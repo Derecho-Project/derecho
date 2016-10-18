@@ -1,0 +1,44 @@
+Introduction
+============
+RDMC is an extremely fast user-space multicast library. It runs on
+RDMA unicast, and uses parallel block-dissemination to achieve high
+levels of concurrency. Data moves not just on network links from
+source to receivers but also inner links between the receivers,
+minimizing delay and increasing throughput. Although very basic, RDMC
+still has useful guarantees: data is kept in the sender's order and is
+not lost, duplicated or corrupted. RDMC is extremely fast relative to
+existing options, and in many cases even outperforms specialized
+solutions.
+
+RDMC is licensed under the Simplified BSD License (BSD). For more
+information see the LICENSE file. 
+
+
+General Advice
+==============
+During group creation, the user must specify the send algorithm and
+block size. Typically BINOMIAL_SEND will provide the best
+performance. The optimal block size depends on a number of factors,
+but tends to be around 1MB for large messages.
+
+
+Gotcha's
+========
+The message size indicated in the incoming receive callback will be
+rounded up to a multiple of the block size but completion callback
+will show the correct message size. This behavior is a consequence of
+the way RDMC initiates transfers.
+
+
+Known Limitations
+=================
+- A failed process could deadlock group formation (will be resolved in
+  a future update)
+
+- RDMC entry points can't be called from within callbacks because they
+  would trigger deadlocks
+
+- Callbacks for incoming and completed messages block all RDMC
+  progress
+
+- Concurrent group creation is not supported

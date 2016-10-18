@@ -1,0 +1,4 @@
+#!/bin/bash
+
+export CPLUS_INCLUDE_PATH="`pwd`/mutils"
+
