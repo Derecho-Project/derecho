@@ -302,8 +302,8 @@ public:
         std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
         std::vector<MessageBuffer>& free_message_buffers,
         dispatcherType _dispatchers,
-	CallbackSet callbacks,
-	const DerechoParams derecho_params,
+        CallbackSet callbacks,
+        const DerechoParams derecho_params,
         std::map<node_id_t, std::string> ip_addrs,
         std::vector<char> already_failed = {});
     /** Constructor to initialize a new derecho_group from an old one,

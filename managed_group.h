@@ -130,9 +130,9 @@ private:
     void receive_join(tcp::socket& client_socket);
 
     /** Starts a new Derecho group with this node as the only member, and initializes the GMS. */
-  std::unique_ptr<View<dispatcherType>> start_group(const node_id_t my_id, const ip_addr my_ip);
+    std::unique_ptr<View<dispatcherType>> start_group(const node_id_t my_id, const ip_addr my_ip);
     /** Joins an existing Derecho group, initializing this object to participate in its GMS. */
-  std::unique_ptr<View<dispatcherType>> join_existing(const node_id_t my_id, const ip_addr& leader_ip, const int leader_port);
+    std::unique_ptr<View<dispatcherType>> join_existing(const node_id_t my_id, const ip_addr& leader_ip, const int leader_port);
 
     // Ken's helper methods
     void deliver_in_order(const View<dispatcherType>& Vc, int Leader);
@@ -153,7 +153,7 @@ private:
     /** Creates the SST and derecho_group for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing derecho_group. */
     void setup_derecho(std::vector<MessageBuffer>& message_buffers,
-		       CallbackSet callbacks,
+                       CallbackSet callbacks,
                        const DerechoParams& derecho_params);
     /** Sets up the SST and derecho_group for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
@@ -175,17 +175,17 @@ public:
      */
     ManagedGroup(const ip_addr my_ip,
                  dispatcherType _dispatchers,
-		 CallbackSet callbacks,
+                 CallbackSet callbacks,
                  const DerechoParams derecho_params,
                  std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
     ManagedGroup(const node_id_t my_id,
                  const ip_addr my_ip,
-		 const node_id_t leader_id,
+                 const node_id_t leader_id,
                  const ip_addr leader_ip,
                  dispatcherType _dispatchers,
-		 CallbackSet callbacks,
-		 std::vector<view_upcall_t> _view_upcalls = {},
+                 CallbackSet callbacks,
+                 std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
     /**
      * Constructor that re-starts a failed group member from log files.
@@ -213,10 +213,10 @@ public:
                  const node_id_t my_id,
                  const ip_addr my_ip,
                  dispatcherType _dispatchers,
-		 CallbackSet callbacks,
-		 DerechoParams derecho_params,
+                 CallbackSet callbacks,
+                 DerechoParams derecho_params,
                  std::vector<view_upcall_t> _view_upcalls = {},
-		 const int gms_port=12345);
+                 const int gms_port = 12345);
 
     ~ManagedGroup();
 

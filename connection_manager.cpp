@@ -90,15 +90,15 @@ bool tcp_connections::write(node_id_t node_id, char const* buffer,
 }
 
 bool tcp_connections::write_all(char const* buffer, size_t size) {
-  std::lock_guard<std::mutex> lock(sockets_mutex);
-  bool success = true;
-  for (auto& p : sockets) {
-    if (p.first == my_id) {
-      continue;
+    std::lock_guard<std::mutex> lock(sockets_mutex);
+    bool success = true;
+    for(auto& p : sockets) {
+        if(p.first == my_id) {
+            continue;
+        }
+        success = success && p.second.write(buffer, size);
     }
-    success = success && p.second.write(buffer, size);
-  }
-  return success;
+    return success;
 }
 
 bool tcp_connections::read(node_id_t node_id, char* buffer,

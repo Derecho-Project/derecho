@@ -283,7 +283,7 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)> > {
         auto invocation_id = mutils::long_rand();
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-	  auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
             size += std::accumulate(t.begin(), t.end(), 0);
         }
         char *serialized_args = out_alloc(size);
@@ -455,12 +455,12 @@ auto wrap(const partial_wrapped<opcode, Ret, NewClass, Args...> &partial) {
 
 template <typename NewClass, FunctionTag opcode, typename Ret, typename... Args>
 auto wrap(std::unique_ptr<NewClass> *_this, const partial_wrapped<opcode, Ret, NewClass, Args...> &partial) {
-  assert(_this);
-  assert(_this->get());
-  return wrapped<opcode, std::function<Ret(Args...)> >{
-    [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
-    }
-  };
+    assert(_this);
+    assert(_this->get());
+    return wrapped<opcode, std::function<Ret(Args...)> >{
+        [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
+}
+};
 }
 
 template <typename NewClass, typename Ret, typename... Args>
@@ -590,7 +590,7 @@ template <typename... T>
 struct Dispatcher;
 
 template <typename T>
-using RemoteInvocableOf = std::decay_t<decltype(*std::declval<T>().register_functions(std::declval<Dispatcher<> &>(),std::declval<std::unique_ptr<T>* >() ))>;
+using RemoteInvocableOf = std::decay_t<decltype(*std::declval<T>().register_functions(std::declval<Dispatcher<> &>(), std::declval<std::unique_ptr<T> *>()))>;
 
 template <typename... T>
 struct Dispatcher {
@@ -603,7 +603,7 @@ private:
     std::unique_ptr<std::map<Opcode, receive_fun_t> > receivers;
     // constructed *after* initialization
     std::unique_ptr<std::thread> receiver;
-  std::tuple<std::unique_ptr<std::unique_ptr<T> >...> objects;
+    std::tuple<std::unique_ptr<std::unique_ptr<T> >...> objects;
     mutils::DeserializationManager dsm{{}};
     std::unique_ptr<impl_t> impl;
 
@@ -656,7 +656,7 @@ public:
 private:
     template <typename... ClientClasses>
     auto register_all(std::unique_ptr<ClientClasses> &... cc) {
-      return std::make_unique<impl_t>(cc->register_functions(*this,&cc)...);
+        return std::make_unique<impl_t>(cc->register_functions(*this, &cc)...);
     }
 
     template <typename>
@@ -666,10 +666,10 @@ private:
 
     template <typename TL, typename FirstType, typename... EverythingElse>
     auto construct_objects(const TL &tl) {
-      auto internal_unique_ptr = mutils::make_unique_tupleargs<FirstType>(tl.first);
-      auto second_unique_ptr = std::make_unique<decltype(internal_unique_ptr)>(std::move(internal_unique_ptr));
-      return std::tuple_cat(std::make_tuple(std::move(second_unique_ptr)),
-			    construct_objects<typename TL::Rest, EverythingElse...>(tl.rest));
+        auto internal_unique_ptr = mutils::make_unique_tupleargs<FirstType>(tl.first);
+        auto second_unique_ptr = std::make_unique<decltype(internal_unique_ptr)>(std::move(internal_unique_ptr));
+        return std::tuple_cat(std::make_tuple(std::move(second_unique_ptr)),
+                              construct_objects<typename TL::Rest, EverythingElse...>(tl.rest));
     }
 
 public:
@@ -700,7 +700,6 @@ public:
 	  std::cout << "obj's state is: " << (*obj)->state << std::endl;
 	  return offset + mutils::bytes_size(**obj);
         }, offset);
-	
     }
 
     template <typename... CtrTuples>

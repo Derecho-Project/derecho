@@ -8,7 +8,7 @@
 using namespace std;
 
 int main() {
-  const int leader_port = 67599, port = 25739;
+    const int leader_port = 67599, port = 25739;
     uint32_t my_id;
     cin >> my_id;
     tcp::ip_addr_t ip_addr;
@@ -50,8 +50,8 @@ int main() {
         cin >> leader_ip;
         tcp::socket leader_socket(leader_ip, leader_port);
         if(!leader_socket.exchange(my_id, remote_id)) {
-	  cerr << "WARNING: failed to exchange id with node"
-	       << endl;
+            cerr << "WARNING: failed to exchange id with node"
+                 << endl;
             return 0;
         } else {
             // send the ip addr to the leader

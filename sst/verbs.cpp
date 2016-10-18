@@ -309,7 +309,7 @@ void resources::connect_qp() {
     // just send a dummy char back and forth
     success = sync(remote_index);
     check_for_error(
-		    success,
+        success,
         "Could not sync in connect_qp after qp transition to RTS state");
 }
 
@@ -533,7 +533,7 @@ bool sync(uint32_t r_index) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-  void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank) {
+void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank) {
     sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, port);
 
     // init all of the resources, so cleanup will be easy

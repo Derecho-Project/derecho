@@ -62,10 +62,9 @@ inline void log_event(const char *file, int line, uint32_t group_number,
 }
 void flush_events();
 void start_flush_server();
-#define LOG_EVENT(group_number, message_number, block_number, event_name) \
-    do {                                                                  \
-        log_event(__FILE__, __LINE__, group_number, message_number,       \
-                  block_number, event_name);                              \
+#define LOG_EVENT(group_number, message_number, block_number, event_name)                      \
+    do {                                                                                       \
+        log_event(__FILE__, __LINE__, group_number, message_number, block_number, event_name); \
     } while(0)
 
 inline void CHECK(bool b) {

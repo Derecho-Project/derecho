@@ -21,7 +21,7 @@
 namespace derecho {
 
 template <typename handlersType>
-class View : public mutils::ByteRepresentable{
+class View : public mutils::ByteRepresentable {
 public:
     /** Upper bound on the number of members that will ever be in any one view.
      */

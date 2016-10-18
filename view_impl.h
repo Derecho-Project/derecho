@@ -95,7 +95,7 @@ bool View<handlersType>::IAmTheNewLeader() {
     return true;
 }
 
-template<typename handlersType>
+template <typename handlersType>
 void View<handlersType>::merge_changes() {
     int myRank = my_rank;
     // Merge the change lists
@@ -134,7 +134,7 @@ void View<handlersType>::merge_changes() {
     gmsSST->put();
 }
 
-template<typename handlersType>
+template <typename handlersType>
 void View<handlersType>::wedge() {
     derecho_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set((*gmsSST)[my_rank].wedged, true);
@@ -307,6 +307,4 @@ std::istream& operator>>(std::istream& stream, View<handlersType>& view) {
     }
     return stream;
 }
-
-
 }
