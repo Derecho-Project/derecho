@@ -1,6 +1,6 @@
 [submodule "mutils-serialization"]
-	path = mutils-serialization
+	path = third_party/mutils-serialization
 	url = https://github.com/mpmilano/mutils-serialization.git
 [submodule "mutils"]
-	path = mutils
+	path = third_party/mutils
 	url = https://github.com/mpmilano/mutils.git

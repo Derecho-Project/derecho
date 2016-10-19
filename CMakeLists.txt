@@ -8,17 +8,19 @@ add_subdirectory(experiments)
 add_custom_target(
 	mutils_target
 	COMMAND make
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/mutils
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/third_party/mutils
 )
-include_directories(${CMAKE_SOURCE_DIR}/mutils)
-link_directories(${CMAKE_SOURCE_DIR}/mutils)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/mutils)
+link_directories(${CMAKE_SOURCE_DIR}/third_party/mutils)
 add_custom_target(
 	mutils_serialization_target
-	COMMAND CPLUS_INCLUDE_PATH=${CMAKE_SOURCE_DIR}/mutils make
-	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/mutils-serialization
+	COMMAND CPLUS_INCLUDE_PATH=${CMAKE_SOURCE_DIR}/third_party/mutils make
+	WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/third_party/mutils-serialization
 )
-include_directories(${CMAKE_SOURCE_DIR}/mutils-serialization)
-link_directories(${CMAKE_SOURCE_DIR}/mutils-serialization)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/mutils-serialization)
+link_directories(${CMAKE_SOURCE_DIR}/third_party/mutils-serialization)
+
+include_directories(${CMAKE_SOURCE_DIR}/third_party)
 
 add_library(derecho SHARED derecho_row.cpp logger.cpp filewriter.cpp connection_manager.cpp)
 target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization)
