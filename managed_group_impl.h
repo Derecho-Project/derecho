@@ -24,8 +24,8 @@
 
 #include "derecho_group.h"
 #include "derecho_row.h"
-#include "persistence.h"
 #include "mutils-serialization/SerializationSupport.hpp"
+#include "persistence.h"
 #include "sst/sst.h"
 #include "sst/verbs.h"
 #include "view.h"
@@ -43,14 +43,14 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     const DerechoParams derecho_params,
     std::vector<view_upcall_t> _view_upcalls,
     const int gms_port)
-    : last_suspected(MAX_MEMBERS),
-      gms_port(gms_port),
-      server_socket(gms_port),
-      thread_shutdown(false),
-      next_view(nullptr),
-      dispatchers(std::move(_dispatchers)),
-      view_upcalls(_view_upcalls),
-      derecho_params(derecho_params) {
+        : last_suspected(MAX_MEMBERS),
+          gms_port(gms_port),
+          server_socket(gms_port),
+          thread_shutdown(false),
+          next_view(nullptr),
+          dispatchers(std::move(_dispatchers)),
+          view_upcalls(_view_upcalls),
+          derecho_params(derecho_params) {
     const node_id_t my_id = 0;
     curr_view = start_group(my_id, my_ip);
     rdmc_sst_setup();
@@ -64,8 +64,8 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     curr_view->failed.push_back(false);
 
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
-     bool success = client_socket.write(bytes, size);
-     assert(success);
+        bool success = client_socket.write(bytes, size);
+        assert(success);
     };
     std::size_t size_of_view = mutils::bytes_size(*curr_view);
     client_socket.write((char*)&size_of_view, sizeof(size_of_view));
@@ -103,9 +103,9 @@ ManagedGroup<dispatcherType>::ManagedGroup(
                                   std::vector<node_id_t> old_members) {
         std::vector<node_id_t> removed_members;
         std::set_difference(
-                old_members.begin(), old_members.end(), new_members.begin(),
-                new_members.end(),
-                std::back_inserter(removed_members));
+            old_members.begin(), old_members.end(), new_members.begin(),
+            new_members.end(),
+            std::back_inserter(removed_members));
         curr_view->derecho_group->set_exceptions_for_removed_nodes(removed_members);
     });
     lock_guard_t lock(view_mutex);
@@ -126,14 +126,14 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
                                            CallbackSet callbacks,
                                            std::vector<view_upcall_t> _view_upcalls,
                                            const int gms_port)
-    : last_suspected(MAX_MEMBERS),
-      gms_port(gms_port),
-      server_socket(gms_port),
-      thread_shutdown(false),
-      next_view(nullptr),
-      dispatchers(std::move(_dispatchers)),
-      view_upcalls(_view_upcalls),
-      derecho_params(0, 0) {
+        : last_suspected(MAX_MEMBERS),
+          gms_port(gms_port),
+          server_socket(gms_port),
+          thread_shutdown(false),
+          next_view(nullptr),
+          dispatchers(std::move(_dispatchers)),
+          view_upcalls(_view_upcalls),
+          derecho_params(0, 0) {
     curr_view = join_existing(my_id, leader_ip, gms_port);
     curr_view->my_rank = curr_view->rank_of(my_id);
     rdmc_sst_setup();
@@ -172,9 +172,9 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
                                   std::vector<node_id_t> old_members) {
         std::vector<node_id_t> removed_members;
         std::set_difference(
-                old_members.begin(), old_members.end(), new_members.begin(),
-                new_members.end(),
-                std::back_inserter(removed_members));
+            old_members.begin(), old_members.end(), new_members.begin(),
+            new_members.end(),
+            std::back_inserter(removed_members));
         curr_view->derecho_group->set_exceptions_for_removed_nodes(removed_members);
     });
     lock_guard_t lock(view_mutex);
@@ -195,14 +195,14 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
                                            DerechoParams derecho_params,
                                            std::vector<view_upcall_t> _view_upcalls,
                                            const int gms_port)
-    : last_suspected(MAX_MEMBERS),
-      gms_port(gms_port),
-      server_socket(gms_port),
-      thread_shutdown(false),
-      view_file_name(recovery_filename + persistence::PAXOS_STATE_EXTENSION),
-      dispatchers(std::move(_dispatchers)),
-      view_upcalls(_view_upcalls),
-      derecho_params(derecho_params) {
+        : last_suspected(MAX_MEMBERS),
+          gms_port(gms_port),
+          server_socket(gms_port),
+          thread_shutdown(false),
+          view_file_name(recovery_filename + persistence::PAXOS_STATE_EXTENSION),
+          dispatchers(std::move(_dispatchers)),
+          view_upcalls(_view_upcalls),
+          derecho_params(derecho_params) {
     auto last_view = load_view<dispatcherType>(view_file_name);
     std::vector<MessageBuffer> message_buffers;
     auto max_msg_size = DerechoGroup<MAX_MEMBERS, dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
@@ -261,9 +261,9 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
                                   std::vector<node_id_t> old_members) {
         std::vector<node_id_t> removed_members;
         std::set_difference(
-                old_members.begin(), old_members.end(), new_members.begin(),
-                new_members.end(),
-                std::back_inserter(removed_members));
+            old_members.begin(), old_members.end(), new_members.begin(),
+            new_members.end(),
+            std::back_inserter(removed_members));
         curr_view->derecho_group->set_exceptions_for_removed_nodes(removed_members);
     });
 
@@ -292,7 +292,7 @@ void ManagedGroup<dispatcherType>::create_threads() {
     client_listener_thread = std::thread{[this]() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
-	    util::debug_log().log_event(std::stringstream() << "Background thread got a client connection from " << client_socket.remote_ip);
+            util::debug_log().log_event(std::stringstream() << "Background thread got a client connection from " << client_socket.remote_ip);
             pending_joins.locked().access.emplace_back(std::move(client_socket));
         }
         cout << "Connection listener thread shutting down." << endl;
@@ -347,7 +347,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 Vc.failed[q] = true;
                 Vc.nFailed++;
 
-                if (Vc.nFailed >= (Vc.num_members + 1) / 2) {
+                if(Vc.nFailed >= (Vc.num_members + 1) / 2) {
                     throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
                 }
 
@@ -387,7 +387,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
     };
     auto commit_change = [this](DerechoSST& gmsSST) {
         gmssst::set(gmsSST[gmsSST.get_local_index()].nCommitted,
-            min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
+                    min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
         log_event(std::stringstream() << "Leader committing view proposal #" << gmsSST[gmsSST.get_local_index()].nCommitted);
         gmsSST.put();
     };
@@ -475,7 +475,8 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         }
 
         if(next_view->gmsSST != nullptr) {
-            std::cout << "Segmentation fault" << std::endl; raise(SIGSEGV);
+            std::cout << "Segmentation fault" << std::endl;
+            raise(SIGSEGV);
             throw derecho_exception("Overwriting the SST");
         }
 
@@ -504,7 +505,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 if(curr_view->IAmLeader() && !failed) {
                     // Send the view to the newly joined client before we try to do SST and RDMC setup
                     commit_join(*next_view, joining_client_socket);
-		    curr_view->derecho_group->send_objects(joining_client_socket);
+                    curr_view->derecho_group->send_objects(joining_client_socket);
                     // Close the client's socket
                     joining_client_socket = tcp::socket();
                 }
@@ -514,11 +515,11 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.predicates.remove(suspected_changed_handle);
 
                 log_event(std::stringstream() << "Starting creation of new SST and DerechoGroup for view " << next_view->vid);
-		// if  a new member has joined
-		if (curr_view->members.size() < next_view->members.size()) {
-		  rdma::impl::verbs_add_connection(next_view->members.back(), next_view->member_ips.back(), next_view->members[next_view->my_rank]);
-		  sst::add_node(next_view->members.back(), next_view->member_ips.back());
-		}
+                // if  a new member has joined
+                if(curr_view->members.size() < next_view->members.size()) {
+                    rdma::impl::verbs_add_connection(next_view->members.back(), next_view->member_ips.back(), next_view->members[next_view->my_rank]);
+                    sst::add_node(next_view->members.back(), next_view->member_ips.back());
+                }
                 // This will block until everyone responds to SST/RDMC initial handshakes
                 transition_sst_and_rdmc(*next_view, whoFailed);
                 next_view->gmsSST->put();
@@ -531,16 +532,15 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                     old_views.push(std::move(curr_view));
                     old_views_cv.notify_all();
                 }
-		curr_view = std::move(next_view);
+                curr_view = std::move(next_view);
 
-		// Announce the new view to the application
+                // Announce the new view to the application
                 curr_view->newView(*curr_view);
 
                 //If in persistent mode, write the new view to disk before using it
                 if(!view_file_name.empty()) {
                     persist_view(*curr_view, view_file_name);
                 }
-
 
                 // Register predicates in the new view
                 register_predicates();
@@ -573,7 +573,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                                          sst::PredicateType::ONE_TIME);
             }
 
-            };
+        };
         gmsSST.predicates.insert(is_meta_wedged, meta_wedged_continuation, sst::PredicateType::ONE_TIME);
 
     };
@@ -728,7 +728,7 @@ void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_v
     log_event("Sending client the new view");
     // Temporarily disabled because all node IDs are globally fixed at startup
     //    client_socket.write((char*) &joining_client_id, sizeof(joining_client_id));
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {client_socket.write(bytes, size); };
+    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
     client_socket.write((char*)&size_of_view, sizeof(size_of_view));
     mutils::post_object(bind_socket_write, new_view);

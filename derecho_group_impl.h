@@ -68,19 +68,19 @@ DerechoGroup<N, dispatchersType>::DerechoGroup(
     const DerechoParams derecho_params,
     std::map<node_id_t, std::string> ip_addrs,
     std::vector<char> already_failed)
-    : members(_members),
-      num_members(members.size()),
-      member_index(index_of(members, my_node_id)),
-      block_size(derecho_params.block_size),
-      max_msg_size(compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size)),
-      type(derecho_params.type),
-      window_size(derecho_params.window_size),
-      callbacks(callbacks),
-      dispatchers(std::move(_dispatchers)),
-      connections(my_node_id, ip_addrs, derecho_params.rpc_port),
-      rdmc_group_num_offset(0),
-      sender_timeout(derecho_params.timeout_ms),
-      sst(_sst) {
+        : members(_members),
+          num_members(members.size()),
+          member_index(index_of(members, my_node_id)),
+          block_size(derecho_params.block_size),
+          max_msg_size(compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size)),
+          type(derecho_params.type),
+          window_size(derecho_params.window_size),
+          callbacks(callbacks),
+          dispatchers(std::move(_dispatchers)),
+          connections(my_node_id, ip_addrs, derecho_params.rpc_port),
+          rdmc_group_num_offset(0),
+          sender_timeout(derecho_params.timeout_ms),
+          sst(_sst) {
     assert(window_size >= 1);
 
     if(!derecho_params.filename.empty()) {
@@ -127,23 +127,23 @@ DerechoGroup<N, dispatchersType>::DerechoGroup(
     std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
     DerechoGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
     std::vector<char> already_failed, uint32_t rpc_port)
-    : members(_members),
-      num_members(members.size()),
-      member_index(index_of(members, my_node_id)),
-      block_size(old_group.block_size),
-      max_msg_size(old_group.max_msg_size),
-      type(old_group.type),
-      window_size(old_group.window_size),
-      callbacks(old_group.callbacks),
-      dispatchers(std::move(old_group.dispatchers)),
-      connections(my_node_id, ip_addrs, rpc_port),
-      toFulfillQueue(std::move(old_group.toFulfillQueue)),
-      fulfilledList(std::move(old_group.fulfilledList)),
-      rdmc_group_num_offset(old_group.rdmc_group_num_offset +
-                            old_group.num_members),
-      total_message_buffers(old_group.total_message_buffers),
-      sender_timeout(old_group.sender_timeout),
-      sst(_sst) {
+        : members(_members),
+          num_members(members.size()),
+          member_index(index_of(members, my_node_id)),
+          block_size(old_group.block_size),
+          max_msg_size(old_group.max_msg_size),
+          type(old_group.type),
+          window_size(old_group.window_size),
+          callbacks(old_group.callbacks),
+          dispatchers(std::move(old_group.dispatchers)),
+          connections(my_node_id, ip_addrs, rpc_port),
+          toFulfillQueue(std::move(old_group.toFulfillQueue)),
+          fulfilledList(std::move(old_group.fulfilledList)),
+          rdmc_group_num_offset(old_group.rdmc_group_num_offset +
+                                old_group.num_members),
+          total_message_buffers(old_group.total_message_buffers),
+          sender_timeout(old_group.sender_timeout),
+          sst(_sst) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <=
            std::numeric_limits<uint16_t>::max() - old_group.num_members -

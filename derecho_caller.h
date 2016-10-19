@@ -136,8 +136,8 @@ private:
 
 public:
     QueryResults(QueryResults &&o)
-        : pending_rmap{std::move(o.pending_rmap)},
-          replies{std::move(o.replies)} {}
+            : pending_rmap{std::move(o.pending_rmap)},
+              replies{std::move(o.replies)} {}
     QueryResults(const QueryResults &) = delete;
 
     /*
@@ -412,7 +412,7 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)> > {
 
     RemoteInvocable(std::map<Opcode, receive_fun_t> &receivers,
                     std::function<Ret(Args...)> f)
-        : f(f) {
+            : f(f) {
         receivers[invoke_id] = [this](auto... a) {
             return this->receive_call(a...);
         };
@@ -480,7 +480,7 @@ template <FunctionTag id, typename Q>
 struct RemoteInvocablePairs<wrapped<id, Q> >
     : public RemoteInvocable<id, Q> {
     RemoteInvocablePairs(std::map<Opcode, receive_fun_t> &receivers, Q q)
-        : RemoteInvocable<id, Q>(receivers, q) {}
+            : RemoteInvocable<id, Q>(receivers, q) {}
 
     using RemoteInvocable<id, Q>::handler;
 };
@@ -493,8 +493,8 @@ public:
     template <typename... T>
     RemoteInvocablePairs(std::map<Opcode, receive_fun_t> &receivers, Q q,
                          T &&... t)
-        : RemoteInvocable<id, Q>(receivers, q),
-          RemoteInvocablePairs<rest...>(receivers, std::forward<T>(t)...) {}
+            : RemoteInvocable<id, Q>(receivers, q),
+              RemoteInvocablePairs<rest...>(receivers, std::forward<T>(t)...) {}
 
     using RemoteInvocable<id, Q>::handler;
     using RemoteInvocablePairs<rest...>::handler;
@@ -539,7 +539,7 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
     // these are the functions (no names) from Fs
     // delegation so receivers exists during superclass construction
     RemoteInvocableClass(Node_id nid, std::map<Opcode, receive_fun_t> &rvrs, const Fs &... fs)
-        : RemoteInvocablePairs<Fs...>(rvrs, fs.fun...), nid(nid) {}
+            : RemoteInvocablePairs<Fs...>(rvrs, fs.fun...), nid(nid) {}
 
     /* you *do not* need to delete the pointer in the pair this returns. */
     template <FunctionTag tag, typename... Args>
@@ -704,17 +704,17 @@ public:
 
     template <typename... CtrTuples>
     Dispatcher(Node_id nid, CtrTuples... a)
-        : nid(nid),
-          receivers(new std::decay_t<decltype(*receivers)>()),
-          objects(construct_objects<mutils::TupleList<CtrTuples...>, T...>(mutils::TupleList<CtrTuples...>{a...})),
-          impl(mutils::callFunc([&](auto &... obj) {return this->register_all(*obj...); },
-                                objects)) {}
+            : nid(nid),
+              receivers(new std::decay_t<decltype(*receivers)>()),
+              objects(construct_objects<mutils::TupleList<CtrTuples...>, T...>(mutils::TupleList<CtrTuples...>{a...})),
+              impl(mutils::callFunc([&](auto &... obj) {return this->register_all(*obj...); },
+                                    objects)) {}
 
     Dispatcher(Dispatcher &&other)
-        : nid(other.nid),
-          receivers(std::move(other.receivers)),
-          objects(std::move(other.objects)),
-          impl(std::move(other.impl)) {}
+            : nid(other.nid),
+              receivers(std::move(other.receivers)),
+              objects(std::move(other.objects)),
+              impl(std::move(other.impl)) {}
 
     template <class NewClass, typename... NewFuns>
     auto register_functions(std::unique_ptr<NewClass> *cls, NewFuns... f) {

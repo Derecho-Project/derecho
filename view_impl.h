@@ -13,20 +13,20 @@ using std::shared_ptr;
 
 template <typename handlersType>
 View<handlersType>::View()
-    : View(0) {}
+        : View(0) {}
 
 template <typename handlersType>
 View<handlersType>::View(int num_members)
-    : vid(0),
-      members(num_members),
-      member_ips(num_members),
-      failed(num_members, 0),
-      nFailed(0),
-      who(nullptr),
-      num_members(num_members),
-      my_rank(0),
-      derecho_group(nullptr),
-      gmsSST(nullptr) {}
+        : vid(0),
+          members(num_members),
+          member_ips(num_members),
+          failed(num_members, 0),
+          nFailed(0),
+          who(nullptr),
+          num_members(num_members),
+          my_rank(0),
+          derecho_group(nullptr),
+          gmsSST(nullptr) {}
 
 template <typename handlersType>
 void View<handlersType>::init_vectors() {

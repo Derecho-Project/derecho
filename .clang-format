@@ -2,7 +2,7 @@
 Language:        Cpp
 # BasedOnStyle:  Google
 AccessModifierOffset: -4
-ConstructorInitializerIndentWidth: 4
+ConstructorInitializerIndentWidth: 8
 AlignEscapedNewlinesLeft: true
 AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: true

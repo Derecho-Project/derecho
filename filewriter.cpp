@@ -21,10 +21,10 @@ const uint8_t MAGIC_NUMBER[8] = {'D', 'E', 'R', 'E', 'C', 'H', 'O', 29};
 
 FileWriter::FileWriter(const std::function<void(message)>& _message_written_upcall,
                        const std::string& filename)
-    : message_written_upcall(_message_written_upcall),
-      exit(false),
-      writer_thread(&FileWriter::perform_writes, this, filename),
-      callback_thread(&FileWriter::issue_callbacks, this) {}
+        : message_written_upcall(_message_written_upcall),
+          exit(false),
+          writer_thread(&FileWriter::perform_writes, this, filename),
+          callback_thread(&FileWriter::issue_callbacks, this) {}
 
 FileWriter::~FileWriter() {
     {

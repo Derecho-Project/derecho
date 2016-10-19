@@ -71,7 +71,7 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, ip_ad
 tcp_connections::tcp_connections(
     node_id_t _my_id, const std::map<node_id_t, ip_addr_t>& ip_addrs,
     uint32_t _port)
-    : my_id(_my_id), port(_port) {
+        : my_id(_my_id), port(_port) {
     establish_node_connections(ip_addrs);
 }
 

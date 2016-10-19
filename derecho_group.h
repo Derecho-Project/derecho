@@ -57,13 +57,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
                   uint32_t rpc_port = 12487)
-        : max_payload_size(max_payload_size),
-          block_size(block_size),
-          filename(filename),
-          window_size(window_size),
-          timeout_ms(timeout_ms),
-          type(type),
-          rpc_port(rpc_port) {
+            : max_payload_size(max_payload_size),
+              block_size(block_size),
+              filename(filename),
+              window_size(window_size),
+              timeout_ms(timeout_ms),
+              type(type),
+              rpc_port(rpc_port) {
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, block_size, filename, window_size, timeout_ms, type, rpc_port);

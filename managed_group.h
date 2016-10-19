@@ -179,6 +179,7 @@ public:
                  const DerechoParams derecho_params,
                  std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
+
     ManagedGroup(const node_id_t my_id,
                  const ip_addr my_ip,
                  const node_id_t leader_id,
