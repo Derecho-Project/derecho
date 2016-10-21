@@ -1,7 +1,6 @@
 *~
 libsst.a
 CMakeCache.txt
-Makefile
 cmake_install.cmake
 CMakeFiles/*
 doc/*

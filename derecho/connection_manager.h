@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rdmc/connection.h"
+#include "../rdmc/connection.h"
 
 #include <map>
 #include <mutex>
