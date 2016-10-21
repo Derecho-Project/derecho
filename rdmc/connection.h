@@ -17,7 +17,7 @@ class socket {
 
     explicit socket(int _sock) : sock(_sock), remote_ip() {}
     explicit socket(int _sock, std::string remote_ip)
-        : sock(_sock), remote_ip(remote_ip) {}
+            : sock(_sock), remote_ip(remote_ip) {}
 
     friend class connection_listener;
 

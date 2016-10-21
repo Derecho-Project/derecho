@@ -7,9 +7,9 @@
 #include <cstring>
 #include <iostream>
 #include <netdb.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
 
 namespace tcp {

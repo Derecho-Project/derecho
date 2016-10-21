@@ -16,14 +16,14 @@ decltype(group::message_types) group::message_types;
 group::group(uint16_t _group_number, size_t _block_size,
              vector<uint32_t> _members, uint32_t _member_index,
              incoming_message_callback_t upcall, completion_callback_t callback)
-    : members(_members),
-      first_block_buffer(nullptr),
-      completion_callback(callback),
-      incoming_message_upcall(upcall),
-      group_number(_group_number),
-      block_size(_block_size),
-      num_members(members.size()),
-      member_index(_member_index) {
+        : members(_members),
+          first_block_buffer(nullptr),
+          completion_callback(callback),
+          incoming_message_upcall(upcall),
+          group_number(_group_number),
+          block_size(_block_size),
+          num_members(members.size()),
+          member_index(_member_index) {
     if(member_index != 0) {
         first_block_buffer = unique_ptr<char[]>(new char[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
@@ -536,8 +536,8 @@ binomial_group::binomial_group(uint16_t group_number, size_t block_size,
                                vector<uint32_t> members, uint32_t member_index,
                                incoming_message_callback_t upcall,
                                completion_callback_t callback)
-    : group(group_number, block_size, members, member_index, upcall, callback),
-      log2_num_members(floor(log2(num_members))) /*,
+        : group(group_number, block_size, members, member_index, upcall, callback),
+          log2_num_members(floor(log2(num_members))) /*,
       vertex(member_index & ((1 << log2_num_members) - 1))*/ {
     // size_t vertex_twin = vertex | (1 << log2_num_members);
     // if(vertex_twin < num_members) {

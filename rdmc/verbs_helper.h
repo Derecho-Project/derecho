@@ -53,7 +53,7 @@ class remote_memory_region {
 public:
     remote_memory_region(uint64_t remote_address, size_t length,
                          uint32_t remote_key)
-        : buffer(remote_address), size(length), rkey(remote_key) {}
+            : buffer(remote_address), size(length), rkey(remote_key) {}
 
     const uint64_t buffer;
     const size_t size;

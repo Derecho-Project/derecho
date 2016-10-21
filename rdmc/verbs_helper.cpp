@@ -479,7 +479,7 @@ queue_pair::~queue_pair() {
     //    if(qp) cout << "Destroying Queue Pair..." << endl;
 }
 queue_pair::queue_pair(size_t remote_index)
-    : queue_pair(remote_index, [](queue_pair *) {}) {}
+        : queue_pair(remote_index, [](queue_pair *) {}) {}
 
 // The post_recvs lambda will be called before queue_pair creation completes on
 // either end of the connection. This enables the user to avoid race conditions
