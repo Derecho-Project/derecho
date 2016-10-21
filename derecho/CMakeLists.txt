@@ -16,12 +16,6 @@ add_library(derecho SHARED derecho_row.cpp logger.cpp filewriter.cpp connection_
 target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization)
 add_dependencies(derecho mutils_serialization_target mutils_target)
 
-add_executable(main main.cpp)
-target_link_libraries(main derecho)
-
-add_executable(dynamic_connection_setup dynamic_connection_setup.cpp)
-target_link_libraries(dynamic_connection_setup derecho rdmc)
-
 add_executable(parse_state_file parse_state_file.cpp)
 target_link_libraries(parse_state_file derecho)
 
@@ -42,8 +36,5 @@ target_link_libraries(gms_test derecho)
 
 add_executable(gms_test2 gms_test2.cpp experiments/block_size.cpp)
 target_link_libraries(gms_test2 derecho)
-
-add_executable(test_inheritance_plan test_inheritance_plan.cpp)
-target_link_libraries(test_inheritance_plan mutils-serialization)
 
 add_custom_target(format_derecho clang-format-3.6 -i *.cpp *.h)

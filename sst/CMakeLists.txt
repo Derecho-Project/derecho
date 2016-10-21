@@ -5,7 +5,7 @@ SET(CMAKE_CXX_FLAGS "-std=c++14 -O1 -g -Wall -Wno-unused-function -Wno-unused-va
 
 include_directories(${derecho_SOURCE_DIR})
 
-ADD_LIBRARY(sst SHARED verbs.cpp ${derecho_SOURCE_DIR}/connection_manager.cpp)
+ADD_LIBRARY(sst SHARED verbs.cpp ../derecho/connection_manager.cpp)
 TARGET_LINK_LIBRARIES(sst rdmacm ibverbs pthread rt) 
 
 add_custom_target(format_sst clang-format-3.6 -i *.cpp *.h)
