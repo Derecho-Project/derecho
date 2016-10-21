@@ -10,6 +10,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <experimental/optional>
 
 #include "logger.h"
 #include "rdmc/connection.h"
@@ -101,7 +102,7 @@ private:
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
 
-    /** Name of the file to use to persist the current view (and other parameters) to disk. */
+    /** Name of the file to use to persist the current view to disk. */
     std::string view_file_name;
 
     /** Lock this before accessing curr_view, since it's shared by multiple threads */
@@ -149,6 +150,9 @@ private:
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
     void register_predicates();
+    /** Constructor helper called when creating a new group; waits for a new
+     * member to join, then sends it the view. */
+    void await_second_member(const node_id_t my_id);
 
     /** Creates the SST and derecho_group for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing derecho_group. */
@@ -161,17 +165,19 @@ private:
 
 public:
     /**
-     * Constructor, starts or joins a managed Derecho group.
-     * The parameters after leader_id are the parameters for the DerechoGroup
-     * that should be constructed for communications within this managed group.
-     * If a filename is specified, the group will run in persistent mode and log
-     * all messages to disk.
+     * Constructor that starts a new managed Derecho group with this node as
+     * the leader (ID 0). The DerechoParams will be passed through to construct
+     * the  underlying DerechoGroup. If they specify a filename, the group will
+     * run in persistent mode and log all messages to disk.
+     * @param my_ip The IP address of the node executing this code
+     * @param _dispatchers
+     * @param callbacks The set of callback functions for message delivery
+     * events in this group.
+     * @param derecho_params The assorted configuration parameters for this
+     * Derecho group instance, such as message size and logfile name
+     * @param _view_upcalls
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
-     * @param global_ip_map A map specifying all of the potential members in the
-     * group, mapping their node IDs to their IP addresses
-     * @param my_id The node ID of the node executing this code
-     * @param leader_id The node ID of the GMS leader
      */
     ManagedGroup(const ip_addr my_ip,
                  dispatcherType _dispatchers,
@@ -180,6 +186,21 @@ public:
                  std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
 
+    /**
+     * Constructor that joins an existing managed Derecho group. The parameters
+     * normally set by DerechoParams will be initialized by copying them from
+     * the existing group's leader.
+     * @param my_id The node ID of the node running this code
+     * @param my_ip The IP address of the node running this code
+     * @param leader_id The node ID of the existing group's leader
+     * @param leader_ip The IP address of the existing group's leader
+     * @param _dispatchers
+     * @param callbacks The set of callback functions for message delivery
+     * events in this group.
+     * @param _view_upcalls
+     * @param gms_port The port to contact other group members on when sending
+     * group-management messages
+     */
     ManagedGroup(const node_id_t my_id,
                  const ip_addr my_ip,
                  const node_id_t leader_id,
@@ -197,25 +218,26 @@ public:
      * script log_recovery_helper.sh). Does NOT currently attempt to replay
      * completion events for missing messages that were transferred over from
      * another member's log.
-     * The last 5 parameters are the callbacks and DerechoGroup parameters
-     * to use for sending messages once recovery is complete.
      * @param recovery_filename The base name of the set of recovery files to
      * use (extensions will be added automatically)
+     * @param my_id The node ID of the node executing this code
+     * @param my_ip The IP address of the node executing this code
+     * @param _dispatchers
+     * @param callbacks The set of callback functions to use for message
+     * delivery events once the group has been re-joined
+     * @param derecho_params (Optional) If set, and this node is the leader of
+     * the restarting group, a new set of Derecho parameters to configure the
+     * group with. Otherwise, these parameters will be read from the logfile or
+     * copied from the existing group leader.
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
-     * @param my_id The node ID of the node executing this code
-     * @param _max_payload_size
-     * @param stability_callbacks
-     * @param _block_size
-     * @param _window_size
-     * @param _type
      */
     ManagedGroup(const std::string& recovery_filename,
                  const node_id_t my_id,
                  const ip_addr my_ip,
                  dispatcherType _dispatchers,
                  CallbackSet callbacks,
-                 DerechoParams derecho_params,
+                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
                  std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
 

@@ -590,7 +590,31 @@ template <typename... T>
 struct Dispatcher;
 
 template <typename T>
-using RemoteInvocableOf = std::decay_t<decltype(*std::declval<T>().register_functions(std::declval<Dispatcher<> &>(), std::declval<std::unique_ptr<T> *>()))>;
+using RemoteInvocableOf = std::decay_t<decltype(*std::declval<T>().register_functions(std::declval<Dispatcher<> &>(),
+        std::declval<std::unique_ptr<T> *>()))>;
+
+template<>
+struct Dispatcher<>{
+private:
+    const Node_id nid;
+    // listen here
+    // constructed *before* initialization
+    std::unique_ptr<std::map<Opcode, receive_fun_t> > receivers;
+public:
+    Dispatcher(Node_id nid)
+            : nid(nid),
+              receivers(new std::decay_t<decltype(*receivers)>()) {}
+
+    std::exception_ptr handle_receive(...){
+        return nullptr;
+    }
+    void receive_objects(tcp::socket &){}
+    void send_objects(tcp::socket &){}
+    template <class NewClass, typename... NewFuns>
+    auto register_functions(std::unique_ptr<NewClass> *cls, NewFuns... f) {
+        return build_remoteinvocableclass<NewClass>(nid, *receivers, wrap(cls, wrap(f))...);
+    }
+};
 
 template <typename... T>
 struct Dispatcher {
@@ -701,7 +725,7 @@ public:
 	  return offset + mutils::bytes_size(**obj);
         }, offset);
     }
-
+//Dispatcher<Foo,Bar> b{id,std::make_tuple(/*Foo's ctr arguments*/),std::make_tuple(/*Bar's ctr arguments*/)}
     template <typename... CtrTuples>
     Dispatcher(Node_id nid, CtrTuples... a)
             : nid(nid),

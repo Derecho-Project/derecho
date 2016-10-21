@@ -25,7 +25,7 @@ int main() {
     uint32_t node_rank;
     uint32_t num_nodes;
 
-    initialize(node_rank, num_nodes);
+    std::map<uint32_t, std::string> node_address_map = initialize(node_rank, num_nodes);
 
     vector<uint32_t> members(num_nodes);
     for(int i = 0; i < (int)num_nodes; ++i) {
@@ -48,11 +48,12 @@ int main() {
     std::shared_ptr<sst::SST<DerechoRow<MAX_GROUP_SIZE>, sst::Mode::Writes>>
         derecho_sst =
             std::make_shared<sst::SST<DerechoRow<8>, sst::Mode::Writes>>(
-                members, node_rank);
+                    members, node_rank);
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<MAX_GROUP_SIZE> g(
-        members, node_rank, derecho_sst, free_message_buffers, max_msg_size,
-        derecho::CallbackSet{stability_callback, nullptr}, block_size);
+    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(
+            members, node_rank, derecho_sst, free_message_buffers,
+            Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
+            derecho::DerechoParams{max_msg_size, block_size}, node_address_map);
 
     cout << "Derecho group created" << endl;
 

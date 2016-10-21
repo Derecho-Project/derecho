@@ -199,23 +199,6 @@ std::string View<handlersType>::ToString() const {
 }
 
 template <typename handlersType>
-void persist_view(const View<handlersType>& view, const std::string& view_file_name) {
-    using namespace std::placeholders;
-    //Use the "safe save" paradigm to ensure a crash won't corrupt our saved View file
-    std::ofstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);
-    auto view_file_swap_write = [&](char const* const c, std::size_t n) {
-        //std::bind(&std::ofstream::write, &view_file_swap, _1, _2);
-        view_file_swap.write(c,n);
-    };
-    mutils::post_object(view_file_swap_write, mutils::bytes_size(view));
-    mutils::post_object(view_file_swap_write, view);
-    view_file_swap.close();
-    if(std::rename((view_file_name + persistence::SWAP_FILE_EXTENSION).c_str(), view_file_name.c_str()) < 0) {
-        std::cerr << "Error updating saved-state file on disk! " << strerror(errno) << endl;
-    }
-}
-
-template <typename handlersType>
 std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
     std::ifstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);

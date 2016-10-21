@@ -54,32 +54,15 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     const node_id_t my_id = 0;
     curr_view = start_group(my_id, my_ip);
     rdmc_sst_setup();
-    tcp::socket client_socket = server_socket.accept();
-    node_id_t client_id = 0;
-    client_socket.exchange(my_id, client_id);
-    ip_addr& joiner_ip = client_socket.remote_ip;
-    curr_view->num_members++;
-    curr_view->member_ips.push_back(joiner_ip);
-    curr_view->members.push_back(client_id);
-    curr_view->failed.push_back(false);
+    //Wait for the first client (second group member) to join
+    await_second_member(my_id);
 
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
-        bool success = client_socket.write(bytes, size);
-        assert(success);
-    };
-    std::size_t size_of_view = mutils::bytes_size(*curr_view);
-    client_socket.write((char*)&size_of_view, sizeof(size_of_view));
-    mutils::post_object(bind_socket_write, *curr_view);
-    std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
-    client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
-    mutils::post_object(bind_socket_write, derecho_params);
-    dispatchers.send_objects(client_socket);
-    rdma::impl::verbs_add_connection(client_id, joiner_ip, my_id);
-    sst::add_node(client_id, joiner_ip);
 
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
-        persist_view(*curr_view, view_file_name);
+        std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
+        persist_object(*curr_view, view_file_name);
+        persist_object(derecho_params, params_file_name);
     }
 
     std::vector<MessageBuffer> message_buffers;
@@ -139,7 +122,9 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
     rdmc_sst_setup();
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
-        persist_view(*curr_view, view_file_name);
+        std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
+        persist_object(*curr_view, view_file_name);
+        persist_object(derecho_params, params_file_name);
     }
     log_event("Initializing SST and RDMC for the first time.");
 
@@ -192,7 +177,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
                                            const ip_addr my_ip,
                                            dispatcherType _dispatchers,
                                            CallbackSet callbacks,
-                                           DerechoParams derecho_params,
+                                           std::experimental::optional<DerechoParams> _derecho_params,
                                            std::vector<view_upcall_t> _view_upcalls,
                                            const int gms_port)
         : last_suspected(MAX_MEMBERS),
@@ -202,16 +187,12 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
           view_file_name(recovery_filename + persistence::PAXOS_STATE_EXTENSION),
           dispatchers(std::move(_dispatchers)),
           view_upcalls(_view_upcalls),
-          derecho_params(derecho_params) {
+          derecho_params(0, 0) {
     auto last_view = load_view<dispatcherType>(view_file_name);
-    std::vector<MessageBuffer> message_buffers;
-    auto max_msg_size = DerechoGroup<MAX_MEMBERS, dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
-    while(message_buffers.size() < derecho_params.window_size * MAX_MEMBERS) {
-        message_buffers.emplace_back(max_msg_size);
-    }
 
     if(my_id != last_view->members[last_view->rank_of_leader()]) {
-        curr_view = join_existing(my_id, last_view->member_ips[last_view->rank_of_leader()], gms_port, derecho_params);
+        curr_view = join_existing(my_id, last_view->member_ips[last_view->rank_of_leader()], gms_port);
+        //derecho_params will be initialized by the existing view's leader
     } else {
         /* This should only happen if an entire group failed and the leader is restarting;
          * otherwise the view obtained from the recovery script will have a leader that is
@@ -219,30 +200,31 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
          * restart and join. */
         curr_view = start_group(my_id, my_ip);
         curr_view->vid = last_view->vid + 1;
-        tcp::socket client_socket = server_socket.accept();
-        node_id_t client_id = 0;
-        client_socket.exchange(my_id, client_id);
-        ip_addr& joiner_ip = client_socket.remote_ip;
-        curr_view->num_members++;
-        curr_view->member_ips.push_back(joiner_ip);
-        curr_view->members.push_back(client_id);
-        curr_view->failed.push_back(false);
+        rdmc_sst_setup();
+        if(_derecho_params) {
+            derecho_params = _derecho_params.value();
+        } else {
+            derecho_params = *(load_object<DerechoParams>(
+                    std::string(recovery_filename + persistence::PARAMATERS_EXTENSION)));
+        }
 
-        auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
-            bool success = client_socket.write(bytes, size);
-            assert(success);
-        };
-        std::size_t size_of_view = mutils::bytes_size(*curr_view);
-        client_socket.write((char*)&size_of_view, sizeof(size_of_view));
-        mutils::post_object(bind_socket_write, *curr_view);
-        std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
-        client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
-        mutils::post_object(bind_socket_write, derecho_params);
+        await_second_member(my_id);
     }
     curr_view->my_rank = curr_view->rank_of(my_id);
 
+    //since the View just changed, and we're definitely in persistent mode, persist it again
+    view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
+    std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
+    persist_object(*curr_view, view_file_name);
+    persist_object(derecho_params, params_file_name);
+
+    std::vector<MessageBuffer> message_buffers;
+    auto max_msg_size = DerechoGroup<MAX_MEMBERS, dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
+    while(message_buffers.size() < derecho_params.window_size * MAX_MEMBERS) {
+        message_buffers.emplace_back(max_msg_size);
+    }
+
     log_event("Initializing SST and RDMC for the first time.");
-    derecho_params.filename = recovery_filename;
     setup_derecho(message_buffers,
                   callbacks,
                   derecho_params);
@@ -273,6 +255,35 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
     for(auto& view_upcall : view_upcalls) {
         view_upcall(curr_view->members, old_members);
     }
+}
+
+template<typename dispatcherType>
+void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id)
+                                                       {
+    tcp::socket client_socket = server_socket.accept();
+    node_id_t client_id = 0;
+    client_socket.exchange(my_id, client_id);
+    ip_addr& joiner_ip = client_socket.remote_ip;
+    curr_view->num_members++;
+    curr_view->member_ips.push_back(joiner_ip);
+    curr_view->members.push_back(client_id);
+    curr_view->failed.push_back(false);
+
+    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
+        bool success = client_socket.write(bytes, size);
+        assert(success);
+    };
+
+    std::size_t size_of_view = mutils::bytes_size(*curr_view);
+    client_socket.write((char*)&size_of_view, sizeof(size_of_view));
+    mutils::post_object(bind_socket_write, *curr_view);
+    std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
+    client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
+    mutils::post_object(bind_socket_write, derecho_params);
+    dispatchers.send_objects(client_socket);
+    rdma::impl::verbs_add_connection(client_id, joiner_ip, my_id);
+    sst::add_node(client_id, joiner_ip);
+
 }
 
 template <typename dispatcherType>
@@ -539,7 +550,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
 
                 //If in persistent mode, write the new view to disk before using it
                 if(!view_file_name.empty()) {
-                    persist_view(*curr_view, view_file_name);
+                    persist_object(*curr_view, view_file_name);
                 }
 
                 // Register predicates in the new view
@@ -625,13 +636,6 @@ void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& mes
  */
 template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>& newView, int whichFailed) {
-    //Temporarily disabled because all nodes are initialized at the beginning
-    //    if(whichFailed == -1) { //This is a join
-    //        rdmc::add_address(newView.members.back(), newView.member_ips.back());
-    //    }
-    //
-    //    std::map<node_id_t, ip_addr> new_member_map {{newView.members[newView.my_rank], newView.member_ips[newView.my_rank]}, {newView.members.back(), newView.member_ips.back()}};
-    //    sst::tcp::tcp_initialize(newView.members[newView.my_rank], new_member_map);
     newView.gmsSST = std::make_shared<sst::SST<DerechoRow<MAX_MEMBERS>>>(
         newView.members, newView.members[newView.my_rank],
         [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed);
@@ -665,12 +669,6 @@ std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::join_existin
     //    cout << "Joining group by contacting node at " << leader_ip << endl;
     log_event("Joining group: waiting for a response from the leader");
     tcp::socket leader_socket{leader_ip, leader_port};
-    //Temporarily disabled because all node IDs are fixed at startup
-    //First the leader sends the node ID this client has been assigned
-    //    node_id_t myNodeID;
-    //    bool success = leader_socket.read((char*)&myNodeID,sizeof(myNodeID));
-    //    assert(success);
-
     // exchange ids
     node_id_t leader_id = 0;
     leader_socket.exchange(my_id, leader_id);
@@ -726,8 +724,6 @@ template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_view,
                                                tcp::socket& client_socket) {
     log_event("Sending client the new view");
-    // Temporarily disabled because all node IDs are globally fixed at startup
-    //    client_socket.write((char*) &joining_client_id, sizeof(joining_client_id));
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
     client_socket.write((char*)&size_of_view, sizeof(size_of_view));

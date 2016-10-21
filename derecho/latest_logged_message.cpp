@@ -12,7 +12,7 @@
 #include <string>
 #include <strings.h>
 
-#include "serialization/SerializationSupport.hpp"
+#include <mutils-serialization/SerializationSupport.hpp>
 #include "persistence.h"
 
 using namespace derecho::persistence;

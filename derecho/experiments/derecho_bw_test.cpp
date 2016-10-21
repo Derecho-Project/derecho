@@ -13,8 +13,6 @@
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
 
-static const int GMS_PORT = 12345;
-
 using std::vector;
 using std::map;
 using std::cout;
@@ -23,23 +21,6 @@ using std::endl;
 using namespace derecho;
 
 int count = 0;
-
-struct test1_str {
-    int test1(string str) {
-        cout << str << endl;
-        count++;
-        if(count == 2) {
-            cout << "Exiting" << endl;
-            exit(0);
-        }
-        return 19954;
-    }
-
-    template <typename Dispatcher>
-    auto register_functions(Dispatcher &d) {
-        return d.register_functions(this, &test1_str::test1);
-    }
-};
 
 int main(int argc, char *argv[]) {
     srand(time(NULL));
@@ -93,17 +74,26 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    Dispatcher<test1_str> group_handlers(node_rank, std::make_tuple());
-    derecho::ManagedGroup<decltype(group_handlers)> managed_group(
-        GMS_PORT, node_addresses, node_rank, server_rank, max_msg_size,
-        derecho::CallbackSet{stability_callback, nullptr},
-        std::move(group_handlers), {}, block_size);
+    Dispatcher<> empty_dispatcher(node_rank);
+    std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+    if(node_rank == server_rank) {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_addresses[node_rank], std::move(empty_dispatcher),
+                derecho::CallbackSet{stability_callback, nullptr},
+                derecho::DerechoParams{max_msg_size, block_size});
+    } else {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_rank, node_addresses[node_rank], server_rank,
+                node_addresses[server_rank], std::move(empty_dispatcher),
+                derecho::CallbackSet{stability_callback, nullptr});
+    }
+
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    while(managed_group.get_members().size() < num_nodes) {
+    while(managed_group->get_members().size() < num_nodes) {
     }
-    auto members_order = managed_group.get_members();
+    auto members_order = managed_group->get_members();
     cout << "The order of members is :" << endl;
     for(auto id : members_order) {
         cout << id << " ";
@@ -113,20 +103,20 @@ int main(int argc, char *argv[]) {
     auto send_all = [&]() {
         for(int i = 0; i < num_messages; ++i) {
             cout << "Asking for a buffer" << endl;
-            char *buf = managed_group.get_sendbuffer_ptr(max_msg_size);
+            char *buf = managed_group->get_sendbuffer_ptr(max_msg_size);
             while(!buf) {
-                buf = managed_group.get_sendbuffer_ptr(max_msg_size);
+                buf = managed_group->get_sendbuffer_ptr(max_msg_size);
             }
             cout << "Obtained a buffer, sending" << endl;	    
-            managed_group.send();
+            managed_group->send();
         }
     };
     auto send_one = [&]() {
-        char *buf = managed_group.get_sendbuffer_ptr(1, num_messages);
+        char *buf = managed_group->get_sendbuffer_ptr(1, num_messages);
         while(!buf) {
-            buf = managed_group.get_sendbuffer_ptr(1, num_messages);
+            buf = managed_group->get_sendbuffer_ptr(1, num_messages);
         }
-        managed_group.send();
+        managed_group->send();
     };
 
     struct timespec start_time;
@@ -170,11 +160,11 @@ int main(int argc, char *argv[]) {
     log_results(num_nodes, num_senders_selector, max_msg_size, avg_bw,
                 "data_derecho_bw");
 
-    managed_group.barrier_sync();
+    managed_group->barrier_sync();
     std::string log_filename =
         (std::stringstream() << "events_node" << node_rank << ".csv").str();
     std::ofstream logfile(log_filename);
-    managed_group.print_log(logfile);
-    managed_group.leave();
+    managed_group->print_log(logfile);
+    managed_group->leave();
     cout << "Finished destroying managed_group" << endl;
 }

@@ -102,21 +102,11 @@ public:
               my_rank(my_rank) {}
 };
 
-/**
- * Serializes a View to disk, using the "safe save" method (writing to a swap
- * file first).
- * @param view The View to serialize
- * @param view_file_name The name of the file to create and write the View into
- */
-template <typename handlersType>
-void persist_view(const View<handlersType>& view, const std::string& view_file_name);
 
 /**
- * Inverse of persist_view; constructs a new View using the serialized data in
- * the file named view_file_name. If a swap file matching view_file_name exists
- * and contains a newer or more complete View, the View from the swap file will
- * be constructed instead (because this means a crash occurred before the swap
- * file could be renamed).
+ * Custom implementation of load_object for Views. The View from the swap file
+ * will be used if it is newer than the View from view_file_name (according to
+ * VID), since this means a crash occurred before the swap file could be renamed.
  * @param view_file_name The name of the file to read for a serialized View
  * @return A new View constructed with the data in the file
  */

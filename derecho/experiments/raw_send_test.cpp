@@ -23,10 +23,6 @@ using std::endl;
 using derecho::DerechoGroup;
 using derecho::DerechoRow;
 
-int test1 (string str) {
-  cout << str << endl;
-  return 1;
-}
 
 int main(int argc, char *argv[]) {
     srand(time(NULL));
@@ -58,32 +54,43 @@ int main(int argc, char *argv[]) {
         num_messages_received++;
     };
 
-    auto group_handlers = handlers(node_rank, 0, test1);
+    Dispatcher<> empty_dispatcher(node_rank);
+    derecho::CallbackSet callbacks{stability_callback, nullptr};
+    derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    derecho::ManagedGroup<decltype(group_handlers)> managed_group(
-        GMS_PORT, node_addresses, node_rank, server_rank, max_msg_size,
-        stability_callback, std::move(group_handlers), block_size);
+    std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+
+    if(node_rank == server_rank) {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_addresses[node_rank], std::move(empty_dispatcher),
+                callbacks, parameters);
+    } else {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_rank, node_addresses[node_rank], server_rank,
+                node_addresses[server_rank], std::move(empty_dispatcher),
+                callbacks);
+    }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    while(managed_group.get_members().size() < num_nodes) {
+    while(managed_group->get_members().size() < num_nodes) {
     }
-    auto members_order = managed_group.get_members();
+    auto members_order = managed_group->get_members();
     cout << "The order of members is :" << endl;
     for(auto id : members_order) {
         cout << id << " ";
     }
     cout << endl;
     for(int i = 0; i < num_messages; ++i) {
-        char *buf = managed_group.get_sendbuffer_ptr(max_msg_size);
+        char *buf = managed_group->get_sendbuffer_ptr(max_msg_size);
         while(!buf) {
-            buf = managed_group.get_sendbuffer_ptr(max_msg_size);
+            buf = managed_group->get_sendbuffer_ptr(max_msg_size);
         }
 	for (uint i = 0; i < max_msg_size; ++i) {
 	  buf[i] = 'a'+(rand()%26);
 	}
 	cout << buf << endl;
-	managed_group.send();
+	managed_group->send();
     }
 
     while(num_messages_received < num_messages * num_nodes) {

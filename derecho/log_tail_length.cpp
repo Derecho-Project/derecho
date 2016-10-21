@@ -12,8 +12,8 @@
 #include <cstdlib>
 #include <cstdint>
 
+#include <mutils-serialization/SerializationSupport.hpp>
 #include "persistence.h"
-#include "serialization/SerializationSupport.hpp"
 
 using namespace derecho::persistence;
 

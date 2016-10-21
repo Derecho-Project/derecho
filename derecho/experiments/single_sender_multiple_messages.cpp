@@ -24,7 +24,7 @@ int main() {
     uint32_t node_rank;
     uint32_t num_nodes;
 
-    initialize(node_rank, num_nodes);
+    std::map<uint32_t, std::string> node_address_map = initialize(node_rank, num_nodes);
 
     vector<uint32_t> members(num_nodes);
     for(int i = 0; i < (int)num_nodes; ++i) {
@@ -45,9 +45,10 @@ int main() {
             sst::SST<DerechoRow<MAX_GROUP_SIZE>, sst::Mode::Writes>>(members,
                                                                      node_rank);
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<MAX_GROUP_SIZE> g(
-        members, node_rank, derecho_sst, free_message_buffers, max_msg_size,
-        derecho::CallbackSet{stability_callback, nullptr}, block_size);
+    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(
+        members, node_rank, derecho_sst, free_message_buffers,
+        Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
+        derecho::DerechoParams{max_msg_size, block_size}, node_address_map);
 
     int num_messages = 100;
     if(node_rank == 0) {

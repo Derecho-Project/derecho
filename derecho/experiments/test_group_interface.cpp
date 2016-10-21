@@ -17,7 +17,7 @@ int main() {
     uint32_t node_rank;
     uint32_t num_nodes;
 
-    initialize(node_rank, num_nodes);
+    auto node_addresses = initialize(node_rank, num_nodes);
 
     vector<uint32_t> members(num_nodes);
     for(int i = 0; i < (int)num_nodes; ++i) {
@@ -39,9 +39,11 @@ int main() {
             std::make_shared<sst::SST<DerechoRow<8>, sst::Mode::Writes>>(
                 members, node_rank);
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<MAX_GROUP_SIZE> g(members, node_rank, derecho_sst,
-                                   free_message_buffers, max_msg_size,
-                                   callbacks, block_size);
+    derecho::DerechoParams parameters{max_msg_size, block_size};
+
+    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(members, node_rank, derecho_sst,
+                                   free_message_buffers, Dispatcher<>(node_rank),
+                                   callbacks, parameters, node_addresses);
 
     cout << "Derecho group created" << endl;
 

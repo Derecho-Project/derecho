@@ -11,13 +11,12 @@
 
 #include "../derecho_group.h"
 #include "../managed_group.h"
+#include "../derecho_caller.h"
 #include "../view.h"
 #include "block_size.h"
 #include "../rdmc/util.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
-
-static const int GMS_PORT = 12345;
 
 using std::vector;
 using std::map;
@@ -129,15 +128,26 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    derecho::ManagedGroup managed_group(
-        GMS_PORT, node_addresses, node_rank, server_rank, buffer_size,
-        derecho::CallbackSet{stability_callback, nullptr}, block_size);
+    derecho::CallbackSet callbacks{stability_callback, nullptr};
+    derecho::DerechoParams param_object{buffer_size, block_size};
+    Dispatcher<> empty_dispatcher(node_rank);
+    std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+
+    if(node_rank == server_rank) {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_addresses[node_rank], std::move(empty_dispatcher), callbacks, param_object);
+    } else {
+        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+                node_rank, node_addresses[node_rank],
+                server_rank, node_addresses[server_rank],
+                std::move(empty_dispatcher), callbacks);
+    }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    while(managed_group.get_members().size() < num_nodes) {
+    while(managed_group->get_members().size() < num_nodes) {
     }
-    auto members_order = managed_group.get_members();
+    auto members_order = managed_group->get_members();
     cout << "The order of members is :" << endl;
     for(auto id : members_order) {
         cout << id << " ";
@@ -146,11 +156,11 @@ int main(int argc, char *argv[]) {
 
     auto send_all = [&]() {
         for(int i = 0; i < num_messages; ++i) {
-            char *buf = managed_group.get_sendbuffer_ptr(buffer_size);
+            char *buf = managed_group->get_sendbuffer_ptr(buffer_size);
             while(!buf) {
-                buf = managed_group.get_sendbuffer_ptr(buffer_size);
+                buf = managed_group->get_sendbuffer_ptr(buffer_size);
             }
-            managed_group.send();
+            managed_group->send();
         }
     };
     struct timespec start_time;
@@ -170,11 +180,11 @@ int main(int argc, char *argv[]) {
     cout << avg_bw << endl;
     // log_results(num_nodes, buffer_size, avg_bw, "data_derecho_bw");
 
-    managed_group.barrier_sync();
+    managed_group->barrier_sync();
     std::string log_filename =
         (std::stringstream() << "events_node" << node_rank << ".csv").str();
     std::ofstream logfile(log_filename);
-    managed_group.print_log(logfile);
-    managed_group.leave();
+    managed_group->print_log(logfile);
+    managed_group->leave();
     cout << "Finished destroying managed_group" << endl;
 }

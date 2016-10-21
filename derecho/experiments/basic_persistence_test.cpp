@@ -1,9 +1,3 @@
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../rdmc/util.h"
-#include "../view.h"
-#include "../logger.h"
-
 #include <chrono>
 #include <ratio>
 #include <cstdlib>
@@ -13,6 +7,13 @@
 #include <thread>
 #include <vector>
 #include <fstream>
+
+#include "../derecho_group.h"
+#include "../managed_group.h"
+#include "../derecho_caller.h"
+#include "../view.h"
+#include "../logger.h"
+
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -24,12 +25,12 @@ const int GMS_PORT = 12345;
 const size_t message_size = 1000;
 const size_t block_size = 1000;
 
-uint32_t num_nodes, node_rank;
+uint32_t num_nodes, node_id;
 map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 1000;
 bool done = false;
-shared_ptr<derecho::ManagedGroup> managed_group;
+shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
@@ -45,6 +46,15 @@ void persistence_callback(int sender_id, long long int index, char* data, long l
         cout << "Done" << endl;
         done = true;
     }
+}
+
+void query_node_info(derecho::node_id_t& node_id, derecho::ip_addr& node_ip, derecho::ip_addr& leader_ip) {
+     cout << "Please enter this node's ID: ";
+     cin >> node_id;
+     cout << "Please enter this node's IP address: ";
+     cin >> node_ip;
+     cout << "Please enter the leader node's IP address: ";
+     cin >> leader_ip;
 }
 
 void send_messages(int count) {
@@ -64,17 +74,31 @@ void send_messages(int count) {
  */
 int main(int argc, char* argv[]) {
     srand(time(nullptr));
-    query_addresses(node_addresses, node_rank);
-    num_nodes = node_addresses.size();
-    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
+    if(argc < 2) {
+        cout << "Error: Expected number of nodes in experiment as the first argument."
+                << endl;
+        return -1;
+    }
+    num_nodes = std::atoi(argv[1]);
+    derecho::ip_addr my_ip;
+    derecho::node_id_t leader_id = 0;
+    derecho::ip_addr leader_ip;
 
-    string log_filename = (std::stringstream() << "events_node" << node_rank << ".csv").str();
-    string message_filename = (std::stringstream() << "data" << node_rank << ".dat").str();
+    query_node_info(node_id, my_ip, leader_ip);
 
-    managed_group = make_shared<derecho::ManagedGroup>(
-        GMS_PORT, node_addresses, node_rank, 0, message_size,
-        derecho::CallbackSet{stability_callback, persistence_callback},
-        block_size, message_filename);
+    string log_filename = (std::stringstream() << "events_node" << node_id << ".csv").str();
+    string message_filename = (std::stringstream() << "data" << node_id << ".dat").str();
+
+    derecho::CallbackSet callbacks{stability_callback, persistence_callback};
+    derecho::DerechoParams param_object{message_size, block_size, message_filename};
+    if(node_id == leader_id) {
+        managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+                my_ip, Dispatcher<>(node_id), callbacks, param_object);
+    } else {
+        managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+                node_id, my_ip, leader_id, leader_ip, Dispatcher<>(node_id), callbacks);
+    }
+
     cout << "Created group, waiting for others to join." << endl;
     while(managed_group->get_members().size() < (num_nodes - 1)) {
         std::this_thread::sleep_for(1ms);

@@ -3,13 +3,14 @@
 #include <memory>
 #include <vector>
 #include <time.h>
+#include <map>
 
 #include "../rdmc/rdmc.h"
+#include "../rdmc/util.h"
 #include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
-#include "initialize.h"
 
 using std::vector;
 
@@ -17,8 +18,13 @@ int main(int argc, char *argv[]) {
     uint32_t node_rank;
     uint32_t num_nodes;
 
-    initialize(node_rank, num_nodes);
+    std::map<uint32_t, std::string> node_addresses;
 
+    query_addresses(node_addresses, node_rank);
+    num_nodes = node_addresses.size();
+
+    // initialize RDMA resources, input number of nodes, node rank and ip addresses and create TCP connections
+    rdmc::initialize(node_addresses, node_rank);
     // size of one message
     long long int msg_size = atoll(argv[1]);
     // set block size
