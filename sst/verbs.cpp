@@ -21,7 +21,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../connection_manager.h"
+#include "derecho/connection_manager.h"
 #include "verbs.h"
 
 using std::cout;
