@@ -1,12 +1,12 @@
 #pragma once
-#include <array>
-#include <functional>
-#include <memory>
-#include <type_traits>
-#include <cassert>
-#include <tuple>
 #include "args-finder.hpp"
 #include "combinator_utils.h"
+#include <array>
+#include <cassert>
+#include <functional>
+#include <memory>
+#include <tuple>
+#include <type_traits>
 
 namespace sst {
 
@@ -68,7 +68,8 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
      * You can't write <T extends Row & Row_Extension> in C++ yet.
      */
     const std::function<row_entry(volatile const Row &,
-                                  volatile const Row_Extension &)> curr_pred;
+                                  volatile const Row_Extension &)>
+        curr_pred;
 
     /**
      * The raw function passed in by the user
@@ -185,7 +186,8 @@ struct PredicateBuilder {
         volatile Row_Extension &,
         std::function<util::ref_pair<volatile Row, volatile Row_Extension>(
             int)>,
-        const int num_rows)> updater_function_t;
+        const int num_rows)>
+        updater_function_t;
 
     using num_updater_functions = std::integral_constant<
         std::size_t,
@@ -275,11 +277,11 @@ struct PredicateBuilder {
     PredicateBuilder(const PredicateBuilder<Row, tl> &prev,
                      const decltype(updater_function_raw) &f,
                      const decltype(curr_pred_raw) curr_pred)
-        : updater_function_raw(f),
-          updater_function(f),
-          prev_preds(prev),
-          curr_pred_raw(curr_pred),
-          curr_pred(curr_pred) {}
+            : updater_function_raw(f),
+              updater_function(f),
+              prev_preds(prev),
+              curr_pred_raw(curr_pred),
+              curr_pred(curr_pred) {}
 
     // for convenience when parameterizing SST
     using NamedRowPredicatesTypePack = NamedRowPredicates<PredicateBuilder>;
@@ -315,7 +317,7 @@ auto as_row_pred(const F &f) {
 template <typename NameEnum, NameEnum Name, typename Row, typename fun_return,
           typename Up, typename Get>
 auto name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
+                    Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
     using This_list =
         TypeList<PredicateMetadata<NameEnum, Name, fun_return, Up, Get>>;
     using next_builder = PredicateBuilder<Row, This_list>;
@@ -329,7 +331,7 @@ auto name_predicate(const PredicateBuilder<
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, typename hd, typename... tl>
 const auto &name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
+                           Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
                                pb) {
     constexpr int unique = static_cast<int>(Name);
     auto new_prev = change_uniqueness<unique>(pb.prev_preds);
@@ -346,7 +348,7 @@ const auto &name_predicate(const PredicateBuilder<
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, int unique, typename... tl>
 const auto &name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
+                           Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
                                pb) {
     static_assert(unique >= 0, "Internal error: overload resolution fails");
     using next_builder = PredicateBuilder<

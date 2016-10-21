@@ -4,14 +4,14 @@
 // This will be included at the bottom of sst.h
 
 #include <cassert>
-#include <memory>
-#include <utility>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <numeric>
+#include <utility>
 
-#include "sst.h"
 #include "predicates.h"
+#include "sst.h"
 
 namespace sst {
 
@@ -22,17 +22,17 @@ SST<Row, ImplMode, NameEnum, RowExtras>::SST(
         row_preds,
     failure_upcall_t _failure_upcall, std::vector<char> already_failed,
     bool start_predicate_thread)
-    : named_functions(row_preds.first),
-      members(_members.size()),
-      num_members(_members.size()),
-      table(new InternalRow[_members.size()]),
-      failure_upcall(_failure_upcall),
-      row_predicate_updater_functions(row_preds.second),
-      res_vec(num_members),
-      background_threads(),
-      thread_shutdown(false),
-      thread_start(start_predicate_thread),
-      predicates(*(new Predicates())) {
+        : named_functions(row_preds.first),
+          members(_members.size()),
+          num_members(_members.size()),
+          table(new InternalRow[_members.size()]),
+          failure_upcall(_failure_upcall),
+          row_predicate_updater_functions(row_preds.second),
+          res_vec(num_members),
+          background_threads(),
+          thread_shutdown(false),
+          thread_start(start_predicate_thread),
+          predicates(*(new Predicates())) {
     // copy members and figure out the member_index
     for(uint32_t i = 0; i < num_members; ++i) {
         members[i] = _members[i];
@@ -568,7 +568,7 @@ void SST<Row, ImplMode, NameEnum, RowExtras>::put(
 template <class Row, Mode ImplMode, typename NameEnum, typename RowExtras>
 SST<Row, ImplMode, NameEnum, RowExtras>::SST_Snapshot::SST_Snapshot(
     const unique_ptr<volatile InternalRow[]> &_table, int _num_members)
-    : num_members(_num_members), table(new InternalRow[num_members]) {
+        : num_members(_num_members), table(new InternalRow[num_members]) {
     std::memcpy(const_cast<InternalRow *>(table.get()),
                 const_cast<const InternalRow *>(_table.get()),
                 num_members * sizeof(InternalRow));
@@ -577,7 +577,7 @@ SST<Row, ImplMode, NameEnum, RowExtras>::SST_Snapshot::SST_Snapshot(
 template <class Row, Mode ImplMode, typename NameEnum, typename RowExtras>
 SST<Row, ImplMode, NameEnum, RowExtras>::SST_Snapshot::SST_Snapshot(
     const SST_Snapshot &to_copy)
-    : num_members(to_copy.num_members), table(new InternalRow[num_members]) {
+        : num_members(to_copy.num_members), table(new InternalRow[num_members]) {
     std::memcpy(table.get(), to_copy.table.get(),
                 num_members * sizeof(InternalRow));
 }

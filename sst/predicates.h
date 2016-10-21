@@ -1,11 +1,11 @@
 #ifndef PREDICATES_H
 #define PREDICATES_H
 
+#include <algorithm>
 #include <functional>
 #include <list>
-#include <utility>
 #include <mutex>
-#include <algorithm>
+#include <utility>
 
 #include "sst.h"
 
@@ -77,10 +77,10 @@ public:
     public:
         pred_handle() : is_valid(false) {}
         pred_handle(typename pred_list::iterator iter, PredicateType type)
-            : is_valid{true}, iter{iter}, type{type} {}
+                : is_valid{true}, iter{iter}, type{type} {}
         pred_handle(pred_handle &) = delete;
         pred_handle(pred_handle &&other)
-            : pred_handle(std::move(other.iter), other.type) {
+                : pred_handle(std::move(other.iter), other.type) {
             other.is_valid = false;
         }
         pred_handle &operator=(pred_handle &) = delete;
@@ -110,7 +110,8 @@ public:
                        PredicateType type = PredicateType::ONE_TIME) {
         return insert(predicate, [triggers](SST &sst) {
             for(const auto &trigger : triggers) trigger(sst);
-        }, type);
+        },
+                      type);
     }
 
     /** Removes a (predicate, trigger) pair previously registered with insert().

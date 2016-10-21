@@ -2,27 +2,27 @@
  * @file verbs.cpp
  * Contains the implementation of the IB Verbs adapter layer of %SST.
  */
+#include <arpa/inet.h>
+#include <byteswap.h>
+#include <cstring>
+#include <endian.h>
+#include <errno.h>
+#include <getopt.h>
+#include <infiniband/verbs.h>
+#include <inttypes.h>
 #include <iostream>
+#include <netdb.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
-#include <cstring>
-#include <unistd.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <endian.h>
-#include <byteswap.h>
-#include <getopt.h>
-#include <sys/time.h>
-#include <arpa/inet.h>
-#include <infiniband/verbs.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <errno.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include "verbs.h"
 #include "../connection_manager.h"
+#include "verbs.h"
 
 using std::cout;
 using std::cerr;

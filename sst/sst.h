@@ -1,25 +1,25 @@
 #ifndef SST_H
 #define SST_H
 
+#include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <iostream>
 #include <list>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <thread>
 #include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <thread>
-#include <atomic>
-#include <mutex>
-#include <condition_variable>
 
+#include "NamedRowPredicates.h"
+#include "combinator_utils.h"
+#include "combinators.h"
 #include "util.h"
 #include "verbs.h"
-#include "NamedRowPredicates.h"
-#include "combinators.h"
-#include "combinator_utils.h"
 
 /** The root namespace for the Shared State Table project. */
 namespace sst {
@@ -206,7 +206,8 @@ private:
                     f(sst.table[sst.get_local_index()], [&](int row) {
                         return ref_pair<volatile Row, volatile Row_Extension>{
                             sst.table[row], sst.table[row]};
-                    }, sst.get_num_rows());
+                    },
+                      sst.get_num_rows());
                 };
             },
             pb);
@@ -240,9 +241,9 @@ public:
     SST(const vector<uint32_t> &_members, uint32_t my_node_id,
         failure_upcall_t failure_upcall = nullptr, std::vector<char> already_failed = {},
         bool start_predicate_thread = true)
-        : SST(_members, my_node_id,
-              std::pair<std::tuple<>, std::vector<row_predicate_updater_t>>{},
-              failure_upcall, already_failed, start_predicate_thread) {}
+            : SST(_members, my_node_id,
+                  std::pair<std::tuple<>, std::vector<row_predicate_updater_t>>{},
+                  failure_upcall, already_failed, start_predicate_thread) {}
 
     template <typename ExtensionList, typename... RestFunctions>
     SST(const vector<uint32_t> &_members, uint32_t my_node_id,
@@ -250,15 +251,15 @@ public:
         std::vector<char> already_failed,
         const PredicateBuilder<Row, ExtensionList> &pb,
         RestFunctions... named_funs)
-        : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
-              failure_upcall, already_failed, start_predicate_thread) {}
+            : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
+                  failure_upcall, already_failed, start_predicate_thread) {}
 
     template <typename ExtensionList, typename... RestFunctions>
     SST(const vector<uint32_t> &_members, uint32_t my_node_id,
         const PredicateBuilder<Row, ExtensionList> &pb,
         RestFunctions... named_funs)
-        : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
-              nullptr, {}, true) {}
+            : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
+                  nullptr, {}, true) {}
 
     /**
      * Delegate constructor to construct an SST instance without named

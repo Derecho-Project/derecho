@@ -1,11 +1,11 @@
 #pragma once
+#include "args-finder.hpp"
 #include <array>
+#include <cassert>
 #include <functional>
 #include <memory>
-#include <type_traits>
-#include <cassert>
 #include <tuple>
-#include "args-finder.hpp"
+#include <type_traits>
 
 namespace sst {
 namespace util {
@@ -240,7 +240,7 @@ using choose_uniqueness_tag = typename choose_uniqueness_tag_str<T>::type;
 template <int name_index, typename Row, typename NameEnum, NameEnum Name,
           typename... Ext_t>
 auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
+                               Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
     static_assert(
         static_cast<int>(Name) == name_index,
         "Error: names must be consecutive integer-valued enum members");
@@ -250,7 +250,7 @@ auto extract_predicate_getters(const PredicateBuilder<
 template <int name_index, typename Row, int uniqueness_tag, typename Ext_t,
           typename... rst>
 auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, rst...>>> &
+                               Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, rst...>>> &
                                    pb) {
     static_assert(
         uniqueness_tag >= 0,
@@ -261,7 +261,7 @@ auto extract_predicate_getters(const PredicateBuilder<
 template <int name_index, typename Row, typename NameEnum, NameEnum Name,
           typename Ext_t, typename Up, typename Get, typename... tl>
 auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, tl...>> &
+                               Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, tl...>> &
                                    pb) {
     static_assert(
         static_cast<int>(Name) == name_index,
@@ -274,8 +274,8 @@ auto extract_predicate_getters(const PredicateBuilder<
 template <int name_index, typename Row, int uniqueness_tag, typename Ext_t,
           typename Up, typename Get, typename... tl>
 auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
-                  tl...>> &pb) {
+                               Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
+                                             tl...>> &pb) {
     static_assert(
         uniqueness_tag >= 0,
         "Error: Please name this predicate before attempting to use it");
@@ -337,7 +337,7 @@ auto map_updaters(
 
 template <int unique, typename Row, typename Ext, typename Get>
 auto change_uniqueness(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, void, Get>>> &pb) {
+                       Row, TypeList<NamelessPredicateMetadata<Ext, -1, void, Get>>> &pb) {
     using next_builder = PredicateBuilder<
         Row, TypeList<NamelessPredicateMetadata<Ext, unique, void, Get>>>;
     return next_builder{pb.curr_pred_raw};
@@ -346,7 +346,7 @@ auto change_uniqueness(const PredicateBuilder<
 template <int unique, typename Row, typename Ext, typename Up, typename Get,
           typename hd, typename... tl>
 auto change_uniqueness(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
+                       Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
                            pb) {
     auto new_prev = change_uniqueness<unique>(pb.prev_preds);
     using This_list = typename decltype(new_prev)::template append<

@@ -1,10 +1,10 @@
 #ifndef NAMED_FUNCTION_H_
 #define NAMED_FUNCTION_H_
 
-#include <type_traits>
-#include <functional>
 #include "args-finder.hpp"
 #include "combinators.h"
+#include <functional>
+#include <type_traits>
 
 namespace sst {
 
