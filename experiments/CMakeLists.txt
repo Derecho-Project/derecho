@@ -1,13 +1,12 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(derecho CXX)
 set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3")
 
-include_directories(${CMAKE_SOURCE_DIR}/third_party)
-include_directories(${CMAKE_SOURCE_DIR}/third_party/mutils)
-include_directories(${CMAKE_SOURCE_DIR}/third_party/mutils-serialization)
-link_directories(${CMAKE_SOURCE_DIR}/third_party/mutils)
-link_directories(${CMAKE_SOURCE_DIR}/third_party/mutils-serialization)
+include_directories(${derecho_SOURCE_DIR}/third_party)
+include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
+include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
+link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 
 # test_group_interface
 add_executable(test_group_interface test_group_interface.cpp initialize.cpp )
