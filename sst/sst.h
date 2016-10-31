@@ -1,164 +1,185 @@
-#ifndef SST_H
-#define SST_H
+#pragma once
 
 #include <atomic>
+#include <bitset>
+#include <cassert>
 #include <condition_variable>
 #include <functional>
 #include <iostream>
-#include <list>
-#include <map>
 #include <memory>
 #include <mutex>
+#include <numeric>
+#include <stdexcept>
+#include <string>
 #include <thread>
-#include <tuple>
-#include <type_traits>
-#include <utility>
 #include <vector>
 
-#include "NamedRowPredicates.h"
-#include "combinator_utils.h"
-#include "combinators.h"
-#include "util.h"
+#include "predicates.h"
 #include "verbs.h"
 
-/** The root namespace for the Shared State Table project. */
+using sst::resources;
+
 namespace sst {
 
-using std::vector;
-using std::cout;
-using std::endl;
-using std::function;
-using std::list;
-using std::pair;
-using std::map;
-using std::thread;
-using std::unique_ptr;
+const int alignTo = sizeof(long);
 
-using util::template_and;
+constexpr int padded_len(const int& len) {
+    return (len < alignTo) ? alignTo : (len + alignTo) | ~(alignTo - 1);
+}
 
-/**
- * Flag to determine whether an SST is implemented in reads mode or writes mode.
- */
-enum class Mode {
-    /** In reads mode, the SST will continuously refresh the local copy of
-     * the table by posting one-sided reads to the remote nodes. */
-    Reads,
-    /** In writes mode, the SST waits for its local copy of the table to be
-     * updated by a one-sided write from a remote node, and each node is
-     * responsible for calling SST::put() to initiate this write after
-     * changing a variable in its local row. */
-    Writes
+/** Internal helper class, never exposed to the client. */
+class _SSTField {
+public:
+    char* base;
+    int row_len;
+    int field_len;
+
+    _SSTField(const int field_len) : base(nullptr), row_len(0), field_len(field_len) {}
+
+    int set_base(char* const base) {
+        this->base = base;
+        return padded_len(field_len);
+    }
+    void set_row_len(const int& rowLen) { row_len = rowLen; }
 };
 
-typedef function<void(uint32_t)> failure_upcall_t;
+/**
+ * Clients should use instances of this class with the appropriate template
+ * parameter to declare fields in their SST; for example, SSTField<int> is the
+ * type of an integer-valued SST field.
+ */
+template <typename T>
+class SSTField : public _SSTField {
+public:
+    using _SSTField::base;
+    using _SSTField::row_len;
+    using _SSTField::field_len;
+
+    SSTField() : _SSTField(sizeof(T)) {}
+
+    // Tracks down the appropriate row
+    T& operator[](const int row_idx) const { return ((T&)base[row_idx * row_len]); }
+
+    // Getter
+    T const& operator()(const int row_idx) const {
+        return *(T*)(base + row_idx * row_len);
+    }
+
+    // Setter
+    void operator()(const int row_idx, T const v) { *(T*)(base + row_idx * row_len) = v; }
+};
 
 /**
- * The SST object, representing a single shared state table.
- *
- * @tparam Row The type of the structure that will be used for each row in
- * this SST
- * @tparam ImplMode A {@link Mode} enum value indicating whether this SST will
- *be
- * implemented in Reads mode or Writes mode; default is Writes.
- * @tparam NameEnum An enum that will be used to name functions, if named
- * functions are used with this SST. Defaults to util::NullEnum, which is empty.
- * @tparam NamedFunctionTypePack A struct containing the function types and
- * return types of all the named functions that will be registered with this
- * SST; defaults to an empty struct if no named functions are used.
+ * Clients should use instances of this class to declare vector-like fields in
+ * their SST; the template parameter is the type of the vector's elements, just
+ * like with std::vector.
  */
-template <class Row, Mode ImplMode = Mode::Writes,
-          typename NameEnum = util::NullEnum,
-          typename RowExtras = NamedRowPredicates<>>
-class SST {
-    using NamedRowPredicatesTypePack =
-        typename RowExtras::NamedRowPredicatesTypePack;
-
-    // Row struct must be POD. In addition, it should not contain any pointer
-    // types
-    static_assert(std::is_pod<Row>::value, "Error! Row type must be POD.");
-    // static_assert(forall_type_list<this should be is_base with the Row!,
-    // NamedRowPredicatesTypePack>(),"Error: RowPredicates built on wrong
-    // row!");
-
+template <typename T>
+class SSTFieldVector : public _SSTField {
 public:
-    struct InternalRow : public Row,
-                         public util::extend_tuple_members<
-                             typename NamedRowPredicatesTypePack::row_types> {};
+    using _SSTField::base;
+    using _SSTField::row_len;
+    using _SSTField::field_len;
 
-private:
-    using named_functions_t =
-        typename NamedRowPredicatesTypePack::template Getters<
-            const volatile InternalRow &>;
+    SSTFieldVector(int nsenders) : _SSTField(nsenders * sizeof(T)) {}
 
-    //			   std::declval<util::n_copies<NamedRowPredicatesTypePack::size::value,
-    //			   std::function<bool (volatile const InternalRow&,
-    // int)>
-    //>
-    //>()))>;
-    /** List of functions we have registered to use knowledge operators on */
-    named_functions_t named_functions;
+    // Tracks down the appropriate row
+    T* operator[](const int& idx) const { return (T*)(base + idx * row_len); }
+};
 
-public:
+typedef std::function<void(uint32_t)> failure_upcall_t;
+
+/** Constructor parameter pack for SST. */
+struct SSTParams {
+    const std::vector<uint32_t>& members;
+    const uint32_t my_node_id;
+    const failure_upcall_t failure_upcall;
+    const std::vector<char> already_failed;
+    const bool start_predicate_thread;
+
     /**
-     * An object containing a read-only snapshot of an SST. It can be used
-     * like an SST for reading row values and the states of named functions,
-     * but it is disconnected from the actual SST and will not get updated.
+     *
+     * @param _members A vector of node IDs, each of which represents a node
+     * participating in the SST. The order of nodes in this vector is the order
+     * in which their rows will appear in the SST.
+     * @param my_node_id The ID of the local node
+     * @param failure_upcall The function to call when SST detects that a
+     * remote node has failed.
+     * @param already_failed A boolean vector indicating whether a node
+     * identified in members has already failed at the time this SST is
+     * constructed (i.e. already_failed[i] is true if members[i] has failed).
+     * @param start_predicate_thread Whether the predicate evaluation thread
+     * should be started immediately on construction of the SST. If false,
+     * predicate evaluation will not start until start_predicate_evalution()
+     * is called.
      */
-    class SST_Snapshot {
-    private:
-        /** Number of members, which is the number of rows in `table`. */
-        int num_members;
-        /** The structure containing shared state data. */
-        unique_ptr<const InternalRow[]> table;
+    SSTParams(const std::vector<uint32_t>& _members,
+              const uint32_t my_node_id,
+              const failure_upcall_t failure_upcall = nullptr,
+              const std::vector<char> already_failed = {},
+              const bool start_predicate_thread = true)
+            : members(_members),
+              my_node_id(my_node_id),
+              failure_upcall(failure_upcall),
+              already_failed(already_failed),
+              start_predicate_thread(start_predicate_thread) {}
+};
 
-    public:
-        /** Creates an SST snapshot given the current state internals of the
-         * SST. */
-        SST_Snapshot(const unique_ptr<volatile InternalRow[]> &_table,
-                     int _num_members);
-        /** Copy constructor. */
-        SST_Snapshot(const SST_Snapshot &to_copy);
+template <class DerivedSST>
+class SST {
+private:
+    template <typename... Fields>
+    void init_SSTFields(Fields&... fields) {
+        row_len = 0;
+        compute_row_len(row_len, fields...);
+        rows = (char*)malloc(row_len * num_members);
+        char* base = rows;
+        set_bases_and_row_lens(base, row_len, fields...);
+    }
 
-        /** Accesses a row of the snapshot. */
-        const InternalRow &get(int index) const;
-        /** Accesses a row of the snapshot using the [] operator. */
-        const InternalRow &operator[](int index) const;
-    };
+    DerivedSST* derived_this;
+
+    std::vector<std::thread> background_threads;
+    std::atomic<bool> thread_shutdown;
+
+    void detect();
+
+public:
+    Predicates<DerivedSST> predicates;
+    friend class Predicates<DerivedSST>;
 
 private:
-    /** List of members in the group (values are node ranks). */
-    vector<uint32_t> members;
-    /** List of node ranks mapped to member index. */
-    map<uint32_t, int, std::greater<uint32_t>> members_by_rank;
-    /** Number of members; equal to `members.size()`. */
-    unsigned int num_members;
-    /** Index of this node in the table. */
-    unsigned int member_index;
-    /** The actual structure containing shared state data. */
-    unique_ptr<volatile InternalRow[]> table;
+    /** Pointer to memory where the SST rows are stored. */
+    char* rows;
+    /** Length of each row in this SST, in bytes. */
+    int row_len;
+    /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
+    const std::vector<uint32_t>& members;
+    /** Equal to members.size() */
+    const unsigned int num_members;
+    /** Index (row number) of this node in the SST. */
+    unsigned int my_index;
+    /** Maps node IDs to SST row indexes. */
+    std::map<uint32_t, int, std::greater<uint32_t>> members_by_id;
+    /** ID of this node in the system. */
+    uint32_t my_node_id;
     /** Map of queue pair number to row. Useful for detecting failures. */
     std::map<int, int> qp_num_to_index;
-    /** A parallel array tracking whether the row has been marked frozen. */
+
+    /** Array with one entry for each row index, tracking whether the row is
+     *  marked frozen (meaning its corresponding remote node has crashed). */
     std::vector<bool> row_is_frozen;
     /** The number of rows that have been frozen. */
     int num_frozen{0};
     /** The function to call when a remote node appears to have failed. */
     failure_upcall_t failure_upcall;
-    /** List of functions needed to update row predicates */
-    using row_predicate_updater_t = std::function<void(SST &)>;
-    const std::vector<row_predicate_updater_t>
-        row_predicate_updater_functions;  // should be of size
-    // NamedPredicatesTypePack::num_updater_functions:::value
+    /** Mutex for failure detection and row freezing. */
+    std::mutex freeze_mutex;
+
     /** RDMA resources vector, one for each member. */
-    vector<unique_ptr<resources>> res_vec;
-    /** Holds references to background threads, so that we can shut them down
-     * during destruction. */
-    vector<thread> background_threads;
-    /** A flag to signal background threads to shut down; set to true during
-     * destructor calls. */
-    std::atomic<bool> thread_shutdown;
-    /** Indicates whether the predicate evaluation thread should start after
-     * being
+    std::vector<std::unique_ptr<resources>> res_vec;
+
+    /** Indicates whether the predicate evaluation thread should start after being
      * forked in the constructor. */
     bool thread_start;
     /** Mutex for thread_start_cv. */
@@ -166,181 +187,126 @@ private:
     /** Notified when the predicate evaluation thread should start. */
     std::condition_variable thread_start_cv;
 
-    // mutex for put
-    std::mutex freeze_mutex;
-
-    /** Base case for the recursive constructor_helper with no template
-     * parameters. */
-    template <int index>
-    auto constructor_helper() const {
-        using namespace std;
-        return make_pair(tuple<>{}, vector<row_predicate_updater_t>{});
-    }
-
-    /** Helper function for the constructor that recursively unpacks Named
-     * RowPredicate template parameters. */
-
-    template <int index, typename ExtensionList, typename... RestFunctions>
-    auto constructor_helper(const PredicateBuilder<Row, ExtensionList> &pb,
-                            const RestFunctions &... rest) const {
-        using namespace std;
-        using namespace util;
-        static_assert(PredicateBuilder<Row, ExtensionList>::is_named::value,
-                      "Error: cannot build SST with unnamed predicate");
-        static_assert(
-            PredicateBuilder<Row, ExtensionList>::template name_enum_matches<
-                NameEnum>::value,
-            "Error: this predicate contains names from a different NameEnum!");
-
-        constexpr auto num_getters =
-            PredicateBuilder<Row, ExtensionList>::num_getters::value;
-        auto rec_call_res = constructor_helper<index + num_getters>(rest...);
-
-        std::vector<row_predicate_updater_t> &row_predicate_updater_functions =
-            rec_call_res.second;
-        predicate_builder::map_updaters(
-            row_predicate_updater_functions,
-            [](const auto &f, auto const *const RE_type) {
-                return [f](SST &sst) -> void {
-                    using Row_Extension = decay_t<decltype(*RE_type)>;
-                    f(sst.table[sst.get_local_index()], [&](int row) {
-                        return ref_pair<volatile Row, volatile Row_Extension>{
-                            sst.table[row], sst.table[row]};
-                    },
-                      sst.get_num_rows());
-                };
-            },
-            pb);
-
-        return make_pair(tuple_cat(pb.template wrap_getters<InternalRow>(),
-                                   rec_call_res.first),
-                         row_predicate_updater_functions);
-    }
-
-    // Functions for background threads to run
-    /** Reads all the remote rows once by RDMA, if this SST is in Reads mode. */
-    void refresh_table();
-    /** Continuously refreshes all the remote rows, if this SST is in Reads
-     * mode.
-     */
-    void read();
-    /** Continuously evaluates predicates to detect when they become true. */
-    void detect();
-
 public:
-    /**
-     * Constructs an SST instance, initializes RDMA resources, and spawns
-     * background threads.
-     *
-     * @param _members A vector of node ranks (IDs), each of which represents a
-     * node participating in the SST. The order of nodes in this vector is the
-     * order in which their rows will appear in the SST.
-     * @param my_node_id The node rank of the local node, i.e. the one on which
-     * this code is running.
-     */
-    SST(const vector<uint32_t> &_members, uint32_t my_node_id,
-        failure_upcall_t failure_upcall = nullptr, std::vector<char> already_failed = {},
-        bool start_predicate_thread = true)
-            : SST(_members, my_node_id,
-                  std::pair<std::tuple<>, std::vector<row_predicate_updater_t>>{},
-                  failure_upcall, already_failed, start_predicate_thread) {}
+    template <typename... Fields>
+    SST(DerivedSST* derived_class_pointer, const SSTParams& params, Fields&... fields)
+            : derived_this(derived_class_pointer),
+              thread_shutdown(false),
+              members(params.members),
+              num_members(members.size()),
+              my_node_id(params.my_node_id),
+              row_is_frozen(num_members),
+              failure_upcall(params.failure_upcall),
+              res_vec(num_members),
+              thread_start(params.start_predicate_thread) {
+        //Figure out my SST index
+        for(uint32_t i = 0; i < num_members; ++i) {
+            if(members[i] == my_node_id) {
+                my_index = i;
+            }
+        }
 
-    template <typename ExtensionList, typename... RestFunctions>
-    SST(const vector<uint32_t> &_members, uint32_t my_node_id,
-        failure_upcall_t failure_upcall, bool start_predicate_thread,
-        std::vector<char> already_failed,
-        const PredicateBuilder<Row, ExtensionList> &pb,
-        RestFunctions... named_funs)
-            : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
-                  failure_upcall, already_failed, start_predicate_thread) {}
+        //Initialize rows and set the "base" field of each SSTField
+        init_SSTFields(fields...);
 
-    template <typename ExtensionList, typename... RestFunctions>
-    SST(const vector<uint32_t> &_members, uint32_t my_node_id,
-        const PredicateBuilder<Row, ExtensionList> &pb,
-        RestFunctions... named_funs)
-            : SST(_members, my_node_id, constructor_helper<0>(pb, named_funs...),
-                  nullptr, {}, true) {}
+        if(!params.already_failed.empty()) {
+            assert(params.already_failed.size() == num_members);
+            for(size_t index = 0; index < params.already_failed.size(); ++index) {
+                if(params.already_failed[index]) {
+                    row_is_frozen[index] = true;
+                }
+            }
+        }
 
-    /**
-     * Delegate constructor to construct an SST instance without named
-     * functions.
-     * @param _members A vector of node ranks (IDs), each of which represents a
-     * node participating in the SST. The order of nodes in this vector is the
-     * order in which their rows will appear in the SST.
-     * @param _node_rank The node rank of the local node, i.e. the one on which
-     * this code is running.
-     */
-    SST(const vector<uint32_t> &_members, uint32_t my_node_id,
-        std::pair<decltype(named_functions),
-                  std::vector<row_predicate_updater_t>>,
-        failure_upcall_t _failure_upcall = nullptr,
-        std::vector<char> already_failed = {},
-        bool start_predicate_thread = true);
-    SST(const SST &) = delete;
-    virtual ~SST();
+        // sort members descending by node ID, while keeping track of their
+        // specified index in the SST
+        for(unsigned int sst_index = 0; sst_index < num_members; ++sst_index) {
+            members_by_id[members[sst_index]] = sst_index;
+        }
+
+        //Initialize res_vec with the correct offsets for each row
+        unsigned int node_rank, sst_index;
+        for(auto const& rank_index : members_by_id) {
+            std::tie(node_rank, sst_index) = rank_index;
+            char *write_addr, *read_addr;
+            write_addr = rows + row_len * sst_index;
+            read_addr = rows + row_len * my_index;
+            if(sst_index != my_index) {
+                if(row_is_frozen[sst_index]) {
+                    continue;
+                }
+                res_vec[sst_index] = std::make_unique<resources>(
+                    node_rank, write_addr, read_addr, row_len, row_len);
+                // update qp_num_to_index
+                qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
+            }
+        }
+
+        std::thread detector(&SST::detect, this);
+        background_threads.push_back(std::move(detector));
+
+        std::cout << "Initialized SST and Started Threads" << std::endl;
+    }
+
+    ~SST();
+
     /** Starts the predicate evaluation loop. */
     void start_predicate_evaluation();
-    /** Accesses a local or remote row. */
-    volatile InternalRow &get(unsigned int index);
-    /** Read-only access to a local or remote row, for use in const contexts. */
-    const volatile InternalRow &get(unsigned int index) const;
-    /** Accesses a local or remote row using the [] operator. */
-    volatile InternalRow &operator[](unsigned int index);
-    /** Read-only [] operator for a local or remote row, for use in const
-     * contexts. */
-    const volatile InternalRow &operator[](unsigned int index) const;
-    int get_num_rows() const;
-    /** Gets the index of the local row in the table. */
-    int get_local_index() const;
-    /** Gets a snapshot of the table. */
-    std::unique_ptr<SST_Snapshot> get_snapshot() const;
-    /** Writes the local row to all remote nodes. */
-    void put();
-    /** Writes the local row to some of the remote nodes. */
-    void put(vector<uint32_t> receiver_ranks);
-    /** Writes a contiguous subset of the local row to all remote nodes. */
-    void put(long long int offset, long long int size);
-    /** Writes a contiguous subset of the local row to some of the remote nodes.
-     */
-    void put(vector<uint32_t> receiver_ranks, long long int offset,
-             long long int size);
+
     /** Does a TCP sync with each member of the SST. */
     void sync_with_members() const;
-    /** Marks a row as frozen, so it will no longer update, and its
-     * corresponding
+
+    /** Marks a row as frozen, so it will no longer update, and its corresponding
      * node will not receive writes. */
-    void freeze(int index);
-    /** Deletes all predicates currently registered with this SST. */
-    void delete_all_predicates();
+    void freeze(int row_index);
 
-    class Predicates;
-    /** Predicate management object for this SST. */
-    Predicates &predicates;
-    friend class Predicates;
+    /** Returns the total number of rows in the table. */
+    int get_num_rows() const { return num_members; }
 
-    /**
-     * Retrieve a previously-stored named predicate and call it.
-     */
-    template <NameEnum name>
-    auto call_named_predicate(volatile const InternalRow &ir) const {
-        constexpr int index = static_cast<int>(name);
-        constexpr int max = std::tuple_size<named_functions_t>::value;
-        static_assert(index < max,
-                      "Error: this name was not used to name a RowPredicate");
+    /** Gets the index of the local row in the table. */
+    int get_local_index() const { return my_index; }
 
-        // the modulos here ensure the function type-checks
-        // even when the index is too large.
-        return std::get<index % max>(named_functions)(ir);
+    /** Writes the entire local row to all remote nodes. */
+    void put() {
+        std::vector<uint32_t> indices(num_members);
+        std::iota(indices.begin(), indices.end(), 0);
+        put(indices, 0, row_len);
     }
 
-    template <NameEnum name>
-    auto call_named_predicate(const int row_index) const {
-        return call_named_predicate<name>((*this)[row_index]);
+    /** Writes the entire local row to some of the remote nodes. */
+    void put(std::vector<uint32_t> receiver_ranks) { put(receiver_ranks, 0, row_len); }
+
+    /** Writes a contiguous subset of the local row to all remote nodes. */
+    void put(long long int offset, long long int size) {
+        std::vector<uint32_t> indices(num_members);
+        iota(indices.begin(), indices.end(), 0);
+        put(indices, offset, size);
+    }
+
+    /** Writes a contiguous subset of the local row to some of the remote nodes. */
+    void put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+
+private:
+    using char_p = char*;
+
+    void compute_row_len(int&) {}
+
+    template <typename Field, typename... Fields>
+    void compute_row_len(int& row_len, Field& f, Fields&... rest) {
+        row_len += padded_len(f.field_len);
+        compute_row_len(row_len, rest...);
+    }
+
+    void set_bases_and_row_lens(char*, const int) {}
+
+    template <typename Field, typename... Fields>
+    void set_bases_and_row_lens(char_p& base, const int rlen, Field& f, Fields&... rest) {
+        base += f.set_base(base);
+        f.set_row_len(rlen);
+        set_bases_and_row_lens(base, rlen, rest...);
     }
 };
 
 } /* namespace sst */
 
 #include "sst_impl.h"
-
-#endif /* SST_H */
