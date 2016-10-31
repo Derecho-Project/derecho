@@ -30,13 +30,13 @@ constexpr int padded_len(const int& len) {
 /** Internal helper class, never exposed to the client. */
 class _SSTField {
 public:
-    char* base;
+    volatile char* base;
     int row_len;
     int field_len;
 
     _SSTField(const int field_len) : base(nullptr), row_len(0), field_len(field_len) {}
 
-    int set_base(char* const base) {
+    int set_base(volatile char* const base) {
         this->base = base;
         return padded_len(field_len);
     }
@@ -58,10 +58,10 @@ public:
     SSTField() : _SSTField(sizeof(T)) {}
 
     // Tracks down the appropriate row
-    T& operator[](const int row_idx) const { return ((T&)base[row_idx * row_len]); }
+    volatile T& operator[](const int row_idx) const { return ((T&)base[row_idx * row_len]); }
 
     // Getter
-    T const& operator()(const int row_idx) const {
+    volatile T const& operator()(const int row_idx) const {
         return *(T*)(base + row_idx * row_len);
     }
 
@@ -72,19 +72,25 @@ public:
 /**
  * Clients should use instances of this class to declare vector-like fields in
  * their SST; the template parameter is the type of the vector's elements, just
- * like with std::vector.
+ * like with std::vector. Unlike std::vector, these are fixed-size arrays and
+ * cannot grow or shrink after construction.
  */
 template <typename T>
 class SSTFieldVector : public _SSTField {
+private:
+    const size_t length;
 public:
     using _SSTField::base;
     using _SSTField::row_len;
     using _SSTField::field_len;
 
-    SSTFieldVector(int nsenders) : _SSTField(nsenders * sizeof(T)) {}
+    SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {}
 
     // Tracks down the appropriate row
-    T* operator[](const int& idx) const { return (T*)(base + idx * row_len); }
+    volatile T* operator[](const int& idx) const { return (T*)(base + idx * row_len); }
+
+    /** Just like std::vector::size(), returns the number of elements in this vector. */
+    size_t size() const { return length; }
 };
 
 typedef std::function<void(uint32_t)> failure_upcall_t;
@@ -133,7 +139,7 @@ private:
         row_len = 0;
         compute_row_len(row_len, fields...);
         rows = (char*)malloc(row_len * num_members);
-        char* base = rows;
+        volatile char* base = rows;
         set_bases_and_row_lens(base, row_len, fields...);
     }
 
@@ -150,7 +156,7 @@ public:
 
 private:
     /** Pointer to memory where the SST rows are stored. */
-    char* rows;
+    volatile char* rows;
     /** Length of each row in this SST, in bytes. */
     int row_len;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
@@ -287,7 +293,7 @@ public:
     void put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
 
 private:
-    using char_p = char*;
+    using char_p = volatile char*;
 
     void compute_row_len(int&) {}
 
