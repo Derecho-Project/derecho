@@ -6,78 +6,131 @@
 #include <mutex>
 #include <string>
 #include <sstream>
+#include "../sst/sst.h"
 
 namespace derecho {
 
 using ip_addr = std::string;
 using node_id_t = uint32_t;
 
-using cstring = char[50];
+const int MAX_STRING_LEN = 50;
+using cstring = char[MAX_STRING_LEN];
 
+using sst::SSTField;
+using sst::SSTFieldVector;
 /**
- * The GMS and derecho_group will share the same SST for efficiency
+ * The GMS and derecho_group will share the same SST for efficiency. This class
+ * defines all the fields in this SST.
  */
-template <unsigned int N>
-struct DerechoRow {
+class DerechoSST : public sst::SST<DerechoSST> {
+public:
     // derecho_group members. Copy-pasted from derecho_group.h's
     // MessageTrackingRow
     /** This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
-    long long int seq_num;
+    SSTField<long long int> seq_num;
     /** This represents the highest sequence number that has been received
      * by every node, as observed by this node. If a node updates stable_num,
      * then it believes that all messages up to stable_num in the global
      * round-robin order have been received by every node. */
-    long long int stable_num;
+    SSTField<long long int> stable_num;
     /** This represents the highest sequence number that has been delivered
      * at this node. Messages are only delievered once stable, so it must be
      * at least stable_num. */
-    long long int delivered_num;
+    SSTField<long long int> delivered_num;
     /** This represents the highest sequence number that has been persisted
      * to disk at this node, if persistence is enabled. Messages are only
      * persisted to disk once delivered to the application. */
-    long long int persisted_num;
+    SSTField<long long int> persisted_num;
 
     /** View ID associated with this SST */
-    int vid;
+    SSTField<int> vid;
     /** Array of same length as View::members, where each bool represents
      * whether the corresponding member is suspected to have failed */
-    bool suspected[N];
+    SSTFieldVector<bool> suspected;
     /** An array of nChanges proposed changes to the view (the number of non-
      * empty elements is nChanges). The total number of changes never exceeds
      * N/2. If request i is a Join, changes[i] is not in current View's
      * members. If request i is a Departure, changes[i] is in current View's
      * members. */
-    node_id_t changes[N];  // If the total never exceeds N/2, why is this N?
+    SSTFieldVector<node_id_t> changes;
     /** If the next pending view change include a join, this is the IP address
-     *  of the joining node. */
-    cstring joiner_ip;
+     *  of the joining node. Stored as a fixed-size char array, since SST
+     *  doesn't support strings. */
+    SSTFieldVector<char> joiner_ip;
     /** How many changes to the view are pending. */
-    int nChanges;
+    SSTField<int> nChanges;
     /** How many proposed view changes have reached the commit point. */
-    int nCommitted;
+    SSTField<int> nCommitted;
     /** How many proposed changes have been seen. Incremented by a member
      * to acknowledge that it has seen a proposed change.*/
-    int nAcked;
+    SSTField<int> nAcked;
     /** Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
-    long long int nReceived[N];
+    SSTFieldVector<long long int> nReceived;
     /** Set after calling rdmc::wedged(), reports that this member is wedged.
      * Must be after nReceived!*/
-    bool wedged;
+    SSTField<bool> wedged;
     /** Array of how many messages to accept from each sender, K1-able*/
-    int globalMin[N];
+    SSTFieldVector<int> globalMin;
     /** Must come after GlobalMin */
-    bool globalMinReady;
+    SSTField<bool> globalMinReady;
+
+    /**
+     * Constructs an SST, and initializes the GMS fields of the local row based
+     * on the given VID. If the VID is >0, the "committed" and "acked" counters
+     * are initialized to that value so that all views up to that ID are
+     * considered already stable. GMS fields on non-local rows are always
+     * initialized to zero, to ensure they have "safe" values before receiving
+     * the first put().
+     * @param parameters The SST parameters, which will be forwarded to the
+     * standard SST constructor.
+     * @param curr_vid The last stable VID known by the GMS; default is 0
+     * (meaning this is the first time a Derecho SST has been created).
+     */
+    DerechoSST(const sst::SSTParams& parameters, const int curr_vid = 0)
+            : suspected(parameters.members.size()),
+              changes(parameters.members.size()),
+              joiner_ip(MAX_STRING_LEN),
+              nReceived(parameters.members.size()),
+              globalMin(parameters.members.size()),
+              sst::SST<DerechoSST>(this, parameters, seq_num, stable_num, delivered_num,
+                       persisted_num, vid, suspected, changes, joiner_ip,
+                       nChanges, nCommitted, nAcked, nReceived, wedged,
+                       globalMin, globalMinReady) {
+        //Once superclass constructor has finished, table entries can be initialized
+        int my_row = get_local_index();
+        for(int row = 0; row < get_num_rows(); ++row) {
+            vid[row] = (row == my_row ? curr_vid : 0);
+            for(size_t i = 0; i < parameters.members.size(); ++i) {
+                suspected[row][i] = false;
+                globalMin[row][i] = 0;
+                changes[row][i] = 0;
+            }
+            memset(const_cast<char*>(joiner_ip[row]), 0, MAX_STRING_LEN);
+            nChanges[row] = (row == my_row ? curr_vid : 0);
+            nCommitted[row] = (row == my_row ? curr_vid : 0);
+            nAcked[row] = (row == my_row ? curr_vid : 0);
+            wedged[row] = false;
+            globalMinReady[row] = false;
+        }
+    }
+
+    void init_local_row_from_existing(const DerechoSST& existing_sst, const int row);
+
+    //This can probably be deleted because it replicates the constructor's functionality
+    //It only exists to be a drop-in replacement for gmssst::init(DerechoRow, vid)
+    void init_local_row_at_vid(const int vid);
+
+    /**
+     * Creates a string representation of the local row (not the whole table).
+     * This should be converted to an ostream operator<< to follow standards.
+     */
+    std::string to_string() const;
 };
 
-template <unsigned int N>
-using GMSTableRow = DerechoRow<N>;
-
-// static_assert(std::is_pod<DerechoRow<10>>::value, "Error! Row type must be
-// POD.");
 
 /**
  * Utility functions for manipulating GMSTableRow objects; SST rows can't have
@@ -86,7 +139,7 @@ using GMSTableRow = DerechoRow<N>;
 namespace gmssst {
 
 /**
- * Thread-safe setter for GMSTableRow members; ensures there is a
+ * Thread-safe setter for DerechoSST members; ensures there is a
  * std::atomic_signal_fence after writing the value.
  * @param e A reference to a member of GMSTableRow.
  * @param value The value to set that reference to.
@@ -98,7 +151,7 @@ void set(volatile Elem& e, const Elem& value) {
 }
 
 /**
- * Thread-safe setter for GMSTableRow members; ensures there is a
+ * Thread-safe setter for DerechoSST members; ensures there is a
  * std::atomic_signal_fence after writing the value.
  * @param e A reference to a member of GMSTableRow.
  * @param value The value to set that reference to.
@@ -110,10 +163,29 @@ void set(volatile Elem& e, volatile const Elem& value) {
 }
 
 /**
- * Thread-safe setter for GMSTableRow members that are arrays; takes a lock
+ * Thread-safe setter for DerechoSST members that are arrays; takes a lock
+ * before running memcpy, and then ensures there is an atomic_signal_fence.
+ * The first {@code length} members of {@code value} are copied to {@code array}.
+ * @param array A pointer to the first element of an array that should be set
+ * to {@code value}, obtained by calling SSTFieldVector::operator[]
+ * @param value A pointer to the first element of an array to read values from
+ * @param length The number of array elements to copy
+ */
+template <typename Elem>
+void set(volatile Elem* array, volatile Elem* value, const size_t length) {
+    static thread_local std::mutex set_mutex;
+    {
+        std::lock_guard<std::mutex> lock(set_mutex);
+        memcpy(const_cast<Elem*>(array), const_cast<Elem*>(value),
+               length * sizeof(Elem));
+    }
+    std::atomic_signal_fence(std::memory_order_acq_rel);
+}
+/**
+ * Thread-safe setter for DerechoSST members that are arrays; takes a lock
  * before running memcpy, and then ensures there is an atomic_signal_fence.
  * This version copies the entire array, and assumes both arrays are the same
- *length.
+ * length.
  *
  * @param e A reference to an array-type member of GMSTableRow
  * @param value The array whose contents should be copied to this member
@@ -126,8 +198,7 @@ void set(volatile Arr(&e)[Len], const volatile Arr(&value)[Len]) {
         memcpy(const_cast<Arr(&)[Len]>(e), const_cast<const Arr(&)[Len]>(value),
                Len * sizeof(Arr));
         // copy_n just plain doesn't work, claiming that its argument types are
-        // "not
-        // assignable"
+        // "not assignable"
         //        std::copy_n(const_cast<const Arr (&)[Len]>(value), Len,
         //        const_cast<Arr (&)[Len]>(e));
     }
@@ -135,7 +206,7 @@ void set(volatile Arr(&e)[Len], const volatile Arr(&value)[Len]) {
 }
 
 /**
- * Thread-safe setter for GMSTableRow members that are arrays; takes a lock
+ * Thread-safe setter for DerechoSST members that are arrays; takes a lock
  * before running memcpy, and then ensures there is an atomic_signal_fence.
  * This version only copies the first num elements of the source array.
  * @param dst
@@ -143,8 +214,7 @@ void set(volatile Arr(&e)[Len], const volatile Arr(&value)[Len]) {
  * @param num
  */
 template <size_t L1, size_t L2, typename Arr>
-void set(volatile Arr(&dst)[L1], const volatile Arr(&src)[L2],
-         const size_t& num) {
+void set(volatile Arr(&dst)[L1], const volatile Arr(&src)[L2], const size_t& num) {
     static thread_local std::mutex set_mutex;
     {
         std::lock_guard<std::mutex> lock(set_mutex);
@@ -154,105 +224,16 @@ void set(volatile Arr(&dst)[L1], const volatile Arr(&src)[L2],
     std::atomic_signal_fence(std::memory_order_acq_rel);
 }
 
-/**
- * Constructs a DerechoRow for a system that does not start at View ID 0 (which
- * is the case when recovering from logs). Initializes the "committed" and
- * "acked" counters to the given VID so that all views up to that ID are
- * considered already stable.
- *
- * @param newRow The instance of DerechoRow to initialize
- * @param vid The VID of the current View upon initialization
- */
-template <unsigned int N>
-void init(volatile DerechoRow<N>& newRow, const int vid) {
-    newRow.vid = vid;
-    for(size_t i = 0; i < N; ++i) {
-        newRow.suspected[i] = false;
-        newRow.globalMin[i] = 0;
-        // This will be initialized by DerechoGroup
-        //        newRow.nReceived[i] = -1;
-        newRow.changes[i] = 0;
-    }
-    newRow.nChanges = vid;
-    newRow.nCommitted = vid;
-    newRow.nAcked = vid;
-    newRow.wedged = false;
-    newRow.globalMinReady = false;
-}
 
-/**
- * Pseudo-constructor for DerechoRow, to work around the fact that POD can't
- * have constructors. Ensures that all members are initialized to a safe initial
- * value (i.e. suspected[] is all false), including setting changes[] to empty
- * C-strings.
- * @param newRow The instance of DerechoRow to initialize.
- */
-template <unsigned int N>
-void init(volatile DerechoRow<N>& newRow) {
-    init(newRow, 0);
-}
-
-/**
- * Transfers data from one DerechoRow instance to another; specifically, copies
- * changes, nChanges, nCommitted, and nAcked.
- * @param newRow The instance to initialize.
- * @param existingRow The instance to copy data from.
- */
-template <unsigned int N>
-void init_from_existing(volatile GMSTableRow<N>& newRow,
-                        const volatile GMSTableRow<N>& existingRow) {
-    static thread_local std::mutex copy_mutex;
-    std::unique_lock<std::mutex> lock(copy_mutex);
-    memcpy(const_cast<node_id_t*>(newRow.changes),
-           const_cast<const node_id_t*>(existingRow.changes),
-           N * sizeof(node_id_t));
-    for(size_t i = 0; i < N; ++i) {
-        newRow.suspected[i] = false;
-        newRow.globalMin[i] = 0;
-        // This will be initialized by DerechoGroup
-        //        newRow.nReceived[i] = -1;
-    }
-    newRow.nChanges = existingRow.nChanges;
-    newRow.nCommitted = existingRow.nCommitted;
-    newRow.nAcked = existingRow.nAcked;
-    newRow.wedged = false;
-    newRow.globalMinReady = false;
-}
-
-template <unsigned int N>
-std::string to_string(volatile const DerechoRow<N>& row) {
-    std::stringstream s;
-    s << "Vid=" << row.vid << " ";
-    s << "Suspected={ ";
-    for(unsigned int n = 0; n < N; n++) {
-        s << (row.suspected[n] ? "T" : "F") << " ";
-    }
-
-    s << "}, nChanges=" << row.nChanges << ", nCommitted=" << row.nCommitted;
-    s << ", Changes={ ";
-    for(int n = row.nCommitted; n < row.nChanges; n++) {
-        s << row.changes[n % N];
-    }
-    s << " }, nAcked= " << row.nAcked << ", nReceived={ ";
-    for(unsigned int n = 0; n < N; n++) {
-        s << row.nReceived[n] << " ";
-    }
-
-    s << "}"
-      << ", Wedged = " << (row.wedged ? "T" : "F") << ", GlobalMin = { ";
-    for(unsigned int n = 0; n < N; n++) {
-        s << row.globalMin[n] << " ";
-    }
-
-    s << "}, GlobalMinReady=" << row.globalMinReady << "\n";
-    return s.str();
-}
+void set(volatile char* string_array, const std::string& value);
 
 void set(volatile cstring& element, const std::string& value);
 
 void increment(volatile int& member);
 
 bool equals(const volatile cstring& element, const std::string& value);
+
+bool equals(const volatile char& string_array, const std::string& value);
 
 }  // namespace gmssst
 

@@ -14,7 +14,7 @@
 #include "../derecho_caller.h"
 #include "../view.h"
 #include "block_size.h"
-#include "../rdmc/util.h"
+#include "rdmc/util.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
 
@@ -25,7 +25,7 @@ using std::endl;
 using std::ifstream;
 
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 void generate_buffer(char *buf, long long int buffer_size) {
     srand(time(NULL));

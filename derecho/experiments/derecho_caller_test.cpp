@@ -21,7 +21,7 @@ using namespace std;
 using namespace mutils;
 
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 int count = 0;
 

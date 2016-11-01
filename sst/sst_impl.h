@@ -25,7 +25,7 @@ namespace sst {
 template <typename DerivedSST>
 SST<DerivedSST>::~SST() {
     if(rows != nullptr) {
-        free(rows);
+        delete[](const_cast<char*>(rows));
     }
 
     thread_shutdown = true;
@@ -115,7 +115,7 @@ void SST<DerivedSST>::detect() {
 
 template <typename DerivedSST>
 void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
-    int num_writes_posted = 0;
+    unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
 
     for(auto index : receiver_ranks) {

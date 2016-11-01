@@ -138,7 +138,7 @@ private:
     void init_SSTFields(Fields&... fields) {
         row_len = 0;
         compute_row_len(row_len, fields...);
-        rows = (char*)malloc(row_len * num_members);
+        rows = new char[row_len * num_members];
         volatile char* base = rows;
         set_bases_and_row_lens(base, row_len, fields...);
     }
@@ -234,9 +234,9 @@ public:
         unsigned int node_rank, sst_index;
         for(auto const& rank_index : members_by_id) {
             std::tie(node_rank, sst_index) = rank_index;
-            char *write_addr, *read_addr;
-            write_addr = rows + row_len * sst_index;
-            read_addr = rows + row_len * my_index;
+            char* write_addr, *read_addr;
+            write_addr = const_cast<char*>(rows) + row_len * sst_index;
+            read_addr = const_cast<char*>(rows) + row_len * my_index;
             if(sst_index != my_index) {
                 if(row_is_frozen[sst_index]) {
                     continue;
@@ -303,7 +303,7 @@ private:
         compute_row_len(row_len, rest...);
     }
 
-    void set_bases_and_row_lens(char*, const int) {}
+    void set_bases_and_row_lens(char_p&, const int) {}
 
     template <typename Field, typename... Fields>
     void set_bases_and_row_lens(char_p& base, const int rlen, Field& f, Fields&... rest) {

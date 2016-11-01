@@ -21,7 +21,6 @@ using std::cout;
 using std::endl;
 
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
 
 
 int main(int argc, char *argv[]) {

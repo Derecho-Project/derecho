@@ -2,9 +2,13 @@
 #define AGGREGATE_BANDWIDTH_H
 
 #include <vector>
+#include "sst/sst.h"
 
-struct Result {
-    double bw;
+class ResultSST : public sst::SST<ResultSST> {
+public:
+    sst::SSTField<double> bw;
+    ResultSST(const sst::SSTParams& params)
+            : SST<ResultSST>(this, params, bw) {}
 };
 double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,
                            double bw);

@@ -9,7 +9,7 @@ using std::endl;
 using std::cin;
 using std::vector;
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -34,14 +34,12 @@ int main() {
     derecho::CallbackSet callbacks{stability_callback,
                                    derecho::message_callback{}};
 
-    std::shared_ptr<sst::SST<DerechoRow<MAX_GROUP_SIZE>, sst::Mode::Writes>>
-        derecho_sst =
-            std::make_shared<sst::SST<DerechoRow<8>, sst::Mode::Writes>>(
-                members, node_rank);
+    std::shared_ptr<DerechoSST> derecho_sst =
+            std::make_shared<DerechoSST>(sst::SSTParams(members, node_rank));
     vector<derecho::MessageBuffer> free_message_buffers;
     derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(members, node_rank, derecho_sst,
+    DerechoGroup<Dispatcher<>> g(members, node_rank, derecho_sst,
                                    free_message_buffers, Dispatcher<>(node_rank),
                                    callbacks, parameters, node_addresses);
 

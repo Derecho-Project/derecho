@@ -26,8 +26,6 @@
 
 namespace derecho {
 
-using std::vector;
-
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
 using message_callback = std::function<void(int, long long int, char*, long long int)>;
 
@@ -184,11 +182,8 @@ struct MessageTrackingRow {
     long long int delivered_num;
 };
 
-/** combines sst and rdmc to give an abstraction of a group where anyone can
- * send
- * template parameter is the maximum possible group size - used for the GMS SST
- * row-struct */
-template <unsigned int N, typename dispatcherType>
+/** combines sst and rdmc to give an abstraction of a group where anyone can send */
+template <typename dispatcherType>
 class DerechoGroup {
 private:
     /** vector of member id's */
@@ -266,9 +261,9 @@ private:
     std::thread rpc_thread;
 
     /** The SST, shared between this group and its GMS. */
-    std::shared_ptr<sst::SST<DerechoRow<N>>> sst;
+    std::shared_ptr<DerechoSST> sst;
 
-    using pred_handle = typename sst::SST<DerechoRow<N>>::Predicates::pred_handle;
+    using pred_handle = typename sst::Predicates<DerechoSST>::pred_handle;
     pred_handle stability_pred_handle;
     pred_handle delivery_pred_handle;
     pred_handle sender_pred_handle;
@@ -290,7 +285,7 @@ private:
 
     void deliver_message(Message& msg);
     template <typename IdClass, unsigned long long tag, typename... Args>
-    auto derechoCallerSend(const vector<node_id_t>& nodes, char* buf, Args&&... args);
+    auto derechoCallerSend(const std::vector<node_id_t>& nodes, char* buf, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto tcpSend(node_id_t dest_node, Args&&... args);
     // private get_position - used for cooked send
@@ -299,7 +294,7 @@ public:
     // the constructor - takes the list of members, send parameters (block size, buffer size), K0 and K1 callbacks
     DerechoGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
-        std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
+        std::shared_ptr<DerechoSST> _sst,
         std::vector<MessageBuffer>& free_message_buffers,
         dispatcherType _dispatchers,
         CallbackSet callbacks,
@@ -310,7 +305,7 @@ public:
      * preserving the same settings but providing a new list of members. */
     DerechoGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
-        std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
+        std::shared_ptr<DerechoSST> _sst,
         DerechoGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
         std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
     ~DerechoGroup();
@@ -324,11 +319,11 @@ public:
      * there is only one message per sender in the RDMC pipeline */
     bool send();
     template <typename IdClass, unsigned long long tag, typename... Args>
-    void orderedSend(const vector<node_id_t>& nodes, char* buf, Args&&... args);
+    void orderedSend(const std::vector<node_id_t>& nodes, char* buf, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
     void orderedSend(char* buf, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
-    auto orderedQuery(const vector<node_id_t>& nodes, char* buf, Args&&... args);
+    auto orderedQuery(const std::vector<node_id_t>& nodes, char* buf, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto orderedQuery(char* buf, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>

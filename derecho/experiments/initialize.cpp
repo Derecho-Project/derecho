@@ -1,11 +1,11 @@
 #include "initialize.h"
-#include "../sst/sst.h"
-#include "../rdmc/util.h"
-#include "../rdmc/message.h"
-#include "../rdmc/verbs_helper.h"
-#include "../rdmc/rdmc.h"
-#include "../rdmc/microbenchmarks.h"
-#include "../rdmc/group_send.h"
+#include "sst/sst.h"
+#include "rdmc/util.h"
+#include "rdmc/message.h"
+#include "rdmc/verbs_helper.h"
+#include "rdmc/rdmc.h"
+#include "rdmc/microbenchmarks.h"
+#include "rdmc/group_send.h"
 
 std::map<uint32_t, std::string> initialize (uint32_t &node_rank, uint32_t &num_nodes) {
     map<uint32_t, std::string> node_addresses;

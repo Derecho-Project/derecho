@@ -86,7 +86,7 @@ bool View<handlersType>::IAmTheNewLeader() {
 
     for(int n = 0; n < my_rank; n++) {
         for(int row = 0; row < my_rank; row++) {
-            if(!failed[n] && !(*gmsSST)[row].suspected[n]) {
+            if(!failed[n] && !gmsSST->suspected[row][n]) {
                 return false;  // I'm not the new leader, or some failure suspicion hasn't fully propagated
             }
         }
@@ -100,22 +100,22 @@ void View<handlersType>::merge_changes() {
     int myRank = my_rank;
     // Merge the change lists
     for(int n = 0; n < num_members; n++) {
-        if((*gmsSST)[myRank].nChanges < (*gmsSST)[n].nChanges) {
-            gmssst::set((*gmsSST)[myRank].changes, (*gmsSST)[n].changes);
-            gmssst::set((*gmsSST)[myRank].nChanges, (*gmsSST)[n].nChanges);
+        if(gmsSST->nChanges[myRank] < gmsSST->nChanges[n]) {
+            gmssst::set(gmsSST->changes[myRank], gmsSST->changes[n], gmsSST->changes.size());
+            gmssst::set(gmsSST->nChanges[myRank], gmsSST->nChanges[n]);
         }
 
-        if((*gmsSST)[myRank].nCommitted < (*gmsSST)[n].nCommitted)  // How many I know to have been committed
+        if(gmsSST->nCommitted[myRank] < gmsSST->nCommitted[n])  // How many I know to have been committed
         {
-            gmssst::set((*gmsSST)[myRank].nCommitted, (*gmsSST)[n].nCommitted);
+            gmssst::set(gmsSST->nCommitted[myRank], gmsSST->nCommitted[n]);
         }
     }
     bool found = false;
     for(int n = 0; n < num_members; n++) {
         if(failed[n]) {
             // Make sure that the failed process is listed in the Changes vector as a proposed change
-            for(int c = (*gmsSST)[myRank].nCommitted; c < (*gmsSST)[myRank].nChanges && !found; c++) {
-                if((*gmsSST)[myRank].changes[c % MAX_MEMBERS] == members[n]) {
+            for(int c = gmsSST->nCommitted[myRank]; c < gmsSST->nChanges[myRank] && !found; c++) {
+                if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
                     // Already listed
                     found = true;
                 }
@@ -126,9 +126,9 @@ void View<handlersType>::merge_changes() {
         }
 
         if(!found) {
-            gmssst::set((*gmsSST)[myRank].changes[(*gmsSST)[myRank].nChanges % MAX_MEMBERS],
+            gmssst::set(gmsSST->changes[myRank][gmsSST->nChanges[myRank] % gmsSST->changes.size()],
                         members[n]);
-            gmssst::increment((*gmsSST)[myRank].nChanges);
+            gmssst::increment(gmsSST->nChanges[myRank]);
         }
     }
     gmsSST->put();
@@ -137,7 +137,7 @@ void View<handlersType>::merge_changes() {
 template <typename handlersType>
 void View<handlersType>::wedge() {
     derecho_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
-    gmssst::set((*gmsSST)[my_rank].wedged, true);
+    gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put();
 }
 
@@ -246,9 +246,9 @@ std::ostream& operator<<(std::ostream& stream, const View<handlersType>& view) {
         stream << (fail_val ? "T" : "F") << " ";
     }
     stream << std::endl;
-    stream << view.nFailed << endl;
-    stream << view.num_members << endl;
-    stream << view.my_rank << endl;
+    stream << view.nFailed << std::endl;
+    stream << view.num_members << std::endl;
+    stream << view.my_rank << std::endl;
     return stream;
 }
 
