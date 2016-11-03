@@ -763,14 +763,14 @@ void test_pattern() {
             for(unsigned int step = 0; step < total_steps; step++) {
                 for(unsigned int node = 0; node < group_size; node++) {
                     // Compute the outgoing transfer for this node/step
-                    auto transfer = binomial_group::get_outgoing_transfer(
+                    auto transfer = binomial_schedule::get_outgoing_transfer(
                         node, step, group_size, floor(log2(group_size)),
                         message_size, total_steps);
                     n++;
 
                     if(transfer) {
                         // See what the supposed sender is doing this step
-                        auto reverse = binomial_group::get_incoming_transfer(
+                        auto reverse = binomial_schedule::get_incoming_transfer(
                             transfer->target, step, group_size,
                             floor(log2(group_size)), message_size, total_steps);
                         n++;
@@ -785,7 +785,7 @@ void test_pattern() {
                         if(node != 0) {
                             for(int s = step - 1; s >= 0; s--) {
                                 auto prev =
-                                    binomial_group::get_incoming_transfer(
+                                    binomial_schedule::get_incoming_transfer(
                                         node, s, group_size,
                                         floor(log2(group_size)), message_size,
                                         total_steps);
@@ -802,14 +802,14 @@ void test_pattern() {
                     }
 
                     // Compute the incoming transfer for this node/step
-                    transfer = binomial_group::get_incoming_transfer(
+                    transfer = binomial_schedule::get_incoming_transfer(
                         node, step, group_size, floor(log2(group_size)),
                         message_size, total_steps);
                     n++;
 
                     if(transfer) {
                         // Again make sure the supposed receiver agrees
-                        auto reverse = binomial_group::get_outgoing_transfer(
+                        auto reverse = binomial_schedule::get_outgoing_transfer(
                             transfer->target, step, group_size,
                             floor(log2(group_size)), message_size, total_steps);
                         n++;
@@ -821,7 +821,7 @@ void test_pattern() {
                         // Make sure we don't already have the block we're
                         // getting.
                         for(int s = step - 1; s >= 0; s--) {
-                            auto prev = binomial_group::get_incoming_transfer(
+                            auto prev = binomial_schedule::get_incoming_transfer(
                                 node, s, group_size, floor(log2(group_size)),
                                 message_size, total_steps);
                             n++;
@@ -838,7 +838,7 @@ void test_pattern() {
             for(unsigned int node = 1; node < group_size; node++) {
                 set<size_t> blocks;
                 for(unsigned int step = 0; step < total_steps; step++) {
-                    auto transfer = binomial_group::get_incoming_transfer(
+                    auto transfer = binomial_schedule::get_incoming_transfer(
                         node, step, group_size, floor(log2(group_size)),
                         message_size, total_steps);
                     n++;

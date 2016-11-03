@@ -33,6 +33,7 @@ public:
 
 class chain_schedule : public schedule {
 public:
+	using schedule::schedule;
     vector<uint32_t> get_connections() const;
     optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;
@@ -42,6 +43,7 @@ public:
 
 class sequential_schedule : public schedule {
 public:
+	using schedule::schedule;
     vector<uint32_t> get_connections() const;
 	optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;
@@ -51,6 +53,7 @@ public:
 
 class tree_schedule : public schedule {
 public:
+	using schedule::schedule;
     vector<uint32_t> get_connections() const;
     optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;

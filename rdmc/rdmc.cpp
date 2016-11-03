@@ -98,31 +98,29 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
                   failure_callback_t failure_callback) {
     if(shutdown_flag) return false;
 
-    shared_ptr<group> g;
+	schedule* send_schedule;
     uint32_t member_index = index_of(members, node_rank);
     if(algorithm == BINOMIAL_SEND) {
-        g = make_shared<binomial_group>(group_number, block_size, members,
-                                        member_index, incoming_upcall,
-                                        callback);
-    } else if(algorithm == CHAIN_SEND) {
-        g = make_shared<chain_group>(group_number, block_size, members,
-                                     member_index, incoming_upcall, callback);
+        send_schedule = new binomial_schedule(members.size(), member_index);
     } else if(algorithm == SEQUENTIAL_SEND) {
-        g = make_shared<sequential_group>(group_number, block_size, members,
-                                          member_index, incoming_upcall,
-                                          callback);
+        send_schedule = new sequential_schedule(members.size(), member_index);
+    } else if(algorithm == CHAIN_SEND) {
+        send_schedule = new chain_schedule(members.size(), member_index);
     } else if(algorithm == TREE_SEND) {
-        g = make_shared<tree_group>(group_number, block_size, members,
-                                    member_index, incoming_upcall, callback);
+		send_schedule = new tree_schedule(members.size(), member_index);
     } else {
         puts("Unsupported group type?!");
         fflush(stdout);
         return false;
     }
 
+    auto g = make_shared<group>(group_number, block_size, members, member_index,
+                                incoming_upcall, callback,
+								unique_ptr<schedule>(send_schedule));
+
     unique_lock<mutex> lock(groups_lock);
     auto p = groups.emplace(group_number, std::move(g));
-    return p.second && p.first->second->init();
+    return p.second;
 }
 
 void destroy_group(uint16_t group_number) {
