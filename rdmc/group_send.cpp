@@ -14,18 +14,29 @@ using namespace rdmc;
 decltype(group::message_types) group::message_types;
 
 group::group(uint16_t _group_number, size_t _block_size,
-             vector<uint32_t> _members, uint32_t _member_index,
-             incoming_message_callback_t upcall, completion_callback_t callback,
-			 unique_ptr<schedule> tschedule)
+                       vector<uint32_t> _members, uint32_t _member_index,
+                       incoming_message_callback_t upcall,
+                       completion_callback_t callback,
+                       unique_ptr<schedule> _schedule)
         : members(_members),
-          first_block_buffer(nullptr),
-          completion_callback(callback),
-          incoming_message_upcall(upcall),
           group_number(_group_number),
           block_size(_block_size),
           num_members(members.size()),
           member_index(_member_index),
-		  transfer_schedule(std::move(tschedule)) {
+          transfer_schedule(std::move(_schedule)),
+          completion_callback(callback),
+          incoming_message_upcall(upcall) {}
+
+group::~group() { unique_lock<mutex> lock(monitor); }
+
+polling_group::polling_group(uint16_t _group_number, size_t _block_size,
+                             vector<uint32_t> _members, uint32_t _member_index,
+                             incoming_message_callback_t upcall,
+                             completion_callback_t callback,
+                             unique_ptr<schedule> _schedule)
+        : group(_group_number, _block_size, _members, _member_index, upcall,
+                     callback, std::move(_schedule)),
+          first_block_buffer(nullptr) {
     if(member_index != 0) {
         first_block_buffer = unique_ptr<char[]>(new char[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
@@ -34,7 +45,7 @@ group::group(uint16_t _group_number, size_t _block_size,
             make_unique<memory_region>(first_block_buffer.get(), block_size);
     }
 
-	auto connections = transfer_schedule->get_connections();
+    auto connections = transfer_schedule->get_connections();
     for(auto c : connections) {
         connect(c);
     }
@@ -48,8 +59,8 @@ group::group(uint16_t _group_number, size_t _block_size,
         // puts("Issued Ready For Block CCCCCCCCC");
     }
 }
-group::~group() { unique_lock<mutex> lock(monitor); }
-void group::receive_block(uint32_t send_imm, size_t received_block_size) {
+
+void polling_group::receive_block(uint32_t send_imm, size_t received_block_size) {
     unique_lock<mutex> lock(monitor);
 
     assert(member_index > 0);
@@ -58,7 +69,7 @@ void group::receive_block(uint32_t send_imm, size_t received_block_size) {
         num_blocks = parse_immediate(send_imm).total_blocks;
         first_block_number =
             min(transfer_schedule->get_first_block(num_blocks)->block_number,
-				num_blocks - 1);
+                num_blocks - 1);
         message_size = num_blocks * block_size;
         if(num_blocks == 1) {
             message_size = received_block_size;
@@ -83,7 +94,7 @@ void group::receive_block(uint32_t send_imm, size_t received_block_size) {
 
         assert(receive_step == 0);
         auto transfer = transfer_schedule->get_incoming_transfer(num_blocks,
-																 receive_step);
+                                                                 receive_step);
         while((!transfer || transfer->block_number == *first_block_number) &&
               receive_step < transfer_schedule->get_total_steps(num_blocks)) {
             transfer = transfer_schedule->get_incoming_transfer(num_blocks, ++receive_step);
@@ -133,7 +144,7 @@ void group::receive_block(uint32_t send_imm, size_t received_block_size) {
                   "returned_from_send_next_block");
 
         if(!sending && num_received_blocks == num_blocks &&
-		   send_step == transfer_schedule->get_total_steps(num_blocks)) {
+           send_step == transfer_schedule->get_total_steps(num_blocks)) {
             complete_message();
         }
     } else {
@@ -193,7 +204,7 @@ void group::receive_block(uint32_t send_imm, size_t received_block_size) {
         }
     }
 }
-void group::receive_ready_for_block(uint32_t step, uint32_t sender) {
+void polling_group::receive_ready_for_block(uint32_t step, uint32_t sender) {
     unique_lock<mutex> lock(monitor);
 
     auto it = rfb_queue_pairs.find(sender);
@@ -207,7 +218,7 @@ void group::receive_ready_for_block(uint32_t step, uint32_t sender) {
         send_next_block();
     }
 }
-void group::complete_block_send() {
+void polling_group::complete_block_send() {
     unique_lock<mutex> lock(monitor);
 
     LOG_EVENT(group_number, message_number, outgoing_block,
@@ -223,7 +234,7 @@ void group::complete_block_send() {
         complete_message();
     }
 }
-void group::send_message(shared_ptr<memory_region> message_mr, size_t offset,
+void polling_group::send_message(shared_ptr<memory_region> message_mr, size_t offset,
                          size_t length) {
     LOG_EVENT(group_number, -1, -1, "send()");
 
@@ -251,7 +262,7 @@ void group::send_message(shared_ptr<memory_region> message_mr, size_t offset,
     // No need to worry about completion here. We must send at least
     // one block, so we can't be done already.
 }
-void group::send_next_block() {
+void polling_group::send_next_block() {
     sending = false;
     if(send_step == transfer_schedule->get_total_steps(num_blocks)) {
         return;
@@ -302,7 +313,7 @@ void group::send_next_block() {
     LOG_EVENT(group_number, message_number, block_number,
               "started_sending_block");
 }
-void group::complete_message() {
+void polling_group::complete_message() {
     // remap first_block into buffer
     if(member_index > 0 && first_block_number) {
         LOG_EVENT(group_number, message_number, *first_block_number,
@@ -356,7 +367,7 @@ void group::complete_message() {
         //      << ")" << endl;
     }
 }
-void group::post_recv(schedule::block_transfer transfer) {
+void polling_group::post_recv(schedule::block_transfer transfer) {
     auto it = queue_pairs.find(transfer.target);
     assert(it != queue_pairs.end());
 
@@ -381,7 +392,7 @@ void group::post_recv(schedule::block_transfer transfer) {
     LOG_EVENT(group_number, message_number, transfer.block_number,
               "posted_receive_buffer");
 }
-void group::connect(uint32_t neighbor) {
+void polling_group::connect(uint32_t neighbor) {
     queue_pairs.emplace(neighbor, queue_pair(members[neighbor]));
 
     auto post_recv = [this, neighbor](rdma::queue_pair* qp) {
@@ -392,7 +403,7 @@ void group::connect(uint32_t neighbor) {
     rfb_queue_pairs.emplace(neighbor, queue_pair(members[neighbor], post_recv));
 }
 
-void group::send_ready_for_block(uint32_t neighbor) {
+void polling_group::send_ready_for_block(uint32_t neighbor) {
     auto it = rfb_queue_pairs.find(neighbor);
     assert(it != rfb_queue_pairs.end());
     it->second.post_empty_send(form_tag(group_number, neighbor), 0,
