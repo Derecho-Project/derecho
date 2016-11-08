@@ -9,9 +9,9 @@
 #include <tuple>
 #include <vector>
 
-#include "../sst.h"
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 #include "statistics.h"
 
 static const long long int SECONDS_TO_NS = 1000000000LL;

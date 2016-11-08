@@ -6,11 +6,11 @@
 #include <thread>
 #include <vector>
 
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../derecho_caller.h"
-#include "../rdmc/util.h"
-#include "../view.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "derecho/derecho_caller.h"
+#include "rdmc/util.h"
+#include "derecho/view.h"
 
 using namespace std;
 using namespace std::chrono_literals;

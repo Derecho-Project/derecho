@@ -3,7 +3,7 @@
 #include <sstream>
 
 #include "multicast.h"
-#include "../../max_members.h"
+#include "derecho/max_members.h"
 
 using namespace std;
 using namespace sst;

@@ -1,8 +1,8 @@
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../rdmc/util.h"
-#include "../view.h"
-#include "../logger.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "rdmc/util.h"
+#include "derecho/view.h"
+#include "derecho/logger.h"
 
 #include <chrono>
 #include <ratio>

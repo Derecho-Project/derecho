@@ -2,8 +2,8 @@
 #include <memory>
 #include <string>
 
-#include "../filewriter.h"
-#include "../derecho_group.h"
+#include "derecho/filewriter.h"
+#include "derecho/derecho_group.h"
 
 using std::cout;
 using std::endl;

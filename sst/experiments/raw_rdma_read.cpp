@@ -7,8 +7,8 @@
 #include <algorithm>
 #include <numeric>
 
-#include "../verbs.h"
-#include "../tcp.h"
+#include "sst/verbs.h"
+#include "sst/tcp.h"
 #include "statistics.h"
 
 using namespace std;

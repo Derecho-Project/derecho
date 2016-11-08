@@ -6,7 +6,7 @@
 #include <vector>
 #include <time.h>
 
-#include "../derecho_group.h"
+#include "derecho/derecho_group.h"
 #include "initialize.h"
 
 using std::cout;

@@ -3,7 +3,7 @@
 #include <vector>
 #include <time.h>
 
-#include "../derecho_group.h"
+#include "derecho/derecho_group.h"
 #include "rdmc/rdmc.h"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"

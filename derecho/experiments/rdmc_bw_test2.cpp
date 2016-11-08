@@ -5,8 +5,8 @@
 #include <time.h>
 #include <map>
 
-#include "../rdmc/rdmc.h"
-#include "../rdmc/util.h"
+#include "rdmc/rdmc.h"
+#include "rdmc/util.h"
 #include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"

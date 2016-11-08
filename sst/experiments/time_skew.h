@@ -1,6 +1,6 @@
 #include <chrono>
 
-#include "../sst.h"
+#include "sst/sst.h"
 
 struct TimeRow {
     long long int time_in_nanoseconds;

@@ -1,8 +1,8 @@
 #include <iostream>
 #include <map>
 
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 
 using namespace std;
 using namespace sst;

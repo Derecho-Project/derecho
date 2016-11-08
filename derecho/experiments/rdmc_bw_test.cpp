@@ -4,7 +4,7 @@
 #include <vector>
 #include <time.h>
 
-#include "../rdmc/rdmc.h"
+#include "rdmc/rdmc.h"
 #include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"

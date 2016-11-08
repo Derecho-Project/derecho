@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "../derecho_group.h"
+#include "derecho/derecho_group.h"
 #include "initialize.h"
 
 using namespace sst;

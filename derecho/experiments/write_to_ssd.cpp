@@ -3,8 +3,8 @@
 #include <vector>
 #include <time.h>
 
-#include "../derecho_group.h"
-#include "../derecho_caller.h"
+#include "derecho/derecho_group.h"
+#include "derecho/derecho_caller.h"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"

@@ -5,11 +5,11 @@
 #include <time.h>
 #include <memory>
 
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../view.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "derecho/view.h"
 #include "block_size.h"
-#include "../rdmc/util.h"
+#include "rdmc/util.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
 

@@ -6,7 +6,7 @@
 #include <mutex>
 #include <string>
 #include <sstream>
-#include "../sst/sst.h"
+#include "sst/sst.h"
 
 namespace derecho {
 
@@ -97,9 +97,9 @@ public:
               nReceived(parameters.members.size()),
               globalMin(parameters.members.size()),
               sst::SST<DerechoSST>(this, parameters, seq_num, stable_num, delivered_num,
-                       persisted_num, vid, suspected, changes, joiner_ip,
-                       nChanges, nCommitted, nAcked, nReceived, wedged,
-                       globalMin, globalMinReady) {
+                                   persisted_num, vid, suspected, changes, joiner_ip,
+                                   nChanges, nCommitted, nAcked, nReceived, wedged,
+                                   globalMin, globalMinReady) {
         //Once superclass constructor has finished, table entries can be initialized
         int my_row = get_local_index();
         for(int row = 0; row < get_num_rows(); ++row) {

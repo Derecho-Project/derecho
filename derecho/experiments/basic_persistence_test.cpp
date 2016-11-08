@@ -8,11 +8,11 @@
 #include <vector>
 #include <fstream>
 
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../derecho_caller.h"
-#include "../view.h"
-#include "../logger.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "derecho/derecho_caller.h"
+#include "derecho/view.h"
+#include "derecho/logger.h"
 
 
 using namespace std;

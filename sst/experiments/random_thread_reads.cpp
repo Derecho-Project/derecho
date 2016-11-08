@@ -15,8 +15,8 @@
 #include <time.h>
 #include <chrono>
 
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 
 using std::cout;
 using std::vector;

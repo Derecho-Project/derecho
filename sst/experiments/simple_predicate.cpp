@@ -6,8 +6,8 @@
 #include <time.h>
 #include <cstdlib>
 
-#include "../sst.h"
-#include "../tcp.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
 #include "statistics.h"
 #include "timing.h"
 

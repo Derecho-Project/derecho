@@ -9,10 +9,10 @@
 #include <unistd.h>
 #include <cstdio>
 
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../derecho_caller.h"
-#include "../view.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "derecho/derecho_caller.h"
+#include "derecho/view.h"
 #include "block_size.h"
 #include "rdmc/util.h"
 #include "aggregate_bandwidth.h"

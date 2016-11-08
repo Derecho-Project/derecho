@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../verbs.h"
-#include "../tcp.h"
+#include "sst/verbs.h"
+#include "sst/tcp.h"
 
 using std::string;
 using std::vector;
