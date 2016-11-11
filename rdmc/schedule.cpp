@@ -18,8 +18,7 @@ vector<uint32_t> chain_schedule::get_connections() const {
     } else if(member_index == num_members - 1) {
         return {num_members - 2};
     } else {
-        return {member_index - 1};
-        return {member_index + 1};
+        return {member_index - 1, member_index + 1};
     }
 }
 size_t chain_schedule::get_total_steps(size_t num_blocks) const {

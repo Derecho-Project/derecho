@@ -114,11 +114,10 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
         return false;
     }
 
+    unique_lock<mutex> lock(groups_lock);
     auto g = make_shared<polling_group>(group_number, block_size, members,
 										member_index, incoming_upcall, callback,
                                         unique_ptr<schedule>(send_schedule));
-
-    unique_lock<mutex> lock(groups_lock);
     auto p = groups.emplace(group_number, std::move(g));
     return p.second;
 }
