@@ -39,9 +39,13 @@ class message_types_exhausted : public exception {};
  */
 class memory_region {
     std::unique_ptr<ibv_mr, std::function<void(ibv_mr*)>> mr;
+	std::unique_ptr<char[]> allocated_buffer;
+
+	memory_region(size_t size, bool contiguous);
     friend class queue_pair;
 
 public:
+    memory_region(size_t size);
     memory_region(char* buffer, size_t size);
     uint32_t get_rkey() const;
 
@@ -124,6 +128,9 @@ void verbs_destroy();
 std::map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
     const std::vector<uint32_t>& members, uint32_t node_rank,
     const memory_region& mr);
-}
-}
+
+bool set_interrupt_mode(bool enabled);
+bool set_contiguous_memory_mode(bool enabled);
+} /* namespace impl */
+} /* namespace rdma */
 #endif /* VERBS_HELPER_H */

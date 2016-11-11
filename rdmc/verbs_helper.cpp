@@ -23,6 +23,10 @@ extern "C" {
 #include <infiniband/verbs.h>
 }
 
+#ifdef INFINIBAND_VERBS_EXP_H
+#define MELLANOX_EXPERIMENTAL_VERBS
+#endif
+
 using namespace std;
 
 namespace rdma {
@@ -67,6 +71,9 @@ struct completion_handler_set {
 static vector<completion_handler_set> completion_handlers;
 static std::mutex completion_handlers_mutex;
 
+static atomic<bool> interrupt_mode;
+static atomic<bool> contiguous_memory_mode;
+
 static atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
     TRACE("Spawned main loop");
@@ -78,7 +85,7 @@ static void polling_loop() {
         int num_completions = 0;
         while(num_completions == 0) {
             if(polling_loop_shutdown_flag) return;
-            uint64_t poll_end = get_time() + 50000000;
+            uint64_t poll_end = get_time() + interrupt_mode ? 5000 : 50000000;
             while(num_completions == 0 && get_time() < poll_end) {
                 if(polling_loop_shutdown_flag) return;
                 num_completions =
@@ -332,6 +339,9 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
         goto resources_create_exit;
     }
 
+	set_interrupt_mode(false);
+	set_contiguous_memory_mode(true);
+	
     {
         thread t(polling_loop);
         t.detach();
@@ -422,59 +432,75 @@ bool verbs_add_connection(uint32_t index, const string &address,
 
     return false;  // we can't connect to ourselves...
 }
+bool set_interrupt_mode(bool enabled) {
+	interrupt_mode = enabled;
+    return true;
 }
-memory_region::memory_region(char *buf, size_t s) : buffer(buf), size(s) {
-    if(!buffer || size == 0) throw rdma::invalid_args();
+bool set_contiguous_memory_mode(bool enabled) {
+#ifdef MELLANOX_EXPERIMENTAL_VERBS
+    contiguous_memory_mode = enabled;
+    return true;
+#else
+    return false;
+#endif
+}
+}
+
+using ibv_mr_unique_ptr = unique_ptr<ibv_mr, std::function<void(ibv_mr *)>>;
+static ibv_mr_unique_ptr create_mr(char *buffer, size_t size) {
+	if(!buffer || size == 0) throw rdma::invalid_args();
 
     int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
                    IBV_ACCESS_REMOTE_WRITE;
 
-    // printf("MR Protection Domain = %p\n", verbs_resources.pd);
-
-    mr = unique_ptr<ibv_mr, std::function<void(ibv_mr *)>>(
-        ibv_reg_mr(verbs_resources.pd, const_cast<void *>((const void *)buffer),
-                   size, mr_flags),
+    ibv_mr_unique_ptr mr = ibv_mr_unique_ptr(
+        ibv_reg_mr(verbs_resources.pd, (void *)buffer, size, mr_flags),
         [](ibv_mr *m) { ibv_dereg_mr(m); });
 
     if(!mr) {
-        fprintf(stderr, "ERROR: ibv_reg_mr failed with mr_flags=0x%x\n",
-                mr_flags);
         throw rdma::mr_creation_failure();
     }
-
-    // fprintf(
-    //     stdout,
-    //     "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
-    //     buffer, mr->lkey, mr->rkey, mr_flags);
+	return mr;
 }
-// memory_region::memory_region(ibv_mr *_mr)
-//     : mr(_mr, [](ibv_mr *m) { ibv_dereg_mr(m); }),
-//       buffer((char*)mr->addr),
-//       size(mr->length) {}
-// static ibv_mr *exp_reg_mr(ibv_pd *pd, void *addr, size_t len, uint64_t flags)
-// {
-//     ibv_exp_reg_mr_in in;
-//     in.pd = pd;
-// 	in.addr = addr;
-// 	in.length = len;
-// 	in.exp_access = flags;
-// 	in.comp_mask = 0;
-// 	in.create_flags = 0;
-// 	return ibv_exp_reg_mr(&in);
-// }
-// memory_region::memory_region(size_t s)
-//     : memory_region(exp_reg_mr(
-//           verbs_resources.pd, NULL, s,
-//           IBV_EXP_ACCESS_LOCAL_WRITE | IBV_EXP_ACCESS_REMOTE_READ |
-//               IBV_EXP_ACCESS_REMOTE_WRITE | IBV_EXP_ACCESS_ALLOCATE_MR)) {
-//     if(size == 0) throw rdma::invalid_args();
+#ifdef MELLANOX_EXPERIMENTAL_VERBS
+static ibv_mr_unique_ptr create_contiguous_mr(size_t size) {
+	if(size == 0) throw rdma::invalid_args();
+	
+    ibv_exp_reg_mr_in in;
+    in.pd = verbs_resources.pd;
+    in.addr = 0;
+    in.length = size;
+    in.exp_access =
+        IBV_EXP_ACCESS_LOCAL_WRITE | IBV_EXP_ACCESS_REMOTE_READ |
+        IBV_EXP_ACCESS_REMOTE_WRITE | IBV_EXP_ACCESS_ALLOCATE_MR;
+    in.create_flags = IBV_EXP_REG_MR_CREATE_CONTIG;
+    in.comp_mask = IBV_EXP_REG_MR_CREATE_FLAGS;
+    ibv_mr_unique_ptr mr = ibv_mr_unique_ptr(ibv_exp_reg_mr(&in),
+                                             [](ibv_mr *m) { ibv_dereg_mr(m); });
+    if(!mr) {
+        throw rdma::mr_creation_failure();
+    }
+    return mr;
+}
+memory_region::memory_region(size_t s, bool contiguous)
+        : mr(contiguous ? create_contiguous_mr(s) : create_mr(new char[s], s)),
+          buffer((char *)mr->addr),
+          size(s) {
+    if(!contiguous) {
+        allocated_buffer.reset(buffer);
+    }
+}
+#else
+memory_region::memory_region(size_t s, bool contiguous) : memory_region(new char[s], s) {
+    allocated_buffer.reset(buffer);
+}
+#endif
 
-//     if(!mr) {
-//         fprintf(stderr, "ERROR: ibv_reg_mr failed");
-//         throw rdma::mr_creation_failure();
-//     }
-// }
+memory_region::memory_region(size_t s) : memory_region(s, contiguous_memory_mode) {}
+memory_region::memory_region(char *buf, size_t s) : mr(create_mr(buf, s)), buffer(buf), size(s) {}
+
 uint32_t memory_region::get_rkey() const { return mr->rkey; }
+
 queue_pair::~queue_pair() {
     //    if(qp) cout << "Destroying Queue Pair..." << endl;
 }

@@ -79,11 +79,8 @@ send_stats measure_multicast(size_t size, size_t block_size,
 
     size_t num_blocks = (size - 1) / block_size + 1;
     size_t buffer_size = num_blocks * block_size;
-    unique_ptr<char[]> buffer(new char[buffer_size]);
-    //    memset(buffer.get(), 1, size);
-    //    memset(buffer.get(), 0, size);
-    shared_ptr<memory_region> mr =
-        make_shared<memory_region>(buffer.get(), buffer_size);
+    auto mr = make_shared<memory_region>(buffer_size);
+	char* buffer = mr->buffer;
 
     if(send_groups.count(send_params) == 0) {
         vector<uint32_t> members;
@@ -229,9 +226,8 @@ send_stats measure_partially_concurrent_multicast(
 
     size_t num_blocks = (size - 1) / block_size + 1;
     size_t buffer_size = num_blocks * block_size;
-    unique_ptr<char[]> buffer(new char[buffer_size * num_senders]);
-    shared_ptr<memory_region> mr =
-        make_shared<memory_region>(buffer.get(), buffer_size * num_senders);
+	auto mr = make_shared<memory_region>(buffer_size * num_senders);
+	char* buffer = mr->buffer;
 
     uint16_t base_group_number = next_group_number;
     atomic<uint32_t> sends_remaining;
@@ -323,9 +319,10 @@ send_stats measure_concurrent_multicast(
         return send_stats();
     }
 
-    unique_ptr<char[]> buffer(new char[size * group_size]);
-    shared_ptr<memory_region> mr =
-        make_shared<memory_region>(buffer.get(), size * group_size);
+	size_t num_blocks = (size - 1) / block_size + 1;
+    size_t buffer_size = num_blocks * block_size;
+	auto mr = make_shared<memory_region>(buffer_size * group_size);
+	char* buffer = mr->buffer;
 
     uint16_t base_group_number = next_group_number;
     atomic<uint32_t> sends_remaining;
