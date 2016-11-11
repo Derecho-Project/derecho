@@ -1,5 +1,10 @@
-Makefile
 cmake_install.cmake
-/libderecho.so
-/experiments/cmake_install.cmake
-/experiments/derecho_caller_test
+conntest
+create_state_file
+gms_test
+gms_test2
+latest_logged_message
+libderecho.so
+log_tail_length
+Makefile
+parse_state_file

@@ -1,10 +1,10 @@
-verbs-mcast
-Makefile
-CMakeCache.txt
 cmake_install.cmake
-librdmc.so
+CMakeCache.txt
 CMakeFiles/*
+librdmc.a
+librdmc.so
+Makefile
+script_copy.sh
 scripts/*
-/librdmc.a
-/script_copy.sh
-/TAGS
+TAGS
+verbs-mcast
