@@ -85,13 +85,13 @@ static void polling_loop() {
         int num_completions = 0;
         while(num_completions == 0) {
             if(polling_loop_shutdown_flag) return;
-            uint64_t poll_end = get_time() + interrupt_mode ? 5000 : 50000000;
-            while(num_completions == 0 && get_time() < poll_end) {
+            uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
+            do {
                 if(polling_loop_shutdown_flag) return;
                 num_completions =
                     ibv_poll_cq(verbs_resources.cq, max_work_completions,
                                 work_completions.get());
-            }
+            } while(num_completions == 0 && get_time() < poll_end);
 
             if(num_completions == 0) {
                 if(ibv_req_notify_cq(verbs_resources.cq, 0))
@@ -486,7 +486,9 @@ memory_region::memory_region(size_t s, bool contiguous)
         : mr(contiguous ? create_contiguous_mr(s) : create_mr(new char[s], s)),
           buffer((char *)mr->addr),
           size(s) {
-    if(!contiguous) {
+    if(contiguous) {
+		memset(buffer, 0, size);
+	} else {
         allocated_buffer.reset(buffer);
     }
 }

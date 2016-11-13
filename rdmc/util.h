@@ -8,6 +8,8 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <vector>
 
 template <class T, class U>
@@ -24,8 +26,14 @@ bool file_exists(const std::string &name);
 void create_directory(const std::string &name);
 inline uint64_t get_time() {
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
+    clock_gettime(CLOCK_MONOTONIC, &now);
     return now.tv_sec * 1000000000L + now.tv_nsec;
+}
+inline uint64_t get_process_time() {
+	rusage usage;
+	getrusage(RUSAGE_SELF, &usage);
+    return (usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1000000000L +
+           (usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) * 1000L;
 }
 double compute_data_rate(size_t numBytes, uint64_t sTime, uint64_t eTime);
 void put_flush(const char *str);
