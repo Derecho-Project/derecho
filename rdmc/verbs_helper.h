@@ -14,6 +14,7 @@
 
 struct ibv_mr;
 struct ibv_qp;
+struct ibv_cq;
 
 /**
  * Contains functions and classes for low-level RDMA operations, such as setting
@@ -28,6 +29,7 @@ class invalid_args : public exception {};
 class connection_broken : public exception {};
 class creation_failure : public exception {};
 class mr_creation_failure : public creation_failure {};
+class cq_creation_failure : public creation_failure {};
 class qp_creation_failure : public creation_failure {};
 class message_types_exhausted : public exception {};
 
@@ -64,6 +66,12 @@ public:
     const uint32_t rkey;
 };
 
+class completion_queue {
+public:
+    std::unique_ptr<ibv_cq, std::function<void(ibv_cq*)>> cq;
+    explicit completion_queue(bool cross_channel);
+};
+ 
 typedef std::function<void(uint64_t tag, uint32_t immediate, size_t length)>
     completion_handler;
 

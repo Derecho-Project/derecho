@@ -503,6 +503,35 @@ memory_region::memory_region(char *buf, size_t s) : mr(create_mr(buf, s)), buffe
 
 uint32_t memory_region::get_rkey() const { return mr->rkey; }
 
+completion_queue::completion_queue(bool cross_channel) {
+    ibv_cq *cq_ptr = nullptr;
+    if(!cross_channel) {
+        cq_ptr =
+            ibv_create_cq(verbs_resources.ib_ctx, 1024, nullptr, nullptr, 0);
+    } else {
+#ifdef CROSS_CHANNEL
+        ibv_exp_cq_init_attr attr;
+        attr.comp_mask = IBV_EXP_CQ_INIT_ATTR_FLAGS;
+        attr.flags = IBV_EXP_CQ_CREATE_CROSS_CHANNEL;
+        cq_ptr = ibv_exp_create_cq(verbs_resources.ib_ctx, 1024, nullptr,
+                                   nullptr, 0, &attr);
+
+        ibv_exp_cq_attr mod_attr;
+        mod_attr.comp_mask = IBV_EXP_CQ_ATTR_CQ_CAP_FLAGS;
+        mod_attr.cq_cap_flags = IBV_EXP_CQ_IGNORE_OVERRUN;
+        ibv_exp_modify_cq(cq_ptr, &mod_attr, IBV_EXP_CQ_CAP_FLAGS);
+#else
+        throw invalid_args();
+#endif
+    }
+    if(!cq_ptr) {
+        throw cq_creation_failure();
+    }
+
+    cq = decltype(cq)(cq_ptr, [](ibv_cq *q) { ibv_destroy_cq(q); });
+}
+
+	
 queue_pair::~queue_pair() {
     //    if(qp) cout << "Destroying Queue Pair..." << endl;
 }
