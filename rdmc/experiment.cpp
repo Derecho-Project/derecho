@@ -53,7 +53,7 @@ uint16_t next_group_number;
 send_stats measure_partially_concurrent_multicast(
     size_t size, size_t block_size, uint32_t group_size, uint32_t num_senders,
     size_t iterations, rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-    bool use_cv = false) {
+    bool use_cv = true) {
     if(node_rank >= group_size) {
         // Each iteration involves two barriers: one at the start and one at the
         // end.
@@ -66,7 +66,9 @@ send_stats measure_partially_concurrent_multicast(
 
 	std::mutex send_mutex;
 	std::condition_variable send_done_cv;
-
+	atomic<uint64_t> end_time;
+	atomic<uint64_t> end_ptime;
+	
     size_t num_blocks = (size - 1) / block_size + 1;
     size_t buffer_size = num_blocks * block_size;
 	auto mr = make_shared<memory_region>(buffer_size * num_senders);
@@ -85,8 +87,12 @@ send_stats measure_partially_concurrent_multicast(
             [&mr, i, buffer_size](size_t length) -> rdmc::receive_destination {
                 return {mr, buffer_size * i};
             },
-            [&sends_remaining, i, &send_done_cv](char *data, size_t) {
+            [&](char *data, size_t) {
                 if(--sends_remaining == 0) {
+					universal_barrier_group->barrier_wait();
+					end_ptime = get_process_time();
+					end_time = get_time();
+					unique_lock<mutex> lk(send_mutex);
                     send_done_cv.notify_all();
                 }
             },
@@ -102,7 +108,9 @@ send_stats measure_partially_concurrent_multicast(
 
     for(size_t i = 0; i < iterations; i++) {
         sends_remaining = num_senders;
-
+		end_time = 0;
+		end_ptime = 0;
+		
         if(node_rank < num_senders) {
             for(size_t j = 0; j < size; j += 256)
                 buffer[node_rank * buffer_size + j] = (rand() >> 5) % 256;
@@ -120,15 +128,12 @@ send_stats measure_partially_concurrent_multicast(
 
 		if(use_cv) {
 			unique_lock<mutex> lk(send_mutex);
-			send_done_cv.wait(lk, [&] { return sends_remaining == 0; });
+			send_done_cv.wait(lk, [&] { return end_time != 0; });
 		} else {
-            while(sends_remaining > 0)
+            while(end_time == 0)
                 /* do nothing*/;
         }
-        universal_barrier_group->barrier_wait();
 
-		uint64_t end_time = get_time();
-		uint64_t end_ptime = get_process_time();
 		uint64_t time_diff = end_time - start_time;
 		uint64_t ptime_diff = end_ptime - start_ptime;
 		rates.push_back(8.0 * size * num_senders / time_diff);
@@ -158,7 +163,7 @@ send_stats measure_partially_concurrent_multicast(
 send_stats measure_multicast(size_t size, size_t block_size,
                              uint32_t group_size, size_t iterations,
                              rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-							 bool use_cv = false) {
+							 bool use_cv = true) {
 	return measure_partially_concurrent_multicast(size, block_size, group_size,
 												  1, iterations, type, use_cv);
 }
@@ -672,7 +677,12 @@ int main(int argc, char *argv[]) {
     } else if(strcmp(argv[1], "concurrent") == 0) {
         concurrent_bandwidth_group_size();
     } else if(strcmp(argv[1], "active_senders") == 0) {
-        active_senders();
+		for(bool interrupts : {true, false}){
+			puts("==================================================================");
+			printf("interrupts: %s\n\n", interrupts ? "enabled" : "disabled");
+			rdma::impl::set_interrupt_mode(interrupts);
+			active_senders();
+		}
     } else if(strcmp(argv[1], "tast_create_group_failure") == 0) {
         tast_create_group_failure();
         exit(0);
