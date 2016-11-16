@@ -24,23 +24,23 @@ namespace sst {
 const int alignTo = sizeof(long);
 
 constexpr int padded_len(const int& len) {
-    return (len < alignTo) ? alignTo : (len + alignTo) | ~(alignTo - 1);
+    return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
 }
 
 /** Internal helper class, never exposed to the client. */
 class _SSTField {
 public:
     volatile char* base;
-    int row_len;
+    int rowLen;
     int field_len;
 
-    _SSTField(const int field_len) : base(nullptr), row_len(0), field_len(field_len) {}
+    _SSTField(const int field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
 
     int set_base(volatile char* const base) {
         this->base = base;
         return padded_len(field_len);
     }
-    void set_row_len(const int& rowLen) { row_len = rowLen; }
+    void set_rowLen(const int& _rowLen) { rowLen = _rowLen; }
 };
 
 /**
@@ -52,7 +52,7 @@ template <typename T>
 class SSTField : public _SSTField {
 public:
     using _SSTField::base;
-    using _SSTField::row_len;
+    using _SSTField::rowLen;
     using _SSTField::field_len;
 
     SSTField() : _SSTField(sizeof(T)) {
@@ -60,15 +60,15 @@ public:
     }
 
     // Tracks down the appropriate row
-    volatile T& operator[](const int row_idx) const { return ((T&)base[row_idx * row_len]); }
+    volatile T& operator[](const int row_idx) const { return ((T&)base[row_idx * rowLen]); }
 
     // Getter
     volatile T const& operator()(const int row_idx) const {
-        return *(T*)(base + row_idx * row_len);
+        return *(T*)(base + row_idx * rowLen);
     }
 
     // Setter
-    void operator()(const int row_idx, T const v) { *(T*)(base + row_idx * row_len) = v; }
+    void operator()(const int row_idx, T const v) { *(T*)(base + row_idx * rowLen) = v; }
 };
 
 /**
@@ -83,7 +83,7 @@ private:
     const size_t length;
 public:
     using _SSTField::base;
-    using _SSTField::row_len;
+    using _SSTField::rowLen;
     using _SSTField::field_len;
 
     SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
@@ -91,7 +91,7 @@ public:
     }
 
     // Tracks down the appropriate row
-    volatile T* operator[](const int& idx) const { return (T*)(base + idx * row_len); }
+    volatile T* operator[](const int& idx) const { return (T*)(base + idx * rowLen); }
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
@@ -140,11 +140,12 @@ class SST {
 private:
     template <typename... Fields>
     void init_SSTFields(Fields&... fields) {
-        row_len = 0;
-        compute_row_len(row_len, fields...);
-        rows = new char[row_len * num_members];
+        rowLen = 0;
+        compute_rowLen(rowLen, fields...);
+	std::cout << "Row length is : " << rowLen << std::endl;
+        rows = new char[rowLen * num_members];
         volatile char* base = rows;
-        set_bases_and_row_lens(base, row_len, fields...);
+        set_bases_and_rowLens(base, rowLen, fields...);
     }
 
     DerivedSST* derived_this;
@@ -162,7 +163,7 @@ private:
     /** Pointer to memory where the SST rows are stored. */
     volatile char* rows;
     /** Length of each row in this SST, in bytes. */
-    int row_len;
+    int rowLen;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
     const std::vector<uint32_t>& members;
     /** Equal to members.size() */
@@ -245,14 +246,14 @@ public:
         for(auto const& rank_index : members_by_id) {
             std::tie(node_rank, sst_index) = rank_index;
             char* write_addr, *read_addr;
-            write_addr = const_cast<char*>(rows) + row_len * sst_index;
-            read_addr = const_cast<char*>(rows) + row_len * my_index;
+            write_addr = const_cast<char*>(rows) + rowLen * sst_index;
+            read_addr = const_cast<char*>(rows) + rowLen * my_index;
             if(sst_index != my_index) {
                 if(row_is_frozen[sst_index]) {
                     continue;
                 }
                 res_vec[sst_index] = std::make_unique<resources>(
-                    node_rank, write_addr, read_addr, row_len, row_len);
+                    node_rank, write_addr, read_addr, rowLen, rowLen);
                 // update qp_num_to_index
                 qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
             }
@@ -287,11 +288,11 @@ public:
     void put() {
         std::vector<uint32_t> indices(num_members);
         std::iota(indices.begin(), indices.end(), 0);
-        put(indices, 0, row_len);
+        put(indices, 0, rowLen);
     }
 
     /** Writes the entire local row to some of the remote nodes. */
-    void put(std::vector<uint32_t> receiver_ranks) { put(receiver_ranks, 0, row_len); }
+    void put(std::vector<uint32_t> receiver_ranks) { put(receiver_ranks, 0, rowLen); }
 
     /** Writes a contiguous subset of the local row to all remote nodes. */
     void put(long long int offset, long long int size) {
@@ -306,21 +307,21 @@ public:
 private:
     using char_p = volatile char*;
 
-    void compute_row_len(int&) {}
+    void compute_rowLen(int&) {}
 
     template <typename Field, typename... Fields>
-    void compute_row_len(int& row_len, Field& f, Fields&... rest) {
-        row_len += padded_len(f.field_len);
-        compute_row_len(row_len, rest...);
+    void compute_rowLen(int& rowLen, Field& f, Fields&... rest) {
+        rowLen += padded_len(f.field_len);
+        compute_rowLen(rowLen, rest...);
     }
 
-    void set_bases_and_row_lens(char_p&, const int) {}
+    void set_bases_and_rowLens(char_p&, const int) {}
 
     template <typename Field, typename... Fields>
-    void set_bases_and_row_lens(char_p& base, const int rlen, Field& f, Fields&... rest) {
+    void set_bases_and_rowLens(char_p& base, const int rlen, Field& f, Fields&... rest) {
         base += f.set_base(base);
-        f.set_row_len(rlen);
-        set_bases_and_row_lens(base, rlen, rest...);
+        f.set_rowLen(rlen);
+        set_bases_and_rowLens(base, rlen, rest...);
     }
 };
 
