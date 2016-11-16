@@ -55,7 +55,9 @@ public:
     using _SSTField::row_len;
     using _SSTField::field_len;
 
-    SSTField() : _SSTField(sizeof(T)) {}
+    SSTField() : _SSTField(sizeof(T)) {
+      std::cout << "Here in SSTField constructor" << std::endl;
+    }
 
     // Tracks down the appropriate row
     volatile T& operator[](const int row_idx) const { return ((T&)base[row_idx * row_len]); }
@@ -84,7 +86,9 @@ public:
     using _SSTField::row_len;
     using _SSTField::field_len;
 
-    SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {}
+    SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
+        std::cout << "Here in SSTFieldVector constructor" << std::endl;
+    }
 
     // Tracks down the appropriate row
     volatile T* operator[](const int& idx) const { return (T*)(base + idx * row_len); }
@@ -194,8 +198,7 @@ private:
     std::condition_variable thread_start_cv;
 
 public:
-    template <typename... Fields>
-    SST(DerivedSST* derived_class_pointer, const SSTParams& params, Fields&... fields)
+    SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
               thread_shutdown(false),
               members(params.members),
@@ -205,6 +208,9 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
+        std::cout << "Here in SST constructor" << std::endl;
+	return;
+
         //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
@@ -212,9 +218,7 @@ public:
             }
         }
 
-        //Initialize rows and set the "base" field of each SSTField
-        init_SSTFields(fields...);
-
+        
         if(!params.already_failed.empty()) {
             assert(params.already_failed.size() == num_members);
             for(size_t index = 0; index < params.already_failed.size(); ++index) {
@@ -229,6 +233,12 @@ public:
         for(unsigned int sst_index = 0; sst_index < num_members; ++sst_index) {
             members_by_id[members[sst_index]] = sst_index;
         }
+    }
+
+    template <typename... Fields>
+    void SSTInit(Fields&... fields) {
+        //Initialize rows and set the "base" field of each SSTField
+        init_SSTFields(fields...);
 
         //Initialize res_vec with the correct offsets for each row
         unsigned int node_rank, sst_index;
@@ -253,6 +263,7 @@ public:
 
         std::cout << "Initialized SST and Started Threads" << std::endl;
     }
+
 
     ~SST();
 

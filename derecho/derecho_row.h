@@ -91,15 +91,18 @@ public:
      * (meaning this is the first time a Derecho SST has been created).
      */
     DerechoSST(const sst::SSTParams& parameters, const int curr_vid = 0)
-            : suspected(parameters.members.size()),
+            : sst::SST<DerechoSST>(this, parameters),
+              suspected(parameters.members.size()),
               changes(parameters.members.size()),
               joiner_ip(MAX_STRING_LEN),
               nReceived(parameters.members.size()),
-              globalMin(parameters.members.size()),
-              sst::SST<DerechoSST>(this, parameters, seq_num, stable_num, delivered_num,
-                                   persisted_num, vid, suspected, changes, joiner_ip,
-                                   nChanges, nCommitted, nAcked, nReceived, wedged,
-                                   globalMin, globalMinReady) {
+              globalMin(parameters.members.size())
+    {
+        SSTInit(seq_num, stable_num, delivered_num,
+                persisted_num, vid, suspected, changes, joiner_ip,
+                nChanges, nCommitted, nAcked, nReceived, wedged,
+                globalMin, globalMinReady);
+        std::cout << "Here in DerechoSST constructor after initializer list" << std::endl;
         //Once superclass constructor has finished, table entries can be initialized
         int my_row = get_local_index();
         for(int row = 0; row < get_num_rows(); ++row) {

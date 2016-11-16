@@ -1,3 +1,4 @@
+*~
 CMakeFiles
 /CMakeCache.txt
 /Makefile
@@ -29,3 +30,5 @@ CMakeFiles
 /derecho/log_tail_length
 /derecho/parse_state_file
 /sst/Makefile
+/derecho/experiments/script_copy.sh
+/derecho/script_copy.sh
