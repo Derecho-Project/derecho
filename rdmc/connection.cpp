@@ -121,7 +121,7 @@ connection_listener::connection_listener(int port) {
     listen(listenfd, 5);
 
     fd = unique_ptr<int, std::function<void(int *)>>(
-        new int(listenfd), [](int *fd) { close(*fd); });
+        new int(listenfd), [](int *fd) { close(*fd); delete fd; });
 }
 
 socket connection_listener::accept() {
