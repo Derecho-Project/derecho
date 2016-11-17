@@ -3,6 +3,7 @@
 #include "connection.h"
 #include "util.h"
 
+#include <boost/optional.hpp>
 #include <arpa/inet.h>
 #include <byteswap.h>
 #include <cstring>
@@ -28,6 +29,7 @@ extern "C" {
 #endif
 
 using namespace std;
+using boost::optional;
 
 namespace rdma {
 const uint32_t TCP_PORT = 19875;
@@ -66,6 +68,7 @@ struct ibv_resources {
 struct completion_handler_set {
     completion_handler send;
     completion_handler recv;
+	completion_handler write;
     string name;
 };
 static vector<completion_handler_set> completion_handlers;
@@ -73,6 +76,8 @@ static std::mutex completion_handlers_mutex;
 
 static atomic<bool> interrupt_mode;
 static atomic<bool> contiguous_memory_mode;
+
+static feature_set supported_features;
 
 static atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
@@ -131,7 +136,25 @@ static void polling_loop() {
         for(int i = 0; i < num_completions; i++) {
             ibv_wc &wc = work_completions[i];
 
+            if(wc.status == 5) continue;  // Queue Flush
+            if(wc.status != 0) {
+                string opcode = "[unknown]";
+                if(wc.opcode == IBV_WC_SEND) opcode = "IBV_WC_SEND";
+                if(wc.opcode == IBV_WC_RECV) opcode = "IBV_WC_RECV";
+                if(wc.opcode == IBV_WC_RDMA_WRITE) opcode = "IBV_WC_RDMA_WRITE";
+
+                // Failed operation
+                printf("wc.status = %d; wc.wr_id = 0x%llx; imm = 0x%x; "
+                       "opcode = %s\n",
+                       (int)wc.status, (long long)wc.wr_id,
+                       (unsigned int)wc.imm_data, opcode.c_str());
+                fflush(stdout);
+            }
+
             message_type::tag_type type = wc.wr_id >> message_type::shift_bits;
+            if(type == std::numeric_limits<message_type::tag_type>::max())
+                continue;
+
             uint64_t masked_wr_id = wc.wr_id & 0x00ffffffffffffff;
             if(type >= completion_handlers.size()) {
                 // Unrecognized message type
@@ -144,7 +167,8 @@ static void polling_loop() {
                 completion_handlers[type].recv(masked_wr_id, wc.imm_data,
                                                wc.byte_len);
             } else if(wc.opcode == IBV_WC_RDMA_WRITE) {
-                // Do nothing
+                completion_handlers[type].write(masked_wr_id, wc.imm_data,
+                                               wc.byte_len);
             } else {
                 puts("Sent unrecognized completion type?!");
             }
@@ -341,7 +365,25 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
 
 	set_interrupt_mode(false);
 	set_contiguous_memory_mode(true);
-	
+
+	// Initialize the ignored message type.
+	(void)message_type::ignored();
+
+	// Detect experimental features
+#ifdef MELLANOX_EXPERIMENTAL_VERBS
+    {
+		supported_features.contiguous_memory = true;
+		
+        ibv_exp_device_attr attr;
+        attr.comp_mask = 0;
+        int ret = ibv_exp_query_device(res->ib_ctx, &attr);
+		if(ret == 0) {
+            supported_features.cross_channel =
+				attr.exp_device_cap_flags & IBV_EXP_DEVICE_CROSS_CHANNEL;
+        }
+    }
+#endif
+
     {
         thread t(polling_loop);
         t.detach();
@@ -509,7 +551,7 @@ completion_queue::completion_queue(bool cross_channel) {
         cq_ptr =
             ibv_create_cq(verbs_resources.ib_ctx, 1024, nullptr, nullptr, 0);
     } else {
-#ifdef CROSS_CHANNEL
+#ifdef MELLANOX_EXPERIMENTAL_VERBS
         ibv_exp_cq_init_attr attr;
         attr.comp_mask = IBV_EXP_CQ_INIT_ATTR_FLAGS;
         attr.flags = IBV_EXP_CQ_CREATE_CROSS_CHANNEL;
@@ -723,8 +765,9 @@ bool queue_pair::post_empty_recv(uint64_t wr_id, const message_type &type) {
 bool queue_pair::post_write(const memory_region &mr, size_t offset,
                             size_t length, uint64_t wr_id,
                             remote_memory_region remote_mr,
-                            size_t remote_offset, bool signaled,
-                            bool send_inline) {
+                            size_t remote_offset, const message_type &type,
+							bool signaled, bool send_inline) {
+    if(wr_id >> type.shift_bits || !type.tag) throw invalid_args();
     if(mr.size < offset + length || remote_mr.size < remote_offset + length) {
         cout << "mr.size = " << mr.size << " offset = " << offset
              << " length = " << length << " remote_mr.size = " << remote_mr.size
@@ -745,7 +788,7 @@ bool queue_pair::post_write(const memory_region &mr, size_t offset,
     // prepare the send work request
     memset(&sr, 0, sizeof(sr));
     sr.next = NULL;
-    sr.wr_id = wr_id;
+    sr.wr_id = wr_id | ((uint64_t)*type.tag << type.shift_bits);
     sr.sg_list = &sge;
     sr.num_sge = 1;
     sr.opcode = IBV_WR_RDMA_WRITE;
@@ -761,11 +804,322 @@ bool queue_pair::post_write(const memory_region &mr, size_t offset,
     return true;
 }
 
+#ifdef MELLANOX_EXPERIMENTAL_VERBS
+managed_queue_pair::managed_queue_pair(
+    size_t remote_index, std::function<void(managed_queue_pair *)> post_recvs)
+    : queue_pair(), scq(true), rcq(true) {
+    auto it = sockets.find(remote_index);
+    if(it == sockets.end()) throw rdma::invalid_args();
+
+    auto &sock = it->second;
+
+    ibv_exp_qp_init_attr attr;
+    memset(&attr, 0, sizeof(attr));
+    attr.qp_context = nullptr;
+    attr.send_cq = scq.cq.get();
+    attr.recv_cq = rcq.cq.get();
+    attr.srq = nullptr;
+    attr.cap.max_send_wr = 10000;
+    attr.cap.max_recv_wr = 10000;
+    attr.cap.max_send_sge = 1;
+    attr.cap.max_recv_sge = 1;
+    attr.cap.max_inline_data = 0;
+    attr.qp_type = IBV_QPT_RC;
+    attr.sq_sig_all = 0;
+    attr.comp_mask =
+        IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
+    attr.pd = verbs_resources.pd;
+    attr.xrcd = nullptr;
+    attr.exp_create_flags =
+        IBV_EXP_QP_CREATE_CROSS_CHANNEL | IBV_EXP_QP_CREATE_MANAGED_SEND;
+    attr.max_inl_recv = 0;
+
+    qp = decltype(qp)(ibv_exp_create_qp(verbs_resources.ib_ctx, &attr),
+                      [](ibv_qp *q) { ibv_destroy_qp(q); });
+
+    if(!qp) {
+        fprintf(stderr, "failed to create QP, (errno = %s)\n", strerror(errno));
+        throw rdma::qp_creation_failure();
+    }
+
+    struct cm_con_data_t local_con_data;
+    struct cm_con_data_t remote_con_data;
+    memset(&local_con_data, 0, sizeof(local_con_data));
+    memset(&remote_con_data, 0, sizeof(remote_con_data));
+    union ibv_gid my_gid;
+
+    if(local_config.gid_idx >= 0) {
+        int rc = ibv_query_gid(verbs_resources.ib_ctx, local_config.ib_port,
+                               local_config.gid_idx, &my_gid);
+        if(rc) {
+            fprintf(stderr, "could not get gid for port %d, index %d\n",
+                    local_config.ib_port, local_config.gid_idx);
+            return;
+        }
+    } else {
+        memset(&my_gid, 0, sizeof my_gid);
+    }
+
+    /* exchange using TCP sockets info required to connect QPs */
+    local_con_data.qp_num = qp->qp_num;
+    local_con_data.lid = verbs_resources.port_attr.lid;
+    memcpy(local_con_data.gid, &my_gid, 16);
+    // fprintf(stdout, "Local QP number  = 0x%x\n", qp->qp_num);
+    // fprintf(stdout, "Local LID        = 0x%x\n",
+    // verbs_resources.port_attr.lid);
+
+    if(!sock.exchange(local_con_data, remote_con_data))
+        throw rdma::qp_creation_failure();
+
+    bool success =
+        !modify_qp_to_init(qp.get(), local_config.ib_port) &&
+        !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid,
+                          remote_con_data.gid, local_config.ib_port,
+                          local_config.gid_idx) &&
+        !modify_qp_to_rts(qp.get());
+
+    if(!success) throw rdma::qp_creation_failure();
+
+    post_recvs(this);
+
+    // Sync to make sure that both sides are in states that they can connect to
+    // prevent packet loss.
+    int tmp = -1;
+    if(!sock.exchange(0, tmp) || tmp != 0) throw rdma::qp_creation_failure();
+}
+manager_queue_pair::manager_queue_pair() : queue_pair() {
+    ibv_exp_qp_init_attr attr;
+    memset(&attr, 0, sizeof(attr));
+    attr.qp_context = nullptr;
+    attr.send_cq = verbs_resources.cq;
+    attr.recv_cq = verbs_resources.cq;
+    attr.srq = nullptr;
+    attr.cap.max_send_wr = 30005;
+    attr.cap.max_recv_wr = 0;
+    attr.cap.max_send_sge = 1;
+    attr.cap.max_recv_sge = 1;
+    attr.cap.max_inline_data = 0;
+    attr.qp_type = IBV_QPT_RC;
+    attr.sq_sig_all = 0;
+    attr.comp_mask =
+        IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
+    attr.pd = verbs_resources.pd;
+    attr.xrcd = nullptr;
+    attr.exp_create_flags = IBV_EXP_QP_CREATE_CROSS_CHANNEL;
+    attr.max_inl_recv = 0;
+
+    qp = decltype(qp)(ibv_exp_create_qp(verbs_resources.ib_ctx, &attr),
+                      [](ibv_qp *q) { ibv_destroy_qp(q); });
+
+    if(!qp) {
+        fprintf(stderr, "failed to create QP, (errno = %s)\n", strerror(errno));
+        throw rdma::qp_creation_failure();
+    }
+
+    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) &&
+                   !modify_qp_to_rtr(qp.get(), qp->qp_num, 0, nullptr,
+                                     local_config.ib_port, -1) &&
+                   !modify_qp_to_rts(qp.get());
+
+    if(!success) throw rdma::qp_creation_failure();
+}
+
+struct task::task_impl {
+	struct wr_list {
+		size_t start_index;
+		size_t end_index;
+	};
+
+	vector<ibv_sge> sges;
+	vector<ibv_recv_wr> recv_wrs;
+	vector<ibv_exp_send_wr> send_wrs;
+	
+	map<ibv_qp*, wr_list> recv_list;
+	map<ibv_qp*, wr_list> send_list;
+	optional<wr_list> mqp_list;
+	ibv_qp* mqp;
+	
+	task_impl(ibv_qp* mqp_ptr) : mqp(mqp_ptr) {}
+
+	void append_mqp_wr(size_t send_index) {
+		if(mqp_list) {
+			send_wrs[mqp_list->start_index].next = &send_wrs[send_index];
+			mqp_list->end_index = send_index;
+		} else {
+			mqp_list = wr_list{send_index, send_index};
+		}
+	}
+};
+
+task::task(std::shared_ptr<manager_queue_pair> manager_qp)
+	: impl(new task_impl(manager_qp->qp.get())), mqp(manager_qp) {}
+task::~task() {}
+
+void task::append_wait(const completion_queue &cq, int count, bool signaled,
+					   bool last, uint64_t wr_id, const message_type &type) {
+    impl->send_wrs.emplace_back();
+    auto &wr = impl->send_wrs.back();
+    wr.wr_id = wr_id | ((uint64_t)*type.tag << type.shift_bits);
+    wr.sg_list = nullptr;
+	wr.num_sge = 0;
+	wr.exp_opcode = IBV_EXP_WR_CQE_WAIT;
+    wr.exp_send_flags = (signaled ? IBV_SEND_SIGNALED : 0) |
+                        (last ? IBV_EXP_SEND_WAIT_EN_LAST : 0);
+    wr.ex.imm_data = 0;
+	wr.task.cqe_wait.cq = cq.cq.get();
+	wr.task.cqe_wait.cq_count = count;
+	wr.comp_mask = 0;
+	wr.next = nullptr;
+	impl->append_mqp_wr(impl->send_wrs.size()-1);
+}
+void task::append_enable_send(const managed_queue_pair &qp, int count) {
+    impl->send_wrs.emplace_back();
+    auto &wr = impl->send_wrs.back();
+	wr.wr_id = 0xfffffffff1f1f1f1;
+	wr.sg_list = nullptr;
+	wr.num_sge = 0;
+	wr.exp_opcode = IBV_EXP_WR_SEND_ENABLE;
+	wr.exp_send_flags = 0;
+	wr.ex.imm_data = 0;
+	wr.task.wqe_enable.qp = qp.qp.get();
+	wr.task.wqe_enable.wqe_count = count;
+	wr.comp_mask = 0;
+	wr.next = nullptr;
+	impl->append_mqp_wr(impl->send_wrs.size()-1);
+}
+void task::append_send(const managed_queue_pair &qp, const memory_region &mr,
+                       size_t offset, size_t length, uint32_t immediate) {
+	impl->sges.emplace_back();
+	auto& sge = impl->sges.back();
+	sge.addr = (uintptr_t)mr.buffer + offset;
+	sge.length = length;
+	sge.lkey = mr.mr->lkey;
+
+    impl->send_wrs.emplace_back();
+    auto &wr = impl->send_wrs.back();
+	wr.wr_id = 0xfffffffff2f2f2f2;
+	wr.next = nullptr;
+	wr.sg_list = &impl->sges[impl->sges.size()-1];
+	wr.num_sge = 1;
+	wr.exp_opcode = IBV_EXP_WR_SEND;
+	wr.exp_send_flags = 0;
+	wr.ex.imm_data = immediate;
+	wr.comp_mask = 0;
+
+	// Attempt to add element to map.
+	size_t index = impl->send_wrs.size() - 1;
+    auto pair = impl->send_list.emplace(qp.qp.get(),
+										task_impl::wr_list{index, index});
+
+    // If the element already existed, then replace it instead.
+	if(!pair.second) {
+		auto& wr_list = pair.first->second;
+        impl->send_wrs[wr_list.end_index].next = &impl->send_wrs[index];
+        wr_list.end_index = index;
+    }
+}
+void task::append_recv(const managed_queue_pair &qp, const memory_region &mr,
+                       size_t offset, size_t length) {
+	impl->sges.emplace_back();
+	auto& sge = impl->sges.back();
+	sge.addr = (uintptr_t)mr.buffer + offset;
+	sge.length = length;
+	sge.lkey = mr.mr->lkey;
+
+    impl->recv_wrs.emplace_back();
+    auto &wr = impl->recv_wrs.back();
+	wr.wr_id = 0xfffffffff3f3f3f3;
+	wr.next = nullptr;
+	wr.sg_list = &impl->sges[impl->sges.size()-1];
+	wr.num_sge = 1;
+
+	// Attempt to add element to map.
+	size_t index = impl->recv_wrs.size() - 1;
+	auto pair = impl->recv_list.emplace(qp.qp.get(),
+										task_impl::wr_list{index, index});
+
+	// If the element already existed, then replace it instead.
+	if(!pair.second) {
+		auto& wr_list = pair.first->second;
+        impl->recv_wrs[wr_list.end_index].next = &impl->recv_wrs[index];
+		wr_list.end_index = index;
+    }
+}
+bool task::post() {
+	size_t num_tasks = 1 + impl->send_list.size() + impl->recv_list.size();
+	auto tasks = make_unique<ibv_exp_task[]>(num_tasks);
+
+	size_t index = 0;
+	for(auto&& l : impl->recv_list) {
+		tasks[index].item.qp = l.first;
+		tasks[index].item.recv_wr = &impl->recv_wrs[l.second.start_index];
+		tasks[index].task_type = IBV_EXP_TASK_RECV;
+		tasks[index].next = &tasks[index+1];
+		tasks[index].comp_mask = 0;
+        ++index;
+    }
+	for(auto&& l : impl->send_list) {
+		tasks[index].item.qp = l.first;
+		tasks[index].item.send_wr = &impl->send_wrs[l.second.start_index];
+		tasks[index].task_type = IBV_EXP_TASK_SEND;
+		tasks[index].next = &tasks[index+1];
+		tasks[index].comp_mask = 0;
+        ++index;
+    }
+
+	tasks[index].item.qp = impl->mqp;
+    tasks[index].item.send_wr = &impl->send_wrs[impl->mqp_list->start_index];
+    tasks[index].task_type = IBV_EXP_TASK_SEND;
+    tasks[index].next = nullptr;
+    tasks[index].comp_mask = 0;
+	
+    ibv_exp_task *bad = nullptr;
+    return !ibv_exp_post_task(verbs_resources.ib_ctx, &tasks[0], &bad);
+}
+
+#else
+managed_queue_pair::managed_queue_pair(size_t remote_index,
+                                       std::function<void(managed_queue_pair *)> post_recvs)
+        : queue_pair(), scq(true), rcq(true) {
+	throw rdma::qp_creation_failure();
+}
+
+manager_queue_pair::manager_queue_pair() : queue_pair() {
+	throw rdma::qp_creation_failure();
+}
+
+struct task::task_impl {};
+task::~task() {}
+task::task(std::shared_ptr<manager_queue_pair> manager_qp) {
+    throw unsupported_feature();
+}
+void task::append_wait(const completion_queue &cq, int count, bool signaled,
+					   bool last, uint64_t wr_id, const message_type &type) {
+    throw unsupported_feature();
+}
+void task::append_enable_send(const managed_queue_pair &qp, int count) {
+    throw unsupported_feature();
+}
+void task::append_send(const managed_queue_pair &qp, const memory_region &mr,
+                       size_t offset, size_t length, uint32_t immediate) {
+    throw unsupported_feature();
+}
+void task::append_recv(const managed_queue_pair &qp, const memory_region &mr,
+                       size_t offset, size_t length) {
+    throw unsupported_feature();
+}
+bool task::post() {
+    throw unsupported_feature();
+}
+
+#endif
+
 message_type::message_type(const string &name, completion_handler send_handler,
-                           completion_handler recv_handler) {
+                           completion_handler recv_handler,
+                           completion_handler write_handler) {
     std::lock_guard<std::mutex> l(completion_handlers_mutex);
 
-    if(completion_handlers.size() > std::numeric_limits<tag_type>::max())
+    if(completion_handlers.size() >= std::numeric_limits<tag_type>::max())
         throw message_types_exhausted();
 
     tag = completion_handlers.size();
@@ -773,8 +1127,18 @@ message_type::message_type(const string &name, completion_handler send_handler,
     completion_handler_set set;
     set.send = send_handler;
     set.recv = recv_handler;
+	set.write = write_handler;
     set.name = name;
     completion_handlers.push_back(set);
+}
+
+message_type message_type::ignored() {
+    static message_type m(std::numeric_limits<tag_type>::max());
+    return m;
+}
+
+feature_set get_supported_features() {
+	return supported_features;
 }
 
 // int poll_for_completions(int num, ibv_wc *wcs, atomic<bool> &shutdown_flag) {

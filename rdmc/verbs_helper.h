@@ -32,6 +32,7 @@ class mr_creation_failure : public creation_failure {};
 class cq_creation_failure : public creation_failure {};
 class qp_creation_failure : public creation_failure {};
 class message_types_exhausted : public exception {};
+class unsupported_feature : public exception {};
 
 /**
  * A C++ wrapper for the IB Verbs ibv_mr struct. Registers a memory region for
@@ -45,7 +46,8 @@ class memory_region {
 
 	memory_region(size_t size, bool contiguous);
     friend class queue_pair;
-
+	friend class task;
+	
 public:
     memory_region(size_t size);
     memory_region(char* buffer, size_t size);
@@ -67,8 +69,11 @@ public:
 };
 
 class completion_queue {
-public:
     std::unique_ptr<ibv_cq, std::function<void(ibv_cq*)>> cq;
+	friend class managed_queue_pair;
+    friend class task;
+
+public:
     explicit completion_queue(bool cross_channel);
 };
  
@@ -82,12 +87,18 @@ public:
 
 private:
     std::experimental::optional<tag_type> tag;
-    friend class queue_pair;
+    message_type(tag_type t) : tag(t) {}
 
+	friend class queue_pair;
+	friend class task;
+	
 public:
     message_type(const std::string& name, completion_handler send_handler,
-                 completion_handler recv_handler);
+                 completion_handler recv_handler,
+                 completion_handler write_handler = nullptr);
     message_type() {}
+
+	static message_type ignored();
 };
 
 /**
@@ -96,8 +107,12 @@ public:
  * has been run, since it depends on global Verbs resources.
  */
 class queue_pair {
+protected:
     std::unique_ptr<ibv_qp, std::function<void(ibv_qp*)>> qp;
+    explicit queue_pair() {}
 
+	friend class task;
+	
 public:
     ~queue_pair();
     explicit queue_pair(size_t remote_index);
@@ -116,9 +131,48 @@ public:
 
     bool post_write(const memory_region& mr, size_t offset, size_t length,
                     uint64_t wr_id, remote_memory_region remote_mr,
-                    size_t remote_offset, bool signaled = false,
-                    bool send_inline = false);
+                    size_t remote_offset, const message_type& type,
+					bool signaled = false, bool send_inline = false);
 };
+
+class managed_queue_pair : public queue_pair {
+public:
+    completion_queue scq, rcq;
+    managed_queue_pair(size_t remote_index,
+                       std::function<void(managed_queue_pair*)> post_recvs);
+};
+
+class manager_queue_pair : public queue_pair {
+public:
+    explicit manager_queue_pair();
+};
+
+class task {
+protected:
+	struct task_impl;
+	std::unique_ptr<task_impl> impl;
+	std::shared_ptr<manager_queue_pair> mqp;
+	
+
+public:
+    task(std::shared_ptr<manager_queue_pair> manager_qp);
+	virtual ~task();
+
+    void append_wait(const completion_queue &cq, int count, bool signaled,
+					   bool last, uint64_t wr_id, const message_type &type);
+	void append_enable_send(const managed_queue_pair& qp, int count);
+    void append_send(const managed_queue_pair& qp, const memory_region& mr,
+					 size_t offset, size_t length, uint32_t immediate);
+    void append_recv(const managed_queue_pair& qp, const memory_region& mr,
+					 size_t offset, size_t length);
+    bool post() __attribute__((warn_unused_result));
+};
+
+struct feature_set {
+	bool contiguous_memory;
+    bool cross_channel;
+};
+feature_set get_supported_features();
 
 namespace impl {
 bool verbs_initialize(const std::map<uint32_t, std::string>& node_addresses,
@@ -139,6 +193,7 @@ std::map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
 
 bool set_interrupt_mode(bool enabled);
 bool set_contiguous_memory_mode(bool enabled);
+
 } /* namespace impl */
 } /* namespace rdma */
 #endif /* VERBS_HELPER_H */

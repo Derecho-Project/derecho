@@ -474,7 +474,69 @@ void concurrent_send() {
 //     fflush(stdout);
 // }
 
-void tast_create_group_failure() {
+void test_cross_channel() {
+	if(node_rank > 1) {
+		return;
+	}
+
+	puts("ZZZZZZZZZZZZZZ"); fflush(stdout);
+	
+    static volatile atomic<bool> done_flag;
+    done_flag = false;
+
+    auto nop_handler = [](auto, auto, auto) {};
+    auto done_handler = [](uint64_t tag, uint32_t immediate, size_t length) {
+        if(tag == 0x6000000) done_flag = true;
+    };
+
+	puts("YYYYYYYYYYYYYYYY"); fflush(stdout);
+		
+    static message_type mtype_done("ccc.done", nop_handler, nop_handler,
+                                   done_handler);
+	puts("XXXXXXXXXXXXXXXX"); fflush(stdout);
+
+    const int steps = 128;
+	const size_t chunk_size = 16;
+    const size_t buffer_size = (steps + 1) * chunk_size;
+
+    // Setup memory region
+    memory_region mr{buffer_size};
+	puts("WWWWWWWWWWWWWWWW"); fflush(stdout);
+		
+    memset(mr.buffer, 1 + node_rank, buffer_size);
+    memset(mr.buffer, node_rank * 10 + 10, chunk_size);
+    mr.buffer[buffer_size - 1] = 0;
+	puts("AAAAAAAAAAAAAAAA"); fflush(stdout);
+	auto mqp = make_shared<manager_queue_pair>();
+	puts("BBBBBBBBBBBBBBBB"); fflush(stdout);
+    managed_queue_pair qp(node_rank == 0 ? 1 : 0, [&](managed_queue_pair *qp) {
+        qp->post_recv(mr, chunk_size, chunk_size, 125, mtype_done);
+    });
+
+	puts("CCCCCCCCCCCCCCCC"); fflush(stdout);
+	
+	rdma::task t(mqp);
+	puts("LLLLLLLLLLLLLLLL"); fflush(stdout);
+	for(int i = 0; i < steps; i++) {
+        if(i != 0) {
+            t.append_recv(qp, mr, (i+1) * chunk_size, chunk_size);
+        }
+		t.append_send(qp, mr, i * chunk_size, chunk_size, 0);
+
+        t.append_enable_send(qp, i + 1);
+		t.append_wait(qp.rcq, i+1, false, false, 0, mtype_done);
+    }
+	puts("DDDDDDDDDDDDDDDDDD"); fflush(stdout);
+	t.append_wait(qp.scq, 0, true, true, 0x6000000, mtype_done);
+	puts("EEEEEEEEEEEEEEEEEE"); fflush(stdout);
+	CHECK(t.post());
+	puts("FFFFFFFFFFFFFFFFFF"); fflush(stdout);
+	while(!done_flag) {}
+
+	puts("PASS");
+}
+
+void test_create_group_failure() {
     if(num_nodes <= 2) {
         puts("FAILURE: must run with at least 3 nodes");
     }
@@ -683,9 +745,12 @@ int main(int argc, char *argv[]) {
 			rdma::impl::set_interrupt_mode(interrupts);
 			active_senders();
 		}
-    } else if(strcmp(argv[1], "tast_create_group_failure") == 0) {
-        tast_create_group_failure();
+    } else if(strcmp(argv[1], "test_create_group_failure") == 0) {
+        test_create_group_failure();
         exit(0);
+	} else if(strcmp(argv[1], "test_cross_channel") == 0) {
+		test_cross_channel();
+		exit(0);
     } else {
         puts("Unrecognized experiment name.");
         fflush(stdout);

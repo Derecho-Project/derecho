@@ -203,7 +203,8 @@ void barrier_group::barrier_wait() {
         if(!queue_pairs[m].post_write(
                *number_mr.get(), 0, 8,
                form_tag(0, (node_rank + (1 << m)) % group_size),
-               remote_memory_regions[m], m * 8, false, true)) {
+               remote_memory_regions[m], m * 8, message_type::ignored(),
+			   false, true)) {
             throw rdmc::connection_broken();
         }
 
