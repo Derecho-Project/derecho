@@ -210,7 +210,6 @@ public:
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
         std::cout << "Here in SST constructor" << std::endl;
-	return;
 
         //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
@@ -248,6 +247,10 @@ public:
             char* write_addr, *read_addr;
             write_addr = const_cast<char*>(rows) + rowLen * sst_index;
             read_addr = const_cast<char*>(rows) + rowLen * my_index;
+	    std::cout << "rows: " << rows << std::endl;
+	    std::cout << "rowLen: " << rowLen << std::endl;
+	    std::cout << "write_addr: " << write_addr << std::endl;
+	    std::cout << "read_addr: " << read_addr << std::endl;
             if(sst_index != my_index) {
                 if(row_is_frozen[sst_index]) {
                     continue;
