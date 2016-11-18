@@ -478,8 +478,6 @@ void test_cross_channel() {
 	if(node_rank > 1) {
 		return;
 	}
-
-	puts("ZZZZZZZZZZZZZZ"); fflush(stdout);
 	
     static volatile atomic<bool> done_flag;
     done_flag = false;
@@ -489,50 +487,47 @@ void test_cross_channel() {
         if(tag == 0x6000000) done_flag = true;
     };
 
-	puts("YYYYYYYYYYYYYYYY"); fflush(stdout);
-		
     static message_type mtype_done("ccc.done", nop_handler, nop_handler,
                                    done_handler);
-	puts("XXXXXXXXXXXXXXXX"); fflush(stdout);
 
     const int steps = 128;
-	const size_t chunk_size = 16;
+	const size_t chunk_size = 1024;
     const size_t buffer_size = (steps + 1) * chunk_size;
 
     // Setup memory region
     memory_region mr{buffer_size};
-	puts("WWWWWWWWWWWWWWWW"); fflush(stdout);
-		
     memset(mr.buffer, 1 + node_rank, buffer_size);
     memset(mr.buffer, node_rank * 10 + 10, chunk_size);
     mr.buffer[buffer_size - 1] = 0;
-	puts("AAAAAAAAAAAAAAAA"); fflush(stdout);
+
 	auto mqp = make_shared<manager_queue_pair>();
-	puts("BBBBBBBBBBBBBBBB"); fflush(stdout);
     managed_queue_pair qp(node_rank == 0 ? 1 : 0, [&](managed_queue_pair *qp) {
         qp->post_recv(mr, chunk_size, chunk_size, 125, mtype_done);
     });
 
-	puts("CCCCCCCCCCCCCCCC"); fflush(stdout);
-	
 	rdma::task t(mqp);
-	puts("LLLLLLLLLLLLLLLL"); fflush(stdout);
+	for(int i = 1; i < steps; i++) {
+		t.append_recv(qp, mr, (i+1) * chunk_size, chunk_size);
+	}
 	for(int i = 0; i < steps; i++) {
-        if(i != 0) {
-            t.append_recv(qp, mr, (i+1) * chunk_size, chunk_size);
-        }
 		t.append_send(qp, mr, i * chunk_size, chunk_size, 0);
-
+	}
+	for(int i = 0; i < steps; i++) {
         t.append_enable_send(qp, i + 1);
-		t.append_wait(qp.rcq, i+1, false, false, 0, mtype_done);
+        t.append_wait(qp.rcq, i + 1, false, false, 0x321000 + i, mtype_done);
     }
-	puts("DDDDDDDDDDDDDDDDDD"); fflush(stdout);
-	t.append_wait(qp.scq, 0, true, true, 0x6000000, mtype_done);
-	puts("EEEEEEEEEEEEEEEEEE"); fflush(stdout);
-	CHECK(t.post());
-	puts("FFFFFFFFFFFFFFFFFF"); fflush(stdout);
-	while(!done_flag) {}
+    t.append_wait(qp.scq, 0, true, true, 0x6000000, mtype_done);
+    CHECK(t.post());
 
+    while(!done_flag) {
+    }
+
+    // std::this_thread::sleep_for(std::chrono::seconds(1));
+	// for(int i = 0; i < steps && i < 16; i++) {
+	// 	printf("%2d ", mr.buffer[i * chunk_size]);
+	// }
+	// printf("\n");
+	
 	puts("PASS");
 }
 
