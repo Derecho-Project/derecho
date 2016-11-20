@@ -52,11 +52,6 @@ protected:
 public:
     virtual ~group();
 
-	static struct {
-        rdma::message_type data_block;
-        rdma::message_type ready_for_block;
-    } message_types;
-	
     virtual void receive_block(uint32_t send_imm, size_t size) = 0;
     virtual void receive_ready_for_block(uint32_t step, uint32_t sender) = 0;
     virtual void complete_block_send() = 0;
@@ -90,7 +85,14 @@ private:
     map<size_t, rdma::queue_pair> queue_pairs;
     map<size_t, rdma::queue_pair> rfb_queue_pairs;
 
+	static struct {
+        rdma::message_type data_block;
+        rdma::message_type ready_for_block;
+    } message_types;
+	
 public:
+	static void initialize_message_types();
+
     polling_group(uint16_t group_number, size_t block_size,
                   vector<uint32_t> members, uint32_t member_index,
                   incoming_message_callback_t upcall,

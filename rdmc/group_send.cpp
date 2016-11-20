@@ -11,7 +11,12 @@ using namespace std;
 using namespace rdma;
 using namespace rdmc;
 
-decltype(group::message_types) group::message_types;
+namespace rdmc {
+extern map<uint16_t, shared_ptr<group>> groups;
+extern mutex groups_lock;
+};
+
+decltype(polling_group::message_types) polling_group::message_types;
 
 group::group(uint16_t _group_number, size_t _block_size,
                        vector<uint32_t> _members, uint32_t _member_index,
@@ -26,9 +31,39 @@ group::group(uint16_t _group_number, size_t _block_size,
           transfer_schedule(std::move(_schedule)),
           completion_callback(callback),
           incoming_message_upcall(upcall) {}
-
 group::~group() { unique_lock<mutex> lock(monitor); }
 
+void polling_group::initialize_message_types() {
+    auto find_group = [](uint16_t group_number) {
+        unique_lock<mutex> lock(groups_lock);
+        auto it = groups.find(group_number);
+        return it != groups.end() ? it->second : nullptr;
+    };
+    auto send_data_block = [find_group](uint64_t tag, uint32_t immediate,
+                                        size_t length) {
+        ParsedTag parsed_tag = parse_tag(tag);
+        shared_ptr<group> g = find_group(parsed_tag.group_number);
+        if(g) g->complete_block_send();
+    };
+    auto receive_data_block = [find_group](uint64_t tag, uint32_t immediate,
+                                           size_t length) {
+        ParsedTag parsed_tag = parse_tag(tag);
+        shared_ptr<group> g = find_group(parsed_tag.group_number);
+        if(g) g->receive_block(immediate, length);
+    };
+    auto send_ready_for_block = [](uint64_t, uint32_t, size_t) {};
+    auto receive_ready_for_block = [find_group](
+        uint64_t tag, uint32_t immediate, size_t length) {
+        ParsedTag parsed_tag = parse_tag(tag);
+        shared_ptr<group> g = find_group(parsed_tag.group_number);
+        if(g) g->receive_ready_for_block(immediate, parsed_tag.target);
+    };
+
+    message_types.data_block =
+        message_type("rdmc.data_block", send_data_block, receive_data_block);
+    message_types.ready_for_block = message_type(
+        "rdmc.ready_for_block", send_ready_for_block, receive_ready_for_block);
+}
 polling_group::polling_group(uint16_t _group_number, size_t _block_size,
                              vector<uint32_t> _members, uint32_t _member_index,
                              incoming_message_callback_t upcall,
@@ -59,7 +94,6 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
         // puts("Issued Ready For Block CCCCCCCCC");
     }
 }
-
 void polling_group::receive_block(uint32_t send_imm, size_t received_block_size) {
     unique_lock<mutex> lock(monitor);
 
@@ -402,7 +436,6 @@ void polling_group::connect(uint32_t neighbor) {
 
     rfb_queue_pairs.emplace(neighbor, queue_pair(members[neighbor], post_recv));
 }
-
 void polling_group::send_ready_for_block(uint32_t neighbor) {
     auto it = rfb_queue_pairs.find(neighbor);
     assert(it != rfb_queue_pairs.end());

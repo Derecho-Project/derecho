@@ -41,50 +41,18 @@ uint32_t node_rank;
 atomic<bool> shutdown_flag;
 
 // map from group number to group
-map<uint16_t, shared_ptr<group> > groups;
+map<uint16_t, shared_ptr<group>> groups;
 mutex groups_lock;
 
 bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     if(shutdown_flag) return false;
 
     node_rank = _node_rank;
-
-    TRACE("starting initialize");
     if(!::rdma::impl::verbs_initialize(addresses, node_rank)) {
         return false;
     }
-    TRACE("verbs initialized");
 
-    auto find_group = [](uint16_t group_number) {
-        unique_lock<mutex> lock(groups_lock);
-        auto it = groups.find(group_number);
-        return it != groups.end() ? it->second : nullptr;
-    };
-    auto send_data_block = [find_group](uint64_t tag, uint32_t immediate,
-                                        size_t length) {
-        ParsedTag parsed_tag = parse_tag(tag);
-        shared_ptr<group> g = find_group(parsed_tag.group_number);
-        if(g) g->complete_block_send();
-    };
-    auto receive_data_block = [find_group](uint64_t tag, uint32_t immediate,
-                                           size_t length) {
-        ParsedTag parsed_tag = parse_tag(tag);
-        shared_ptr<group> g = find_group(parsed_tag.group_number);
-        if(g) g->receive_block(immediate, length);
-    };
-    auto send_ready_for_block = [](uint64_t, uint32_t, size_t) {};
-    auto receive_ready_for_block = [find_group](
-        uint64_t tag, uint32_t immediate, size_t length) {
-        ParsedTag parsed_tag = parse_tag(tag);
-        shared_ptr<group> g = find_group(parsed_tag.group_number);
-        if(g) g->receive_ready_for_block(immediate, parsed_tag.target);
-    };
-
-    group::message_types.data_block =
-        message_type("rdmc.data_block", send_data_block, receive_data_block);
-    group::message_types.ready_for_block = message_type(
-        "rdmc.ready_for_block", send_ready_for_block, receive_ready_for_block);
-
+	polling_group::initialize_message_types();
     return true;
 }
 void add_address(uint32_t index, const string& address) {
