@@ -6,11 +6,13 @@
 #include <condition_variable>
 #include <functional>
 #include <iostream>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <string.h>
 #include <thread>
 #include <vector>
 
@@ -36,6 +38,10 @@ public:
 
     _SSTField(const int field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
 
+    virtual bool operator==(_SSTField const&) {
+        assert(false);
+    }
+
     int set_base(volatile char* const base) {
         this->base = base;
         return padded_len(field_len);
@@ -56,7 +62,7 @@ public:
     using _SSTField::field_len;
 
     SSTField() : _SSTField(sizeof(T)) {
-      std::cout << "Here in SSTField constructor" << std::endl;
+        std::cout << "Here in SSTField constructor" << std::endl;
     }
 
     // Tracks down the appropriate row
@@ -81,6 +87,7 @@ template <typename T>
 class SSTFieldVector : public _SSTField {
 private:
     const size_t length;
+
 public:
     using _SSTField::base;
     using _SSTField::rowLen;
@@ -142,8 +149,9 @@ private:
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
-	std::cout << "Row length is : " << rowLen << std::endl;
+        std::cout << "Row length is : " << rowLen << std::endl;
         rows = new char[rowLen * num_members];
+        snapshot = new char[rowLen * num_members];
         volatile char* base = rows;
         set_bases_and_rowLens(base, rowLen, fields...);
     }
@@ -162,6 +170,7 @@ public:
 private:
     /** Pointer to memory where the SST rows are stored. */
     volatile char* rows;
+    char* snapshot;
     /** Length of each row in this SST, in bytes. */
     int rowLen;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
@@ -218,7 +227,6 @@ public:
             }
         }
 
-        
         if(!params.already_failed.empty()) {
             assert(params.already_failed.size() == num_members);
             for(size_t index = 0; index < params.already_failed.size(); ++index) {
@@ -247,10 +255,10 @@ public:
             char* write_addr, *read_addr;
             write_addr = const_cast<char*>(rows) + rowLen * sst_index;
             read_addr = const_cast<char*>(rows) + rowLen * my_index;
-	    std::cout << "rows: " << rows << std::endl;
-	    std::cout << "rowLen: " << rowLen << std::endl;
-	    std::cout << "write_addr: " << write_addr << std::endl;
-	    std::cout << "read_addr: " << read_addr << std::endl;
+            std::cout << "rows: " << rows << std::endl;
+            std::cout << "rowLen: " << rowLen << std::endl;
+            std::cout << "write_addr: " << write_addr << std::endl;
+            std::cout << "read_addr: " << read_addr << std::endl;
             if(sst_index != my_index) {
                 if(row_is_frozen[sst_index]) {
                     continue;
@@ -267,7 +275,6 @@ public:
 
         std::cout << "Initialized SST and Started Threads" << std::endl;
     }
-
 
     ~SST();
 
@@ -325,6 +332,19 @@ private:
         base += f.set_base(base);
         f.set_rowLen(rlen);
         set_bases_and_rowLens(base, rlen, rest...);
+    }
+
+    void take_snapshot() {
+        memcpy(snapshot, const_cast<char*>(rows), rowLen * num_members);
+    }
+
+    // returns snapshot == current
+    bool compare_snapshot_and_current() {
+      int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+        if(res == 0) {
+            return true;
+        }
+        return false;
     }
 };
 

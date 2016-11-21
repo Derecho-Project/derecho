@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -59,6 +60,7 @@ void SST<DerivedSST>::detect() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
+    int num_evals_after_snapshot = 0;
     while(!thread_shutdown) {
         // Take the predicate lock before reading the predicate lists
         std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
@@ -109,6 +111,26 @@ void SST<DerivedSST>::detect() {
             }
         }
 
+        num_evals_after_snapshot++;
+
+        if(num_evals_after_snapshot == 1000) {
+            predicates_lock.unlock();
+            num_evals_after_snapshot = 0;
+            while(true) {
+                // check if the row contents have changed
+                if(compare_snapshot_and_current()) {
+		  std::cout << "No activity! Sleeping for 1 ms" << std::endl;
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(1ms);
+		    std::cout << "Waking up" << std::endl;
+                } else {
+                    std::cout << "Change detected! Starting predicate evaluation" << std::endl;
+                    take_snapshot();
+                    break;
+                }
+            }
+            predicates_lock.lock();
+        }
         //Still to do: Clean up deleted predicates
     }
 }
