@@ -1,5 +1,5 @@
 
-#include "connection.h"
+#include "tcp.h"
 
 #include <algorithm>
 #include <arpa/inet.h>

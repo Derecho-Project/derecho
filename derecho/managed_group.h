@@ -1,8 +1,14 @@
 #ifndef MANAGED_GROUP_H_
 #define MANAGED_GROUP_H_
 
+#include "tcp/tcp.h"
+
+#include "logger.h"
+#include "view.h"
+
 #include <chrono>
 #include <ctime>
+#include <experimental/optional>
 #include <list>
 #include <map>
 #include <mutex>
@@ -10,11 +16,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include <experimental/optional>
-
-#include "logger.h"
-#include "rdmc/connection.h"
-#include "view.h"
 
 namespace derecho {
 

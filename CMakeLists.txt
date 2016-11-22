@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3")
 add_subdirectory(derecho)
 add_subdirectory(rdmc)
 add_subdirectory(sst)
+add_subdirectory(tcp)
 
 add_custom_target(
 	mutils_target

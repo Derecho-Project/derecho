@@ -1,6 +1,7 @@
 
+#include "tcp/tcp.h"
+
 #include "verbs_helper.h"
-#include "connection.h"
 #include "util.h"
 
 #include <atomic>

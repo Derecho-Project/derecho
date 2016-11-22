@@ -5,8 +5,8 @@ SET(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Wall -ggdb")
 
 include_directories(${derecho_SOURCE_DIR})
 
-ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp verbs_helper.cpp connection.cpp schedule.cpp)
-TARGET_LINK_LIBRARIES(rdmc rdmacm ibverbs rt pthread)
+ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp verbs_helper.cpp schedule.cpp)
+TARGET_LINK_LIBRARIES(rdmc tcp rdmacm ibverbs rt pthread)
 
 find_library(SLURM_FOUND slurm)
 if (SLURM_FOUND)

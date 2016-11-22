@@ -3,7 +3,7 @@
  *
  */
 
-#include "rdmc/connection.h"
+#include "tcp/tcp.h"
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
