@@ -32,3 +32,5 @@ CMakeFiles
 /sst/Makefile
 /derecho/experiments/script_copy.sh
 /derecho/script_copy.sh
+/sst/experiments/Makefile
+/sst/experiments/sst_test
