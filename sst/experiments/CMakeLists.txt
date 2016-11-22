@@ -8,3 +8,11 @@ include_directories(${derecho_SOURCE_DIR})
 # count_read
 add_executable(count_write count_write.cpp)
 target_link_libraries(count_write sst rdmc)
+
+# sst_test
+add_executable(sst_test sst_test.cpp)
+target_link_libraries(sst_test sst rdmc)
+
+# simple_predicate
+add_executable(simple_predicate simple_predicate.cpp)
+target_link_libraries(simple_predicate sst rdmc)

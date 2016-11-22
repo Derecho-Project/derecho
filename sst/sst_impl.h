@@ -119,12 +119,9 @@ void SST<DerivedSST>::detect() {
             while(true) {
                 // check if the row contents have changed
                 if(compare_snapshot_and_current()) {
-		  std::cout << "No activity! Sleeping for 1 ms" << std::endl;
                     using namespace std::chrono_literals;
                     std::this_thread::sleep_for(1ms);
-		    std::cout << "Waking up" << std::endl;
                 } else {
-                    std::cout << "Change detected! Starting predicate evaluation" << std::endl;
                     take_snapshot();
                     break;
                 }
