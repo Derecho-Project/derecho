@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 2.8)
 PROJECT(verbs-mcast CXX)
 SET(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Wall -ggdb")
 
+include_directories(${derecho_SOURCE_DIR})
+
 ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp verbs_helper.cpp connection.cpp schedule.cpp)
 TARGET_LINK_LIBRARIES(rdmc rdmacm ibverbs rt pthread)
 

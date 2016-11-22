@@ -1,9 +1,10 @@
 #pragma once
 
-#include "../rdmc/connection.h"
+#include "rdmc/connection.h"
 
 #include <map>
 #include <mutex>
+#include <cassert>
 
 namespace tcp {
 using ip_addr_t = std::string;

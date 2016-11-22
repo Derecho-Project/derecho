@@ -1,17 +1,18 @@
-#include <iostream>
 #include <fstream>
-#include <vector>
+#include <iostream>
 #include <map>
-#include <time.h>
 #include <memory>
+#include <time.h>
+#include <vector>
 
 #include "../derecho_group.h"
 #include "../managed_group.h"
 #include "../view.h"
-#include "block_size.h"
-#include "../rdmc/util.h"
 #include "aggregate_bandwidth.h"
+#include "block_size.h"
 #include "log_results.h"
+
+#include "rdmc/rdmc.h"
 
 using std::vector;
 using std::map;
@@ -31,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     map<uint32_t, std::string> node_addresses;
 
-    query_addresses(node_addresses, node_rank);
+	rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     vector<uint32_t> members(num_nodes);

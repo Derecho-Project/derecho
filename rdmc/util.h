@@ -2,14 +2,12 @@
 #ifndef UTIL_H
 #define UTIL_H
 
-#include <algorithm>
+#include "time/time.h"
+
 #include <cstdlib>
-#include <cstring>
 #include <map>
 #include <mutex>
 #include <string>
-#include <sys/resource.h>
-#include <sys/time.h>
 #include <vector>
 
 template <class T, class U>
@@ -24,22 +22,11 @@ size_t index_of(T container, U elem) {
 }
 bool file_exists(const std::string &name);
 void create_directory(const std::string &name);
-inline uint64_t get_time() {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return now.tv_sec * 1000000000L + now.tv_nsec;
-}
-inline uint64_t get_process_time() {
-	rusage usage;
-	getrusage(RUSAGE_SELF, &usage);
-    return (usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) * 1000000000L +
-           (usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) * 1000L;
-}
 double compute_data_rate(size_t numBytes, uint64_t sTime, uint64_t eTime);
 void put_flush(const char *str);
 void reset_epoch();
-void query_addresses(std::map<uint32_t, std::string> &addresses,
-                     uint32_t &node_rank);
+void query_peer_addresses(std::map<uint32_t, std::string> &addresses,
+                          uint32_t &node_rank);
 
 double compute_mean(std::vector<double> v);
 double compute_stddev(std::vector<double> v);

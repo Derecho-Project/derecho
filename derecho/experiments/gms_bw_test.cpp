@@ -1,18 +1,20 @@
+
+#include "time/time.h"
+
 #include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../rdmc/util.h"
-#include "../view.h"
 #include "../logger.h"
+#include "../managed_group.h"
+#include "../view.h"
 
 #include <chrono>
-#include <ratio>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <map>
+#include <ratio>
 #include <string>
 #include <thread>
 #include <vector>
-#include <fstream>
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -103,7 +105,6 @@ int main(int argc, char *argv[]) {
     auto t1 = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t2 = high_resolution_clock::now();
-    reset_epoch();
     derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t3 = high_resolution_clock::now();

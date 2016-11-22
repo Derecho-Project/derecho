@@ -2,11 +2,9 @@
 #ifndef VERBS_HELPER_H
 #define VERBS_HELPER_H
 
-#include "message.h"
-
-#include <atomic>
 #include <cstdint>
 #include <experimental/optional>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>

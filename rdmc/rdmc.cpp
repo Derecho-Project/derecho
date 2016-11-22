@@ -1,37 +1,22 @@
 
-#include "rdmc.h"
 #include "group_send.h"
 #include "message.h"
-#include "microbenchmarks.h"
+#include "rdmc.h"
+#include "schedule.h"
 #include "util.h"
 #include "verbs_helper.h"
 
-#include <algorithm>
 #include <atomic>
-#include <chrono>
-#include <cinttypes>
 #include <cmath>
-#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fstream>
-#include <iostream>
-#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <poll.h>
-#include <queue>
 #include <set>
-#include <sstream>
 #include <string>
-#include <sys/mman.h>
-#include <sys/resource.h>
-#include <thread>
-#include <unistd.h>
 #include <vector>
+#include <utility>
 
 using namespace std;
 using namespace rdma;
@@ -112,6 +97,10 @@ bool send(uint16_t group_number, shared_ptr<memory_region> mr, size_t offset,
     LOG_EVENT(group_number, -1, -1, "preparing_to_send_message");
     g->send_message(mr, offset, length);
     return true;
+}
+void query_addresses(std::map<uint32_t, std::string>& addresses,
+                     uint32_t& node_rank) {
+	query_peer_addresses(addresses, node_rank);
 }
 
 barrier_group::barrier_group(vector<uint32_t> members) {

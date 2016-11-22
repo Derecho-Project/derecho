@@ -10,7 +10,6 @@
 #include "../managed_group.h"
 #include "../view.h"
 #include "block_size.h"
-#include "../rdmc/util.h"
 
 static const int GMS_PORT = 12345;
 
@@ -33,7 +32,7 @@ int main(int argc, char *argv[]) {
 
     map<uint32_t, std::string> node_addresses;
 
-    query_addresses(node_addresses, node_rank);
+	rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     vector<uint32_t> members(num_nodes);

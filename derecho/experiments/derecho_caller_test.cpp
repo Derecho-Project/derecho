@@ -1,16 +1,15 @@
-#include <iostream>
 #include <fstream>
-#include <vector>
+#include <iostream>
 #include <map>
-#include <time.h>
 #include <memory>
+#include <time.h>
+#include <vector>
 
-#include "../derecho_group.h"
 #include "../derecho_caller.h"
+#include "../derecho_group.h"
 #include "../managed_group.h"
 #include "../view.h"
 #include "block_size.h"
-#include "../rdmc/util.h"
 
 using std::vector;
 using std::map;

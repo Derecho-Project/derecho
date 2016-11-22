@@ -1,16 +1,16 @@
-#include <iostream>
 #include <fstream>
-#include <memory>
-#include <vector>
-#include <time.h>
+#include <iostream>
 #include <map>
+#include <memory>
+#include <time.h>
+#include <vector>
 
-#include "../rdmc/rdmc.h"
-#include "../rdmc/util.h"
 #include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
+
+#include "rdmc/rdmc.h"
 
 using std::vector;
 
@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 
     std::map<uint32_t, std::string> node_addresses;
 
-    query_addresses(node_addresses, node_rank);
+	rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     // initialize RDMA resources, input number of nodes, node rank and ip addresses and create TCP connections

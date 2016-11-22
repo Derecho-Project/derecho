@@ -1,4 +1,3 @@
-#include <stddef.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -7,11 +6,11 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <stddef.h>
 #include <string>
 
 #include "../logger.h"
 #include "../managed_group.h"
-#include "../rdmc/util.h"
 
 using namespace std;
 

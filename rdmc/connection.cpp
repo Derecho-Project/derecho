@@ -1,15 +1,13 @@
 
 #include "connection.h"
 
+#include <algorithm>
 #include <arpa/inet.h>
-#include <cassert>
 #include <cerrno>
 #include <cstring>
-#include <iostream>
 #include <netdb.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 namespace tcp {

@@ -6,11 +6,12 @@
 #include <thread>
 #include <vector>
 
+#include "../derecho_caller.h"
 #include "../derecho_group.h"
 #include "../managed_group.h"
-#include "../derecho_caller.h"
-#include "../rdmc/util.h"
 #include "../view.h"
+
+#include "time/time.h"
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -90,7 +91,6 @@ int main(int argc, char *argv[]) {
     uint64_t t1 = get_time();
     universal_barrier_group->barrier_wait();
     uint64_t t2 = get_time();
-    reset_epoch();
     derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     uint64_t t3 = get_time();

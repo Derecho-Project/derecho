@@ -1,8 +1,6 @@
 
-#include "group_send.h"
-#include "message.h"
-#include "microbenchmarks.h"
 #include "rdmc.h"
+#include "schedule.h"
 #include "util.h"
 #include "verbs_helper.h"
 
@@ -10,17 +8,14 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
-#include <cinttypes>
 #include <cmath>
 #include <condition_variable>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
-#include <sys/mman.h>
-#include <sys/resource.h>
 #include <thread>
 #include <vector>
 
@@ -687,7 +682,7 @@ int main(int argc, char *argv[]) {
 
     LOG_EVENT(-1, -1, -1, "querying_addresses");
     map<uint32_t, string> addresses;
-    query_addresses(addresses, node_rank);
+	rdmc::query_addresses(addresses, node_rank);
     num_nodes = addresses.size();
 
     LOG_EVENT(-1, -1, -1, "calling_init");

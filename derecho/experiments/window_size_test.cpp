@@ -4,11 +4,12 @@
 #include <time.h>
 
 #include "../derecho_group.h"
-#include "../rdmc/rdmc.h"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
 #include "initialize.h"
+
+#include "rdmc/rdmc.h"
 
 using std::cout;
 using std::endl;

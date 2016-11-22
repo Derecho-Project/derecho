@@ -3,22 +3,14 @@
 #include "connection.h"
 #include "util.h"
 
-#include <arpa/inet.h>
-#include <boost/optional.hpp>
-#include <byteswap.h>
+#include <atomic>
 #include <cstring>
-#include <endian.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <iostream>
 #include <list>
 #include <mutex>
-#include <netdb.h>
 #include <poll.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 
 extern "C" {
@@ -30,7 +22,6 @@ extern "C" {
 #endif
 
 using namespace std;
-using boost::optional;
 
 namespace rdma {
 const uint32_t TCP_PORT = 19875;

@@ -2,8 +2,6 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
-#include <cassert>
-#include <map>
 #include <memory>
 #include <string>
 

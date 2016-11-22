@@ -4,13 +4,13 @@
 
 #include "verbs_helper.h"
 
+#include <array>
 #include <boost/optional.hpp>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace rdmc {
@@ -54,6 +54,11 @@ void destroy_group(uint16_t group_number);
 
 bool send(uint16_t group_number, std::shared_ptr<rdma::memory_region> mr,
           size_t offset, size_t length) __attribute__((warn_unused_result));
+
+// Convenience function to obtain the addresses of other nodes that might be
+// part of group communication. 
+void query_addresses(std::map<uint32_t, std::string>& addresses,
+                     uint32_t& node_rank);
 
 class barrier_group {
     // Queue Pairs and associated remote memory regions used for performing a

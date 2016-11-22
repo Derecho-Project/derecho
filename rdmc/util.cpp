@@ -1,12 +1,11 @@
 
 #include "util.h"
-#include "verbs_helper.h"
 
 #include <cassert>
 #include <cinttypes>
 #include <cmath>
 #include <cstdint>
-#include <fstream>
+#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <sstream>
@@ -84,7 +83,8 @@ bool slurm_query_addresses(map<uint32_t, string> &addresses,
 #endif
 }
 
-void query_addresses(map<uint32_t, string> &addresses, uint32_t &node_rank) {
+void query_peer_addresses(map<uint32_t, string> &addresses,
+						  uint32_t &node_rank) {
     if(slurm_query_addresses(addresses, node_rank)) return;
 
     uint32_t num_nodes;

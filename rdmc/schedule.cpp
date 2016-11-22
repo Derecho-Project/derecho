@@ -1,7 +1,6 @@
 
 #include "schedule.h"
 
-#include <algorithm>
 #include <climits>
 
 using std::min;

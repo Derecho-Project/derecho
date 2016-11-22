@@ -2,17 +2,14 @@
 #ifndef GROUP_SEND_H
 #define GROUP_SEND_H
 
-#include "schedule.h"
-#include "message.h"
 #include "rdmc.h"
-#include "util.h"
+#include "schedule.h"
 #include "verbs_helper.h"
 
 #include <boost/optional.hpp>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <set>
 #include <vector>
 

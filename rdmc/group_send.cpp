@@ -1,11 +1,9 @@
 
 #include "group_send.h"
+#include "message.h"
+#include "util.h"
 
-#include <cassert>
-#include <climits>
-#include <cmath>
-#include <iostream>
-#include <sys/mman.h>
+#include <cstring>
 
 using namespace std;
 using namespace rdma;
