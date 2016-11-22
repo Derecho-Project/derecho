@@ -137,13 +137,24 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
 
+    version(member_index, version[member_index]+1);
+    
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
             continue;
         }
+	
         // perform a remote RDMA write on the owner of the row
-        res_vec[index]->post_remote_write(offset, size);
+	if (offset == 0) {
+	  if (size != rowLen) {
+	    size += sizeof(version[member_index]);
+	  }
+	  res_vec[index]->post_remote_write(offset, size);
+	}
+	else {
+	  res_vec[index]->post_remote_write(offset, size, 0, sizeof(version[member_index]));	  
+	}
         posted_write_to[index] = true;
         num_writes_posted++;
     }

@@ -79,6 +79,7 @@ public:
     void post_remote_write(long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(long long int offset, long long int size);
+    int post_remote_write(long long int offset1, long long int size1, long long int offset2, long long int size2);
 };
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr);

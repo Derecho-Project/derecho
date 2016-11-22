@@ -148,12 +148,11 @@ private:
     template <typename... Fields>
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
-        compute_rowLen(rowLen, fields...);
-        std::cout << "Row length is : " << rowLen << std::endl;
+        compute_rowLen(rowLen, version, fields...);
         rows = new char[rowLen * num_members];
         snapshot = new char[rowLen * num_members];
         volatile char* base = rows;
-        set_bases_and_rowLens(base, rowLen, fields...);
+        set_bases_and_rowLens(base, rowLen, version, fields...);
     }
 
     DerivedSST* derived_this;
@@ -206,6 +205,9 @@ private:
     std::mutex thread_start_mutex;
     /** Notified when the predicate evaluation thread should start. */
     std::condition_variable thread_start_cv;
+
+    /** version number */
+    SSTField<uint32_t> version;
 
 public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
