@@ -16,3 +16,7 @@ target_link_libraries(sst_test sst rdmc)
 # simple_predicate
 add_executable(simple_predicate simple_predicate.cpp)
 target_link_libraries(simple_predicate sst rdmc)
+
+# test_write
+add_executable(test_write test_write.cpp)
+target_link_libraries(test_write sst rdmc)
