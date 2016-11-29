@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
 
     std::map<uint32_t, std::string> node_addresses;
 
-    query_addresses(node_addresses, node_rank);
+    rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     bool success = rdmc::initialize(node_addresses, node_rank);

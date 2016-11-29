@@ -24,7 +24,7 @@ map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 250;
 bool done = false;
-shared_ptr<derecho::ManagedGroup> managed_group;
+shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
     string debug_log_filename = (std::stringstream() << "events_node" << node_id << ".csv").str();
     string message_log_filename = (std::stringstream() << "data" << node_id << ".dat").str();
 
-    managed_group = make_shared<derecho::ManagedGroup>(
+    managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
         message_log_filename, GMS_PORT, node_addresses, node_id,
         message_size, derecho::CallbackSet{stability_callback, persistence_callback},
         block_size);
