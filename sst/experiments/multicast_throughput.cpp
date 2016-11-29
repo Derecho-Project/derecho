@@ -1,8 +1,8 @@
 #include <iostream>
 
-#include "../../experiments/aggregate_bandwidth.h"
-#include "../../experiments/log_results.h"
-#include "../../max_members.h"
+#include "derecho/experiments/aggregate_bandwidth.h"
+#include "derecho/experiments/log_results.h"
+#include "derecho/max_members.h"
 #include "multicast.h"
 
 using namespace std;

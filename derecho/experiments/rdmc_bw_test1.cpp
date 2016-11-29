@@ -4,6 +4,8 @@
 #include <vector>
 #include <time.h>
 
+#include "rdmc/rdmc.h"
+#include "rdmc/util.h"
 #include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
@@ -18,8 +20,16 @@ int main(int argc, char *argv[]) {
     uint32_t node_rank;
     uint32_t num_nodes;
 
-    initialize(node_rank, num_nodes);
+    std::map<uint32_t, std::string> node_addresses;
 
+    query_addresses(node_addresses, node_rank);
+    num_nodes = node_addresses.size();
+
+    bool success = rdmc::initialize(node_addresses, node_rank);
+    if (!success) {
+      std::cout << "Failed RDMC initialization" << std::endl;
+      std::cout << "Exiting" << std::endl;
+    }
     // size of one message
     long long int msg_size = atoll(argv[1]);
     // set block size
@@ -60,13 +70,17 @@ int main(int argc, char *argv[]) {
         mrs.push_back(mr);
 
         // create the group
-        rdmc::create_group(
+        success = rdmc::create_group(
             i, rotated_members, block_size, type,
             [&mrs, i](size_t length) -> rdmc::receive_destination {
                 return {mrs[i], 0};
             },
             [&counts, i](char *data, size_t size) { ++counts[i]; },
             [](boost::optional<uint32_t>) {});
+        if(!success) {
+	  std::cout << "Failed RDMC group creation" << std::endl;
+            std::cout << "Exiting" << std::endl;
+        }
     }
 
     struct timespec start_time, end_time;
@@ -74,7 +88,7 @@ int main(int argc, char *argv[]) {
     if(node_rank < num_nodes / 2) {
         for(int i = 0; i < num_messages; ++i) {
             // send the message
-            rdmc::send(node_rank, mrs[node_rank], 0, msg_size);
+            success = rdmc::send(node_rank, mrs[node_rank], 0, msg_size);
             while(counts[node_rank] <= i) {
             }
         }

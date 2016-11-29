@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "../tcp.h"
+#include "sst/tcp.h"
 #include "time_skew.h"
 
 using namespace std;

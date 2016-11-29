@@ -7,8 +7,8 @@
 #include <pthread.h>
 #include <time.h>
 
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 
 using std::cout;
 using std::vector;

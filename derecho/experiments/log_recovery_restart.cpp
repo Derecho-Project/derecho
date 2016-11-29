@@ -9,8 +9,9 @@
 #include <stddef.h>
 #include <string>
 
-#include "../logger.h"
-#include "../managed_group.h"
+#include "derecho/logger.h"
+#include "derecho/managed_group.h"
+#include "rdmc/util.h"
 
 using namespace std;
 

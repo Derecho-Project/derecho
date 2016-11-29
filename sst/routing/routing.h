@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-#include "../sst.h"
+#include "sst/sst.h"
 #include "lsdb_row.h"
 #include "std_hashes.h"
 

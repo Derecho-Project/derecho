@@ -20,8 +20,8 @@
 #include <thread>
 #include <vector>
 
-#include "../logger.h"
-#include "../managed_group.h"
+#include "derecho/logger.h"
+#include "derecho/managed_group.h"
 
 using namespace std;
 

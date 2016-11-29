@@ -6,8 +6,8 @@
 #include <pthread.h>
 #include <string.h>
 
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 
 using std::string;
 using std::vector;

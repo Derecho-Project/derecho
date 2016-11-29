@@ -2,8 +2,8 @@
 #include <map>
 #include <fstream>
 
-#include "../verbs.h"
-#include "../tcp.h"
+#include "sst/verbs.h"
+#include "sst/tcp.h"
 
 using std::ofstream;
 using std::map;

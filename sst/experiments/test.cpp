@@ -1,7 +1,7 @@
 #include <iostream>
 #include <map>
 
-#include "../verbs.h"
+#include "sst/verbs.h"
 
 using namespace std;
 using namespace sst;

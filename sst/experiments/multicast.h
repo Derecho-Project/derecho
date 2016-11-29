@@ -7,8 +7,8 @@
 #include <memory>
 #include <vector>
 
-#include "../sst.h"
-#include "../tcp.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
 
 template <uint32_t max_msg_size>
 struct Message {

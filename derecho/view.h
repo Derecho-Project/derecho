@@ -27,8 +27,6 @@ public:
      */
     static constexpr int MAX_MEMBERS = ::MAX_MEMBERS;
 
-    using DerechoSST = sst::SST<DerechoRow<MAX_MEMBERS>>;
-
     /** Sequential view ID: 0, 1, ... */
     int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */
@@ -49,7 +47,7 @@ public:
     /** For member p, returns rankOf(p) */
     int32_t my_rank;
     /** RDMC manager object containing one RDMC group for each sender */
-    std::unique_ptr<DerechoGroup<MAX_MEMBERS, handlersType>> derecho_group;
+    std::unique_ptr<DerechoGroup<handlersType>> derecho_group;
 
     std::shared_ptr<DerechoSST> gmsSST;
 

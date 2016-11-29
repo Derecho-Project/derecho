@@ -3,8 +3,8 @@
 #include <vector>
 #include <fstream>
 
-#include "../verbs.h"
-#include "../tcp.h"
+#include "sst/verbs.h"
+#include "sst/tcp.h"
 
 using namespace std;
 using namespace sst;

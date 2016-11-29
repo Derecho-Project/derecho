@@ -5,10 +5,10 @@
 #include <ctime>
 #include <string>
 
-#include "../sst.h"
-#include "../tcp.h"
-#include "../experiments/timing.h"
-#include "../experiments/statistics.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
+#include "derecho/experiments//timing.h"
+#include "derecho/experiments/statistics.h"
 
 using std::vector;
 using std::map;

@@ -4,8 +4,7 @@
 #include <ctime>
 #include <cstdlib>
 
-#include "../sst.h"
-#include "../tcp.h"
+#include "sst/sst.h"
 //Since all SST instances are named sst, we can use this convenient hack
 #define LOCAL sst.get_local_index()
 
@@ -18,17 +17,18 @@ using std::endl;
 using std::ofstream;
 
 using namespace sst;
-using sst::tcp::tcp_initialize;
-using sst::tcp::sync;
 
-struct TestRow {
-  int a;
+class mySST : public sst::SST<mySST> {
+public:
+    mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST<mySST>(this, sst::SSTParams{_members, my_id}) {
+      SSTInit(a);
+    }
+    sst::SSTField<int> a;
 };
 
 int main () {
   // input number of nodes and the local node id
-  uint32_t num_nodes, node_rank;
-  cout << "BEWARE!!! Node Rank is taken before Num Nodes" << endl;
+  uint32_t node_rank, num_nodes;
   cin >> node_rank >> num_nodes;
 
   // input the ip addresses
@@ -37,11 +37,8 @@ int main () {
     cin >> ip_addrs[i];
   }
 
-  // initialize tcp connections
-  tcp_initialize(node_rank, ip_addrs);
-  
   // initialize the rdma resources
-  verbs_initialize();
+  verbs_initialize(ip_addrs, node_rank);
   
   // form a group with a subset of all the nodes
   vector <uint32_t> members (num_nodes);
@@ -50,16 +47,16 @@ int main () {
   }
   
   // create a new shared state table with all the members
-  SST<TestRow, Mode::Writes> *sst = new SST<TestRow, Mode::Writes> (members, node_rank);
-  (*sst)[sst->get_local_index()].a = 0;
-  sst->put ();
+  mySST sst(members, node_rank);
+  sst.a(node_rank, 0);
+  sst.put();
 
   bool if_exit = false;
   // wait till all a's are 0
   while (if_exit == false) {
     if_exit = true;
     for (unsigned int i = 0; i < num_nodes; ++i) {
-      if ((*sst)[i].a != 0) {
+      if (sst.a[i] != 0) {
 	if_exit = false;
       }
     }
@@ -75,9 +72,9 @@ int main () {
   struct timespec start_time;
 
   // the predicate
-  auto f = [num_nodes] (const SST<TestRow, Mode::Writes> & sst) {
+  auto f = [num_nodes] (const mySST& sst) {
       for (unsigned int i = 0; i < num_nodes; ++i) {
-          if (sst[i].a < sst[LOCAL].a) {
+          if (sst.a[i] < sst.a[LOCAL]) {
               return false;
           }
       }
@@ -85,10 +82,10 @@ int main () {
   };
 
   // trigger. Increments self value
-  auto g = [&start_time] (SST<TestRow, Mode::Writes>& sst) {
-	  ++(sst[LOCAL].a);
+  auto g = [&start_time] (mySST& sst) {
+	  ++(sst.a[LOCAL]);
 	  sst.put ();
-	  if (sst[LOCAL].a == 1000000) {
+	  if (sst.a[LOCAL] == 1000000) {
 		  // end timer
 		  struct timespec end_time;
 		  clock_gettime(CLOCK_REALTIME, &end_time);
@@ -147,7 +144,7 @@ int main () {
   clock_gettime(CLOCK_REALTIME, &start_time);
   
   // register as a recurring predicate
-  sst->predicates.insert (f, g, PredicateType::RECURRENT);
+  sst.predicates.insert (f, g, PredicateType::RECURRENT);
 
   while (true) {
     

@@ -3,8 +3,8 @@
 #include <vector>
 #include <time.h>
 
-#include "../derecho_group.h"
-#include "../derecho_caller.h"
+#include "derecho/derecho_group.h"
+#include "derecho/derecho_caller.h"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
@@ -15,7 +15,7 @@ using std::endl;
 using std::cin;
 using std::vector;
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -50,10 +50,9 @@ int main(int argc, char *argv[]) {
     };
 
     auto derecho_sst =
-        std::make_shared<sst::SST<DerechoRow<8>, sst::Mode::Writes>>(members,
-                                                                     node_rank);
+        std::make_shared<DerechoSST>(sst::SSTParams(members, node_rank));
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(
+    DerechoGroup<Dispatcher<>> g(
         members, node_rank, derecho_sst, free_message_buffers,
         Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
         derecho::DerechoParams{msg_size, block_size}, node_address_map);

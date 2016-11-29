@@ -5,8 +5,8 @@
 #include <cstdlib>
 #include <chrono>
 
-#include "../sst.h"
-#include "../tcp.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
 //Since all SST instances are named sst, we can use this convenient hack
 #define LOCAL sst.get_local_index()
 

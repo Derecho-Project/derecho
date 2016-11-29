@@ -5,11 +5,12 @@
 #include <time.h>
 #include <vector>
 
-#include "../derecho_caller.h"
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../view.h"
+#include "derecho/derecho_group.h"
+#include "derecho/derecho_caller.h"
+#include "derecho/managed_group.h"
+#include "derecho/view.h"
 #include "block_size.h"
+#include "rdmc/util.h"
 
 using std::vector;
 using std::map;
@@ -20,7 +21,7 @@ using namespace std;
 using namespace mutils;
 
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 int count = 0;
 
@@ -61,11 +62,15 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
 
     uint32_t leader_id = 0;
-    string leader_ip = "128.84.139.10";
+    string leader_ip;
     uint32_t my_id;
     string my_ip;
+    cout << "Enter my id" << endl;
     cin >> my_id;
+    cout << "Enter my ip" << endl;
     cin >> my_ip;
+    cout << "Enter leader ip" << endl;
+    cin >> leader_ip;
     
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = get_block_size(max_msg_size);

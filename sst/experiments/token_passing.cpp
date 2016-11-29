@@ -3,8 +3,8 @@
 #include <vector>
 #include <string>
 
-#include "../sst.h"
-#include "../tcp.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
 
 using std::cin;
 using std::string;

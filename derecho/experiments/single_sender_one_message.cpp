@@ -7,7 +7,7 @@
 #include <vector>
 #include <time.h>
 
-#include "../derecho_group.h"
+#include "derecho/derecho_group.h"
 #include "initialize.h"
 
 using std::cout;
@@ -15,7 +15,7 @@ using std::endl;
 using std::cin;
 using std::vector;
 using derecho::DerechoGroup;
-using derecho::DerechoRow;
+using derecho::DerechoSST;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -45,12 +45,10 @@ int main() {
         cout << endl;
     };
 
-    std::shared_ptr<sst::SST<DerechoRow<MAX_GROUP_SIZE>, sst::Mode::Writes>>
-        derecho_sst =
-            std::make_shared<sst::SST<DerechoRow<8>, sst::Mode::Writes>>(
-                    members, node_rank);
+    std::shared_ptr<DerechoSST> derecho_sst =
+            std::make_shared<DerechoSST>(sst::SSTParams(members, node_rank));
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<MAX_GROUP_SIZE, Dispatcher<>> g(
+    DerechoGroup<Dispatcher<>> g(
             members, node_rank, derecho_sst, free_message_buffers,
             Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
             derecho::DerechoParams{max_msg_size, block_size}, node_address_map);

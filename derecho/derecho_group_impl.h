@@ -11,13 +11,6 @@
 
 namespace derecho {
 
-using std::vector;
-using std::map;
-using std::mutex;
-using std::unique_lock;
-using std::lock_guard;
-using std::cout;
-using std::endl;
 using std::chrono::milliseconds;
 
 /**
@@ -58,11 +51,11 @@ size_t index_of(T container, U elem) {
  * the node runs in non-persistent mode and no persistence callbacks will be
  * issued.
  */
-template <unsigned int N, typename dispatchersType>
-DerechoGroup<N, dispatchersType>::DerechoGroup(
-    vector<node_id_t> _members, node_id_t my_node_id,
-    std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
-    vector<MessageBuffer>& _free_message_buffers,
+template <typename dispatchersType>
+DerechoGroup<dispatchersType>::DerechoGroup(
+    std::vector<node_id_t> _members, node_id_t my_node_id,
+    std::shared_ptr<DerechoSST> _sst,
+    std::vector<MessageBuffer>& _free_message_buffers,
     dispatchersType _dispatchers,
     CallbackSet callbacks,
     const DerechoParams derecho_params,
@@ -118,13 +111,13 @@ DerechoGroup<N, dispatchersType>::DerechoGroup(
     timeout_thread = std::thread(&DerechoGroup::check_failures_loop, this);
     rpc_thread = std::thread(&DerechoGroup::rpc_process_loop, this);
     //    cout << "DerechoGroup: Registered predicates and started thread" <<
-    //    endl;
+    //    std::endl;
 }
 
-template <unsigned int N, typename dispatchersType>
-DerechoGroup<N, dispatchersType>::DerechoGroup(
+template <typename dispatchersType>
+DerechoGroup<dispatchersType>::DerechoGroup(
     std::vector<node_id_t> _members, node_id_t my_node_id,
-    std::shared_ptr<sst::SST<DerechoRow<N>, sst::Mode::Writes>> _sst,
+    std::shared_ptr<DerechoSST> _sst,
     DerechoGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
     std::vector<char> already_failed, uint32_t rpc_port)
         : members(_members),
@@ -166,7 +159,7 @@ DerechoGroup<N, dispatchersType>::DerechoGroup(
 
     // Reclaim MessageBuffers from the old group, and supplement them with
     // additional if the group has grown.
-    lock_guard<mutex> lock(old_group.msg_state_mtx);
+    std::lock_guard<std::mutex> lock(old_group.msg_state_mtx);
     free_message_buffers.swap(old_group.free_message_buffers);
     while(total_message_buffers < window_size * num_members) {
         free_message_buffers.emplace_back(max_msg_size);
@@ -238,11 +231,11 @@ DerechoGroup<N, dispatchersType>::DerechoGroup(
     timeout_thread = std::thread(&DerechoGroup::check_failures_loop, this);
     rpc_thread = std::thread(&DerechoGroup::rpc_process_loop, this);
     //    cout << "DerechoGroup: Registered predicates and started thread" <<
-    //    endl;
+    //    std::endl;
 }
 
-template <unsigned int N, typename handlersType>
-std::function<void(persistence::message)> DerechoGroup<N, handlersType>::make_file_written_callback() {
+template <typename handlersType>
+std::function<void(persistence::message)> DerechoGroup<handlersType>::make_file_written_callback() {
     return [this](persistence::message m) {
         //m.sender is an ID, not a rank
         int sender_rank;
@@ -256,23 +249,23 @@ std::function<void(persistence::message)> DerechoGroup<N, handlersType>::make_fi
         // the msg corresponding to m and put its MessageBuffer on free_message_buffers
         auto sequence_number = m.index * num_members + sender_rank;
         {
-            lock_guard<mutex> lock(msg_state_mtx);
+            std::lock_guard<std::mutex> lock(msg_state_mtx);
             auto find_result = non_persistent_messages.find(sequence_number);
             assert(find_result != non_persistent_messages.end());
             Message &m_msg = find_result->second;
             free_message_buffers.push_back(std::move(m_msg.message_buffer));
             non_persistent_messages.erase(find_result);
-            (*sst)[member_index].persisted_num = sequence_number;
+            sst->persisted_num[member_index] = sequence_number;
             sst->put();
         }
 
     };
 }
 
-template <unsigned int N, typename dispatchersType>
-bool DerechoGroup<N, dispatchersType>::create_rdmc_groups() {
+template <typename dispatchersType>
+bool DerechoGroup<dispatchersType>::create_rdmc_groups() {
     // rotated list of members - used for creating n internal RDMC groups
-    vector<uint32_t> rotated_members(num_members);
+    std::vector<uint32_t> rotated_members(num_members);
 
     std::cout << "The members are" << std::endl;
     for(int i = 0; i < num_members; ++i) {
@@ -300,12 +293,12 @@ bool DerechoGroup<N, dispatchersType>::create_rdmc_groups() {
         // locally_stable_messages and update the received count
         auto rdmc_receive_handler = [this, groupnum](char* data, size_t size) {
             assert(this->sst);
-            util::debug_log().log_event(std::stringstream() << "Locally received message from sender " << groupnum << ": index = " << ((*sst)[member_index].nReceived[groupnum] + 1));
-            lock_guard<mutex> lock(msg_state_mtx);
+            util::debug_log().log_event(std::stringstream() << "Locally received message from sender " << groupnum << ": index = " << (sst->nReceived[member_index][groupnum] + 1));
+            std::lock_guard<std::mutex> lock(msg_state_mtx);
             header *h = (header *)data;
-            (*sst)[member_index].nReceived[groupnum]++;
+            sst->nReceived[member_index][groupnum]++;
 
-            long long int index = (*sst)[member_index].nReceived[groupnum];
+            long long int index = sst->nReceived[member_index][groupnum];
             long long int sequence_number = index * num_members + groupnum;
 
             // Move message from current_receives to locally_stable_messages.
@@ -325,18 +318,19 @@ bool DerechoGroup<N, dispatchersType>::create_rdmc_groups() {
             for(unsigned int j = 0; j < h->pause_sending_turns; ++j) {
                 index++;
                 sequence_number += num_members;
-                (*sst)[member_index].nReceived[groupnum]++;
+                sst->nReceived[member_index][groupnum]++;
                 locally_stable_messages[sequence_number] = {groupnum, index, 0, 0};
             }
 
-            auto* min_ptr = std::min_element(std::begin((*sst)[member_index].nReceived),
-                                 &(*sst)[member_index].nReceived[num_members]);
-            int min_index = std::distance(
-                std::begin((*sst)[member_index].nReceived), min_ptr);
+            std::atomic_signal_fence(std::memory_order_acq_rel);
+            auto* min_ptr = std::min_element(&sst->nReceived[member_index][0],
+                                 &sst->nReceived[member_index][num_members]);
+            int min_index = std::distance(&sst->nReceived[member_index][0], min_ptr);
             auto new_seq_num = (*min_ptr + 1) * num_members + min_index - 1;
-            if(new_seq_num > (*sst)[member_index].seq_num) {
+            if(new_seq_num > sst->seq_num[member_index]) {
                 util::debug_log().log_event(std::stringstream() << "Updating seq_num to "  << new_seq_num);
-                (*sst)[member_index].seq_num = new_seq_num;
+                sst->seq_num[member_index] = new_seq_num;
+                std::atomic_signal_fence(std::memory_order_acq_rel);
                 sst->put();
             } else {
                 sst->put();
@@ -370,15 +364,14 @@ bool DerechoGroup<N, dispatchersType>::create_rdmc_groups() {
             if(!rdmc::create_group(
                    groupnum + rdmc_group_num_offset, rotated_members, block_size, type,
                    [this, groupnum](size_t length) -> rdmc::receive_destination {
-                       lock_guard<mutex> lock(msg_state_mtx);
+                       std::lock_guard<std::mutex> lock(msg_state_mtx);
                        assert(!free_message_buffers.empty());
 
                        Message msg;
                        msg.sender_rank = groupnum;
-                       msg.index = (*sst)[member_index].nReceived[groupnum] + 1;
+                       msg.index = sst->nReceived[member_index][groupnum] + 1;
                        msg.size = length;
-                       msg.message_buffer =
-                           std::move(free_message_buffers.back());
+                       msg.message_buffer = std::move(free_message_buffers.back());
                        free_message_buffers.pop_back();
 
                        rdmc::receive_destination ret{msg.message_buffer.mr, 0};
@@ -396,23 +389,23 @@ bool DerechoGroup<N, dispatchersType>::create_rdmc_groups() {
     return true;
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::initialize_sst_row() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::initialize_sst_row() {
     for(int i = 0; i < num_members; ++i) {
         for(int j = 0; j < num_members; ++j) {
-            (*sst)[i].nReceived[j] = -1;
+            sst->nReceived[i][j] = -1;
         }
-        (*sst)[i].seq_num = -1;
-        (*sst)[i].stable_num = -1;
-        (*sst)[i].delivered_num = -1;
-        (*sst)[i].persisted_num = -1;
+        sst->seq_num[i] = -1;
+        sst->stable_num[i] = -1;
+        sst->delivered_num[i] = -1;
+        sst->persisted_num[i] = -1;
     }
     sst->put();
     sst->sync_with_members();
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::deliver_message(Message& msg) {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::deliver_message(Message& msg) {
     if(msg.size > 0) {
         char* buf = msg.message_buffer.buffer.get();
         header* h = (header*)(buf);
@@ -437,8 +430,7 @@ void DerechoGroup<N, dispatchersType>::deliver_message(Message& msg) {
                 auto max_payload_size = max_msg_size - sizeof(header);
                 size_t reply_size = 0;
                 dispatchers.handle_receive(
-                    buf, payload_size, [this, &reply_size, &max_payload_size](
-                                           size_t size) -> char* {
+                    buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
                         reply_size = size;
                         if(reply_size <= max_payload_size) {
                             return deliveryBuffer.get();
@@ -453,8 +445,7 @@ void DerechoGroup<N, dispatchersType>::deliver_message(Message& msg) {
                             deliveryBuffer.get(), reply_size,
                             [](size_t size) -> char* { assert(false); });
                         if(dest_size == 0) {
-                            std::lock_guard<std::mutex> lock(
-                                pending_results_mutex);
+                            std::lock_guard<std::mutex> lock(pending_results_mutex);
                             toFulfillQueue.front()->fulfill_map(members);
                             fulfilledList.push_back(std::move(toFulfillQueue.front()));
                             toFulfillQueue.pop();
@@ -475,7 +466,7 @@ void DerechoGroup<N, dispatchersType>::deliver_message(Message& msg) {
             // msg.sender_rank is the 0-indexed rank within this group, but
             // persistence::message needs the sender's globally unique ID
             persistence::message msg_for_filewriter{buf + h->header_size,
-                                                    msg.size, (uint32_t)(*sst)[member_index].vid,
+                                                    msg.size, (uint32_t)sst->vid[member_index],
                                                     members[msg.sender_rank], (uint64_t)msg.index,
                                                     h->cooked_send};
             auto sequence_number = msg.index * num_members + msg.sender_rank;
@@ -487,12 +478,12 @@ void DerechoGroup<N, dispatchersType>::deliver_message(Message& msg) {
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::deliver_messages_upto(
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::deliver_messages_upto(
     const std::vector<long long int>& max_indices_for_senders) {
     assert(max_indices_for_senders.size() == (size_t)num_members);
-    lock_guard<mutex> lock(msg_state_mtx);
-    auto curr_seq_num = (*sst)[member_index].delivered_num;
+    std::lock_guard<std::mutex> lock(msg_state_mtx);
+    auto curr_seq_num = sst->delivered_num[member_index];
     auto max_seq_num = curr_seq_num;
     for(int sender = 0; sender < (int)max_indices_for_senders.size();
         sender++) {
@@ -509,24 +500,24 @@ void DerechoGroup<N, dispatchersType>::deliver_messages_upto(
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::register_predicates() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::register_predicates() {
     auto stability_pred = [this](
-        const sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) { return true; };
+        const DerechoSST& sst) { return true; };
     auto stability_trig =
-        [this](sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) {
+        [this](DerechoSST& sst) {
             // compute the min of the seq_num
-            long long int min_seq_num = sst[0].seq_num;
+            long long int min_seq_num = sst.seq_num[0];
             for(int i = 0; i < num_members; ++i) {
-                if(sst[i].seq_num < min_seq_num) {
-                    min_seq_num = sst[i].seq_num;
+                if(sst.seq_num[i] < min_seq_num) {
+                    min_seq_num = sst.seq_num[i];
                 }
             }
-            if(min_seq_num > sst[member_index].stable_num) {
+            if(min_seq_num > sst.stable_num[member_index]) {
                 util::debug_log().log_event(std::stringstream()
                                             << "Updating stable_num to "
                                             << min_seq_num);
-                sst[member_index].stable_num = min_seq_num;
+                sst.stable_num[member_index] = min_seq_num;
                 sst.put();
             }
         };
@@ -534,15 +525,15 @@ void DerechoGroup<N, dispatchersType>::register_predicates() {
         stability_pred, stability_trig, sst::PredicateType::RECURRENT);
 
     auto delivery_pred = [this](
-        const sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) { return true; };
+        const DerechoSST& sst) { return true; };
     auto delivery_trig = [this](
-        sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) {
-        lock_guard<mutex> lock(msg_state_mtx);
+        DerechoSST& sst) {
+        std::lock_guard<std::mutex> lock(msg_state_mtx);
         // compute the min of the stable_num
-        long long int min_stable_num = sst[0].stable_num;
+        long long int min_stable_num = sst.stable_num[0];
         for(int i = 0; i < num_members; ++i) {
-            if(sst[i].stable_num < min_stable_num) {
-                min_stable_num = sst[i].stable_num;
+            if(sst.stable_num[i] < min_stable_num) {
+                min_stable_num = sst.stable_num[i];
             }
         }
 
@@ -553,7 +544,7 @@ void DerechoGroup<N, dispatchersType>::register_predicates() {
                 util::debug_log().log_event(std::stringstream() << "Can deliver a locally stable message: min_stable_num=" << min_stable_num << " and least_undelivered_seq_num=" << least_undelivered_seq_num);
                 Message& msg = locally_stable_messages.begin()->second;
                 deliver_message(msg);
-                sst[member_index].delivered_num = least_undelivered_seq_num;
+                sst.delivered_num[member_index] = least_undelivered_seq_num;
                 //                sst.put (offsetof (DerechoRow<N>,
                 //                delivered_num), sizeof
                 //                (least_undelivered_seq_num));
@@ -564,16 +555,16 @@ void DerechoGroup<N, dispatchersType>::register_predicates() {
     };
     delivery_pred_handle = sst->predicates.insert(delivery_pred, delivery_trig, sst::PredicateType::RECURRENT);
 
-    auto sender_pred = [this](const sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) {
+    auto sender_pred = [this](const DerechoSST& sst) {
         long long int seq_num = next_message_to_deliver * num_members + member_index;
         for (int i = 0; i < num_members; ++i) {
-            if (sst[i].delivered_num < seq_num || (file_writer && sst[i].persisted_num < seq_num)) {
+            if (sst.delivered_num[i] < seq_num || (file_writer && sst.persisted_num[i] < seq_num)) {
                 return false;
             }
         }
         return true;
     };
-    auto sender_trig = [this](sst::SST<DerechoRow<N>, sst::Mode::Writes>& sst) {
+    auto sender_trig = [this](DerechoSST& sst) {
         sender_cv.notify_all();
         next_message_to_deliver++;
     };
@@ -581,8 +572,8 @@ void DerechoGroup<N, dispatchersType>::register_predicates() {
                                                 sst::PredicateType::RECURRENT);
 }
 
-template <unsigned int N, typename dispatchersType>
-DerechoGroup<N, dispatchersType>::~DerechoGroup() {
+template <typename dispatchersType>
+DerechoGroup<dispatchersType>::~DerechoGroup() {
     wedge();
     if(timeout_thread.joinable()) {
         timeout_thread.join();
@@ -592,8 +583,8 @@ DerechoGroup<N, dispatchersType>::~DerechoGroup() {
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-long long unsigned int DerechoGroup<N, dispatchersType>::compute_max_msg_size(
+template <typename dispatchersType>
+long long unsigned int DerechoGroup<dispatchersType>::compute_max_msg_size(
     const long long unsigned int max_payload_size,
     const long long unsigned int block_size) {
     auto max_msg_size = max_payload_size + sizeof(header);
@@ -603,8 +594,8 @@ long long unsigned int DerechoGroup<N, dispatchersType>::compute_max_msg_size(
     return max_msg_size;
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::wedge() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::wedge() {
     bool thread_shutdown_existing = thread_shutdown.exchange(true);
     if(thread_shutdown_existing) {  // Wedge has already been called
         return;
@@ -629,8 +620,8 @@ void DerechoGroup<N, dispatchersType>::wedge() {
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::send_loop() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::send_loop() {
     auto should_send = [&]() {
         if(!rdmc_groups_created) {
             return false;
@@ -639,13 +630,13 @@ void DerechoGroup<N, dispatchersType>::send_loop() {
             return false;
         }
         Message &msg = pending_sends.front();
-        if((*sst)[member_index].nReceived[member_index] < msg.index - 1) {
+        if(sst->nReceived[member_index][member_index] < msg.index - 1) {
             return false;
         }
 
         for (int i = 0; i < num_members; ++i) {
-            if ((*sst)[i].delivered_num < (msg.index - window_size) * num_members + member_index
-                    || (file_writer && (*sst)[i].persisted_num < (msg.index - window_size) * num_members + member_index)) {
+            if (sst->delivered_num[i] < (msg.index - window_size) * num_members + member_index
+                    || (file_writer && sst->persisted_num[i] < (msg.index - window_size) * num_members + member_index)) {
                 return false;
             }
         }
@@ -654,41 +645,38 @@ void DerechoGroup<N, dispatchersType>::send_loop() {
     };
     auto should_wake = [&]() { return thread_shutdown || should_send(); };
     try {
-        unique_lock<mutex> lock(msg_state_mtx);
+        std::unique_lock<std::mutex> lock(msg_state_mtx);
         while(!thread_shutdown) {
             sender_cv.wait(lock, should_wake);
             if(!thread_shutdown) {
                 current_send = std::move(pending_sends.front());
-                util::debug_log().log_event(
-                    std::stringstream()
-                    << "Calling send on message " << current_send->index
-                    << " from sender " << current_send->sender_rank);
+                util::debug_log().log_event(std::stringstream() << "Calling send on message " << current_send->index
+                        << " from sender " << current_send->sender_rank);
                 if(!rdmc::send(member_index + rdmc_group_num_offset,
                                current_send->message_buffer.mr, 0,
                                current_send->size)) {
-                    throw "rdmc::send returned false";
+                    throw std::runtime_error("rdmc::send returned false");
                 }
                 pending_sends.pop();
             }
         }
-        cout << "DerechoGroup send thread shutting down" << endl;
+        std::cout << "DerechoGroup send thread shutting down" << std::endl;
     } catch(const std::exception& e) {
-        cout << "DerechoGroup send thread had an exception: " << e.what()
-             << endl;
+        std::cout << "DerechoGroup send thread had an exception: " << e.what() << std::endl;
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::check_failures_loop() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::check_failures_loop() {
     while(!thread_shutdown) {
         std::this_thread::sleep_for(milliseconds(sender_timeout));
         if(sst) sst->put();
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-bool DerechoGroup<N, dispatchersType>::send() {
-    lock_guard<mutex> lock(msg_state_mtx);
+template <typename dispatchersType>
+bool DerechoGroup<dispatchersType>::send() {
+    std::lock_guard<std::mutex> lock(msg_state_mtx);
     if(thread_shutdown || !rdmc_groups_created) {
         return false;
     }
@@ -699,8 +687,8 @@ bool DerechoGroup<N, dispatchersType>::send() {
     return true;
 }
 
-template <unsigned int N, typename dispatchersType>
-char* DerechoGroup<N, dispatchersType>::get_position(
+template <typename dispatchersType>
+char* DerechoGroup<dispatchersType>::get_position(
     long long unsigned int payload_size,
     int pause_sending_turns, bool cooked_send) {
     // if rdmc groups were not created because of failures, return NULL
@@ -713,19 +701,19 @@ char* DerechoGroup<N, dispatchersType>::get_position(
         msg_size = max_msg_size;
     }
     if(msg_size > max_msg_size) {
-        cout << "Can't send messages of size larger than the maximum message "
+        std::cout << "Can't send messages of size larger than the maximum message "
                 "size which is equal to "
-             << max_msg_size << endl;
+             << max_msg_size << std::endl;
         return nullptr;
     }
     for(int i = 0; i < num_members; ++i) {
-        if((*sst)[i].delivered_num <
+        if(sst->delivered_num[i] <
            (future_message_index - window_size) * num_members + member_index) {
             return nullptr;
         }
     }
 
-    unique_lock<mutex> lock(msg_state_mtx);
+    std::unique_lock<std::mutex> lock(msg_state_mtx);
     if(thread_shutdown) return nullptr;
     if(free_message_buffers.empty()) return nullptr;
 
@@ -749,10 +737,10 @@ char* DerechoGroup<N, dispatchersType>::get_position(
     return buf + sizeof(header);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto DerechoGroup<N, dispatchersType>::derechoCallerSend(
-    const vector<node_id_t>& nodes, char* buf, Args&&... args) {
+auto DerechoGroup<dispatchersType>::derechoCallerSend(
+    const std::vector<node_id_t>& nodes, char* buf, Args&&... args) {
     auto max_payload_size = max_msg_size - sizeof(header);
     // use nodes
     ((size_t*)buf)[0] = nodes.size();
@@ -789,36 +777,36 @@ auto DerechoGroup<N, dispatchersType>::derechoCallerSend(
 
 // this should be called from the GMS, as this takes care of locks on mutexes
 // view_change_mutex and msg_state_mutex
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IDClass, unsigned long long tag, typename... Args>
-void DerechoGroup<N, dispatchersType>::orderedSend(const vector<node_id_t>& nodes,
+void DerechoGroup<dispatchersType>::orderedSend(const std::vector<node_id_t>& nodes,
                                                    char* buf, Args&&... args) {
     derechoCallerSend<IDClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-void DerechoGroup<N, dispatchersType>::orderedSend(char* buf, Args&&... args) {
+void DerechoGroup<dispatchersType>::orderedSend(char* buf, Args&&... args) {
     // empty nodes means that the destination is the entire group
     orderedSend<IdClass, tag>({}, buf, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto DerechoGroup<N, dispatchersType>::orderedQuery(const vector<node_id_t>& nodes,
+auto DerechoGroup<dispatchersType>::orderedQuery(const std::vector<node_id_t>& nodes,
                                                     char* buf, Args&&... args) {
     return derechoCallerSend<IdClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto DerechoGroup<N, dispatchersType>::orderedQuery(char* buf, Args&&... args) {
+auto DerechoGroup<dispatchersType>::orderedQuery(char* buf, Args&&... args) {
     return orderedQuery<IdClass, tag>({}, buf, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto DerechoGroup<N, dispatchersType>::tcpSend(node_id_t dest_node,
+auto DerechoGroup<dispatchersType>::tcpSend(node_id_t dest_node,
                                                Args&&... args) {
     assert(dest_node != members[member_index]);
     // use dest_node
@@ -844,27 +832,27 @@ auto DerechoGroup<N, dispatchersType>::tcpSend(node_id_t dest_node,
     return std::move(return_pair.results);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-void DerechoGroup<N, dispatchersType>::p2pSend(node_id_t dest_node,
+void DerechoGroup<dispatchersType>::p2pSend(node_id_t dest_node,
                                                Args&&... args) {
     tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
+template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto DerechoGroup<N, dispatchersType>::p2pQuery(node_id_t dest_node,
+auto DerechoGroup<dispatchersType>::p2pQuery(node_id_t dest_node,
                                                 Args&&... args) {
     return tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::send_objects(tcp::socket& new_member_socket) {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::send_objects(tcp::socket& new_member_socket) {
     dispatchers.send_objects(new_member_socket);
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::rpc_process_loop() {
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::rpc_process_loop() {
     using namespace ::rpc::remote_invocation_utilities;
     const auto header_size = header_space();
     auto max_payload_size = max_msg_size - sizeof(header);
@@ -902,8 +890,8 @@ void DerechoGroup<N, dispatchersType>::rpc_process_loop() {
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::set_exceptions_for_removed_nodes(
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::set_exceptions_for_removed_nodes(
     std::vector<node_id_t> removed_members) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
@@ -913,22 +901,21 @@ void DerechoGroup<N, dispatchersType>::set_exceptions_for_removed_nodes(
     }
 }
 
-template <unsigned int N, typename dispatchersType>
-void DerechoGroup<N, dispatchersType>::debug_print() {
-    cout << "In DerechoGroup SST has " << sst->get_num_rows()
-         << " rows; member_index is " << member_index << endl;
-    cout << "Printing SST" << endl;
+template <typename dispatchersType>
+void DerechoGroup<dispatchersType>::debug_print() {
+    std::cout << "In DerechoGroup SST has " << sst->get_num_rows()
+         << " rows; member_index is " << member_index << std::endl;
+    std::cout << "Printing SST" << std::endl;
     for(int i = 0; i < num_members; ++i) {
-        cout << (*sst)[i].seq_num << " " << (*sst)[i].stable_num << " "
-             << (*sst)[i].delivered_num << endl;
+        std::cout << sst->seq_num[i] << " " << sst->stable_num[i] << " " << sst->delivered_num[i] << std::endl;
     }
-    cout << endl;
+    std::cout << std::endl;
 
-    cout << "Printing last_received_messages" << endl;
+    std::cout << "Printing last_received_messages" << std::endl;
     for(int i = 0; i < num_members; ++i) {
-        cout << (*sst)[member_index].nReceived[i] << " " << endl;
+        std::cout << sst->nReceived[member_index][i] << " " << std::endl;
     }
-    cout << endl;
+    std::cout << std::endl;
 }
 
 }  // namespace derecho

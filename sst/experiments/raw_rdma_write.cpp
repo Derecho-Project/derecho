@@ -5,8 +5,8 @@
 #include <time.h>
 #include <cstdlib>
 
-#include "../verbs.h"
-#include "../tcp.h"
+#include "sst/verbs.h"
+#include "sst/tcp.h"
 #include "statistics.h"
 
 using std::string;

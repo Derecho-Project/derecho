@@ -63,11 +63,10 @@ public:
 template <typename dispatcherType>
 class ManagedGroup {
 private:
-    using pred_handle =
-        typename View<dispatcherType>::DerechoSST::Predicates::pred_handle;
+    using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    using view_upcall_t = std::function<void(vector<node_id_t> new_members,
-                                             vector<node_id_t> old_members)>;
+    using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
+                                             std::vector<node_id_t> old_members)>;
     static constexpr int MAX_MEMBERS = View<dispatcherType>::MAX_MEMBERS;
 
     /** Contains client sockets for all pending joins, except the current one.*/
@@ -142,10 +141,10 @@ private:
     void leader_ragged_edge_cleanup(View<dispatcherType>& Vc);
     void follower_ragged_edge_cleanup(View<dispatcherType>& Vc);
 
-    static bool suspected_not_equal(const typename View<dispatcherType>::DerechoSST& gmsSST, const std::vector<bool>& old);
-    static void copy_suspected(const typename View<dispatcherType>::DerechoSST& gmsSST, std::vector<bool>& old);
-    static bool changes_contains(const typename View<dispatcherType>::DerechoSST& gmsSST, const node_id_t q);
-    static int min_acked(const typename View<dispatcherType>::DerechoSST& gmsSST, const std::vector<char>& failed);
+    static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
+    static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
+    static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
+    static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
@@ -259,11 +258,11 @@ public:
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send();
     template <typename IdClass, unsigned long long tag, typename... Args>
-    void orderedSend(const vector<node_id_t>& nodes, Args&&... args);
+    void orderedSend(const std::vector<node_id_t>& nodes, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
     void orderedSend(Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
-    auto orderedQuery(const vector<node_id_t>& nodes, Args&&... args);
+    auto orderedQuery(const std::vector<node_id_t>& nodes, Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto orderedQuery(Args&&... args);
     template <typename IdClass, unsigned long long tag, typename... Args>

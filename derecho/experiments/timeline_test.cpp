@@ -6,10 +6,11 @@
 #include <thread>
 #include <vector>
 
-#include "../derecho_caller.h"
-#include "../derecho_group.h"
-#include "../managed_group.h"
-#include "../view.h"
+#include "derecho/derecho_group.h"
+#include "derecho/managed_group.h"
+#include "derecho/derecho_caller.h"
+#include "rdmc/util.h"
+#include "derecho/view.h"
 
 #include "time/time.h"
 

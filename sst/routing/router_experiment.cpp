@@ -13,11 +13,11 @@
 #include <map>
 #include <vector>
 
-#include "../experiments/statistics.h"
-#include "../experiments/timing.h"
-#include "../sst.h"
-#include "../tcp.h"
-#include "../verbs.h"
+#include "sst/experiments/statistics.h"
+#include "sst/experiments/timing.h"
+#include "sst/sst.h"
+#include "sst/tcp.h"
+#include "sst/verbs.h"
 #include "lsdb_row.h"
 #include "routing.h"
 #include "std_hashes.h"
