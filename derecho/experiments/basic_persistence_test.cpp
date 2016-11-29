@@ -8,10 +8,7 @@
 #include <vector>
 #include <fstream>
 
-#include "derecho/derecho_group.h"
-#include "derecho/managed_group.h"
-#include "derecho/derecho_caller.h"
-#include "derecho/view.h"
+#include "derecho/derecho.h"
 #include "derecho/logger.h"
 
 

@@ -1,10 +1,6 @@
-
 #include "time/time.h"
-
-#include "derecho/derecho_group.h"
-#include "derecho/managed_group.h"
+#include "derecho/derecho.h"
 #include "rdmc/util.h"
-#include "derecho/view.h"
 #include "derecho/logger.h"
 
 #include <chrono>

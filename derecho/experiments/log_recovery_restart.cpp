@@ -9,11 +9,17 @@
 #include <stddef.h>
 #include <string>
 
+#include "derecho/derecho.h"
 #include "derecho/logger.h"
-#include "derecho/managed_group.h"
 #include "rdmc/util.h"
 
-using namespace std;
+using std::map;
+using std::cout;
+using std::endl;
+using std::string;
+using std::stringstream;
+using std::shared_ptr;
+using std::make_shared;
 
 const int GMS_PORT = 12345;
 const size_t message_size = 1000;
@@ -59,8 +65,8 @@ int main(int argc, char* argv[]) {
     num_nodes = node_addresses.size();
     //This won't work! We need to support starting up a member without doing global setup
 //    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
-    string debug_log_filename = (std::stringstream() << "events_node" << node_id << ".csv").str();
-    string message_log_filename = (std::stringstream() << "data" << node_id << ".dat").str();
+    string debug_log_filename = (stringstream() << "events_node" << node_id << ".csv").str();
+    string message_log_filename = (:stringstream() << "data" << node_id << ".dat").str();
 
     managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
         message_log_filename, GMS_PORT, node_addresses, node_id,
@@ -70,7 +76,7 @@ int main(int argc, char* argv[]) {
     send_messages(num_messages);
     while(!done) {
     }
-    ofstream log_stream(debug_log_filename);
+    std::ofstream log_stream(debug_log_filename);
     managed_group->print_log(log_stream);
 }
 

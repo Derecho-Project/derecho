@@ -21,7 +21,7 @@
 #include <vector>
 
 #include "derecho/logger.h"
-#include "derecho/managed_group.h"
+#include "derecho/derecho.h"
 
 using namespace std;
 
