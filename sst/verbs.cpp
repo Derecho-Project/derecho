@@ -385,8 +385,7 @@ void resources::post_remote_write(long long int size) {
     check_for_error(
         !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
 }
-
-  /**
+/**
  * @param offset The offset, in bytes, of the remote memory buffer at which to
  * start writing.
  * @param size The number of bytes to write from the local buffer into remote
@@ -396,41 +395,6 @@ void resources::post_remote_write(long long int offset, long long int size) {
     int rc = post_remote_send(offset, size, 1);
     check_for_error(
         !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
-}
-
-  int resources::post_remote_write(long long int offset1, long long int size1, long long int offset2, long long int size2) {
-    struct ibv_send_wr sr;
-    struct ibv_sge sge[2];
-    struct ibv_send_wr *bad_wr = NULL;
-
-    // prepare the scatter/gather entry
-    memset(&sge[0], 0, sizeof(sge[0]));
-    memset(&sge[1], 0, sizeof(sge[1]));
-    // don't care where the read buffer is saved
-    sge[0].addr = (uintptr_t)(read_buf + offset1);
-    sge[0].length = size1;
-    sge[0].lkey = read_mr->lkey;
-    sge[1].addr = (uintptr_t)(read_buf + offset2);
-    sge[1].length = size2;
-    sge[1].lkey = read_mr->lkey;
-    // prepare the send work request
-    memset(&sr, 0, sizeof(sr));
-    sr.next = NULL;
-    sr.wr_id = 0;
-    sr.sg_list = sge;
-    sr.num_sge = 2;
-    // set opcode depending on op parameter
-    sr.opcode = IBV_WR_RDMA_WRITE;
-    sr.send_flags = IBV_SEND_SIGNALED;
-
-    // set the remote rkey and virtual address
-    sr.wr.rdma.remote_addr = remote_props.addr + offset1;
-    sr.wr.rdma.rkey = remote_props.rkey;
-
-    // there is a receive request in the responder side, so we won't get any
-    // into RNR flow
-    int ret_code = ibv_post_send(qp, &sr, &bad_wr);
-    return ret_code;
 }
 
 /**
