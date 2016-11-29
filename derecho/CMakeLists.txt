@@ -28,13 +28,4 @@ target_link_libraries(latest_logged_message derecho)
 add_executable(log_tail_length log_tail_length.cpp)
 target_link_libraries(log_tail_length derecho)
 
-add_executable(conntest connection_test.cpp)
-target_link_libraries(conntest rdmc sst)
-
-add_executable(gms_test gms_test.cpp experiments/block_size.cpp)
-target_link_libraries(gms_test derecho)
-
-add_executable(gms_test2 gms_test2.cpp experiments/block_size.cpp)
-target_link_libraries(gms_test2 derecho)
-
 add_custom_target(format_derecho clang-format-3.6 -i *.cpp *.h)

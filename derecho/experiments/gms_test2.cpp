@@ -9,8 +9,8 @@ using std::cout;
 using std::endl;
 using std::map;
 
-#include "derecho.h"
-#include "experiments/block_size.h"
+#include "derecho/derecho.h"
+#include "block_size.h"
 
 void query_node_info(derecho::node_id_t& node_id, derecho::ip_addr& node_ip, derecho::ip_addr& leader_ip) {
      cout << "Please enter this node's ID: ";

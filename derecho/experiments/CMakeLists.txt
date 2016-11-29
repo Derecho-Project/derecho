@@ -41,6 +41,14 @@ target_link_libraries(raw_send_test derecho mutils mutils-serialization)
 add_executable(ssd_bw_test ssd_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
 target_link_libraries(ssd_bw_test derecho)
 
+# gms_test
+add_executable(gms_test gms_test.cpp block_size.cpp)
+target_link_libraries(gms_test derecho)
+
+# gms_test
+add_executable(gms_test2 gms_test2.cpp block_size.cpp)
+target_link_libraries(gms_test2 derecho)
+
 # gms_bw_test
 add_executable(gms_bw_test gms_bw_test.cpp)
 target_link_libraries(gms_bw_test derecho)
