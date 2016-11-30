@@ -12,8 +12,8 @@
 #include <iostream>
 
 #include "derecho_group.h"
+#include "derecho_sst.h"
 #include "sst/sst.h"
-#include "derecho_row.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "max_members.h"

@@ -96,13 +96,11 @@ public:
               changes(parameters.members.size()),
               joiner_ip(MAX_STRING_LEN),
               nReceived(parameters.members.size()),
-              globalMin(parameters.members.size())
-    {
+              globalMin(parameters.members.size()) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ip,
                 nChanges, nCommitted, nAcked, nReceived, wedged,
                 globalMin, globalMinReady);
-        std::cout << "Here in DerechoSST constructor after initializer list" << std::endl;
         //Once superclass constructor has finished, table entries can be initialized
         int my_row = get_local_index();
         for(int row = 0; row < get_num_rows(); ++row) {

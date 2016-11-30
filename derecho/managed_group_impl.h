@@ -23,7 +23,7 @@
 #include "managed_group.h"
 
 #include "derecho_group.h"
-#include "derecho_row.h"
+#include "derecho_sst.h"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "persistence.h"
 #include "sst/sst.h"

@@ -17,7 +17,7 @@
 
 #include "connection_manager.h"
 #include "derecho_caller.h"
-#include "derecho_row.h"
+#include "derecho_sst.h"
 #include "filewriter.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"

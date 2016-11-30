@@ -8,7 +8,7 @@
 
 #include <mutils-serialization/SerializationSupport.hpp>
 
-#include "derecho_row.h"
+#include "derecho_sst.h"
 
 namespace derecho {
 

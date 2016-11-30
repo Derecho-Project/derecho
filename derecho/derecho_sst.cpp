@@ -1,6 +1,6 @@
-#include "derecho_row.h"
 #include <cstring>
 #include <atomic>
+#include "derecho_sst.h"
 
 namespace derecho {
 
