@@ -121,10 +121,6 @@ public:
 
     void init_local_row_from_existing(const DerechoSST& existing_sst, const int row);
 
-    //This can probably be deleted because it replicates the constructor's functionality
-    //It only exists to be a drop-in replacement for gmssst::init(DerechoRow, vid)
-    void init_local_row_at_vid(const int vid);
-
     /**
      * Creates a string representation of the local row (not the whole table).
      * This should be converted to an ostream operator<< to follow standards.
@@ -133,10 +129,6 @@ public:
 };
 
 
-/**
- * Utility functions for manipulating GMSTableRow objects; SST rows can't have
- * instance methods, but this one needs them.
- */
 namespace gmssst {
 
 /**

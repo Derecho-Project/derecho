@@ -29,23 +29,6 @@ void DerechoSST::init_local_row_from_existing(const DerechoSST& existing_sst, co
     globalMinReady[local_row] = false;
 }
 
-void DerechoSST::init_local_row_at_vid(const int vid) {
-    int my_row = get_local_index();
-    this->vid[my_row] = vid;
-    for(size_t i = 0; i < suspected.size(); ++i) {
-        suspected[my_row][i] = false;
-        globalMin[my_row][i] = 0;
-        changes[my_row][i] = 0;
-    }
-    memset(const_cast<char*>(joiner_ip[my_row]), 0, MAX_STRING_LEN);
-    nChanges[my_row] = vid;
-    nCommitted[my_row] = vid ;
-    nAcked[my_row] = vid;
-    wedged[my_row] = false;
-    globalMinReady[my_row] = false;
-
-}
-
 std::string DerechoSST::to_string() const {
     const int row = get_local_index();
     std::stringstream s;

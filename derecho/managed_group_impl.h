@@ -229,8 +229,6 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     log_event("Done setting up initial SST and RDMC");
-    //Initialize nChanges and nAcked in the local SST row to the saved view's VID, so the next proposed change is detected
-    curr_view->gmsSST->init_local_row_at_vid(curr_view->vid);
 
     create_threads();
     register_predicates();
@@ -611,11 +609,11 @@ template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& message_buffers,
                                                  CallbackSet callbacks,
                                                  const DerechoParams& derecho_params) {
+    //Construct an SST with the local row's vid, nChanges, and nAcked initialized to the current view's vid
     curr_view->gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
         curr_view->members, curr_view->members[curr_view->my_rank],
-        [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false));
-
-    gmssst::set(curr_view->gmsSST->vid[curr_view->my_rank], curr_view->vid);
+        [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
+            curr_view->vid);
 
     curr_view->derecho_group = std::make_unique<DerechoGroup<dispatcherType>>(
         curr_view->members, curr_view->members[curr_view->my_rank],
