@@ -49,17 +49,18 @@ public:
     /** Array of same length as View::members, where each bool represents
      * whether the corresponding member is suspected to have failed */
     SSTFieldVector<bool> suspected;
-    /** An array of nChanges proposed changes to the view (the number of non-
-     * empty elements is nChanges). The total number of changes never exceeds
-     * N/2. If request i is a Join, changes[i] is not in current View's
-     * members. If request i is a Departure, changes[i] is in current View's
-     * members. */
+    /** An array of the same length as View::members, containing nChanges
+     * proposed changes to the view (the number of non-empty elements is
+     * nChanges). The total number of changes never exceeds View::num_members/2.
+     * If request i is a Join, changes[i] is not in current View's members.
+     * If request i is a Departure, changes[i] is in current View's members. */
     SSTFieldVector<node_id_t> changes;
     /** If the next pending view change include a join, this is the IP address
      *  of the joining node. Stored as a fixed-size char array, since SST
      *  doesn't support strings. */
     SSTFieldVector<char> joiner_ip;
-    /** How many changes to the view are pending. */
+    /** How many changes to the view are pending. Must never exceed the number
+     * of members in the current view. */
     SSTField<int> nChanges;
     /** How many proposed view changes have reached the commit point. */
     SSTField<int> nCommitted;

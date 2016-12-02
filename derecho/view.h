@@ -23,10 +23,6 @@ namespace derecho {
 template <typename handlersType>
 class View : public mutils::ByteRepresentable {
 public:
-    /** Upper bound on the number of members that will ever be in any one view.
-     */
-    static constexpr int MAX_MEMBERS = ::MAX_MEMBERS;
-
     /** Sequential view ID: 0, 1, ... */
     int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */

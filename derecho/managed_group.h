@@ -67,7 +67,6 @@ private:
 
     using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
                                              std::vector<node_id_t> old_members)>;
-    static constexpr int MAX_MEMBERS = View<dispatcherType>::MAX_MEMBERS;
 
     /** Contains client sockets for all pending joins, except the current one.*/
     LockedQueue<tcp::socket> pending_joins;

@@ -43,7 +43,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     const DerechoParams derecho_params,
     std::vector<view_upcall_t> _view_upcalls,
     const int gms_port)
-        : last_suspected(MAX_MEMBERS),
+        : last_suspected(2), //The initial view always has 2 members
           gms_port(gms_port),
           server_socket(gms_port),
           thread_shutdown(false),
@@ -67,7 +67,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
 
     std::vector<MessageBuffer> message_buffers;
     auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
-    while(message_buffers.size() < derecho_params.window_size * MAX_MEMBERS) {
+    while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
 
@@ -109,8 +109,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
                                            CallbackSet callbacks,
                                            std::vector<view_upcall_t> _view_upcalls,
                                            const int gms_port)
-        : last_suspected(MAX_MEMBERS),
-          gms_port(gms_port),
+        : gms_port(gms_port),
           server_socket(gms_port),
           thread_shutdown(false),
           next_view(nullptr),
@@ -119,6 +118,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
           derecho_params(0, 0) {
     curr_view = join_existing(my_id, leader_ip, gms_port);
     curr_view->my_rank = curr_view->rank_of(my_id);
+    last_suspected = std::vector<bool>(curr_view->members.size());
     rdmc_sst_setup();
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
@@ -130,7 +130,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
 
     std::vector<MessageBuffer> message_buffers;
     auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
-    while(message_buffers.size() < derecho_params.window_size * MAX_MEMBERS) {
+    while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
     setup_derecho(message_buffers, callbacks, derecho_params);
@@ -178,8 +178,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
                                            std::experimental::optional<DerechoParams> _derecho_params,
                                            std::vector<view_upcall_t> _view_upcalls,
                                            const int gms_port)
-        : last_suspected(MAX_MEMBERS),
-          gms_port(gms_port),
+        : gms_port(gms_port),
           server_socket(gms_port),
           thread_shutdown(false),
           view_file_name(recovery_filename + persistence::PAXOS_STATE_EXTENSION),
@@ -209,6 +208,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
         await_second_member(my_id);
     }
     curr_view->my_rank = curr_view->rank_of(my_id);
+    last_suspected = std::vector<bool>(curr_view->members.size());
 
     //since the View just changed, and we're definitely in persistent mode, persist it again
     view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
@@ -218,7 +218,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
 
     std::vector<MessageBuffer> message_buffers;
     auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
-    while(message_buffers.size() < derecho_params.window_size * MAX_MEMBERS) {
+    while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
 
@@ -360,11 +360,11 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.put();
                 if(Vc.IAmLeader() && !changes_contains(gmsSST, Vc.members[q]))  // Leader initiated
                 {
-                    if((gmsSST.nChanges[myRank] - gmsSST.nCommitted[myRank]) == MAX_MEMBERS) {
+                    if((gmsSST.nChanges[myRank] - gmsSST.nCommitted[myRank]) == (int) gmsSST.changes.size()) {
                         throw derecho_exception("Ran out of room in the pending changes list");
                     }
 
-                    gmssst::set(gmsSST.changes[myRank][gmsSST.nChanges[myRank] % MAX_MEMBERS], Vc.members[q]);  // Reports the failure (note that q NotIn members)
+                    gmssst::set(gmsSST.changes[myRank][gmsSST.nChanges[myRank] % gmsSST.changes.size()], Vc.members[q]);  // Reports the failure (note that q NotIn members)
                     gmssst::increment(gmsSST.nChanges[myRank]);
                     log_event(std::stringstream() << "Leader proposed a change to remove failed node " << Vc.members[q]);
                     gmsSST.put();
@@ -443,7 +443,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         assert(gmsSST.get_local_index() == curr_view->my_rank);
 
         Vc.wedge();
-        node_id_t currChangeID = gmsSST.changes[myRank][Vc.vid % MAX_MEMBERS];
+        node_id_t currChangeID = gmsSST.changes[myRank][Vc.vid % gmsSST.changes.size()];
         next_view = std::make_unique<View<dispatcherType>>();
         next_view->vid = Vc.vid + 1;
         next_view->IKnowIAmLeader = Vc.IKnowIAmLeader;
@@ -481,8 +481,6 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         }
 
         if(next_view->gmsSST != nullptr) {
-            std::cout << "Segmentation fault" << std::endl;
-            raise(SIGSEGV);
             throw derecho_exception("Overwriting the SST");
         }
 
@@ -547,6 +545,9 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 if(!view_file_name.empty()) {
                     persist_object(*curr_view, view_file_name);
                 }
+
+                //Resize last_suspected to match the new size of suspected[]
+                last_suspected.resize(curr_view->members.size());
 
                 // Register predicates in the new view
                 register_predicates();
@@ -692,7 +693,7 @@ void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
     ip_addr& joiner_ip = client_socket.remote_ip;
     DerechoSST& gmsSST = *curr_view->gmsSST;
     if((gmsSST.nChanges[curr_view->my_rank] -
-        gmsSST.nCommitted[curr_view->my_rank]) == MAX_MEMBERS / 2) {
+        gmsSST.nCommitted[curr_view->my_rank]) >= (int) gmsSST.changes.size() / 2) {
         throw derecho_exception("Too many changes to allow a Join right now");
     }
 
@@ -700,7 +701,7 @@ void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
 
     log_event(std::stringstream() << "Proposing change to add node " << joining_client_id);
-    size_t next_change = gmsSST.nChanges[curr_view->my_rank] % MAX_MEMBERS;
+    size_t next_change = gmsSST.nChanges[curr_view->my_rank] % gmsSST.changes.size();
     gmssst::set(gmsSST.changes[curr_view->my_rank][next_change], joining_client_id);
     gmssst::set(gmsSST.joiner_ip[curr_view->my_rank], joiner_ip);
 
@@ -750,7 +751,7 @@ template <typename dispatcherType>
 bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
     int myRow = gmsSST.get_local_index();
     for(int n = gmsSST.nCommitted[myRow]; n < gmsSST.nChanges[myRow]; n++) {
-        int p_index = n % MAX_MEMBERS;
+        int p_index = n % gmsSST.changes.size();
         const node_id_t p(const_cast<node_id_t&>(gmsSST.changes[myRow][p_index]));
         if(p_index < gmsSST.nChanges[myRow] && p == q) {
             return true;
@@ -857,7 +858,7 @@ void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
     std::cout << "Node ID " << who << " failure reported; marking suspected[" << r << "]" << std::endl;
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
     int cnt = 0;
-    for(r = 0; r < MAX_MEMBERS; r++) {
+    for(r = 0; r < (int) curr_view->gmsSST->suspected.size(); r++) {
         if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
             ++cnt;
         }
