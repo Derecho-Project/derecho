@@ -21,7 +21,7 @@ View<handlersType>::View(int num_members)
           members(num_members),
           member_ips(num_members),
           failed(num_members, 0),
-          nFailed(0),
+          num_failed(0),
           who(nullptr),
           num_members(num_members),
           my_rank(0),
@@ -66,21 +66,19 @@ int View<handlersType>::rank_of(const node_id_t& who) const {
 }
 
 template <typename handlersType>
-void View<handlersType>::newView(const View& Vc) {
-    // I don't know what this is supposed to do in real life. In the C#
-    // simulation it just prints to stdout.
+void View<handlersType>::announce_new_view(const View& Vc) {
     //    std::cout <<"Process " << Vc.members[Vc.my_rank] << " New view: " <<
     //    Vc.ToString() << std::endl;
 }
 
 template <typename handlersType>
-bool View<handlersType>::IAmLeader() const {
+bool View<handlersType>::i_am_leader() const {
     return (rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
 template <typename handlersType>
-bool View<handlersType>::IAmTheNewLeader() {
-    if(IKnowIAmLeader) {
+bool View<handlersType>::i_am_new_leader() {
+    if(i_know_i_am_leader) {
         return false;  // I am the OLD leader
     }
 
@@ -91,7 +89,7 @@ bool View<handlersType>::IAmTheNewLeader() {
             }
         }
     }
-    IKnowIAmLeader = true;
+    i_know_i_am_leader = true;
     return true;
 }
 
@@ -142,33 +140,7 @@ void View<handlersType>::wedge() {
 }
 
 template <typename handlersType>
-shared_ptr<node_id_t> View<handlersType>::Joined() const {
-    if(who == nullptr) {
-        return shared_ptr<node_id_t>();
-    }
-    for(int r = 0; r < num_members; r++) {
-        if(members[r] == *who) {
-            return who;
-        }
-    }
-    return shared_ptr<node_id_t>();
-}
-
-template <typename handlersType>
-shared_ptr<node_id_t> View<handlersType>::Departed() const {
-    if(who == nullptr) {
-        return shared_ptr<node_id_t>();
-    }
-    for(int r = 0; r < num_members; r++) {
-        if(members[r] == *who) {
-            return shared_ptr<node_id_t>();
-        }
-    }
-    return who;
-}
-
-template <typename handlersType>
-std::string View<handlersType>::ToString() const {
+std::string View<handlersType>::debug_string() const {
     // need to add member ips and other fields
     std::stringstream s;
     s << "View " << vid << ": MyRank=" << my_rank << ". ";
@@ -183,18 +155,19 @@ std::string View<handlersType>::ToString() const {
         fs += failed[m] ? string(" T ") : string(" F ");
     }
 
-    s << "Failed={" << fs << " }, nFailed=" << nFailed;
-    shared_ptr<node_id_t> dep = Departed();
-    if(dep != nullptr) {
-        s << ", Departed: " << *dep;
+    s << "Failed={" << fs << " }, num_failed=" << num_failed;
+    if(who != nullptr) {
+        bool departed = false;
+        for(int r = 0; r < num_members; r++) {
+            if(members[r] == *who) {
+                s << ", Departed: " << *who;
+                departed = true;
+            }
+        }
+        if(!departed) {
+            s << ", Joined: " << *who;
+        }
     }
-
-    shared_ptr<node_id_t> join = Joined();
-    if(join != nullptr) {
-        s << ", Joined: " << *join;
-    }
-
-    //    s += string("\n") + gmsSST->ToString();
     return s.str();
 }
 
@@ -246,7 +219,7 @@ std::ostream& operator<<(std::ostream& stream, const View<handlersType>& view) {
         stream << (fail_val ? "T" : "F") << " ";
     }
     stream << std::endl;
-    stream << view.nFailed << std::endl;
+    stream << view.num_failed << std::endl;
     stream << view.num_members << std::endl;
     stream << view.my_rank << std::endl;
     return stream;
@@ -280,7 +253,7 @@ std::istream& operator>>(std::istream& stream, View<handlersType>& view) {
     }
     //The last three lines each contain a single number
     if(std::getline(stream, line)) {
-        view.nFailed = std::stoi(line);
+        view.num_failed = std::stoi(line);
     }
     if(std::getline(stream, line)) {
         view.num_members = std::stoi(line);

@@ -14,9 +14,8 @@
 #include "derecho_group.h"
 #include "derecho_sst.h"
 #include "sst/sst.h"
-#include "mutils-serialization/SerializationMacros.hpp"
-#include "mutils-serialization/SerializationSupport.hpp"
-#include "max_members.h"
+#include <mutils-serialization/SerializationMacros.hpp>
+#include <mutils-serialization/SerializationSupport.hpp>
 
 namespace derecho {
 
@@ -35,17 +34,19 @@ public:
     /** Number of current outstanding failures in this view. After
      * transitioning to a new view that excludes a failed member, this count
      * will decrease by one. */
-    int32_t nFailed;
+    int32_t num_failed;
     /** ID of the node that joined or departed since the prior view; null if this is the first view */
     std::shared_ptr<node_id_t> who;
     /** Number of members in this view */
     int32_t num_members;
-    /** For member p, returns rankOf(p) */
+    /** The rank of this node (as returned by rank_of()) */
     int32_t my_rank;
     /** RDMC manager object containing one RDMC group for each sender */
     std::unique_ptr<DerechoGroup<handlersType>> derecho_group;
-
+    /** Pointer to the SST instance used by the GMS in this View */
     std::shared_ptr<DerechoSST> gmsSST;
+
+    bool i_know_i_am_leader = false;  // I am the leader (and know it)
 
     /** Creates a completely empty new View. Vectors such as members will
      * be empty (size 0), so the client will need to resize them. */
@@ -53,7 +54,10 @@ public:
     /** Creates an empty new View with num_members members.
      * The vectors will have room for num_members elements. */
     View(int32_t num_members);
-    void newView(const View& Vc);
+    /** Announces a new view to the application using this group
+     * (or at least that's the idea; this still needs to be implemented,
+     * probably with some sort of callback system). */
+    void announce_new_view(const View& Vc);
     /** When constructing a View piecemeal, call this after num_members has been set. */
     void init_vectors();
 
@@ -61,28 +65,20 @@ public:
     int rank_of(const node_id_t& who) const;
     int rank_of_leader() const;
 
-    bool IKnowIAmLeader = false;  // I am the leader (and know it)
 
-    bool IAmLeader() const;
+    bool i_am_leader() const;
     /** Determines whether this node is the new leader after a view change. */
-    bool IAmTheNewLeader();
+    bool i_am_new_leader();
     /** Merges changes lists from other SST rows into this node's SST row. */
     void merge_changes();
     /** Wedges the view, which means wedging both SST and DerechoGroup. */
     void wedge();
 
-    /** Returns a pointer to the (IP address of the) member who recently joined,
-     * or null if the most recent change was not a join. */
-    std::shared_ptr<node_id_t> Joined() const;
-    /** Returns a pointer to the (IP address of the) member who recently departed,
-     * or null if the most recent change was not a departure. */
-    std::shared_ptr<node_id_t> Departed() const;
-
     /** Prints a human-readable string representing the state of the view.
      *  Used for debugging only.*/
-    std::string ToString() const;
+    std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, nFailed, num_members, my_rank);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, num_members, my_rank);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
@@ -91,7 +87,7 @@ public:
               members(members),
               member_ips(member_ips),
               failed(failed),
-              nFailed(nFailed),
+              num_failed(nFailed),
               num_members(num_members),
               my_rank(my_rank) {}
 };
