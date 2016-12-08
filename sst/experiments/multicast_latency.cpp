@@ -3,7 +3,6 @@
 #include <sstream>
 
 #include "multicast.h"
-#include "derecho/max_members.h"
 
 using namespace std;
 using namespace sst;
@@ -17,37 +16,31 @@ int main() {
     uint32_t node_id, num_nodes;
     cin >> node_id >> num_nodes;
 
-    assert(MAX_MEMBERS == num_nodes);
-
     // input the ip addresses
     map<uint32_t, string> ip_addrs;
     for(unsigned int i = 0; i < num_nodes; ++i) {
         cin >> ip_addrs[i];
     }
 
-    // initialize tcp connections
-    tcp::tcp_initialize(node_id, ip_addrs);
-
     // initialize the rdma resources
-    verbs_initialize();
+    verbs_initialize(ip_addrs, node_id);
 
     std::vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {
         members[i] = i;
     }
 
-    vector<vector<int64_t>> recv_times(MAX_MEMBERS);
-    for(uint i = 0; i < MAX_MEMBERS; ++i) {
+    vector<vector<int64_t>> recv_times(num_nodes);
+    for(uint i = 0; i < num_nodes; ++i) {
         recv_times[i].resize(num_messages);
     }
-
 
     vector<int64_t> send_times(num_messages);
 
     uint num_finished = 0;
     struct timespec recv_time, send_time;
-    group<window_size, max_msg_size, MAX_MEMBERS> g(
-        members, node_id,
+    group<max_msg_size> g(
+        members, node_id, window_size,
         [&recv_times, &recv_time, &num_finished, &num_nodes, &num_messages](
             uint32_t sender_rank, uint64_t index, volatile char* msg,
             uint32_t size) {
@@ -65,16 +58,16 @@ int main() {
         volatile char* buf;
         while((buf = g.get_buffer(max_msg_size)) == NULL) {
         }
-	clock_gettime(CLOCK_REALTIME, &send_time);
-	send_times[i] = send_time.tv_sec * 1e9 + send_time.tv_nsec;
+        clock_gettime(CLOCK_REALTIME, &send_time);
+        send_times[i] = send_time.tv_sec * 1e9 + send_time.tv_nsec;
         g.send();
     }
     while(!done) {
     }
-    
-    for(uint i = 0; i < MAX_MEMBERS; ++i) {
+
+    for(uint i = 0; i < num_nodes; ++i) {
         stringstream ss;
-        ss << "ml_" << MAX_MEMBERS << "_" << i;
+        ss << "ml_" << num_nodes << "_" << i;
         ofstream fout;
         fout.open(ss.str());
         for(uint j = 0; j < num_messages; ++j) {
@@ -84,7 +77,7 @@ int main() {
     }
 
     stringstream ss;
-    ss << "ml_" << MAX_MEMBERS;
+    ss << "ml_" << num_nodes;
     ofstream fout;
     fout.open(ss.str());
     for(uint i = 0; i < num_messages; ++i) {
@@ -96,8 +89,6 @@ int main() {
         if(i == node_id) {
             continue;
         }
-        char temp_char;
-        char tQ[2] = {'Q', 0};
-	tcp::sock_sync_data(tcp::get_socket(i), 1, tQ, &temp_char);
+        sync(i);
     }
 }

@@ -290,6 +290,10 @@ public:
     /** Gets the index of the local row in the table. */
     int get_local_index() const { return my_index; }
 
+    const char* getBaseAddress() {
+      return const_cast<char*>(rows);
+    }
+
     /** Writes the entire local row to all remote nodes. */
     void put() {
         std::vector<uint32_t> indices(num_members);

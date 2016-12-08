@@ -2,7 +2,6 @@
 
 #include "derecho/experiments/aggregate_bandwidth.h"
 #include "derecho/experiments/log_results.h"
-#include "derecho/max_members.h"
 #include "multicast.h"
 
 using namespace std;
@@ -23,11 +22,8 @@ int main() {
         cin >> ip_addrs[i];
     }
 
-    // initialize tcp connections
-    tcp::tcp_initialize(node_id, ip_addrs);
-
     // initialize the rdma resources
-    verbs_initialize();
+    verbs_initialize(ip_addrs, node_id);
 
     std::vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {
@@ -36,10 +32,10 @@ int main() {
 
     uint num_finished = 0;
     struct timespec start_time, end_time;
-    group<window_size, max_msg_size, MAX_MEMBERS> g(
-        members, node_id, [&num_finished, &num_nodes, &num_messages](
-                              uint32_t sender_rank, uint64_t index,
-                              volatile char* msg, uint32_t size) {
+    group<max_msg_size> g(
+        members, node_id, window_size, [&num_finished, &num_nodes, &num_messages](
+                                           uint32_t sender_rank, uint64_t index,
+                                           volatile char* msg, uint32_t size) {
             if(index == num_messages - 1) {
                 num_finished++;
             }
