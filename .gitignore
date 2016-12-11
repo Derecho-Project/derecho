@@ -34,3 +34,4 @@ CMakeFiles
 /derecho/script_copy.sh
 /sst/experiments/Makefile
 /sst/experiments/sst_test
+/sst/experiments/multicast_throughput
