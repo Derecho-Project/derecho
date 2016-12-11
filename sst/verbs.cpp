@@ -83,6 +83,9 @@ struct global_resources {
 /** The single instance of global_resources for the %SST system */
 struct global_resources *g_res;
 
+std::thread polling_thread;
+bool shutdown = false;
+
 /**
  * Initializes the resources. Registers write_addr and read_addr as the read
  * and write buffers and connects a queue pair with the specified remote node.
@@ -400,7 +403,7 @@ void resources::post_remote_write(uint32_t id, long long int offset, long long i
 }
 
 void polling_loop() {
-  while (true) {
+  while (!shutdown) {
     auto ce = verbs_poll_completion();
     util::polling_data.insert_completion_entry(ce.first, ce.second);
   }
@@ -505,6 +508,9 @@ void resources_create() {
     check_for_error(g_res->cq,
                     "Could not create completion queue, error code is " +
                         std::to_string(errno));
+
+    // start the polling thread
+    polling_thread = std::thread(polling_loop);
 }
 
 bool add_node(uint32_t new_id, const string new_ip_addr) {
@@ -552,6 +558,11 @@ void verbs_destroy() {
     if(g_res->ib_ctx) {
         rc = ibv_close_device(g_res->ib_ctx);
         check_for_error(!rc, "Could not close RDMA device");
+    }
+
+    shutdown = true;
+    if (polling_thread.joinable()) {
+      polling_thread.join();
     }
 }
 
