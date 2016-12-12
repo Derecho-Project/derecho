@@ -16,6 +16,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 namespace derecho {
 
@@ -144,6 +145,8 @@ private:
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
+    /** Returns the ranks of all the members that have failed and are committed to being removed. */
+    static std::set<int> consecutive_committed_failures(const View<dispatcherType>& view);
 
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
@@ -160,7 +163,7 @@ private:
                        const DerechoParams& derecho_params);
     /** Sets up the SST and derecho_group for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
-    void transition_sst_and_rdmc(View<dispatcherType>& newView, int whichFailed);
+    void transition_sst_and_rdmc(View<dispatcherType>& newView);
 
 public:
     /**
@@ -274,9 +277,11 @@ public:
     void barrier_sync();
     void debug_print_status() const;
     static void log_event(const std::string& event_text) {
+        std::cout << event_text << std::endl;
         util::debug_log().log_event(event_text);
     }
     static void log_event(const std::stringstream& event_text) {
+        std::cout << event_text.str() << std::endl;
         util::debug_log().log_event(event_text);
     }
     void print_log(std::ostream& output_dest) const;

@@ -36,7 +36,7 @@ public:
      * will decrease by one. */
     int32_t num_failed;
     /** ID of the node that joined or departed since the prior view; null if this is the first view */
-    std::shared_ptr<node_id_t> who;
+    std::shared_ptr<node_id_t> who; //can be removed, it's only used by debug_string
     /** Number of members in this view */
     int32_t num_members;
     /** The rank of this node (as returned by rank_of()) */
@@ -62,9 +62,9 @@ public:
     void init_vectors();
 
     int rank_of(const ip_addr& who) const;
+    /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
     int rank_of_leader() const;
-
 
     bool i_am_leader() const;
     /** Determines whether this node is the new leader after a view change. */
