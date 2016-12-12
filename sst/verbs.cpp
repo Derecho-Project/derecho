@@ -84,7 +84,7 @@ struct global_resources {
 struct global_resources *g_res;
 
 std::thread polling_thread;
-bool shutdown = false;
+static bool shutdown = false;
 
 /**
  * Initializes the resources. Registers write_addr and read_addr as the read
@@ -403,10 +403,12 @@ void resources::post_remote_write(uint32_t id, long long int offset, long long i
 }
 
 void polling_loop() {
+  std::cout << "Polling thread starting" << std::endl;
   while (!shutdown) {
     auto ce = verbs_poll_completion();
     util::polling_data.insert_completion_entry(ce.first, ce.second);
   }
+  std::cout << "Polling thread ending" << std::endl;
 }
 
 /**
@@ -430,7 +432,10 @@ void polling_loop() {
 	  break;
 	}
       }
-      util::polling_data.wait_for_requests();
+      if (poll_result) {
+	break;
+      }
+      // util::polling_data.wait_for_requests();
     }
     // not sure what to do when we cannot read entries off the CQ
     // this means that something is wrong with the local node
@@ -546,24 +551,26 @@ void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank)
  * only be called once all SST instances have been destroyed.
  */
 void verbs_destroy() {
-    int rc;
-    if(g_res->cq) {
-        rc = ibv_destroy_cq(g_res->cq);
-        check_for_error(!rc, "Could not destroy completion queue");
-    }
-    if(g_res->pd) {
-        rc = ibv_dealloc_pd(g_res->pd);
-        check_for_error(!rc, "Could not deallocate protection domain");
-    }
-    if(g_res->ib_ctx) {
-        rc = ibv_close_device(g_res->ib_ctx);
-        check_for_error(!rc, "Could not close RDMA device");
-    }
-
+    std::cout << "Waiting for polling thread to exit" << std::endl;
     shutdown = true;
-    if (polling_thread.joinable()) {
-      polling_thread.join();
-    }
+    // int rc;
+    // if(g_res->cq) {
+    //     rc = ibv_destroy_cq(g_res->cq);
+    //     check_for_error(!rc, "Could not destroy completion queue");
+    // }
+    // if(g_res->pd) {
+    //     rc = ibv_dealloc_pd(g_res->pd);
+    //     check_for_error(!rc, "Could not deallocate protection domain");
+    // }
+    // if(g_res->ib_ctx) {
+    //     rc = ibv_close_device(g_res->ib_ctx);
+    //     check_for_error(!rc, "Could not close RDMA device");
+    // }
+
+    // if (polling_thread.joinable()) {
+      // polling_thread.join();
+    // }
+    std:: cout << "Shutting down" << std::endl;
 }
 
 }  // namespace sst

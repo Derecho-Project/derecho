@@ -147,7 +147,6 @@ private:
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
-        std::cout << "Row length is : " << rowLen << std::endl;
         rows = new char[rowLen * num_members];
         snapshot = new char[rowLen * num_members];
         volatile char* base = rows;

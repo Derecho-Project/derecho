@@ -141,10 +141,11 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
     std::vector<bool> posted_write_to(num_members, false);
 
     const auto tid = std::this_thread::get_id();
-    
     // get id first
     uint32_t id = util::polling_data.get_index(tid);
-    
+
+    util::polling_data.set_waiting(tid);
+        
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
@@ -171,12 +172,10 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
     gettimeofday(&cur_time, NULL);
     start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
 
-    util::polling_data.set_waiting(tid);
-    
     // poll for surviving number of rows
     for(unsigned int index = 0; index < num_writes_posted; ++index) {
       std::experimental::optional<std::pair<int32_t, int32_t>> ce;
-
+      
         while(true) {
             // check if polling result is available
             ce = util::polling_data.get_completion_entry(tid);
@@ -201,8 +200,8 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
                 std::cout << "Reporting failure on row " << index2
                           << " even though it didn't fail directly" << std::endl;
 		failed_node_indexes.push_back(index2);
-		break;
             }
+	    continue;
         }
 
 	auto ce_v = ce.value();

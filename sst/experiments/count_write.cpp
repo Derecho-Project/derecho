@@ -143,9 +143,9 @@ int main() {
 			  sync(0);
 			  free(res);
 		  }
-
-		  exit (0);
-	  }
+          verbs_destroy();
+          exit(0);
+      }
     };
 
     // start timer

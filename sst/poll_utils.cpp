@@ -1,3 +1,4 @@
+#include <iostream>
 #include <numeric>
 
 #include "poll_utils.h"
@@ -38,7 +39,7 @@ uint32_t PollingData::get_index(const std::thread::id id) {
     std::lock_guard<std::mutex> lk(poll_mutex);
     if(tid_to_index.find(id) == tid_to_index.end()) {
         completion_entries.push_back(std::list<std::pair<int32_t, int32_t>>());
-        tid_to_index[id] = completion_entries.size();
+        tid_to_index[id] = completion_entries.size()-1;
         if_waiting.push_back(false);
     }
     return tid_to_index[id];
