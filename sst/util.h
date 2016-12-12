@@ -5,9 +5,10 @@
  *      Author: edward
  */
 
-#ifndef UTIL_H_
-#define UTIL_H_
+#pragma once
 
+#include <memory>
+#include <type_traits>
 #include "args-finder.hpp"
 
 namespace sst {
@@ -125,5 +126,3 @@ std::unique_ptr<T> heap_copy(const T &t) {
 }
 }
 }
-
-#endif /* UTIL_H_ */

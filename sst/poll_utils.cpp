@@ -4,6 +4,16 @@
 
 namespace sst {
 namespace util {
+
+std::vector<std::list<std::pair<int32_t, int32_t>>> PollingData::completion_entries;
+std::map<std::thread::id, uint32_t> PollingData::tid_to_index;
+std::vector<bool> PollingData::if_waiting;
+std::condition_variable PollingData::poll_cv;
+std::mutex PollingData::poll_mutex;
+
+//Single global instance, defined here
+PollingData polling_data;
+
 bool PollingData::check_waiting() {
     return std::accumulate(if_waiting.begin(), if_waiting.end(), false, [](bool a, bool b) {return a || b; });
 }

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <condition_variable>
 #include <list>
 #include <map>
@@ -31,6 +33,8 @@ public:
     void wait_for_requests();
 };
 
-static PollingData polling_data;
+
+//There is one global instance of PollingData
+extern PollingData polling_data;
 }
 }
