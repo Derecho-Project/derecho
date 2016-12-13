@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
             int sender_rank, long long int index, char *buf,
             long long int msg_size) {
             received_count++;
-            // cout << "In stability callback; sender = " << sender_rank
-	    //  << ", index = " << index << endl;
+            cout << "In stability callback; sender = " << sender_rank
+                    << ", index = " << index << endl;
             if(received_count == num_messages) {
                 done = true;
             }

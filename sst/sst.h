@@ -100,6 +100,14 @@ public:
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
+
+    void __attribute__((noinline)) debug_print (int row_num)  {
+        volatile T* arr = (*this)[row_num];
+        for (unsigned int j = 0; j < length; ++j) {
+            std::cout << arr[j] << " ";
+        }
+        std::cout << std::endl;
+    }
 };
 
 typedef std::function<void(uint32_t)> failure_upcall_t;

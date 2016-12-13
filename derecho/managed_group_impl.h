@@ -342,7 +342,8 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         }
 
         for(int q = 0; q < Vc.num_members; q++) {
-            if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+            if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) { //If this is a new suspicion
+                last_suspected[q] = gmsSST.suspected[myRank][q];
                 log_event(std::stringstream() << "Marking " << Vc.members[q] << " failed");
                 if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
                     throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
@@ -362,18 +363,18 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.put();
                 if(Vc.i_am_leader() && !changes_contains(gmsSST, Vc.members[q]))  // Leader initiated
                 {
-                    if((gmsSST.nChanges[myRank] - gmsSST.nCommitted[myRank]) == (int) gmsSST.changes.size()) {
+                    if((gmsSST.nChanges[myRank] - Vc.vid) == (int) gmsSST.changes.size()) {
                         throw derecho_exception("Ran out of room in the pending changes list");
                     }
 
-                    gmssst::set(gmsSST.changes[myRank][gmsSST.nChanges[myRank] % gmsSST.changes.size()], Vc.members[q]);  // Reports the failure (note that q NotIn members)
+                    gmssst::set(gmsSST.changes[myRank][gmsSST.nChanges[myRank] - Vc.vid], Vc.members[q]);  // Reports the failure (note that q NotIn members)
                     gmssst::increment(gmsSST.nChanges[myRank]);
                     log_event(std::stringstream() << "Leader proposed a change to remove failed node " << Vc.members[q]);
                     gmsSST.put();
                 }
             }
         }
-        copy_suspected(gmsSST, last_suspected);
+//        copy_suspected(gmsSST, last_suspected);
     };
 
     /* This pair runs only on the leader and reacts to new client connections
@@ -455,7 +456,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         assert(gmsSST.get_local_index() == curr_view->my_rank);
 
         Vc.wedge();
-        node_id_t currChangeID = gmsSST.changes[myRank][Vc.vid % gmsSST.changes.size()];
+        node_id_t currChangeID = gmsSST.changes[myRank][0];
         next_view = std::make_unique<View<dispatcherType>>();
         next_view->vid = Vc.vid + 1;
         next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
@@ -714,7 +715,7 @@ void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
 
     log_event(std::stringstream() << "Proposing change to add node " << joining_client_id);
-    size_t next_change = gmsSST.nChanges[curr_view->my_rank] % gmsSST.changes.size();
+    size_t next_change = gmsSST.nChanges[curr_view->my_rank] - curr_view->vid;
     gmssst::set(gmsSST.changes[curr_view->my_rank][next_change], joining_client_id);
     gmssst::set(gmsSST.joiner_ip[curr_view->my_rank], joiner_ip);
 
@@ -763,10 +764,9 @@ void ManagedGroup<dispatcherType>::copy_suspected(const DerechoSST& gmsSST, std:
 template <typename dispatcherType>
 bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
     int myRow = gmsSST.get_local_index();
-    for(int n = gmsSST.nCommitted[myRow]; n < gmsSST.nChanges[myRow]; n++) {
-        int p_index = n % gmsSST.changes.size();
+    for(int p_index = 0; p_index < gmsSST.nChanges[myRow] - gmsSST.vid[myRow]; p_index++) {
         const node_id_t p(const_cast<node_id_t&>(gmsSST.changes[myRow][p_index]));
-        if(p_index < gmsSST.nChanges[myRow] && p == q) {
+        if(p == q) {
             return true;
         }
     }

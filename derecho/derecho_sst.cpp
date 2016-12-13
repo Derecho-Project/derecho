@@ -15,9 +15,10 @@ void DerechoSST::init_local_row_from_existing(const DerechoSST& existing_sst, co
     const int local_row = get_local_index();
     static thread_local std::mutex copy_mutex;
     std::unique_lock<std::mutex> lock(copy_mutex);
+    //Copy elements [1...n] of the old changes array to the beginning of the new changes array
     memcpy(const_cast<node_id_t*>(changes[local_row]),
-           const_cast<const node_id_t*>(existing_sst.changes[row]),
-           existing_sst.changes.size() * sizeof(node_id_t));
+           const_cast<const node_id_t*>(existing_sst.changes[row] + 1),
+           (existing_sst.changes.size()-1) * sizeof(node_id_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
         globalMin[local_row][i] = 0;
