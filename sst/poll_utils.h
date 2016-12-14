@@ -33,7 +33,6 @@ public:
     void wait_for_requests();
 };
 
-
 //There is one global instance of PollingData
 extern PollingData polling_data;
 }

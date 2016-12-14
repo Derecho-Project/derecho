@@ -145,7 +145,7 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
     uint32_t id = util::polling_data.get_index(tid);
 
     util::polling_data.set_waiting(tid);
-        
+
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
@@ -160,7 +160,7 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
     // track which nodes haven't failed yet
     std::vector<bool> polled_successfully_from(num_members, false);
 
-    std::vector <uint32_t> failed_node_indexes;
+    std::vector<uint32_t> failed_node_indexes;
 
     /** Completion Queue poll timeout in millisec */
     const int MAX_POLL_CQ_TIMEOUT = 2000;
@@ -174,8 +174,8 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
 
     // poll for surviving number of rows
     for(unsigned int index = 0; index < num_writes_posted; ++index) {
-      std::experimental::optional<std::pair<int32_t, int32_t>> ce;
-      
+        std::experimental::optional<std::pair<int32_t, int32_t>> ce;
+
         while(true) {
             // check if polling result is available
             ce = util::polling_data.get_completion_entry(tid);
@@ -198,13 +198,13 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
                 }
 
                 std::cout << "Reporting failure on row " << index2
-                          << " even though it didn't fail directly" << std::endl;
-		failed_node_indexes.push_back(index2);
+                          << " due to a missing poll completion" << std::endl;
+                failed_node_indexes.push_back(index2);
             }
-	    continue;
+            continue;
         }
 
-	auto ce_v = ce.value();
+        auto ce_v = ce.value();
         int qp_num = ce_v.first;
         int result = ce_v.second;
         if(result == 1) {
@@ -215,15 +215,15 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
             if(!row_is_frozen[index]) {
                 std::cerr << "Poll completion error in QP " << qp_num
                           << ". Freezing row " << index << std::endl;
-		failed_node_indexes.push_back (index);
+                failed_node_indexes.push_back(index);
             }
         }
     }
 
     util::polling_data.reset_waiting(tid);
-    
-    for (auto index : failed_node_indexes) {
-      freeze (index);
+
+    for(auto index : failed_node_indexes) {
+        freeze(index);
     }
 }
 

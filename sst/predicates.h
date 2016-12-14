@@ -81,8 +81,7 @@ public:
         return insert(predicate, [triggers](DerivedSST& t) {
             for(const auto& trigger : triggers)
                 trigger(t);
-        },
-                      type);
+        }, type);
     }
 
     /** Removes a (predicate, trigger) pair previously registered with insert(). */

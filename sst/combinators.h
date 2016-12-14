@@ -317,7 +317,7 @@ auto as_row_pred(const F &f) {
 template <typename NameEnum, NameEnum Name, typename Row, typename fun_return,
           typename Up, typename Get>
 auto name_predicate(const PredicateBuilder<
-                    Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
+    Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
     using This_list =
         TypeList<PredicateMetadata<NameEnum, Name, fun_return, Up, Get>>;
     using next_builder = PredicateBuilder<Row, This_list>;
@@ -331,7 +331,7 @@ auto name_predicate(const PredicateBuilder<
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, typename hd, typename... tl>
 const auto &name_predicate(const PredicateBuilder<
-                           Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
+    Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
                                pb) {
     constexpr int unique = static_cast<int>(Name);
     auto new_prev = change_uniqueness<unique>(pb.prev_preds);
@@ -348,7 +348,7 @@ const auto &name_predicate(const PredicateBuilder<
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, int unique, typename... tl>
 const auto &name_predicate(const PredicateBuilder<
-                           Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
+    Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
                                pb) {
     static_assert(unique >= 0, "Internal error: overload resolution fails");
     using next_builder = PredicateBuilder<
