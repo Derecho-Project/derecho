@@ -324,7 +324,7 @@ void resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-  int resources::post_remote_send(uint32_t id, long long int offset, long long int size,
+int resources::post_remote_send(uint32_t id, long long int offset, long long int size,
                                 int op) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
@@ -365,7 +365,7 @@ void resources::connect_qp() {
 /**
  * @param size The number of bytes to read from remote memory.
  */
-  void resources::post_remote_read(uint32_t id, long long int size) {
+void resources::post_remote_read(uint32_t id, long long int size) {
     int rc = post_remote_send(id, 0, size, 0);
     check_for_error(
         !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
@@ -375,7 +375,7 @@ void resources::connect_qp() {
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-  void resources::post_remote_read(uint32_t id, long long int offset, long long int size) {
+void resources::post_remote_read(uint32_t id, long long int offset, long long int size) {
     int rc = post_remote_send(id, offset, size, 0);
     check_for_error(
         !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
@@ -384,13 +384,13 @@ void resources::connect_qp() {
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-  void resources::post_remote_write(uint32_t id, long long int size) {
+void resources::post_remote_write(uint32_t id, long long int size) {
     int rc = post_remote_send(id, 0, size, 1);
     check_for_error(
         !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
 }
 
-  /**
+/**
  * @param offset The offset, in bytes, of the remote memory buffer at which to
  * start writing.
  * @param size The number of bytes to write from the local buffer into remote
@@ -403,12 +403,12 @@ void resources::post_remote_write(uint32_t id, long long int offset, long long i
 }
 
 void polling_loop() {
-  std::cout << "Polling thread starting" << std::endl;
-  while (!shutdown) {
-    auto ce = verbs_poll_completion();
-    util::polling_data.insert_completion_entry(ce.first, ce.second);
-  }
-  std::cout << "Polling thread ending" << std::endl;
+    std::cout << "Polling thread starting" << std::endl;
+    while(!shutdown) {
+        auto ce = verbs_poll_completion();
+        util::polling_data.insert_completion_entry(ce.first, ce.second);
+    }
+    std::cout << "Polling thread ending" << std::endl;
 }
 
 /**
@@ -420,28 +420,28 @@ void polling_loop() {
  * @return pair(qp_num,result) The queue pair number associated with the
  * completed request and the result (1 for successful, -1 for unsuccessful)
  */
-  std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
+std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
 
     while(true) {
-      poll_result = 0;
-      for (int i = 0; i < 50; ++i) {
-        poll_result = ibv_poll_cq(g_res->cq, 1, &wc);
-	if (poll_result) {
-	  break;
-	}
-      }
-      if (poll_result) {
-	break;
-      }
-      // util::polling_data.wait_for_requests();
+        poll_result = 0;
+        for(int i = 0; i < 50; ++i) {
+            poll_result = ibv_poll_cq(g_res->cq, 1, &wc);
+            if(poll_result) {
+                break;
+            }
+        }
+        if(poll_result) {
+            break;
+        }
+        // util::polling_data.wait_for_requests();
     }
     // not sure what to do when we cannot read entries off the CQ
     // this means that something is wrong with the local node
     if(poll_result < 0) {
         check_for_error(false, "Poll completion failed");
-	exit (-1);
+        exit(-1);
     }
     // check the completion status (here we don't care about the completion
     // opcode)
@@ -568,9 +568,9 @@ void verbs_destroy() {
     // }
 
     // if (polling_thread.joinable()) {
-      // polling_thread.join();
+    // polling_thread.join();
     // }
-    std:: cout << "Shutting down" << std::endl;
+    std::cout << "Shutting down" << std::endl;
 }
 
 }  // namespace sst

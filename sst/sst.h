@@ -101,9 +101,9 @@ public:
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
 
-    void __attribute__((noinline)) debug_print (int row_num)  {
+    void __attribute__((noinline)) debug_print(int row_num) {
         volatile T* arr = (*this)[row_num];
-        for (unsigned int j = 0; j < length; ++j) {
+        for(unsigned int j = 0; j < length; ++j) {
             std::cout << arr[j] << " ";
         }
         std::cout << std::endl;
@@ -223,7 +223,6 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
-
         //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
@@ -340,7 +339,7 @@ private:
 
     // returns snapshot == current
     bool compare_snapshot_and_current() {
-      int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+        int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
         if(res == 0) {
             return true;
         }
