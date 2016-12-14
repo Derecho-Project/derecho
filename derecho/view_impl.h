@@ -22,18 +22,19 @@ View<handlersType>::View(int num_members)
           member_ips(num_members),
           failed(num_members, 0),
           num_failed(0),
-          who(nullptr),
+          joined(0),
+          departed(0),
           num_members(num_members),
           my_rank(0),
           derecho_group(nullptr),
           gmsSST(nullptr) {}
 
-template <typename handlersType>
-void View<handlersType>::init_vectors() {
-    members.resize(num_members);
-    member_ips.resize(num_members);
-    failed.resize(num_members, 0);
-}
+//template <typename handlersType>
+//void View<handlersType>::init_vectors() {
+//    members.resize(num_members);
+//    member_ips.resize(num_members);
+//    failed.resize(num_members, 0);
+//}
 
 template <typename handlersType>
 int View<handlersType>::rank_of_leader() const {
@@ -98,21 +99,21 @@ void View<handlersType>::merge_changes() {
     int myRank = my_rank;
     // Merge the change lists
     for(int n = 0; n < num_members; n++) {
-        if(gmsSST->nChanges[myRank] < gmsSST->nChanges[n]) {
+        if(gmsSST->num_changes[myRank] < gmsSST->num_changes[n]) {
             gmssst::set(gmsSST->changes[myRank], gmsSST->changes[n], gmsSST->changes.size());
-            gmssst::set(gmsSST->nChanges[myRank], gmsSST->nChanges[n]);
+            gmssst::set(gmsSST->num_changes[myRank], gmsSST->num_changes[n]);
         }
 
-        if(gmsSST->nCommitted[myRank] < gmsSST->nCommitted[n])  // How many I know to have been committed
+        if(gmsSST->num_committed[myRank] < gmsSST->num_committed[n])  // How many I know to have been committed
         {
-            gmssst::set(gmsSST->nCommitted[myRank], gmsSST->nCommitted[n]);
+            gmssst::set(gmsSST->num_committed[myRank], gmsSST->num_committed[n]);
         }
     }
     bool found = false;
     for(int n = 0; n < num_members; n++) {
         if(failed[n]) {
             // Make sure that the failed process is listed in the Changes vector as a proposed change
-            for(int c = gmsSST->nCommitted[myRank]; c < gmsSST->nChanges[myRank] && !found; c++) {
+            for(int c = gmsSST->num_committed[myRank]; c < gmsSST->num_changes[myRank] && !found; c++) {
                 if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
                     // Already listed
                     found = true;
@@ -124,9 +125,9 @@ void View<handlersType>::merge_changes() {
         }
 
         if(!found) {
-            gmssst::set(gmsSST->changes[myRank][gmsSST->nChanges[myRank] % gmsSST->changes.size()],
+            gmssst::set(gmsSST->changes[myRank][gmsSST->num_changes[myRank] % gmsSST->changes.size()],
                         members[n]);
-            gmssst::increment(gmsSST->nChanges[myRank]);
+            gmssst::increment(gmsSST->num_changes[myRank]);
         }
     }
     gmsSST->put();
@@ -144,30 +145,26 @@ std::string View<handlersType>::debug_string() const {
     // need to add member ips and other fields
     std::stringstream s;
     s << "View " << vid << ": MyRank=" << my_rank << ". ";
-    string ms = " ";
+    s << "Members={ ";
     for(int m = 0; m < num_members; m++) {
-        ms += std::to_string(members[m]) + string("  ");
+        s << members[m] << "  ";
     }
-
-    s << "Members={" << ms << "}, ";
+    s << "}, ";
     string fs = (" ");
     for(int m = 0; m < num_members; m++) {
         fs += failed[m] ? string(" T ") : string(" F ");
     }
 
     s << "Failed={" << fs << " }, num_failed=" << num_failed;
-    if(who != nullptr) {
-        bool departed = false;
-        for(int r = 0; r < num_members; r++) {
-            if(members[r] == *who) {
-                s << ", Departed: " << *who;
-                departed = true;
-            }
-        }
-        if(!departed) {
-            s << ", Joined: " << *who;
-        }
+    s << ", Departed: { ";
+    for(int i = 0; i < departed.size(); ++i) {
+        s << members[departed[i]] << " ";
     }
+    s << "} , Joined: { ";
+    for(int i = 0; i < joined.size(); ++i) {
+        s << members[joined[i]] << " ";
+    }
+    s << "}";
     return s.str();
 }
 

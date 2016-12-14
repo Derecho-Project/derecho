@@ -49,10 +49,9 @@ public:
     /** Array of same length as View::members, where each bool represents
      * whether the corresponding member is suspected to have failed */
     SSTFieldVector<bool> suspected;
-    /** An array of the same length as View::members, containing a circular
-     * buffer of proposed changes to the view starting at changes[vid %
-     * num_members] and ending at changes[nChanges % num_members]. The number
-     * of valid elements is nChanges - vid, which should never exceed
+    /** An array of the same length as View::members, containing a list of
+     * proposed changes to the view that have not yet been installed. The number
+     * of valid elements is num_changes - num_installed, which should never exceed
      * View::num_members/2.
      * If request i is a Join, changes[i] is not in current View's members.
      * If request i is a Departure, changes[i] is in current View's members. */
@@ -62,15 +61,18 @@ public:
      *  doesn't support strings. */
     SSTFieldVector<char> joiner_ip;
     /** How many changes to the view have been proposed. Monotonically increases.
-     * nChanges - nCommitted is the number of pending changes, which should never
-     * exceed the number of members in the current view. If nChanges == nCommitted
-     * == VID, no changes are pending. */
-    SSTField<int> nChanges;
+     * num_changes - num_committed is the number of pending changes, which should never
+     * exceed the number of members in the current view. If num_changes == num_committed
+     * == num_installed, no changes are pending. */
+    SSTField<int> num_changes;
     /** How many proposed view changes have reached the commit point. */
-    SSTField<int> nCommitted;
+    SSTField<int> num_committed;
     /** How many proposed changes have been seen. Incremented by a member
      * to acknowledge that it has seen a proposed change.*/
-    SSTField<int> nAcked;
+    SSTField<int> num_acked;
+    /** How many previously proposed view changes have been installed in the
+     * current view. Monotonically increases, lower bound on num_committed. */
+    SSTField<int> num_installed;
     /** Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
@@ -84,18 +86,12 @@ public:
     SSTField<bool> globalMinReady;
 
     /**
-     * Constructs an SST, and initializes the GMS fields of the local row based
-     * on the given VID. If the VID is >0, the "committed" and "acked" counters
-     * are initialized to that value so that all views up to that ID are
-     * considered already stable. GMS fields on non-local rows are always
-     * initialized to zero, to ensure they have "safe" values before receiving
-     * the first put().
+     * Constructs an SST, and initializes the GMS fields to "safe" initial values
+     * (0, false, etc.). Initializing the derecho_group fields is left to derecho_group.
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
-     * @param curr_vid The last stable VID known by the GMS; default is 0
-     * (meaning this is the first time a Derecho SST has been created).
      */
-    DerechoSST(const sst::SSTParams& parameters, const int curr_vid = 0)
+    DerechoSST(const sst::SSTParams& parameters)
             : sst::SST<DerechoSST>(this, parameters),
               suspected(parameters.members.size()),
               changes(parameters.members.size()),
@@ -104,27 +100,44 @@ public:
               globalMin(parameters.members.size()) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ip,
-                nChanges, nCommitted, nAcked, nReceived, wedged,
-                globalMin, globalMinReady);
+                num_changes, num_committed, num_acked, num_installed,
+                nReceived, wedged, globalMin, globalMinReady);
         //Once superclass constructor has finished, table entries can be initialized
-        int my_row = get_local_index();
         for(int row = 0; row < get_num_rows(); ++row) {
-            vid[row] = (row == my_row ? curr_vid : 0);
+            vid[row] = 0;
             for(size_t i = 0; i < parameters.members.size(); ++i) {
                 suspected[row][i] = false;
                 globalMin[row][i] = 0;
                 changes[row][i] = 0;
             }
             memset(const_cast<char*>(joiner_ip[row]), 0, MAX_STRING_LEN);
-            nChanges[row] = (row == my_row ? curr_vid : 0);
-            nCommitted[row] = (row == my_row ? curr_vid : 0);
-            nAcked[row] = (row == my_row ? curr_vid : 0);
+            num_changes[row] = 0;
+            num_committed[row] = 0;
+            num_acked[row] = 0;
             wedged[row] = false;
             globalMinReady[row] = false;
         }
     }
 
-    void init_local_row_from_existing(const DerechoSST& existing_sst, const int row);
+    /**
+     * Initializes the local row of this SST based on the specified row of the
+     * previous View's SST. Copies num_changes, num_committed, and num_acked,
+     * adds num_changes_installed to the previous value of num_installed, copies
+     * (num_changes - num_changes_installed) elements of changes, and initializes
+     * the other SST fields to 0/false.
+     * @param old_sst The SST instance to copy data from
+     * @param row The target row in that SST instance (from which data will be copied)
+     * @param num_changes_installed The number of changes that were applied
+     * when changing from the previous view to this one
+     */
+    void init_local_row_from_previous(const DerechoSST& old_sst, const int row, const int num_changes_installed);
+
+    /**
+     * Copies currently proposed changes and the various counter values associated
+     * with them to the local row from some other row (i.e. the group leader's row).
+     * @param other_row The row to copy values from.
+     */
+    void init_local_change_proposals(const int other_row);
 
     /**
      * Creates a string representation of the local row (not the whole table).
@@ -132,7 +145,6 @@ public:
      */
     std::string to_string() const;
 };
-
 
 namespace gmssst {
 
@@ -221,7 +233,6 @@ void set(volatile Arr(&dst)[L1], const volatile Arr(&src)[L2], const size_t& num
     }
     std::atomic_signal_fence(std::memory_order_acq_rel);
 }
-
 
 void set(volatile char* string_array, const std::string& value);
 

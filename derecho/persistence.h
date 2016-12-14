@@ -15,7 +15,7 @@ namespace derecho {
 namespace persistence {
 
 struct message {
-    char *data;
+    char* data;
     uint64_t length;
     uint32_t view_id;
     uint32_t sender;
@@ -54,7 +54,7 @@ static const std::string SWAP_FILE_EXTENSION = ".swp";
  * @param object Any object that is serializable using mutils::to_bytes
  * @param filename The name of the file to create when saving this object to disk.
  */
-template<typename T>
+template <typename T>
 void persist_object(const T& object, const std::string& filename) {
     std::ofstream swap_file(filename + SWAP_FILE_EXTENSION);
     auto swap_file_write_func = [&](char const* const c, std::size_t n) {
@@ -64,7 +64,7 @@ void persist_object(const T& object, const std::string& filename) {
     mutils::post_object(swap_file_write_func, object);
     swap_file.close();
 
-     if(std::rename((filename + SWAP_FILE_EXTENSION).c_str(), filename.c_str()) < 0) {
+    if(std::rename((filename + SWAP_FILE_EXTENSION).c_str(), filename.c_str()) < 0) {
         std::cerr << "Error updating saved-state file on disk! " << strerror(errno) << std::endl;
     }
 }
