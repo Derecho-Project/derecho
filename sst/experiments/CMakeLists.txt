@@ -28,3 +28,7 @@ target_link_libraries(multicast_latency sst rdmc)
 # multicast_throughput
 add_executable(multicast_throughput multicast_throughput.cpp ${derecho_SOURCE_DIR}/derecho/experiments/aggregate_bandwidth.cpp)
 target_link_libraries(multicast_throughput sst rdmc)
+
+# cpu_load_experiment
+add_executable(cpu_load_experiment cpu_load_experiment.cpp ${derecho_SOURCE_DIR}/derecho/experiments/aggregate_bandwidth.cpp)
+target_link_libraries(cpu_load_experiment sst rdmc)

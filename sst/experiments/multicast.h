@@ -23,7 +23,7 @@ public:
             : sst::SST<multicastSST<max_msg_size>>(this, sst::SSTParams{_members, my_id}),
               slots(window_size),
               num_received(_members.size()) {
-      this->SSTInit(slots, num_received);
+        this->SSTInit(slots, num_received);
     }
     sst::SSTFieldVector<Message<max_msg_size>> slots;
     sst::SSTFieldVector<uint64_t> num_received;
@@ -76,17 +76,28 @@ class group {
     }
 
     void register_predicates() {
-        auto receiver_pred = [this](const multicastSST<max_msg_size>& sst) { return true; };
+        auto receiver_pred = [this](const multicastSST<max_msg_size>& sst) {
+	    for(uint i = 0; i < window_size / 2; ++i) {
+                for(uint j = 0; j < num_members; ++j) {
+                    uint32_t slot = sst.num_received[my_rank][j] % window_size;
+                    if(sst.slots[j][slot].next_seq ==
+                       (sst.num_received[my_rank][j]) / window_size + 1) {
+		      return true;
+                    }
+                }
+            }
+	  return false;
+        };
         auto receiver_trig = [this](multicastSST<max_msg_size>& sst) {
             for(uint i = 0; i < window_size / 2; ++i) {
-	      for(uint j = 0; j < num_members; ++j) {
-		uint32_t slot = sst.num_received[my_rank][j] % window_size;
-		if(sst.slots[j][slot].next_seq ==
-		   (sst.num_received[my_rank][j]) / window_size + 1) {
-            this->receiver_callback(j, sst.num_received[my_rank][j],
-                                    sst.slots[j][slot].buf,
-                                    sst.slots[j][slot].size);
-	    sst.num_received[my_rank][j]++;
+                for(uint j = 0; j < num_members; ++j) {
+                    uint32_t slot = sst.num_received[my_rank][j] % window_size;
+                    if(sst.slots[j][slot].next_seq ==
+                       (sst.num_received[my_rank][j]) / window_size + 1) {
+                        this->receiver_callback(j, sst.num_received[my_rank][j],
+                                                sst.slots[j][slot].buf,
+                                                sst.slots[j][slot].size);
+                        sst.num_received[my_rank][j]++;
                     }
                 }
             }
@@ -145,7 +156,7 @@ public:
         sst.slots[my_rank][slot].next_seq++;
         sst.put(
             (char*)std::addressof(sst.slots[0][slot]) -
-	    sst.getBaseAddress(),
+                sst.getBaseAddress(),
             sizeof(Message<max_msg_size>));
     }
 };

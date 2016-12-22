@@ -62,7 +62,6 @@ public:
     using _SSTField::field_len;
 
     SSTField() : _SSTField(sizeof(T)) {
-        std::cout << "Here in SSTField constructor" << std::endl;
     }
 
     // Tracks down the appropriate row
@@ -94,7 +93,6 @@ public:
     using _SSTField::field_len;
 
     SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
-        std::cout << "Here in SSTFieldVector constructor" << std::endl;
     }
 
     // Tracks down the appropriate row
@@ -149,7 +147,6 @@ private:
     void init_SSTFields(Fields&... fields) {
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
-        std::cout << "Row length is : " << rowLen << std::endl;
         rows = new char[rowLen * num_members];
         snapshot = new char[rowLen * num_members];
         volatile char* base = rows;
@@ -218,7 +215,6 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
-        std::cout << "Here in SST constructor" << std::endl;
 
         //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
