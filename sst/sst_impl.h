@@ -120,7 +120,6 @@ void SST<DerivedSST>::detect() {
         }
 
         if(predicate_fired) {
-            std::cout << "Not sleeping because some predicate fired" << std::endl;
             // update last time
             clock_gettime(CLOCK_REALTIME, &last_time);
         } else {
@@ -128,15 +127,11 @@ void SST<DerivedSST>::detect() {
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3 + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > 1) {
-                std::cout << "Sleeping" << std::endl;
                 predicates_lock.unlock();
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
 		predicates_lock.lock();
             }
-	    else {
-	      std::cout << "Not sleeping because system hasn't been inactive for enough time" << std::endl;
-	    }
         }
         //Still to do: Clean up deleted predicates
     }
