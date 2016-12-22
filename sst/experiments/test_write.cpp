@@ -55,7 +55,7 @@ int main () {
   cout << "write buffer is " << write_buf << endl;
 
   // remotely write data from the write_buf
-  res->post_remote_write (1, 2, 6, 2);
+  res->post_remote_write (1, 2);
   // poll for completion
   verbs_poll_completion();
   
