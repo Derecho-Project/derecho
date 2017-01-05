@@ -341,7 +341,7 @@ void concurrent_bandwidth_group_size() {
     puts("");
     fflush(stdout);
 }
-void active_senders() {
+void active_senders(bool interrupts = false, bool labels = true) {
     auto compute_block_size = [](size_t message_size) -> size_t {
         if(message_size < 4096 * 2) return message_size;
         if(message_size < 4096 * 10) return 4096;
@@ -357,13 +357,18 @@ void active_senders() {
         return max<size_t>(100000000 / message_size, 4u);
     };
 
-    printf(
-        "Message Size, Group Size, 1-sender Bandwidth, half-sending Bandwidth, "
-        "all-sending Bandwidth, 1-sender CPU, half-sending CPU, all-sending CPU\n");
+    if(labels) {
+        printf("Interrupts, Message Size, Group Size, 1-sender Bandwidth, "
+			   "half-sending Bandwidth, all-sending Bandwidth, 1-sender CPU, "
+			   "half-sending CPU, all-sending CPU\n");
+    }
 
+	// rdma::impl::set_interrupt_mode(interrupts);
+	
     for(size_t message_size : {1, 10000, 1'000'000, 100'000'000}) {
         for(uint32_t group_size = 3; group_size <= num_nodes; group_size++) {
-            printf("%d, %d, ", (int)message_size, (int)group_size);
+            printf("%s, %d, %d, ", interrupts ? "enabled" : "disabled",
+				   (int)message_size, (int)group_size);
             fflush(stdout);
 
 			vector<double> cpu_usage;
@@ -678,7 +683,11 @@ int main(int argc, char *argv[]) {
     if(argc >= 2 && strcmp(argv[1], "test_pattern") == 0) {
         test_pattern();
         exit(0);
-    }
+    } else if(argc >= 2 && strcmp(argv[1], "spin") == 0) {
+        volatile bool b = true;
+		while(b);
+		CHECK(false);
+	}
 
     LOG_EVENT(-1, -1, -1, "querying_addresses");
     map<uint32_t, string> addresses;
@@ -729,12 +738,10 @@ int main(int argc, char *argv[]) {
     } else if(strcmp(argv[1], "concurrent") == 0) {
         concurrent_bandwidth_group_size();
     } else if(strcmp(argv[1], "active_senders") == 0) {
-		for(bool interrupts : {true, false}){
-			puts("==================================================================");
-			printf("interrupts: %s\n\n", interrupts ? "enabled" : "disabled");
-			rdma::impl::set_interrupt_mode(interrupts);
-			active_senders();
-		}
+		active_senders();
+	} else if(strcmp(argv[1], "polling_interrupts") == 0) {
+		active_senders(false, true);
+		active_senders(true, false);
     } else if(strcmp(argv[1], "test_create_group_failure") == 0) {
         test_create_group_failure();
         exit(0);
