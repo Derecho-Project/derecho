@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <sstream>
@@ -56,10 +57,11 @@ public:
      * If request i is a Join, changes[i] is not in current View's members.
      * If request i is a Departure, changes[i] is in current View's members. */
     SSTFieldVector<node_id_t> changes;
-    /** If the next pending view change include a join, this is the IP address
-     *  of the joining node. Stored as a fixed-size char array, since SST
-     *  doesn't support strings. */
-    SSTFieldVector<char> joiner_ip;
+    /** If changes[i] is a Join, joiner_ips[i] is the IP address of the joining
+     *  node, packed into an unsigned int in network byte order. This
+     *  representation is necessary because SST doesn't support variable-length
+     *  strings. */
+    SSTFieldVector<uint32_t> joiner_ips;
     /** How many changes to the view have been proposed. Monotonically increases.
      * num_changes - num_committed is the number of pending changes, which should never
      * exceed the number of members in the current view. If num_changes == num_committed
@@ -95,11 +97,11 @@ public:
             : sst::SST<DerechoSST>(this, parameters),
               suspected(parameters.members.size()),
               changes(parameters.members.size()),
-              joiner_ip(MAX_STRING_LEN),
+              joiner_ips(parameters.members.size()),
               nReceived(parameters.members.size()),
               globalMin(parameters.members.size()) {
         SSTInit(seq_num, stable_num, delivered_num,
-                persisted_num, vid, suspected, changes, joiner_ip,
+                persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
                 nReceived, wedged, globalMin, globalMinReady);
         //Once superclass constructor has finished, table entries can be initialized
@@ -110,7 +112,7 @@ public:
                 globalMin[row][i] = 0;
                 changes[row][i] = 0;
             }
-            memset(const_cast<char*>(joiner_ip[row]), 0, MAX_STRING_LEN);
+            memset(const_cast<uint32_t*>(joiner_ips[row]), 0, parameters.members.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_acked[row] = 0;

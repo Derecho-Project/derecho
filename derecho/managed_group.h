@@ -70,7 +70,7 @@ private:
                                              std::vector<node_id_t> old_members)>;
 
     /** Contains client sockets for all pending joins, except the current one.*/
-    LockedQueue<tcp::socket> pending_joins;
+    LockedQueue<tcp::socket> pending_join_sockets;
 
     /** Contains old Views that need to be cleaned up*/
     std::queue<std::unique_ptr<View<dispatcherType>>> old_views;
@@ -78,7 +78,7 @@ private:
     std::condition_variable old_views_cv;
 
     /** The socket connected to the client that is currently joining, if any */
-    tcp::socket joining_client_socket;
+    std::list<tcp::socket> proposed_join_sockets;
     /** The node ID that has been assigned to the client that is currently joining, if any. */
     node_id_t joining_client_id;
     /** A cached copy of the last known value of this node's suspected[] array.
@@ -125,7 +125,7 @@ private:
     void commit_join(const View<dispatcherType>& new_view,
                      tcp::socket& client_socket);
 
-    bool has_pending_join() { return pending_joins.locked().access.size() > 0; }
+    bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
     /** Assuming this node is the leader, handles a join request from a client.*/
     void receive_join(tcp::socket& client_socket);

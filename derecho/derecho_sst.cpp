@@ -12,6 +12,10 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<node_id_t*>(changes[local_row]),
            const_cast<const node_id_t*>(old_sst.changes[row] + num_changes_installed),
            (old_sst.changes.size() - num_changes_installed) * sizeof(node_id_t));
+    //Do the same thing with the joiner_ips arrays
+    memcpy(const_cast<uint32_t*>(joiner_ips[local_row]),
+           const_cast<const uint32_t*>(old_sst.joiner_ips[row] + num_changes_installed),
+           (old_sst.joiner_ips.size() - num_changes_installed) * sizeof(uint32_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
         globalMin[local_row][i] = 0;

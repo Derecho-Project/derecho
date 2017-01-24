@@ -19,6 +19,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include <arpa/inet.h>
 #include <mutils-serialization/SerializationSupport.hpp>
 
 #include "managed_group.h"
@@ -307,7 +308,7 @@ void ManagedGroup<dispatcherType>::create_threads() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
             util::debug_log().log_event(std::stringstream() << "Background thread got a client connection from " << client_socket.remote_ip);
-            pending_joins.locked().access.emplace_back(std::move(client_socket));
+            pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
         std::cout << "Connection listener thread shutting down." << std::endl;
     }};
@@ -388,16 +389,14 @@ void ManagedGroup<dispatcherType>::register_predicates() {
     /* This pair runs only on the leader and reacts to new client connections
      * by proposing a new view */
     auto start_join_pred = [this](const DerechoSST& sst) {
-        // Only start one join at a time
-        return curr_view->i_am_leader() && has_pending_join() &&
-               joining_client_socket.is_empty();
+        return curr_view->i_am_leader() && has_pending_join();
     };
     auto start_join_trig = [this](DerechoSST& sst) {
         log_event("GMS handling a new client connection");
         //C++'s ugly two-step dequeue: leave queue.front() in an invalid state, then delete it
-        joining_client_socket = std::move(pending_joins.locked().access.front());
-        pending_joins.locked().access.pop_front();
-        receive_join(joining_client_socket);
+        proposed_join_sockets.emplace_back(std::move(pending_join_sockets.locked().access.front()));
+        pending_join_sockets.locked().access.pop_front();
+        receive_join(proposed_join_sockets.back());
     };
 
     /* These run only on the leader. They monitor the acks received from followers
@@ -430,7 +429,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
             // Echo (copy) the vector including the new changes
             gmssst::set(gmsSST.changes[myRank], gmsSST.changes[leader], gmsSST.changes.size());
             // Echo the new member's IP
-            gmssst::set(gmsSST.joiner_ip[myRank], gmsSST.joiner_ip[leader], gmsSST.joiner_ip.size());
+            gmssst::set(gmsSST.joiner_ips[myRank], gmsSST.joiner_ips[leader], gmsSST.joiner_ips.size());
             // Echo the count
             gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
             gmssst::set(gmsSST.num_committed[myRank], gmsSST.num_committed[leader]);
@@ -463,38 +462,54 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         assert(gmsSST.get_local_index() == curr_view->my_rank);
 
         Vc.wedge();
-        std::set<int> failed_ranks = consecutive_committed_failures(Vc);
-        int num_consecutive_failures = failed_ranks.size();
-        bool is_join = (num_consecutive_failures == 0);
+        std::set<int> leave_ranks;
+        std::vector<int> join_indexes;
+        //Look through pending changes up to num_committed and filter the joins and leaves
+        const int committed_count = gmsSST.num_committed[Vc.rank_of_leader()]
+                - gmsSST.num_installed[Vc.rank_of_leader()];
+        for(int change_index = 0; change_index < committed_count; change_index++) {
+            node_id_t change_id = gmsSST.changes[Vc.my_rank][change_index];
+            int change_rank = Vc.rank_of(change_id);
+            if(change_rank != -1) {
+                //Might as well save the rank, since we'll need it again
+                leave_ranks.emplace(change_rank);
+            } else {
+                join_indexes.emplace_back(change_index);
+            }
+        }
 
-        //The next view will have num_consecutive_failures fewer members, unless
-        //the next change is a join, in which case it will have 1 more
-        int next_num_members = Vc.num_members - num_consecutive_failures
-                + (is_join ? 1 : 0);
+        int next_num_members = Vc.num_members - leave_ranks.size()
+                + join_indexes.size();
         //Initialize the next view
         next_view = std::make_unique<View<dispatcherType>>(next_num_members);
         next_view->vid = Vc.vid + 1;
-        if(is_join) {
-            node_id_t joinerID = gmsSST.changes[myRank][0];
-            next_view->num_failed = Vc.num_failed;
-            next_view->joined.emplace_back(joinerID);
-            int new_member_rank = Vc.num_members;
-            next_view->members[new_member_rank] = joinerID;
-            next_view->member_ips[new_member_rank] = std::string(const_cast<char*>(gmsSST.joiner_ip[myRank]));
-            log_event(std::stringstream() << "Next view will add new member with ID " << joinerID);
-        } else {
-            next_view->num_failed = Vc.num_failed - num_consecutive_failures;
-            for(const auto failed_rank : failed_ranks) {
-                next_view->departed.emplace_back(Vc.members[failed_rank]);
-            }
-            log_event(std::stringstream() << "Next view will exclude " << num_consecutive_failures << " failed members.");
+        next_view->num_failed = Vc.num_failed - leave_ranks.size();
+        for(std::size_t i = 0; i < join_indexes.size(); ++i) {
+            const int join_index = join_indexes[i];
+            node_id_t joiner_id = gmsSST.changes[myRank][join_index];
+            struct in_addr joiner_ip_packed;
+            joiner_ip_packed.s_addr = gmsSST.joiner_ips[myRank][join_index];
+            char* joiner_ip_cstr = inet_ntoa(joiner_ip_packed);
+            std::string joiner_ip(joiner_ip_cstr);
+
+            next_view->joined.emplace_back(joiner_id);
+            //New members go at the end of the members list, but it may shrink in the new view
+            int new_member_rank = Vc.num_members - leave_ranks.size() + i;
+            next_view->members[new_member_rank] = joiner_id;
+            next_view->member_ips[new_member_rank] = joiner_ip;
+            log_event(std::stringstream() << "Next view will add new member with ID " << joiner_id);
         }
+        for(const auto& leaver_rank : leave_ranks) {
+            next_view->departed.emplace_back(Vc.members[leaver_rank]);
+        }
+        log_event(std::stringstream() << "Next view will exclude " << leave_ranks.size() << " failed members.");
         next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
 
         //Copy member information, excluding the members that have failed
         int m = 0;
         for(int n = 0; n < Vc.num_members; n++) {
-            if(failed_ranks.find(n) == failed_ranks.end()) {
+            //This is why leave_ranks needs to be a set
+            if(leave_ranks.find(n) == leave_ranks.end()) {
                 next_view->members[m] = Vc.members[n];
                 next_view->member_ips[m] = Vc.member_ips[n];
                 next_view->failed[m] = Vc.failed[n];
@@ -520,22 +535,25 @@ void ManagedGroup<dispatcherType>::register_predicates() {
             }
             return true;
         };
-        auto meta_wedged_continuation = [this, is_join](DerechoSST& gmsSST) {
+        auto meta_wedged_continuation = [this](DerechoSST& gmsSST) {
             log_event("MetaWedged is true; continuing view change");
             unique_lock_t lock(view_mutex);
             assert(next_view);
 
-            auto globalMin_ready_continuation = [this, is_join](DerechoSST& gmsSST) {
+            auto globalMin_ready_continuation = [this](DerechoSST& gmsSST) {
                 lock_guard_t lock(view_mutex);
                 assert(next_view);
 
                 ragged_edge_cleanup(*curr_view);
-                if(curr_view->i_am_leader() && is_join) {
-                    // Send the view to the newly joined client before we try to do SST and RDMC setup
-                    commit_join(*next_view, joining_client_socket);
-                    curr_view->derecho_group->send_objects(joining_client_socket);
-                    // Close the client's socket
-                    joining_client_socket = tcp::socket();
+                if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
+                    //If j joins have been committed, pop the next j sockets off proposed_join_sockets
+                    //and send them the new view (must happen before we try to do SST setup)
+                    for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
+                        commit_join(*next_view, proposed_join_sockets.front());
+                        curr_view->derecho_group->send_objects(proposed_join_sockets.front());
+                        // Close the client's socket
+                        proposed_join_sockets.pop_front();
+                    }
                 }
 
                 // Delete the last two GMS predicates from the old SST in preparation for deleting it
@@ -543,10 +561,16 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.predicates.remove(suspected_changed_handle);
 
                 log_event(std::stringstream() << "Starting creation of new SST and DerechoGroup for view " << next_view->vid);
-                // if a new member has joined, add its RDMA connections to SST and RDMC
-                if(is_join) {
-                    rdma::impl::verbs_add_connection(next_view->members.back(), next_view->member_ips.back(), next_view->members[next_view->my_rank]);
-                    sst::add_node(next_view->members.back(), next_view->member_ips.back());
+                // if new members have joined, add their RDMA connections to SST and RDMC
+                for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
+                    //The new members will be the last joined.size() elements of the members lists
+                    int joiner_rank = next_view->num_members - next_view->joined.size() + i;
+                    rdma::impl::verbs_add_connection(next_view->members[joiner_rank], next_view->member_ips[joiner_rank],
+                                                     next_view->members[next_view->my_rank]);
+                }
+                for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
+                    int joiner_rank = next_view->num_members - next_view->joined.size() + i;
+                    sst::add_node(next_view->members[joiner_rank], next_view->member_ips[joiner_rank]);
                 }
                 // This will block until everyone responds to SST/RDMC initial handshakes
                 transition_sst_and_rdmc(*next_view);
@@ -713,7 +737,6 @@ std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::join_existin
 
 template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
-    ip_addr& joiner_ip = client_socket.remote_ip;
     DerechoSST& gmsSST = *curr_view->gmsSST;
     if((gmsSST.num_changes[curr_view->my_rank] -
         gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
@@ -721,13 +744,16 @@ void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
         throw derecho_exception("Too many changes to allow a Join right now");
     }
 
+    struct in_addr joiner_ip_packed;
+    inet_aton(client_socket.remote_ip.c_str(), &joiner_ip_packed);
+
     node_id_t joining_client_id = 0;
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
 
     log_event(std::stringstream() << "Proposing change to add node " << joining_client_id);
     size_t next_change = gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_installed[curr_view->my_rank];
     gmssst::set(gmsSST.changes[curr_view->my_rank][next_change], joining_client_id);
-    gmssst::set(gmsSST.joiner_ip[curr_view->my_rank], joiner_ip);
+    gmssst::set(gmsSST.joiner_ips[curr_view->my_rank][next_change], joiner_ip_packed.s_addr);
 
     gmssst::increment(gmsSST.num_changes[curr_view->my_rank]);
 

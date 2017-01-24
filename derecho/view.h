@@ -35,6 +35,8 @@ public:
      * transitioning to a new view that excludes a failed member, this count
      * will decrease by one. */
     int32_t num_failed;
+    //WARNING: The joined and departed fields are not serialized, so they will not be sent to a new node that joins the system.
+    //This doesn't seem to break anything but it would be nice to support serializing more than 7 fields so that we could send these.
     /** List of IDs of nodes that joined since the previous view, if any. */
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
