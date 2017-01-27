@@ -921,7 +921,6 @@ template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
     int r = curr_view->rank_of(who);
     log_event(std::stringstream() << "Node ID " << who << " failure reported; marking suspected[" << r << "]");
-    std::cout << "Node ID " << who << " failure reported; marking suspected[" << r << "]" << std::endl;
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
     int cnt = 0;
     for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
@@ -934,7 +933,6 @@ void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put();
-    std::cout << "Exiting from remote_failure" << std::endl;
 }
 
 template <typename dispatcherType>

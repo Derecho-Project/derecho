@@ -277,11 +277,9 @@ public:
     void barrier_sync();
     void debug_print_status() const;
     static void log_event(const std::string& event_text) {
-        std::cout << event_text << std::endl;
         util::debug_log().log_event(event_text);
     }
     static void log_event(const std::stringstream& event_text) {
-        std::cout << event_text.str() << std::endl;
         util::debug_log().log_event(event_text);
     }
     void print_log(std::ostream& output_dest) const;
