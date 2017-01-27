@@ -19,6 +19,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+#include <arpa/inet.h>
 #include <mutils-serialization/SerializationSupport.hpp>
 
 #include "managed_group.h"
@@ -43,7 +44,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     const DerechoParams derecho_params,
     std::vector<view_upcall_t> _view_upcalls,
     const int gms_port)
-        : last_suspected(2), //The initial view always has 2 members
+        : last_suspected(2),  //The initial view always has 2 members
           gms_port(gms_port),
           server_socket(gms_port),
           thread_shutdown(false),
@@ -56,7 +57,6 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     rdmc_sst_setup();
     //Wait for the first client (second group member) to join
     await_second_member(my_id);
-
 
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
@@ -93,7 +93,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     });
     lock_guard_t lock(view_mutex);
     std::vector<node_id_t> old_members(curr_view->members.begin(),
-                                  curr_view->members.end() - 1);
+                                       curr_view->members.end() - 1);
     for(auto& view_upcall : view_upcalls) {
         view_upcall(curr_view->members, old_members);
     }
@@ -134,14 +134,15 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
         message_buffers.emplace_back(max_msg_size);
     }
     setup_derecho(message_buffers, callbacks, derecho_params);
+    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     log_event("Done setting up initial SST and RDMC");
 
     if(curr_view->vid != 0) {
-        // If this node is joining an existing group with a non-initial view, copy the leader's nChanges and nAcked
-        // Otherwise, you'll immediately think that there's as new proposed view change because [leader].nChanges > nAcked
-        curr_view->gmsSST->init_local_row_from_existing(*curr_view->gmsSST, curr_view->rank_of_leader());
+        // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
+        // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
+        curr_view->gmsSST->init_local_change_proposals(curr_view->rank_of_leader());
         curr_view->gmsSST->put();
         log_event("Joining node initialized its SST row from the leader");
     }
@@ -162,7 +163,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
     });
     lock_guard_t lock(view_mutex);
     std::vector<node_id_t> old_members(curr_view->members.begin(),
-                                  curr_view->members.end() - 1);
+                                       curr_view->members.end() - 1);
     for(auto& view_upcall : view_upcalls) {
         view_upcall(curr_view->members, old_members);
     }
@@ -202,7 +203,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
             derecho_params = _derecho_params.value();
         } else {
             derecho_params = *(load_object<DerechoParams>(
-                    std::string(recovery_filename + persistence::PARAMATERS_EXTENSION)));
+                std::string(recovery_filename + persistence::PARAMATERS_EXTENSION)));
         }
 
         await_second_member(my_id);
@@ -226,9 +227,18 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
     setup_derecho(message_buffers,
                   callbacks,
                   derecho_params);
+    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     log_event("Done setting up initial SST and RDMC");
+
+    if(curr_view->my_rank != curr_view->rank_of_leader()) {
+        // If we're re-joining a group as a non-leader, copy the leader's num_changes, num_acked, and num_committed
+        // This ensures we won't immediately detect a proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
+        curr_view->gmsSST->init_local_change_proposals(curr_view->rank_of_leader());
+        curr_view->gmsSST->put();
+        log_event("Joining node initialized its SST row from the leader");
+    }
 
     create_threads();
     register_predicates();
@@ -247,15 +257,14 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
 
     lock_guard_t lock(view_mutex);
     std::vector<node_id_t> old_members(curr_view->members.begin(),
-                                  curr_view->members.end() - 1);
+                                       curr_view->members.end() - 1);
     for(auto& view_upcall : view_upcalls) {
         view_upcall(curr_view->members, old_members);
     }
 }
 
-template<typename dispatcherType>
-void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id)
-                                                       {
+template <typename dispatcherType>
+void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id) {
     tcp::socket client_socket = server_socket.accept();
     node_id_t client_id = 0;
     client_socket.exchange(my_id, client_id);
@@ -279,7 +288,6 @@ void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id)
     dispatchers.send_objects(client_socket);
     rdma::impl::verbs_add_connection(client_id, joiner_ip, my_id);
     sst::add_node(client_id, joiner_ip);
-
 }
 
 template <typename dispatcherType>
@@ -300,7 +308,7 @@ void ManagedGroup<dispatcherType>::create_threads() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
             util::debug_log().log_event(std::stringstream() << "Background thread got a client connection from " << client_socket.remote_ip);
-            pending_joins.locked().access.emplace_back(std::move(client_socket));
+            pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
         std::cout << "Connection listener thread shutting down." << std::endl;
     }};
@@ -322,7 +330,6 @@ void ManagedGroup<dispatcherType>::create_threads() {
 
 template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::register_predicates() {
-
     /* This predicate-trigger pair monitors the suspected[] array to detect failures
      * and, for the leader, proposes new views to exclude failed members */
     auto suspected_changed = [this](const DerechoSST& sst) {
@@ -342,7 +349,9 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         }
 
         for(int q = 0; q < Vc.num_members; q++) {
-            if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) { //If this is a new suspicion
+            //If this is a new suspicion
+            if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+                //This is safer than copy_suspected, since suspected[] might change during this loop
                 last_suspected[q] = gmsSST.suspected[myRank][q];
                 log_event(std::stringstream() << "Marking " << Vc.members[q] << " failed");
                 if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
@@ -363,74 +372,71 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.put();
                 if(Vc.i_am_leader() && !changes_contains(gmsSST, Vc.members[q]))  // Leader initiated
                 {
-                    if((gmsSST.nChanges[myRank] - Vc.vid) == (int) gmsSST.changes.size()) {
+                    const int next_change_index = gmsSST.num_changes[myRank] - gmsSST.num_installed[myRank];
+                    if(next_change_index == (int) gmsSST.changes.size()) {
                         throw derecho_exception("Ran out of room in the pending changes list");
                     }
 
-                    gmssst::set(gmsSST.changes[myRank][gmsSST.nChanges[myRank] - Vc.vid], Vc.members[q]);  // Reports the failure (note that q NotIn members)
-                    gmssst::increment(gmsSST.nChanges[myRank]);
+                    gmssst::set(gmsSST.changes[myRank][next_change_index], Vc.members[q]);  // Reports the failure (note that q NotIn members)
+                    gmssst::increment(gmsSST.num_changes[myRank]);
                     log_event(std::stringstream() << "Leader proposed a change to remove failed node " << Vc.members[q]);
                     gmsSST.put();
                 }
             }
         }
-//        copy_suspected(gmsSST, last_suspected);
     };
 
     /* This pair runs only on the leader and reacts to new client connections
      * by proposing a new view */
     auto start_join_pred = [this](const DerechoSST& sst) {
-        // Only start one join at a time
-        return curr_view->i_am_leader() && has_pending_join() &&
-               joining_client_socket.is_empty();
+        return curr_view->i_am_leader() && has_pending_join();
     };
     auto start_join_trig = [this](DerechoSST& sst) {
         log_event("GMS handling a new client connection");
         //C++'s ugly two-step dequeue: leave queue.front() in an invalid state, then delete it
-        joining_client_socket = std::move(pending_joins.locked().access.front());
-        pending_joins.locked().access.pop_front();
-        receive_join(joining_client_socket);
+        proposed_join_sockets.emplace_back(std::move(pending_join_sockets.locked().access.front()));
+        pending_join_sockets.locked().access.pop_front();
+        receive_join(proposed_join_sockets.back());
     };
 
     /* These run only on the leader. They monitor the acks received from followers
      * and update the leader's nCommitted when all non-failed members have acked */
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
         return curr_view->i_am_leader() &&
-               min_acked(gmsSST, curr_view->failed) > gmsSST.nCommitted[gmsSST.get_local_index()];
+               min_acked(gmsSST, curr_view->failed) > gmsSST.num_committed[gmsSST.get_local_index()];
     };
     auto commit_change = [this](DerechoSST& gmsSST) {
-        gmssst::set(gmsSST.nCommitted[gmsSST.get_local_index()],
+        gmssst::set(gmsSST.num_committed[gmsSST.get_local_index()],
                     min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
-        log_event(std::stringstream() << "Leader committing view proposal #" << gmsSST.nCommitted[gmsSST.get_local_index()]);
+        log_event(std::stringstream() << "Leader committing change proposal #" << gmsSST.num_committed[gmsSST.get_local_index()]);
         gmsSST.put();
     };
-
 
     /* These are mostly intended for non-leaders, and update nAcked to acknowledge
      * a proposed change when the leader increments nChanges. Only one join can be
      * proposed at once, but multiple failures could be proposed and acknowledged. */
     auto leader_proposed_change = [this](const DerechoSST& gmsSST) {
-        return gmsSST.nChanges[curr_view->rank_of_leader()] >
-               gmsSST.nAcked[gmsSST.get_local_index()];
+        return gmsSST.num_changes[curr_view->rank_of_leader()] >
+               gmsSST.num_acked[gmsSST.get_local_index()];
     };
     auto ack_proposed_change = [this](DerechoSST& gmsSST) {
         // These fields had better be synchronized.
         assert(gmsSST.get_local_index() == curr_view->my_rank);
         int myRank = gmsSST.get_local_index();
         int leader = curr_view->rank_of_leader();
-        log_event(std::stringstream() << "Detected that leader proposed view change #" << gmsSST.nChanges[leader] << ". Acknowledging.");
+        log_event(std::stringstream() << "Detected that leader proposed change #" << gmsSST.num_changes[leader] << ". Acknowledging.");
         if(myRank != leader) {
             // Echo (copy) the vector including the new changes
             gmssst::set(gmsSST.changes[myRank], gmsSST.changes[leader], gmsSST.changes.size());
             // Echo the new member's IP
-            gmssst::set(gmsSST.joiner_ip[myRank], gmsSST.joiner_ip[leader], gmsSST.joiner_ip.size());
+            gmssst::set(gmsSST.joiner_ips[myRank], gmsSST.joiner_ips[leader], gmsSST.joiner_ips.size());
             // Echo the count
-            gmssst::set(gmsSST.nChanges[myRank], gmsSST.nChanges[leader]);
-            gmssst::set(gmsSST.nCommitted[myRank], gmsSST.nCommitted[leader]);
+            gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
+            gmssst::set(gmsSST.num_committed[myRank], gmsSST.num_committed[leader]);
         }
 
         // Notice a new request, acknowledge it
-        gmssst::set(gmsSST.nAcked[myRank], gmsSST.nChanges[leader]);
+        gmssst::set(gmsSST.num_acked[myRank], gmsSST.num_changes[leader]);
         gmsSST.put();
         log_event("Wedging current view.");
         curr_view->wedge();
@@ -438,13 +444,13 @@ void ManagedGroup<dispatcherType>::register_predicates() {
 
     };
 
-    /* This predicate detects when at least one new view has been committed by the leader.
+    /* This predicate detects when at least one new change has been committed by the leader.
      * The trigger starts the process of changing to a new view. */
     auto leader_committed_next_view = [this](const DerechoSST& gmsSST) {
-        return gmsSST.nCommitted[curr_view->rank_of_leader()] > curr_view->vid;
+        return gmsSST.num_committed[curr_view->rank_of_leader()] > gmsSST.num_installed[curr_view->my_rank];
     };
     auto start_view_change = [this](DerechoSST& gmsSST) {
-        log_event(std::stringstream() << "Starting view change to view " << curr_view->vid + 1);
+        log_event(std::stringstream() << "Starting view change to view " << (curr_view->vid + 1));
         // Disable all the other SST predicates, except suspected_changed and the one I'm about to register
         gmsSST.predicates.remove(start_join_handle);
         gmsSST.predicates.remove(change_commit_ready_handle);
@@ -456,31 +462,54 @@ void ManagedGroup<dispatcherType>::register_predicates() {
         assert(gmsSST.get_local_index() == curr_view->my_rank);
 
         Vc.wedge();
-        node_id_t currChangeID = gmsSST.changes[myRank][0];
-        next_view = std::make_unique<View<dispatcherType>>();
-        next_view->vid = Vc.vid + 1;
-        next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
-        node_id_t myID = Vc.members[myRank];
-        bool failed;
-        int whoFailed = Vc.rank_of(currChangeID);
-        if(whoFailed != -1) {
-            failed = true;
-            next_view->num_failed = Vc.num_failed - 1;
-            next_view->num_members = Vc.num_members - 1;
-            next_view->init_vectors();
-        } else {
-            failed = false;
-            next_view->num_failed = Vc.num_failed;
-            next_view->num_members = Vc.num_members;
-            int new_member_rank = next_view->num_members++;
-            next_view->init_vectors();
-            next_view->members[new_member_rank] = currChangeID;
-            next_view->member_ips[new_member_rank] = std::string(const_cast<char*>(gmsSST.joiner_ip[myRank]));
+        std::set<int> leave_ranks;
+        std::vector<int> join_indexes;
+        //Look through pending changes up to num_committed and filter the joins and leaves
+        const int committed_count = gmsSST.num_committed[Vc.rank_of_leader()]
+                - gmsSST.num_installed[Vc.rank_of_leader()];
+        for(int change_index = 0; change_index < committed_count; change_index++) {
+            node_id_t change_id = gmsSST.changes[Vc.my_rank][change_index];
+            int change_rank = Vc.rank_of(change_id);
+            if(change_rank != -1) {
+                //Might as well save the rank, since we'll need it again
+                leave_ranks.emplace(change_rank);
+            } else {
+                join_indexes.emplace_back(change_index);
+            }
         }
 
+        int next_num_members = Vc.num_members - leave_ranks.size()
+                + join_indexes.size();
+        //Initialize the next view
+        next_view = std::make_unique<View<dispatcherType>>(next_num_members);
+        next_view->vid = Vc.vid + 1;
+        next_view->num_failed = Vc.num_failed - leave_ranks.size();
+        for(std::size_t i = 0; i < join_indexes.size(); ++i) {
+            const int join_index = join_indexes[i];
+            node_id_t joiner_id = gmsSST.changes[myRank][join_index];
+            struct in_addr joiner_ip_packed;
+            joiner_ip_packed.s_addr = gmsSST.joiner_ips[myRank][join_index];
+            char* joiner_ip_cstr = inet_ntoa(joiner_ip_packed);
+            std::string joiner_ip(joiner_ip_cstr);
+
+            next_view->joined.emplace_back(joiner_id);
+            //New members go at the end of the members list, but it may shrink in the new view
+            int new_member_rank = Vc.num_members - leave_ranks.size() + i;
+            next_view->members[new_member_rank] = joiner_id;
+            next_view->member_ips[new_member_rank] = joiner_ip;
+            log_event(std::stringstream() << "Next view will add new member with ID " << joiner_id);
+        }
+        for(const auto& leaver_rank : leave_ranks) {
+            next_view->departed.emplace_back(Vc.members[leaver_rank]);
+        }
+        log_event(std::stringstream() << "Next view will exclude " << leave_ranks.size() << " failed members.");
+        next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
+
+        //Copy member information, excluding the members that have failed
         int m = 0;
         for(int n = 0; n < Vc.num_members; n++) {
-            if(n != whoFailed) {
+            //This is why leave_ranks needs to be a set
+            if(leave_ranks.find(n) == leave_ranks.end()) {
                 next_view->members[m] = Vc.members[n];
                 next_view->member_ips[m] = Vc.member_ips[n];
                 next_view->failed[m] = Vc.failed[n];
@@ -488,20 +517,17 @@ void ManagedGroup<dispatcherType>::register_predicates() {
             }
         }
 
-        next_view->who = std::make_shared<node_id_t>(currChangeID);
+        //Initialize my_rank in next_view
+        node_id_t myID = Vc.members[myRank];
         if((next_view->my_rank = next_view->rank_of(myID)) == -1) {
             throw derecho_exception((std::stringstream() << "Some other node reported that I failed.  Node " << myID << " terminating").str());
-        }
-
-        if(next_view->gmsSST != nullptr) {
-            throw derecho_exception("Overwriting the SST");
         }
 
         // At this point we need to await "meta wedged."
         // To do that, we create a predicate that will fire when meta wedged is
         // true, and put the rest of the code in its trigger.
 
-        auto is_meta_wedged = [this](const DerechoSST& gmsSST) mutable {
+        auto is_meta_wedged = [this](const DerechoSST& gmsSST) {
             for(int n = 0; n < gmsSST.get_num_rows(); ++n) {
                 if(!curr_view->failed[n] && !gmsSST.wedged[n]) {
                     return false;
@@ -509,22 +535,25 @@ void ManagedGroup<dispatcherType>::register_predicates() {
             }
             return true;
         };
-        auto meta_wedged_continuation = [this, failed, whoFailed](DerechoSST& gmsSST) {
+        auto meta_wedged_continuation = [this](DerechoSST& gmsSST) {
             log_event("MetaWedged is true; continuing view change");
             unique_lock_t lock(view_mutex);
             assert(next_view);
 
-            auto globalMin_ready_continuation = [this, failed, whoFailed](DerechoSST& gmsSST) {
+            auto globalMin_ready_continuation = [this](DerechoSST& gmsSST) {
                 lock_guard_t lock(view_mutex);
                 assert(next_view);
 
                 ragged_edge_cleanup(*curr_view);
-                if(curr_view->i_am_leader() && !failed) {
-                    // Send the view to the newly joined client before we try to do SST and RDMC setup
-                    commit_join(*next_view, joining_client_socket);
-                    curr_view->derecho_group->send_objects(joining_client_socket);
-                    // Close the client's socket
-                    joining_client_socket = tcp::socket();
+                if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
+                    //If j joins have been committed, pop the next j sockets off proposed_join_sockets
+                    //and send them the new view (must happen before we try to do SST setup)
+                    for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
+                        commit_join(*next_view, proposed_join_sockets.front());
+                        curr_view->derecho_group->send_objects(proposed_join_sockets.front());
+                        // Close the client's socket
+                        proposed_join_sockets.pop_front();
+                    }
                 }
 
                 // Delete the last two GMS predicates from the old SST in preparation for deleting it
@@ -532,13 +561,19 @@ void ManagedGroup<dispatcherType>::register_predicates() {
                 gmsSST.predicates.remove(suspected_changed_handle);
 
                 log_event(std::stringstream() << "Starting creation of new SST and DerechoGroup for view " << next_view->vid);
-                // if  a new member has joined
-                if(curr_view->members.size() < next_view->members.size()) {
-                    rdma::impl::verbs_add_connection(next_view->members.back(), next_view->member_ips.back(), next_view->members[next_view->my_rank]);
-                    sst::add_node(next_view->members.back(), next_view->member_ips.back());
+                // if new members have joined, add their RDMA connections to SST and RDMC
+                for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
+                    //The new members will be the last joined.size() elements of the members lists
+                    int joiner_rank = next_view->num_members - next_view->joined.size() + i;
+                    rdma::impl::verbs_add_connection(next_view->members[joiner_rank], next_view->member_ips[joiner_rank],
+                                                     next_view->members[next_view->my_rank]);
+                }
+                for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
+                    int joiner_rank = next_view->num_members - next_view->joined.size() + i;
+                    sst::add_node(next_view->members[joiner_rank], next_view->member_ips[joiner_rank]);
                 }
                 // This will block until everyone responds to SST/RDMC initial handshakes
-                transition_sst_and_rdmc(*next_view, whoFailed);
+                transition_sst_and_rdmc(*next_view);
                 next_view->gmsSST->put();
                 next_view->gmsSST->sync_with_members();
                 log_event(std::stringstream() << "Done setting up SST and DerechoGroup for view " << next_view->vid);
@@ -623,11 +658,9 @@ template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& message_buffers,
                                                  CallbackSet callbacks,
                                                  const DerechoParams& derecho_params) {
-    //Construct an SST with the local row's vid, nChanges, and nAcked initialized to the current view's vid
     curr_view->gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
         curr_view->members, curr_view->members[curr_view->my_rank],
-        [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
-            curr_view->vid);
+        [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false));
 
     curr_view->derecho_group = std::make_unique<DerechoGroup<dispatcherType>>(
         curr_view->members, curr_view->members[curr_view->my_rank],
@@ -642,7 +675,7 @@ void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& mes
  * @param whichFailed The rank of the node in the old view that failed, if any.
  */
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>& newView, int whichFailed) {
+void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>& newView) {
     newView.gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
         newView.members, newView.members[newView.my_rank],
         [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed, false));
@@ -654,7 +687,8 @@ void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>&
     curr_view->derecho_group.reset();
 
     // Initialize this node's row in the new SST
-    newView.gmsSST->init_local_row_from_existing((*curr_view->gmsSST), curr_view->my_rank);
+    int changes_installed = newView.joined.size() + newView.departed.size();
+    newView.gmsSST->init_local_row_from_previous((*curr_view->gmsSST), curr_view->my_rank, changes_installed);
     gmssst::set(newView.gmsSST->vid[newView.my_rank], newView.vid);
 }
 
@@ -703,23 +737,25 @@ std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::join_existin
 
 template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
-    ip_addr& joiner_ip = client_socket.remote_ip;
     DerechoSST& gmsSST = *curr_view->gmsSST;
-    if((gmsSST.nChanges[curr_view->my_rank] -
-        gmsSST.nCommitted[curr_view->my_rank]) >= (int) gmsSST.changes.size() / 2) {
+    if((gmsSST.num_changes[curr_view->my_rank] -
+        gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
         //TODO: this shouldn't throw an exception, it should just block the client until the group stabilizes
         throw derecho_exception("Too many changes to allow a Join right now");
     }
+
+    struct in_addr joiner_ip_packed;
+    inet_aton(client_socket.remote_ip.c_str(), &joiner_ip_packed);
 
     node_id_t joining_client_id = 0;
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
 
     log_event(std::stringstream() << "Proposing change to add node " << joining_client_id);
-    size_t next_change = gmsSST.nChanges[curr_view->my_rank] - curr_view->vid;
+    size_t next_change = gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_installed[curr_view->my_rank];
     gmssst::set(gmsSST.changes[curr_view->my_rank][next_change], joining_client_id);
-    gmssst::set(gmsSST.joiner_ip[curr_view->my_rank], joiner_ip);
+    gmssst::set(gmsSST.joiner_ips[curr_view->my_rank][next_change], joiner_ip_packed.s_addr);
 
-    gmssst::increment(gmsSST.nChanges[curr_view->my_rank]);
+    gmssst::increment(gmsSST.num_changes[curr_view->my_rank]);
 
     log_event(std::stringstream() << "Wedging view " << curr_view->vid);
     curr_view->wedge();
@@ -738,6 +774,23 @@ void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_v
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
     mutils::post_object(bind_socket_write, derecho_params);
+}
+
+template <typename dispatcherType>
+std::set<int> ManagedGroup<dispatcherType>::consecutive_committed_failures(const View<dispatcherType>& view) {
+    //Look through pending changes up to nCommitted and add failures to the list until a join is encountered
+    std::set<int> failed_ranks;
+    const int committed_count = view.gmsSST->num_committed[view.rank_of_leader()] - view.gmsSST->num_installed[view.rank_of_leader()];
+    for(int change_idx = 0; change_idx < committed_count; change_idx++) {
+        node_id_t change_id = view.gmsSST->changes[view.my_rank][change_idx];
+        int change_rank = view.rank_of(change_id);
+        if(change_rank != -1) {
+            failed_ranks.emplace(change_rank);
+        } else {
+            break;  //The change is a join, stop here
+        }
+    }
+    return failed_ranks;
 }
 
 /* ------------------------- Ken's helper methods ------------------------- */
@@ -764,7 +817,7 @@ void ManagedGroup<dispatcherType>::copy_suspected(const DerechoSST& gmsSST, std:
 template <typename dispatcherType>
 bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
     int myRow = gmsSST.get_local_index();
-    for(int p_index = 0; p_index < gmsSST.nChanges[myRow] - gmsSST.vid[myRow]; p_index++) {
+    for(int p_index = 0; p_index < gmsSST.num_changes[myRow] - gmsSST.num_installed[myRow]; p_index++) {
         const node_id_t p(const_cast<node_id_t&>(gmsSST.changes[myRow][p_index]));
         if(p == q) {
             return true;
@@ -776,10 +829,10 @@ bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, co
 template <typename dispatcherType>
 int ManagedGroup<dispatcherType>::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
     int myRank = gmsSST.get_local_index();
-    int min = gmsSST.nAcked[myRank];
+    int min = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
-        if(!failed[n] && gmsSST.nAcked[n] < min) {
-            min = gmsSST.nAcked[n];
+        if(!failed[n] && gmsSST.num_acked[n] < min) {
+            min = gmsSST.num_acked[n];
         }
     }
 
@@ -868,10 +921,9 @@ template <typename dispatcherType>
 void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
     int r = curr_view->rank_of(who);
     log_event(std::stringstream() << "Node ID " << who << " failure reported; marking suspected[" << r << "]");
-    std::cout << "Node ID " << who << " failure reported; marking suspected[" << r << "]" << std::endl;
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
     int cnt = 0;
-    for(r = 0; r < (int) curr_view->gmsSST->suspected.size(); r++) {
+    for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
         if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
             ++cnt;
         }
@@ -881,7 +933,6 @@ void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put();
-    std::cout << "Exiting from remote_failure" << std::endl;
 }
 
 template <typename dispatcherType>

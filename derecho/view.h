@@ -35,8 +35,12 @@ public:
      * transitioning to a new view that excludes a failed member, this count
      * will decrease by one. */
     int32_t num_failed;
-    /** ID of the node that joined or departed since the prior view; null if this is the first view */
-    std::shared_ptr<node_id_t> who;
+    //WARNING: The joined and departed fields are not serialized, so they will not be sent to a new node that joins the system.
+    //This doesn't seem to break anything but it would be nice to support serializing more than 7 fields so that we could send these.
+    /** List of IDs of nodes that joined since the previous view, if any. */
+    std::vector<node_id_t> joined;
+    /** List of IDs of nodes that left since the previous view, if any. */
+    std::vector<node_id_t> departed;
     /** Number of members in this view */
     int32_t num_members;
     /** The rank of this node (as returned by rank_of()) */
@@ -58,13 +62,11 @@ public:
      * (or at least that's the idea; this still needs to be implemented,
      * probably with some sort of callback system). */
     void announce_new_view(const View& Vc);
-    /** When constructing a View piecemeal, call this after num_members has been set. */
-    void init_vectors();
 
     int rank_of(const ip_addr& who) const;
+    /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
     int rank_of_leader() const;
-
 
     bool i_am_leader() const;
     /** Determines whether this node is the new leader after a view change. */
@@ -91,7 +93,6 @@ public:
               num_members(num_members),
               my_rank(my_rank) {}
 };
-
 
 /**
  * Custom implementation of load_object for Views. The View from the swap file

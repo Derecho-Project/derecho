@@ -651,7 +651,7 @@ void DerechoGroup<dispatchersType>::send_loop() {
             if(!thread_shutdown) {
                 current_send = std::move(pending_sends.front());
                 util::debug_log().log_event(std::stringstream() << "Calling send on message " << current_send->index
-                        << " from sender " << current_send->sender_rank);
+                                                                << " from sender " << current_send->sender_rank);
                 if(!rdmc::send(member_index + rdmc_group_num_offset,
                                current_send->message_buffer.mr, 0,
                                current_send->size)) {
@@ -702,8 +702,8 @@ char* DerechoGroup<dispatchersType>::get_position(
     }
     if(msg_size > max_msg_size) {
         std::cout << "Can't send messages of size larger than the maximum message "
-                "size which is equal to "
-             << max_msg_size << std::endl;
+                     "size which is equal to "
+                  << max_msg_size << std::endl;
         return nullptr;
     }
     for(int i = 0; i < num_members; ++i) {
@@ -780,7 +780,7 @@ auto DerechoGroup<dispatchersType>::derechoCallerSend(
 template <typename dispatchersType>
 template <typename IDClass, unsigned long long tag, typename... Args>
 void DerechoGroup<dispatchersType>::orderedSend(const std::vector<node_id_t>& nodes,
-                                                   char* buf, Args&&... args) {
+                                                char* buf, Args&&... args) {
     derechoCallerSend<IDClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
@@ -794,7 +794,7 @@ void DerechoGroup<dispatchersType>::orderedSend(char* buf, Args&&... args) {
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto DerechoGroup<dispatchersType>::orderedQuery(const std::vector<node_id_t>& nodes,
-                                                    char* buf, Args&&... args) {
+                                                 char* buf, Args&&... args) {
     return derechoCallerSend<IdClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
@@ -807,7 +807,7 @@ auto DerechoGroup<dispatchersType>::orderedQuery(char* buf, Args&&... args) {
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto DerechoGroup<dispatchersType>::tcpSend(node_id_t dest_node,
-                                               Args&&... args) {
+                                            Args&&... args) {
     assert(dest_node != members[member_index]);
     // use dest_node
 
@@ -835,14 +835,14 @@ auto DerechoGroup<dispatchersType>::tcpSend(node_id_t dest_node,
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 void DerechoGroup<dispatchersType>::p2pSend(node_id_t dest_node,
-                                               Args&&... args) {
+                                            Args&&... args) {
     tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto DerechoGroup<dispatchersType>::p2pQuery(node_id_t dest_node,
-                                                Args&&... args) {
+                                             Args&&... args) {
     return tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 
@@ -904,7 +904,7 @@ void DerechoGroup<dispatchersType>::set_exceptions_for_removed_nodes(
 template <typename dispatchersType>
 void DerechoGroup<dispatchersType>::debug_print() {
     std::cout << "In DerechoGroup SST has " << sst->get_num_rows()
-         << " rows; member_index is " << member_index << std::endl;
+              << " rows; member_index is " << member_index << std::endl;
     std::cout << "Printing SST" << std::endl;
     for(int i = 0; i < num_members; ++i) {
         std::cout << sst->seq_num[i] << " " << sst->stable_num[i] << " " << sst->delivered_num[i] << std::endl;

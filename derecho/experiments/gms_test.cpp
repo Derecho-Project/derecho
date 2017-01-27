@@ -48,8 +48,10 @@ int main(int argc, char *argv[]) {
             int sender_rank, long long int index, char *buf,
             long long int msg_size) {
             received_count++;
-            cout << "In stability callback; sender = " << sender_rank
-                    << ", index = " << index << endl;
+            if(received_count % 1000 == 0) {
+                cout << "In stability callback; sender = " << sender_rank
+                        << ", index = " << index << endl;
+            }
             if(received_count == num_messages) {
                 done = true;
             }
@@ -79,18 +81,15 @@ int main(int argc, char *argv[]) {
             // random message size between 1 and 100
             unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
             char *buf = managed_group->get_sendbuffer_ptr(msg_size);
-            //        cout << "After getting sendbuffer for message " << i <<
-            //        endl;
-            //        managed_group.debug_print_status();
+//          cout << "After getting sendbuffer for message " << i <<  endl;
+//          managed_group.debug_print_status();
             while(!buf) {
                 buf = managed_group->get_sendbuffer_ptr(msg_size);
             }
             for(unsigned int j = 0; j < msg_size; ++j) {
                 buf[j] = 'a' + i;
             }
-            //        cout << "Client telling DerechoGroup to send message " <<
-            //        i << "
-            //        with size " << msg_size << endl;;
+//          cout << "Client telling DerechoGroup to send message " << i << " with size " << msg_size << endl;
             managed_group->send();
         }
         while(!done) {

@@ -11,5 +11,3 @@
 
 #include "managed_group.h"
 #include "derecho_caller.h"
-
-

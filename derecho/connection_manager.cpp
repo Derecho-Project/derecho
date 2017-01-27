@@ -33,22 +33,28 @@ bool tcp_connections::add_connection(const node_id_t other_id,
         }
         return true;
     } else if(other_id > my_id) {
-        try {
-            socket s = conn_listener->accept();
+        while(true) {
+            try {
+                socket s = conn_listener->accept();
 
-            uint32_t remote_id = 0;
-            if(!s.exchange(my_id, remote_id)) {
-                std::cerr << "WARNING: failed to exchange id with node"
+                uint32_t remote_id = 0;
+                if(!s.exchange(my_id, remote_id)) {
+                    std::cerr << "WARNING: failed to exchange id with node"
+                              << std::endl;
+                    return false;
+                } else {
+                    sockets[remote_id] = std::move(s);
+                    //If the connection we got wasn't the intended node, keep
+                    //looping and try again; there must be multiple nodes connecting
+                    //simultaneously
+                    if(remote_id == other_id)
+                        return true;
+                }
+            } catch(exception) {
+                std::cerr << "Got error while attempting to listing on port"
                           << std::endl;
                 return false;
-            } else {
-                sockets[remote_id] = std::move(s);
-                return true;
             }
-        } catch(exception) {
-            std::cerr << "Got error while attempting to listing on port"
-                      << std::endl;
-            return false;
         }
     }
 
@@ -59,7 +65,9 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, ip_ad
     conn_listener = std::make_unique<connection_listener>(port);
 
     for(auto it = ip_addrs.begin(); it != ip_addrs.end(); it++) {
-        if(it->first != my_id) {
+        //Check that there isn't already be a connection to this ID,
+        //since an earlier add_connection could have connected to it by "mistake"
+        if(it->first != my_id && sockets.count(it->first) == 0) {
             if(!add_connection(it->first, it->second)) {
                 std::cerr << "WARNING: failed to connect to node " << it->first
                           << " at " << it->second << std::endl;
@@ -112,7 +120,9 @@ bool tcp_connections::read(node_id_t node_id, char* buffer,
 bool tcp_connections::add_node(node_id_t new_id, const ip_addr_t new_ip_addr) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     assert(new_id != my_id);
-    assert(!sockets.count(new_id));
+    //If there's already a connection to this ID, just return "success"
+    if(sockets.count(new_id) > 0)
+        return true;
     return add_connection(new_id, new_ip_addr);
 }
 
