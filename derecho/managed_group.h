@@ -145,8 +145,6 @@ private:
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
-    /** Returns the ranks of all the members that have failed and are committed to being removed. */
-    static std::set<int> consecutive_committed_failures(const View<dispatcherType>& view);
 
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
@@ -259,18 +257,25 @@ public:
     /** Instructs the managed DerechoGroup to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send();
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     void orderedSend(const std::vector<node_id_t>& nodes, Args&&... args);
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     void orderedSend(Args&&... args);
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto orderedQuery(const std::vector<node_id_t>& nodes, Args&&... args);
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto orderedQuery(Args&&... args);
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     void p2pSend(node_id_t dest_node, Args&&... args);
+
     template <typename IdClass, unsigned long long tag, typename... Args>
     auto p2pQuery(node_id_t dest_node, Args&&... args);
+
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */

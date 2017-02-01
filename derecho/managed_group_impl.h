@@ -776,23 +776,6 @@ void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_v
     mutils::post_object(bind_socket_write, derecho_params);
 }
 
-template <typename dispatcherType>
-std::set<int> ManagedGroup<dispatcherType>::consecutive_committed_failures(const View<dispatcherType>& view) {
-    //Look through pending changes up to nCommitted and add failures to the list until a join is encountered
-    std::set<int> failed_ranks;
-    const int committed_count = view.gmsSST->num_committed[view.rank_of_leader()] - view.gmsSST->num_installed[view.rank_of_leader()];
-    for(int change_idx = 0; change_idx < committed_count; change_idx++) {
-        node_id_t change_id = view.gmsSST->changes[view.my_rank][change_idx];
-        int change_rank = view.rank_of(change_id);
-        if(change_rank != -1) {
-            failed_ranks.emplace(change_rank);
-        } else {
-            break;  //The change is a join, stop here
-        }
-    }
-    return failed_ranks;
-}
-
 /* ------------------------- Ken's helper methods ------------------------- */
 
 template <typename dispatcherType>
