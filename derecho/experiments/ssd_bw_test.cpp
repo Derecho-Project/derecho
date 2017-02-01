@@ -24,7 +24,7 @@ using std::cout;
 using std::endl;
 using std::ifstream;
 
-using derecho::DerechoGroup;
+using derecho::MulticastGroup;
 using derecho::DerechoSST;
 
 void generate_buffer(char *buf, long long int buffer_size) {
@@ -130,14 +130,14 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{buffer_size, block_size};
-    Dispatcher<> empty_dispatcher(node_rank);
-    std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+    rpc::Dispatcher<> empty_dispatcher(node_rank);
+    std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
     if(node_rank == server_rank) {
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 node_addresses[node_rank], std::move(empty_dispatcher), callbacks, param_object);
     } else {
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 node_rank, node_addresses[node_rank],
                 server_rank, node_addresses[server_rank],
                 std::move(empty_dispatcher), callbacks);

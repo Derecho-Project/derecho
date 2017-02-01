@@ -30,7 +30,7 @@ map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 250;
 bool done = false;
-shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
@@ -66,9 +66,9 @@ int main(int argc, char* argv[]) {
     //This won't work! We need to support starting up a member without doing global setup
 //    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
     string debug_log_filename = (stringstream() << "events_node" << node_id << ".csv").str();
-    string message_log_filename = (:stringstream() << "data" << node_id << ".dat").str();
+    string message_log_filename = (stringstream() << "data" << node_id << ".dat").str();
 
-    managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+    managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
         message_log_filename, GMS_PORT, node_addresses, node_id,
         message_size, derecho::CallbackSet{stability_callback, persistence_callback},
         block_size);

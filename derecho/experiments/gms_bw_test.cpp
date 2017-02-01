@@ -29,7 +29,7 @@ map<uint32_t, std::string> node_addresses;
 
 unsigned int message_number = 0;
 vector<uint64_t> message_times;
-shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char *data, long long int size) {
     using namespace derecho;
@@ -120,15 +120,15 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
-    Dispatcher<> empty_dispatcher(node_id);
+    rpc::Dispatcher<> empty_dispatcher(node_id);
 
 
     if(node_id == leader_id) {
         assert(my_ip == leader_ip);
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 my_ip, std::move(empty_dispatcher), callbacks, param_object);
     } else {
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher),
                 callbacks);
     }

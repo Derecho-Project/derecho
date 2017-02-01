@@ -3,7 +3,7 @@
 #include <string>
 
 #include "derecho/filewriter.h"
-#include "derecho/derecho_group.h"
+#include "derecho/multicast_group.h"
 
 using std::cout;
 using std::endl;

@@ -1,5 +1,4 @@
-#ifndef DERECHO_GROUP_H
-#define DERECHO_GROUP_H
+#pragma once
 
 #include <assert.h>
 #include <condition_variable>
@@ -182,9 +181,12 @@ struct MessageTrackingRow {
     long long int delivered_num;
 };
 
-/** combines sst and rdmc to give an abstraction of a group where anyone can send */
+/** Implements the low-level mechanics of tracking multicasts in a Derecho group,
+ * using RDMC to deliver messages and SST to track their arrival and stability.
+ * This class should only be used as part of a Group, since it does not know how
+ * to handle failures. */
 template <typename dispatcherType>
-class DerechoGroup {
+class MulticastGroup {
 private:
     /** vector of member id's */
     std::vector<node_id_t> members;
@@ -292,7 +294,7 @@ private:
 
 public:
     // the constructor - takes the list of members, send parameters (block size, buffer size), K0 and K1 callbacks
-    DerechoGroup(
+    MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,
         std::vector<MessageBuffer>& free_message_buffers,
@@ -303,12 +305,12 @@ public:
         std::vector<char> already_failed = {});
     /** Constructor to initialize a new derecho_group from an old one,
      * preserving the same settings but providing a new list of members. */
-    DerechoGroup(
+    MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,
-        DerechoGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
+        MulticastGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
         std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
-    ~DerechoGroup();
+    ~MulticastGroup();
 
     void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders);
     /** get a pointer into the buffer, to write data into it before sending */
@@ -344,6 +346,4 @@ public:
 };
 }  // namespace derecho
 
-#include "derecho_group_impl.h"
-
-#endif /* DERECHO_GROUP_H */
+#include "multicast_group_impl.h"

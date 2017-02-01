@@ -3,7 +3,7 @@
 #include <vector>
 #include <time.h>
 
-#include "derecho/derecho_group.h"
+#include "derecho/multicast_group.h"
 #include "derecho/derecho_caller.h"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
@@ -14,7 +14,7 @@ using std::cout;
 using std::endl;
 using std::cin;
 using std::vector;
-using derecho::DerechoGroup;
+using derecho::MulticastGroup;
 using derecho::DerechoSST;
 
 constexpr int MAX_GROUP_SIZE = 8;
@@ -52,9 +52,9 @@ int main(int argc, char *argv[]) {
     auto derecho_sst =
         std::make_shared<DerechoSST>(sst::SSTParams(members, node_rank));
     vector<derecho::MessageBuffer> free_message_buffers;
-    DerechoGroup<Dispatcher<>> g(
+    MulticastGroup<rpc::Dispatcher<>> g(
         members, node_rank, derecho_sst, free_message_buffers,
-        Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
+        rpc::Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
         derecho::DerechoParams{msg_size, block_size}, node_address_map);
     struct timespec start_time;
     // start timer

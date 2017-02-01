@@ -1,5 +1,4 @@
-#ifndef MANAGED_GROUP_H_
-#define MANAGED_GROUP_H_
+#pragma once
 
 #include "tcp/tcp.h"
 
@@ -57,12 +56,12 @@ public:
 };
 
 /**
- * A wrapper for DerechoGroup that adds the group management service (GMS)
- * features. All members of a group should create instances of ManagedGroup
- * (instead of creating DerechoGroup directly) in order to enable the GMS.
+ * The top-level object for creating a Derecho group. This implements the group
+ * management service (GMS) features and contains a MulticastGroup instance that
+ * manages the actual sending and tracking of messages within the group.
  */
 template <typename dispatcherType>
-class ManagedGroup {
+class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
@@ -179,7 +178,7 @@ public:
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
      */
-    ManagedGroup(const ip_addr my_ip,
+    Group(const ip_addr my_ip,
                  dispatcherType _dispatchers,
                  CallbackSet callbacks,
                  const DerechoParams derecho_params,
@@ -201,7 +200,7 @@ public:
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
      */
-    ManagedGroup(const node_id_t my_id,
+    Group(const node_id_t my_id,
                  const ip_addr my_ip,
                  const node_id_t leader_id,
                  const ip_addr leader_ip,
@@ -232,7 +231,7 @@ public:
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
      */
-    ManagedGroup(const std::string& recovery_filename,
+    Group(const std::string& recovery_filename,
                  const node_id_t my_id,
                  const ip_addr my_ip,
                  dispatcherType _dispatchers,
@@ -241,7 +240,7 @@ public:
                  std::vector<view_upcall_t> _view_upcalls = {},
                  const int gms_port = 12345);
 
-    ~ManagedGroup();
+    ~Group();
 
     void rdmc_sst_setup();
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
@@ -293,6 +292,4 @@ public:
 
 } /* namespace derecho */
 
-#include "managed_group_impl.h"
-
-#endif /* MANAGED_GROUP_H_ */
+#include "group_impl.h"

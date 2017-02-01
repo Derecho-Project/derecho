@@ -22,10 +22,9 @@
 #include <arpa/inet.h>
 #include <mutils-serialization/SerializationSupport.hpp>
 
-#include "managed_group.h"
-
-#include "derecho_group.h"
 #include "derecho_sst.h"
+#include "group.h"
+#include "multicast_group.h"
 #include "persistence.h"
 #include "sst/sst.h"
 #include "sst/verbs.h"
@@ -37,7 +36,7 @@ using lock_guard_t = std::lock_guard<std::mutex>;
 using unique_lock_t = std::unique_lock<std::mutex>;
 
 template <typename dispatcherType>
-ManagedGroup<dispatcherType>::ManagedGroup(
+Group<dispatcherType>::Group(
     const ip_addr my_ip,
     dispatcherType _dispatchers,
     CallbackSet callbacks,
@@ -66,7 +65,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
     }
 
     std::vector<MessageBuffer> message_buffers;
-    auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
+    auto max_msg_size = MulticastGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
     while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
@@ -101,7 +100,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(
 }
 
 template <typename dispatcherType>
-ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
+Group<dispatcherType>::Group(const node_id_t my_id,
                                            const ip_addr my_ip,
                                            const node_id_t leader_id,
                                            const ip_addr leader_ip,
@@ -129,7 +128,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
     log_event("Initializing SST and RDMC for the first time.");
 
     std::vector<MessageBuffer> message_buffers;
-    auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
+    auto max_msg_size = MulticastGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
     while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
@@ -171,7 +170,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const node_id_t my_id,
 }
 
 template <typename dispatcherType>
-ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
+Group<dispatcherType>::Group(const std::string& recovery_filename,
                                            const node_id_t my_id,
                                            const ip_addr my_ip,
                                            dispatcherType _dispatchers,
@@ -218,7 +217,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
     persist_object(derecho_params, params_file_name);
 
     std::vector<MessageBuffer> message_buffers;
-    auto max_msg_size = DerechoGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
+    auto max_msg_size = MulticastGroup<dispatcherType>::compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size);
     while(message_buffers.size() < derecho_params.window_size * curr_view->members.size()) {
         message_buffers.emplace_back(max_msg_size);
     }
@@ -264,7 +263,7 @@ ManagedGroup<dispatcherType>::ManagedGroup(const std::string& recovery_filename,
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id) {
+void Group<dispatcherType>::await_second_member(const node_id_t my_id) {
     tcp::socket client_socket = server_socket.accept();
     node_id_t client_id = 0;
     client_socket.exchange(my_id, client_id);
@@ -291,7 +290,7 @@ void ManagedGroup<dispatcherType>::await_second_member(const node_id_t my_id) {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::rdmc_sst_setup() {
+void Group<dispatcherType>::rdmc_sst_setup() {
     std::cout << "Doing global setup of RDMC and SST" << std::endl;
     // construct member_ips
     auto member_ips_map = get_member_ips_map(curr_view->members, curr_view->member_ips, curr_view->failed);
@@ -303,7 +302,7 @@ void ManagedGroup<dispatcherType>::rdmc_sst_setup() {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::create_threads() {
+void Group<dispatcherType>::create_threads() {
     client_listener_thread = std::thread{[this]() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
@@ -329,7 +328,7 @@ void ManagedGroup<dispatcherType>::create_threads() {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::register_predicates() {
+void Group<dispatcherType>::register_predicates() {
     /* This predicate-trigger pair monitors the suspected[] array to detect failures
      * and, for the leader, proposes new views to exclude failed members */
     auto suspected_changed = [this](const DerechoSST& sst) {
@@ -641,7 +640,7 @@ void ManagedGroup<dispatcherType>::register_predicates() {
 }
 
 template <typename dispatcherType>
-ManagedGroup<dispatcherType>::~ManagedGroup() {
+Group<dispatcherType>::~Group() {
     thread_shutdown = true;
     // force accept to return.
     tcp::socket s{"localhost", gms_port};
@@ -655,14 +654,14 @@ ManagedGroup<dispatcherType>::~ManagedGroup() {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& message_buffers,
+void Group<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& message_buffers,
                                                  CallbackSet callbacks,
                                                  const DerechoParams& derecho_params) {
     curr_view->gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
         curr_view->members, curr_view->members[curr_view->my_rank],
         [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false));
 
-    curr_view->derecho_group = std::make_unique<DerechoGroup<dispatcherType>>(
+    curr_view->derecho_group = std::make_unique<MulticastGroup<dispatcherType>>(
         curr_view->members, curr_view->members[curr_view->my_rank],
         curr_view->gmsSST, message_buffers, std::move(dispatchers), callbacks, derecho_params,
         get_member_ips_map(curr_view->members, curr_view->member_ips, curr_view->failed),
@@ -675,12 +674,12 @@ void ManagedGroup<dispatcherType>::setup_derecho(std::vector<MessageBuffer>& mes
  * @param whichFailed The rank of the node in the old view that failed, if any.
  */
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>& newView) {
+void Group<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>& newView) {
     newView.gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
         newView.members, newView.members[newView.my_rank],
         [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed, false));
     std::cout << "Going to create the derecho group" << std::endl;
-    newView.derecho_group = std::make_unique<DerechoGroup<dispatcherType>>(
+    newView.derecho_group = std::make_unique<MulticastGroup<dispatcherType>>(
         newView.members, newView.members[newView.my_rank], newView.gmsSST,
         std::move(*curr_view->derecho_group),
         get_member_ips_map(newView.members, newView.member_ips, newView.failed), newView.failed);
@@ -693,7 +692,7 @@ void ManagedGroup<dispatcherType>::transition_sst_and_rdmc(View<dispatcherType>&
 }
 
 template <typename dispatcherType>
-std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::start_group(const node_id_t my_id, const ip_addr my_ip) {
+std::unique_ptr<View<dispatcherType>> Group<dispatcherType>::start_group(const node_id_t my_id, const ip_addr my_ip) {
     log_event("Starting new empty group with myself as leader");
     std::unique_ptr<View<dispatcherType>> newView = std::make_unique<View<dispatcherType>>(1);
     newView->members[0] = my_id;
@@ -705,7 +704,7 @@ std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::start_group(
 }
 
 template <typename dispatcherType>
-std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::join_existing(
+std::unique_ptr<View<dispatcherType>> Group<dispatcherType>::join_existing(
     const node_id_t my_id, const ip_addr& leader_ip, const int leader_port) {
     //    std::cout << "Joining group by contacting node at " << leader_ip << std::endl;
     log_event("Joining group: waiting for a response from the leader");
@@ -736,7 +735,7 @@ std::unique_ptr<View<dispatcherType>> ManagedGroup<dispatcherType>::join_existin
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
+void Group<dispatcherType>::receive_join(tcp::socket& client_socket) {
     DerechoSST& gmsSST = *curr_view->gmsSST;
     if((gmsSST.num_changes[curr_view->my_rank] -
         gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
@@ -764,7 +763,7 @@ void ManagedGroup<dispatcherType>::receive_join(tcp::socket& client_socket) {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_view,
+void Group<dispatcherType>::commit_join(const View<dispatcherType>& new_view,
                                                tcp::socket& client_socket) {
     log_event("Sending client the new view");
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
@@ -779,7 +778,7 @@ void ManagedGroup<dispatcherType>::commit_join(const View<dispatcherType>& new_v
 /* ------------------------- Ken's helper methods ------------------------- */
 
 template <typename dispatcherType>
-bool ManagedGroup<dispatcherType>::suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old) {
+bool Group<dispatcherType>::suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old) {
     for(int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
@@ -791,14 +790,14 @@ bool ManagedGroup<dispatcherType>::suspected_not_equal(const DerechoSST& gmsSST,
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old) {
+void Group<dispatcherType>::copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old) {
     for(size_t who = 0; who < gmsSST.suspected.size(); ++who) {
         old[who] = gmsSST.suspected[gmsSST.get_local_index()][who];
     }
 }
 
 template <typename dispatcherType>
-bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
+bool Group<dispatcherType>::changes_contains(const DerechoSST& gmsSST, const node_id_t q) {
     int myRow = gmsSST.get_local_index();
     for(int p_index = 0; p_index < gmsSST.num_changes[myRow] - gmsSST.num_installed[myRow]; p_index++) {
         const node_id_t p(const_cast<node_id_t&>(gmsSST.changes[myRow][p_index]));
@@ -810,7 +809,7 @@ bool ManagedGroup<dispatcherType>::changes_contains(const DerechoSST& gmsSST, co
 }
 
 template <typename dispatcherType>
-int ManagedGroup<dispatcherType>::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
+int Group<dispatcherType>::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
     int myRank = gmsSST.get_local_index();
     int min = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
@@ -823,7 +822,7 @@ int ManagedGroup<dispatcherType>::min_acked(const DerechoSST& gmsSST, const std:
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::deliver_in_order(const View<dispatcherType>& Vc, int Leader) {
+void Group<dispatcherType>::deliver_in_order(const View<dispatcherType>& Vc, int Leader) {
     // Ragged cleanup is finished, deliver in the implied order
     std::vector<long long int> max_received_indices(Vc.num_members);
     std::string deliveryOrder(" ");
@@ -842,7 +841,7 @@ void ManagedGroup<dispatcherType>::deliver_in_order(const View<dispatcherType>& 
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::ragged_edge_cleanup(View<dispatcherType>& Vc) {
+void Group<dispatcherType>::ragged_edge_cleanup(View<dispatcherType>& Vc) {
     util::debug_log().log_event("Running RaggedEdgeCleanup");
     if(Vc.i_am_leader()) {
         leader_ragged_edge_cleanup(Vc);
@@ -853,7 +852,7 @@ void ManagedGroup<dispatcherType>::ragged_edge_cleanup(View<dispatcherType>& Vc)
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::leader_ragged_edge_cleanup(View<dispatcherType>& Vc) {
+void Group<dispatcherType>::leader_ragged_edge_cleanup(View<dispatcherType>& Vc) {
     int myRank = Vc.my_rank;
     int Leader = Vc.rank_of_leader();  // We don't want this to change under our feet
     bool found = false;
@@ -886,7 +885,7 @@ void ManagedGroup<dispatcherType>::leader_ragged_edge_cleanup(View<dispatcherTyp
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::follower_ragged_edge_cleanup(View<dispatcherType>& Vc) {
+void Group<dispatcherType>::follower_ragged_edge_cleanup(View<dispatcherType>& Vc) {
     int myRank = Vc.my_rank;
     // Learn the leader's data and push it before acting upon it
     util::debug_log().log_event("Received leader's globalMin; echoing it");
@@ -901,7 +900,7 @@ void ManagedGroup<dispatcherType>::follower_ragged_edge_cleanup(View<dispatcherT
 /* ------------------------------------------------------------------------- */
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
+void Group<dispatcherType>::report_failure(const node_id_t who) {
     int r = curr_view->rank_of(who);
     log_event(std::stringstream() << "Node ID " << who << " failure reported; marking suspected[" << r << "]");
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
@@ -919,7 +918,7 @@ void ManagedGroup<dispatcherType>::report_failure(const node_id_t who) {
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::leave() {
+void Group<dispatcherType>::leave() {
     lock_guard_t lock(view_mutex);
     log_event("Cleanly leaving the group.");
     curr_view->derecho_group->wedge();
@@ -930,13 +929,13 @@ void ManagedGroup<dispatcherType>::leave() {
 }
 
 template <typename dispatcherType>
-char* ManagedGroup<dispatcherType>::get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns, bool cooked_send) {
+char* Group<dispatcherType>::get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns, bool cooked_send) {
     lock_guard_t lock(view_mutex);
     return curr_view->derecho_group->get_position(payload_size, pause_sending_turns, cooked_send);
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::send() {
+void Group<dispatcherType>::send() {
     std::unique_lock<std::mutex> lock(view_mutex);
     while(true) {
         if(curr_view->derecho_group->send()) break;
@@ -946,7 +945,7 @@ void ManagedGroup<dispatcherType>::send() {
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-void ManagedGroup<dispatcherType>::orderedSend(const std::vector<node_id_t>& nodes,
+void Group<dispatcherType>::orderedSend(const std::vector<node_id_t>& nodes,
                                                Args&&... args) {
     char* buf;
     while(!(buf = get_sendbuffer_ptr(0, 0, true))) {
@@ -959,7 +958,7 @@ void ManagedGroup<dispatcherType>::orderedSend(const std::vector<node_id_t>& nod
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-void ManagedGroup<dispatcherType>::orderedSend(Args&&... args) {
+void Group<dispatcherType>::orderedSend(Args&&... args) {
     char* buf;
     while(!(buf = get_sendbuffer_ptr(0, 0, true))) {
     };
@@ -971,7 +970,7 @@ void ManagedGroup<dispatcherType>::orderedSend(Args&&... args) {
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto ManagedGroup<dispatcherType>::orderedQuery(const std::vector<node_id_t>& nodes,
+auto Group<dispatcherType>::orderedQuery(const std::vector<node_id_t>& nodes,
                                                 Args&&... args) {
     char* buf;
     while(!(buf = get_sendbuffer_ptr(0, 0, true))) {
@@ -984,7 +983,7 @@ auto ManagedGroup<dispatcherType>::orderedQuery(const std::vector<node_id_t>& no
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto ManagedGroup<dispatcherType>::orderedQuery(Args&&... args) {
+auto Group<dispatcherType>::orderedQuery(Args&&... args) {
     char* buf;
     while(!(buf = get_sendbuffer_ptr(0, 0, true))) {
     };
@@ -996,37 +995,37 @@ auto ManagedGroup<dispatcherType>::orderedQuery(Args&&... args) {
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-void ManagedGroup<dispatcherType>::p2pSend(node_id_t dest_node, Args&&... args) {
+void Group<dispatcherType>::p2pSend(node_id_t dest_node, Args&&... args) {
     curr_view->derecho_group->template p2pSend<IdClass, tag, Args...>(
         dest_node, std::forward<Args>(args)...);
 }
 
 template <typename dispatcherType>
 template <typename IdClass, unsigned long long tag, typename... Args>
-auto ManagedGroup<dispatcherType>::p2pQuery(node_id_t dest_node, Args&&... args) {
+auto Group<dispatcherType>::p2pQuery(node_id_t dest_node, Args&&... args) {
     return curr_view->derecho_group->template p2pQuery<IdClass, tag, Args...>(
         dest_node, std::forward<Args>(args)...);
 }
 
 template <typename dispatcherType>
-std::vector<node_id_t> ManagedGroup<dispatcherType>::get_members() {
+std::vector<node_id_t> Group<dispatcherType>::get_members() {
     lock_guard_t lock(view_mutex);
     return curr_view->members;
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::barrier_sync() {
+void Group<dispatcherType>::barrier_sync() {
     lock_guard_t lock(view_mutex);
     curr_view->gmsSST->sync_with_members();
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::debug_print_status() const {
+void Group<dispatcherType>::debug_print_status() const {
     std::cout << "curr_view = " << curr_view->debug_string() << std::endl;
 }
 
 template <typename dispatcherType>
-void ManagedGroup<dispatcherType>::print_log(std::ostream& output_dest) const {
+void Group<dispatcherType>::print_log(std::ostream& output_dest) const {
     for(size_t i = 0; i < util::debug_log().curr_event; ++i) {
         output_dest << util::debug_log().times[i] << "," << util::debug_log().events[i]
                     << "," << std::string("ABCDEFGHIJKLMNOPQRSTUVWXYZ")[curr_view->members[curr_view->my_rank]]
@@ -1035,7 +1034,7 @@ void ManagedGroup<dispatcherType>::print_log(std::ostream& output_dest) const {
 }
 
 template <typename dispatcherType>
-std::map<node_id_t, ip_addr> ManagedGroup<dispatcherType>::get_member_ips_map(
+std::map<node_id_t, ip_addr> Group<dispatcherType>::get_member_ips_map(
     std::vector<node_id_t>& members, std::vector<ip_addr>& member_ips, std::vector<char> failed) {
     std::map<node_id_t, ip_addr> member_ips_map;
     size_t num_members = members.size();

@@ -9,5 +9,5 @@
 
 #pragma once
 
-#include "managed_group.h"
 #include "derecho_caller.h"
+#include "group.h"

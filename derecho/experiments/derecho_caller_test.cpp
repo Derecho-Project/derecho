@@ -17,7 +17,7 @@ using std::endl;
 using namespace std;
 using namespace mutils;
 
-using derecho::DerechoGroup;
+using derecho::MulticastGroup;
 using derecho::DerechoSST;
 
 int count = 0;
@@ -79,10 +79,10 @@ int main(int argc, char *argv[]) {
     Dispatcher<test1_str> dispatchers(my_id, std::make_tuple());
 
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    derecho::ManagedGroup<decltype(dispatchers)>* managed_group;
+    derecho::Group<decltype(dispatchers)>* managed_group;
 
     if(my_id == 0) {
-        managed_group = new derecho::ManagedGroup<decltype(dispatchers)>(
+        managed_group = new derecho::Group<decltype(dispatchers)>(
             my_ip, std::move(dispatchers), {stability_callback, {}},
             derecho_params, {[](vector<derecho::node_id_t> new_members,
                                 vector<derecho::node_id_t> old_members) {
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     }
 
     else {
-        managed_group = new derecho::ManagedGroup<decltype(dispatchers)>(
+        managed_group = new derecho::Group<decltype(dispatchers)>(
             my_id, my_ip, leader_id, leader_ip, std::move(dispatchers),
             {stability_callback, {}},
             {[](vector<derecho::node_id_t> new_members,

@@ -24,7 +24,7 @@ map<uint32_t, std::string> node_addresses;
 
 unsigned int message_number = 0;
 vector<uint64_t> message_times;
-shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char *data,
                         long long int size) {
@@ -103,13 +103,13 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callback_set{stability_callback, derecho::message_callback{}};
     derecho::DerechoParams param_object{message_size, block_size};
-    Dispatcher<> empty_dispatcher(node_id);
+    rpc::Dispatcher<> empty_dispatcher(node_id);
 
     if(node_id == num_nodes - 1) {
         cout << "Sleeping for 10 seconds..." << endl;
         std::this_thread::sleep_for(10s);
         cout << "Connecting to group" << endl;
-        managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
             node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher),
             callback_set);
         managed_group->log_event("About to start sending");
@@ -119,10 +119,10 @@ int main(int argc, char *argv[]) {
         exit(0);
     } else {
         if(node_id == leader_id) {
-            managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+            managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
                     my_ip, std::move(empty_dispatcher), callback_set, param_object);
         } else {
-            managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
+            managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
                     node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher),
                     callback_set);
         }

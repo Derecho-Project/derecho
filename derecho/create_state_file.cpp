@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string view_file_name(argv[1]);
-    derecho::View<Dispatcher<>> view;
+    derecho::View<rpc::Dispatcher<>> view;
     std::cin >> view;
     derecho::persist_object(view, view_file_name);
     return 0;

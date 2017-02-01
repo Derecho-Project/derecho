@@ -1,6 +1,6 @@
 #include <vector>
 
-#include "derecho/derecho_group.h"
+#include "derecho/multicast_group.h"
 #include "initialize.h"
 
 using namespace sst;
@@ -8,7 +8,7 @@ using std::cout;
 using std::endl;
 using std::cin;
 using std::vector;
-using derecho::DerechoGroup;
+using derecho::MulticastGroup;
 using derecho::DerechoSST;
 
 constexpr int MAX_GROUP_SIZE = 8;
@@ -39,7 +39,7 @@ int main() {
     vector<derecho::MessageBuffer> free_message_buffers;
     derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    DerechoGroup<Dispatcher<>> g(members, node_rank, derecho_sst,
+    MulticastGroup<Dispatcher<>> g(members, node_rank, derecho_sst,
                                    free_message_buffers, Dispatcher<>(node_rank),
                                    callbacks, parameters, node_addresses);
 

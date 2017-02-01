@@ -34,7 +34,7 @@ map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 1000;
 bool done = false;
-shared_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
 void stability_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
@@ -92,11 +92,11 @@ int main(int argc, char* argv[]) {
     derecho::CallbackSet callbacks{stability_callback, persistence_callback};
     derecho::DerechoParams param_object{message_size, block_size, message_log_filename};
     if(node_id == leader_id) {
-        managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
-                my_ip, Dispatcher<>(node_id), callbacks, param_object);
+        managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
+                my_ip, rpc::Dispatcher<>(node_id), callbacks, param_object);
     } else {
-        managed_group = make_shared<derecho::ManagedGroup<Dispatcher<>>>(
-                node_id, my_ip, leader_id, leader_ip, Dispatcher<>(node_id), callbacks);
+        managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
+                node_id, my_ip, leader_id, leader_ip, rpc::Dispatcher<>(node_id), callbacks);
     }
     cout << "Created group, waiting for others to join." << endl;
     while(managed_group->get_members().size() < (num_nodes - 1)) {

@@ -59,16 +59,16 @@ int main(int argc, char *argv[]) {
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
         derecho::DerechoParams param_object{max_msg_size, block_size};
-        Dispatcher<> empty_dispatcher(node_id);
-        std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+        rpc::Dispatcher<> empty_dispatcher(node_id);
+        std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
 
 
         if(node_id == leader_id) {
             assert(my_ip == leader_ip);
-            managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+            managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                     my_ip, std::move(empty_dispatcher), callbacks, param_object);
         } else {
-            managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+            managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                     node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher), callbacks);
         }
 

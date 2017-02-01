@@ -75,15 +75,15 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    Dispatcher<> empty_dispatcher(node_rank);
-    std::unique_ptr<derecho::ManagedGroup<Dispatcher<>>> managed_group;
+    rpc::Dispatcher<> empty_dispatcher(node_rank);
+    std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
     if(node_rank == server_rank) {
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 node_addresses[node_rank], std::move(empty_dispatcher),
                 derecho::CallbackSet{stability_callback, nullptr},
                 derecho::DerechoParams{max_msg_size, block_size});
     } else {
-        managed_group = std::make_unique<derecho::ManagedGroup<Dispatcher<>>>(
+        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
                 node_rank, node_addresses[node_rank], server_rank,
                 node_addresses[server_rank], std::move(empty_dispatcher),
                 derecho::CallbackSet{stability_callback, nullptr});

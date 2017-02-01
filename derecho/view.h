@@ -11,7 +11,7 @@
 #include <mutex>
 #include <iostream>
 
-#include "derecho_group.h"
+#include "multicast_group.h"
 #include "derecho_sst.h"
 #include "sst/sst.h"
 #include <mutils-serialization/SerializationMacros.hpp>
@@ -46,7 +46,7 @@ public:
     /** The rank of this node (as returned by rank_of()) */
     int32_t my_rank;
     /** RDMC manager object containing one RDMC group for each sender */
-    std::unique_ptr<DerechoGroup<handlersType>> derecho_group;
+    std::unique_ptr<MulticastGroup<handlersType>> derecho_group;
     /** Pointer to the SST instance used by the GMS in this View */
     std::shared_ptr<DerechoSST> gmsSST;
 

@@ -1,5 +1,6 @@
 #include "logger.h"
-#include "managed_group.h"
+
+#include "group.h"
 
 namespace derecho {
 

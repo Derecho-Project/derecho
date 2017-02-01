@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string view_file_name(argv[1]);
-    std::unique_ptr<derecho::View<Dispatcher<>>> view = derecho::load_view<Dispatcher<>>(view_file_name);
+    std::unique_ptr<derecho::View<rpc::Dispatcher<>>> view = derecho::load_view<rpc::Dispatcher<>>(view_file_name);
     //Use View's overloaded operator<< to write it out as parseable text
     std::cout << *view;
     return 0;
