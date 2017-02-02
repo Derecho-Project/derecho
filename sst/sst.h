@@ -223,7 +223,8 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
-        //Figure out my SST index
+
+      //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
                 my_index = i;
@@ -292,6 +293,10 @@ public:
 
     /** Gets the index of the local row in the table. */
     int get_local_index() const { return my_index; }
+
+    const char* getBaseAddress() {
+      return const_cast<char*>(rows);
+    }
 
     /** Writes the entire local row to all remote nodes. */
     void put() {

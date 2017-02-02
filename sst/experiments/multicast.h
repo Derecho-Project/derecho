@@ -8,13 +8,25 @@
 #include <vector>
 
 #include "sst/sst.h"
-#include "sst/tcp.h"
 
 template <uint32_t max_msg_size>
 struct Message {
     char buf[max_msg_size];
     uint32_t size;
     uint64_t next_seq;
+};
+
+template <uint32_t max_msg_size>
+class multicastSST : public sst::SST<multicastSST<max_msg_size>> {
+public:
+    multicastSST(const std::vector<uint32_t>& _members, uint32_t my_id, uint32_t window_size)
+            : sst::SST<multicastSST<max_msg_size>>(this, sst::SSTParams{_members, my_id}),
+              slots(window_size),
+              num_received(_members.size()) {
+        this->SSTInit(slots, num_received);
+    }
+    sst::SSTFieldVector<Message<max_msg_size>> slots;
+    sst::SSTFieldVector<uint64_t> num_received;
 };
 
 template <uint32_t window_size, uint32_t max_msg_size, uint32_t max_members>
@@ -26,7 +38,7 @@ struct Row {
 typedef std::function<void(uint32_t, uint64_t, volatile char*, uint32_t size)>
     receiver_callback_t;
 
-template <uint32_t window_size, uint32_t max_msg_size, uint32_t max_members>
+template <uint32_t max_msg_size>
 class group {
     // number of messages for which get_buffer has been called
     uint64_t num_queued = 0;
@@ -41,64 +53,75 @@ class group {
 
     // number of members
     uint32_t num_members;
+    // window size
+    uint32_t window_size;
 
     receiver_callback_t receiver_callback;
 
-    using SST_type = sst::SST<Row<window_size, max_msg_size, max_members>>;
-
     // SST
-    std::unique_ptr<SST_type> multicastSST;
+    multicastSST<max_msg_size> sst;
 
     void initialize() {
         for(uint i = 0; i < num_members; ++i) {
             for(uint j = 0; j < num_members; ++j) {
-                (*multicastSST)[i].num_received[j] = 0;
+                sst.num_received[i][j] = 0;
             }
             for(uint j = 0; j < window_size; ++j) {
-                (*multicastSST)[i].slots[j].buf[0] = 0;
-                (*multicastSST)[i].slots[j].next_seq = 0;
+                sst.slots[i][j].buf[0] = 0;
+                sst.slots[i][j].next_seq = 0;
             }
         }
-        multicastSST->sync_with_members();
+        sst.sync_with_members();
         std::cout << "Initialization complete" << std::endl;
     }
 
     void register_predicates() {
-        auto receiver_pred = [this](const SST_type& sst) { return true; };
-        auto receiver_trig = [this](SST_type& sst) {
-            for(uint i = 0; i < window_size / 2; ++i) {
+        auto receiver_pred = [this](const multicastSST<max_msg_size>& sst) {
+	    for(uint i = 0; i < window_size / 2; ++i) {
                 for(uint j = 0; j < num_members; ++j) {
-                    uint32_t slot = sst[my_rank].num_received[j] % window_size;
-                    if(sst[j].slots[slot].next_seq ==
-                       (sst[my_rank].num_received[j]) / window_size + 1) {
-                        this->receiver_callback(j, sst[my_rank].num_received[j],
-                                                sst[j].slots[slot].buf,
-                                                sst[j].slots[slot].size);
-                        sst[my_rank].num_received[j]++;
+                    uint32_t slot = sst.num_received[my_rank][j] % window_size;
+                    if(sst.slots[j][slot].next_seq ==
+                       (sst.num_received[my_rank][j]) / window_size + 1) {
+		      return true;
                     }
                 }
             }
-            sst.put((char*)std::addressof(sst[0].num_received[0]) -
-                        (char*)std::addressof(sst[0]),
-                    sizeof(sst[0].num_received[0]) * num_members);
+	  return false;
         };
-        multicastSST->predicates.insert(receiver_pred, receiver_trig,
-                                        sst::PredicateType::RECURRENT);
+        auto receiver_trig = [this](multicastSST<max_msg_size>& sst) {
+            for(uint i = 0; i < window_size / 2; ++i) {
+                for(uint j = 0; j < num_members; ++j) {
+                    uint32_t slot = sst.num_received[my_rank][j] % window_size;
+                    if(sst.slots[j][slot].next_seq ==
+                       (sst.num_received[my_rank][j]) / window_size + 1) {
+                        this->receiver_callback(j, sst.num_received[my_rank][j],
+                                                sst.slots[j][slot].buf,
+                                                sst.slots[j][slot].size);
+                        sst.num_received[my_rank][j]++;
+                    }
+                }
+            }
+            sst.put((char*)std::addressof(sst.num_received[0][0]) -
+                        sst.getBaseAddress(),
+                    sizeof(sst.num_received[0][0]) * num_members);
+        };
+        sst.predicates.insert(receiver_pred, receiver_trig,
+                              sst::PredicateType::RECURRENT);
     }
 
 public:
     group(std::vector<uint> members, uint32_t my_id,
-          receiver_callback_t receiver_callback)
-        : receiver_callback(receiver_callback) {
-        num_members = members.size();
-        assert(num_members <= max_members);
+          uint32_t window_size, receiver_callback_t receiver_callback)
+            : num_members(members.size()),
+              window_size(window_size),
+              receiver_callback(receiver_callback),
+              sst(members, my_id, window_size) {
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_id) {
                 my_rank = i;
                 break;
             }
         }
-        multicastSST = std::make_unique<SST_type>(members, my_rank);
         initialize();
         register_predicates();
     }
@@ -110,16 +133,16 @@ public:
             uint32_t slot = num_queued % window_size;
             num_queued++;
             // set size appropriately
-            (*multicastSST)[my_rank].slots[slot].size = msg_size;
-            return (*multicastSST)[my_rank].slots[slot].buf;
+            sst.slots[my_rank][slot].size = msg_size;
+            return sst.slots[my_rank][slot].buf;
         } else {
             uint64_t min_multicast_num =
-                (*multicastSST)[0].num_received[my_rank];
+                sst.num_received[0][my_rank];
             for(uint32_t i = 1; i < num_members; ++i) {
-                if((*multicastSST)[i].num_received[my_rank] <
+                if(sst.num_received[i][my_rank] <
                    min_multicast_num) {
                     min_multicast_num =
-                        (*multicastSST)[i].num_received[my_rank];
+                        sst.num_received[i][my_rank];
                 }
             }
             num_multicasts_finished = min_multicast_num;
@@ -130,10 +153,10 @@ public:
     void send() {
         uint32_t slot = num_sent % window_size;
         num_sent++;
-        (*multicastSST)[my_rank].slots[slot].next_seq++;
-        multicastSST->put(
-            (char*)std::addressof((*multicastSST)[0].slots[slot]) -
-                (char*)std::addressof((*multicastSST)[0]),
+        sst.slots[my_rank][slot].next_seq++;
+        sst.put(
+            (char*)std::addressof(sst.slots[0][slot]) -
+                sst.getBaseAddress(),
             sizeof(Message<max_msg_size>));
     }
 };

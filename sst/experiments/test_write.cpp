@@ -2,19 +2,9 @@
 #include <map>
 
 #include "sst/verbs.h"
-#include "sst/tcp.h"
 
 using namespace std;
 using namespace sst;
-using namespace sst::tcp;
-
-void initialize(int node_rank, const map <uint32_t, string> & ip_addrs) {
-  // initialize tcp connections
-  tcp_initialize(node_rank, ip_addrs);
-  
-  // initialize the rdma resources
-  verbs_initialize();
-}
 
 int main () {
   // input number of nodes and the local node id
@@ -29,15 +19,15 @@ int main () {
   }
 
   // create all tcp connections and initialize global rdma resources
-  initialize(node_rank, ip_addrs);
-
+  verbs_initialize(ip_addrs, node_rank);
+  
   // create read and write buffers
   char *write_buf = (char*) malloc (10);
   char *read_buf = (char*) malloc (10);
 
   // write message (in a way that distinguishes nodes)
   for (int i = 0; i < 9; ++i) {
-    write_buf[i] = '0'+node_rank%10;
+    write_buf[i] = '0';
   }
   write_buf[9] = 0;
 
@@ -53,29 +43,23 @@ int main () {
   // poll for completion
   verbs_poll_completion();
 
-  // sync before destroying resources
-  char  temp_char; 
-  char tQ[2] = {'Q', 0};
-  sock_sync_data(get_socket (r_index), 1, tQ, &temp_char);
+  sync(r_index);
 
   cout << "Buffer written by remote side is : " << read_buf << endl;
   
-  for (int i = 0; i < 7; ++i) {
-    write_buf[i] = '5'+node_rank%10;
-  }
-  for (int i = 7; i < 9; ++i) {
-    write_buf[i] = '1'+node_rank%10;
+  for (int i = 0; i < 10; ++i) {
+    write_buf[i] = '0' + i + node_rank%10;
   }
   write_buf[9] = 0;
 
   cout << "write buffer is " << write_buf << endl;
 
   // remotely write data from the write_buf
-  res->post_remote_write (5, 3);
+  res->post_remote_write (1, 2);
   // poll for completion
   verbs_poll_completion();
   
-  sock_sync_data(get_socket (r_index), 1, tQ, &temp_char);
+  sync(r_index);
 
   cout << "Buffer written by remote side is : " << read_buf << endl;
 

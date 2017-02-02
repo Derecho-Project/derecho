@@ -2,7 +2,6 @@
 
 #include "derecho/experiments/aggregate_bandwidth.h"
 #include "derecho/experiments/log_results.h"
-#include "derecho/max_members.h"
 #include "multicast.h"
 
 using namespace std;
@@ -23,11 +22,8 @@ int main() {
         cin >> ip_addrs[i];
     }
 
-    // initialize tcp connections
-    tcp::tcp_initialize(node_id, ip_addrs);
-
     // initialize the rdma resources
-    verbs_initialize();
+    verbs_initialize(ip_addrs, node_id);
 
     std::vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {
@@ -36,31 +32,29 @@ int main() {
 
     uint num_finished = 0;
     struct timespec start_time, end_time;
-    group<window_size, max_msg_size, MAX_MEMBERS> g(
-        members, node_id, [&num_finished, &num_nodes, &num_messages](
-                              uint32_t sender_rank, uint64_t index,
-                              volatile char* msg, uint32_t size) {
+    group<max_msg_size> g(
+        members, node_id, window_size, [&num_finished, &num_nodes, &num_messages](
+                                           uint32_t sender_rank, uint64_t index,
+                                           volatile char* msg, uint32_t size) {
             if(index == num_messages - 1) {
                 num_finished++;
             }
-            if(num_finished == 1) {
+            if(num_finished == num_nodes) {
                 done = true;
             }
         });
-    uint count = 0;
+    // uint count = 0;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
-    if(node_id < 1) {
-        for(uint i = 0; i < num_messages; ++i) {
-            volatile char* buf;
-            while((buf = g.get_buffer(max_msg_size)) == NULL) {
-                ++count;
-            }
-            // for(uint i = 0; i < size; ++i) {
-            //     buf[i] = 'a' + rand() % 26;
-            // }
-            g.send();
+    for(uint i = 0; i < num_messages; ++i) {
+        volatile char* buf;
+        while((buf = g.get_buffer(max_msg_size)) == NULL) {
+	  // ++count;
         }
+        // for(uint i = 0; i < size; ++i) {
+        //     buf[i] = 'a' + rand() % 26;
+        // }
+        g.send();
     }
     // cout << "Done sending" << endl;
     while(!done) {
@@ -70,9 +64,6 @@ int main() {
     double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) -
                       (start_time.tv_sec * 1e9 + start_time.tv_nsec));
     double message_rate = (num_messages * 1e9) / my_time;
-    if(!(node_id < 1)) {
-        message_rate = 0;
-    }
     // cout << "Time in nanoseconds " << my_time << endl;
     // cout << "Number of messages per second " << message_rate
     //      << endl;

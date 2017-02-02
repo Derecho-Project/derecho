@@ -34,4 +34,7 @@ CMakeFiles
 /derecho/script_copy.sh
 /sst/experiments/Makefile
 /sst/experiments/sst_test
+/derecho/experiments/gms_test
+/derecho/experiments/gms_test2
+/sst/experiments/cpu_load_experiment
 /sst/experiments/multicast_throughput
