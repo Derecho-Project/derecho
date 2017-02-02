@@ -153,12 +153,12 @@ private:
      * member to join, then sends it the view. */
     void await_second_member(const node_id_t my_id);
 
-    /** Creates the SST and derecho_group for the current view, using the current view's member list.
-     * The parameters are all the possible parameters for constructing derecho_group. */
+    /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
+     * The parameters are all the possible parameters for constructing MulticastGroup. */
     void setup_derecho(std::vector<MessageBuffer>& message_buffers,
                        CallbackSet callbacks,
                        const DerechoParams& derecho_params);
-    /** Sets up the SST and derecho_group for a new view, based on the settings in the current view
+    /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
     void transition_sst_and_rdmc(View<dispatcherType>& newView);
 
@@ -179,11 +179,11 @@ public:
      * group-management messages
      */
     Group(const ip_addr my_ip,
-                 dispatcherType _dispatchers,
-                 CallbackSet callbacks,
-                 const DerechoParams derecho_params,
-                 std::vector<view_upcall_t> _view_upcalls = {},
-                 const int gms_port = 12345);
+          dispatcherType _dispatchers,
+          CallbackSet callbacks,
+          const DerechoParams derecho_params,
+          std::vector<view_upcall_t> _view_upcalls = {},
+          const int gms_port = 12345);
 
     /**
      * Constructor that joins an existing managed Derecho group. The parameters
@@ -201,13 +201,13 @@ public:
      * group-management messages
      */
     Group(const node_id_t my_id,
-                 const ip_addr my_ip,
-                 const node_id_t leader_id,
-                 const ip_addr leader_ip,
-                 dispatcherType _dispatchers,
-                 CallbackSet callbacks,
-                 std::vector<view_upcall_t> _view_upcalls = {},
-                 const int gms_port = 12345);
+          const ip_addr my_ip,
+          const node_id_t leader_id,
+          const ip_addr leader_ip,
+          dispatcherType _dispatchers,
+          CallbackSet callbacks,
+          std::vector<view_upcall_t> _view_upcalls = {},
+          const int gms_port = 12345);
     /**
      * Constructor that re-starts a failed group member from log files.
      * It assumes the local ".paxosstate" file already contains the last known
@@ -232,13 +232,13 @@ public:
      * group-management messages
      */
     Group(const std::string& recovery_filename,
-                 const node_id_t my_id,
-                 const ip_addr my_ip,
-                 dispatcherType _dispatchers,
-                 CallbackSet callbacks,
-                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
-                 std::vector<view_upcall_t> _view_upcalls = {},
-                 const int gms_port = 12345);
+          const node_id_t my_id,
+          const ip_addr my_ip,
+          dispatcherType _dispatchers,
+          CallbackSet callbacks,
+          std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
+          std::vector<view_upcall_t> _view_upcalls = {},
+          const int gms_port = 12345);
 
     ~Group();
 

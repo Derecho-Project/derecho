@@ -780,7 +780,7 @@ auto MulticastGroup<dispatchersType>::derechoCallerSend(
 template <typename dispatchersType>
 template <typename IDClass, unsigned long long tag, typename... Args>
 void MulticastGroup<dispatchersType>::orderedSend(const std::vector<node_id_t>& nodes,
-                                                char* buf, Args&&... args) {
+                                                  char* buf, Args&&... args) {
     derechoCallerSend<IDClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
@@ -794,7 +794,7 @@ void MulticastGroup<dispatchersType>::orderedSend(char* buf, Args&&... args) {
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto MulticastGroup<dispatchersType>::orderedQuery(const std::vector<node_id_t>& nodes,
-                                                 char* buf, Args&&... args) {
+                                                   char* buf, Args&&... args) {
     return derechoCallerSend<IdClass, tag>(nodes, buf, std::forward<Args>(args)...);
 }
 
@@ -807,7 +807,7 @@ auto MulticastGroup<dispatchersType>::orderedQuery(char* buf, Args&&... args) {
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto MulticastGroup<dispatchersType>::tcpSend(node_id_t dest_node,
-                                            Args&&... args) {
+                                              Args&&... args) {
     assert(dest_node != members[member_index]);
     // use dest_node
 
@@ -835,14 +835,14 @@ auto MulticastGroup<dispatchersType>::tcpSend(node_id_t dest_node,
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 void MulticastGroup<dispatchersType>::p2pSend(node_id_t dest_node,
-                                            Args&&... args) {
+                                              Args&&... args) {
     tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 
 template <typename dispatchersType>
 template <typename IdClass, unsigned long long tag, typename... Args>
 auto MulticastGroup<dispatchersType>::p2pQuery(node_id_t dest_node,
-                                             Args&&... args) {
+                                               Args&&... args) {
     return tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
 }
 

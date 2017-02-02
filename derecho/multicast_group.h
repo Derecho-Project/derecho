@@ -89,7 +89,7 @@ class Pending : public PendingBase {
 public:
     Pending(PendingResults<Ret>& _pending) : pending(_pending) {}
     void fulfill_map(const std::vector<node_id_t>& nodes) {
-        who_t who;
+        node_list_t who;
         for(auto n : nodes) {
             who.push_back(Node_id(n));
         }
@@ -303,7 +303,7 @@ public:
         const DerechoParams derecho_params,
         std::map<node_id_t, std::string> ip_addrs,
         std::vector<char> already_failed = {});
-    /** Constructor to initialize a new derecho_group from an old one,
+    /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
     MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,

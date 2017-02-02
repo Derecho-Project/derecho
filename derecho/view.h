@@ -45,8 +45,8 @@ public:
     int32_t num_members;
     /** The rank of this node (as returned by rank_of()) */
     int32_t my_rank;
-    /** RDMC manager object containing one RDMC group for each sender */
-    std::unique_ptr<MulticastGroup<handlersType>> derecho_group;
+    /** RDMC manager object used for sending multicasts */
+    std::unique_ptr<MulticastGroup<handlersType>> multicast_group;
     /** Pointer to the SST instance used by the GMS in this View */
     std::shared_ptr<DerechoSST> gmsSST;
 

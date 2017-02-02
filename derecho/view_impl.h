@@ -26,7 +26,7 @@ View<handlersType>::View(int num_members)
           departed(0),
           num_members(num_members),
           my_rank(0),
-          derecho_group(nullptr),
+          multicast_group(nullptr),
           gmsSST(nullptr) {}
 
 //template <typename handlersType>
@@ -135,7 +135,7 @@ void View<handlersType>::merge_changes() {
 
 template <typename handlersType>
 void View<handlersType>::wedge() {
-    derecho_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
+    multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put();
 }
