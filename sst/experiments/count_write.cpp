@@ -5,6 +5,7 @@
 #include <map>
 
 #include "sst/sst.h"
+#include "sst/poll_utils.h"
 //Since all SST instances are named sst, we can use this convenient hack
 #define LOCAL sst.get_local_index()
 

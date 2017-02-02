@@ -1,7 +1,9 @@
 #include <iostream>
+#include <thread>
 #include <map>
 
 #include "sst/verbs.h"
+#include "sst/poll_utils.h"
 
 using namespace std;
 using namespace sst;
@@ -37,11 +39,15 @@ int main () {
   
   // create the rdma struct for exchanging data
   resources *res = new resources (r_index, read_buf, write_buf, 10, 10);
-  
+
+  const auto tid = std::this_thread::get_id();
+  // get id first
+  uint32_t id = util::polling_data.get_index(tid);
+
   // remotely write data from the write_buf
-  res->post_remote_write (10);
+  res->post_remote_write (id, 10);
   // poll for completion
-  verbs_poll_completion();
+  util::polling_data.get_completion_entry(tid);
 
   sync(r_index);
 
@@ -53,14 +59,8 @@ int main () {
   write_buf[9] = 0;
 
   cout << "write buffer is " << write_buf << endl;
-
-  // remotely write data from the write_buf
-  res->post_remote_write (1, 2);
-  // poll for completion
-  verbs_poll_completion();
   
   sync(r_index);
-
   cout << "Buffer written by remote side is : " << read_buf << endl;
 
   // destroy resources
