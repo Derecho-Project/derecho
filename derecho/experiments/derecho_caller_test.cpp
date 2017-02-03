@@ -35,10 +35,19 @@ struct test1_str{
         return true;
     }
 
+    /**
+     * This function will be called by Dispatcher to register functions from
+     * this class as RPC functions. When called, it should call Dispatcher's
+     * setup_rpc_class and supply each method that should be an RPC function
+     * as an argument.
+     * @param d The Dispatcher instance calling this function
+     * @param ptr A pointer to an instance of this class
+     * @return Whatever the result of Dispatcher::setup_rpc_class() is.
+     */
     template <typename Dispatcher>
     auto register_functions(Dispatcher &d, std::unique_ptr<test1_str> *ptr) {
-      assert(this == ptr->get());
-        return d.register_functions(ptr, &test1_str::read_state,
+        assert(this == ptr->get());
+        return d.setup_rpc_class(ptr, &test1_str::read_state,
                                     &test1_str::change_state);
     }
 };
