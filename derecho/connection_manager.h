@@ -29,6 +29,7 @@ public:
     bool write_all(char const* buffer, size_t size);
     bool read(node_id_t node_id, char* buffer, size_t size);
     bool add_node(node_id_t new_id, const ip_addr_t new_ip_addr);
+    bool delete_node(node_id_t remove_id);
     template <class T>
     bool exchange(node_id_t node_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);

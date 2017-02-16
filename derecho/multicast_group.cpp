@@ -1,5 +1,3 @@
-#pragma once
-
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -51,15 +49,13 @@ size_t index_of(T container, U elem) {
  * the node runs in non-persistent mode and no persistence callbacks will be
  * issued.
  */
-template <typename dispatchersType>
-MulticastGroup<dispatchersType>::MulticastGroup(
+
+MulticastGroup::MulticastGroup(
     std::vector<node_id_t> _members, node_id_t my_node_id,
     std::shared_ptr<DerechoSST> _sst,
     std::vector<MessageBuffer>& _free_message_buffers,
-    dispatchersType _dispatchers,
     CallbackSet callbacks,
     const DerechoParams derecho_params,
-    std::map<node_id_t, std::string> ip_addrs,
     std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
@@ -69,8 +65,6 @@ MulticastGroup<dispatchersType>::MulticastGroup(
           type(derecho_params.type),
           window_size(derecho_params.window_size),
           callbacks(callbacks),
-          dispatchers(std::move(_dispatchers)),
-          connections(my_node_id, ip_addrs, derecho_params.rpc_port),
           rdmc_group_num_offset(0),
           sender_timeout(derecho_params.timeout_ms),
           sst(_sst) {
@@ -88,8 +82,6 @@ MulticastGroup<dispatchersType>::MulticastGroup(
 
     total_message_buffers = free_message_buffers.size();
 
-    p2pBuffer = std::unique_ptr<char[]>(new char[derecho_params.max_payload_size]);
-    deliveryBuffer = std::unique_ptr<char[]>(new char[derecho_params.max_payload_size]);
 
     initialize_sst_row();
     bool no_member_failed = true;
@@ -109,16 +101,15 @@ MulticastGroup<dispatchersType>::MulticastGroup(
     register_predicates();
     sender_thread = std::thread(&MulticastGroup::send_loop, this);
     timeout_thread = std::thread(&MulticastGroup::check_failures_loop, this);
-    rpc_thread = std::thread(&MulticastGroup::rpc_process_loop, this);
     //    cout << "DerechoGroup: Registered predicates and started thread" <<
     //    std::endl;
 }
 
-template <typename dispatchersType>
-MulticastGroup<dispatchersType>::MulticastGroup(
+
+MulticastGroup::MulticastGroup(
     std::vector<node_id_t> _members, node_id_t my_node_id,
     std::shared_ptr<DerechoSST> _sst,
-    MulticastGroup&& old_group, std::map<node_id_t, std::string> ip_addrs,
+    MulticastGroup&& old_group,
     std::vector<char> already_failed, uint32_t rpc_port)
         : members(_members),
           num_members(members.size()),
@@ -128,10 +119,7 @@ MulticastGroup<dispatchersType>::MulticastGroup(
           type(old_group.type),
           window_size(old_group.window_size),
           callbacks(old_group.callbacks),
-          dispatchers(std::move(old_group.dispatchers)),
-          connections(my_node_id, ip_addrs, rpc_port),
-          toFulfillQueue(std::move(old_group.toFulfillQueue)),
-          fulfilledList(std::move(old_group.fulfilledList)),
+          rpc_callback(old_group.rpc_callback),
           rdmc_group_num_offset(old_group.rdmc_group_num_offset +
                                 old_group.num_members),
           total_message_buffers(old_group.total_message_buffers),
@@ -170,8 +158,6 @@ MulticastGroup<dispatchersType>::MulticastGroup(
         free_message_buffers.push_back(std::move(msg.second.message_buffer));
     }
     old_group.current_receives.clear();
-    p2pBuffer = std::move(old_group.p2pBuffer);
-    deliveryBuffer = std::move(old_group.deliveryBuffer);
 
     // Assume that any locally stable messages failed. If we were the sender
     // than re-attempt, otherwise discard. TODO: Presumably the ragged edge
@@ -229,13 +215,11 @@ MulticastGroup<dispatchersType>::MulticastGroup(
     register_predicates();
     sender_thread = std::thread(&MulticastGroup::send_loop, this);
     timeout_thread = std::thread(&MulticastGroup::check_failures_loop, this);
-    rpc_thread = std::thread(&MulticastGroup::rpc_process_loop, this);
     //    cout << "DerechoGroup: Registered predicates and started thread" <<
     //    std::endl;
 }
 
-template <typename handlersType>
-std::function<void(persistence::message)> MulticastGroup<handlersType>::make_file_written_callback() {
+std::function<void(persistence::message)> MulticastGroup::make_file_written_callback() {
     return [this](persistence::message m) {
         //m.sender is an ID, not a rank
         int sender_rank;
@@ -262,8 +246,7 @@ std::function<void(persistence::message)> MulticastGroup<handlersType>::make_fil
     };
 }
 
-template <typename dispatchersType>
-bool MulticastGroup<dispatchersType>::create_rdmc_groups() {
+bool MulticastGroup::create_rdmc_groups() {
     // rotated list of members - used for creating n internal RDMC groups
     std::vector<uint32_t> rotated_members(num_members);
 
@@ -389,8 +372,7 @@ bool MulticastGroup<dispatchersType>::create_rdmc_groups() {
     return true;
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::initialize_sst_row() {
+void MulticastGroup::initialize_sst_row() {
     for(int i = 0; i < num_members; ++i) {
         for(int j = 0; j < num_members; ++j) {
             sst->nReceived[i][j] = -1;
@@ -404,8 +386,7 @@ void MulticastGroup<dispatchersType>::initialize_sst_row() {
     sst->sync_with_members();
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::deliver_message(Message& msg) {
+void MulticastGroup::deliver_message(Message& msg) {
     if(msg.size > 0) {
         char* buf = msg.message_buffer.buffer.get();
         header* h = (header*)(buf);
@@ -413,49 +394,7 @@ void MulticastGroup<dispatchersType>::deliver_message(Message& msg) {
         if(h->cooked_send) {
             buf += h->header_size;
             auto payload_size = msg.size - h->header_size;
-            // extract the destination vector
-            size_t dest_size = ((size_t*)buf)[0];
-            buf += sizeof(size_t);
-            payload_size -= sizeof(size_t);
-            bool in_dest = false;
-            for(size_t i = 0; i < dest_size; ++i) {
-                auto n = ((node_id_t*)buf)[0];
-                buf += sizeof(node_id_t);
-                payload_size -= sizeof(node_id_t);
-                if(n == members[member_index]) {
-                    in_dest = true;
-                }
-            }
-            if(in_dest || dest_size == 0) {
-                auto max_payload_size = max_msg_size - sizeof(header);
-                size_t reply_size = 0;
-                dispatchers.handle_receive(
-                    buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
-                        reply_size = size;
-                        if(reply_size <= max_payload_size) {
-                            return deliveryBuffer.get();
-                        } else {
-                            return nullptr;
-                        }
-                    });
-                if(reply_size > 0) {
-                    node_id_t id = members[msg.sender_rank];
-                    if(id == members[member_index]) {
-                        dispatchers.handle_receive(
-                            deliveryBuffer.get(), reply_size,
-                            [](size_t size) -> char* { assert(false); });
-                        if(dest_size == 0) {
-                            std::lock_guard<std::mutex> lock(pending_results_mutex);
-                            toFulfillQueue.front()->fulfill_map(members);
-                            fulfilledList.push_back(std::move(toFulfillQueue.front()));
-                            toFulfillQueue.pop();
-                        }
-                    } else {
-                        connections.write(id, deliveryBuffer.get(),
-                                          reply_size);
-                    }
-                }
-            }
+            rpc_callback(members[msg.sender_rank], buf, payload_size);
         }
         // raw send
         else {
@@ -478,8 +417,8 @@ void MulticastGroup<dispatchersType>::deliver_message(Message& msg) {
     }
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::deliver_messages_upto(
+
+void MulticastGroup::deliver_messages_upto(
     const std::vector<long long int>& max_indices_for_senders) {
     assert(max_indices_for_senders.size() == (size_t)num_members);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
@@ -500,8 +439,8 @@ void MulticastGroup<dispatchersType>::deliver_messages_upto(
     }
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::register_predicates() {
+
+void MulticastGroup::register_predicates() {
     auto stability_pred = [this](
         const DerechoSST& sst) { return true; };
     auto stability_trig =
@@ -572,19 +511,16 @@ void MulticastGroup<dispatchersType>::register_predicates() {
                                                 sst::PredicateType::RECURRENT);
 }
 
-template <typename dispatchersType>
-MulticastGroup<dispatchersType>::~MulticastGroup() {
+
+MulticastGroup::~MulticastGroup() {
     wedge();
     if(timeout_thread.joinable()) {
         timeout_thread.join();
     }
-    if(rpc_thread.joinable()) {
-        rpc_thread.join();
-    }
 }
 
-template <typename dispatchersType>
-long long unsigned int MulticastGroup<dispatchersType>::compute_max_msg_size(
+
+long long unsigned int MulticastGroup::compute_max_msg_size(
     const long long unsigned int max_payload_size,
     const long long unsigned int block_size) {
     auto max_msg_size = max_payload_size + sizeof(header);
@@ -594,8 +530,8 @@ long long unsigned int MulticastGroup<dispatchersType>::compute_max_msg_size(
     return max_msg_size;
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::wedge() {
+
+void MulticastGroup::wedge() {
     bool thread_shutdown_existing = thread_shutdown.exchange(true);
     if(thread_shutdown_existing) {  // Wedge has already been called
         return;
@@ -609,10 +545,6 @@ void MulticastGroup<dispatchersType>::wedge() {
         rdmc::destroy_group(i + rdmc_group_num_offset);
     }
 
-    if(rpc_thread.joinable()) {
-        rpc_thread.join();
-    }
-    connections.destroy();
 
     sender_cv.notify_all();
     if(sender_thread.joinable()) {
@@ -620,8 +552,8 @@ void MulticastGroup<dispatchersType>::wedge() {
     }
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::send_loop() {
+
+void MulticastGroup::send_loop() {
     auto should_send = [&]() {
         if(!rdmc_groups_created) {
             return false;
@@ -666,16 +598,16 @@ void MulticastGroup<dispatchersType>::send_loop() {
     }
 }
 
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::check_failures_loop() {
+
+void MulticastGroup::check_failures_loop() {
     while(!thread_shutdown) {
         std::this_thread::sleep_for(milliseconds(sender_timeout));
         if(sst) sst->put();
     }
 }
 
-template <typename dispatchersType>
-bool MulticastGroup<dispatchersType>::send() {
+
+bool MulticastGroup::send() {
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     if(thread_shutdown || !rdmc_groups_created) {
         return false;
@@ -687,8 +619,8 @@ bool MulticastGroup<dispatchersType>::send() {
     return true;
 }
 
-template <typename dispatchersType>
-char* MulticastGroup<dispatchersType>::get_position(
+
+char* MulticastGroup::get_position(
     long long unsigned int payload_size,
     int pause_sending_turns, bool cooked_send) {
     // if rdmc groups were not created because of failures, return NULL
@@ -737,172 +669,8 @@ char* MulticastGroup<dispatchersType>::get_position(
     return buf + sizeof(header);
 }
 
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-auto MulticastGroup<dispatchersType>::derechoCallerSend(
-    const std::vector<node_id_t>& nodes, char* buf, Args&&... args) {
-    auto max_payload_size = max_msg_size - sizeof(header);
-    // use nodes
-    ((size_t*)buf)[0] = nodes.size();
-    buf += sizeof(size_t);
-    max_payload_size -= sizeof(size_t);
-    for(auto& n : nodes) {
-        ((node_id_t*)buf)[0] = n;
-        buf += sizeof(node_id_t);
-        max_payload_size -= sizeof(node_id_t);
-    }
 
-    auto return_pair = dispatchers.template Send<IdClass, tag>(
-        [&buf, &max_payload_size](size_t size) -> char* {
-            if(size <= max_payload_size) {
-                return buf;
-            } else {
-                return nullptr;
-            }
-        },
-        std::forward<Args>(args)...);
-    while(!send()) {
-    }
-    auto P = createPending(return_pair.pending);
-
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
-    if(nodes.size()) {
-        P->fulfill_map(nodes);
-        fulfilledList.push_back(std::move(P));
-    } else {
-        toFulfillQueue.push(std::move(P));
-    }
-    return std::move(return_pair.results);
-}
-
-// this should be called from the GMS, as this takes care of locks on mutexes
-// view_change_mutex and msg_state_mutex
-template <typename dispatchersType>
-template <typename IDClass, unsigned long long tag, typename... Args>
-void MulticastGroup<dispatchersType>::orderedSend(const std::vector<node_id_t>& nodes,
-                                                  char* buf, Args&&... args) {
-    derechoCallerSend<IDClass, tag>(nodes, buf, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-void MulticastGroup<dispatchersType>::orderedSend(char* buf, Args&&... args) {
-    // empty nodes means that the destination is the entire group
-    orderedSend<IdClass, tag>({}, buf, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-auto MulticastGroup<dispatchersType>::orderedQuery(const std::vector<node_id_t>& nodes,
-                                                   char* buf, Args&&... args) {
-    return derechoCallerSend<IdClass, tag>(nodes, buf, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-auto MulticastGroup<dispatchersType>::orderedQuery(char* buf, Args&&... args) {
-    return orderedQuery<IdClass, tag>({}, buf, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-auto MulticastGroup<dispatchersType>::tcpSend(node_id_t dest_node,
-                                              Args&&... args) {
-    assert(dest_node != members[member_index]);
-    // use dest_node
-
-    size_t size;
-    auto max_payload_size = max_msg_size - sizeof(header);
-    auto return_pair = dispatchers.template Send<IdClass, tag>(
-        [this, &max_payload_size, &size](size_t _size) -> char* {
-            size = _size;
-            if(size <= max_payload_size) {
-                return p2pBuffer.get();
-            } else {
-                return nullptr;
-            }
-        },
-        std::forward<Args>(args)...);
-    connections.write(dest_node, p2pBuffer.get(), size);
-    auto P = createPending(return_pair.pending);
-    P->fulfill_map({dest_node});
-
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
-    fulfilledList.push_back(std::move(P));
-    return std::move(return_pair.results);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-void MulticastGroup<dispatchersType>::p2pSend(node_id_t dest_node,
-                                              Args&&... args) {
-    tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-template <typename IdClass, unsigned long long tag, typename... Args>
-auto MulticastGroup<dispatchersType>::p2pQuery(node_id_t dest_node,
-                                               Args&&... args) {
-    return tcpSend<IdClass, tag>(dest_node, std::forward<Args>(args)...);
-}
-
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::send_objects(tcp::socket& new_member_socket) {
-    dispatchers.send_objects(new_member_socket);
-}
-
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::rpc_process_loop() {
-    using namespace ::rpc::remote_invocation_utilities;
-    const auto header_size = header_space();
-    auto max_payload_size = max_msg_size - sizeof(header);
-    std::unique_ptr<char[]> rpcBuffer =
-        std::unique_ptr<char[]>(new char[max_payload_size]);
-    while(!thread_shutdown) {
-        auto other_id = connections.probe_all();
-        if(other_id < 0) {
-            continue;
-        }
-        connections.read(other_id, rpcBuffer.get(), header_size);
-        std::size_t payload_size;
-        Opcode indx;
-        Node_id received_from;
-        retrieve_header(nullptr, rpcBuffer.get(), payload_size,
-                        indx, received_from);
-        connections.read(other_id, rpcBuffer.get() + header_size,
-                         payload_size);
-        size_t reply_size = 0;
-        dispatchers.handle_receive(
-            indx, received_from, rpcBuffer.get() + header_size, payload_size,
-            [&rpcBuffer, &max_payload_size,
-             &reply_size](size_t _size) -> char* {
-                reply_size = _size;
-                if(reply_size <= max_payload_size) {
-                    return rpcBuffer.get();
-                } else {
-                    return nullptr;
-                }
-            });
-        if(reply_size > 0) {
-            connections.write(received_from.id, rpcBuffer.get(),
-                              reply_size);
-        }
-    }
-}
-
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::set_exceptions_for_removed_nodes(
-    std::vector<node_id_t> removed_members) {
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
-    for(auto& pending : fulfilledList) {
-        for(auto removed_id : removed_members) {
-            pending->set_exception_for_removed_node(removed_id);
-        }
-    }
-}
-
-template <typename dispatchersType>
-void MulticastGroup<dispatchersType>::debug_print() {
+void MulticastGroup::debug_print() {
     std::cout << "In DerechoGroup SST has " << sst->get_num_rows()
               << " rows; member_index is " << member_index << std::endl;
     std::cout << "Printing SST" << std::endl;

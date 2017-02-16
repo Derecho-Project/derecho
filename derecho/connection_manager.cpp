@@ -76,9 +76,9 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, ip_ad
     }
 }
 
-tcp_connections::tcp_connections(
-    node_id_t _my_id, const std::map<node_id_t, ip_addr_t>& ip_addrs,
-    uint32_t _port)
+tcp_connections::tcp_connections(node_id_t _my_id,
+                                 const std::map<node_id_t, ip_addr_t>& ip_addrs,
+                                 uint32_t _port)
         : my_id(_my_id), port(_port) {
     establish_node_connections(ip_addrs);
 }
@@ -124,6 +124,11 @@ bool tcp_connections::add_node(node_id_t new_id, const ip_addr_t new_ip_addr) {
     if(sockets.count(new_id) > 0)
         return true;
     return add_connection(new_id, new_ip_addr);
+}
+
+bool tcp_connections::delete_node(node_id_t remove_id) {
+    std::lock_guard<std::mutex> lock(sockets_mutex);
+    return (sockets.erase(remove_id) > 0);
 }
 
 int32_t tcp_connections::probe_all() {

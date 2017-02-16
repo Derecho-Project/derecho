@@ -1,58 +1,43 @@
 #pragma once
 
-#include "tcp/tcp.h"
-
-#include "logger.h"
-#include "view.h"
 
 #include <chrono>
 #include <ctime>
+#include <cstdint>
 #include <experimental/optional>
+#include <exception>
 #include <list>
 #include <map>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <typeindex>
 #include <utility>
 #include <vector>
 #include <iostream>
 
+#include "tcp/tcp.h"
+
+#include "logger.h"
+#include "view.h"
+#include "replicated.h"
+#include "rpc_manager.h"
+#include "view_manager.h"
+#include "derecho_exception.h"
+
+#include "mutils-containers/TypeMap2.hpp"
+#include "mutils-containers/KindMap.hpp"
+
 namespace derecho {
 
-/**
- * Base exception class for all exceptions raised by Derecho.
- */
-struct derecho_exception : public std::exception {
-public:
-    const std::string message;
-    derecho_exception(const std::string& message) : message(message) {}
-
-    const char* what() const noexcept { return message.c_str(); }
-};
-
-/**
- * A little helper class that implements a threadsafe queue by requiring all
- * clients to lock a mutex before accessing the queue.
- */
-template <typename T>
-class LockedQueue {
-private:
-    using unique_lock_t = std::unique_lock<std::mutex>;
-    std::mutex mutex;
-    std::list<T> underlying_list;
-
-public:
-    struct LockedListAccess {
-    private:
-        unique_lock_t lock;
-
-    public:
-        std::list<T>& access;
-        LockedListAccess(std::mutex& m, std::list<T>& a) : lock(m), access(a){};
-    };
-    LockedListAccess locked() {
-        return LockedListAccess{mutex, underlying_list};
-    }
+struct SubgroupInfo {
+    /** subgroup type -> number of subgroups */
+    std::map<std::type_index, uint32_t> num_subgroups;
+    /** (subgroup type, subgroup index) -> number of shards */
+    std::map<std::pair<std::type_index, uint32_t>, uint32_t> num_shards;
+    /** (old view, new view, subgroup type, subgroup index, shard index) -> IDs of members */
+    std::function<std::vector<node_id_t>(View&, View&,
+            std::type_index, uint32_t, uint32_t)> subgroup_membership;
 };
 
 /**
@@ -60,107 +45,113 @@ public:
  * management service (GMS) features and contains a MulticastGroup instance that
  * manages the actual sending and tracking of messages within the group.
  */
-template <typename dispatcherType>
+template <typename... ReplicatedObjects>
 class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
+    //This might need to change to View&, View& if we want to support subgroup_membership
     using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
                                              std::vector<node_id_t> old_members)>;
 
-    /** Contains client sockets for all pending joins, except the current one.*/
-    LockedQueue<tcp::socket> pending_join_sockets;
+    using subgroup_id_t = uint32_t;
 
-    /** Contains old Views that need to be cleaned up*/
-    std::queue<std::unique_ptr<View<dispatcherType>>> old_views;
-    std::mutex old_views_mutex;
-    std::condition_variable old_views_cv;
+    template<typename T>
+    using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
-    /** The socket connected to the client that is currently joining, if any */
-    std::list<tcp::socket> proposed_join_sockets;
-    /** The node ID that has been assigned to the client that is currently joining, if any. */
-    node_id_t joining_client_id;
-    /** A cached copy of the last known value of this node's suspected[] array.
-     * Helps the SST predicate detect when there's been a change to suspected[].*/
-    std::vector<bool> last_suspected;
+    SubgroupInfo subgroup_info;
+    /** Maps a type to the Factory for that type. */
+    mutils::KindMap<Factory, ReplicatedObjects...> factories;
+    /** Maps each type T to a map of <index, Replicated<T>> for that type's
+     * subgroup(s). If this node is not a member of a subgroup for a type, the
+     * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
+     * the Replicated<T> will refer to the one shard that this node belongs to. */
+    mutils::KindMap<replicated_index_map, ReplicatedObjects...> replicated_objects;
+    /** Maps a type to the list of subgroup IDs that implement Replicated<T>
+     * for that type. Do I need this? */
+    mutils::TypeMap<std::list<subgroup_id_t>, ReplicatedObjects...> subgroup_members;
 
-    /** The port that this instance of the GMS communicates on. */
-    const int gms_port;
+    /** Contains all state related to managing Views, including the
+     * ManagedGroup and SST (since those change when the view changes). */
+    ViewManager view_manager;
+    /** Contains all state related to receiving and handling RPC function
+     * calls for any Replicated objects implemented by this group. */
+    rpc::RPCManager rpc_manager;
 
-    tcp::connection_listener server_socket;
-    /** A flag to signal background threads to shut down; set to true when the group is destroyed. */
-    std::atomic<bool> thread_shutdown;
-    /** The background thread that listens for clients connecting on our server socket. */
-    std::thread client_listener_thread;
-    std::thread old_view_cleanup_thread;
 
-    //Handles for all the predicates the GMS registered with the current view's SST.
-    pred_handle suspected_changed_handle;
-    pred_handle start_join_handle;
-    pred_handle change_commit_ready_handle;
-    pred_handle leader_proposed_handle;
-    pred_handle leader_committed_handle;
+    /** Constructor helper that wires together the component objects of Group. */
+    void set_up_components();
 
-    /** Name of the file to use to persist the current view to disk. */
-    std::string view_file_name;
+    /** Base case for construct_objects template. */
+    void construct_objects(...){}
 
-    /** Lock this before accessing curr_view, since it's shared by multiple threads */
-    std::mutex view_mutex;
-    /** Notified when curr_view changes (i.e. we are finished with a pending view change).*/
-    std::condition_variable view_change_cv;
+    /**
+     * Constructor helper that unpacks the template parameter pack. Constructs
+     * Replicated<T> wrappers for each object being replicated, and saves each
+     * Factory<T> in a map so they can be used again if more subgroups are
+     * added when the group expands.
+     * @param my_id The Node ID of this node
+     * @param subgroup_info The structure describing subgroup membership
+     * @param next_subgroup_id The unique "subgroup ID" that will be used for the
+     * next subgroup encountered while traversing the list of subgroup types/indices.
+     * The first call should always supply 0 to this parameter, and it will be
+     * passed through recursively as a "local variable."
+     * @param curr_factory The current Factory<ReplicatedObject> being considered
+     * @param rest_factories The rest of the template parameter pack
+     */
+    template<typename FirstType, typename... RestTypes>
+    void construct_objects(node_id_t my_id, const View& curr_view, subgroup_id_t next_subgroup_id,
+                           Factory<FirstType> curr_factory, Factory<RestTypes>... rest_factories) {
+        factories.template get<FirstType>() = curr_factory;
+        std::vector<node_id_t> members(curr_view.members);
+        std::type_index subgroup_type(typeid(FirstType));
+        uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);
+        for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index){
+            //Create a unique ID for this index of this subgroup type
+            subgroup_members.template get<FirstType>().push_back(next_subgroup_id);
+            //Find out if this node is in any shard of this subgroup
+            bool in_subgroup = false;
+            uint32_t num_shards = subgroup_info.num_shards.at(std::make_pair(subgroup_type, subgroup_index));
+            for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
+                std::vector<node_id_t> members = subgroup_info.subgroup_membership(
+                        View(), curr_view, subgroup_type,
+                        subgroup_index, shard_num);
+                //"If this node is in subgroup_membership() for this shard"
+                if(std::find(members.begin(), members.end(), my_id) != members.end()) {
+                     in_subgroup = true;
+                     replicated_objects.template get<FirstType>().insert(std::make_pair(subgroup_index,
+                             Replicated<FirstType>(my_id, rpc_manager, curr_factory)));
+                     break; //This node can be in at most one shard
+                }
+            }
+            if(!in_subgroup) {
+                //Put a default-constructed Replicated() in the map
+                replicated_objects.template get<FirstType>()[subgroup_index];
+            }
+            next_subgroup_id++;
+        }
 
-    /** The current View, containing the state of the managed group.
-     *  Must be a pointer so we can re-assign it.*/
-    std::unique_ptr<View<dispatcherType>> curr_view;
-    /** May hold a pointer to the partially-constructed next view, if we are
-     *  in the process of transitioning to a new view. */
-    std::unique_ptr<View<dispatcherType>> next_view;
+        construct_objects<RestTypes...>(my_id, curr_view, next_subgroup_id, rest_factories...);
+    }
 
-    dispatcherType dispatchers;
-    std::vector<view_upcall_t> view_upcalls;
-
-    DerechoParams derecho_params;
-    /** Sends a joining node the new view that has been constructed to include it.*/
-    void commit_join(const View<dispatcherType>& new_view,
-                     tcp::socket& client_socket);
-
-    bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
-
-    /** Assuming this node is the leader, handles a join request from a client.*/
-    void receive_join(tcp::socket& client_socket);
-
-    /** Starts a new Derecho group with this node as the only member, and initializes the GMS. */
-    std::unique_ptr<View<dispatcherType>> start_group(const node_id_t my_id, const ip_addr my_ip);
-    /** Joins an existing Derecho group, initializing this object to participate in its GMS. */
-    std::unique_ptr<View<dispatcherType>> join_existing(const node_id_t my_id, const ip_addr& leader_ip, const int leader_port);
-
-    // Ken's helper methods
-    void deliver_in_order(const View<dispatcherType>& Vc, int Leader);
-    void ragged_edge_cleanup(View<dispatcherType>& Vc);
-    void leader_ragged_edge_cleanup(View<dispatcherType>& Vc);
-    void follower_ragged_edge_cleanup(View<dispatcherType>& Vc);
-
-    static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
-    static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
-    static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
-    static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
-
-    /** Constructor helper method to encapsulate spawning the background threads. */
-    void create_threads();
-    /** Constructor helper method to encapsulate creating all the predicates. */
-    void register_predicates();
-    /** Constructor helper called when creating a new group; waits for a new
-     * member to join, then sends it the view. */
-    void await_second_member(const node_id_t my_id);
-
-    /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
-     * The parameters are all the possible parameters for constructing MulticastGroup. */
-    void setup_derecho(std::vector<MessageBuffer>& message_buffers,
-                       CallbackSet callbacks,
-                       const DerechoParams& derecho_params);
-    /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
-     * (and copying over the SST data from the current view). */
-    void transition_sst_and_rdmc(View<dispatcherType>& newView);
+    /**
+     * Delegating constructor for joining an existing managed group, called after
+     * the entry-point constructor constructs a socket that connects to the leader.
+     * @param my_id The node ID of the node running this code
+     * @param leader_connection A socket connected to the existing group's leader
+     * @param callbacks
+     * @param subgroup_info
+     * @param _view_upcalls
+     * @param gms_port
+     * @param factories
+     */
+    Group(const node_id_t my_id,
+          tcp::socket leader_connection,
+          CallbackSet callbacks,
+          const SubgroupInfo& subgroup_info,
+          std::vector<view_upcall_t> _view_upcalls,
+          const int gms_port,
+          Factory<ReplicatedObjects>... factories);
 
 public:
     /**
@@ -169,7 +160,6 @@ public:
      * the  underlying DerechoGroup. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
      * @param my_ip The IP address of the node executing this code
-     * @param _dispatchers
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      * @param derecho_params The assorted configuration parameters for this
@@ -177,13 +167,15 @@ public:
      * @param _view_upcalls
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
+     *
      */
     Group(const ip_addr my_ip,
-          dispatcherType _dispatchers,
           CallbackSet callbacks,
-          const DerechoParams derecho_params,
+          const DerechoParams& derecho_params,
+          const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345);
+          const int gms_port = 12345,
+          Factory<ReplicatedObjects>... factories);
 
     /**
      * Constructor that joins an existing managed Derecho group. The parameters
@@ -193,7 +185,6 @@ public:
      * @param my_ip The IP address of the node running this code
      * @param leader_id The node ID of the existing group's leader
      * @param leader_ip The IP address of the existing group's leader
-     * @param _dispatchers
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      * @param _view_upcalls
@@ -204,10 +195,11 @@ public:
           const ip_addr my_ip,
           const node_id_t leader_id,
           const ip_addr leader_ip,
-          dispatcherType _dispatchers,
           CallbackSet callbacks,
+          const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345);
+          const int gms_port = 12345,
+          Factory<ReplicatedObjects>... factories);
     /**
      * Constructor that re-starts a failed group member from log files.
      * It assumes the local ".paxosstate" file already contains the last known
@@ -221,7 +213,6 @@ public:
      * use (extensions will be added automatically)
      * @param my_id The node ID of the node executing this code
      * @param my_ip The IP address of the node executing this code
-     * @param _dispatchers
      * @param callbacks The set of callback functions to use for message
      * delivery events once the group has been re-joined
      * @param derecho_params (Optional) If set, and this node is the leader of
@@ -234,15 +225,47 @@ public:
     Group(const std::string& recovery_filename,
           const node_id_t my_id,
           const ip_addr my_ip,
-          dispatcherType _dispatchers,
           CallbackSet callbacks,
+          std::experimental::optional<SubgroupInfo> _subgroup_info = std::experimental::optional<SubgroupInfo>{},
           std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345);
+          const int gms_port = 12345,
+          Factory<ReplicatedObjects>... factories);
 
     ~Group();
 
-    void rdmc_sst_setup();
+    /**
+     * Gets the Replicated<T> for the subgroup of the specified type and index.
+     * If this node is a member of that subgroup, it will contain the replicated
+     * state of an object of type T and be usable to send multicasts to this node's
+     * shard of the subgroup. If this node is not a member of the subgroup, it
+     * will be an invalid Replicated<T>.
+     * @param subgroup_index The index of the subgroup within the set of
+     * subgroups that replicate the same type of object.
+     * @tparam SubgroupType The object type identifying the subgroup
+     * @return A reference to the Replicated<SubgroupType> for this subgroup
+     */
+    template<typename SubgroupType>
+    Replicated<SubgroupType>& get_subgroup(uint32_t subgroup_index);
+
+    /**
+     * Serializes and sends the state of all replicated objects that represent
+     * subgroups this node is a member of. (This sends the state of the object
+     * itself, not the Replicated<T> that wraps it).
+     * @param receiver_socket The socket that should receive the serialized
+     * objects.
+     */
+    void send_objects(tcp::socket& receiver_socket);
+
+    /**
+     * Updates the state of all replicated objects that correspond to subgroups
+     * this node is a member of, replacing them with the objects received over
+     * the given TCP socket.
+     * @param sender_socket The socket that is sending serialized objects to
+     * this node.
+     */
+    void receive_objects(tcp::socket& sender_socket);
+
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
     /** Creates and returns a vector listing the nodes that are currently members of the group. */
@@ -250,30 +273,12 @@ public:
     /** Gets a pointer into the managed DerechoGroup's send buffer, at a
      * position where there are at least payload_size bytes remaining in the
      * buffer. The returned pointer can be used to write a message into the
-     * buffer. (Analogous to DerechoGroup::get_position) */
+     * buffer. (Analogous to MulticastGroup::get_position) */
     char* get_sendbuffer_ptr(long long unsigned int payload_size,
                              int pause_sending_turns = 0, bool cooked_send = false);
-    /** Instructs the managed DerechoGroup to send the next message. This
+    /** Instructs the managed MulticastGroup to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send();
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    void orderedSend(const std::vector<node_id_t>& nodes, Args&&... args);
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    void orderedSend(Args&&... args);
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    auto orderedQuery(const std::vector<node_id_t>& nodes, Args&&... args);
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    auto orderedQuery(Args&&... args);
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    void p2pSend(node_id_t dest_node, Args&&... args);
-
-    template <typename IdClass, unsigned long long tag, typename... Args>
-    auto p2pQuery(node_id_t dest_node, Args&&... args);
 
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
@@ -287,7 +292,6 @@ public:
         util::debug_log().log_event(event_text);
     }
     void print_log(std::ostream& output_dest) const;
-    std::map<node_id_t, ip_addr> get_member_ips_map(std::vector<node_id_t>& members, std::vector<ip_addr>& member_ips, std::vector<char> failed);
 };
 
 } /* namespace derecho */

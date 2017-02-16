@@ -19,7 +19,6 @@
 
 namespace derecho {
 
-template <typename handlersType>
 class View : public mutils::ByteRepresentable {
 public:
     /** Sequential view ID: 0, 1, ... */
@@ -46,7 +45,7 @@ public:
     /** The rank of this node (as returned by rank_of()) */
     int32_t my_rank;
     /** RDMC manager object used for sending multicasts */
-    std::unique_ptr<MulticastGroup<handlersType>> multicast_group;
+    std::unique_ptr<MulticastGroup> multicast_group;
     /** Pointer to the SST instance used by the GMS in this View */
     std::shared_ptr<DerechoSST> gmsSST;
 
@@ -95,14 +94,21 @@ public:
 };
 
 /**
+ * Creates a View for the initial leader of a group, to be used when it starts up.
+ * @param my_id The leader's ID (should be 0)
+ * @param my_ip The leader's IP address
+ * @return A unique_ptr to first view that should be installed at that leader.
+ */
+std::unique_ptr<View> make_initial_view(const node_id_t my_id, const ip_addr my_ip);
+
+/**
  * Custom implementation of load_object for Views. The View from the swap file
  * will be used if it is newer than the View from view_file_name (according to
  * VID), since this means a crash occurred before the swap file could be renamed.
  * @param view_file_name The name of the file to read for a serialized View
  * @return A new View constructed with the data in the file
  */
-template <typename handlersType>
-std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name);
+std::unique_ptr<View> load_view(const std::string& view_file_name);
 
 /**
  * Prints a plaintext representation of the View to an output stream. This is
@@ -112,15 +118,11 @@ std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name)
  * @param view The View to print
  * @return The output stream
  */
-template <typename handlersType>
-std::ostream& operator<<(std::ostream& stream, const View<handlersType>& view);
+std::ostream& operator<<(std::ostream& stream, const View& view);
 
 /**
  * Parses the plaintext representation created by operator<< and modifies the View
  * argument to contain the view it represents.
  */
-template <typename handlersType>
-std::istream& operator>>(std::istream& stream, View<handlersType>& view);
+std::istream& operator>>(std::istream& stream, View& view);
 }
-
-#include "view_impl.h"

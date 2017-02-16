@@ -9,5 +9,4 @@
 
 #pragma once
 
-#include "derecho_caller.h"
 #include "group.h"

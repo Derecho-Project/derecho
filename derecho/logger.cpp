@@ -1,7 +1,5 @@
 #include "logger.h"
 
-#include "group.h"
-
 namespace derecho {
 
 std::chrono::high_resolution_clock::time_point program_start_time;

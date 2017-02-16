@@ -3,7 +3,6 @@
 
 #include "connection_manager.h"
 #include "mutils-serialization/SerializationSupport.hpp"
-#include "rdmc/connection.h"
 
 using namespace std;
 

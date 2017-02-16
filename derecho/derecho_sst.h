@@ -1,5 +1,4 @@
-#ifndef DERECHO_ROW_H_
-#define DERECHO_ROW_H_
+#pragma once
 
 #include <atomic>
 #include <cstring>
@@ -25,9 +24,16 @@ using sst::SSTFieldVector;
  */
 class DerechoSST : public sst::SST<DerechoSST> {
 public:
-    // derecho_group members. Copy-pasted from derecho_group.h's
-    // MessageTrackingRow
-    /** This variable is the highest sequence number that has been received
+    // MulticastGroup members, related only to tracking message delivery
+    /**
+     * Sequence numbers are interpreted like a row-major pair:
+     * (sender, index) becomes sender + num_members * index.
+     * Since the global order is round-robin, the correct global order of
+     * messages becomes a consecutive sequence of these numbers: with 4
+     * senders, we expect to receive (0,0), (1,0), (2,0), (3,0), (0,1),
+     * (1,1), ... which is 0, 1, 2, 3, 4, 5, ....
+     *
+     * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
     SSTField<long long int> seq_num;
@@ -45,6 +51,7 @@ public:
      * persisted to disk once delivered to the application. */
     SSTField<long long int> persisted_num;
 
+    // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
     SSTField<int> vid;
     /** Array of same length as View::members, where each bool represents
@@ -249,5 +256,3 @@ bool equals(const volatile char& string_array, const std::string& value);
 }  // namespace gmssst
 
 }  // namespace derecho
-
-#endif /* DERECHO_ROW_H_ */

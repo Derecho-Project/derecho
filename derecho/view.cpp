@@ -11,12 +11,11 @@ namespace derecho {
 using std::string;
 using std::shared_ptr;
 
-template <typename handlersType>
-View<handlersType>::View()
+View::View()
         : View(0) {}
 
-template <typename handlersType>
-View<handlersType>::View(int num_members)
+
+View::View(int num_members)
         : vid(0),
           members(num_members),
           member_ips(num_members),
@@ -29,15 +28,15 @@ View<handlersType>::View(int num_members)
           multicast_group(nullptr),
           gmsSST(nullptr) {}
 
-//template <typename handlersType>
-//void View<handlersType>::init_vectors() {
+//
+//void View::init_vectors() {
 //    members.resize(num_members);
 //    member_ips.resize(num_members);
 //    failed.resize(num_members, 0);
 //}
 
-template <typename handlersType>
-int View<handlersType>::rank_of_leader() const {
+
+int View::rank_of_leader() const {
     for(int r = 0; r < num_members; ++r) {
         if(!failed[r]) {
             return r;
@@ -46,8 +45,8 @@ int View<handlersType>::rank_of_leader() const {
     return -1;
 }
 
-template <typename handlersType>
-int View<handlersType>::rank_of(const ip_addr& who) const {
+
+int View::rank_of(const ip_addr& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
         if(member_ips[rank] == who) {
             return rank;
@@ -56,8 +55,8 @@ int View<handlersType>::rank_of(const ip_addr& who) const {
     return -1;
 }
 
-template <typename handlersType>
-int View<handlersType>::rank_of(const node_id_t& who) const {
+
+int View::rank_of(const node_id_t& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
         if(members[rank] == who) {
             return rank;
@@ -66,19 +65,19 @@ int View<handlersType>::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-template <typename handlersType>
-void View<handlersType>::announce_new_view(const View& Vc) {
+
+void View::announce_new_view(const View& Vc) {
     //    std::cout <<"Process " << Vc.members[Vc.my_rank] << " New view: " <<
     //    Vc.ToString() << std::endl;
 }
 
-template <typename handlersType>
-bool View<handlersType>::i_am_leader() const {
+
+bool View::i_am_leader() const {
     return (rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
-template <typename handlersType>
-bool View<handlersType>::i_am_new_leader() {
+
+bool View::i_am_new_leader() {
     if(i_know_i_am_leader) {
         return false;  // I am the OLD leader
     }
@@ -94,8 +93,8 @@ bool View<handlersType>::i_am_new_leader() {
     return true;
 }
 
-template <typename handlersType>
-void View<handlersType>::merge_changes() {
+
+void View::merge_changes() {
     int myRank = my_rank;
     // Merge the change lists
     for(int n = 0; n < num_members; n++) {
@@ -133,15 +132,15 @@ void View<handlersType>::merge_changes() {
     gmsSST->put();
 }
 
-template <typename handlersType>
-void View<handlersType>::wedge() {
+
+void View::wedge() {
     multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put();
 }
 
-template <typename handlersType>
-std::string View<handlersType>::debug_string() const {
+
+std::string View::debug_string() const {
     // need to add member ips and other fields
     std::stringstream s;
     s << "View " << vid << ": MyRank=" << my_rank << ". ";
@@ -168,12 +167,12 @@ std::string View<handlersType>::debug_string() const {
     return s.str();
 }
 
-template <typename handlersType>
-std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name) {
+
+std::unique_ptr<View> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
     std::ifstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);
-    std::unique_ptr<View<handlersType>> view;
-    std::unique_ptr<View<handlersType>> swap_view;
+    std::unique_ptr<View> view;
+    std::unique_ptr<View> swap_view;
     //The expected view file might not exist, in which case we'll fall back to the swap file
     if(view_file.good()) {
         //Each file contains the size of the view (an int copied as bytes),
@@ -185,7 +184,7 @@ std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name)
         //If the view file doesn't contain a complete view (due to a crash
         //during writing), the read() call will set failbit
         if(!view_file.fail()) {
-            view = mutils::from_bytes<View<handlersType>>(nullptr, buffer);
+            view = mutils::from_bytes<View>(nullptr, buffer);
         }
     }
     if(view_file_swap.good()) {
@@ -194,7 +193,7 @@ std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name)
         char buffer[size_of_view];
         view_file_swap.read(buffer, size_of_view);
         if(!view_file_swap.fail()) {
-            swap_view = mutils::from_bytes<View<handlersType>>(nullptr, buffer);
+            swap_view = mutils::from_bytes<View>(nullptr, buffer);
         }
     }
     if(swap_view == nullptr ||
@@ -205,8 +204,18 @@ std::unique_ptr<View<handlersType>> load_view(const std::string& view_file_name)
     }
 }
 
-template <typename handlersType>
-std::ostream& operator<<(std::ostream& stream, const View<handlersType>& view) {
+std::unique_ptr<View> make_initial_view(const node_id_t my_id, const ip_addr my_ip) {
+    std::unique_ptr<View> new_view = std::make_unique<View>(1);
+    new_view->members[0] = my_id;
+    new_view->my_rank = 0;
+    new_view->member_ips[0] = my_ip;
+    new_view->failed[0] = false;
+    new_view->i_know_i_am_leader = true;
+    return new_view;
+}
+
+
+std::ostream& operator<<(std::ostream& stream, const View& view) {
     stream << view.vid << std::endl;
     std::copy(view.members.begin(), view.members.end(), std::ostream_iterator<node_id_t>(stream, " "));
     stream << std::endl;
@@ -222,8 +231,8 @@ std::ostream& operator<<(std::ostream& stream, const View<handlersType>& view) {
     return stream;
 }
 
-template <typename handlersType>
-std::istream& operator>>(std::istream& stream, View<handlersType>& view) {
+
+std::istream& operator>>(std::istream& stream, View& view) {
     std::string line;
     if(std::getline(stream, line)) {
         view.vid = std::stoi(line);
