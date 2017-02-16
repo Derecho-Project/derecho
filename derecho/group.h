@@ -35,8 +35,8 @@ struct SubgroupInfo {
     std::map<std::type_index, uint32_t> num_subgroups;
     /** (subgroup type, subgroup index) -> number of shards */
     std::map<std::pair<std::type_index, uint32_t>, uint32_t> num_shards;
-    /** (old view, new view, subgroup type, subgroup index, shard index) -> IDs of members */
-    std::function<std::vector<node_id_t>(View&, View&,
+    /** (current view, subgroup type, subgroup index, shard index) -> IDs of members */
+    std::function<std::vector<node_id_t>(View&,
             std::type_index, uint32_t, uint32_t)> subgroup_membership;
 };
 
@@ -67,9 +67,6 @@ private:
      * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
      * the Replicated<T> will refer to the one shard that this node belongs to. */
     mutils::KindMap<replicated_index_map, ReplicatedObjects...> replicated_objects;
-    /** Maps a type to the list of subgroup IDs that implement Replicated<T>
-     * for that type. Do I need this? */
-    mutils::TypeMap<std::list<subgroup_id_t>, ReplicatedObjects...> subgroup_members;
 
     /** Contains all state related to managing Views, including the
      * ManagedGroup and SST (since those change when the view changes). */
@@ -92,29 +89,23 @@ private:
      * added when the group expands.
      * @param my_id The Node ID of this node
      * @param subgroup_info The structure describing subgroup membership
-     * @param next_subgroup_id The unique "subgroup ID" that will be used for the
-     * next subgroup encountered while traversing the list of subgroup types/indices.
-     * The first call should always supply 0 to this parameter, and it will be
-     * passed through recursively as a "local variable."
      * @param curr_factory The current Factory<ReplicatedObject> being considered
      * @param rest_factories The rest of the template parameter pack
      */
     template<typename FirstType, typename... RestTypes>
-    void construct_objects(node_id_t my_id, const View& curr_view, subgroup_id_t next_subgroup_id,
+    void construct_objects(node_id_t my_id, const View& curr_view,
                            Factory<FirstType> curr_factory, Factory<RestTypes>... rest_factories) {
         factories.template get<FirstType>() = curr_factory;
         std::vector<node_id_t> members(curr_view.members);
         std::type_index subgroup_type(typeid(FirstType));
         uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);
         for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index){
-            //Create a unique ID for this index of this subgroup type
-            subgroup_members.template get<FirstType>().push_back(next_subgroup_id);
             //Find out if this node is in any shard of this subgroup
             bool in_subgroup = false;
-            uint32_t num_shards = subgroup_info.num_shards.at(std::make_pair(subgroup_type, subgroup_index));
+            uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type, subgroup_index});
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
                 std::vector<node_id_t> members = subgroup_info.subgroup_membership(
-                        View(), curr_view, subgroup_type,
+                        curr_view, subgroup_type,
                         subgroup_index, shard_num);
                 //"If this node is in subgroup_membership() for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
@@ -128,10 +119,9 @@ private:
                 //Put a default-constructed Replicated() in the map
                 replicated_objects.template get<FirstType>()[subgroup_index];
             }
-            next_subgroup_id++;
         }
 
-        construct_objects<RestTypes...>(my_id, curr_view, next_subgroup_id, rest_factories...);
+        construct_objects<RestTypes...>(my_id, curr_view, rest_factories...);
     }
 
     /**

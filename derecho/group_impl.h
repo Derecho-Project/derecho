@@ -25,7 +25,7 @@ Group<ReplicatedObjects...>::Group(
           view_manager(my_ip, callbacks, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager) {
     //    ^ In this constructor, this is the first node to start, so my ID will be 0
-    construct_objects(0, view_manager.get_current_view(), subgroup_info, 0, factories...);
+    construct_objects(0, view_manager.get_current_view(), subgroup_info, factories...);
     set_up_components();
     view_manager.start();
 }
@@ -54,7 +54,7 @@ Group<ReplicatedObjects...>::Group(const node_id_t my_id,
           Factory<ReplicatedObjects>... factories)
           : view_manager(my_id, leader_connection, callbacks, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager) {
-    construct_objects(my_id, view_manager.get_current_view(), 0, factories...);
+    construct_objects(my_id, view_manager.get_current_view(), factories...);
     receive_objects(leader_connection);
     set_up_components();
     view_manager.start();

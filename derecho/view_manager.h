@@ -124,6 +124,8 @@ private:
     const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
+
+
     send_objects_upcall_t send_subgroup_objects;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
@@ -165,13 +167,16 @@ private:
 
     /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing MulticastGroup. */
-    void setup_derecho(CallbackSet callbacks,
+    void setup_multicast_group(CallbackSet callbacks,
                        const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
     void transition_sst_and_rdmc(View& newView);
     void rdmc_sst_setup();
-    uint32_t calc_num_received_size(std::vector<uint32_t> members);
+    uint32_t make_subgroup_maps(const View& curr_view,
+                                std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+                                std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
+                                std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership) const;
     uint32_t calc_total_num_subgroups() const;
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 public:

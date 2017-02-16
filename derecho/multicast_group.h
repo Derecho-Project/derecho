@@ -134,9 +134,10 @@ public:    //consts can be public, right?
 private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
-    const SubgroupInfo subgroup_info;
-    std::map<uint32_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
-    std::map<uint32_t, uint32_t> subgroup_to_num_received_offset;
+    uint32_t total_num_subgroups;
+    const std::map<uint32_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    const std::map<uint32_t, uint32_t> subgroup_to_num_received_offset;
+    const std::map<uint32_t, std::vector<node_id_t>> subgroup_to_membership;
     std::map<uint32_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
     rpc_handler_t rpc_callback;
@@ -216,7 +217,10 @@ public:
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,
         CallbackSet callbacks,
-        SubgroupInfo subgroup_info,
+        uint32_t total_num_subgroups,
+        const std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+        const std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
+        const std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership,
         const DerechoParams derecho_params,
         std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -225,6 +229,10 @@ public:
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,
         MulticastGroup&& old_group,
+        uint32_t total_num_subgroups,
+        const std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+        const std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
+        const std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership,
         std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
     ~MulticastGroup();
 

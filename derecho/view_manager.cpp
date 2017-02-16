@@ -44,7 +44,7 @@ ViewManager::ViewManager(
     }
 
     log_event("Initializing SST and RDMC for the first time.");
-    setup_derecho(callbacks, derecho_params);
+    setup_multicast_group(callbacks, derecho_params);
 }
 
 ViewManager::ViewManager(const node_id_t my_id,
@@ -76,7 +76,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     }
     log_event("Initializing SST and RDMC for the first time.");
 
-    setup_derecho(callbacks, derecho_params);
+    setup_multicast_group(callbacks, derecho_params);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -129,7 +129,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     persist_object(derecho_params, params_file_name);
 
     log_event("Initializing SST and RDMC for the first time.");
-    setup_derecho(callbacks,
+    setup_multicast_group(callbacks,
                   derecho_params);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
     curr_view->gmsSST->put();
@@ -591,28 +591,41 @@ void ViewManager::register_predicates() {
     leader_committed_handle = curr_view->gmsSST->predicates.insert(leader_committed_next_view, start_view_change, sst::PredicateType::ONE_TIME);
 }
 
-void ViewManager::setup_derecho(CallbackSet callbacks,
+void ViewManager::setup_multicast_group(CallbackSet callbacks,
                                 const DerechoParams& derecho_params) {
+    std::map<uint32_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    std::map<uint32_t, uint32_t> subgroup_to_num_received_offset;
+    std::map<uint32_t, std::vector<node_id_t>> subgroup_to_membership;
+    uint32_t num_received_size = make_subgroup_maps(*curr_view, subgroup_to_shard_n_index,
+            subgroup_to_num_received_offset, subgroup_to_membership);
     curr_view->gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
             curr_view->members, curr_view->members[curr_view->my_rank],
             [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
-            calc_total_num_subgroups(), calc_num_received_size(curr_view->members));
+            calc_total_num_subgroups(), num_received_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
         curr_view->members, curr_view->members[curr_view->my_rank],
-        curr_view->gmsSST, callbacks, subgroup_info, derecho_params,
+        curr_view->gmsSST, callbacks, calc_total_num_subgroups(), subgroup_to_shard_n_index,
+        subgroup_to_num_received_offset, subgroup_to_membership, derecho_params,
         curr_view->failed);
 }
 
 void ViewManager::transition_sst_and_rdmc(View& newView) {
+    std::map<uint32_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    std::map<uint32_t, uint32_t> subgroup_to_num_received_offset;
+    std::map<uint32_t, std::vector<node_id_t>> subgroup_to_membership;
+    uint32_t num_received_size = make_subgroup_maps(newView, subgroup_to_shard_n_index,
+            subgroup_to_num_received_offset, subgroup_to_membership);
     newView.gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
             newView.members, newView.members[newView.my_rank],
             [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed, false),
-            calc_total_num_subgroups(), calc_num_received_size(newView.members));
+            calc_total_num_subgroups(), num_received_size);
 
     newView.multicast_group = std::make_unique<MulticastGroup>(
         newView.members, newView.members[newView.my_rank], newView.gmsSST,
-        std::move(*curr_view->multicast_group),
+        std::move(*curr_view->multicast_group), calc_total_num_subgroups(),
+        subgroup_to_shard_n_index,
+        subgroup_to_num_received_offset, subgroup_to_membership,
         newView.failed);
     curr_view->multicast_group.reset();
 
@@ -749,25 +762,37 @@ uint32_t ViewManager::calc_total_num_subgroups() const {
     return total;
 }
 
-uint32_t ViewManager::calc_num_received_size(std::vector<uint32_t> members) {
-    auto num_members = members.size();
-    uint32_t sum = 0;
-    auto num_subgroups = calc_total_num_subgroups();
-    for(uint i = 0; i < num_subgroups; ++i) {
-        auto num_shards = subgroup_info.num_shards(num_members, i);
-        uint32_t max_shard_members = 0;
-        for(uint j = 0; j < num_shards; ++j) {
-            auto shard_size = subgroup_info.subgroup_membership(members, i, j).size();
-            if(shard_size > max_shard_members) {
-                max_shard_members = shard_size;
+uint32_t ViewManager::make_subgroup_maps(const View& curr_view,
+                                    std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+                                    std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
+                                    std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership) const {
+    uint32_t next_subgroup_number = 0;
+    uint32_t subgroup_offset = 0;
+    for(const auto& subgroup_type_count : subgroup_info.num_subgroups) {
+        for(uint32_t subgroup_index = 0; subgroup_index < subgroup_type_count.second; ++subgroup_index) {
+            uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type_count.first, subgroup_index});
+            uint32_t max_shard_members = 0;
+            for(uint j = 0; j < num_shards; ++j) {
+                std::vector<node_id_t> shard_members = subgroup_info.subgroup_membership(
+                        curr_view, subgroup_type_count.first, subgroup_index, j);
+                auto it = std::find(shard_members.begin(), shard_members.end(), curr_view.members[curr_view.my_rank]);
+                if(it != shard_members.end()) {
+                    auto shard_index = std::distance(shard_members.begin(), it);
+                    subgroup_to_shard_n_index[next_subgroup_number] = {j, shard_index};
+                    subgroup_to_num_received_offset[next_subgroup_number] = subgroup_offset;
+                    subgroup_to_membership[next_subgroup_number] = shard_members;
+                }
+                auto shard_size = shard_members.size();
+                if(shard_size > max_shard_members) {
+                    max_shard_members = shard_size;
+                }
             }
+            next_subgroup_number++;
+            subgroup_offset += max_shard_members;
         }
-        sum += max_shard_members;
     }
-    std::cout << "nReceived_size is : " << sum << std::endl;
-    return sum;
+    return subgroup_offset;
 }
-
 
 /* ------------------------- Ken's helper methods ------------------------- */
 
