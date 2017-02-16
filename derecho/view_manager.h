@@ -59,6 +59,8 @@ private:
     using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
                                              std::vector<node_id_t> old_members)>;
 
+    using send_objects_upcall_t = std::function<void(tcp::socket&)>;
+
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
     friend class rpc::RPCManager;
     template<typename T>
@@ -120,6 +122,8 @@ private:
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
     DerechoParams derecho_params;
+
+    send_objects_upcall_t send_subgroup_objects;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -257,6 +261,10 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
 
+
+    void register_send_objects_upcall(send_objects_upcall_t upcall) {
+        send_subgroup_objects = std::move(upcall);
+    }
 
     void debug_print_status() const;
     static void log_event(const std::string& event_text) {

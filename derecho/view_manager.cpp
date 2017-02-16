@@ -513,8 +513,7 @@ void ViewManager::register_predicates() {
                     //and send them the new view (must happen before we try to do SST setup)
                     for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
                         commit_join(*next_view, proposed_join_sockets.front());
-                        //TODO: Send each ReplicatedObject's state to the new group
-//                        curr_view->multicast_group->send_objects(proposed_join_sockets.front());
+                        send_subgroup_objects(proposed_join_sockets.front());
                         // Close the client's socket
                         proposed_join_sockets.pop_front();
                     }
@@ -833,10 +832,10 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc) {
 
     if(!found) {
         for(int n = 0; n < Vc.num_members; n++) {
-            int min = Vc.gmsSST->nReceived[myRank][n];
+            int min = Vc.gmsSST->num_received[myRank][n];
             for(int r = 0; r < Vc.num_members; r++) {
-                if(/*!Vc.failed[r] && */ min > Vc.gmsSST->nReceived[r][n]) {
-                    min = Vc.gmsSST->nReceived[r][n];
+                if(/*!Vc.failed[r] && */ min > Vc.gmsSST->num_received[r][n]) {
+                    min = Vc.gmsSST->num_received[r][n];
                 }
             }
 

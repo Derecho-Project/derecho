@@ -94,7 +94,9 @@ void Group<ReplicatedObjects...>::set_up_components() {
             [this](node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(sender, buf, size);
     });
-
+    view_manager.register_send_objects_upcall([this](tcp::socket& joiner_socket){
+        send_objects(joiner_socket);
+    });
 }
 
 
