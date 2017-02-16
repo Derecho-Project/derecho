@@ -18,6 +18,9 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
            (old_sst.joiner_ips.size() - num_changes_installed) * sizeof(uint32_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
+        globalMinReady[local_row][i] = false;
+    }
+    for (size_t i = 0; i < globalMin.size(); ++i) {
         globalMin[local_row][i] = 0;
     }
     num_changes[local_row] = old_sst.num_changes[row];
@@ -25,7 +28,6 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     num_acked[local_row] = old_sst.num_acked[row];
     num_installed[local_row] = old_sst.num_installed[row] + num_changes_installed;
     wedged[local_row] = false;
-    globalMinReady[local_row] = false;
 }
 
 void DerechoSST::init_local_change_proposals(const int other_row) {
@@ -42,31 +44,38 @@ void DerechoSST::init_local_change_proposals(const int other_row) {
 }
 
 std::string DerechoSST::to_string() const {
-    const int row = get_local_index();
     std::stringstream s;
-    s << "Vid=" << vid[row] << " ";
-    s << "Suspected={ ";
-    for(unsigned int n = 0; n < suspected.size(); n++) {
-        s << (suspected[row][n] ? "T" : "F") << " ";
-    }
+    uint num_rows = get_num_rows();
+    for(uint row = 0; row < num_rows; ++row) {
+        s << "Row=" << row << " ";
+        s << "Vid=" << vid[row] << " ";
+        s << "Suspected={ ";
+        for(unsigned int n = 0; n < suspected.size(); n++) {
+            s << (suspected[row][n] ? "T" : "F") << " ";
+        }
 
-    s << "}, num_changes=" << num_changes[row] << ", num_committed="
-      << num_committed[row] << ", num_installed=" << num_installed[row];
-    s << ", Changes={ ";
-    for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
-        s << changes[row][n] << " ";
-    }
-    s << "}, num_acked= " << num_acked[row] << ", nReceived={ ";
-    for(unsigned int n = 0; n < nReceived.size(); n++) {
-        s << nReceived[row][n] << " ";
-    }
+        s << "}, num_changes=" << num_changes[row] << ", num_committed="
+          << num_committed[row] << ", num_installed=" << num_installed[row];
+        s << ", Changes={ ";
+        for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
+            s << changes[row][n] << " ";
+        }
+        s << "}, num_acked= " << num_acked[row] << ", nReceived={ ";
+        for(unsigned int n = 0; n < num_received.size(); n++) {
+            s << num_received[row][n] << " ";
+        }
+        s << "}"
+          << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
+        for(unsigned int n = 0; n < globalMin.size(); n++) {
+            s << globalMin[row][n] << " ";
+        }
 
-    s << "}, Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
-    for(unsigned int n = 0; n < globalMin.size(); n++) {
-        s << globalMin[row][n] << " ";
+        s << "}, GlobalMinReady= { ";
+        for(uint n = 0; n < globalMinReady.size(); n++) {
+            s << globalMinReady[row] << " ";
+        }
+        s << "}" << std::endl;
     }
-
-    s << "}, GlobalMinReady=" << globalMinReady[row] << "\n";
     return s.str();
 }
 

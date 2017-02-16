@@ -129,14 +129,14 @@ void View::merge_changes() {
             gmssst::increment(gmsSST->num_changes[myRank]);
         }
     }
-    gmsSST->put();
+    gmsSST->put((char*)std::addressof(gmsSST->changes[0][0]) - gmsSST->getBaseAddress(), gmsSST->changes.size() * sizeof(node_id_t) + gmsSST->joiner_ips.size() * sizeof(uint32_t) + sizeof(int) + sizeof(int));
 }
 
 
 void View::wedge() {
     multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
-    gmsSST->put();
+    gmsSST->put((char*)std::addressof(gmsSST->wedged[0]) - gmsSST->getBaseAddress(), sizeof(bool));
 }
 
 

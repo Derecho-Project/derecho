@@ -67,19 +67,21 @@ void FileWriter::perform_writes(std::string filename) {
             message m = pending_writes.front();
             pending_writes.pop();
 
-            message_metadata metadata;
+           message_metadata metadata;
             metadata.view_id = m.view_id;
             metadata.sender = m.sender;
             metadata.index = m.index;
             metadata.offset = current_offset;
             metadata.length = m.length;
             metadata.is_cooked = m.cooked;
+            metadata.subgroup_num = m.subgroup_num;
 
             data_file.write(m.data, m.length);
             mutils::post_object(std::bind(&std::ofstream::write, &metadata_file, _1, _2), metadata);
 
             data_file.flush();
             metadata_file.flush();
+
 
             current_offset += m.length;
 

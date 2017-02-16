@@ -25,7 +25,7 @@
 namespace derecho {
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
-using message_callback = std::function<void(int, long long int, char*, long long int)>;
+using message_callback = std::function<void(uint32_t, int, long long int, char*, long long int)>;
 
 using rpc_handler_t = std::function<void(node_id_t, char*, uint32_t)>;
 
@@ -115,6 +115,8 @@ class MulticastGroup {
 private:
     /** vector of member id's */
     std::vector<node_id_t> members;
+    /** inverse map of node_ids to sst_row */
+    std::map<node_id_t, uint32_t> node_id_to_sst_index;
     /**  number of members */
     const int num_members;
     /** index of the local node in the members vector, which should also be its row index in the SST */
@@ -132,41 +134,44 @@ public:    //consts can be public, right?
 private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
+    const SubgroupInfo subgroup_info;
+    std::map<uint32_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    std::map<uint32_t, uint32_t> subgroup_to_num_received_offset;
+    std::map<uint32_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
     rpc_handler_t rpc_callback;
 
-    std::mutex pending_results_mutex;
     /** Offset to add to member ranks to form RDMC group numbers. */
-    const uint16_t rdmc_group_num_offset;
+    uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
     bool rdmc_groups_created = false;
-    unsigned int total_message_buffers;
     /** Stores message buffers not currently in use. Protected by
      * msg_state_mtx */
-    std::vector<MessageBuffer> free_message_buffers;
+    std::map<uint32_t, std::vector<MessageBuffer>> free_message_buffers;
 
 
-    /** Index to be used the next time get_position is called.
+    /** Index to be used the next time get_sendbuffer_ptr is called.
      * When next_message is not none, then next_message.index = future_message_index-1 */
-    long long int future_message_index = 0;
+    std::vector<long long int> future_message_indices;
 
-    /** next_message is the message that will be sent when send is called the next time.
+       /** next_message is the message that will be sent when send is called the next time.
      * It is boost::none when there is no message to send. */
-    std::experimental::optional<Message> next_send;
+    std::vector<std::experimental::optional<Message>> next_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
-    std::queue<Message> pending_sends;
-    /** The message that is currently being sent out using RDMC, or boost::none otherwise. */
-    std::experimental::optional<Message> current_send;
+    std::vector<std::queue<Message>> pending_sends;
+    /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
+    /** one per subgroup */
+    std::vector<std::experimental::optional<Message>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<long long int, Message> current_receives;
+    std::map<std::pair<uint32_t, long long int>, Message> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable */
-    std::map<long long int, Message> locally_stable_messages;
+    std::map<uint32_t, std::map<long long int, Message>> locally_stable_messages;
     /** Messages that are currently being written to persistent storage */
-    std::map<long long int, Message> non_persistent_messages;
+    std::map<uint32_t, std::map<long long int, Message>> non_persistent_messages;
 
-    long long int next_message_to_deliver = 0;
+    std::vector<long long int> next_message_to_deliver;
     std::mutex msg_state_mtx;
     std::condition_variable sender_cv;
 
@@ -203,18 +208,15 @@ private:
     void initialize_sst_row();
     void register_predicates();
 
-    /** Listens for P2P RPC calls over the TCP connections and handles them. */
-    void rpc_process_loop();
-
-    void deliver_message(Message& msg);
+    void deliver_message(Message& msg, uint32_t subgroup_num);
 
 public:
     // the constructor - takes the list of members, send parameters (block size, buffer size), K0 and K1 callbacks
     MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,
-        std::vector<MessageBuffer>& free_message_buffers,
         CallbackSet callbacks,
+        SubgroupInfo subgroup_info,
         const DerechoParams derecho_params,
         std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -232,16 +234,15 @@ public:
      */
     void register_rpc_callback(rpc_handler_t handler) { rpc_callback = std::move(handler); }
 
-    void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders);
+    void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders, uint32_t subgroup_num, uint32_t num_shard_members);
     /** Get a pointer into the current buffer, to write data into it before sending */
-    char* get_position(long long unsigned int payload_size,
-                       int pause_sending_turns = 0, bool cooked_send = false);
+    char* get_sendbuffer_ptr(uint32_t subgroup_num, long long unsigned int payload_size,
+                             int pause_sending_turns = 0, bool cooked_send = false);
     /** Note that get_position and send are called one after the another - regexp for using the two is (get_position.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
-    bool send();
+    bool send(uint32_t subgroup_num);
 
-    void send_objects(tcp::socket& new_member_socket);
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
     void wedge();
     /** Debugging function; prints the current state of the SST to stdout. */
@@ -249,5 +250,12 @@ public:
     static long long unsigned int compute_max_msg_size(
         const long long unsigned int max_payload_size,
         const long long unsigned int block_size);
+    const std::map<uint32_t, std::pair<uint32_t, uint32_t>>& get_subgroup_to_shard_n_index() {
+        return subgroup_to_shard_n_index;
+    }
+    const std::map<uint32_t, uint32_t>& get_subgroup_to_num_received_offset() {
+        return subgroup_to_num_received_offset;
+    }
+    std::vector<uint32_t> get_shard_sst_indices(uint32_t subgroup_num);
 };
 }  // namespace derecho

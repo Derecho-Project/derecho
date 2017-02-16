@@ -36,20 +36,20 @@ public:
      * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
-    SSTField<long long int> seq_num;
+    SSTFieldVector<long long int> seq_num;
     /** This represents the highest sequence number that has been received
      * by every node, as observed by this node. If a node updates stable_num,
      * then it believes that all messages up to stable_num in the global
      * round-robin order have been received by every node. */
-    SSTField<long long int> stable_num;
+    SSTFieldVector<long long int> stable_num;
     /** This represents the highest sequence number that has been delivered
      * at this node. Messages are only delievered once stable, so it must be
      * at least stable_num. */
-    SSTField<long long int> delivered_num;
+    SSTFieldVector<long long int> delivered_num;
     /** This represents the highest sequence number that has been persisted
      * to disk at this node, if persistence is enabled. Messages are only
      * persisted to disk once delivered to the application. */
-    SSTField<long long int> persisted_num;
+    SSTFieldVector<long long int> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
@@ -85,46 +85,55 @@ public:
     /** Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
-    SSTFieldVector<long long int> nReceived;
+    SSTFieldVector<long long int> num_received;
     /** Set after calling rdmc::wedged(), reports that this member is wedged.
-     * Must be after nReceived!*/
+     * Must be after num_received!*/
     SSTField<bool> wedged;
     /** Array of how many messages to accept from each sender, K1-able*/
     SSTFieldVector<int> globalMin;
     /** Must come after GlobalMin */
-    SSTField<bool> globalMinReady;
-
+    SSTFieldVector<bool> globalMinReady;
+    /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
+    SSTField<bool> heartbeat;
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
      * (0, false, etc.). Initializing the derecho_group fields is left to derecho_group.
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-    DerechoSST(const sst::SSTParams& parameters)
+    DerechoSST(const sst::SSTParams& parameters, const uint32_t num_subgroups, const uint32_t num_received_size)
             : sst::SST<DerechoSST>(this, parameters),
+              seq_num(num_subgroups),
+              stable_num(num_subgroups),
+              delivered_num(num_subgroups),
+              persisted_num(num_subgroups),
               suspected(parameters.members.size()),
               changes(parameters.members.size()),
               joiner_ips(parameters.members.size()),
-              nReceived(parameters.members.size()),
-              globalMin(parameters.members.size()) {
+              num_received(num_received_size),
+              globalMin(num_received_size),
+              globalMinReady(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
-                nReceived, wedged, globalMin, globalMinReady);
+                num_received, wedged, globalMin, globalMinReady, heartbeat);
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
             for(size_t i = 0; i < parameters.members.size(); ++i) {
                 suspected[row][i] = false;
-                globalMin[row][i] = 0;
                 changes[row][i] = 0;
+                globalMinReady[row][i] = false;
+            }
+            for(size_t i = 0; i < num_received_size; ++i) {
+                globalMin[row][i] = 0;
             }
             memset(const_cast<uint32_t*>(joiner_ips[row]), 0, parameters.members.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_acked[row] = 0;
             wedged[row] = false;
-            globalMinReady[row] = false;
+            heartbeat[row] = true;
         }
     }
 

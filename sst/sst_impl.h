@@ -11,8 +11,9 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <experimental/optional>
+#include <pthread.h>
 #include <sys/time.h>
+#include <time.h>
 #include <thread>
 #include <vector>
 
@@ -63,14 +64,18 @@ void SST<DerivedSST>::detect() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
-    // int num_evals_after_snapshot = 0;
+    struct timespec last_time, cur_time;
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
     while(!thread_shutdown) {
+      bool predicate_fired = false;
         // Take the predicate lock before reading the predicate lists
         std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
 
         // one time predicates need to be evaluated only until they become true
         for(auto& pred : predicates.one_time_predicates) {
             if(pred != nullptr && (pred->first(*derived_this) == true)) {
+                predicate_fired = true;
                 // Copy the trigger pointer locally, so it can continue running without
                 // segfaulting even if this predicate gets deleted when we unlock predicates_lock
                 std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
@@ -85,6 +90,7 @@ void SST<DerivedSST>::detect() {
         // recurrent predicates are evaluated each time they are found to be true
         for(auto& pred : predicates.recurrent_predicates) {
             if(pred != nullptr && (pred->first(*derived_this) == true)) {
+                predicate_fired = true;
                 std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
                 predicates_lock.unlock();
                 (*trigger)(*derived_this);
@@ -101,6 +107,7 @@ void SST<DerivedSST>::detect() {
                 //*pred_state_it is the previous state of the predicate at *pred_it
                 bool curr_pred_state = (*pred_it)->first(*derived_this);
                 if(curr_pred_state == true && *pred_state_it == false) {
+                    predicate_fired = true;
                     std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(
                         (*pred_it)->second);
                     predicates_lock.unlock();
@@ -114,23 +121,20 @@ void SST<DerivedSST>::detect() {
             }
         }
 
-        // num_evals_after_snapshot++;
-
-        // if(num_evals_after_snapshot == 1000) {
-        //     predicates_lock.unlock();
-        //     num_evals_after_snapshot = 0;
-        //     while(true) {
-        //         // check if the row contents have changed
-        //         if(compare_snapshot_and_current()) {
-        //             using namespace std::chrono_literals;
-        //             std::this_thread::sleep_for(1ms);
-        //         } else {
-        //             take_snapshot();
-        //             break;
-        //         }
-        //     }
-        //     predicates_lock.lock();
-        // }
+        if(predicate_fired) {
+            // update last time
+            clock_gettime(CLOCK_REALTIME, &last_time);
+        } else {
+            clock_gettime(CLOCK_REALTIME, &cur_time);
+            // check if the system has been inactive for enough time to induce sleep
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3 + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            if(time_elapsed_in_ms > 1) {
+                predicates_lock.unlock();
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+		predicates_lock.lock();
+            }
+        }
         //Still to do: Clean up deleted predicates
     }
 }
@@ -200,6 +204,28 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
                 std::cout << "Reporting failure on row " << index2
                           << " due to a missing poll completion" << std::endl;
                 failed_node_indexes.push_back(index2);
+
+                std::cout << "Writes was posted to rows: " << std::endl;
+                for(uint i = 0; i < num_members; ++i) {
+                    if(posted_write_to[i]) {
+                        std::cout << i << " ";
+                    }
+                }
+                std::cout << std::endl;
+                std::cout << "Got completions from rows: " << std::endl;
+                for(uint i = 0; i < num_members; ++i) {
+                    if(polled_successfully_from[i]) {
+                        std::cout << i << " ";
+                    }
+                }
+                std::cout << std::endl;
+
+		std::cout << "Set of indices: ";
+		for (auto i : receiver_ranks) {
+		  std::cout << i << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "Number of members: " << num_members << std::endl;
             }
             continue;
         }

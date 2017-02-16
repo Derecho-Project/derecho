@@ -121,6 +121,7 @@ private:
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
+    const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
     send_objects_upcall_t send_subgroup_objects;
@@ -138,10 +139,16 @@ private:
     void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
     // Ken's helper methods
-    void deliver_in_order(const View& Vc, int Leader);
+    void deliver_in_order(const View& Vc, const int shard_leader_rank,
+                          const uint32_t subgroup_num, const uint32_t nReceived_offset,
+                          const std::vector<node_id_t>& shard_members);
     void ragged_edge_cleanup(View& Vc);
-    void leader_ragged_edge_cleanup(View& Vc);
-    void follower_ragged_edge_cleanup(View& Vc);
+    void leader_ragged_edge_cleanup(View& Vc, const uint32_t subgroup_num,
+                                    const uint32_t num_received_offset,
+                                    const std::vector<node_id_t>& shard_members);
+    void follower_ragged_edge_cleanup(View& Vc, const uint32_t subgroup_num,
+                                      const uint32_t num_received_offset,
+                                      const std::vector<node_id_t>& shard_members);
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -158,13 +165,14 @@ private:
 
     /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing MulticastGroup. */
-    void setup_derecho(std::vector<MessageBuffer>& message_buffers,
-                       CallbackSet callbacks,
+    void setup_derecho(CallbackSet callbacks,
                        const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
     void transition_sst_and_rdmc(View& newView);
     void rdmc_sst_setup();
+    uint32_t calc_num_received_size(std::vector<uint32_t> members);
+    uint32_t calc_total_num_subgroups() const;
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 public:
     /**
@@ -180,6 +188,7 @@ public:
      */
     ViewManager(const ip_addr my_ip,
           CallbackSet callbacks,
+          const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345);
@@ -200,6 +209,7 @@ public:
     ViewManager(const node_id_t my_id,
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
+                const SubgroupInfo& subgroup_info,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = 12345);
 
@@ -223,6 +233,7 @@ public:
                 const node_id_t my_id,
                 const ip_addr my_ip,
                 CallbackSet callbacks,
+                const SubgroupInfo& subgroup_info,
                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = 12345);
@@ -240,11 +251,11 @@ public:
      * position where there are at least payload_size bytes remaining in the
      * buffer. The returned pointer can be used to write a message into the
      * buffer. (Analogous to MulticastGroup::get_position) */
-    char* get_sendbuffer_ptr(long long unsigned int payload_size,
+    char* get_sendbuffer_ptr(uint32_t subgroup_num, long long unsigned int payload_size,
                              int pause_sending_turns = 0, bool cooked_send = false);
     /** Instructs the managed MulticastGroup to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
-    void send();
+    void send(uint32_t subgroup_num);
 
     /**
      * @return a reference to the current View, to make it easier for the

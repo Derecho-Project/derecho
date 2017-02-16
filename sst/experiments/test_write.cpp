@@ -1,20 +1,11 @@
 #include <iostream>
 #include <map>
 
+#include "sst/poll_utils.h"
 #include "sst/verbs.h"
-#include "sst/tcp.h"
 
 using namespace std;
 using namespace sst;
-using namespace sst::tcp;
-
-void initialize(int node_rank, const map <uint32_t, string> & ip_addrs) {
-  // initialize tcp connections
-  tcp_initialize(node_rank, ip_addrs);
-  
-  // initialize the rdma resources
-  verbs_initialize();
-}
 
 int main () {
   // input number of nodes and the local node id
@@ -29,15 +20,15 @@ int main () {
   }
 
   // create all tcp connections and initialize global rdma resources
-  initialize(node_rank, ip_addrs);
+  verbs_initialize(ip_addrs, node_rank);
 
   // create read and write buffers
   char *write_buf = (char*) malloc (10);
   char *read_buf = (char*) malloc (10);
 
   // write message (in a way that distinguishes nodes)
-  for (int i = 0; i < 9; ++i) {
-    write_buf[i] = '0'+node_rank%10;
+  for (int i = 0; i < 10; ++i) {
+    write_buf[i] = '0' + i + node_rank%10;
   }
   write_buf[9] = 0;
 
@@ -48,42 +39,29 @@ int main () {
   // create the rdma struct for exchanging data
   resources *res = new resources (r_index, read_buf, write_buf, 10, 10);
   
-  // remotely write data from the write_buf
-  res->post_remote_write (10);
-  // poll for completion
-  verbs_poll_completion();
+  const auto tid = std::this_thread::get_id();
+  // get id first
+  uint32_t id = util::polling_data.get_index(tid);
 
-  // sync before destroying resources
-  char  temp_char; 
-  char tQ[2] = {'Q', 0};
-  sock_sync_data(get_socket (r_index), 1, tQ, &temp_char);
+  // remotely write data from the write_buf
+  res->post_remote_write (id, 10);
+
+  while (true) {
+      // poll for completion
+      auto ce = util::polling_data.get_completion_entry(tid);
+      if (ce) {
+    break;
+      }
+  }
+  sync(r_index);
 
   cout << "Buffer written by remote side is : " << read_buf << endl;
   
-  for (int i = 0; i < 7; ++i) {
-    write_buf[i] = '5'+node_rank%10;
-  }
-  for (int i = 7; i < 9; ++i) {
-    write_buf[i] = '1'+node_rank%10;
-  }
-  write_buf[9] = 0;
+  // // destroy resources
+  // delete(res);
 
-  cout << "write buffer is " << write_buf << endl;
-
-  // remotely write data from the write_buf
-  res->post_remote_write (5, 3);
-  // poll for completion
-  verbs_poll_completion();
-  
-  sock_sync_data(get_socket (r_index), 1, tQ, &temp_char);
-
-  cout << "Buffer written by remote side is : " << read_buf << endl;
-
-  // destroy resources
-  delete(res);
-
-  // destroy global resources
-  verbs_destroy();
+  // // destroy global resources
+  // verbs_destroy();
 
   return 0;
 }
