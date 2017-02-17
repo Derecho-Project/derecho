@@ -172,8 +172,8 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     return header_size;
 }
 
-void RPCManager::finish_rpc_send(const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
-    while(!view_manager.curr_view->multicast_group->send()) {
+void RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+    while(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
     }
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(dest_nodes.size()) {

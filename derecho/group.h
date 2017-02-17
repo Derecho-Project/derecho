@@ -24,21 +24,16 @@
 #include "rpc_manager.h"
 #include "view_manager.h"
 #include "derecho_exception.h"
+#include "subgroup_info.h"
 
 #include "mutils-containers/TypeMap2.hpp"
 #include "mutils-containers/KindMap.hpp"
 
 namespace derecho {
 
-struct SubgroupInfo {
-    /** subgroup type -> number of subgroups */
-    std::map<std::type_index, uint32_t> num_subgroups;
-    /** (subgroup type, subgroup index) -> number of shards */
-    std::map<std::pair<std::type_index, uint32_t>, uint32_t> num_shards;
-    /** (current view, subgroup type, subgroup index, shard index) -> IDs of members */
-    std::function<std::vector<node_id_t>(View&,
-            std::type_index, uint32_t, uint32_t)> subgroup_membership;
-};
+/** The type to use in Group's template parameters for a subgroup
+ * that doesn't implement a Replicated Object */
+struct RawObject { };
 
 /**
  * The top-level object for creating a Derecho group. This implements the group
@@ -93,10 +88,10 @@ private:
      * @param rest_factories The rest of the template parameter pack
      */
     template<typename FirstType, typename... RestTypes>
-    void construct_objects(node_id_t my_id, const View& curr_view,
+    void construct_objects(node_id_t my_id,
                            Factory<FirstType> curr_factory, Factory<RestTypes>... rest_factories) {
         factories.template get<FirstType>() = curr_factory;
-        std::vector<node_id_t> members(curr_view.members);
+        std::vector<node_id_t> members(view_manager.get_current_view().members);
         std::type_index subgroup_type(typeid(FirstType));
         uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);
         for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index){
@@ -105,13 +100,14 @@ private:
             uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type, subgroup_index});
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
                 std::vector<node_id_t> members = subgroup_info.subgroup_membership(
-                        curr_view, subgroup_type,
+                        view_manager.get_current_view(), subgroup_type,
                         subgroup_index, shard_num);
                 //"If this node is in subgroup_membership() for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                      in_subgroup = true;
-                     replicated_objects.template get<FirstType>().insert(std::make_pair(subgroup_index,
-                             Replicated<FirstType>(my_id, rpc_manager, curr_factory)));
+                     auto subgroup_id = view_manager.get_subgroup_numbers_by_type().at({subgroup_type, subgroup_index});
+                     replicated_objects.template get<FirstType>().insert({subgroup_index,
+                             Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory)});
                      break; //This node can be in at most one shard
                 }
             }
@@ -121,7 +117,7 @@ private:
             }
         }
 
-        construct_objects<RestTypes...>(my_id, curr_view, rest_factories...);
+        construct_objects<RestTypes...>(my_id, rest_factories...);
     }
 
     /**
@@ -161,8 +157,8 @@ public:
      */
     Group(const ip_addr my_ip,
           CallbackSet callbacks,
-          const DerechoParams& derecho_params,
           const SubgroupInfo& subgroup_info,
+          const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
           Factory<ReplicatedObjects>... factories);
@@ -216,7 +212,7 @@ public:
           const node_id_t my_id,
           const ip_addr my_ip,
           CallbackSet callbacks,
-          std::experimental::optional<SubgroupInfo> _subgroup_info = std::experimental::optional<SubgroupInfo>{},
+          const SubgroupInfo& subgroup_info,
           std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
@@ -260,15 +256,6 @@ public:
     void leave();
     /** Creates and returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
-    /** Gets a pointer into the managed DerechoGroup's send buffer, at a
-     * position where there are at least payload_size bytes remaining in the
-     * buffer. The returned pointer can be used to write a message into the
-     * buffer. (Analogous to MulticastGroup::get_position) */
-    char* get_sendbuffer_ptr(long long unsigned int payload_size,
-                             int pause_sending_turns = 0, bool cooked_send = false);
-    /** Instructs the managed MulticastGroup to send the next message. This
-     * returns immediately; the send is scheduled to happen some time in the future. */
-    void send();
 
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);

@@ -15,6 +15,7 @@
 #include "view.h"
 #include "tcp/tcp.h"
 #include "logger.h"
+#include "subgroup_info.h"
 
 #include "mutils-serialization/SerializationSupport.hpp"
 
@@ -124,7 +125,7 @@ private:
     const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
-
+    std::map<std::pair<std::type_index, uint32_t>, uint32_t> subgroup_numbers_by_type;
 
     send_objects_upcall_t send_subgroup_objects;
 
@@ -176,7 +177,7 @@ private:
     uint32_t make_subgroup_maps(const View& curr_view,
                                 std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
-                                std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership) const;
+                                std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership);
     uint32_t calc_total_num_subgroups() const;
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 public:
@@ -266,7 +267,11 @@ public:
      * @return a reference to the current View, to make it easier for the
      * Group that contains this ViewManager to set things up.
      */
-    View& get_current_view();
+    const View& get_current_view();
+
+    const std::map<std::pair<std::type_index, uint32_t>, uint32_t>& get_subgroup_numbers_by_type() const {
+        return subgroup_numbers_by_type;
+    }
 
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */

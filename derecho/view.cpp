@@ -156,11 +156,11 @@ std::string View::debug_string() const {
 
     s << "Failed={" << fs << " }, num_failed=" << num_failed;
     s << ", Departed: { ";
-    for(int i = 0; i < departed.size(); ++i) {
+    for(uint i = 0; i < departed.size(); ++i) {
         s << members[departed[i]] << " ";
     }
     s << "} , Joined: { ";
-    for(int i = 0; i < joined.size(); ++i) {
+    for(uint i = 0; i < joined.size(); ++i) {
         s << members[joined[i]] << " ";
     }
     s << "}";

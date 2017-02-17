@@ -333,8 +333,9 @@ void ViewManager::register_predicates() {
                     gmssst::set(gmsSST.changes[myRank][next_change_index], Vc.members[q]);  // Reports the failure (note that q NotIn members)
                     gmssst::increment(gmsSST.num_changes[myRank]);
                     log_event(std::stringstream() << "Leader proposed a change to remove failed node " << Vc.members[q]);
-                    gmsSST.put((char*)std::addressof(gmsSST.changes[0][gmsSST.num_changes[myRank] % MAX_MEMBERS]) - gmsSST.getBaseAddress(), sizeof(node_id_t));
-                    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(), sizeof(int));                }
+                    gmsSST.put((char*)std::addressof(gmsSST.changes[0][next_change_index]) - gmsSST.getBaseAddress(), sizeof(node_id_t));
+                    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(), sizeof(int));
+                }
             }
         }
     };
@@ -729,7 +730,7 @@ void ViewManager::barrier_sync() {
     curr_view->gmsSST->sync_with_members();
 }
 
-View& ViewManager::get_current_view() {
+const View& ViewManager::get_current_view() {
     lock_guard_t lock(view_mutex);
     return *curr_view;
 }
@@ -765,11 +766,13 @@ uint32_t ViewManager::calc_total_num_subgroups() const {
 uint32_t ViewManager::make_subgroup_maps(const View& curr_view,
                                     std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                     std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
-                                    std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership) const {
+                                    std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership) {
     uint32_t next_subgroup_number = 0;
     uint32_t subgroup_offset = 0;
     for(const auto& subgroup_type_count : subgroup_info.num_subgroups) {
         for(uint32_t subgroup_index = 0; subgroup_index < subgroup_type_count.second; ++subgroup_index) {
+            //Assign this (type, index) pair a new unique subgroup ID
+            subgroup_numbers_by_type[{subgroup_type_count.first, subgroup_index}] = next_subgroup_number;
             uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type_count.first, subgroup_index});
             uint32_t max_shard_members = 0;
             for(uint j = 0; j < num_shards; ++j) {
@@ -859,13 +862,12 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
 void ViewManager::ragged_edge_cleanup(View& Vc) {
     util::debug_log().log_event("Running RaggedEdgeCleanup");
     const auto subgroup_to_shard_n_index = Vc.multicast_group->get_subgroup_to_shard_n_index();
-    const auto subgroup_to_nReceived_offset = Vc.multicast_group->get_subgroup_to_num_received_offset();
+    const auto subgroup_to_num_received_offset = Vc.multicast_group->get_subgroup_to_num_received_offset();
     for(const auto p : subgroup_to_shard_n_index) {
         const auto subgroup_num = p.first;
-        const auto shard_num = p.second.first;
         const auto index = p.second.second;
-        const auto num_received_offset = subgroup_to_nReceived_offset.at(subgroup_num);
-        const std::vector<node_id_t> shard_members = subgroup_info.subgroup_membership(Vc.members, subgroup_num, shard_num);
+        const auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
+        const std::vector<node_id_t> shard_members =  Vc.multicast_group->get_subgroup_to_membership().at(subgroup_num);
 
         if(index == 0) {
             leader_ragged_edge_cleanup(Vc, subgroup_num, num_received_offset - index, shard_members);

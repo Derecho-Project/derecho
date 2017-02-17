@@ -10,3 +10,5 @@
 #pragma once
 
 #include "group.h"
+#include "derecho_exception.h"
+#include "subgroup_info.h"

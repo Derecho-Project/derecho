@@ -37,6 +37,7 @@ private:
     /** The user-provided state object with some RPC methods */
     std::unique_ptr<T> object;
     const node_id_t node_id;
+    const uint32_t subgroup_id;
     /** Non-owning, non-managed pointer to Group's RPCManager - really a
      * reference, but needs to be lazily initialized */
     rpc::RPCManager* group_rpc_manager;
@@ -52,7 +53,7 @@ private:
                      Args&&... args) {
         if(is_valid()) {
             char* buffer;
-            while(!(buffer = group_rpc_manager->view_manager.get_sendbuffer_ptr(0, 0, true))) {
+            while(!(buffer = group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id, 0, 0, true))) {
             };
             std::unique_lock<std::mutex> view_lock(group_rpc_manager->view_manager.view_mutex);
 
@@ -70,7 +71,7 @@ private:
             },
             std::forward<Args>(args)...);
 
-            group_rpc_manager->finish_rpc_send(destination_nodes, send_return_struct.pending);
+            group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
         } else {
             throw derecho::empty_reference_exception();
@@ -101,10 +102,11 @@ private:
     }
 
 public:
-    Replicated(node_id_t nid, rpc::RPCManager& group_rpc_manager,
+    Replicated(node_id_t nid, uint32_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory) :
         object(client_object_factory()),
         node_id(nid),
+        subgroup_id(subgroup_id),
         group_rpc_manager(&group_rpc_manager),
         wrapped_this(object->register_functions(group_rpc_manager, &object)),
         p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
@@ -112,6 +114,7 @@ public:
     Replicated() :
         object(nullptr),
         node_id(0),
+        subgroup_id(0),
         group_rpc_manager(nullptr),
         wrapped_this(nullptr),
         p2pSendBuffer(new char[1]) {}

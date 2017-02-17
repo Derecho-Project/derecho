@@ -33,6 +33,10 @@ target_link_libraries(derecho_bw_test derecho)
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
 
+# subgroup_test
+add_executable(subgroup_test subgroup_test.cpp)
+target_link_libraries(subgroup_test derecho)
+
 # raw_send_test
 add_executable(raw_send_test raw_send_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(raw_send_test derecho mutils mutils-serialization)

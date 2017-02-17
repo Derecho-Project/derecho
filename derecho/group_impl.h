@@ -16,16 +16,16 @@ template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(
         const ip_addr my_ip,
         CallbackSet callbacks,
-        const DerechoParams& derecho_params,
         const SubgroupInfo& subgroup_info,
+        const DerechoParams& derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
         Factory<ReplicatedObjects>... factories)
         : subgroup_info(subgroup_info),
-          view_manager(my_ip, callbacks, derecho_params, _view_upcalls, gms_port),
+          view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager) {
     //    ^ In this constructor, this is the first node to start, so my ID will be 0
-    construct_objects(0, view_manager.get_current_view(), subgroup_info, factories...);
+    construct_objects(0, subgroup_info, factories...);
     set_up_components();
     view_manager.start();
 }
@@ -52,9 +52,9 @@ Group<ReplicatedObjects...>::Group(const node_id_t my_id,
           std::vector<view_upcall_t> _view_upcalls,
           const int gms_port,
           Factory<ReplicatedObjects>... factories)
-          : view_manager(my_id, leader_connection, callbacks, _view_upcalls, gms_port),
+          : view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager) {
-    construct_objects(my_id, view_manager.get_current_view(), factories...);
+    construct_objects(my_id, factories...);
     receive_objects(leader_connection);
     set_up_components();
     view_manager.start();
@@ -65,13 +65,13 @@ Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
         const node_id_t my_id,
         const ip_addr my_ip,
         CallbackSet callbacks,
-        std::experimental::optional<SubgroupInfo> _subgroup_info,
+        const SubgroupInfo& subgroup_info,
         std::experimental::optional<DerechoParams> _derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
         Factory<ReplicatedObjects>... factories)
-        : subgroup_info(_subgroup_info.value()),
-          view_manager(recovery_filename, my_id, my_ip, callbacks, _derecho_params, _view_upcalls, gms_port),
+        : subgroup_info(subgroup_info),
+          view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager) {
     //TODO: This is the recover-from-saved-file constructor; I don't know how it will work
     set_up_components();
@@ -152,17 +152,6 @@ void Group<ReplicatedObjects...>::report_failure(const node_id_t who) {
 template <typename... ReplicatedObjects>
 void Group<ReplicatedObjects...>::leave() {
     view_manager.leave();
-}
-
-template <typename... ReplicatedObjects>
-char* Group<ReplicatedObjects...>::get_sendbuffer_ptr(unsigned long long int payload_size,
-        int pause_sending_turns, bool cooked_send) {
-    return view_manager.get_sendbuffer_ptr(payload_size, pause_sending_turns, cooked_send);
-}
-
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::send() {
-    view_manager.send();
 }
 
 template <typename... ReplicatedObjects>

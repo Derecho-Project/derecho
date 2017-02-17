@@ -17,6 +17,7 @@
 #include "connection_manager.h"
 #include "derecho_sst.h"
 #include "filewriter.h"
+#include "subgroup_info.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "rdmc/rdmc.h"
@@ -118,7 +119,7 @@ private:
     /** inverse map of node_ids to sst_row */
     std::map<node_id_t, uint32_t> node_id_to_sst_index;
     /**  number of members */
-    const int num_members;
+    const unsigned int num_members;
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
 public:    //consts can be public, right?
@@ -263,6 +264,9 @@ public:
     }
     const std::map<uint32_t, uint32_t>& get_subgroup_to_num_received_offset() {
         return subgroup_to_num_received_offset;
+    }
+    const std::map<uint32_t, std::vector<node_id_t>>& get_subgroup_to_membership() {
+        return subgroup_to_membership;
     }
     std::vector<uint32_t> get_shard_sst_indices(uint32_t subgroup_num);
 };
