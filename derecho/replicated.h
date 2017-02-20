@@ -42,7 +42,7 @@ private:
      * reference, but needs to be lazily initialized */
     rpc::RPCManager* group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
-    rpc::RemoteInvocableOf<T> wrapped_this;
+    std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     /** Buffer for replying to P2P messages, cached here so it doesn't need to be
      * created in every p2p_send call. */
     std::unique_ptr<char[]> p2pSendBuffer;
@@ -74,7 +74,7 @@ private:
             group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
         } else {
-            throw derecho::empty_reference_exception();
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
         }
     }
 
@@ -97,7 +97,7 @@ private:
             group_rpc_manager->finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
             return std::move(return_pair.results);
         } else {
-            throw derecho::empty_reference_exception();
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
         }
     }
 
@@ -123,13 +123,13 @@ public:
     Replicated(Replicated&) = delete;
 
     bool is_valid() const {
-        return object && wrapped_this && group_rpc_manager;
+        return object && group_rpc_manager && wrapped_this;
     }
 
     template<rpc::FunctionTag tag, typename... Args>
     void ordered_send(const std::vector<node_id_t>& destination_nodes,
                       Args&&... args) {
-        ordered_send_or_query(destination_nodes, std::forward<Args>(args)...);
+        ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
     }
 
     template<rpc::FunctionTag tag, typename... Args>
@@ -185,7 +185,7 @@ public:
      * @return The serialized size of the object, of type T, that holds the
      * state of this Replicated<T>.
      */
-    std::size_t object_size() {
+    std::size_t object_size() const {
         return mutils::bytes_size(*object);
     }
 
@@ -194,7 +194,7 @@ public:
      * this Replicated<T> over the given socket.
      * @param receiver_socket
      */
-    void send_object(tcp::socket& receiver_socket) {
+    void send_object(tcp::socket& receiver_socket) const {
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
             receiver_socket.write(bytes, size); };
         mutils::post_object(bind_socket_write, object_size());
@@ -209,7 +209,7 @@ public:
      * a buffer to allocate for this object.
      * @param receiver_socket
      */
-    void send_object_raw(tcp::socket& receiver_socket) {
+    void send_object_raw(tcp::socket& receiver_socket) const {
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
             receiver_socket.write(bytes, size); };
         mutils::post_object(bind_socket_write, *object);

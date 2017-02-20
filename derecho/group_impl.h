@@ -138,15 +138,15 @@ void Group<ReplicatedObjects...>::send_objects(tcp::socket& reciever_socket) {
     std::size_t total_size = 0;
     replicated_objects.for_each([&](const auto&, const auto& objects_map){
         for(const auto& index_object_pair : objects_map) {
-            if(index_object_pair->second.is_valid()) {
-                total_size += index_object_pair->second.object_size();
+            if(index_object_pair.second.is_valid()) {
+                total_size += index_object_pair.second.object_size();
             }
         }
     });
     replicated_objects.for_each([&](const auto&, const auto& objects_map){
         for(const auto& index_object_pair : objects_map) {
-            if(index_object_pair->second.is_valid()) {
-                index_object_pair->second.send_object_raw(reciever_socket);
+            if(index_object_pair.second.is_valid()) {
+                index_object_pair.second.send_object_raw(reciever_socket);
             }
         }
     });
@@ -161,10 +161,10 @@ void Group<ReplicatedObjects...>::receive_objects(tcp::socket& sender_socket) {
     success = sender_socket.read(buf, total_size);
     assert(success);
     size_t offset = 0;
-    replicated_objects.for_each([&](const auto&, const auto& objects_map){
-        for(const auto& index_object_pair : objects_map) {
-            if(index_object_pair->second) {
-                std::size_t bytes_read = index_object_pair->second.receive_object(buf + offset);
+    replicated_objects.for_each([&](const auto&, auto& objects_map){
+        for(auto& index_object_pair : objects_map) {
+            if(index_object_pair.second.is_valid()) {
+                std::size_t bytes_read = index_object_pair.second.receive_object(buf + offset);
                 offset += bytes_read;
             }
         }

@@ -38,7 +38,7 @@ class RPCManager {
     mutils::DeserializationManager dsm{{}};
 
     template<typename T>
-    friend class Replicated; //Give only Replicated access to view_manager
+    friend class ::derecho::Replicated; //Give only Replicated access to view_manager
     ViewManager& view_manager;
 
     /** Contains a TCP connection to each member of the group. */

@@ -121,8 +121,8 @@ private:
                      in_subgroup = true;
                      subgroup_id_t subgroup_id = view_manager.get_subgroup_ids_by_type()
                              .at({subgroup_type, subgroup_index});
-                     replicated_objects.template get<FirstType>().insert({subgroup_index,
-                             Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory)});
+                     replicated_objects.template get<FirstType>().emplace(subgroup_index,
+                             Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory));
                      break; //This node can be in at most one shard
                 }
             }

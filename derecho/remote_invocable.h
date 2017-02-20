@@ -73,7 +73,7 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
     }
 
     /**
-     * Return type for the Send function. Contains the RPC-invoking message
+     * Return type for the send function. Contains the RPC-invoking message
      * (in a buffer of size "size"), a set of futures for the results, and
      * a set of promises for the results.
      */
@@ -407,7 +407,7 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
         constexpr std::integral_constant<FunctionTag, tag>* choice{nullptr};
         auto& hndl = this->handler(choice, args...);
         const auto header_size = header_space();
-        auto sent_return = hndl.Send(
+        auto sent_return = hndl.send(
             [&out_alloc, &header_size](std::size_t size) {
                 return out_alloc(size + header_size) + header_size;
             },
@@ -439,10 +439,11 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
 /**
  * Constructs a RemoteInvocableClass that "wraps" the class in the template
  * parameter.
- * @param nid
- * @param rvrs
- * @param fs
- * @return
+ * @param nid The Node ID of the node running this code
+ * @param rvrs A map from RPC opcodes to RPC message handler functions
+ * @param fs Pointers to the member functions of the wrapped class that should
+ * be RPC functions.
+ * @return A unique_ptr to a RemoteInvocableClass of type IdentifyingClass.
  */
 template <class IdentifyingClass, typename... Fs>
 auto build_remoteinvocableclass(const node_id_t nid, std::map<Opcode, receive_fun_t>& rvrs, const Fs&... fs) {

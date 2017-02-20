@@ -49,10 +49,11 @@ struct test1_str{
         return m.setup_rpc_class(ptr, derecho::rpc::wrap<0>(&test1_str::read_state),
                                     derecho::rpc::wrap<1>(&test1_str::change_state));
     }
-	enum class Functions : long long unsigned int { read_state, change_state};
+	enum Functions : long long unsigned int { READ_STATE, CHANGE_STATE};
 };
 
-void output_result(auto& rmap) {
+template<typename T>
+void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
     cout << "Obtained a reply map" << endl;
     for(auto it = rmap.begin(); it != rmap.end(); ++it) {
         try {
@@ -142,7 +143,7 @@ int main(int argc, char *argv[]) {
     if(my_id != 2) {
       cout << "Changing each other's state to 35" << endl;
       derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-      output_result(rpc_handle.ordered_query<test1_str::Functions::change_state>({1 - my_id},
+      output_result<bool>(rpc_handle.ordered_query<test1_str::Functions::CHANGE_STATE>({1 - my_id},
 								      36 - my_id).get());
     }
 
@@ -152,7 +153,7 @@ int main(int argc, char *argv[]) {
     // all members verify every node's state
     cout << "Reading everyone's state" << endl;
     derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-    output_result(rpc_handle.ordered_query<test1_str::Functions::read_state>({}).get());
+    output_result<int>(rpc_handle.ordered_query<test1_str::Functions::READ_STATE>({}).get());
     
     cout << "Done" << endl;
     cout << "Reached here" << endl;
