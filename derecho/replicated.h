@@ -120,7 +120,7 @@ public:
         p2pSendBuffer(new char[1]) {}
 
     Replicated(Replicated&&) = default;
-    Replicated(Replicated&) = delete;
+    Replicated(const Replicated&) = delete;
 
     bool is_valid() const {
         return object && group_rpc_manager && wrapped_this;
