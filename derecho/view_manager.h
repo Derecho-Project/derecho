@@ -125,7 +125,7 @@ private:
     const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
-    std::map<std::pair<std::type_index, uint32_t>, uint32_t> subgroup_numbers_by_type;
+    std::map<std::pair<std::type_index, uint32_t>, subgroup_id_t> subgroup_ids_by_type;
 
     send_objects_upcall_t send_subgroup_objects;
 
@@ -175,9 +175,9 @@ private:
     void transition_sst_and_rdmc(View& newView);
     void rdmc_sst_setup();
     uint32_t make_subgroup_maps(const View& curr_view,
-                                std::map<uint32_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-                                std::map<uint32_t, uint32_t>& subgroup_to_num_received_offset,
-                                std::map<uint32_t, std::vector<node_id_t>>& subgroup_to_membership);
+                                std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+                                std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
+                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
     uint32_t calc_total_num_subgroups() const;
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 public:
@@ -269,8 +269,8 @@ public:
      */
     const View& get_current_view();
 
-    const std::map<std::pair<std::type_index, uint32_t>, uint32_t>& get_subgroup_numbers_by_type() const {
-        return subgroup_numbers_by_type;
+    const std::map<std::pair<std::type_index, uint32_t>, subgroup_id_t>& get_subgroup_ids_by_type() const {
+        return subgroup_ids_by_type;
     }
 
     /** Adds another function to the set of "view upcalls," which are called

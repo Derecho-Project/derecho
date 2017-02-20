@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
         derecho::DerechoParams param_object{max_msg_size, block_size};
         std::unique_ptr<derecho::Group<>> managed_group;
 
+        //Define one "raw" subgroup with all the members
         derecho::SubgroupInfo subgroup_info{ {
             {std::type_index(typeid(derecho::RawObject)), 1}
         }, {
@@ -95,45 +96,59 @@ int main(int argc, char *argv[]) {
 
         while(managed_group->get_members().size() < num_nodes) {
         }
-/*
-        auto send = [&]() {
-	  for(int i = 0; i < num_messages; ++i) {
-	    for (uint j = 0; j < 3; ++j) {
-	      // random message size between 1 and 100
-	      unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-	      char *buf = managed_group->get_sendbuffer_ptr(j, msg_size);
-	      bool not_sending = false;
-	      //        cout << "After getting sendbuffer for message " << i <<
-	      //        endl;
-	      //        managed_group.debug_print_status();
-	      while(!buf) {
-		buf = managed_group->get_sendbuffer_ptr(j, msg_size);
-		if ((managed_group->get_members().size() == 7) && (j == 2)) {
-		  not_sending = true;
-		  break;
-		}
-		if ((managed_group->get_members().size() < 6)) {
-		  not_sending = true;
-		  break;
-		}
-	      }
-	      if (not_sending) {
-		continue;
-	      }
-	      for(unsigned int k = 0; k < msg_size-1; ++k) {
-		buf[k] = 'a' + j;
-	      }
-	      buf[msg_size-1] = 0;
-	      //        cout << "Client telling DerechoGroup to send message " <<
-	      //        i << "
-	      //        with size " << msg_size << endl;;
-	      managed_group->send(j);
-	    }
-	  }
-	};
 
-	send();
-	
+        for(int i = 0; i < num_messages; ++i) {
+            // random message size between 1 and 100
+            unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
+            derecho::RawSubgroup subgroup_handle = managed_group->get_subgroup<derecho::RawObject>(0);
+            char* buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
+            while(!buf) {
+                buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
+            }
+            for(unsigned int k = 0; k < msg_size; ++k) {
+                buf[k] = 'a';
+            }
+            buf[msg_size-1] = 0;
+            subgroup_handle.send();
+        }
+//        auto send = [&]() {
+//            for(int i = 0; i < num_messages; ++i) {
+//                for (uint j = 0; j < 3; ++j) {
+//                    // random message size between 1 and 100
+//                    unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
+//                    char *buf = managed_group->get_sendbuffer_ptr(j, msg_size);
+//                    bool not_sending = false;
+//                    //        cout << "After getting sendbuffer for message " << i <<
+//                    //        endl;
+//                    //        managed_group.debug_print_status();
+//                    while(!buf) {
+//                        buf = managed_group->get_sendbuffer_ptr(j, msg_size);
+//                        if ((managed_group->get_members().size() == 7) && (j == 2)) {
+//                            not_sending = true;
+//                            break;
+//                        }
+//                        if ((managed_group->get_members().size() < 6)) {
+//                            not_sending = true;
+//                            break;
+//                        }
+//                    }
+//                    if (not_sending) {
+//                        continue;
+//                    }
+//                    for(unsigned int k = 0; k < msg_size-1; ++k) {
+//                        buf[k] = 'a' + j;
+//                    }
+//                    buf[msg_size-1] = 0;
+//                    //        cout << "Client telling DerechoGroup to send message " <<
+//                    //        i << "
+//                    //        with size " << msg_size << endl;;
+//                    managed_group->send(j);
+//                }
+//            }
+//        };
+//
+//        send();
+
         // everything that follows is rendered irrelevant
         while(true) {
         }
@@ -142,7 +157,7 @@ int main(int argc, char *argv[]) {
         managed_group->barrier_sync();
 
         managed_group->leave();
-*/
+
     } catch(const std::exception &e) {
         cout << "Main got an exception: " << e.what() << endl;
         throw e;

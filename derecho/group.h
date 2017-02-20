@@ -25,20 +25,19 @@
 #include "view_manager.h"
 #include "derecho_exception.h"
 #include "subgroup_info.h"
+#include "raw_subgroup.h"
 
 #include "mutils-containers/TypeMap2.hpp"
 #include "mutils-containers/KindMap.hpp"
 
 namespace derecho {
 
-/** The type to use in Group's template parameters for a subgroup
- * that doesn't implement a Replicated Object */
-struct RawObject { };
-
 /**
  * The top-level object for creating a Derecho group. This implements the group
  * management service (GMS) features and contains a MulticastGroup instance that
  * manages the actual sending and tracking of messages within the group.
+ * @tparam ReplicatedObjects The types of user-provided objects that will represent
+ * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedObjects>
 class Group {
@@ -49,19 +48,9 @@ private:
     using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
                                              std::vector<node_id_t> old_members)>;
 
-    using subgroup_id_t = uint32_t;
-
+    //The type of a map from subgroup index -> Replicated<T>
     template<typename T>
     using replicated_index_map = std::map<uint32_t, Replicated<T>>;
-
-    SubgroupInfo subgroup_info;
-    /** Maps a type to the Factory for that type. */
-    mutils::KindMap<Factory, ReplicatedObjects...> factories;
-    /** Maps each type T to a map of <index, Replicated<T>> for that type's
-     * subgroup(s). If this node is not a member of a subgroup for a type, the
-     * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
-     * the Replicated<T> will refer to the one shard that this node belongs to. */
-    mutils::KindMap<replicated_index_map, ReplicatedObjects...> replicated_objects;
 
     /** Contains all state related to managing Views, including the
      * ManagedGroup and SST (since those change when the view changes). */
@@ -69,10 +58,35 @@ private:
     /** Contains all state related to receiving and handling RPC function
      * calls for any Replicated objects implemented by this group. */
     rpc::RPCManager rpc_manager;
+    /** Maps a type to the Factory for that type. */
+    mutils::KindMap<Factory, ReplicatedObjects...> factories;
+    /** Maps each type T to a map of <index, Replicated<T>> for that type's
+     * subgroup(s). If this node is not a member of a subgroup for a type, the
+     * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
+     * the Replicated<T> will refer to the one shard that this node belongs to. */
+    mutils::KindMap<replicated_index_map, ReplicatedObjects...> replicated_objects;
+    /** The map of <index, RawSubgroup> for the subgroups of type RawObject. */
+    std::map<uint32_t, RawSubgroup> raw_subgroups;
 
+    /* get_subgroup is actually implemented in these two methods. This is an
+     * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
+     * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */
+    template<typename SubgroupType>
+    Replicated<SubgroupType>& get_subgroup(SubgroupType*, uint32_t subgroup_index);
+    RawSubgroup& get_subgroup(RawObject*, uint32_t subgroup_index);
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
+
+    /**
+     * Constructor helper that constructs RawSubgroup objects for each subgroup
+     * of type RawObject; called to initialize the raw_subgroups map.
+     * @param my_id The Node ID of this node
+     * @param subgroup_info The structure describing subgroup membership
+     * @return A map containing a RawSubgroup for each "raw" subgroup the user
+     * requested.
+     */
+    std::map<uint32_t, RawSubgroup> construct_raw_subgroups(node_id_t my_id, const SubgroupInfo& subgroup_info);
 
     /** Base case for construct_objects template. */
     void construct_objects(...){}
@@ -88,7 +102,7 @@ private:
      * @param rest_factories The rest of the template parameter pack
      */
     template<typename FirstType, typename... RestTypes>
-    void construct_objects(node_id_t my_id,
+    void construct_objects(node_id_t my_id, const SubgroupInfo& subgroup_info,
                            Factory<FirstType> curr_factory, Factory<RestTypes>... rest_factories) {
         factories.template get<FirstType>() = curr_factory;
         std::vector<node_id_t> members(view_manager.get_current_view().members);
@@ -105,7 +119,8 @@ private:
                 //"If this node is in subgroup_membership() for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                      in_subgroup = true;
-                     auto subgroup_id = view_manager.get_subgroup_numbers_by_type().at({subgroup_type, subgroup_index});
+                     subgroup_id_t subgroup_id = view_manager.get_subgroup_ids_by_type()
+                             .at({subgroup_type, subgroup_index});
                      replicated_objects.template get<FirstType>().insert({subgroup_index,
                              Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory)});
                      break; //This node can be in at most one shard
@@ -117,11 +132,11 @@ private:
             }
         }
 
-        construct_objects<RestTypes...>(my_id, rest_factories...);
+        construct_objects<RestTypes...>(my_id, subgroup_info, rest_factories...);
     }
 
     /**
-     * Delegating constructor for joining an existing managed group, called after
+     * Delegate constructor for joining an existing managed group, called after
      * the entry-point constructor constructs a socket that connects to the leader.
      * @param my_id The node ID of the node running this code
      * @param leader_connection A socket connected to the existing group's leader
@@ -221,18 +236,20 @@ public:
     ~Group();
 
     /**
-     * Gets the Replicated<T> for the subgroup of the specified type and index.
-     * If this node is a member of that subgroup, it will contain the replicated
+     * Gets the "handle" for the subgroup of the specified type and index, which
+     * is either a Replicated<T> or a RawSubgroup. If this node is a member of
+     * the desired subgroup, the Replicated<T> will contain the replicated
      * state of an object of type T and be usable to send multicasts to this node's
      * shard of the subgroup. If this node is not a member of the subgroup, it
-     * will be an invalid Replicated<T>.
+     * will be an invalid/empty Replicated<T>.
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object.
      * @tparam SubgroupType The object type identifying the subgroup
-     * @return A reference to the Replicated<SubgroupType> for this subgroup
+     * @return A reference to either a Replicated<SubgroupType> or a RawSubgroup
+     * for this subgroup
      */
     template<typename SubgroupType>
-    Replicated<SubgroupType>& get_subgroup(uint32_t subgroup_index);
+    auto get_subgroup(uint32_t subgroup_index);
 
     /**
      * Serializes and sends the state of all replicated objects that represent

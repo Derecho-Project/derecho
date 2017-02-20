@@ -44,12 +44,12 @@ struct test1_str{
      * @param ptr A pointer to an instance of this class
      * @return Whatever the result of Dispatcher::setup_rpc_class() is.
      */
-    template <typename Dispatcher>
-    auto register_functions(Dispatcher &d, std::unique_ptr<test1_str> *ptr) {
+    auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str> *ptr) {
         assert(this == ptr->get());
-        return d.setup_rpc_class(ptr, &test1_str::read_state,
+        return m.setup_rpc_class(ptr, &test1_str::read_state,
                                     &test1_str::change_state);
     }
+	enum class Functions : long long unsigned int { read_state, change_state};
 };
 
 void output_result(auto& rmap) {
@@ -82,17 +82,26 @@ int main(int argc, char *argv[]) {
     long long unsigned int block_size = get_block_size(max_msg_size);
     // int num_messages = 10;
 
-    auto stability_callback = [](int sender_id, long long int index, char *buf,
+    auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, char *buf,
                                  long long int msg_size) {};
 
-    Dispatcher<test1_str> dispatchers(my_id, std::make_tuple());
-
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    derecho::Group<decltype(dispatchers)>* managed_group;
+	derecho::SubgroupInfo subgroup_info { {
+		{std::type_index(typeid(test1_str)), 1}
+	}, { 
+		{ {std::type_index(typeid(test1_str)), 0} , 1}
+	},
+		[](const derecho::View& curr_view, std::type_index subgroup_type, uint32_t subgroup_num, uint32_t shard_num) {
+			if(subgroup_type == std::type_index(typeid(test1_str))) {
+				return curr_view.members;
+			}
+			return std::vector<derecho::node_id_t>();
+		}};
+    derecho::Group<test1_str>* managed_group;
 
     if(my_id == 0) {
-        managed_group = new derecho::Group<decltype(dispatchers)>(
-            my_ip, std::move(dispatchers), {stability_callback, {}},
+        managed_group = new derecho::Group<test1_str>(
+            my_ip, {stability_callback, {}}, subgroup_info,
             derecho_params, {[](vector<derecho::node_id_t> new_members,
                                 vector<derecho::node_id_t> old_members) {
                 cout << "New members are : " << endl;
@@ -105,13 +114,13 @@ int main(int argc, char *argv[]) {
                     cout << o << " ";
                 }
                 cout << endl;
-            }});
+            }}, 12345, [](){return test1_str();});
     }
 
     else {
-        managed_group = new derecho::Group<decltype(dispatchers)>(
-            my_id, my_ip, leader_id, leader_ip, std::move(dispatchers),
-            {stability_callback, {}},
+        managed_group = new derecho::Group<test1_str>(
+            my_id, my_ip, leader_id, leader_ip, 
+            {stability_callback, {}}, subgroup_info,
             {[](vector<derecho::node_id_t> new_members,
                 vector<derecho::node_id_t> old_members) {
                 cout << "New members are : " << endl;
@@ -124,7 +133,7 @@ int main(int argc, char *argv[]) {
                     cout << o << " ";
                 }
                 cout << endl;
-            }});
+            }}, 12345, [](){return test1_str();});
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -132,7 +141,8 @@ int main(int argc, char *argv[]) {
     // other nodes (first two) change each other's state
     if(my_id != 2) {
       cout << "Changing each other's state to 35" << endl;
-      output_result(managed_group->template orderedQuery<test1_str, 0>({1 - my_id},
+      derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
+      output_result(rpc_handle.ordered_query<test1_str::Functions::change_state>({1 - my_id},
 								      36 - my_id).get());
     }
 
@@ -141,7 +151,8 @@ int main(int argc, char *argv[]) {
     
     // all members verify every node's state
     cout << "Reading everyone's state" << endl;
-    output_result(managed_group->template orderedQuery<test1_str, 0>({}).get());
+    derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
+    output_result(rpc_handle.ordered_query<test1_str::Functions::read_state>({}).get());
     
     cout << "Done" << endl;
     cout << "Reached here" << endl;

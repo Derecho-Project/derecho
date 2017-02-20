@@ -16,6 +16,10 @@ namespace derecho {
 
 class View;
 
+/** The type to use in the SubgroupInfo maps for a subgroup
+ * that doesn't implement a Replicated Object */
+struct RawObject { };
+
 struct SubgroupInfo {
     /** subgroup type -> number of subgroups */
     std::map<std::type_index, uint32_t> num_subgroups;

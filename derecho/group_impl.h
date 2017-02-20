@@ -21,9 +21,9 @@ Group<ReplicatedObjects...>::Group(
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
         Factory<ReplicatedObjects>... factories)
-        : subgroup_info(subgroup_info),
-          view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
-          rpc_manager(0, view_manager) {
+        : view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
+          rpc_manager(0, view_manager),
+          raw_subgroups(construct_raw_subgroups(0, subgroup_info)) {
     //    ^ In this constructor, this is the first node to start, so my ID will be 0
     construct_objects(0, subgroup_info, factories...);
     set_up_components();
@@ -53,8 +53,9 @@ Group<ReplicatedObjects...>::Group(const node_id_t my_id,
           const int gms_port,
           Factory<ReplicatedObjects>... factories)
           : view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
-          rpc_manager(my_id, view_manager) {
-    construct_objects(my_id, factories...);
+            rpc_manager(my_id, view_manager),
+            raw_subgroups(construct_raw_subgroups(my_id, subgroup_info)) {
+    construct_objects(my_id, subgroup_info, factories...);
     receive_objects(leader_connection);
     set_up_components();
     view_manager.start();
@@ -70,12 +71,13 @@ Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
         Factory<ReplicatedObjects>... factories)
-        : subgroup_info(subgroup_info),
-          view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
-          rpc_manager(my_id, view_manager) {
+        : view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
+          rpc_manager(my_id, view_manager),
+          raw_subgroups(construct_raw_subgroups(my_id, subgroup_info)) {
     //TODO: This is the recover-from-saved-file constructor; I don't know how it will work
+    construct_objects(my_id, subgroup_info, factories...);
     set_up_components();
-
+    view_manager.start();
 }
 
 template <typename... ReplicatedObjects>
@@ -83,6 +85,20 @@ Group<ReplicatedObjects...>::~Group() {
 
 }
 
+template <typename... ReplicatedObjects>
+std::map<uint32_t, RawSubgroup> Group<ReplicatedObjects...>::construct_raw_subgroups(
+        node_id_t my_id, const SubgroupInfo& subgroup_info) {
+    std::map<uint32_t, RawSubgroup> raw_subgroup_map;
+    std::type_index raw_object_type(typeid(RawObject));
+    for(uint32_t subgroup_index = 0;
+            subgroup_index < subgroup_info.num_subgroups.at(raw_object_type);
+            ++subgroup_index) {
+        subgroup_id_t raw_subgroup_id = view_manager.get_subgroup_ids_by_type().at(
+                {raw_object_type, subgroup_index});
+        raw_subgroup_map.insert({subgroup_index, RawSubgroup(my_id, raw_subgroup_id, view_manager)});
+    }
+    return raw_subgroup_map;
+}
 
 template <typename... ReplicatedObjects>
 void Group<ReplicatedObjects...>::set_up_components() {
@@ -99,11 +115,22 @@ void Group<ReplicatedObjects...>::set_up_components() {
     });
 }
 
+template<typename... ReplicatedObjects>
+RawSubgroup& Group<ReplicatedObjects...>::get_subgroup(RawObject*, uint32_t subgroup_index) {
+    return raw_subgroups.at(subgroup_index);
+}
 
-template <typename... ReplicatedObjects>
+template<typename... ReplicatedObjects>
 template<typename SubgroupType>
-Replicated<SubgroupType>& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
+Replicated<SubgroupType>& Group<ReplicatedObjects...>::get_subgroup(SubgroupType*, uint32_t subgroup_index) {
     return replicated_objects.template get<SubgroupType>().at(subgroup_index);
+}
+
+template<typename... ReplicatedObjects>
+template<typename SubgroupType>
+auto Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
+    SubgroupType* overload_selector = nullptr;
+    return get_subgroup(overload_selector, subgroup_index);
 }
 
 template<typename... ReplicatedObjects>

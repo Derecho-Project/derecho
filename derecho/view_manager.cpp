@@ -702,13 +702,13 @@ void ViewManager::leave() {
     thread_shutdown = true;
 }
 
-char* ViewManager::get_sendbuffer_ptr(uint32_t subgroup_num, unsigned long long int payload_size,
+char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num, unsigned long long int payload_size,
                                       int pause_sending_turns, bool cooked_send) {
     lock_guard_t lock(view_mutex);
     return curr_view->multicast_group->get_sendbuffer_ptr(subgroup_num, payload_size, pause_sending_turns, cooked_send);
 }
 
-void ViewManager::send(uint32_t subgroup_num) {
+void ViewManager::send(subgroup_id_t subgroup_num) {
     std::unique_lock<std::mutex> lock(view_mutex);
     while(true) {
         if(curr_view->multicast_group->send(subgroup_num)) break;
@@ -772,7 +772,7 @@ uint32_t ViewManager::make_subgroup_maps(const View& curr_view,
     for(const auto& subgroup_type_count : subgroup_info.num_subgroups) {
         for(uint32_t subgroup_index = 0; subgroup_index < subgroup_type_count.second; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
-            subgroup_numbers_by_type[{subgroup_type_count.first, subgroup_index}] = next_subgroup_number;
+            subgroup_ids_by_type[{subgroup_type_count.first, subgroup_index}] = next_subgroup_number;
             uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type_count.first, subgroup_index});
             uint32_t max_shard_members = 0;
             for(uint j = 0; j < num_shards; ++j) {

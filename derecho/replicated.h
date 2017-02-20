@@ -37,7 +37,7 @@ private:
     /** The user-provided state object with some RPC methods */
     std::unique_ptr<T> object;
     const node_id_t node_id;
-    const uint32_t subgroup_id;
+    const subgroup_id_t subgroup_id;
     /** Non-owning, non-managed pointer to Group's RPCManager - really a
      * reference, but needs to be lazily initialized */
     rpc::RPCManager* group_rpc_manager;
@@ -102,7 +102,7 @@ private:
     }
 
 public:
-    Replicated(node_id_t nid, uint32_t subgroup_id, rpc::RPCManager& group_rpc_manager,
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory) :
         object(client_object_factory()),
         node_id(nid),
@@ -157,6 +157,27 @@ public:
     template<rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
         return p2p_send_or_query(dest_node, std::forward<Args>(args)...);
+    }
+
+    /**
+     * Gets a pointer into the send buffer for this subgroup, for the purpose of
+     * doing a "raw send" (not an RPC send).
+     * @param payload_size The size of the payload that the caller intends to
+     * send, in bytes.
+     * @param pause_sending_turns
+     * @return
+     */
+    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns) {
+        return group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id,
+                payload_size, pause_sending_turns, false);
+    }
+
+    /**
+     * Submits the contents of the send buffer to be multicast to the subgroup,
+     * assuming it has been previously filled with a call to get_sendbuffer_ptr().
+     */
+    void raw_send() {
+        group_rpc_manager->view_manager.send(subgroup_id);
     }
 
     /**
