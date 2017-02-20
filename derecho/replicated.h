@@ -141,23 +141,23 @@ public:
     template<rpc::FunctionTag tag, typename... Args>
     auto ordered_query(const std::vector<node_id_t>& destination_nodes,
                       Args&&... args) {
-        return ordered_send_or_query(destination_nodes, std::forward<Args>(args)...);
+        return ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
     }
 
     template<rpc::FunctionTag tag, typename... Args>
     auto ordered_query(Args&&... args) {
         // empty nodes means that the destination is the entire group
-        return ordered_query({}, std::forward<Args>(args)...);
+        return ordered_query<tag>({}, std::forward<Args>(args)...);
     }
 
     template<rpc::FunctionTag tag, typename... Args>
     void p2p_send(node_id_t dest_node, Args&&... args) {
-        p2p_send_or_query(dest_node, std::forward<Args>(args)...);
+        p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
     }
 
     template<rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
-        return p2p_send_or_query(dest_node, std::forward<Args>(args)...);
+        return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
     }
 
     /**
