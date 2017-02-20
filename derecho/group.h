@@ -89,7 +89,8 @@ private:
     std::map<uint32_t, RawSubgroup> construct_raw_subgroups(node_id_t my_id, const SubgroupInfo& subgroup_info);
 
     /** Base case for construct_objects template. */
-    void construct_objects(...){}
+	template<typename...>
+    void construct_objects(node_id_t my_id, const SubgroupInfo& subgroup_info){}
 
     /**
      * Constructor helper that unpacks the template parameter pack. Constructs
