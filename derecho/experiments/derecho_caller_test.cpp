@@ -46,8 +46,8 @@ struct test1_str{
      */
     auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str> *ptr) {
         assert(this == ptr->get());
-        return m.setup_rpc_class(ptr, &test1_str::read_state,
-                                    &test1_str::change_state);
+        return m.setup_rpc_class(ptr, derecho::rpc::wrap<0>(&test1_str::read_state),
+                                    derecho::rpc::wrap<1>(&test1_str::change_state));
     }
 	enum class Functions : long long unsigned int { read_state, change_state};
 };
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
                     cout << o << " ";
                 }
                 cout << endl;
-            }}, 12345, [](){return test1_str();});
+            }}, 12345, [](){return std::make_unique<test1_str>();});
     }
 
     else {
@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
                     cout << o << " ";
                 }
                 cout << endl;
-            }}, 12345, [](){return test1_str();});
+            }}, 12345, [](){return std::make_unique<test1_str>();});
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;

@@ -24,7 +24,7 @@
 namespace derecho {
 
 template<typename T>
-using Factory = std::function<T(void)>;
+using Factory = std::function<std::unique_ptr<T>(void)>;
 
 
 struct empty_reference_exception : public derecho_exception {
@@ -120,6 +120,7 @@ public:
         p2pSendBuffer(new char[1]) {}
 
     Replicated(Replicated&&) = default;
+    Replicated(Replicated&) = delete;
 
     bool is_valid() const {
         return object && wrapped_this && group_rpc_manager;

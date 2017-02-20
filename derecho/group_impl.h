@@ -128,7 +128,7 @@ Replicated<SubgroupType>& Group<ReplicatedObjects...>::get_subgroup(SubgroupType
 
 template<typename... ReplicatedObjects>
 template<typename SubgroupType>
-auto Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
+auto& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
     SubgroupType* overload_selector = nullptr;
     return get_subgroup(overload_selector, subgroup_index);
 }

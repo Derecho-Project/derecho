@@ -249,7 +249,7 @@ public:
      * for this subgroup
      */
     template<typename SubgroupType>
-    auto get_subgroup(uint32_t subgroup_index);
+    auto& get_subgroup(uint32_t subgroup_index);
 
     /**
      * Serializes and sends the state of all replicated objects that represent
