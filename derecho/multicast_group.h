@@ -218,7 +218,6 @@ private:
     void deliver_message(Message& msg, uint32_t subgroup_num);
 
 public:
-    // the constructor - takes the list of members, send parameters (block size, buffer size), K0 and K1 callbacks
     MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> _sst,

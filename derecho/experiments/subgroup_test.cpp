@@ -4,27 +4,22 @@
 #include <string>
 #include <cstdlib>
 #include <map>
+#include <unordered_set>
+
+#include "derecho/derecho.h"
+#include "block_size.h"
+#include "initialize.h"
 
 using std::string;
 using std::cin;
 using std::cout;
 using std::endl;
 using std::map;
+using derecho::RawObject;
 
-#include "derecho/derecho.h"
-#include "block_size.h"
-
-void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, derecho::ip_addr &leader_ip) {
-    cout << "Please enter this node's ID: ";
-    cin >> node_id;
-    cout << "Please enter this node's IP address: ";
-    cin >> node_ip;
-    cout << "Please enter the leader node's IP address: ";
-    cin >> leader_ip;
-}
 
 int main(int argc, char *argv[]) {
-    try {
+//    try {
         if(argc < 2) {
             cout << "Error: Expected number of nodes in experiment as the first argument."
                  << endl;
@@ -33,7 +28,6 @@ int main(int argc, char *argv[]) {
         uint32_t num_nodes = std::atoi(argv[1]);
         derecho::node_id_t node_id;
         derecho::ip_addr my_ip;
-        derecho::node_id_t leader_id = 0;
         derecho::ip_addr leader_ip;
 
         query_node_info(node_id, my_ip, leader_ip);
@@ -71,25 +65,46 @@ int main(int argc, char *argv[]) {
         derecho::DerechoParams param_object{max_msg_size, block_size};
         std::unique_ptr<derecho::Group<>> managed_group;
 
-        //Define one "raw" subgroup with all the members
+        //Assuming there will be a total of up to 9 nodes, define 3 subgroups with 3 nodes each
+        //Also assumes that the node IDs will be 0-8 (which they always are in our experiments)
+        std::unordered_set<derecho::node_id_t> group_0_members {0, 1, 2};
+        std::unordered_set<derecho::node_id_t> group_1_members {3, 4, 5};
+        std::unordered_set<derecho::node_id_t> group_2_members {6, 7, 8};
         derecho::SubgroupInfo subgroup_info{ {
-            {std::type_index(typeid(derecho::RawObject)), 1}
+            {std::type_index(typeid(RawObject)), 3}
         }, {
-                { {std::type_index(typeid(derecho::RawObject)), 0}, 1}
+                { {std::type_index(typeid(RawObject)), 0}, 1},
+                { {std::type_index(typeid(RawObject)), 1}, 1},
+                { {std::type_index(typeid(RawObject)), 2}, 1}
         },
-        [](const derecho::View& curr_view, std::type_index subgroup_type, uint32_t subgroup_num, uint32_t shard_num) {
-            if(subgroup_type == std::type_index(typeid(derecho::RawObject))) {
-                return curr_view.members;
+        [group_0_members, group_1_members, group_2_members]
+         (const derecho::View& curr_view, std::type_index subgroup_type, uint32_t subgroup_index, uint32_t) {
+            if(subgroup_type == std::type_index(typeid(RawObject))) {
+                std::vector<derecho::node_id_t> subgroup_members;
+                switch(subgroup_index) {
+                case 0:
+                    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                            group_0_members, std::back_inserter(subgroup_members));
+                    break;
+                case 1:
+                    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                            group_1_members, std::back_inserter(subgroup_members));
+                    break;
+                case 2:
+                    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                            group_2_members, std::back_inserter(subgroup_members));
+                    break;
+                }
+                return subgroup_members;
             }
             return std::vector<derecho::node_id_t>();
         }};
-        if(node_id == leader_id) {
-            assert(my_ip == leader_ip);
+        if(my_ip == leader_ip) {
             managed_group = std::make_unique<derecho::Group<>>(
                 my_ip, callbacks, subgroup_info, param_object);
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, leader_id, leader_ip, callbacks, subgroup_info);
+                node_id, my_ip, leader_ip, callbacks, subgroup_info);
         }
 
         cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -97,10 +112,18 @@ int main(int argc, char *argv[]) {
         while(managed_group->get_members().size() < num_nodes) {
         }
 
+
+        uint32_t my_subgroup_num;
+        if(node_id < 3)
+            my_subgroup_num = 0;
+        else if(node_id >= 3 && node_id < 6)
+            my_subgroup_num = 1;
+        else
+            my_subgroup_num = 2;
         for(int i = 0; i < num_messages; ++i) {
             // random message size between 1 and 100
             unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-            derecho::RawSubgroup subgroup_handle = managed_group->get_subgroup<derecho::RawObject>(0);
+            derecho::RawSubgroup& subgroup_handle = managed_group->get_subgroup<RawObject>(my_subgroup_num);
             char* buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
             while(!buf) {
                 buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
@@ -111,44 +134,6 @@ int main(int argc, char *argv[]) {
             buf[msg_size-1] = 0;
             subgroup_handle.send();
         }
-//        auto send = [&]() {
-//            for(int i = 0; i < num_messages; ++i) {
-//                for (uint j = 0; j < 3; ++j) {
-//                    // random message size between 1 and 100
-//                    unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-//                    char *buf = managed_group->get_sendbuffer_ptr(j, msg_size);
-//                    bool not_sending = false;
-//                    //        cout << "After getting sendbuffer for message " << i <<
-//                    //        endl;
-//                    //        managed_group.debug_print_status();
-//                    while(!buf) {
-//                        buf = managed_group->get_sendbuffer_ptr(j, msg_size);
-//                        if ((managed_group->get_members().size() == 7) && (j == 2)) {
-//                            not_sending = true;
-//                            break;
-//                        }
-//                        if ((managed_group->get_members().size() < 6)) {
-//                            not_sending = true;
-//                            break;
-//                        }
-//                    }
-//                    if (not_sending) {
-//                        continue;
-//                    }
-//                    for(unsigned int k = 0; k < msg_size-1; ++k) {
-//                        buf[k] = 'a' + j;
-//                    }
-//                    buf[msg_size-1] = 0;
-//                    //        cout << "Client telling DerechoGroup to send message " <<
-//                    //        i << "
-//                    //        with size " << msg_size << endl;;
-//                    managed_group->send(j);
-//                }
-//            }
-//        };
-//
-//        send();
-
         // everything that follows is rendered irrelevant
         while(true) {
         }
@@ -158,10 +143,10 @@ int main(int argc, char *argv[]) {
 
         managed_group->leave();
 
-    } catch(const std::exception &e) {
-        cout << "Main got an exception: " << e.what() << endl;
-        throw e;
-    }
+//    } catch(const std::exception &e) {
+//        cout << "Main got an exception: " << e.what() << endl;
+//        throw e;
+//    }
 
     cout << "Finished destroying managed_group" << endl;
 }

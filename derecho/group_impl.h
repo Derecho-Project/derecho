@@ -15,7 +15,7 @@ namespace derecho {
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(
         const ip_addr my_ip,
-        CallbackSet callbacks,
+        const CallbackSet& callbacks,
         const SubgroupInfo& subgroup_info,
         const DerechoParams& derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
@@ -33,9 +33,8 @@ Group<ReplicatedObjects...>::Group(
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const node_id_t my_id,
         const ip_addr my_ip,
-        const node_id_t leader_id,
         const ip_addr leader_ip,
-        CallbackSet callbacks,
+        const CallbackSet& callbacks,
         const SubgroupInfo& subgroup_info,
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
@@ -47,7 +46,7 @@ Group<ReplicatedObjects...>::Group(const node_id_t my_id,
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const node_id_t my_id,
           tcp::socket leader_connection,
-          CallbackSet callbacks,
+          const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls,
           const int gms_port,
@@ -65,7 +64,7 @@ template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
         const node_id_t my_id,
         const ip_addr my_ip,
-        CallbackSet callbacks,
+        const CallbackSet& callbacks,
         const SubgroupInfo& subgroup_info,
         std::experimental::optional<DerechoParams> _derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
@@ -134,7 +133,7 @@ auto& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
 }
 
 template<typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::send_objects(tcp::socket& reciever_socket) {
+void Group<ReplicatedObjects...>::send_objects(tcp::socket& receiver_socket) {
     std::size_t total_size = 0;
     replicated_objects.for_each([&](const auto&, const auto& objects_map){
         for(const auto& index_object_pair : objects_map) {
@@ -143,10 +142,13 @@ void Group<ReplicatedObjects...>::send_objects(tcp::socket& reciever_socket) {
             }
         }
     });
+    mutils::post_object([&receiver_socket](const char *bytes, std::size_t size) {
+        receiver_socket.write(bytes, size); },
+        total_size);
     replicated_objects.for_each([&](const auto&, const auto& objects_map){
         for(const auto& index_object_pair : objects_map) {
             if(index_object_pair.second.is_valid()) {
-                index_object_pair.second.send_object_raw(reciever_socket);
+                index_object_pair.second.send_object_raw(receiver_socket);
             }
         }
     });
@@ -157,6 +159,9 @@ void Group<ReplicatedObjects...>::receive_objects(tcp::socket& sender_socket) {
     std::size_t total_size;
     bool success = sender_socket.read((char*)&total_size, sizeof(size_t));
     assert(success);
+    //If there are no objects to receive, don't try to receive any
+    if(total_size == 0)
+        return;
     char* buf = new char[total_size];
     success = sender_socket.read(buf, total_size);
     assert(success);

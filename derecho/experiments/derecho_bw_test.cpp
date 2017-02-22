@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
         &num_nodes,
         num_senders_selector,
         num_last_received = 0u
-    ](int sender_id, long long int index, char *buf,
+    ](uint32_t subgroup, int sender_id, long long int index, char *buf,
       long long int msg_size) mutable {
         cout << "In stability callback; sender = " << sender_id
              << ", index = " << index << endl;
@@ -75,18 +75,28 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    rpc::Dispatcher<> empty_dispatcher(node_rank);
-    std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
+    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
+        {{ {std::type_index(typeid(RawObject)), 0}, 1}},
+        [](const View& curr_view, std::type_index subgroup_type, uint32_t, uint32_t) {
+        if(subgroup_type == std::type_index(typeid(RawObject))) {
+            return curr_view.members;
+        }
+        return std::vector<node_id_t>();
+    }};
+
+    std::unique_ptr<derecho::Group<>> managed_group;
     if(node_rank == server_rank) {
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_addresses[node_rank], std::move(empty_dispatcher),
+        managed_group = std::make_unique<derecho::Group<>>(
+                node_addresses[node_rank],
                 derecho::CallbackSet{stability_callback, nullptr},
+                one_raw_group,
                 derecho::DerechoParams{max_msg_size, block_size});
     } else {
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_rank, node_addresses[node_rank], server_rank,
-                node_addresses[server_rank], std::move(empty_dispatcher),
-                derecho::CallbackSet{stability_callback, nullptr});
+        managed_group = std::make_unique<derecho::Group<>>(
+                node_rank, node_addresses[node_rank],
+                node_addresses[server_rank],
+                derecho::CallbackSet{stability_callback, nullptr},
+                one_raw_group);
     }
 
 
@@ -102,22 +112,24 @@ int main(int argc, char *argv[]) {
     cout << endl;
 
     auto send_all = [&]() {
+        RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             cout << "Asking for a buffer" << endl;
-            char *buf = managed_group->get_sendbuffer_ptr(max_msg_size);
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
             while(!buf) {
-                buf = managed_group->get_sendbuffer_ptr(max_msg_size);
+                buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
             }
             cout << "Obtained a buffer, sending" << endl;	    
-            managed_group->send();
+            group_as_subgroup.send();
         }
     };
     auto send_one = [&]() {
-        char *buf = managed_group->get_sendbuffer_ptr(1, num_messages);
+        RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, num_messages);
         while(!buf) {
-            buf = managed_group->get_sendbuffer_ptr(1, num_messages);
+            buf = group_as_subgroup.get_sendbuffer_ptr(1, num_messages);
         }
-        managed_group->send();
+        group_as_subgroup.send();
     };
 
     struct timespec start_time;

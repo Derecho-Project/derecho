@@ -7,7 +7,7 @@
 #include <vector>
 #include <time.h>
 
-#include "derecho/multicast_group.h"
+#include "derecho/derecho.h"
 #include "initialize.h"
 
 using std::cout;
@@ -22,20 +22,16 @@ constexpr int MAX_GROUP_SIZE = 8;
 int main() {
     srand(time(NULL));
 
-    uint32_t node_rank;
-    uint32_t num_nodes;
+    derecho::node_id_t node_id;
+    derecho::ip_addr my_ip;
+    derecho::ip_addr leader_ip;
 
-    std::map<uint32_t, std::string> node_address_map = initialize(node_rank, num_nodes);
-
-    vector<uint32_t> members(num_nodes);
-    for(int i = 0; i < (int)num_nodes; ++i) {
-        members[i] = i;
-    }
+    query_node_info(node_id, my_ip, leader_ip);
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 10;
 
-    auto stability_callback = [](int sender_id, long long int index, char* buf,
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char* buf,
                                  long long int msg_size) {
         cout << "Delivered a message" << endl;
         cout << "The message is:" << endl;
@@ -45,24 +41,39 @@ int main() {
         cout << endl;
     };
 
-    std::shared_ptr<DerechoSST> derecho_sst =
-            std::make_shared<DerechoSST>(sst::SSTParams(members, node_rank));
-    vector<derecho::MessageBuffer> free_message_buffers;
-    MulticastGroup<rpc::Dispatcher<>> g(
-            members, node_rank, derecho_sst, free_message_buffers,
-            rpc::Dispatcher<>(node_rank), derecho::CallbackSet{stability_callback, nullptr},
-            derecho::DerechoParams{max_msg_size, block_size}, node_address_map);
+    using derecho::RawObject;
+    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
+        {{ {std::type_index(typeid(RawObject)), 0}, 1}},
+        [](const derecho::View& curr_view, std::type_index subgroup_type, uint32_t, uint32_t) {
+        if(subgroup_type == std::type_index(typeid(RawObject))) {
+            return curr_view.members;
+        }
+        return std::vector<derecho::node_id_t>();
+    }};
+
+    std::unique_ptr<derecho::Group<>> g;
+    if(node_id == 0) {
+        g = std::make_unique<derecho::Group<>>(my_ip,
+                derecho::CallbackSet{stability_callback, nullptr},
+                one_raw_group,
+                derecho::DerechoParams{max_msg_size, block_size});
+    } else {
+        g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip,
+                derecho::CallbackSet{stability_callback, nullptr},
+                one_raw_group);
+    }
 
     cout << "Derecho group created" << endl;
 
-    if(node_rank == 0) {
+    if(node_id == 0) {
+        derecho::RawSubgroup& sg = g->get_subgroup<RawObject>();
         unsigned int msg_size = 10;
-        char* buf = g.get_position(msg_size);
+        char* buf = sg.get_sendbuffer_ptr(msg_size);
         for(unsigned int i = 0; i < msg_size; ++i) {
             buf[i] = rand() % 26 + 'a';
         }
         cout << "Calling send" << endl;
-        g.send();
+        sg.send();
         cout << "send call finished" << endl;
     }
     while(true) {

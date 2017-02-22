@@ -35,6 +35,8 @@ struct test1_str{
         return true;
     }
 
+	enum Functions { READ_STATE, CHANGE_STATE};
+
     /**
      * This function will be called by Dispatcher to register functions from
      * this class as RPC functions. When called, it should call Dispatcher's
@@ -46,10 +48,9 @@ struct test1_str{
      */
     auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str> *ptr) {
         assert(this == ptr->get());
-        return m.setup_rpc_class(ptr, derecho::rpc::wrap<0>(&test1_str::read_state),
-                                    derecho::rpc::wrap<1>(&test1_str::change_state));
+        return m.setup_rpc_class(ptr, derecho::rpc::wrap<READ_STATE>(&test1_str::read_state),
+                                    derecho::rpc::wrap<CHANGE_STATE>(&test1_str::change_state));
     }
-	enum Functions : long long unsigned int { READ_STATE, CHANGE_STATE};
 };
 
 template<typename T>
@@ -120,7 +121,7 @@ int main(int argc, char *argv[]) {
 
     else {
         managed_group = new derecho::Group<test1_str>(
-            my_id, my_ip, leader_id, leader_ip, 
+            my_id, my_ip, leader_ip,
             {stability_callback, {}}, subgroup_info,
             {[](vector<derecho::node_id_t> new_members,
                 vector<derecho::node_id_t> old_members) {

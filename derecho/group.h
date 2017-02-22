@@ -149,7 +149,7 @@ private:
      */
     Group(const node_id_t my_id,
           tcp::socket leader_connection,
-          CallbackSet callbacks,
+          const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls,
           const int gms_port,
@@ -172,7 +172,7 @@ public:
      *
      */
     Group(const ip_addr my_ip,
-          CallbackSet callbacks,
+          const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
@@ -195,9 +195,8 @@ public:
      */
     Group(const node_id_t my_id,
           const ip_addr my_ip,
-          const node_id_t leader_id,
           const ip_addr leader_ip,
-          CallbackSet callbacks,
+          const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
@@ -227,7 +226,7 @@ public:
     Group(const std::string& recovery_filename,
           const node_id_t my_id,
           const ip_addr my_ip,
-          CallbackSet callbacks,
+          const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
           std::vector<view_upcall_t> _view_upcalls = {},
@@ -244,13 +243,15 @@ public:
      * shard of the subgroup. If this node is not a member of the subgroup, it
      * will be an invalid/empty Replicated<T>.
      * @param subgroup_index The index of the subgroup within the set of
-     * subgroups that replicate the same type of object.
+     * subgroups that replicate the same type of object. Defaults to 0, so
+     * if there is only one subgroup of type T, it can be retrieved with
+     * get_subgroup<T>();
      * @tparam SubgroupType The object type identifying the subgroup
      * @return A reference to either a Replicated<SubgroupType> or a RawSubgroup
      * for this subgroup
      */
     template<typename SubgroupType>
-    auto& get_subgroup(uint32_t subgroup_index);
+    auto& get_subgroup(uint32_t subgroup_index = 0);
 
     /**
      * Serializes and sends the state of all replicated objects that represent

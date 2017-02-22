@@ -149,6 +149,8 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     log_event("Starting predicate evaluation");
     curr_view->gmsSST->start_predicate_evaluation();
 
+    //ERROR: This is now a bad assumption: The members of the previous view are not
+    //necessarily this view's members minus the last one!
     lock_guard_t lock(view_mutex);
     std::vector<node_id_t> old_members(curr_view->members.begin(),
                                        curr_view->members.end() - 1);
@@ -239,7 +241,8 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
     mutils::post_object(bind_socket_write, derecho_params);
-    send_subgroup_objects(client_socket);
+    //Sending a "0" will cause the second member's receive_objects to terminate immediately
+    mutils::post_object(bind_socket_write, std::size_t{0});
     rdma::impl::verbs_add_connection(client_id, joiner_ip, my_id);
     sst::add_node(client_id, joiner_ip);
 }
@@ -733,6 +736,10 @@ void ViewManager::barrier_sync() {
 const View& ViewManager::get_current_view() {
     lock_guard_t lock(view_mutex);
     return *curr_view;
+}
+
+void ViewManager::debug_print_status() const {
+    std::cout << "curr_view = " << curr_view->debug_string() << std::endl;
 }
 
 std::map<node_id_t, ip_addr> ViewManager::make_member_ips_map(const View& view) {

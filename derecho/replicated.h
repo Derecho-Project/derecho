@@ -27,6 +27,10 @@ template<typename T>
 using Factory = std::function<std::unique_ptr<T>(void)>;
 
 
+/**
+ * Thrown by methods of Replicated<T> if a client tries to use them when the
+ * Replicated<T> is "empty" (does not refer to a replicated object).
+ */
 struct empty_reference_exception : public derecho_exception {
     empty_reference_exception(const std::string& message) : derecho_exception(message) {}
 };
@@ -102,6 +106,17 @@ private:
     }
 
 public:
+    /**
+     * Constructs a Replicated<T> that enables RPC function calls for an object
+     * of type T.
+     * @param nid The ID of the node on which this Replicated<T> is running.
+     * @param subgroup_id The internally-generated subgroup ID for the subgroup
+     * that participates in replicating this object
+     * @param group_rpc_manager A reference to the RPCManager for the Group
+     * that owns this Replicated<T>
+     * @param client_object_factory A factory functor that can create instances
+     * of T.
+     */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory) :
         object(client_object_factory()),
@@ -122,39 +137,92 @@ public:
     Replicated(Replicated&&) = default;
     Replicated(const Replicated&) = delete;
 
+    /**
+     * @return True if this Replicated<T> actually contains a reference to a
+     * replicated object, false if it is "empty" because this node is not a
+     * member of the subgroup that replicates T.
+     */
     bool is_valid() const {
         return object && group_rpc_manager && wrapped_this;
     }
 
+    /**
+     * Sends a multicast to only some members of the subgroup that replicates this
+     * Replicated<T>, invoking the RPC function identified by the FunctionTag
+     * template parameter, but does not wait for a response. This should only be
+     * used for RPC functions whose return type is void.
+     * @param args The arguments to the RPC function being invoked
+     */
     template<rpc::FunctionTag tag, typename... Args>
     void ordered_send(const std::vector<node_id_t>& destination_nodes,
                       Args&&... args) {
         ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
     }
 
+    /**
+     * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
+     * invoking the RPC function identified by the FunctionTag template parameter,
+     * but does not wait for a response. This should only be used for RPC functions
+     * whose return type is void.
+     * @param args The arguments to the RPC function being invoked
+     */
     template<rpc::FunctionTag tag, typename... Args>
     void ordered_send(Args&&... args) {
         // empty nodes means that the destination is the entire group
         ordered_send<tag>({}, std::forward<Args>(args)...);
     }
 
+    /**
+     * Sends a multicast to only some members of the subgroup that replicates
+     * this Replicated<T>, invoking the RPC function identified by the
+     * FunctionTag template parameter.
+     * @param destination_nodes The IDs of the nodes that should be sent the
+     * RPC message
+     * @param args The arguments to the RPC function
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked.
+     */
     template<rpc::FunctionTag tag, typename... Args>
     auto ordered_query(const std::vector<node_id_t>& destination_nodes,
                       Args&&... args) {
         return ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
     }
 
+    /**
+     * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
+     * invoking the RPC function identified by the FunctionTag template parameter.
+     * @param args The arguments to the RPC function
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked.
+     */
     template<rpc::FunctionTag tag, typename... Args>
     auto ordered_query(Args&&... args) {
         // empty nodes means that the destination is the entire group
         return ordered_query<tag>({}, std::forward<Args>(args)...);
     }
 
+    /**
+     * Sends a peer-to-peer message over TCP to a single member of the subgroup
+     * that replicates this Replicated<T>, invoking the RPC function identified
+     * by the FunctionTag template parameter, but does not wait for a response.
+     * This should only be used for RPC functions whose return type is void.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     */
     template<rpc::FunctionTag tag, typename... Args>
     void p2p_send(node_id_t dest_node, Args&&... args) {
         p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
     }
 
+    /**
+     * Sends a peer-to-peer message over TCP to a single member of the subgroup
+     * that replicates this Replicated<T>, invoking the RPC function identified
+     * by the FunctionTag template parameter.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked
+     */
     template<rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
         return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);

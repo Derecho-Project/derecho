@@ -141,8 +141,9 @@ void RPCManager::new_view_callback(std::vector<node_id_t> new_members, std::vect
     //reach into it in order to get the IP addresses. Really, the new view callbacks
     //should just get the whole view.
     for(const auto& joiner_id : joined_members) {
-        connections.add_node(joiner_id,
-                view_manager.curr_view->member_ips[view_manager.curr_view->rank_of(joiner_id)]);
+        if(joiner_id != nid)
+            connections.add_node(joiner_id,
+                    view_manager.curr_view->member_ips[view_manager.curr_view->rank_of(joiner_id)]);
     }
 
     std::lock_guard<std::mutex> lock(pending_results_mutex);
