@@ -17,6 +17,7 @@
 #include "rpc_utils.h"
 #include "remote_invocable.h"
 #include "view_manager.h"
+#include "view.h"
 #include "mutils-serialization/SerializationSupport.hpp"
 
 namespace derecho {
@@ -109,10 +110,9 @@ public:
      * joins or leaves. Specifically, forms new TCP connections for P2P RPC
      * calls, and updates "pending results" (futures for RPC calls) to report
      * failures for nodes that were removed in the new view.
-     * @param new_members Node IDs of the members of the new view
-     * @param old_members Node IDs of the members of the previous view
+     * @param new_view The new view that was just installed.
      */
-    void new_view_callback(std::vector<node_id_t> new_members, std::vector<node_id_t> old_members);
+    void new_view_callback(const View& new_view);
 
     /**
      * Handles an RPC message for any of the functions managed by this RPCManager,

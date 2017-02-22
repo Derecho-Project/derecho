@@ -125,30 +125,19 @@ void RPCManager::p2p_message_handler(int32_t sender_id, char* msg_buf, uint32_t 
     }
 }
 
-void RPCManager::new_view_callback(std::vector<node_id_t> new_members, std::vector<node_id_t> old_members) {
-    std::vector<node_id_t> removed_members;
-    std::vector<node_id_t> joined_members;
-    std::set_difference(old_members.begin(), old_members.end(),
-                        new_members.begin(), new_members.end(),
-                        std::back_inserter(removed_members));
-    std::set_difference(new_members.begin(), new_members.end(),
-                        old_members.begin(), old_members.end(),
-                        std::back_inserter(joined_members));
-    for(const auto& removed_id : removed_members) {
+void RPCManager::new_view_callback(const View& new_view) {
+    for(const auto& removed_id : new_view.departed) {
         connections.delete_node(removed_id);
     }
-    //HACK: By the time this is called, curr_view will have been installed, so we can
-    //reach into it in order to get the IP addresses. Really, the new view callbacks
-    //should just get the whole view.
-    for(const auto& joiner_id : joined_members) {
+    for(const auto& joiner_id : new_view.joined) {
         if(joiner_id != nid)
             connections.add_node(joiner_id,
-                    view_manager.curr_view->member_ips[view_manager.curr_view->rank_of(joiner_id)]);
+                    new_view.member_ips[new_view.rank_of(joiner_id)]);
     }
 
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
-        for(auto removed_id : removed_members) {
+        for(auto removed_id : new_view.departed) {
             pending.get().set_exception_for_removed_node(removed_id);
         }
     }

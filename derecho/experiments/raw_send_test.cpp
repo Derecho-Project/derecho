@@ -17,7 +17,6 @@ using std::string;
 using std::cout;
 using std::endl;
 
-using derecho::MulticastGroup;
 using derecho::RawObject;
 
 int main(int argc, char *argv[]) {

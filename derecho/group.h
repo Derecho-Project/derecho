@@ -19,7 +19,6 @@
 #include "tcp/tcp.h"
 
 #include "logger.h"
-#include "view.h"
 #include "replicated.h"
 #include "rpc_manager.h"
 #include "view_manager.h"
@@ -43,10 +42,6 @@ template <typename... ReplicatedObjects>
 class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
-
-    //This might need to change to View&, View& if we want to support subgroup_membership
-    using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
-                                             std::vector<node_id_t> old_members)>;
 
     //The type of a map from subgroup index -> Replicated<T>
     template<typename T>

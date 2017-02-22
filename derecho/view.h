@@ -34,8 +34,6 @@ public:
      * transitioning to a new view that excludes a failed member, this count
      * will decrease by one. */
     int32_t num_failed;
-    //WARNING: The joined and departed fields are not serialized, so they will not be sent to a new node that joins the system.
-    //This doesn't seem to break anything but it would be nice to support serializing more than 7 fields so that we could send these.
     /** List of IDs of nodes that joined since the previous view, if any. */
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
@@ -79,16 +77,19 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, num_members, my_rank);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, my_rank);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
-         const std::vector<char>& failed, const int32_t nFailed, const int32_t num_members, const int32_t my_rank)
+         const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
+         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t my_rank)
             : vid(vid),
               members(members),
               member_ips(member_ips),
               failed(failed),
-              num_failed(nFailed),
+              num_failed(num_failed),
+              joined(joined),
+              departed(departed),
               num_members(num_members),
               my_rank(my_rank) {}
 };

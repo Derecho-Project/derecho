@@ -101,41 +101,39 @@ int main(int argc, char *argv[]) {
 		}};
     derecho::Group<test1_str>* managed_group;
 
+    auto new_view_callback = [](const derecho::View& new_view) {
+        std::vector<derecho::node_id_t> old_members;
+        old_members.insert(old_members.begin(), new_view.departed.begin(), new_view.departed.end());
+        //"copy from members to old_members as long as members[i] is not in joined"
+        std::copy_if(new_view.members.begin(), new_view.members.end(), std::back_inserter(old_members),
+                     [&new_view](const derecho::node_id_t& elem){
+            return std::find(new_view.joined.begin(), new_view.joined.end(), elem) == new_view.joined.end();
+        });
+        cout << "New members are : " << endl;
+        for(auto n : new_view.members) {
+            cout << n << " ";
+        }
+        cout << endl;
+        cout << "Old members were :" << endl;
+        for(auto o : old_members) {
+            cout << o << " ";
+        }
+        cout << endl;
+    };
+
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
             my_ip, {stability_callback, {}}, subgroup_info,
-            derecho_params, {[](vector<derecho::node_id_t> new_members,
-                                vector<derecho::node_id_t> old_members) {
-                cout << "New members are : " << endl;
-                for(auto n : new_members) {
-                    cout << n << " ";
-                }
-                cout << endl;
-                cout << "Old members were :" << endl;
-                for(auto o : old_members) {
-                    cout << o << " ";
-                }
-                cout << endl;
-            }}, 12345, [](){return std::make_unique<test1_str>();});
+            derecho_params, {new_view_callback}, 12345,
+            [](){return std::make_unique<test1_str>();});
     }
 
     else {
         managed_group = new derecho::Group<test1_str>(
             my_id, my_ip, leader_ip,
             {stability_callback, {}}, subgroup_info,
-            {[](vector<derecho::node_id_t> new_members,
-                vector<derecho::node_id_t> old_members) {
-                cout << "New members are : " << endl;
-                for(auto n : new_members) {
-                    cout << n << " ";
-                }
-                cout << endl;
-                cout << "Old members were :" << endl;
-                for(auto o : old_members) {
-                    cout << o << " ";
-                }
-                cout << endl;
-            }}, 12345, [](){return std::make_unique<test1_str>();});
+            {new_view_callback}, 12345,
+            [](){return std::make_unique<test1_str>();});
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;

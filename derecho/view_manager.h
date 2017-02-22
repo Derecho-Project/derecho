@@ -53,12 +53,11 @@ public:
     }
 };
 
+using view_upcall_t = std::function<void(const View&)>;
+
 class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
-
-    using view_upcall_t = std::function<void(std::vector<node_id_t> new_members,
-                                             std::vector<node_id_t> old_members)>;
 
     using send_objects_upcall_t = std::function<void(tcp::socket&)>;
 

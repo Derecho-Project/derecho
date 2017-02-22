@@ -149,13 +149,9 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     log_event("Starting predicate evaluation");
     curr_view->gmsSST->start_predicate_evaluation();
 
-    //ERROR: This is now a bad assumption: The members of the previous view are not
-    //necessarily this view's members minus the last one!
     lock_guard_t lock(view_mutex);
-    std::vector<node_id_t> old_members(curr_view->members.begin(),
-                                       curr_view->members.end() - 1);
     for(auto& view_upcall : view_upcalls) {
-        view_upcall(curr_view->members, old_members);
+        view_upcall(*curr_view);
     }
 }
 
@@ -213,10 +209,8 @@ void ViewManager::start() {
     log_event("Starting predicate evaluation");
 
     lock_guard_t lock(view_mutex);
-    std::vector<node_id_t> old_members(curr_view->members.begin(),
-                                       curr_view->members.end() - 1);
     for(auto& view_upcall : view_upcalls) {
-        view_upcall(curr_view->members, old_members);
+        view_upcall(*curr_view);
     }
 }
 
@@ -563,7 +557,7 @@ void ViewManager::register_predicates() {
 
                 // Announce the new view to the application
                 for(auto& view_upcall : view_upcalls) {
-                    view_upcall(curr_view->members, old_members);
+                    view_upcall(*curr_view);
                 }
 
                 view_change_cv.notify_all();
@@ -877,9 +871,9 @@ void ViewManager::ragged_edge_cleanup(View& Vc) {
         const std::vector<node_id_t> shard_members =  Vc.multicast_group->get_subgroup_to_membership().at(subgroup_num);
 
         if(index == 0) {
-            leader_ragged_edge_cleanup(Vc, subgroup_num, num_received_offset - index, shard_members);
+            leader_ragged_edge_cleanup(Vc, subgroup_num, num_received_offset, shard_members);
         } else {
-            follower_ragged_edge_cleanup(Vc, subgroup_num, num_received_offset - index, shard_members);
+            follower_ragged_edge_cleanup(Vc, subgroup_num, num_received_offset, shard_members);
         }
     }
     util::debug_log().log_event("Done with RaggedEdgeCleanup");

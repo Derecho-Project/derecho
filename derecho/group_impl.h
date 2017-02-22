@@ -101,9 +101,8 @@ std::map<uint32_t, RawSubgroup> Group<ReplicatedObjects...>::construct_raw_subgr
 
 template <typename... ReplicatedObjects>
 void Group<ReplicatedObjects...>::set_up_components() {
-    view_manager.add_view_upcall([this](std::vector<node_id_t> new_members,
-            std::vector<node_id_t> old_members) {
-        rpc_manager.new_view_callback(new_members, old_members);
+    view_manager.add_view_upcall([this](const View& new_view) {
+        rpc_manager.new_view_callback(new_view);
     });
     view_manager.get_current_view().multicast_group->register_rpc_callback(
             [this](node_id_t sender, char* buf, uint32_t size) {
