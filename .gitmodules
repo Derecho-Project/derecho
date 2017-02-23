@@ -6,4 +6,4 @@
 	url = https://github.com/mpmilano/mutils.git
 [submodule "third_party/mutils-containers"]
 	path = third_party/mutils-containers
-	url = git@github.com:mpmilano/mutils-containers.git
+	url = https://github.com/mpmilano/mutils-containers.git
