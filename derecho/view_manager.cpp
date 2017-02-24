@@ -132,27 +132,6 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     setup_multicast_group(callbacks,
                   derecho_params);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
-    curr_view->gmsSST->put();
-    curr_view->gmsSST->sync_with_members();
-    log_event("Done setting up initial SST and RDMC");
-
-    if(curr_view->my_rank != curr_view->rank_of_leader()) {
-        // If we're re-joining a group as a non-leader, copy the leader's num_changes, num_acked, and num_committed
-        // This ensures we won't immediately detect a proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
-        curr_view->gmsSST->init_local_change_proposals(curr_view->rank_of_leader());
-        curr_view->gmsSST->put();
-        log_event("Joining node initialized its SST row from the leader");
-    }
-
-    create_threads();
-    register_predicates();
-    log_event("Starting predicate evaluation");
-    curr_view->gmsSST->start_predicate_evaluation();
-
-    lock_guard_t lock(view_mutex);
-    for(auto& view_upcall : view_upcalls) {
-        view_upcall(*curr_view);
-    }
 }
 
 ViewManager::~ViewManager() {
@@ -169,6 +148,7 @@ ViewManager::~ViewManager() {
 }
 
 void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+    std::cout << "Successfully connected to leader, about to receive the View." << std::endl;
     node_id_t leader_id = 0;
     leader_connection.exchange(my_id, leader_id);
 
@@ -216,13 +196,14 @@ void ViewManager::start() {
 
 void ViewManager::await_second_member(const node_id_t my_id) {
     tcp::socket client_socket = server_socket.accept();
-    node_id_t client_id = 0;
-    client_socket.exchange(my_id, client_id);
+    node_id_t joiner_id = 0;
+    client_socket.exchange(my_id, joiner_id);
     ip_addr& joiner_ip = client_socket.remote_ip;
     curr_view->num_members++;
-    curr_view->member_ips.push_back(joiner_ip);
-    curr_view->members.push_back(client_id);
-    curr_view->failed.push_back(false);
+    curr_view->member_ips.emplace_back(joiner_ip);
+    curr_view->members.emplace_back(joiner_id);
+    curr_view->failed.emplace_back(false);
+    curr_view->joined.emplace_back(joiner_id);
 
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         bool success = client_socket.write(bytes, size);
@@ -237,8 +218,8 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     mutils::post_object(bind_socket_write, derecho_params);
     //Sending a "0" will cause the second member's receive_objects to terminate immediately
     mutils::post_object(bind_socket_write, std::size_t{0});
-    rdma::impl::verbs_add_connection(client_id, joiner_ip, my_id);
-    sst::add_node(client_id, joiner_ip);
+    rdma::impl::verbs_add_connection(joiner_id, joiner_ip, my_id);
+    sst::add_node(joiner_id, joiner_ip);
 }
 
 void ViewManager::rdmc_sst_setup() {
@@ -496,14 +477,15 @@ void ViewManager::register_predicates() {
                 assert(next_view);
 
                 ragged_edge_cleanup(*curr_view);
+                std::list<tcp::socket> joiner_sockets;
                 if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
                     //If j joins have been committed, pop the next j sockets off proposed_join_sockets
-                    //and send them the new view (must happen before we try to do SST setup)
+                    //and send them the new View (must happen before we try to do SST setup)
                     for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
                         commit_join(*next_view, proposed_join_sockets.front());
-                        send_subgroup_objects(proposed_join_sockets.front());
-                        // Close the client's socket
-                        proposed_join_sockets.pop_front();
+                        //Save the socket so we can send RPC objects to it after MulticastGroup setup
+                        joiner_sockets.emplace_back(std::move(proposed_join_sockets.front()));
+                        proposed_join_sockets.pop_front(); //ugh, can't actually move from a list
                     }
                 }
 
@@ -525,11 +507,18 @@ void ViewManager::register_predicates() {
                 }
                 // This will block until everyone responds to SST/RDMC initial handshakes
                 transition_sst_and_rdmc(*next_view);
+                // New members will now have their SST and MulticastGroup created, and need to receive RPC objects
+                if(curr_view->i_am_leader()) {
+                    while(!joiner_sockets.empty()) {
+                        send_subgroup_objects(joiner_sockets.front());
+                        //Close the socket, since we're done sending stuff now
+                        joiner_sockets.pop_front();
+                    }
+                }
+                // New members can now proceed to view_manager.start(), which will call sync()
                 next_view->gmsSST->put();
                 next_view->gmsSST->sync_with_members();
                 log_event(std::stringstream() << "Done setting up SST and DerechoGroup for view " << next_view->vid);
-                //Save old view's members for view upcall
-                auto old_members = curr_view->members;
                 {
                     lock_guard_t old_views_lock(old_views_mutex);
                     old_views.push(std::move(curr_view));

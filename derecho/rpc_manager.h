@@ -77,7 +77,7 @@ public:
         nid(node_id),
         receivers(new std::decay_t<decltype(*receivers)>()),
         view_manager(group_view_manager),
-        connections(node_id, ViewManager::make_member_ips_map(*group_view_manager.curr_view),
+        connections(node_id, std::map<node_id_t, ip_addr>(),
                     group_view_manager.derecho_params.rpc_port),
         replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
             rpc_thread = std::thread(&RPCManager::rpc_process_loop, this);
