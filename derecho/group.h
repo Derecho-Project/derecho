@@ -103,15 +103,22 @@ private:
         factories.template get<FirstType>() = curr_factory;
         std::vector<node_id_t> members(view_manager.get_current_view().members);
         std::type_index subgroup_type(typeid(FirstType));
+        std::vector<std::vector<std::unique_ptr<SubView>>> subgroup_shard_views;
+        try {
+            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(view_manager.get_current_view());
+            //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
+            subgroup_shard_views = std::move(temp);
+        } catch (subgroup_provisioning_exception& ex) {
+            view_manager.get_current_view().is_adequately_provisioned = false;
+            construct_objects<RestTypes...>(my_id, subgroup_info, rest_factories...);
+        }
         uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);
         for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index){
             //Find out if this node is in any shard of this subgroup
             bool in_subgroup = false;
-            uint32_t num_shards = subgroup_info.num_shards.at({subgroup_type, subgroup_index});
+            uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size() + 1;
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-                std::vector<node_id_t> members = subgroup_info.subgroup_membership(
-                        view_manager.get_current_view(), subgroup_type,
-                        subgroup_index, shard_num);
+                const std::vector<node_id_t>& members = subgroup_shard_views.at(subgroup_index).at(shard_num)->members;
                 //"If this node is in subgroup_membership() for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                      in_subgroup = true;

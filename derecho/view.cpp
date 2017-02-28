@@ -11,6 +11,23 @@ namespace derecho {
 using std::string;
 using std::shared_ptr;
 
+
+SubView::SubView(int32_t num_members)
+        : members(num_members),
+          member_ips(num_members),
+          joined(0),
+          departed(0) {}
+
+int SubView::rank_of(const node_id_t& who) const {
+    for(std::size_t rank = 0; rank < members.size(); ++rank) {
+        if(members[rank] == who) {
+            return rank;
+        }
+    }
+    return -1;
+}
+
+
 View::View()
         : View(0) {}
 
@@ -28,13 +45,19 @@ View::View(int num_members)
           multicast_group(nullptr),
           gmsSST(nullptr) {}
 
-//
-//void View::init_vectors() {
-//    members.resize(num_members);
-//    member_ips.resize(num_members);
-//    failed.resize(num_members, 0);
-//}
-
+View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+           const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
+           const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t my_rank)
+        : vid(vid),
+          members(members),
+          member_ips(member_ips),
+          failed(failed),
+          num_failed(num_failed),
+          joined(joined),
+          departed(departed),
+          num_members(num_members),
+          my_rank(my_rank) {
+}
 
 int View::rank_of_leader() const {
     for(int r = 0; r < num_members; ++r) {
@@ -66,11 +89,18 @@ int View::rank_of(const node_id_t& who) const {
 }
 
 
-void View::announce_new_view(const View& Vc) {
-    //    std::cout <<"Process " << Vc.members[Vc.my_rank] << " New view: " <<
-    //    Vc.ToString() << std::endl;
+std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members) const {
+    std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
+    sub_view->members = with_members;
+    for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
+        std::size_t member_pos = std::distance(members.begin(),
+                                               std::find(members.begin(), members.end(), with_members[subview_rank]));
+        sub_view->member_ips[subview_rank] = member_ips[member_pos];
+    }
+    sub_view->joined = joined;
+    sub_view->departed = departed;
+    return sub_view;
 }
-
 
 bool View::i_am_leader() const {
     return (rank_of_leader() == my_rank);  // True if I know myself to be the leader

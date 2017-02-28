@@ -72,31 +72,23 @@ int main(int argc, char *argv[]) {
     derecho::SubgroupInfo subgroup_info{ {
         {std::type_index(typeid(RawObject)), 3}
     }, {
-            { {std::type_index(typeid(RawObject)), 0}, 1},
-            { {std::type_index(typeid(RawObject)), 1}, 1},
-            { {std::type_index(typeid(RawObject)), 2}, 1}
-    },
-    [group_0_members, group_1_members, group_2_members]
-     (const derecho::View& curr_view, std::type_index subgroup_type, uint32_t subgroup_index, uint32_t) {
-        if(subgroup_type == std::type_index(typeid(RawObject))) {
-            std::vector<derecho::node_id_t> subgroup_members;
-            switch(subgroup_index) {
-            case 0:
+            { std::type_index(typeid(RawObject)), [group_0_members, group_1_members, group_2_members]
+                                                 (const derecho::View& curr_view) {
+                std::vector<derecho::node_id_t> subgroup_0_members;
+                std::vector<derecho::node_id_t> subgroup_1_members;
+                std::vector<derecho::node_id_t> subgroup_2_members;
                 unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                        group_0_members, std::back_inserter(subgroup_members));
-                break;
-            case 1:
+                                       group_0_members, std::back_inserter(subgroup_0_members));
                 unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                        group_1_members, std::back_inserter(subgroup_members));
-                break;
-            case 2:
+                                       group_1_members, std::back_inserter(subgroup_1_members));
                 unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                        group_2_members, std::back_inserter(subgroup_members));
-                break;
-            }
-            return subgroup_members;
-        }
-        return std::vector<derecho::node_id_t>();
+                                       group_2_members, std::back_inserter(subgroup_2_members));
+                std::vector<std::vector<std::unique_ptr<derecho::SubView>>> shard_vector(3);
+                shard_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members));
+                shard_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members));
+                shard_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members));
+                return shard_vector;
+            } }
     }};
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(

@@ -163,6 +163,10 @@ MulticastGroup::MulticastGroup(
     // Just in case
     old_group.wedge();
 
+    for(uint i = 0; i < num_members; ++i) {
+        node_id_to_sst_index[members[i]] = i;
+    }
+
     // Convience function that takes a msg from the old group and
     // produces one suitable for this group.
     auto convert_msg = [this](Message& msg, subgroup_id_t subgroup_num) {
@@ -504,7 +508,8 @@ void MulticastGroup::deliver_messages_upto(
 void MulticastGroup::register_predicates() {
     for(const auto p : subgroup_to_shard_n_index) {
         subgroup_id_t subgroup_num = p.first;
-        uint32_t shard_index = p.second.second;
+        uint32_t shard_num, shard_index;
+        std::tie(shard_num, shard_index) = p.second;
         std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
         auto num_shard_members = shard_members.size();
         auto stability_pred = [this](
@@ -642,7 +647,7 @@ void MulticastGroup::send_loop() {
 
         std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
         auto num_shard_members = shard_members.size();
-        assert(num_shard_members > 1);
+        assert(num_shard_members >= 1);
         for(uint i = 0; i < num_shard_members; ++i) {
             if(sst->delivered_num[node_id_to_sst_index[shard_members[i]]][subgroup_num] <
                     (int)((msg.index - window_size) * num_shard_members + shard_index)

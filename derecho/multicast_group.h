@@ -141,8 +141,14 @@ private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
     uint32_t total_num_subgroups;
+    /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
+     * (this node's shard number, this node's shard rank)*/
     const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
+     * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
+    /** Maps subgroup IDs (for subgroups this node is a member of) to the members
+     * of this node's shard of that subgroup*/
     const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
@@ -268,9 +274,6 @@ public:
     }
     const std::map<subgroup_id_t, uint32_t>& get_subgroup_to_num_received_offset() {
         return subgroup_to_num_received_offset;
-    }
-    const std::map<subgroup_id_t, std::vector<node_id_t>>& get_subgroup_to_membership() {
-        return subgroup_to_membership;
     }
     std::vector<uint32_t> get_shard_sst_indices(uint32_t subgroup_num);
 };

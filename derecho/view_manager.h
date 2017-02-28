@@ -142,13 +142,13 @@ private:
 
     // Ken's helper methods
     void deliver_in_order(const View& Vc, const int shard_leader_rank,
-                          const uint32_t subgroup_num, const uint32_t nReceived_offset,
+                          const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
                           const std::vector<node_id_t>& shard_members);
     void ragged_edge_cleanup(View& Vc);
-    void leader_ragged_edge_cleanup(View& Vc, const uint32_t subgroup_num,
+    void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                     const uint32_t num_received_offset,
                                     const std::vector<node_id_t>& shard_members);
-    void follower_ragged_edge_cleanup(View& Vc, const uint32_t subgroup_num,
+    void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                       const uint32_t num_received_offset,
                                       const std::vector<node_id_t>& shard_members);
 
@@ -167,13 +167,14 @@ private:
 
     /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing MulticastGroup. */
-    void setup_multicast_group(CallbackSet callbacks,
+    void construct_multicast_group(CallbackSet callbacks,
                        const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
-    void transition_sst_and_rdmc(View& newView);
-    void rdmc_sst_setup();
-    uint32_t make_subgroup_maps(const View& curr_view,
+    void transition_multicast_group(View& newView);
+    /** One-time global initialization of RDMC and SST, using the current view's membership. */
+    void initialize_rdmc_sst();
+    uint32_t make_subgroup_maps(View& curr_view,
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
@@ -256,11 +257,11 @@ public:
      * position where there are at least payload_size bytes remaining in the
      * buffer. The returned pointer can be used to write a message into the
      * buffer. (Analogous to MulticastGroup::get_position) */
-    char* get_sendbuffer_ptr(uint32_t subgroup_num, long long unsigned int payload_size,
+    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                              int pause_sending_turns = 0, bool cooked_send = false);
     /** Instructs the managed MulticastGroup to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
-    void send(uint32_t subgroup_num);
+    void send(subgroup_id_t subgroup_num);
 
     /**
      * @return a reference to the current View, to make it easier for the
