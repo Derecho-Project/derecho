@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
 
     query_node_info(node_id, my_ip, leader_ip);
 
-    long long unsigned int max_msg_size = 1000000;
+    long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
 
     int num_messages = 100;
@@ -39,25 +39,25 @@ int main(int argc, char *argv[]) {
     auto stability_callback = [&node_id, &num_messages](
             uint32_t subgroup_num, int sender_rank, long long int index, char *buf,
             long long int msg_size) {
-        if (subgroup_num == 1 && index == 10 && node_id == 0) {
-            cout << "Exiting" << endl;
-            cout << "The last message is: " << endl;
-            cout << buf << endl;
-            exit(0);
-        }
-        if (subgroup_num == 1 && index == 50 && (node_id == 3 || node_id == 5)) {
-            cout << "Exiting" << endl;
-            cout << "The last message is: " << endl;
-            cout << buf << endl;
-            exit(0);
-        }
-        if (index == 100) {
+        // if (subgroup_num == 1 && index == 10 && node_id == 0) {
+        //     cout << "Exiting" << endl;
+        //     cout << "The last message is: " << endl;
+        //     cout << buf << endl;
+        //     exit(0);
+        // }
+        // if (subgroup_num == 1 && index == 50 && (node_id == 3 || node_id == 5)) {
+        //     cout << "Exiting" << endl;
+        //     cout << "The last message is: " << endl;
+        //     cout << buf << endl;
+        //     exit(0);
+        // }
+      if (index == num_messages-1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_rank << endl;
             cout << "The last message is: " << endl;
             cout << buf << endl;
-        }
-        // cout << "In stability callback; sender = " << sender_rank
-        // << ", index = " << index << endl;
+      }
+        cout << "In stability callback; sender = " << sender_rank
+             << ", index = " << index << endl;
     };
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
@@ -129,7 +129,7 @@ int main(int argc, char *argv[]) {
             buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
         }
         for(unsigned int k = 0; k < msg_size; ++k) {
-            buf[k] = 'a';
+	  buf[k] = 'a' + (rand()%26);
         }
         buf[msg_size-1] = 0;
         subgroup_handle.send();

@@ -64,8 +64,19 @@ std::string DerechoSST::to_string() const {
         for(unsigned int n = 0; n < num_received.size(); n++) {
             s << num_received[row][n] << " ";
         }
-        s << "}"
-          << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
+        s << "}" << ", seq_num={ ";
+	for (unsigned int n = 0; n < seq_num.size(); n++) {
+	  s << seq_num[row][n] << " ";
+	}
+	s << "}" << ", stable_num={ ";
+	for (unsigned int n = 0; n < stable_num.size(); n++) {
+	  s << stable_num[row][n] << " ";
+	}
+	s << "}" << ", delivered_num={ ";
+	for (unsigned int n = 0; n < delivered_num.size(); n++) {
+	  s << delivered_num[row][n] << " ";
+	}
+	s << "}" << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
         for(unsigned int n = 0; n < globalMin.size(); n++) {
             s << globalMin[row][n] << " ";
         }
