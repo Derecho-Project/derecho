@@ -47,6 +47,7 @@ struct test1_str{
      * @return Whatever the result of Dispatcher::setup_rpc_class() is.
      */
     static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str> *ptr) {
+        assert(ptr);
         return m.setup_rpc_class(ptr, derecho::rpc::wrap<READ_STATE>(&test1_str::read_state),
                                     derecho::rpc::wrap<CHANGE_STATE>(&test1_str::change_state));
     }

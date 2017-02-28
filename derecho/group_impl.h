@@ -89,12 +89,15 @@ std::map<uint32_t, RawSubgroup> Group<ReplicatedObjects...>::construct_raw_subgr
         node_id_t my_id, const SubgroupInfo& subgroup_info) {
     std::map<uint32_t, RawSubgroup> raw_subgroup_map;
     std::type_index raw_object_type(typeid(RawObject));
-    for(uint32_t subgroup_index = 0;
-            subgroup_index < subgroup_info.num_subgroups.at(raw_object_type);
-            ++subgroup_index) {
-        subgroup_id_t raw_subgroup_id = view_manager.get_subgroup_ids_by_type().at(
-                {raw_object_type, subgroup_index});
-        raw_subgroup_map.insert({subgroup_index, RawSubgroup(my_id, raw_subgroup_id, view_manager)});
+    auto find_raw_object = subgroup_info.num_subgroups.find(raw_object_type);
+    if(find_raw_object != subgroup_info.num_subgroups.end()) {
+        for(uint32_t subgroup_index = 0;
+                subgroup_index < find_raw_object->second;
+                ++subgroup_index) {
+            subgroup_id_t raw_subgroup_id = view_manager.get_subgroup_ids_by_type().at(
+                    {raw_object_type, subgroup_index});
+            raw_subgroup_map.insert({subgroup_index, RawSubgroup(my_id, raw_subgroup_id, view_manager)});
+        }
     }
     return raw_subgroup_map;
 }

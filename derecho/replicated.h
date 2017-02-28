@@ -38,8 +38,10 @@ struct empty_reference_exception : public derecho_exception {
 template<typename T>
 class Replicated {
 private:
-    /** The user-provided state object with some RPC methods */
-    std::unique_ptr<T> object;
+    /** The user-provided state object with some RPC methods. Stored by
+     * pointer-to-pointer because it must stay pinned at a specific location
+     * in memory, and otherwise Replicated<T> would be unmoveable. */
+    std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
     const node_id_t node_id;
     const subgroup_id_t subgroup_id;
     /** Non-owning, non-managed pointer to Group's RPCManager - really a
@@ -119,15 +121,15 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory) :
-        object(client_object_factory()),
+        user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory())),
         node_id(nid),
         subgroup_id(subgroup_id),
         group_rpc_manager(&group_rpc_manager),
-        wrapped_this(object->register_functions(group_rpc_manager, &object)),
+        wrapped_this((*user_object_ptr)->register_functions(group_rpc_manager, user_object_ptr.get())),
         p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     Replicated() :
-        object(nullptr),
+        user_object_ptr(nullptr),
         node_id(0),
         subgroup_id(0),
         group_rpc_manager(nullptr),
@@ -143,7 +145,7 @@ public:
      * member of the subgroup that replicates T.
      */
     bool is_valid() const {
-        return object && group_rpc_manager && wrapped_this;
+        return user_object_ptr && group_rpc_manager && wrapped_this;
     }
 
     /**
@@ -254,7 +256,7 @@ public:
      * state of this Replicated<T>.
      */
     std::size_t object_size() const {
-        return mutils::bytes_size(*object);
+        return mutils::bytes_size(**user_object_ptr);
     }
 
     /**
@@ -280,7 +282,7 @@ public:
     void send_object_raw(tcp::socket& receiver_socket) const {
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
             receiver_socket.write(bytes, size); };
-        mutils::post_object(bind_socket_write, *object);
+        mutils::post_object(bind_socket_write, **user_object_ptr);
 
     }
 
@@ -295,8 +297,8 @@ public:
      * @return The number of bytes read from the buffer.
      */
     std::size_t receive_object(char* buffer) {
-        object = std::move(mutils::from_bytes<T>(&group_rpc_manager->dsm, buffer));
-        return mutils::bytes_size(*object);
+        *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager->dsm, buffer));
+        return mutils::bytes_size(**user_object_ptr);
     }
 };
 
