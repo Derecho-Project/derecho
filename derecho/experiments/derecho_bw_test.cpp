@@ -76,13 +76,8 @@ int main(int argc, char *argv[]) {
     };
 
     derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{ {std::type_index(typeid(RawObject)), 0}, 1}},
-        [](const View& curr_view, std::type_index subgroup_type, uint32_t, uint32_t) {
-        if(subgroup_type == std::type_index(typeid(RawObject))) {
-            return curr_view.members;
-        }
-        return std::vector<node_id_t>();
-    }};
+        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
+    };
 
     std::unique_ptr<derecho::Group<>> managed_group;
     if(node_rank == server_rank) {

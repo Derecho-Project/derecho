@@ -89,10 +89,7 @@ int main(int argc, char *argv[]) {
     derecho::SubgroupInfo subgroup_info { {
         {std::type_index(typeid(test1_str)), 1}
     }, {
-        {std::type_index(typeid(test1_str)), [](const derecho::View& curr_view) {
-            return { { std::make_unique<derecho::SubView>(curr_view.members, curr_view.member_ips,
-                    curr_view.joined, curr_view.departed) } }; }
-        }
+        {std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view }
     } };
     derecho::Group<test1_str>* managed_group;
 

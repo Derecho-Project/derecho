@@ -103,13 +103,12 @@ private:
         factories.template get<FirstType>() = curr_factory;
         std::vector<node_id_t> members(view_manager.get_current_view().members);
         std::type_index subgroup_type(typeid(FirstType));
-        std::vector<std::vector<std::unique_ptr<SubView>>> subgroup_shard_views;
+        subgroup_shard_layout_t subgroup_shard_views;
         try {
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(view_manager.get_current_view());
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch (subgroup_provisioning_exception& ex) {
-            view_manager.get_current_view().is_adequately_provisioned = false;
             construct_objects<RestTypes...>(my_id, subgroup_info, rest_factories...);
         }
         uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);

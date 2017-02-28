@@ -116,13 +116,8 @@ int main(int argc, char *argv[]) {
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
     derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{ {std::type_index(typeid(RawObject)), 0}, 1}},
-        [](const derecho::View& curr_view, std::type_index subgroup_type, uint32_t, uint32_t) {
-        if(subgroup_type == std::type_index(typeid(RawObject))) {
-            return curr_view.members;
-        }
-        return std::vector<derecho::node_id_t>();
-    }};
+        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
+    };
 
 
     if(my_ip == leader_ip) {

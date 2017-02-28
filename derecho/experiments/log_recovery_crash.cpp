@@ -85,14 +85,9 @@ int main(int argc, char* argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, persistence_callback};
     derecho::DerechoParams param_object{message_size, block_size, message_log_filename};
-        derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{ {std::type_index(typeid(RawObject)), 0}, 1}},
-        [](const derecho::View& curr_view, std::type_index subgroup_type, uint32_t, uint32_t) {
-        if(subgroup_type == std::type_index(typeid(RawObject))) {
-            return curr_view.members;
-        }
-        return std::vector<derecho::node_id_t>();
-    }};
+    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
+        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
+    };
     if(node_id == leader_id) {
         managed_group = make_shared<derecho::Group<>>(
                 my_ip, callbacks, one_raw_group, param_object);

@@ -766,7 +766,7 @@ uint32_t ViewManager::make_subgroup_maps(View& curr_view,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership) {
     uint32_t subgroup_offset = 0;
     for(const auto& subgroup_type_count : subgroup_info.num_subgroups) {
-        std::vector<std::vector<std::unique_ptr<SubView>>> subgroup_shard_views;
+        subgroup_shard_layout_t subgroup_shard_views;
         try {
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type_count.first)(curr_view);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
