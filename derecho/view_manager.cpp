@@ -586,7 +586,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
 
     uint32_t num_received_size = make_subgroup_maps(*curr_view, subgroup_to_shard_n_index,
             subgroup_to_num_received_offset, subgroup_to_membership);
-    const auto num_subgroups = curr_view->shard_views_by_subgroup.size() + 1; //largest subgroup ID + 1
+    const auto num_subgroups = curr_view->shard_views_by_subgroup.size(); //largest subgroup ID + 1
     curr_view->gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
             curr_view->members, curr_view->members[curr_view->my_rank],
             [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
@@ -607,7 +607,7 @@ void ViewManager::transition_multicast_group(View& newView) {
     std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
     uint32_t num_received_size = make_subgroup_maps(newView, subgroup_to_shard_n_index,
             subgroup_to_num_received_offset, subgroup_to_membership);
-    const auto num_subgroups = curr_view->shard_views_by_subgroup.size() + 1; //largest subgroup ID + 1
+    const auto num_subgroups = curr_view->shard_views_by_subgroup.size(); //largest subgroup ID + 1
     newView.gmsSST = std::make_shared<DerechoSST>(sst::SSTParams(
             newView.members, newView.members[newView.my_rank],
             [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed, false),
@@ -779,7 +779,7 @@ uint32_t ViewManager::make_subgroup_maps(View& curr_view,
             //Assign this (type, index) pair a new unique subgroup ID
             subgroup_id_t next_subgroup_number = curr_view.shard_views_by_subgroup.size();
             subgroup_ids_by_type[{subgroup_type_count.first, subgroup_index}] = next_subgroup_number;
-            uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size() + 1;
+            uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
             uint32_t max_shard_members = 0;
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
                 SubView& shard_view = *subgroup_shard_views.at(subgroup_index).at(shard_num);
