@@ -23,16 +23,16 @@ RPCManager::~RPCManager() {
 }
 
 std::exception_ptr RPCManager::handle_receive(
-        const Opcode& indx, const node_id_t& received_from, char const* const buf,
-        std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
+    const Opcode& indx, const node_id_t& received_from, char const* const buf,
+    std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
     auto reply_header_size = header_space();
     recv_ret reply_return = receivers->at(indx)(
-            &dsm, received_from, buf,
-            [&out_alloc, &reply_header_size](std::size_t size) {
+        &dsm, received_from, buf,
+        [&out_alloc, &reply_header_size](std::size_t size) {
         return out_alloc(size + reply_header_size) + reply_header_size;
-    });
+        });
     auto* reply_buf = reply_return.payload;
     if(reply_buf) {
         reply_buf -= reply_header_size;
@@ -44,15 +44,15 @@ std::exception_ptr RPCManager::handle_receive(
 }
 
 std::exception_ptr RPCManager::handle_receive(
-        char* buf, std::size_t size,
-        const std::function<char*(int)>& out_alloc) {
+    char* buf, std::size_t size,
+    const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     std::size_t payload_size = size;
     Opcode indx;
     node_id_t received_from;
     retrieve_header(&dsm, buf, payload_size, indx, received_from);
     return handle_receive(indx, received_from, buf + header_space(),
-            payload_size, out_alloc);
+                          payload_size, out_alloc);
 }
 
 void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_t payload_size) {
@@ -70,24 +70,23 @@ void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_
         }
     }
     if(in_dest || dest_size == 0) {
-        auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size
-                - sizeof(header);
+        auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
         size_t reply_size = 0;
         handle_receive(
-                msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
+            msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
             reply_size = size;
             if(reply_size <= max_payload_size) {
                 return replySendBuffer.get();
             } else {
                 return nullptr;
             }
-        });
+            });
         if(reply_size > 0) {
             node_id_t id = sender_id;
             if(id == nid) {
                 handle_receive(
-                        replySendBuffer.get(), reply_size,
-                        [](size_t size) -> char* { assert(false); });
+                    replySendBuffer.get(), reply_size,
+                    [](size_t size) -> char* { assert(false); });
                 if(dest_size == 0) {
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
                     toFulfillQueue.front().get().fulfill_map(view_manager.curr_view->members);
@@ -112,15 +111,15 @@ void RPCManager::p2p_message_handler(int32_t sender_id, char* msg_buf, uint32_t 
     connections.read(sender_id, msg_buf + header_size, payload_size);
     size_t reply_size = 0;
     handle_receive(
-            indx, received_from, msg_buf + header_size, payload_size,
-            [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
+        indx, received_from, msg_buf + header_size, payload_size,
+        [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
         reply_size = _size;
         if(reply_size <= buffer_size) {
             return msg_buf;
         } else {
             return nullptr;
         }
-    });
+        });
     if(reply_size > 0) {
         connections.write(received_from, msg_buf, reply_size);
     }
@@ -140,7 +139,7 @@ void RPCManager::new_view_callback(const View& new_view) {
         for(const node_id_t& joiner_id : new_view.joined) {
             std::cout << "RPCManager adding a connection to node " << joiner_id << std::endl;
             connections.add_node(joiner_id,
-                    new_view.member_ips[new_view.rank_of(joiner_id)]);
+                                 new_view.member_ips[new_view.rank_of(joiner_id)]);
         }
         for(const node_id_t& removed_id : new_view.departed) {
             connections.delete_node(removed_id);
@@ -162,15 +161,14 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     ((size_t*)buffer)[0] = dest_nodes.size();
     buffer += sizeof(size_t);
     header_size += sizeof(size_t);
-    for(auto& n : dest_nodes) {
-        ((node_id_t*)buffer)[0] = n;
+    for(auto& node_id : dest_nodes) {
+        ((node_id_t*)buffer)[0] = node_id;
         buffer += sizeof(node_id_t);
         header_size += sizeof(node_id_t);
     }
     //Two return values: the size of the header we just created,
     //and the maximum payload size based on that
-    max_payload_size = view_manager.curr_view->multicast_group->max_msg_size
-            - sizeof(derecho::header) - header_size;
+    max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(derecho::header) - header_size;
     return header_size;
 }
 
@@ -193,7 +191,6 @@ void RPCManager::finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t
     fulfilledList.push_back(pending_results_handle);
 }
 
-
 void RPCManager::rpc_process_loop() {
     auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
     std::unique_ptr<char[]> rpcBuffer = std::unique_ptr<char[]>(new char[max_payload_size]);
@@ -205,9 +202,5 @@ void RPCManager::rpc_process_loop() {
         p2p_message_handler(other_id, rpcBuffer.get(), max_payload_size);
     }
 }
-
 }
-
 }
-
-

@@ -15,7 +15,4 @@ subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view) {
     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
     return subgroup_vector;
 }
-
 }
-
-

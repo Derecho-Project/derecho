@@ -67,7 +67,7 @@ void FileWriter::perform_writes(std::string filename) {
             message m = pending_writes.front();
             pending_writes.pop();
 
-           message_metadata metadata;
+            message_metadata metadata;
             metadata.view_id = m.view_id;
             metadata.sender = m.sender;
             metadata.index = m.index;
@@ -81,7 +81,6 @@ void FileWriter::perform_writes(std::string filename) {
 
             data_file.flush();
             metadata_file.flush();
-
 
             current_offset += m.length;
 

@@ -63,9 +63,8 @@ private:
 
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
     friend class rpc::RPCManager;
-    template<typename T>
+    template <typename T>
     friend class Replicated;
-
 
     /** The port that this instance of the GMS communicates on. */
     const int gms_port;
@@ -81,7 +80,6 @@ private:
     /** May hold a pointer to the partially-constructed next view, if we are
      *  in the process of transitioning to a new view. */
     std::unique_ptr<View> next_view;
-
 
     /** Contains client sockets for pending joins that have not yet been handled.*/
     LockedQueue<tcp::socket> pending_join_sockets;
@@ -99,7 +97,6 @@ private:
      * Helps the SST predicate detect when there's been a change to suspected[].*/
     std::vector<bool> last_suspected;
 
-
     tcp::connection_listener server_socket;
     /** A flag to signal background threads to shut down; set to true when the group is destroyed. */
     std::atomic<bool> thread_shutdown;
@@ -116,7 +113,6 @@ private:
 
     /** Name of the file to use to persist the current view to disk. */
     std::string view_file_name;
-
 
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
@@ -168,7 +164,7 @@ private:
     /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing MulticastGroup. */
     void construct_multicast_group(CallbackSet callbacks,
-                       const DerechoParams& derecho_params);
+                                   const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
     void transition_multicast_group(View& newView);
@@ -180,6 +176,7 @@ private:
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
     uint32_t calc_total_num_subgroups() const;
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
+
 public:
     /**
      * Constructor for a new group where this node is the GMS leader.
@@ -193,11 +190,11 @@ public:
      * group-management messages
      */
     ViewManager(const ip_addr my_ip,
-          CallbackSet callbacks,
-          const SubgroupInfo& subgroup_info,
-          const DerechoParams& derecho_params,
-          std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345);
+                CallbackSet callbacks,
+                const SubgroupInfo& subgroup_info,
+                const DerechoParams& derecho_params,
+                std::vector<view_upcall_t> _view_upcalls = {},
+                const int gms_port = 12345);
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -282,7 +279,6 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
 
-
     void register_send_objects_upcall(send_objects_upcall_t upcall) {
         send_subgroup_objects = std::move(upcall);
     }
@@ -297,9 +293,6 @@ public:
         util::debug_log().log_event(event_text);
     }
     void print_log(std::ostream& output_dest) const;
-
-
 };
 
 } /* namespace derecho */
-

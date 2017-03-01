@@ -12,7 +12,6 @@
 #include <mutex>
 #include <utility>
 
-
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "tcp/tcp.h"
 
@@ -23,9 +22,8 @@
 
 namespace derecho {
 
-template<typename T>
+template <typename T>
 using Factory = std::function<std::unique_ptr<T>(void)>;
-
 
 /**
  * Thrown by methods of Replicated<T> if a client tries to use them when the
@@ -35,7 +33,7 @@ struct empty_reference_exception : public derecho_exception {
     empty_reference_exception(const std::string& message) : derecho_exception(message) {}
 };
 
-template<typename T>
+template <typename T>
 class Replicated {
 private:
     /** The user-provided state object with some RPC methods. Stored by
@@ -53,10 +51,9 @@ private:
      * created in every p2p_send call. */
     std::unique_ptr<char[]> p2pSendBuffer;
 
-
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send_or_query(const std::vector<node_id_t>& destination_nodes,
-                     Args&&... args) {
+                               Args&&... args) {
         if(is_valid()) {
             char* buffer;
             while(!(buffer = group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id, 0, 0, true))) {
@@ -65,17 +62,17 @@ private:
 
             std::size_t max_payload_size;
             int buffer_offset = group_rpc_manager->populate_nodelist_header(destination_nodes,
-                    buffer, max_payload_size);
+                                                                            buffer, max_payload_size);
             buffer += buffer_offset;
             auto send_return_struct = wrapped_this->template send<tag>(
-                    [&buffer, &max_payload_size](size_t size) -> char* {
+                [&buffer, &max_payload_size](size_t size) -> char* {
                 if(size <= max_payload_size) {
                     return buffer;
                 } else {
                     return nullptr;
                 }
-            },
-            std::forward<Args>(args)...);
+                },
+                std::forward<Args>(args)...);
 
             group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
@@ -84,22 +81,22 @@ private:
         }
     }
 
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send_or_query(node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
             size_t size;
             auto max_payload_size = group_rpc_manager->view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                [this, &max_payload_size, &size](size_t _size) -> char* {
                 size = _size;
                 if(size <= max_payload_size) {
                     return p2pSendBuffer.get();
                 } else {
                     return nullptr;
                 }
-            },
-            std::forward<Args>(args)...);
+                },
+                std::forward<Args>(args)...);
             group_rpc_manager->finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
             return std::move(return_pair.results);
         } else {
@@ -120,21 +117,20 @@ public:
      * of T.
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
-               Factory<T> client_object_factory) :
-        user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory())),
-        node_id(nid),
-        subgroup_id(subgroup_id),
-        group_rpc_manager(&group_rpc_manager),
-        wrapped_this((*user_object_ptr)->register_functions(group_rpc_manager, user_object_ptr.get())),
-        p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+               Factory<T> client_object_factory)
+            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory())),
+              node_id(nid),
+              subgroup_id(subgroup_id),
+              group_rpc_manager(&group_rpc_manager),
+              wrapped_this((*user_object_ptr)->register_functions(group_rpc_manager, user_object_ptr.get())),
+              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
-    Replicated() :
-        user_object_ptr(nullptr),
-        node_id(0),
-        subgroup_id(0),
-        group_rpc_manager(nullptr),
-        wrapped_this(nullptr),
-        p2pSendBuffer(new char[1]) {}
+    Replicated() : user_object_ptr(nullptr),
+                   node_id(0),
+                   subgroup_id(0),
+                   group_rpc_manager(nullptr),
+                   wrapped_this(nullptr),
+                   p2pSendBuffer(new char[1]) {}
 
     Replicated(Replicated&&) = default;
     Replicated(const Replicated&) = delete;
@@ -155,7 +151,7 @@ public:
      * used for RPC functions whose return type is void.
      * @param args The arguments to the RPC function being invoked
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     void ordered_send(const std::vector<node_id_t>& destination_nodes,
                       Args&&... args) {
         ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
@@ -168,7 +164,7 @@ public:
      * whose return type is void.
      * @param args The arguments to the RPC function being invoked
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     void ordered_send(Args&&... args) {
         // empty nodes means that the destination is the entire group
         ordered_send<tag>({}, std::forward<Args>(args)...);
@@ -184,9 +180,9 @@ public:
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
      * of the RPC function being invoked.
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     auto ordered_query(const std::vector<node_id_t>& destination_nodes,
-                      Args&&... args) {
+                       Args&&... args) {
         return ordered_send_or_query<tag>(destination_nodes, std::forward<Args>(args)...);
     }
 
@@ -197,7 +193,7 @@ public:
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
      * of the RPC function being invoked.
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     auto ordered_query(Args&&... args) {
         // empty nodes means that the destination is the entire group
         return ordered_query<tag>({}, std::forward<Args>(args)...);
@@ -211,7 +207,7 @@ public:
      * @param dest_node The ID of the node that the P2P message should be sent to
      * @param args The arguments to the RPC function being invoked
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     void p2p_send(node_id_t dest_node, Args&&... args) {
         p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
     }
@@ -225,7 +221,7 @@ public:
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
      * of the RPC function being invoked
      */
-    template<rpc::FunctionTag tag, typename... Args>
+    template <rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
         return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
     }
@@ -240,7 +236,7 @@ public:
      */
     char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns) {
         return group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id,
-                payload_size, pause_sending_turns, false);
+                                                                  payload_size, pause_sending_turns, false);
     }
 
     /**
@@ -283,7 +279,6 @@ public:
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
             receiver_socket.write(bytes, size); };
         mutils::post_object(bind_socket_write, **user_object_ptr);
-
     }
 
     /**
@@ -301,7 +296,4 @@ public:
         return mutils::bytes_size(**user_object_ptr);
     }
 };
-
 }
-
-

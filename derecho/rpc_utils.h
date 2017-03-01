@@ -191,7 +191,7 @@ public:
     virtual void set_exception_for_removed_node(const node_id_t&) {
         assert(false);
     }
-    virtual ~PendingBase(){}
+    virtual ~PendingBase() {}
 };
 
 /**
@@ -291,12 +291,9 @@ inline void retrieve_header(mutils::DeserializationManager* dsm,
     payload_size = ((std::size_t const* const)reply_buf)[0];
     op = ((Opcode const* const)(sizeof(std::size_t) + reply_buf))[0];
     from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) +
-                                   reply_buf))[0];
+                                     reply_buf))[0];
 }
-} // namespace remote_invocation_utilities
+}  // namespace remote_invocation_utilities
 
-} // namespace rpc
-} // namespace derecho
-
-
-
+}  // namespace rpc
+}  // namespace derecho

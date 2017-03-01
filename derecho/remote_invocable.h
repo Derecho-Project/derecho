@@ -371,7 +371,6 @@ public:
     using RemoteInvocablePairs<rest...>::handler;
 };
 
-
 /**
  * Wraps a class to make it a "replicated object" with methods that
  * can be invoked by RPC. Each RPC-invokable method must be supplied as a
@@ -455,7 +454,5 @@ class RPCManager;
 template <typename T>
 using RemoteInvocableOf = std::decay_t<decltype(*std::declval<T>().register_functions(std::declval<RPCManager&>(),
                                                                                       std::declval<std::unique_ptr<T>*>()))>;
-
 }
 }
-

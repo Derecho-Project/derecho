@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <chrono>
 #include <ctime>
 #include <cstdint>
@@ -44,7 +43,7 @@ private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
     //The type of a map from subgroup index -> Replicated<T>
-    template<typename T>
+    template <typename T>
     using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
     /** Contains all state related to managing Views, including the
@@ -66,7 +65,7 @@ private:
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
      * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     Replicated<SubgroupType>& get_subgroup(SubgroupType*, uint32_t subgroup_index);
     RawSubgroup& get_subgroup(RawObject*, uint32_t subgroup_index);
 
@@ -84,8 +83,8 @@ private:
     std::map<uint32_t, RawSubgroup> construct_raw_subgroups(node_id_t my_id, const SubgroupInfo& subgroup_info);
 
     /** Base case for construct_objects template. */
-	template<typename...>
-    void construct_objects(node_id_t my_id, const SubgroupInfo& subgroup_info){}
+    template <typename...>
+    void construct_objects(node_id_t my_id, const SubgroupInfo& subgroup_info) {}
 
     /**
      * Constructor helper that unpacks the template parameter pack. Constructs
@@ -97,7 +96,7 @@ private:
      * @param curr_factory The current Factory<ReplicatedObject> being considered
      * @param rest_factories The rest of the template parameter pack
      */
-    template<typename FirstType, typename... RestTypes>
+    template <typename FirstType, typename... RestTypes>
     void construct_objects(node_id_t my_id, const SubgroupInfo& subgroup_info,
                            Factory<FirstType> curr_factory, Factory<RestTypes>... rest_factories) {
         factories.template get<FirstType>() = curr_factory;
@@ -108,11 +107,11 @@ private:
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(view_manager.get_current_view());
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
-        } catch (subgroup_provisioning_exception& ex) {
+        } catch(subgroup_provisioning_exception& ex) {
             construct_objects<RestTypes...>(my_id, subgroup_info, rest_factories...);
         }
         uint32_t subgroups_of_type = subgroup_info.num_subgroups.at(subgroup_type);
-        for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index){
+        for(uint32_t subgroup_index = 0; subgroup_index < subgroups_of_type; ++subgroup_index) {
             //Find out if this node is in any shard of this subgroup
             bool in_subgroup = false;
             uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size() + 1;
@@ -120,12 +119,12 @@ private:
                 const std::vector<node_id_t>& members = subgroup_shard_views.at(subgroup_index).at(shard_num)->members;
                 //"If this node is in subgroup_membership() for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
-                     in_subgroup = true;
-                     subgroup_id_t subgroup_id = view_manager.get_subgroup_ids_by_type()
-                             .at({subgroup_type, subgroup_index});
-                     replicated_objects.template get<FirstType>().emplace(subgroup_index,
-                             Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory));
-                     break; //This node can be in at most one shard
+                    in_subgroup = true;
+                    subgroup_id_t subgroup_id = view_manager.get_subgroup_ids_by_type()
+                                                    .at({subgroup_type, subgroup_index});
+                    replicated_objects.template get<FirstType>().emplace(
+                        subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager, curr_factory));
+                    break;  //This node can be in at most one shard
                 }
             }
             if(!in_subgroup) {
@@ -251,7 +250,7 @@ public:
      * @return A reference to either a Replicated<SubgroupType> or a RawSubgroup
      * for this subgroup
      */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_index = 0);
 
     /**

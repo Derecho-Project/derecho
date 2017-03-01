@@ -12,7 +12,4 @@
 namespace derecho {
 
 subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view);
-
 }
-
-

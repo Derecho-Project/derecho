@@ -20,8 +20,7 @@ using derecho::RawObject;
 
 int main(int argc, char *argv[]) {
     if(argc < 2) {
-        cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+        cout << "Error: Expected number of nodes in experiment as the first argument." << endl;
         return -1;
     }
     uint32_t num_nodes = std::atoi(argv[1]);
@@ -39,18 +38,6 @@ int main(int argc, char *argv[]) {
     auto stability_callback = [&node_id, &num_messages](
             uint32_t subgroup_num, int sender_rank, long long int index, char *buf,
             long long int msg_size) {
-        // if (subgroup_num == 1 && index == 10 && node_id == 0) {
-        //     cout << "Exiting" << endl;
-        //     cout << "The last message is: " << endl;
-        //     cout << buf << endl;
-        //     exit(0);
-        // }
-        // if (subgroup_num == 1 && index == 50 && (node_id == 3 || node_id == 5)) {
-        //     cout << "Exiting" << endl;
-        //     cout << "The last message is: " << endl;
-        //     cout << buf << endl;
-        //     exit(0);
-        // }
       if (index == num_messages-1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_rank << endl;
             cout << "The last message is: " << endl;

@@ -22,11 +22,10 @@
 
 namespace derecho {
 
-template<typename T>
+template <typename T>
 class Replicated;
 
 namespace rpc {
-
 
 class RPCManager {
     /** The ID of the node this RPCManager is running on. */
@@ -38,8 +37,8 @@ class RPCManager {
     /** An emtpy DeserializationManager, in case we need it later. */
     mutils::DeserializationManager dsm{{}};
 
-    template<typename T>
-    friend class ::derecho::Replicated; //Give only Replicated access to view_manager
+    template <typename T>
+    friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
     ViewManager& view_manager;
 
     /** Contains a TCP connection to each member of the group. */
@@ -56,10 +55,8 @@ class RPCManager {
     std::atomic<bool> thread_shutdown{false};
     std::thread rpc_thread;
 
-
     /** Listens for P2P RPC calls over the TCP connections and handles them. */
     void rpc_process_loop();
-
 
     /**
      * Handler to be called by rpc_process_loop each time it receives a
@@ -70,19 +67,15 @@ class RPCManager {
      */
     void p2p_message_handler(int32_t sender_id, char* msg_buf, uint32_t buffer_size);
 
-
 public:
-
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager) :
-        nid(node_id),
-        receivers(new std::decay_t<decltype(*receivers)>()),
-        view_manager(group_view_manager),
-        connections(node_id, std::map<node_id_t, ip_addr>(),
-                    group_view_manager.derecho_params.rpc_port),
-        replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
-            rpc_thread = std::thread(&RPCManager::rpc_process_loop, this);
+    RPCManager(node_id_t node_id, ViewManager& group_view_manager) : nid(node_id),
+                                                                     receivers(new std::decay_t<decltype(*receivers)>()),
+                                                                     view_manager(group_view_manager),
+                                                                     connections(node_id, std::map<node_id_t, ip_addr>(),
+                                                                                 group_view_manager.derecho_params.rpc_port),
+                                                                     replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
+        rpc_thread = std::thread(&RPCManager::rpc_process_loop, this);
     }
-
 
     ~RPCManager();
     /**
@@ -189,11 +182,6 @@ public:
      * send_return for this send.
      */
     void finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle);
-
 };
-
-
 }
 }
-
-

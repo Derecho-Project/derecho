@@ -19,7 +19,4 @@ public:
 
     const char* what() const noexcept { return message.c_str(); }
 };
-
 }
-
-

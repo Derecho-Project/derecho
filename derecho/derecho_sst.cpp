@@ -20,7 +20,7 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
         suspected[local_row][i] = false;
         globalMinReady[local_row][i] = false;
     }
-    for (size_t i = 0; i < globalMin.size(); ++i) {
+    for(size_t i = 0; i < globalMin.size(); ++i) {
         globalMin[local_row][i] = 0;
     }
     num_changes[local_row] = old_sst.num_changes[row];
@@ -64,19 +64,23 @@ std::string DerechoSST::to_string() const {
         for(unsigned int n = 0; n < num_received.size(); n++) {
             s << num_received[row][n] << " ";
         }
-        s << "}" << ", seq_num={ ";
-	for (unsigned int n = 0; n < seq_num.size(); n++) {
-	  s << seq_num[row][n] << " ";
-	}
-	s << "}" << ", stable_num={ ";
-	for (unsigned int n = 0; n < stable_num.size(); n++) {
-	  s << stable_num[row][n] << " ";
-	}
-	s << "}" << ", delivered_num={ ";
-	for (unsigned int n = 0; n < delivered_num.size(); n++) {
-	  s << delivered_num[row][n] << " ";
-	}
-	s << "}" << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
+        s << "}"
+          << ", seq_num={ ";
+        for(unsigned int n = 0; n < seq_num.size(); n++) {
+            s << seq_num[row][n] << " ";
+        }
+        s << "}"
+          << ", stable_num={ ";
+        for(unsigned int n = 0; n < stable_num.size(); n++) {
+            s << stable_num[row][n] << " ";
+        }
+        s << "}"
+          << ", delivered_num={ ";
+        for(unsigned int n = 0; n < delivered_num.size(); n++) {
+            s << delivered_num[row][n] << " ";
+        }
+        s << "}"
+          << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
         for(unsigned int n = 0; n < globalMin.size(); n++) {
             s << globalMin[row][n] << " ";
         }

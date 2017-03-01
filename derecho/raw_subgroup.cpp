@@ -5,7 +5,6 @@
  * @author edward
  */
 
-
 #include "raw_subgroup.h"
 
 namespace derecho {
@@ -17,5 +16,4 @@ char* RawSubgroup::get_sendbuffer_ptr(unsigned long long int payload_size, int p
 void RawSubgroup::send() {
     group_view_manager.send(subgroup_id);
 }
-
 }

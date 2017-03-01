@@ -23,13 +23,12 @@ class SubView;
 
 class subgroup_provisioning_exception : derecho_exception {
 public:
-    subgroup_provisioning_exception(const std::string& message = "") :
-        derecho_exception(message) {}
+    subgroup_provisioning_exception(const std::string& message = "") : derecho_exception(message) {}
 };
 
 /** The type to use in the SubgroupInfo maps for a subgroup
  * that doesn't implement a Replicated Object */
-struct RawObject { };
+struct RawObject {};
 
 /**
  * The data structure used to store a subgroups-and-shards layout for a single
@@ -50,7 +49,4 @@ struct SubgroupInfo {
     /** subgroup type -> [](current view){subgroup index -> shard index -> SubView for shard}*/
     std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions;
 };
-
 }
-
-

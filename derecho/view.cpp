@@ -11,7 +11,6 @@ namespace derecho {
 using std::string;
 using std::shared_ptr;
 
-
 SubView::SubView(int32_t num_members)
         : members(num_members),
           member_ips(num_members),
@@ -27,10 +26,8 @@ int SubView::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-
 View::View()
         : View(0) {}
-
 
 View::View(int num_members)
         : vid(0),
@@ -68,7 +65,6 @@ int View::rank_of_leader() const {
     return -1;
 }
 
-
 int View::rank_of(const ip_addr& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
         if(member_ips[rank] == who) {
@@ -78,7 +74,6 @@ int View::rank_of(const ip_addr& who) const {
     return -1;
 }
 
-
 int View::rank_of(const node_id_t& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
         if(members[rank] == who) {
@@ -87,7 +82,6 @@ int View::rank_of(const node_id_t& who) const {
     }
     return -1;
 }
-
 
 std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members) const {
     std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
@@ -106,7 +100,6 @@ bool View::i_am_leader() const {
     return (rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
-
 bool View::i_am_new_leader() {
     if(i_know_i_am_leader) {
         return false;  // I am the OLD leader
@@ -122,7 +115,6 @@ bool View::i_am_new_leader() {
     i_know_i_am_leader = true;
     return true;
 }
-
 
 void View::merge_changes() {
     int myRank = my_rank;
@@ -162,13 +154,11 @@ void View::merge_changes() {
     gmsSST->put((char*)std::addressof(gmsSST->changes[0][0]) - gmsSST->getBaseAddress(), gmsSST->changes.size() * sizeof(node_id_t) + gmsSST->joiner_ips.size() * sizeof(uint32_t) + sizeof(int) + sizeof(int));
 }
 
-
 void View::wedge() {
     multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put((char*)std::addressof(gmsSST->wedged[0]) - gmsSST->getBaseAddress(), sizeof(bool));
 }
-
 
 std::string View::debug_string() const {
     // need to add member ips and other fields
@@ -196,7 +186,6 @@ std::string View::debug_string() const {
     s << "}";
     return s.str();
 }
-
 
 std::unique_ptr<View> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
@@ -244,7 +233,6 @@ std::unique_ptr<View> make_initial_view(const node_id_t my_id, const ip_addr my_
     return new_view;
 }
 
-
 std::ostream& operator<<(std::ostream& stream, const View& view) {
     stream << view.vid << std::endl;
     std::copy(view.members.begin(), view.members.end(), std::ostream_iterator<node_id_t>(stream, " "));
@@ -260,7 +248,6 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
     stream << view.my_rank << std::endl;
     return stream;
 }
-
 
 std::istream& operator>>(std::istream& stream, View& view) {
     std::string line;

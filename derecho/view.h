@@ -42,11 +42,10 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(SubView, members, member_ips, joined, departed);
     SubView(const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
-            const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed) :
-                members(members),
-                member_ips(member_ips),
-                joined(joined),
-                departed(departed) {}
+            const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed) : members(members),
+                                                                                            member_ips(member_ips),
+                                                                                            joined(joined),
+                                                                                            departed(departed) {}
 };
 
 class View : public mutils::ByteRepresentable {

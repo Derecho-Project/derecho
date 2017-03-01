@@ -5,7 +5,6 @@
  * @author Edward
  */
 
-
 #include <mutils-serialization/SerializationSupport.hpp>
 
 #include "group.h"
@@ -14,13 +13,13 @@ namespace derecho {
 
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(
-        const ip_addr my_ip,
-        const CallbackSet& callbacks,
-        const SubgroupInfo& subgroup_info,
-        const DerechoParams& derecho_params,
-        std::vector<view_upcall_t> _view_upcalls,
-        const int gms_port,
-        Factory<ReplicatedObjects>... factories)
+    const ip_addr my_ip,
+    const CallbackSet& callbacks,
+    const SubgroupInfo& subgroup_info,
+    const DerechoParams& derecho_params,
+    std::vector<view_upcall_t> _view_upcalls,
+    const int gms_port,
+    Factory<ReplicatedObjects>... factories)
         : view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager),
           raw_subgroups(construct_raw_subgroups(0, subgroup_info)) {
@@ -32,28 +31,28 @@ Group<ReplicatedObjects...>::Group(
 
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const node_id_t my_id,
-        const ip_addr my_ip,
-        const ip_addr leader_ip,
-        const CallbackSet& callbacks,
-        const SubgroupInfo& subgroup_info,
-        std::vector<view_upcall_t> _view_upcalls,
-        const int gms_port,
-        Factory<ReplicatedObjects>... factories)
+                                   const ip_addr my_ip,
+                                   const ip_addr leader_ip,
+                                   const CallbackSet& callbacks,
+                                   const SubgroupInfo& subgroup_info,
+                                   std::vector<view_upcall_t> _view_upcalls,
+                                   const int gms_port,
+                                   Factory<ReplicatedObjects>... factories)
         : Group(my_id, tcp::socket{leader_ip, gms_port},
                 callbacks, subgroup_info, _view_upcalls,
                 gms_port, factories...) {}
 
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const node_id_t my_id,
-          tcp::socket leader_connection,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          std::vector<view_upcall_t> _view_upcalls,
-          const int gms_port,
-          Factory<ReplicatedObjects>... factories)
-          : view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
-            rpc_manager(my_id, view_manager),
-            raw_subgroups(construct_raw_subgroups(my_id, subgroup_info)) {
+                                   tcp::socket leader_connection,
+                                   const CallbackSet& callbacks,
+                                   const SubgroupInfo& subgroup_info,
+                                   std::vector<view_upcall_t> _view_upcalls,
+                                   const int gms_port,
+                                   Factory<ReplicatedObjects>... factories)
+        : view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
+          rpc_manager(my_id, view_manager),
+          raw_subgroups(construct_raw_subgroups(my_id, subgroup_info)) {
     construct_objects(my_id, subgroup_info, factories...);
     receive_objects(leader_connection);
     set_up_components();
@@ -62,14 +61,14 @@ Group<ReplicatedObjects...>::Group(const node_id_t my_id,
 
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
-        const node_id_t my_id,
-        const ip_addr my_ip,
-        const CallbackSet& callbacks,
-        const SubgroupInfo& subgroup_info,
-        std::experimental::optional<DerechoParams> _derecho_params,
-        std::vector<view_upcall_t> _view_upcalls,
-        const int gms_port,
-        Factory<ReplicatedObjects>... factories)
+                                   const node_id_t my_id,
+                                   const ip_addr my_ip,
+                                   const CallbackSet& callbacks,
+                                   const SubgroupInfo& subgroup_info,
+                                   std::experimental::optional<DerechoParams> _derecho_params,
+                                   std::vector<view_upcall_t> _view_upcalls,
+                                   const int gms_port,
+                                   Factory<ReplicatedObjects>... factories)
         : view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           raw_subgroups(construct_raw_subgroups(my_id, subgroup_info)) {
@@ -81,21 +80,20 @@ Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
 
 template <typename... ReplicatedObjects>
 Group<ReplicatedObjects...>::~Group() {
-
 }
 
 template <typename... ReplicatedObjects>
 std::map<uint32_t, RawSubgroup> Group<ReplicatedObjects...>::construct_raw_subgroups(
-        node_id_t my_id, const SubgroupInfo& subgroup_info) {
+    node_id_t my_id, const SubgroupInfo& subgroup_info) {
     std::map<uint32_t, RawSubgroup> raw_subgroup_map;
     std::type_index raw_object_type(typeid(RawObject));
     auto find_raw_object = subgroup_info.num_subgroups.find(raw_object_type);
     if(find_raw_object != subgroup_info.num_subgroups.end()) {
         for(uint32_t subgroup_index = 0;
-                subgroup_index < find_raw_object->second;
-                ++subgroup_index) {
+            subgroup_index < find_raw_object->second;
+            ++subgroup_index) {
             subgroup_id_t raw_subgroup_id = view_manager.get_subgroup_ids_by_type().at(
-                    {raw_object_type, subgroup_index});
+                {raw_object_type, subgroup_index});
             raw_subgroup_map.insert({subgroup_index, RawSubgroup(my_id, raw_subgroup_id, view_manager)});
         }
     }
@@ -108,27 +106,27 @@ void Group<ReplicatedObjects...>::set_up_components() {
         rpc_manager.new_view_callback(new_view);
     });
     view_manager.get_current_view().multicast_group->register_rpc_callback(
-            [this](node_id_t sender, char* buf, uint32_t size) {
+        [this](node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(sender, buf, size);
-    });
-    view_manager.register_send_objects_upcall([this](tcp::socket& joiner_socket){
+        });
+    view_manager.register_send_objects_upcall([this](tcp::socket& joiner_socket) {
         send_objects(joiner_socket);
     });
 }
 
-template<typename... ReplicatedObjects>
+template <typename... ReplicatedObjects>
 RawSubgroup& Group<ReplicatedObjects...>::get_subgroup(RawObject*, uint32_t subgroup_index) {
     return raw_subgroups.at(subgroup_index);
 }
 
-template<typename... ReplicatedObjects>
-template<typename SubgroupType>
+template <typename... ReplicatedObjects>
+template <typename SubgroupType>
 Replicated<SubgroupType>& Group<ReplicatedObjects...>::get_subgroup(SubgroupType*, uint32_t subgroup_index) {
     return replicated_objects.template get<SubgroupType>().at(subgroup_index);
 }
 
-template<typename... ReplicatedObjects>
-template<typename SubgroupType>
+template <typename... ReplicatedObjects>
+template <typename SubgroupType>
 auto& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
     if(!view_manager.get_current_view().is_adequately_provisioned) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
@@ -137,20 +135,20 @@ auto& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
     return get_subgroup(overload_selector, subgroup_index);
 }
 
-template<typename... ReplicatedObjects>
+template <typename... ReplicatedObjects>
 void Group<ReplicatedObjects...>::send_objects(tcp::socket& receiver_socket) {
     std::size_t total_size = 0;
-    replicated_objects.for_each([&](const auto&, const auto& objects_map){
+    replicated_objects.for_each([&](const auto&, const auto& objects_map) {
         for(const auto& index_object_pair : objects_map) {
             if(index_object_pair.second.is_valid()) {
                 total_size += index_object_pair.second.object_size();
             }
         }
     });
-    mutils::post_object([&receiver_socket](const char *bytes, std::size_t size) {
+    mutils::post_object([&receiver_socket](const char* bytes, std::size_t size) {
         receiver_socket.write(bytes, size); },
-        total_size);
-    replicated_objects.for_each([&](const auto&, const auto& objects_map){
+                        total_size);
+    replicated_objects.for_each([&](const auto&, const auto& objects_map) {
         for(const auto& index_object_pair : objects_map) {
             if(index_object_pair.second.is_valid()) {
                 index_object_pair.second.send_object_raw(receiver_socket);
@@ -159,7 +157,7 @@ void Group<ReplicatedObjects...>::send_objects(tcp::socket& receiver_socket) {
     });
 }
 
-template<typename... ReplicatedObjects>
+template <typename... ReplicatedObjects>
 void Group<ReplicatedObjects...>::receive_objects(tcp::socket& sender_socket) {
     std::size_t total_size;
     bool success = sender_socket.read((char*)&total_size, sizeof(size_t));
@@ -171,7 +169,7 @@ void Group<ReplicatedObjects...>::receive_objects(tcp::socket& sender_socket) {
     success = sender_socket.read(buf, total_size);
     assert(success);
     size_t offset = 0;
-    replicated_objects.for_each([&](const auto&, auto& objects_map){
+    replicated_objects.for_each([&](const auto&, auto& objects_map) {
         for(auto& index_object_pair : objects_map) {
             if(index_object_pair.second.is_valid()) {
                 std::size_t bytes_read = index_object_pair.second.receive_object(buf + offset);
