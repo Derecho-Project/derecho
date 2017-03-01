@@ -9,7 +9,7 @@ public:
     sst::SSTField<double> bw;
     ResultSST(const sst::SSTParams& params)
             : SST<ResultSST>(this, params) {
-      SSTInit(bw);
+        SSTInit(bw);
     }
 };
 double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,

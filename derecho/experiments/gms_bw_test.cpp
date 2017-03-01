@@ -39,7 +39,7 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
     message_times.push_back(get_time());
 
     util::debug_log().log_event(stringstream() << "Global stability for message " << index
-                       << " from sender " << sender_id);
+                                               << " from sender " << sender_id);
 
     while(!managed_group) {
     }
@@ -58,7 +58,7 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
 void send_messages(uint64_t duration) {
     uint64_t end_time = get_time() + duration;
     while(get_time() < end_time) {
-        derecho::RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+        derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
         char *buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
         if(buffer) {
             memset(buffer, rand() % 256, message_size);
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     uint32_t num_nodes = std::atoi(argv[1]);
@@ -115,17 +115,15 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
-
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-                my_ip, callbacks, one_raw_group, param_object);
+            my_ip, callbacks, one_raw_group, param_object);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, leader_ip, callbacks, one_raw_group);
+            node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
 
     cout << "Created group, waiting for others to join." << endl;

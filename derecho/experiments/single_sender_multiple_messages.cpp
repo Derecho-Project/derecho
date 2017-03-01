@@ -35,19 +35,18 @@ int main() {
              << msg_size << " is stable " << endl;
     };
 
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
     std::unique_ptr<derecho::Group<>> g;
     if(node_id == 0) {
         g = std::make_unique<derecho::Group<>>(my_ip,
-                derecho::CallbackSet{stability_callback, nullptr},
-                one_raw_group,
-                derecho::DerechoParams{max_msg_size, block_size});
+                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               one_raw_group,
+                                               derecho::DerechoParams{max_msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip,
-                derecho::CallbackSet{stability_callback, nullptr},
-                one_raw_group);
+                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               one_raw_group);
     }
 
     int num_messages = 100;

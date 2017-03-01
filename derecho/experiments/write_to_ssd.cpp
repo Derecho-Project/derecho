@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
 
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     uint32_t num_nodes = std::atoi(argv[1]);
@@ -50,23 +50,22 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
     std::unique_ptr<derecho::Group<>> g;
     if(my_ip == leader_ip) {
         g = std::make_unique<derecho::Group<>>(
-                my_ip, derecho::CallbackSet{stability_callback, nullptr},
-                one_raw_group,
-                derecho::DerechoParams{msg_size, block_size});
+            my_ip, derecho::CallbackSet{stability_callback, nullptr},
+            one_raw_group,
+            derecho::DerechoParams{msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, leader_ip,
-                derecho::CallbackSet{stability_callback, nullptr},
-                one_raw_group);
+            node_id, my_ip, leader_ip,
+            derecho::CallbackSet{stability_callback, nullptr},
+            one_raw_group);
     }
 
-    derecho::RawSubgroup& sg = g->get_subgroup<RawObject>();
+    derecho::RawSubgroup &sg = g->get_subgroup<RawObject>();
 
     struct timespec start_time;
     // start timer

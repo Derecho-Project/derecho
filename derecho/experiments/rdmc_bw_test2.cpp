@@ -22,14 +22,14 @@ int main(int argc, char *argv[]) {
 
     std::map<uint32_t, std::string> node_addresses;
 
-	rdmc::query_addresses(node_addresses, node_rank);
+    rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     // initialize RDMA resources, input number of nodes, node rank and ip addresses and create TCP connections
     bool success = rdmc::initialize(node_addresses, node_rank);
-    if (!success) {
-      std::cout << "Failed RDMC initialization" << std::endl;
-      std::cout << "Exiting" << std::endl;
+    if(!success) {
+        std::cout << "Failed RDMC initialization" << std::endl;
+        std::cout << "Exiting" << std::endl;
     }
     // size of one message
     long long int msg_size = atoll(argv[1]);
@@ -61,14 +61,14 @@ int main(int argc, char *argv[]) {
 
     // create the group
     success = rdmc::create_group(0, members, block_size, type,
-                       [&mr](size_t length) -> rdmc::receive_destination {
+                                 [&mr](size_t length) -> rdmc::receive_destination {
                            return {mr, 0};
-                       },
-                       [&count](char *data, size_t size) { ++count; },
-                       [](boost::optional<uint32_t>) {});
-    if (!success) {
-      std::cout << "Failed RDMC group creation" << std::endl;
-      std::cout << "Exiting" << std::endl;
+                                 },
+                                 [&count](char *data, size_t size) { ++count; },
+                                 [](boost::optional<uint32_t>) {});
+    if(!success) {
+        std::cout << "Failed RDMC group creation" << std::endl;
+        std::cout << "Exiting" << std::endl;
     }
 
     struct timespec start_time, end_time;

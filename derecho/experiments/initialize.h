@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <iterator>
 
-std::map<uint32_t, std::string> initialize (uint32_t &node_rank, uint32_t &num_nodes);
+std::map<uint32_t, std::string> initialize(uint32_t& node_rank, uint32_t& num_nodes);
 
 /**
  * Utility method for initializing experiments. Prompts the terminal for the
@@ -16,10 +16,9 @@ std::map<uint32_t, std::string> initialize (uint32_t &node_rank, uint32_t &num_n
  */
 void query_node_info(uint32_t& node_id, std::string& node_ip, std::string& leader_ip);
 
-
 //Just sticking this here for now (because it's only used by experiments),
 //but it should really go in a generic "utilities" header
-template<typename InputIt, typename OutputIt, typename Elem>
+template <typename InputIt, typename OutputIt, typename Elem>
 OutputIt unordered_intersection(InputIt first, InputIt last, std::unordered_set<Elem> filter, OutputIt output) {
     while(first != last) {
         if(filter.count(*first) > 0) {

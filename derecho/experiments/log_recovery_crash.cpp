@@ -41,13 +41,13 @@ shared_ptr<derecho::Group<>> managed_group;
 void stability_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Global stability for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
 }
 
 void persistence_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Persistence complete for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
     if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
         cout << "Done" << endl;
         done = true;
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     num_nodes = std::atoi(argv[1]);
@@ -85,15 +85,14 @@ int main(int argc, char* argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, persistence_callback};
     derecho::DerechoParams param_object{message_size, block_size, message_log_filename};
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
     if(node_id == leader_id) {
         managed_group = make_shared<derecho::Group<>>(
-                my_ip, callbacks, one_raw_group, param_object);
+            my_ip, callbacks, one_raw_group, param_object);
     } else {
         managed_group = make_shared<derecho::Group<>>(
-                node_id, my_ip, leader_ip, callbacks, one_raw_group);
+            node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
     cout << "Created group, waiting for others to join." << endl;
     while(managed_group->get_members().size() < (num_nodes - 1)) {
@@ -102,7 +101,7 @@ int main(int argc, char* argv[]) {
     cout << "Starting to send messages." << endl;
     //Node n-1 will "crash" before sending all the messages
     if(node_id == num_nodes - 1) {
-        send_messages(num_messages-250);
+        send_messages(num_messages - 250);
         managed_group->log_event("About to exit");
         ofstream log_stream(debug_log_filename);
         managed_group->print_log(log_stream);

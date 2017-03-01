@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
     map<uint32_t, std::string> node_addresses;
 
-	rdmc::query_addresses(node_addresses, node_rank);
+    rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     vector<uint32_t> members(num_nodes);
@@ -52,22 +52,21 @@ int main(int argc, char *argv[]) {
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     std::unique_ptr<derecho::Group<>> managed_group;
 
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-                node_addresses[node_rank],
-                callbacks, one_raw_group, parameters);
+            node_addresses[node_rank],
+            callbacks, one_raw_group, parameters);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-                node_rank, node_addresses[node_rank],
-                node_addresses[server_rank],
-                callbacks,
-                one_raw_group);
+            node_rank, node_addresses[node_rank],
+            node_addresses[server_rank],
+            callbacks,
+            one_raw_group);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -80,17 +79,17 @@ int main(int argc, char *argv[]) {
         cout << id << " ";
     }
     cout << endl;
-    derecho::RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+    derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
     for(int i = 0; i < num_messages; ++i) {
         char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         while(!buf) {
             buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         }
-	for (uint i = 0; i < max_msg_size; ++i) {
-	  buf[i] = 'a'+(rand()%26);
-	}
-	cout << buf << endl;
-	group_as_subgroup.send();
+        for(uint i = 0; i < max_msg_size; ++i) {
+            buf[i] = 'a' + (rand() % 26);
+        }
+        cout << buf << endl;
+        group_as_subgroup.send();
     }
 
     while(num_messages_received < num_messages * num_nodes) {

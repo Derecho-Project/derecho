@@ -17,8 +17,7 @@ using std::endl;
 using std::map;
 using derecho::RawObject;
 
-
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument." << endl;
         return -1;
@@ -36,8 +35,8 @@ int main(int argc, char *argv[]) {
     int num_messages = 100;
 
     auto stability_callback = [&node_id, &num_messages](
-            uint32_t subgroup_num, int sender_rank, long long int index, char *buf,
-            long long int msg_size) {
+        uint32_t subgroup_num, int sender_rank, long long int index, char* buf,
+        long long int msg_size) {
       if (index == num_messages-1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_rank << endl;
             cout << "The last message is: " << endl;
@@ -53,14 +52,10 @@ int main(int argc, char *argv[]) {
 
     //Assuming there will be a total of up to 9 nodes, define 3 subgroups with 3 nodes each
     //Also assumes that the node IDs will be 0-8 (which they always are in our experiments)
-    std::unordered_set<derecho::node_id_t> group_0_members {0, 1, 2};
-    std::unordered_set<derecho::node_id_t> group_1_members {3, 4, 5};
-    std::unordered_set<derecho::node_id_t> group_2_members {6, 7, 8};
-    derecho::SubgroupInfo subgroup_info{ {
-        {std::type_index(typeid(RawObject)), 3}
-    }, {
-            { std::type_index(typeid(RawObject)), [group_0_members, group_1_members, group_2_members]
-                                                 (const derecho::View& curr_view) {
+    std::unordered_set<derecho::node_id_t> group_0_members{0, 1, 2};
+    std::unordered_set<derecho::node_id_t> group_1_members{3, 4, 5};
+    std::unordered_set<derecho::node_id_t> group_2_members{6, 7, 8};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(RawObject)), 3}}, {{std::type_index(typeid(RawObject)), [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view) {
                 std::vector<derecho::node_id_t> subgroup_0_members;
                 std::vector<derecho::node_id_t> subgroup_1_members;
                 std::vector<derecho::node_id_t> subgroup_2_members;
@@ -74,23 +69,20 @@ int main(int argc, char *argv[]) {
                 shard_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members));
                 shard_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members));
                 shard_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members));
-                return shard_vector;
-            } }
-    }};
+                return shard_vector; }}}};
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-                my_ip, callbacks, subgroup_info, param_object);
+            my_ip, callbacks, subgroup_info, param_object);
     } else {
         std::cout << "Connecting to leader at " << leader_ip << std::endl;
         managed_group = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, leader_ip, callbacks, subgroup_info);
+            node_id, my_ip, leader_ip, callbacks, subgroup_info);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
     while(managed_group->get_members().size() < num_nodes) {
     }
-
 
     uint32_t my_subgroup_num;
     if(node_id < 3)
@@ -108,9 +100,9 @@ int main(int argc, char *argv[]) {
             buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
         }
         for(unsigned int k = 0; k < msg_size; ++k) {
-	  buf[k] = 'a' + (rand()%26);
+            buf[k] = 'a' + (rand() % 26);
         }
-        buf[msg_size-1] = 0;
+        buf[msg_size - 1] = 0;
         subgroup_handle.send();
     }
     // everything that follows is rendered irrelevant

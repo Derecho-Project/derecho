@@ -35,13 +35,13 @@ shared_ptr<derecho::Group<>> managed_group;
 void stability_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Global stability for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
 }
 
 void persistence_callback(int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Persistence complete for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
     if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
         cout << "Done" << endl;
         done = true;
@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     query_addresses(node_addresses, node_id);
     num_nodes = node_addresses.size();
     //This won't work! We need to support starting up a member without doing global setup
-//    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
+    //    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
     string debug_log_filename = (stringstream() << "events_node" << node_id << ".csv").str();
     string message_log_filename = (stringstream() << "data" << node_id << ".dat").str();
 
@@ -79,5 +79,3 @@ int main(int argc, char* argv[]) {
     std::ofstream log_stream(debug_log_filename);
     managed_group->print_log(log_stream);
 }
-
-

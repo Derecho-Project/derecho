@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     num_nodes = std::atoi(argv[1]);
@@ -91,9 +91,8 @@ int main(int argc, char *argv[]) {
         (std::stringstream() << "events_node" << node_id << ".csv").str();
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
-    derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-    };
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     if(node_id == num_nodes - 1) {
         cout << "Sleeping for 10 seconds..." << endl;
@@ -111,10 +110,10 @@ int main(int argc, char *argv[]) {
     } else {
         if(node_id == leader_id) {
             managed_group = make_shared<derecho::Group<>>(
-                    my_ip, callbacks, one_raw_group, param_object);
+                my_ip, callbacks, one_raw_group, param_object);
         } else {
             managed_group = make_shared<derecho::Group<>>(
-                    node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                node_id, my_ip, leader_ip, callbacks, one_raw_group);
         }
         cout << "Created group, waiting for others to join." << endl;
         while(managed_group->get_members().size() < (num_nodes - 1)) {

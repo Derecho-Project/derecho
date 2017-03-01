@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <map>
 
-
 #include "derecho/derecho.h"
 #include "block_size.h"
 #include "initialize.h"
@@ -15,7 +14,6 @@ using std::endl;
 using std::map;
 
 using derecho::RawObject;
-
 
 int main(int argc, char *argv[]) {
     try {
@@ -54,20 +52,18 @@ int main(int argc, char *argv[]) {
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
         derecho::DerechoParams param_object{max_msg_size, block_size};
-        derecho::SubgroupInfo one_raw_group{ {{std::type_index(typeid(RawObject)), 1}},
-            {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}
-        };
+        derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
+                                            {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
         std::unique_ptr<derecho::Group<>> managed_group;
-
 
         if(node_id == leader_id) {
             assert(my_ip == leader_ip);
             managed_group = std::make_unique<derecho::Group<>>(
-                    my_ip, callbacks, one_raw_group, param_object);
+                my_ip, callbacks, one_raw_group, param_object);
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
-                    node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                node_id, my_ip, leader_ip, callbacks, one_raw_group);
         }
 
         cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -76,19 +72,19 @@ int main(int argc, char *argv[]) {
         }
 
         for(int i = 0; i < num_messages; ++i) {
-            derecho::RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+            derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
             // random message size between 1 and 100
             unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
             char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
-//          cout << "After getting sendbuffer for message " << i <<  endl;
-//          managed_group.debug_print_status();
+            //          cout << "After getting sendbuffer for message " << i <<  endl;
+            //          managed_group.debug_print_status();
             while(!buf) {
                 buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
             }
             for(unsigned int j = 0; j < msg_size; ++j) {
                 buf[j] = 'a' + i;
             }
-//          cout << "Client telling DerechoGroup to send message " << i << " with size " << msg_size << endl;
+            //          cout << "Client telling DerechoGroup to send message " << i << " with size " << msg_size << endl;
             group_as_subgroup.send();
         }
         while(!done) {
