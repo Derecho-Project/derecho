@@ -652,9 +652,9 @@ void MulticastGroup::send_loop() {
         num_shard_senders = get_num_senders(shard_senders);
         assert(shard_sender_index >= 0);
 
-        std::cout << "nReceived offset = " << subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index <<
-                ", nReceived entry " <<  sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index] <<
-                ", message index = " << msg.index << std::endl;
+        // std::cout << "num_received offset = " << subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index <<
+        //         ", num_received entry " <<  sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index] <<
+        //         ", message index = " << msg.index << std::endl;
         if(sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index] < msg.index - 1) {
             return false;
         }

@@ -69,9 +69,21 @@ int main(int argc, char* argv[]) {
                 unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
                                        group_2_members, std::back_inserter(subgroup_2_members));
                 std::vector<std::vector<std::unique_ptr<derecho::SubView>>> subgroup_vector(3);
-                subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members));
-                subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members));
-                subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members));
+		std::vector<int> subgroup_0_senders(subgroup_0_members.size());
+		if(subgroup_0_senders.size()) {
+		  subgroup_0_senders[0] = 1;
+		}
+		// std::vector<int> subgroup_1_senders(subgroup_1_members.size());
+		// if(subgroup_1_senders.size()) {
+		//   subgroup_1_senders[0] = 1;
+		// }
+		// std::vector<int> subgroup_2_senders(subgroup_2_members.size());
+		// if(subgroup_2_senders.size()) {
+		//   subgroup_2_senders[0] = 1;
+		// }
+                subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, subgroup_0_senders));
+                subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
+                subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
                 return subgroup_vector; }}}
     };
     if(my_ip == leader_ip) {
@@ -95,19 +107,22 @@ int main(int argc, char* argv[]) {
         my_subgroup_num = 1;
     else
         my_subgroup_num = 2;
-    for(int i = 0; i < num_messages; ++i) {
-        // random message size between 1 and 100
-        unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-        derecho::RawSubgroup& subgroup_handle = managed_group->get_subgroup<RawObject>(my_subgroup_num);
-        char* buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
-        while(!buf) {
-            buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
+    // all are senders except node id's 1 and 2 in shard 0
+    if(node_id != 1 && node_id != 2) {
+        for(int i = 0; i < num_messages; ++i) {
+            // random message size between 1 and 100
+            unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
+            derecho::RawSubgroup& subgroup_handle = managed_group->get_subgroup<RawObject>(my_subgroup_num);
+            char* buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
+            while(!buf) {
+                buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
+            }
+            for(unsigned int k = 0; k < msg_size; ++k) {
+                buf[k] = 'a' + (rand() % 26);
+            }
+            buf[msg_size - 1] = 0;
+            subgroup_handle.send();
         }
-        for(unsigned int k = 0; k < msg_size; ++k) {
-            buf[k] = 'a' + (rand() % 26);
-        }
-        buf[msg_size - 1] = 0;
-        subgroup_handle.send();
     }
     // everything that follows is rendered irrelevant
     while(true) {
