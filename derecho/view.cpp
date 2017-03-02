@@ -13,6 +13,7 @@ using std::shared_ptr;
 
 SubView::SubView(int32_t num_members)
         : members(num_members),
+	  is_sender(num_members),
           member_ips(num_members),
           joined(0),
           departed(0) {}
@@ -24,6 +25,29 @@ int SubView::rank_of(const node_id_t& who) const {
         }
     }
     return -1;
+}
+
+int SubView::sender_rank_of(uint32_t rank) const {
+  if (!is_sender[rank]) {
+    return -1;
+  }
+  int num = 0;
+  for (uint i = 0; i < rank; ++i) {
+    if (is_sender[i]) {
+      num++;
+    }
+  }
+  return num;
+}
+
+uint32_t SubView::num_senders() const {
+    uint32_t num = 0;
+    for(const auto i : is_sender) {
+        if(i) {
+            num++;
+        }
+    }
+    return num;
 }
 
 View::View()
@@ -83,9 +107,15 @@ int View::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members) const {
+std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const std::vector<int>& is_sender) const {
     std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
     sub_view->members = with_members;
+    // if the sender information is not provided, assume that all members are senders
+    if(!is_sender.size()) {
+        sub_view->is_sender.resize(with_members.size(), 1);
+    } else {
+        sub_view->is_sender = is_sender;
+    }
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         std::size_t member_pos = std::distance(members.begin(),
                                                std::find(members.begin(), members.end(), with_members[subview_rank]));

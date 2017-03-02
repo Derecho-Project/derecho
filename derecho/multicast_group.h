@@ -144,6 +144,7 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
      * (this node's shard number, this node's shard rank)*/
     const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
+    const std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_n_sender_index;
     /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
      * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
@@ -222,6 +223,16 @@ private:
 
     void deliver_message(Message& msg, uint32_t subgroup_num);
 
+    uint32_t get_num_senders(std::vector<int> shard_senders){
+      uint32_t num = 0;
+      for (const auto i : shard_senders) {
+	if (i) {
+	  num++;
+	}
+      }
+      return num;
+    };
+
 public:
     MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
@@ -229,6 +240,7 @@ public:
         CallbackSet callbacks,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+	const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         const DerechoParams derecho_params,
@@ -241,6 +253,7 @@ public:
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+	const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);

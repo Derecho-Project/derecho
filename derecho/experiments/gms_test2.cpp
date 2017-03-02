@@ -24,7 +24,6 @@ int main(int argc, char *argv[]) {
         uint32_t num_nodes = std::atoi(argv[1]);
         derecho::node_id_t node_id;
         derecho::ip_addr my_ip;
-        derecho::node_id_t leader_id = 0;
         derecho::ip_addr leader_ip;
 
         query_node_info(node_id, my_ip, leader_ip);

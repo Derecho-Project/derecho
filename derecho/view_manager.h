@@ -172,6 +172,7 @@ private:
     void initialize_rdmc_sst();
     uint32_t make_subgroup_maps(View& curr_view,
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+                                std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
     uint32_t calc_total_num_subgroups() const;
