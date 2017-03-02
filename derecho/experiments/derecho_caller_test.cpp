@@ -87,7 +87,8 @@ int main(int argc, char* argv[]) {
                                  long long int msg_size) {};
 
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), 1}}, {{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), 1}},
+        {{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}}};
     derecho::Group<test1_str>* managed_group;
 
     auto new_view_callback = [](const derecho::View& new_view) {
@@ -125,7 +126,7 @@ int main(int argc, char* argv[]) {
             []() {return std::make_unique<test1_str>(); });
     }
 
-    cout << "Finished constructing/joining ManagedGroup" << endl;
+    cout << "Finished constructing/joining Group" << endl;
 
     // other nodes (first two) change each other's state
     if(my_id != 2) {

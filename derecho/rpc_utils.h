@@ -125,7 +125,7 @@ struct QueryResults {
 
         auto end() { return std::end(rmap); }
 
-        auto get(const node_id_t& nid) {
+        Ret get(const node_id_t& nid) {
             if(rmap.size() == 0) {
                 assert(parent.pending_rmap.valid());
                 rmap = std::move(*parent.pending_rmap.get());
