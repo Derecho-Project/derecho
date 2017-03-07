@@ -52,8 +52,7 @@ int main(int argc, char *argv[]) {
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
-                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     std::unique_ptr<derecho::Group<>> managed_group;
 

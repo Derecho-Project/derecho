@@ -97,8 +97,7 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callback_set{stability_callback, derecho::message_callback{}};
     derecho::DerechoParams param_object{message_size, block_size};
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
-                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     if(node_id == num_nodes - 1) {
         cout << "Sleeping for 10 seconds..." << endl;

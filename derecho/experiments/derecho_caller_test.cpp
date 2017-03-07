@@ -35,7 +35,8 @@ struct test1_str {
         return true;
     }
 
-    enum Functions { READ_STATE, CHANGE_STATE };
+    enum Functions { READ_STATE,
+                     CHANGE_STATE };
 
     /**
      * This function will be called by Dispatcher to register functions from
@@ -87,8 +88,7 @@ int main(int argc, char* argv[]) {
                                  long long int msg_size) {};
 
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), 1}},
-        {{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}}};
     derecho::Group<test1_str>* managed_group;
 
     auto new_view_callback = [](const derecho::View& new_view) {

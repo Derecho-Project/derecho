@@ -12,21 +12,24 @@
 #include "derecho/derecho.h"
 #include "derecho/logger.h"
 #include "rdmc/util.h"
+#include "initialize.h"
 
 using std::map;
 using std::cout;
+using std::cin;
 using std::endl;
 using std::string;
 using std::stringstream;
 using std::shared_ptr;
 using std::make_shared;
 
+using derecho::RawObject;
+
 const int GMS_PORT = 12345;
 const size_t message_size = 1000;
 const size_t block_size = 1000;
 
 uint32_t num_nodes, node_id;
-map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 250;
 bool done = false;
@@ -50,28 +53,32 @@ void persistence_callback(int sender_id, long long int index, char* data, long l
 
 void send_messages(int count) {
     for(int i = 0; i < count; ++i) {
-        char* buffer = managed_group->get_sendbuffer_ptr(message_size);
+        char* buffer = managed_group->get_subgroup<RawObject>.get_sendbuffer_ptr(message_size);
         while(!buffer) {
-            buffer = managed_group->get_sendbuffer_ptr(message_size);
+            buffer = managed_group->get_subgroup<RawObject>.get_sendbuffer_ptr(message_size);
         }
         memset(buffer, rand() % 256, message_size);
-        managed_group->send();
+        managed_group->get_subgroup<derecho::RawObject>.send();
     }
 }
 
 int main(int argc, char* argv[]) {
     srand(time(nullptr));
-    query_addresses(node_addresses, node_id);
-    num_nodes = node_addresses.size();
-    //This won't work! We need to support starting up a member without doing global setup
-    //    derecho::ManagedGroup::global_setup(node_addresses, node_rank);
+    derecho::ip_addr my_ip;
+    cout << "Please enter this node's ID: ";
+    cin >> node_id;
+    cout << "Please enter this node's IP address: ";
+    cin >> my_ip;
+    cout << "Please enter the number of nodes in the live system: ";
+    cin >> num_nodes;
     string debug_log_filename = (stringstream() << "events_node" << node_id << ".csv").str();
     string message_log_filename = (stringstream() << "data" << node_id << ".dat").str();
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     managed_group = make_shared<derecho::Group<>>(
-        message_log_filename, GMS_PORT, node_addresses, node_id,
-        message_size, derecho::CallbackSet{stability_callback, persistence_callback},
-        block_size);
+        message_log_filename, node_id, my_ip,
+        derecho::CallbackSet{stability_callback, persistence_callback},
+        one_raw_group);
 
     send_messages(num_messages);
     while(!done) {

@@ -36,8 +36,7 @@ int main() {
         cout << "Sender: " << sender_id << ", index: " << index << endl;
     };
 
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), 1}},
-                                        {{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     std::unique_ptr<derecho::Group<>> g;
     if(node_id == 0) {

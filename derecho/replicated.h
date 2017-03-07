@@ -41,7 +41,7 @@ private:
      * in memory, and otherwise Replicated<T> would be unmoveable. */
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
     const node_id_t node_id;
-    const subgroup_id_t subgroup_id;
+    subgroup_id_t subgroup_id;
     /** Non-owning, non-managed pointer to Group's RPCManager - really a
      * reference, but needs to be lazily initialized */
     rpc::RPCManager* group_rpc_manager;
@@ -122,15 +122,16 @@ public:
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(&group_rpc_manager),
-              wrapped_this((*user_object_ptr)->register_functions(group_rpc_manager, user_object_ptr.get())),
+              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
-    Replicated() : user_object_ptr(nullptr),
-                   node_id(0),
-                   subgroup_id(0),
-                   group_rpc_manager(nullptr),
-                   wrapped_this(nullptr),
-                   p2pSendBuffer(new char[1]) {}
+    Replicated(node_id_t nid, rpc::RPCManager& group_rpc_manager)
+            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
+              node_id(nid),
+              subgroup_id(0),
+              group_rpc_manager(&group_rpc_manager),
+              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get())),
+              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     Replicated(Replicated&&) = default;
     Replicated(const Replicated&) = delete;
@@ -141,7 +142,7 @@ public:
      * member of the subgroup that replicates T.
      */
     bool is_valid() const {
-        return user_object_ptr && group_rpc_manager && wrapped_this;
+        return *user_object_ptr && true;
     }
 
     /**

@@ -60,6 +60,7 @@ private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
     using send_objects_upcall_t = std::function<void(tcp::socket&)>;
+    using initialize_rpc_objects_t = std::function<void(node_id_t, const View&)>;
 
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
     friend class rpc::RPCManager;
@@ -117,12 +118,18 @@ private:
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
+    //Parameters stored here, in case we need them again after construction
     const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
-    std::map<std::pair<std::type_index, uint32_t>, subgroup_id_t> subgroup_ids_by_type;
-
+    /** A function that will be called to send replicated objects to a new
+     * member of a subgroup after a view change. This abstracts away the RPC
+     * functionality, which ViewManager shouldn't need to know about. */
     send_objects_upcall_t send_subgroup_objects;
+    /** A function that will be called to initialize replicated objects
+     * after transitioning to a new view, in case this node has become a
+     * member of a new subgroup. */
+    initialize_rpc_objects_t initialize_subgroup_objects;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -266,10 +273,6 @@ public:
      */
     const View& get_current_view();
 
-    const std::map<std::pair<std::type_index, uint32_t>, subgroup_id_t>& get_subgroup_ids_by_type() const {
-        return subgroup_ids_by_type;
-    }
-
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -281,6 +284,10 @@ public:
 
     void register_send_objects_upcall(send_objects_upcall_t upcall) {
         send_subgroup_objects = std::move(upcall);
+    }
+
+    void register_initialize_objects_upcall(initialize_rpc_objects_t upcall) {
+        initialize_subgroup_objects = std::move(upcall);
     }
 
     void debug_print_status() const;

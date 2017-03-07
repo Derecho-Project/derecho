@@ -44,8 +44,6 @@ using subgroup_shard_layout_t = std::vector<std::vector<std::unique_ptr<SubView>
 using shard_view_generator_t = std::function<subgroup_shard_layout_t(const View&)>;
 
 struct SubgroupInfo {
-    /** subgroup type -> number of subgroups */
-    std::map<std::type_index, uint32_t> num_subgroups;
     /** subgroup type -> [](current view){subgroup index -> shard index -> SubView for shard}*/
     std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions;
 };

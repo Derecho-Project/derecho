@@ -33,7 +33,7 @@ int main(int argc, char* argv[]) {
     m.size = 1000;
     //    m.message_buffer = std::move(buffer);
 
-    persistence::message message{&buf[0], m.size, 1, m.sender_rank, (uint64_t)m.index};
+    persistence::message message{&buf[0], m.size, 1, (uint32_t)m.sender_rank, (uint64_t)m.index};
 
     file_writer->write_message(message);
 

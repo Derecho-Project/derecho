@@ -18,9 +18,12 @@ private:
     ViewManager& group_view_manager;
 
 public:
-    RawSubgroup(node_id_t node_id, subgroup_id_t subgroup_id, ViewManager& view_manager) : node_id(node_id),
-                                                                                           subgroup_id(subgroup_id),
-                                                                                           group_view_manager(view_manager) {}
+    RawSubgroup(node_id_t node_id,
+                subgroup_id_t subgroup_id,
+                ViewManager& view_manager)
+            : node_id(node_id),
+              subgroup_id(subgroup_id),
+              group_view_manager(view_manager) {}
 
     /**
      * Gets a pointer into the send buffer for multicasts to this subgroup.

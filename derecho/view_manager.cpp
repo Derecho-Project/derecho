@@ -493,13 +493,14 @@ void ViewManager::register_predicates() {
                 gmsSST.predicates.remove(leader_committed_handle);
                 gmsSST.predicates.remove(suspected_changed_handle);
 
+                node_id_t my_id = next_view->members[next_view->my_rank];
                 log_event(std::stringstream() << "Starting creation of new SST and DerechoGroup for view " << next_view->vid);
                 // if new members have joined, add their RDMA connections to SST and RDMC
                 for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
                     //The new members will be the last joined.size() elements of the members lists
                     int joiner_rank = next_view->num_members - next_view->joined.size() + i;
                     rdma::impl::verbs_add_connection(next_view->members[joiner_rank], next_view->member_ips[joiner_rank],
-                                                     next_view->members[next_view->my_rank]);
+                                                     my_id);
                 }
                 for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
                     int joiner_rank = next_view->num_members - next_view->joined.size() + i;
@@ -508,6 +509,7 @@ void ViewManager::register_predicates() {
                 // This will block until everyone responds to SST/RDMC initial handshakes
                 transition_multicast_group(*next_view);
                 // New members will now have their SST and MulticastGroup created, and need to receive RPC objects
+                initialize_subgroup_objects(my_id, *next_view);
                 if(curr_view->i_am_leader()) {
                     while(!joiner_sockets.empty()) {
                         send_subgroup_objects(joiner_sockets.front());
@@ -586,14 +588,13 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
 
     uint32_t num_received_size = make_subgroup_maps(*curr_view, subgroup_to_shard_n_index,
                                                     subgroup_to_num_received_offset, subgroup_to_membership);
-    const auto num_subgroups = curr_view->shard_views_by_subgroup.size();  //largest subgroup ID + 1
+    const auto num_subgroups = curr_view->subgroup_shard_views.size();
+    std::cout << "After make_subgroup_maps, num_received_size = " << num_received_size << " and num_subgroups = " << num_subgroups << std::endl;
     curr_view->gmsSST = std::make_shared<DerechoSST>(
         sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
                        [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
         num_subgroups, num_received_size);
 
-    //Still todo: Handle cases where curr_view->is_adequately_provisioned == false,
-    //which means the subgroup maps may be invalid
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
         curr_view->members, curr_view->members[curr_view->my_rank],
         curr_view->gmsSST, callbacks, num_subgroups, subgroup_to_shard_n_index,
@@ -605,16 +606,16 @@ void ViewManager::transition_multicast_group(View& newView) {
     std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
     std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
     std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
+    std::cout << "Transition_multicast_group: about to initialize subgroups" << std::endl;
     uint32_t num_received_size = make_subgroup_maps(newView, subgroup_to_shard_n_index,
                                                     subgroup_to_num_received_offset, subgroup_to_membership);
-    const auto num_subgroups = curr_view->shard_views_by_subgroup.size();  //largest subgroup ID + 1
+    const auto num_subgroups = newView.subgroup_shard_views.size();
+    std::cout << "After make_subgroup_maps, num_received_size = " << num_received_size << " and num_subgroups = " << num_subgroups << std::endl;
     newView.gmsSST = std::make_shared<DerechoSST>(
         sst::SSTParams(newView.members, newView.members[newView.my_rank],
                        [this](const uint32_t node_id) { report_failure(node_id); }, newView.failed, false),
         num_subgroups, num_received_size);
 
-    //Still todo: Handle cases where curr_view->is_adequately_provisioned == false,
-    //which means the subgroup maps may be invalid
     newView.multicast_group = std::make_unique<MulticastGroup>(
         newView.members, newView.members[newView.my_rank], newView.gmsSST,
         std::move(*curr_view->multicast_group), num_subgroups,
@@ -748,33 +749,34 @@ void ViewManager::print_log(std::ostream& output_dest) const {
     }
 }
 
-uint32_t ViewManager::calc_total_num_subgroups() const {
-    uint32_t total = 0;
-    for(const auto& entry : subgroup_info.num_subgroups) {
-        total += entry.second;
-    }
-    return total;
-}
-
 uint32_t ViewManager::make_subgroup_maps(View& curr_view,
                                          std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                          std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership) {
+    std::cout << "Called make_subgroup_maps with view: " << curr_view.debug_string() << std::endl;
     uint32_t subgroup_offset = 0;
-    for(const auto& subgroup_type_count : subgroup_info.num_subgroups) {
+    for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
         subgroup_shard_layout_t subgroup_shard_views;
         try {
-            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type_count.first)(curr_view);
+            auto temp = subgroup_type_and_function.second(curr_view);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
+            std::cout << "Got a subgroup_provisioning_exception, marking the view as invalid" << std::endl;
             curr_view.is_adequately_provisioned = false;
-            continue;
+            subgroup_to_shard_n_index.clear();
+            subgroup_to_num_received_offset.clear();
+            subgroup_to_membership.clear();
+            curr_view.subgroup_shard_views.clear();
+            return 0;
         }
-        for(uint32_t subgroup_index = 0; subgroup_index < subgroup_type_count.second; ++subgroup_index) {
+        std::size_t num_subgroups = subgroup_shard_views.size();
+        curr_view.subgroup_ids_by_type[subgroup_type_and_function.first] =
+            std::vector<subgroup_id_t>(num_subgroups);
+        for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
-            subgroup_id_t next_subgroup_number = curr_view.shard_views_by_subgroup.size();
-            subgroup_ids_by_type[{subgroup_type_count.first, subgroup_index}] = next_subgroup_number;
+            subgroup_id_t next_subgroup_number = curr_view.subgroup_shard_views.size();
+            curr_view.subgroup_ids_by_type[subgroup_type_and_function.first][subgroup_index] = next_subgroup_number;
             uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
             uint32_t max_shard_members = 0;
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
@@ -791,8 +793,8 @@ uint32_t ViewManager::make_subgroup_maps(View& curr_view,
                 }
             }
             /* Pull the shard->SubView mapping out of the subgroup membership list
-             * and save it with its new subgroup ID */
-            curr_view.shard_views_by_subgroup.emplace_back(
+             * and save it under its subgroup ID (which was shard_views_by_subgroup.size()) */
+            curr_view.subgroup_shard_views.emplace_back(
                 std::move(subgroup_shard_views[subgroup_index]));
             subgroup_offset += max_shard_members;
         }
@@ -869,7 +871,7 @@ void ViewManager::ragged_edge_cleanup(View& Vc) {
         uint32_t shard_num, shard_rank;
         std::tie(shard_num, shard_rank) = p.second;
         const auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_id);
-        const std::vector<node_id_t>& shard_members = curr_view->shard_views_by_subgroup.at(subgroup_id).at(shard_num)->members;
+        const std::vector<node_id_t>& shard_members = curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num)->members;
 
         if(shard_rank == 0) {
             leader_ragged_edge_cleanup(Vc, subgroup_id, num_received_offset, shard_members);
