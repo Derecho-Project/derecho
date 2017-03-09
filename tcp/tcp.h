@@ -2,6 +2,7 @@
 #ifndef CONNECTION_H
 #define CONNECTION_H
 
+#include <functional>
 #include <memory>
 #include <string>
 
