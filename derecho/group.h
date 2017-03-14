@@ -37,15 +37,16 @@ namespace derecho {
  * @tparam ReplicatedObjects The types of user-provided objects that will represent
  * state and RPC functions for subgroups of this group.
  */
-template <typename... ReplicatedObjects>
+template <typename... ReplicatedTypes>
 class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    //The type of a map from subgroup index -> Replicated<T>
+    //Type alias for a vector of Replicated, otherwise KindMap can't understand it's a template
     template <typename T>
-    using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+    using replicated_vector = std::vector<Replicated<T>>;
 
+    const node_id_t my_id;
     /** Contains all state related to managing Views, including the
      * ManagedGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
@@ -53,14 +54,25 @@ private:
      * calls for any Replicated objects implemented by this group. */
     rpc::RPCManager rpc_manager;
     /** Maps a type to the Factory for that type. */
-    mutils::KindMap<Factory, ReplicatedObjects...> factories;
-    /** Maps each type T to a map of <index, Replicated<T>> for that type's
+    mutils::KindMap<Factory, ReplicatedTypes...> factories;
+    /** Maps each type T to a map of (index -> Replicated<T>) for that type's
      * subgroup(s). If this node is not a member of a subgroup for a type, the
      * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
      * the Replicated<T> will refer to the one shard that this node belongs to. */
-    mutils::KindMap<replicated_index_map, ReplicatedObjects...> replicated_objects;
-    /** The map of <index, RawSubgroup> for the subgroups of type RawObject. */
-    std::map<uint32_t, RawSubgroup> raw_subgroups;
+    mutils::KindMap<replicated_vector, ReplicatedTypes...> replicated_objects;
+    /** Maps subgroup index -> RawSubgroup for the subgroups of type RawObject.
+     * If this node is not a member of RawObject subgroup i, the RawSubgroup at
+     * index i will be invalid; otherwise, the RawObject will refer to the one
+     * shard of that subgroup that this node belongs to. */
+    std::vector<RawSubgroup> raw_subgroups;
+    /** Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
+     * index X is a reference to the Replicated<T> for this node's shard of
+     * subgroup X, which may or may not be valid. The references are the abstract
+     * base type ReplicatedObject because they are only used for send/receive_object.
+     * Note that this is a std::map solely so that we can initialize it out-of-order;
+     * its keys are continuous integers starting at 0 and it should be a std::vector. */
+    std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
+
 
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
@@ -69,14 +81,21 @@ private:
     Replicated<SubgroupType>& get_subgroup(SubgroupType*, uint32_t subgroup_index);
     RawSubgroup& get_subgroup(RawObject*, uint32_t subgroup_index);
 
+    /** Type of a 2-dimensional vector used to store potential node IDs, or -1 */
+    using vector_int64_2d = std::vector<std::vector<int64_t>>;
+
+    /** Deserializes a vector of shard leader IDs sent over the given socket. */
+    static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
+
     /**
-     * Re-constructs the Replicated<T>s for each subgroup, and their wrapped
-     * replicated objects, using a newly-provided View to determine subgroup
-     * membership. Called when the View changes and this node may need to
-     * initialize new replicated objects. This may be unnecessary, and can be
-     * deleted, if it turns out that all it needs to do is call construct_objects.
+     * Updates the state of the replicated objects that correspond to subgroups
+     * identified in the provided map, by receiving serialized state from the
+     * shard leader whose ID is paired with that subgroup ID.
+     * @param subgroups_and_leaders Pairs of (subgroup ID, leader's node ID) for
+     * subgroups that need to have their state initialized from the leader.
      */
-    void rebuild_objects(node_id_t my_id, const View& next_view);
+    void receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders);
+
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
@@ -84,35 +103,44 @@ private:
     /**
      * Constructor helper that constructs RawSubgroup objects for each subgroup
      * of type RawObject; called to initialize the raw_subgroups map.
-     * @param my_id The Node ID of this node
      * @param curr_view A reference to the current view as reported by View_manager
-     * @return A map containing a RawSubgroup for each "raw" subgroup the user
-     * requested.
+     * @return A vector containing a RawSubgroup for each "raw" subgroup the user
+     * requested, at the index corresponding to that subgroup's index.
      */
-    std::map<uint32_t, RawSubgroup> construct_raw_subgroups(node_id_t my_id, const View& curr_view);
+    std::vector<RawSubgroup> construct_raw_subgroups(const View& curr_view);
 
     /**
      * Base case for the construct_objects template. Note that the neat "varargs
      * trick" (defining construct_objects(...) as the base case) doesn't work
      * because varargs can't match const references, and will force a copy
-     * constructor. So std::enable_if is the only way to match an empty
+     * constructor on View. So std::enable_if is the only way to match an empty
      * template pack.
      */
     template <typename... Empty>
-    typename std::enable_if<0 == sizeof...(Empty)>::type
-    construct_objects(node_id_t my_id, const View& curr_view) {}
+    typename std::enable_if<0 == sizeof...(Empty), std::set<std::pair<subgroup_id_t, node_id_t>>>::type
+    construct_objects(const View&, const std::unique_ptr<vector_int64_2d>&) {
+        return std::set<std::pair<subgroup_id_t, node_id_t>>();
+    }
 
     /**
      * Constructor helper that unpacks this Group's template parameter pack.
      * Constructs Replicated<T> wrappers for each object being replicated,
      * using the corresponding Factory<T> saved in Group::factories. If this
      * node is not a member of the subgroup for a type T, an "empty" Replicated<T>
-     * will be constructed with no corresponding object.
-     * @param my_id The Node ID of this node
+     * will be constructed with no corresponding object. If this node is joining
+     * an existing group and there was a previous leader for its shard of a
+     * subgroup, an "empty" Replicated<T> will also be constructed for that
+     * subgroup, since all object state will be received from the shard leader.
      * @param curr_view A reference to the current view as reported by View_manager
+     * @param old_shard_leaders A pointer to the array of old shard leaders for
+     * each subgroup (indexed by subgroup ID), if one exists.
+     * @return The set of subgroup IDs that are un-initialized because this node is
+     * joining an existing group and needs to receive initial object state, paired
+     * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
-    void construct_objects(node_id_t my_id, const View& curr_view);
+    std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(const View& curr_view,
+            const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
 
     /**
      * Delegate constructor for joining an existing managed group, called after
@@ -131,7 +159,7 @@ private:
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls,
           const int gms_port,
-          Factory<ReplicatedObjects>... factories);
+          Factory<ReplicatedTypes>... factories);
 
 public:
     /**
@@ -155,7 +183,7 @@ public:
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
-          Factory<ReplicatedObjects>... factories);
+          Factory<ReplicatedTypes>... factories);
 
     /**
      * Constructor that joins an existing managed Derecho group. The parameters
@@ -178,7 +206,7 @@ public:
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
-          Factory<ReplicatedObjects>... factories);
+          Factory<ReplicatedTypes>... factories);
     /**
      * Constructor that re-starts a failed group member from log files.
      * It assumes the local ".paxosstate" file already contains the last known
@@ -209,7 +237,7 @@ public:
           std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = 12345,
-          Factory<ReplicatedObjects>... factories);
+          Factory<ReplicatedTypes>... factories);
 
     ~Group();
 
@@ -230,24 +258,6 @@ public:
      */
     template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_index = 0);
-
-    /**
-     * Serializes and sends the state of all replicated objects that represent
-     * subgroups this node is a member of. (This sends the state of the object
-     * itself, not the Replicated<T> that wraps it).
-     * @param receiver_socket The socket that should receive the serialized
-     * objects.
-     */
-    void send_objects(tcp::socket& receiver_socket);
-
-    /**
-     * Updates the state of all replicated objects that correspond to subgroups
-     * this node is a member of, replacing them with the objects received over
-     * the given TCP socket.
-     * @param sender_socket The socket that is sending serialized objects to
-     * this node.
-     */
-    void receive_objects(tcp::socket& sender_socket);
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();

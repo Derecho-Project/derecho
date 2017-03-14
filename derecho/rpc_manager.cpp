@@ -22,6 +22,10 @@ RPCManager::~RPCManager() {
     connections.destroy();
 }
 
+LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
+    return connections.get_socket(node);
+}
+
 std::exception_ptr RPCManager::handle_receive(
     const Opcode& indx, const node_id_t& received_from, char const* const buf,
     std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
@@ -100,7 +104,7 @@ void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     }
 }
 
-void RPCManager::p2p_message_handler(int32_t sender_id, char* msg_buf, uint32_t buffer_size) {
+void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size) {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     connections.read(sender_id, msg_buf, header_size);

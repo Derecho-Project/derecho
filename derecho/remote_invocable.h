@@ -326,7 +326,6 @@ auto wrap(const partial_wrapped<opcode, Ret, NewClass, Args...>& partial) {
 template <typename NewClass, FunctionTag opcode, typename Ret, typename... Args>
 auto wrap(std::unique_ptr<NewClass>* _this, const partial_wrapped<opcode, Ret, NewClass, Args...>& partial) {
     assert(_this);
-    assert(_this->get());
     return wrapped<opcode, std::function<Ret(Args...)>>{
         [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
 }

@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
-#include <mutex>
 #include <iostream>
 
 #include "multicast_group.h"
@@ -33,6 +32,9 @@ public:
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
     std::vector<node_id_t> departed;
+    /** The rank of this node within the subgroup/shard, or -1 if this node is
+     * not a member of the subgroup/shard. */
+    int32_t my_rank;
     /** Looks up the sub-view rank of a node ID. Returns -1 if
      * that node ID is not a member of this subgroup/shard. */
     int rank_of(const node_id_t& who) const;
@@ -42,10 +44,12 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(SubView, members, member_ips, joined, departed);
     SubView(const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
-            const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed) : members(members),
-                                                                                            member_ips(member_ips),
-                                                                                            joined(joined),
-                                                                                            departed(departed) {}
+            const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed)
+            : members(members),
+              member_ips(member_ips),
+              joined(joined),
+              departed(departed),
+              my_rank(-1) {}
 };
 
 class View : public mutils::ByteRepresentable {
@@ -94,13 +98,24 @@ public:
      * The vectors will have room for num_members elements. */
     View(int32_t num_members);
 
+    /**
+     * Constructs a SubView containing the provided subset of this View's
+     * members. This is helpful in writing subgroup-membership functions.
+     * @param with_members The node IDs that will be the SubView's members vector
+     * @return A SubView containing those members, the corresponding member IPs,
+     * and the subsets of joined[] and departed[] that intersect with those members
+     * @throws subgroup_provisioning_exception if any of the requested members
+     * are not actually in this View's members vector.
+     */
     std::unique_ptr<SubView> make_subview(const std::vector<node_id_t>& with_members) const;
 
+    /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
     int rank_of(const ip_addr& who) const;
     /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
+    /** Returns the rank of this View's leader, based on failed[]. */
     int rank_of_leader() const;
-
+    /** @return rank_of_leader() == my_rank */
     bool i_am_leader() const;
     /** Determines whether this node is the new leader after a view change. */
     bool i_am_new_leader();
@@ -108,6 +123,8 @@ public:
     void merge_changes();
     /** Wedges the view, which means wedging both SST and DerechoGroup. */
     void wedge();
+
+    int rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const;
 
     /** Builds a human-readable string representing the state of the view.
      *  Used for debugging only.*/

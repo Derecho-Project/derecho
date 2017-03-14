@@ -65,15 +65,17 @@ class RPCManager {
      * @param msg_buf A buffer containing the message
      * @param buffer_size The size of the buffer, in bytes
      */
-    void p2p_message_handler(int32_t sender_id, char* msg_buf, uint32_t buffer_size);
+    void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager) : nid(node_id),
-                                                                     receivers(new std::decay_t<decltype(*receivers)>()),
-                                                                     view_manager(group_view_manager),
-                                                                     connections(node_id, std::map<node_id_t, ip_addr>(),
-                                                                                 group_view_manager.derecho_params.rpc_port),
-                                                                     replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
+    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
+            : nid(node_id),
+              receivers(new std::decay_t<decltype(*receivers)>()),
+              view_manager(group_view_manager),
+              //Connections is initially empty, all connections are added in the new view callback
+              connections(node_id, std::map<node_id_t, ip_addr>(),
+                          group_view_manager.derecho_params.rpc_port),
+              replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::rpc_process_loop, this);
     }
 
@@ -148,6 +150,15 @@ public:
      * @param payload_size The size of the message in the buffer, in bytes
      */
     void rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_t payload_size);
+
+    /**
+     * Returns a LockedReference to the TCP socket connected to the specified
+     * node. This allows other Derecho components to re-use RPCManager's
+     * connection pool without causing a race condition.
+     * @param node The ID of the node to get a TCP connection to
+     * @return A LockedReference containing a reference to that node's socket.
+     */
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> get_socket(node_id_t node);
 
     /**
      * Writes the "list of destination nodes" header field into the given

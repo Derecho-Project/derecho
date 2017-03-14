@@ -1,10 +1,11 @@
 #pragma once
 
-#include "tcp/tcp.h"
-
 #include <map>
 #include <mutex>
 #include <cassert>
+
+#include "tcp/tcp.h"
+#include "locked_reference.h"
 
 namespace tcp {
 using ip_addr_t = std::string;
@@ -38,5 +39,6 @@ public:
         return it->second.exchange(local, remote);
     }
     int32_t probe_all();
+    derecho::LockedReference<std::unique_lock<std::mutex>, socket> get_socket(node_id_t node_id);
 };
 }

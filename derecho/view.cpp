@@ -15,7 +15,8 @@ SubView::SubView(int32_t num_members)
         : members(num_members),
           member_ips(num_members),
           joined(0),
-          departed(0) {}
+          departed(0),
+          my_rank(-1) {}
 
 int SubView::rank_of(const node_id_t& who) const {
     for(std::size_t rank = 0; rank < members.size(); ++rank) {
@@ -87,13 +88,26 @@ std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_m
     std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
     sub_view->members = with_members;
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
-        std::size_t member_pos = std::distance(members.begin(),
-                                               std::find(members.begin(), members.end(), with_members[subview_rank]));
+        std::size_t member_pos = std::distance(
+            members.begin(), std::find(members.begin(), members.end(), with_members[subview_rank]));
+        if(member_pos == members.size()) {
+            //The ID wasn't found in members[]
+            throw subgroup_provisioning_exception();
+        }
         sub_view->member_ips[subview_rank] = member_ips[member_pos];
     }
-    sub_view->joined = joined;
-    sub_view->departed = departed;
     return sub_view;
+}
+
+int View::rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
+    SubView& shard_view = *subgroup_shard_views.at(subgroup_id).at(shard_index);
+    for(std::size_t rank = 0; rank < shard_view.members.size(); ++rank) {
+        //Inefficient to call rank_of every time, but no guarantee the subgroup members will have ascending ranks
+        if(!failed[rank_of(shard_view.members[rank])]) {
+            return rank;
+        }
+    }
+    return -1;
 }
 
 bool View::i_am_leader() const {

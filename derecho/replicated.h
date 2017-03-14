@@ -26,15 +26,22 @@ template <typename T>
 using Factory = std::function<std::unique_ptr<T>(void)>;
 
 /**
- * Thrown by methods of Replicated<T> if a client tries to use them when the
- * Replicated<T> is "empty" (does not refer to a replicated object).
+ * Common interface for all types of Replicated<T>, specifying the methods to
+ * send and receive object state. This allows the Group to send object state
+ * without knowing the full type of a subgroup.
  */
-struct empty_reference_exception : public derecho_exception {
-    empty_reference_exception(const std::string& message) : derecho_exception(message) {}
+class ReplicatedObject {
+public:
+    virtual ~ReplicatedObject() = default;
+    virtual bool is_valid() const = 0;
+    virtual std::size_t object_size() const = 0;
+    virtual void send_object(tcp::socket& receiver_socket) const = 0;
+    virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
+    virtual std::size_t receive_object(char* buffer) = 0;
 };
 
 template <typename T>
-class Replicated {
+class Replicated : public ReplicatedObject {
 private:
     /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
@@ -58,7 +65,7 @@ private:
             char* buffer;
             while(!(buffer = group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id, 0, 0, true))) {
             };
-            std::unique_lock<std::mutex> view_lock(group_rpc_manager->view_manager.view_mutex);
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager->view_manager.view_mutex);
 
             std::size_t max_payload_size;
             int buffer_offset = group_rpc_manager->populate_nodelist_header(destination_nodes,
@@ -85,6 +92,8 @@ private:
     auto p2p_send_or_query(node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
+            //Ensure a view change isn't in progress
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager->view_manager.view_mutex);
             size_t size;
             auto max_payload_size = group_rpc_manager->view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
@@ -135,6 +144,7 @@ public:
 
     Replicated(Replicated&&) = default;
     Replicated(const Replicated&) = delete;
+    virtual ~Replicated() = default;
 
     /**
      * @return True if this Replicated<T> actually contains a reference to a
@@ -258,7 +268,9 @@ public:
 
     /**
      * Serializes and sends the state of the "wrapped" object (of type T) for
-     * this Replicated<T> over the given socket.
+     * this Replicated<T> over the given socket. (This includes sending the
+     * object's size before its data, so the receiver knows the size of buffer
+     * to allocate).
      * @param receiver_socket
      */
     void send_object(tcp::socket& receiver_socket) const {

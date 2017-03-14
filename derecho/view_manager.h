@@ -8,14 +8,16 @@
 
 #include <map>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "logger.h"
 #include "view.h"
 #include "tcp/tcp.h"
-#include "logger.h"
 #include "subgroup_info.h"
+#include "locked_reference.h"
 
 #include "mutils-serialization/SerializationSupport.hpp"
 
@@ -53,14 +55,18 @@ public:
     }
 };
 
+
+template<typename T>
+using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
+
 using view_upcall_t = std::function<void(const View&)>;
 
 class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    using send_objects_upcall_t = std::function<void(tcp::socket&)>;
-    using initialize_rpc_objects_t = std::function<void(node_id_t, const View&)>;
+    using send_object_upcall_t = std::function<void(subgroup_id_t, node_id_t)>;
+    using initialize_rpc_objects_t = std::function<void(node_id_t, const View&, const std::vector<std::vector<int64_t>>&)>;
 
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
     friend class rpc::RPCManager;
@@ -70,10 +76,11 @@ private:
     /** The port that this instance of the GMS communicates on. */
     const int gms_port;
 
-    /** Lock this before accessing curr_view, since it's shared by multiple threads */
-    std::mutex view_mutex;
+    /** Controls access to curr_view. Read-only accesses should acquire a
+     * shared_lock, while view changes acquire a unique_lock. */
+    std::shared_timed_mutex view_mutex;
     /** Notified when curr_view changes (i.e. we are finished with a pending view change).*/
-    std::condition_variable view_change_cv;
+    std::condition_variable_any view_change_cv;
 
     /** The current View, containing the state of the managed group.
      *  Must be a pointer so we can re-assign it, but will never be null.*/
@@ -125,10 +132,10 @@ private:
     /** A function that will be called to send replicated objects to a new
      * member of a subgroup after a view change. This abstracts away the RPC
      * functionality, which ViewManager shouldn't need to know about. */
-    send_objects_upcall_t send_subgroup_objects;
+    send_object_upcall_t send_subgroup_object;
     /** A function that will be called to initialize replicated objects
-     * after transitioning to a new view, in case this node has become a
-     * member of a new subgroup. */
+     * after transitioning to a new view, in the case where the previous
+     * view was inadequately provisioned. */
     initialize_rpc_objects_t initialize_subgroup_objects;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
@@ -167,6 +174,8 @@ private:
     /** Constructor helper called when creating a new group; waits for a new
      * member to join, then sends it the view. */
     void await_second_member(const node_id_t my_id);
+    /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
+    void initialize_rdmc_sst();
 
     /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
      * The parameters are all the possible parameters for constructing MulticastGroup. */
@@ -174,15 +183,22 @@ private:
                                    const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
-    void transition_multicast_group(View& newView);
-    /** One-time global initialization of RDMC and SST, using the current view's membership. */
-    void initialize_rdmc_sst();
-    uint32_t make_subgroup_maps(View& curr_view,
+    void transition_multicast_group();
+    /** Initializes the current View with subgroup information, and creates the
+     * subgroup-related maps that MulticastGroup's constructor needs based on
+     * this information. */
+    uint32_t make_subgroup_maps(const std::unique_ptr<View>& prev_view,
+                                View& curr_view,
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
-    uint32_t calc_total_num_subgroups() const;
+    /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
+
+    static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
+    static std::vector<std::vector<int64_t>> translate_types_to_ids(
+            const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
+            const View& new_view);
 
 public:
     /**
@@ -268,10 +284,11 @@ public:
     void send(subgroup_id_t subgroup_num);
 
     /**
-     * @return a reference to the current View, to make it easier for the
-     * Group that contains this ViewManager to set things up.
+     * @return a reference to the current View, wrapped in a container that
+     * holds a read-lock on it. This is mostly here to make it easier for
+     * the Group that contains this ViewManager to set things up.
      */
-    const View& get_current_view();
+    SharedLockedReference<View> get_current_view();
 
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
@@ -282,8 +299,8 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
 
-    void register_send_objects_upcall(send_objects_upcall_t upcall) {
-        send_subgroup_objects = std::move(upcall);
+    void register_send_object_upcall(send_object_upcall_t upcall) {
+        send_subgroup_object = std::move(upcall);
     }
 
     void register_initialize_objects_upcall(initialize_rpc_objects_t upcall) {

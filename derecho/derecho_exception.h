@@ -19,4 +19,14 @@ public:
 
     const char* what() const noexcept { return message.c_str(); }
 };
+
+/**
+ * Exception that means a reference-like type is "empty" (does not contain a
+ * valid object).
+ */
+struct empty_reference_exception : public derecho_exception {
+public:
+    empty_reference_exception(const std::string& message) : derecho_exception(message) {}
+};
+
 }

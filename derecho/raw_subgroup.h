@@ -8,6 +8,7 @@
 #pragma once
 
 #include "view_manager.h"
+#include "derecho_exception.h"
 
 namespace derecho {
 
@@ -16,6 +17,7 @@ private:
     const node_id_t node_id;
     const subgroup_id_t subgroup_id;
     ViewManager& group_view_manager;
+    bool valid;
 
 public:
     RawSubgroup(node_id_t node_id,
@@ -23,7 +25,21 @@ public:
                 ViewManager& view_manager)
             : node_id(node_id),
               subgroup_id(subgroup_id),
-              group_view_manager(view_manager) {}
+              group_view_manager(view_manager),
+              valid(true) {}
+
+    RawSubgroup(node_id_t node_id, ViewManager& view_manager) :
+        node_id(node_id),
+        subgroup_id(0),
+        group_view_manager(view_manager),
+        valid(false) {}
+
+    /**
+     * @return True if this RawSubgroup is a valid reference to a raw subgroup,
+     * false if it is "empty" because this node is not a member of the raw
+     * subgroup this object represents.
+     */
+    bool is_valid() const { return valid; }
 
     /**
      * Gets a pointer into the send buffer for multicasts to this subgroup.

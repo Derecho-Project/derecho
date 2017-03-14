@@ -24,7 +24,7 @@ void kind_map_builder(MapType&){};
 template <typename MapType, typename FirstType, typename... RestTypes>
 void kind_map_builder(MapType& map, Factory<FirstType> curr_factory,
                       Factory<RestTypes>... rest_factories) {
-    map.template get<FirstType>() = curr_factory;
+    map.template get<FirstType>() = std::move(curr_factory);
     kind_map_builder<MapType, RestTypes...>(map, rest_factories...);
 }
 
@@ -43,59 +43,78 @@ mutils::KindMap<Factory, Types...> make_kind_map(Factory<Types>... factories) {
     return factories_map;
 }
 
-template <typename... ReplicatedObjects>
-Group<ReplicatedObjects...>::Group(
+/**
+ * Inserts set b into set a and returns the modified a. Hack to get around the
+ * fact that set::insert doesn't return *this.
+ * @param a The set to modify and return
+ * @param b The set that should be inserted into a.
+ * @return Set a.
+ */
+template <typename T>
+std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
+    a.insert(b.begin(), b.end());
+    return a;
+}
+
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(
     const ip_addr my_ip,
     const CallbackSet& callbacks,
     const SubgroupInfo& subgroup_info,
     const DerechoParams& derecho_params,
     std::vector<view_upcall_t> _view_upcalls,
     const int gms_port,
-    Factory<ReplicatedObjects>... factories)
-        : view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
+    Factory<ReplicatedTypes>... factories)
+        : my_id(0),
+          view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager),
           factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(0, view_manager.get_current_view())) {
+          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     //    ^ In this constructor, this is the first node to start, so my ID will be 0
-    construct_objects<ReplicatedObjects...>(0, view_manager.get_current_view());
+    //In this case there will be no subgroups to receive objects for
+    construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();
     view_manager.start();
 }
 
-template <typename... ReplicatedObjects>
-Group<ReplicatedObjects...>::Group(const node_id_t my_id,
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                    const ip_addr my_ip,
                                    const ip_addr leader_ip,
                                    const CallbackSet& callbacks,
                                    const SubgroupInfo& subgroup_info,
                                    std::vector<view_upcall_t> _view_upcalls,
                                    const int gms_port,
-                                   Factory<ReplicatedObjects>... factories)
+                                   Factory<ReplicatedTypes>... factories)
         : Group(my_id, tcp::socket{leader_ip, gms_port},
                 callbacks, subgroup_info, _view_upcalls,
                 gms_port, factories...) {}
 
-template <typename... ReplicatedObjects>
-Group<ReplicatedObjects...>::Group(const node_id_t my_id,
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                    tcp::socket leader_connection,
                                    const CallbackSet& callbacks,
                                    const SubgroupInfo& subgroup_info,
                                    std::vector<view_upcall_t> _view_upcalls,
                                    const int gms_port,
-                                   Factory<ReplicatedObjects>... factories)
-        : view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
+                                   Factory<ReplicatedTypes>... factories)
+        : my_id(my_id),
+          view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(my_id, view_manager.get_current_view())) {
-    const View& dont_copy_this = view_manager.get_current_view();
-    construct_objects<ReplicatedObjects...>(my_id, dont_copy_this);
-    receive_objects(leader_connection);
+          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
+    std::unique_ptr<vector_int64_2d> old_shard_leaders =
+            receive_old_shard_leaders(leader_connection);
     set_up_components();
     view_manager.start();
+    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders =
+            construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
+    receive_objects(subgroups_and_leaders);
+
 }
 
-template <typename... ReplicatedObjects>
-Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(const std::string& recovery_filename,
                                    const node_id_t my_id,
                                    const ip_addr my_ip,
                                    const CallbackSet& callbacks,
@@ -103,28 +122,33 @@ Group<ReplicatedObjects...>::Group(const std::string& recovery_filename,
                                    std::experimental::optional<DerechoParams> _derecho_params,
                                    std::vector<view_upcall_t> _view_upcalls,
                                    const int gms_port,
-                                   Factory<ReplicatedObjects>... factories)
-        : view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
+                                   Factory<ReplicatedTypes>... factories)
+        : my_id(my_id),
+          view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(my_id, view_manager.get_current_view())) {
+          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     //TODO: This is the recover-from-saved-file constructor; I don't know how it will work
-    construct_objects<ReplicatedObjects...>(my_id, view_manager.get_current_view());
+    construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();
     view_manager.start();
 }
 
-template <typename... ReplicatedObjects>
-Group<ReplicatedObjects...>::~Group() {
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::~Group() {
 }
 
-template <typename... ReplicatedObjects>
+
+template <typename... ReplicatedTypes>
 template <typename FirstType, typename... RestTypes>
-void Group<ReplicatedObjects...>::construct_objects(node_id_t my_id, const View& curr_view) {
+std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::construct_objects(const View& curr_view,
+        const std::unique_ptr<vector_int64_2d>& old_shard_leaders) {
+    std::set<std::pair<subgroup_id_t, uint32_t>> subgroups_to_receive;
     if(!curr_view.is_adequately_provisioned) {
         std::cout << "construct_objects: View is not adequately provisioned! Returning early." << std::endl;
-        return;
+        return subgroups_to_receive;
     }
+    assert(replicated_objects.template get<FirstType>().empty());
     const auto& subgroup_ids = curr_view.subgroup_ids_by_type.at(std::type_index(typeid(FirstType)));
     for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids.size(); ++subgroup_index) {
         subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
@@ -132,173 +156,158 @@ void Group<ReplicatedObjects...>::construct_objects(node_id_t my_id, const View&
         bool in_subgroup = false;
         uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-            const std::vector<node_id_t>& members = curr_view.subgroup_shard_views
-                                                        .at(subgroup_id)
-                                                        .at(shard_num)
-                                                        ->members;
+            const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num)->members;
             //"If this node is in subview->members for this shard"
             if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                 in_subgroup = true;
-                auto insert_status = replicated_objects.template get<FirstType>().emplace(
-                    subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
-                                                          factories.template get<FirstType>()));
-                if(insert_status.second == false) {
-                    std::cout << "When constructing subgroup " << subgroup_id << " a Replicated already existed;"
-                              << " its is_valid() status is " << std::boolalpha << insert_status.first->second.is_valid() << std::endl;
+                if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
+                        && (*old_shard_leaders)[subgroup_id].size() > shard_num
+                        && (*old_shard_leaders)[subgroup_id][shard_num] > -1
+                        && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
+                    //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
+                    replicated_objects.template get<FirstType>().emplace_back(Replicated<FirstType>(my_id, rpc_manager));
+                    subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
+                } else {
+                    replicated_objects.template get<FirstType>().emplace_back(
+                            Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
+                                    factories.template get<FirstType>()));
                 }
                 break;  //This node can be in at most one shard
             }
         }
         if(!in_subgroup) {
-            //Put an empty Replicated in the map
-            replicated_objects.template get<FirstType>().emplace(subgroup_index,
-                                                                 Replicated<FirstType>(my_id, rpc_manager));
+            //Put an empty Replicated in the vector, so that it still grows by 1 and has an entry at subgroup_index
+            replicated_objects.template get<FirstType>().emplace_back(Replicated<FirstType>(my_id, rpc_manager));
         }
+        //Regardless of how the Replicated was constructed, store a reference to it
+        objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().back());
     }
-    construct_objects<RestTypes...>(my_id, curr_view);
+    return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders));
 }
 
-template <typename... ReplicatedObjects>
-std::map<uint32_t, RawSubgroup> Group<ReplicatedObjects...>::construct_raw_subgroups(
-    node_id_t my_id, const View& curr_view) {
-    std::map<uint32_t, RawSubgroup> raw_subgroup_map;
+template <typename... ReplicatedTypes>
+std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(const View& curr_view) {
+    std::vector<RawSubgroup> raw_subgroup_vector;
     std::type_index raw_object_type(typeid(RawObject));
     auto ids_entry = curr_view.subgroup_ids_by_type.find(raw_object_type);
     if(ids_entry != curr_view.subgroup_ids_by_type.end()) {
         for(uint32_t index = 0; index < ids_entry->second.size(); ++index) {
             subgroup_id_t subgroup_id = ids_entry->second.at(index);
             uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
+            bool in_subgroup = false;
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-                const std::vector<node_id_t>& members = curr_view.subgroup_shard_views
-                                                            .at(subgroup_id)
-                                                            .at(shard_num)
-                                                            ->members;
+                const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num)->members;
                 //"If this node is in subview->members for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
-                    raw_subgroup_map.emplace(index,
-                                             RawSubgroup(my_id, subgroup_id, view_manager));
+                    in_subgroup = true;
+                    raw_subgroup_vector.emplace_back(RawSubgroup(my_id, subgroup_id, view_manager));
                     break;
                 }
             }
+            if(!in_subgroup) {
+                //Put an empty RawObject in the vector, so there's something at this index
+                raw_subgroup_vector.emplace_back(RawSubgroup(my_id, view_manager));
+            }
         }
     }
-    return raw_subgroup_map;
+    return raw_subgroup_vector;
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::set_up_components() {
-    view_manager.add_view_upcall([this](const View& new_view) {
-        rpc_manager.new_view_callback(new_view);
-    });
-    view_manager.get_current_view().multicast_group->register_rpc_callback(
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_up_components() {
+    SharedLockedReference<View> curr_view = view_manager.get_current_view();
+    curr_view.get().multicast_group->register_rpc_callback(
         [this](node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(sender, buf, size);
         });
-    view_manager.register_send_objects_upcall([this](tcp::socket& joiner_socket) {
-        send_objects(joiner_socket);
+    view_manager.add_view_upcall([this](const View& new_view) {
+        rpc_manager.new_view_callback(new_view);
     });
-    view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view) {
-        construct_objects<ReplicatedObjects...>(my_id, view);
+    view_manager.register_send_object_upcall([this](subgroup_id_t subgroup_id, node_id_t new_node_id) {
+        objects_by_subgroup_id.at(subgroup_id).get().send_object(rpc_manager.get_socket(new_node_id).get());
+    });
+    view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
+            const vector_int64_2d& old_shard_leaders) {
+        //ugh, we have to copy the vector to get it as a pointer
+        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders =
+                construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
+        receive_objects(subgroups_and_leaders);
+        raw_subgroups = construct_raw_subgroups(view);
     });
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::rebuild_objects(node_id_t my_id, const View& next_view) {
-    construct_objects<ReplicatedObjects...>(my_id, next_view);
+template <typename... ReplicatedTypes>
+std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
+        tcp::socket& leader_socket) {
+    std::size_t buffer_size;
+    leader_socket.read((char*)&buffer_size, sizeof(buffer_size));
+    char buffer[buffer_size];
+    leader_socket.read(buffer, buffer_size);
+    return mutils::from_bytes<std::vector<std::vector<int64_t>>>(nullptr, buffer);
 }
 
-template <typename... ReplicatedObjects>
-RawSubgroup& Group<ReplicatedObjects...>::get_subgroup(RawObject*, uint32_t subgroup_index) {
+template <typename... ReplicatedTypes>
+RawSubgroup& Group<ReplicatedTypes...>::get_subgroup(RawObject*, uint32_t subgroup_index) {
     return raw_subgroups.at(subgroup_index);
 }
 
-template <typename... ReplicatedObjects>
+template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-Replicated<SubgroupType>& Group<ReplicatedObjects...>::get_subgroup(SubgroupType*, uint32_t subgroup_index) {
+Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(SubgroupType*, uint32_t subgroup_index) {
     return replicated_objects.template get<SubgroupType>().at(subgroup_index);
 }
 
-template <typename... ReplicatedObjects>
+template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-auto& Group<ReplicatedObjects...>::get_subgroup(uint32_t subgroup_index) {
-    if(!view_manager.get_current_view().is_adequately_provisioned) {
+auto& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
+    if(!view_manager.get_current_view().get().is_adequately_provisioned) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
     }
     SubgroupType* overload_selector = nullptr;
     return get_subgroup(overload_selector, subgroup_index);
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::send_objects(tcp::socket& receiver_socket) {
-    std::size_t total_size = 0;
-    replicated_objects.for_each([&](const auto&, const auto& objects_map) {
-        for(const auto& index_object_pair : objects_map) {
-            if(index_object_pair.second.is_valid()) {
-                total_size += index_object_pair.second.object_size();
-            }
-        }
-    });
-    mutils::post_object([&receiver_socket](const char* bytes, std::size_t size) {
-        receiver_socket.write(bytes, size); },
-                        total_size);
-    replicated_objects.for_each([&](const auto&, const auto& objects_map) {
-        for(const auto& index_object_pair : objects_map) {
-            if(index_object_pair.second.is_valid()) {
-                index_object_pair.second.send_object_raw(receiver_socket);
-            }
-        }
-    });
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders) {
+    //This will receive one object from each shard leader in ascending order of subgroup ID
+    for(const auto& subgroup_and_leader : subgroups_and_leaders) {
+        LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket =
+                rpc_manager.get_socket(subgroup_and_leader.second);
+        std::size_t buffer_size;
+        bool success = leader_socket.get().read((char*)&buffer_size, sizeof(buffer_size));
+        assert(success);
+        char buffer[buffer_size];
+        objects_by_subgroup_id.at(subgroup_and_leader.first).get().receive_object(buffer);
+    }
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::receive_objects(tcp::socket& sender_socket) {
-    std::size_t total_size;
-    bool success = sender_socket.read((char*)&total_size, sizeof(size_t));
-    assert(success);
-    //If there are no objects to receive, don't try to receive any
-    if(total_size == 0)
-        return;
-    char* buf = new char[total_size];
-    success = sender_socket.read(buf, total_size);
-    assert(success);
-    size_t offset = 0;
-    replicated_objects.for_each([&](const auto&, auto& objects_map) {
-        for(auto& index_object_pair : objects_map) {
-            if(index_object_pair.second.is_valid()) {
-                std::size_t bytes_read = index_object_pair.second.receive_object(buf + offset);
-                offset += bytes_read;
-            }
-        }
-    });
-}
-
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::report_failure(const node_id_t who) {
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::report_failure(const node_id_t who) {
     view_manager.report_failure(who);
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::leave() {
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::leave() {
     view_manager.leave();
 }
 
-template <typename... ReplicatedObjects>
-std::vector<node_id_t> Group<ReplicatedObjects...>::get_members() {
+template <typename... ReplicatedTypes>
+std::vector<node_id_t> Group<ReplicatedTypes...>::get_members() {
     return view_manager.get_members();
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::barrier_sync() {
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::barrier_sync() {
     view_manager.barrier_sync();
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::debug_print_status() const {
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::debug_print_status() const {
     view_manager.debug_print_status();
 }
 
-template <typename... ReplicatedObjects>
-void Group<ReplicatedObjects...>::print_log(std::ostream& output_dest) const {
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::print_log(std::ostream& output_dest) const {
     view_manager.print_log(output_dest);
 }
 
