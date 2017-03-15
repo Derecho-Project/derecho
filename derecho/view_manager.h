@@ -55,8 +55,7 @@ public:
     }
 };
 
-
-template<typename T>
+template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
 using view_upcall_t = std::function<void(const View&)>;

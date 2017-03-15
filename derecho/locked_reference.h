@@ -31,7 +31,4 @@ public:
         return reference;
     }
 };
-
 }
-
-

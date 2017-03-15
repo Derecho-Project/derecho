@@ -78,8 +78,8 @@ struct recv_ret {
 };
 
 using receive_fun_t = std::function<recv_ret(
-    mutils::DeserializationManager* dsm, const node_id_t&, const char* recv_buf,
-    const std::function<char*(int)>& out_alloc)>;
+        mutils::DeserializationManager* dsm, const node_id_t&, const char* recv_buf,
+        const std::function<char*(int)>& out_alloc)>;
 
 template <typename T>
 using reply_map = std::map<node_id_t, std::future<T>>;
@@ -227,11 +227,11 @@ struct PendingResults : public PendingBase {
 
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
         assert(map_fulfilled);
-        if(dest_nodes.find(removed_nid) != dest_nodes.end() &&
-           responded_nodes.find(removed_nid) == responded_nodes.end()) {
+        if(dest_nodes.find(removed_nid) != dest_nodes.end()
+           && responded_nodes.find(removed_nid) == responded_nodes.end()) {
             set_exception(removed_nid,
                           std::make_exception_ptr(
-                              node_removed_from_group_exception{removed_nid}));
+                                  node_removed_from_group_exception{removed_nid}));
         }
     }
 
@@ -278,10 +278,9 @@ inline char* extra_alloc(int i) {
 inline void populate_header(char* reply_buf,
                             const std::size_t& payload_size,
                             const Opcode& op, const node_id_t& from) {
-    ((std::size_t*)reply_buf)[0] = payload_size;           // size
-    ((Opcode*)(sizeof(std::size_t) + reply_buf))[0] = op;  // what
-    ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] =
-        from;  // from
+    ((std::size_t*)reply_buf)[0] = payload_size;                                 // size
+    ((Opcode*)(sizeof(std::size_t) + reply_buf))[0] = op;                        // what
+    ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
 }
 
 inline void retrieve_header(mutils::DeserializationManager* dsm,
@@ -290,8 +289,7 @@ inline void retrieve_header(mutils::DeserializationManager* dsm,
                             node_id_t& from) {
     payload_size = ((std::size_t const* const)reply_buf)[0];
     op = ((Opcode const* const)(sizeof(std::size_t) + reply_buf))[0];
-    from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) +
-                                     reply_buf))[0];
+    from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0];
 }
 }  // namespace remote_invocation_utilities
 

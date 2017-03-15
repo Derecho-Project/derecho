@@ -224,26 +224,26 @@ private:
 
 public:
     MulticastGroup(
-        std::vector<node_id_t> _members, node_id_t my_node_id,
-        std::shared_ptr<DerechoSST> _sst,
-        CallbackSet callbacks,
-        uint32_t total_num_subgroups,
-        const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-        const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-        const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-        const DerechoParams derecho_params,
-        std::vector<char> already_failed = {});
+            std::vector<node_id_t> _members, node_id_t my_node_id,
+            std::shared_ptr<DerechoSST> _sst,
+            CallbackSet callbacks,
+            uint32_t total_num_subgroups,
+            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+            const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
+            const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+            const DerechoParams derecho_params,
+            std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
     MulticastGroup(
-        std::vector<node_id_t> _members, node_id_t my_node_id,
-        std::shared_ptr<DerechoSST> _sst,
-        MulticastGroup&& old_group,
-        uint32_t total_num_subgroups,
-        const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-        const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-        const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-        std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
+            std::vector<node_id_t> _members, node_id_t my_node_id,
+            std::shared_ptr<DerechoSST> _sst,
+            MulticastGroup&& old_group,
+            uint32_t total_num_subgroups,
+            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
+            const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
+            const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+            std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
     ~MulticastGroup();
 
     /**
@@ -266,8 +266,8 @@ public:
     /** Debugging function; prints the current state of the SST to stdout. */
     void debug_print();
     static long long unsigned int compute_max_msg_size(
-        const long long unsigned int max_payload_size,
-        const long long unsigned int block_size);
+            const long long unsigned int max_payload_size,
+            const long long unsigned int block_size);
     /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
      * (this node's shard number, this node's shard rank)*/
     const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& get_subgroup_to_shard_and_rank() {

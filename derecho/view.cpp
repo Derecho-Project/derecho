@@ -89,7 +89,7 @@ std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_m
     sub_view->members = with_members;
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         std::size_t member_pos = std::distance(
-            members.begin(), std::find(members.begin(), members.end(), with_members[subview_rank]));
+                members.begin(), std::find(members.begin(), members.end(), with_members[subview_rank]));
         if(member_pos == members.size()) {
             //The ID wasn't found in members[]
             throw subgroup_provisioning_exception();
@@ -229,8 +229,7 @@ std::unique_ptr<View> load_view(const std::string& view_file_name) {
             swap_view = mutils::from_bytes<View>(nullptr, buffer);
         }
     }
-    if(swap_view == nullptr ||
-       (view != nullptr && view->vid >= swap_view->vid)) {
+    if(swap_view == nullptr || (view != nullptr && view->vid >= swap_view->vid)) {
         return view;
     } else {
         return swap_view;

@@ -41,7 +41,7 @@ FileWriter::~FileWriter() {
 }
 
 void FileWriter::set_message_written_upcall(
-    const std::function<void(message)>& _message_written_upcall) {
+        const std::function<void(message)>& _message_written_upcall) {
     message_written_upcall = _message_written_upcall;
 }
 

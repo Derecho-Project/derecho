@@ -52,8 +52,8 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
     /* use this from within a derived class to receive precisely this RemoteInvocable
      * (this way, all RemoteInvocable methods do not need to worry about type collisions) */
     inline RemoteInvocable& handler(
-        std::integral_constant<FunctionTag, tag> const* const,
-        const Args&...) {
+            std::integral_constant<FunctionTag, tag> const* const,
+            const Args&...) {
         return *this;
     }
 
@@ -101,10 +101,8 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
         }
         char* serialized_args = out_alloc(size);
         {
-            auto v = serialized_args +
-                     mutils::to_bytes(invocation_id, serialized_args);
-            auto check_size =
-                mutils::bytes_size(invocation_id) + serialize_all(v, a...);
+            auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
+            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, a...);
             assert(check_size == size);
         }
 
@@ -123,9 +121,9 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
      */
     template <typename definitely_char>
     inline recv_ret receive_response(
-        std::false_type*, mutils::DeserializationManager* dsm,
-        const node_id_t& nid, const char* response,
-        const std::function<definitely_char*(int)>&) {
+            std::false_type*, mutils::DeserializationManager* dsm,
+            const node_id_t& nid, const char* response,
+            const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
         assert(results_map.count(invocation_id));
@@ -188,8 +186,8 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
 
     template <typename fst, typename... rst>
     std::tuple<std::unique_ptr<fst>, std::unique_ptr<rst>...> _deserialize(
-        mutils::DeserializationManager* dsm, char const* const buf, fst*,
-        rst*... rest) {
+            mutils::DeserializationManager* dsm, char const* const buf, fst*,
+            rst*... rest) {
         using Type = std::decay_t<fst>;
         auto ds = mutils::from_bytes<Type>(dsm, buf);
         const auto size = mutils::bytes_size(*ds);
@@ -205,7 +203,7 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
      * @return A tuple of deserialized objects
      */
     std::tuple<std::unique_ptr<std::decay_t<Args>>...> deserialize(
-        mutils::DeserializationManager* dsm, char const* const buf) {
+            mutils::DeserializationManager* dsm, char const* const buf) {
         return _deserialize(dsm, buf, ((std::decay_t<Args>*)(nullptr))...);
     }
 
@@ -327,7 +325,7 @@ template <typename NewClass, FunctionTag opcode, typename Ret, typename... Args>
 auto wrap(std::unique_ptr<NewClass>* _this, const partial_wrapped<opcode, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<opcode, std::function<Ret(Args...)>>{
-        [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
+            [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
 }
 };
 }
@@ -347,7 +345,7 @@ struct RemoteInvocablePairs;
 
 template <FunctionTag id, typename Q>
 struct RemoteInvocablePairs<wrapped<id, Q>>
-    : public RemoteInvocable<id, Q> {
+        : public RemoteInvocable<id, Q> {
     RemoteInvocablePairs(std::map<Opcode, receive_fun_t>& receivers, Q q)
             : RemoteInvocable<id, Q>(receivers, q) {}
 
@@ -357,7 +355,7 @@ struct RemoteInvocablePairs<wrapped<id, Q>>
 // id better be an integral constant of Opcode
 template <FunctionTag id, typename Q, typename... rest>
 struct RemoteInvocablePairs<wrapped<id, Q>, rest...>
-    : public RemoteInvocable<id, Q>, public RemoteInvocablePairs<rest...> {
+        : public RemoteInvocable<id, Q>, public RemoteInvocablePairs<rest...> {
     //^ could change this to extend RemoteCaller<id,Q> and RemoteResponder<id,Q> to split up RemoteInvocable
 public:
     template <typename... T>
@@ -406,10 +404,10 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
         auto& hndl = this->handler(choice, args...);
         const auto header_size = header_space();
         auto sent_return = hndl.send(
-            [&out_alloc, &header_size](std::size_t size) {
+                [&out_alloc, &header_size](std::size_t size) {
                 return out_alloc(size + header_size) + header_size;
-            },
-            std::forward<Args>(args)...);
+                },
+                std::forward<Args>(args)...);
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;

@@ -28,11 +28,10 @@ public:
               group_view_manager(view_manager),
               valid(true) {}
 
-    RawSubgroup(node_id_t node_id, ViewManager& view_manager) :
-        node_id(node_id),
-        subgroup_id(0),
-        group_view_manager(view_manager),
-        valid(false) {}
+    RawSubgroup(node_id_t node_id, ViewManager& view_manager) : node_id(node_id),
+                                                                subgroup_id(0),
+                                                                group_view_manager(view_manager),
+                                                                valid(false) {}
 
     /**
      * @return True if this RawSubgroup is a valid reference to a raw subgroup,

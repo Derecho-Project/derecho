@@ -58,13 +58,13 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(
-    const ip_addr my_ip,
-    const CallbackSet& callbacks,
-    const SubgroupInfo& subgroup_info,
-    const DerechoParams& derecho_params,
-    std::vector<view_upcall_t> _view_upcalls,
-    const int gms_port,
-    Factory<ReplicatedTypes>... factories)
+        const ip_addr my_ip,
+        const CallbackSet& callbacks,
+        const SubgroupInfo& subgroup_info,
+        const DerechoParams& derecho_params,
+        std::vector<view_upcall_t> _view_upcalls,
+        const int gms_port,
+        Factory<ReplicatedTypes>... factories)
         : my_id(0),
           view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager),
@@ -79,50 +79,48 @@ Group<ReplicatedTypes...>::Group(
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const node_id_t my_id,
-                                   const ip_addr my_ip,
-                                   const ip_addr leader_ip,
-                                   const CallbackSet& callbacks,
-                                   const SubgroupInfo& subgroup_info,
-                                   std::vector<view_upcall_t> _view_upcalls,
-                                   const int gms_port,
-                                   Factory<ReplicatedTypes>... factories)
+                                 const ip_addr my_ip,
+                                 const ip_addr leader_ip,
+                                 const CallbackSet& callbacks,
+                                 const SubgroupInfo& subgroup_info,
+                                 std::vector<view_upcall_t> _view_upcalls,
+                                 const int gms_port,
+                                 Factory<ReplicatedTypes>... factories)
         : Group(my_id, tcp::socket{leader_ip, gms_port},
                 callbacks, subgroup_info, _view_upcalls,
                 gms_port, factories...) {}
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const node_id_t my_id,
-                                   tcp::socket leader_connection,
-                                   const CallbackSet& callbacks,
-                                   const SubgroupInfo& subgroup_info,
-                                   std::vector<view_upcall_t> _view_upcalls,
-                                   const int gms_port,
-                                   Factory<ReplicatedTypes>... factories)
+                                 tcp::socket leader_connection,
+                                 const CallbackSet& callbacks,
+                                 const SubgroupInfo& subgroup_info,
+                                 std::vector<view_upcall_t> _view_upcalls,
+                                 const int gms_port,
+                                 Factory<ReplicatedTypes>... factories)
         : my_id(my_id),
           view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
-    std::unique_ptr<vector_int64_2d> old_shard_leaders =
-            receive_old_shard_leaders(leader_connection);
+    std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
     view_manager.start();
-    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders =
-            construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
+    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
+            = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     receive_objects(subgroups_and_leaders);
-
 }
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const std::string& recovery_filename,
-                                   const node_id_t my_id,
-                                   const ip_addr my_ip,
-                                   const CallbackSet& callbacks,
-                                   const SubgroupInfo& subgroup_info,
-                                   std::experimental::optional<DerechoParams> _derecho_params,
-                                   std::vector<view_upcall_t> _view_upcalls,
-                                   const int gms_port,
-                                   Factory<ReplicatedTypes>... factories)
+                                 const node_id_t my_id,
+                                 const ip_addr my_ip,
+                                 const CallbackSet& callbacks,
+                                 const SubgroupInfo& subgroup_info,
+                                 std::experimental::optional<DerechoParams> _derecho_params,
+                                 std::vector<view_upcall_t> _view_upcalls,
+                                 const int gms_port,
+                                 Factory<ReplicatedTypes>... factories)
         : my_id(my_id),
           view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
@@ -138,10 +136,10 @@ template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
 }
 
-
 template <typename... ReplicatedTypes>
 template <typename FirstType, typename... RestTypes>
-std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::construct_objects(const View& curr_view,
+std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::construct_objects(
+        const View& curr_view,
         const std::unique_ptr<vector_int64_2d>& old_shard_leaders) {
     std::set<std::pair<subgroup_id_t, uint32_t>> subgroups_to_receive;
     if(!curr_view.is_adequately_provisioned) {
@@ -161,16 +159,16 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                 in_subgroup = true;
                 if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
-                        && (*old_shard_leaders)[subgroup_id].size() > shard_num
-                        && (*old_shard_leaders)[subgroup_id][shard_num] > -1
-                        && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
+                   && (*old_shard_leaders)[subgroup_id].size() > shard_num
+                   && (*old_shard_leaders)[subgroup_id][shard_num] > -1
+                   && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
                     //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
                     replicated_objects.template get<FirstType>().emplace_back(Replicated<FirstType>(my_id, rpc_manager));
                     subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
                 } else {
                     replicated_objects.template get<FirstType>().emplace_back(
                             Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
-                                    factories.template get<FirstType>()));
+                                                  factories.template get<FirstType>()));
                 }
                 break;  //This node can be in at most one shard
             }
@@ -216,10 +214,9 @@ std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(cons
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
-    curr_view.get().multicast_group->register_rpc_callback(
-        [this](node_id_t sender, char* buf, uint32_t size) {
+    curr_view.get().multicast_group->register_rpc_callback([this](node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(sender, buf, size);
-        });
+    });
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
@@ -227,10 +224,10 @@ void Group<ReplicatedTypes...>::set_up_components() {
         objects_by_subgroup_id.at(subgroup_id).get().send_object(rpc_manager.get_socket(new_node_id).get());
     });
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
-            const vector_int64_2d& old_shard_leaders) {
+                                                           const vector_int64_2d& old_shard_leaders) {
         //ugh, we have to copy the vector to get it as a pointer
-        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders =
-                construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
+        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
+            = construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
         receive_objects(subgroups_and_leaders);
         raw_subgroups = construct_raw_subgroups(view);
     });
@@ -271,8 +268,8 @@ template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders) {
     //This will receive one object from each shard leader in ascending order of subgroup ID
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
-        LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket =
-                rpc_manager.get_socket(subgroup_and_leader.second);
+        LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
+                = rpc_manager.get_socket(subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read((char*)&buffer_size, sizeof(buffer_size));
         assert(success);

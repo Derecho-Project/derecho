@@ -27,16 +27,16 @@ LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socke
 }
 
 std::exception_ptr RPCManager::handle_receive(
-    const Opcode& indx, const node_id_t& received_from, char const* const buf,
-    std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
+        const Opcode& indx, const node_id_t& received_from, char const* const buf,
+        std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
     auto reply_header_size = header_space();
     recv_ret reply_return = receivers->at(indx)(
-        &dsm, received_from, buf,
-        [&out_alloc, &reply_header_size](std::size_t size) {
+            &dsm, received_from, buf,
+            [&out_alloc, &reply_header_size](std::size_t size) {
         return out_alloc(size + reply_header_size) + reply_header_size;
-        });
+            });
     auto* reply_buf = reply_return.payload;
     if(reply_buf) {
         reply_buf -= reply_header_size;
@@ -48,8 +48,8 @@ std::exception_ptr RPCManager::handle_receive(
 }
 
 std::exception_ptr RPCManager::handle_receive(
-    char* buf, std::size_t size,
-    const std::function<char*(int)>& out_alloc) {
+        char* buf, std::size_t size,
+        const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     std::size_t payload_size = size;
     Opcode indx;
@@ -76,21 +76,20 @@ void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     if(in_dest || dest_size == 0) {
         auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
         size_t reply_size = 0;
-        handle_receive(
-            msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
+        handle_receive(msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
             reply_size = size;
             if(reply_size <= max_payload_size) {
                 return replySendBuffer.get();
             } else {
                 return nullptr;
             }
-            });
+        });
         if(reply_size > 0) {
             node_id_t id = sender_id;
             if(id == nid) {
                 handle_receive(
-                    replySendBuffer.get(), reply_size,
-                    [](size_t size) -> char* { assert(false); });
+                        replySendBuffer.get(), reply_size,
+                        [](size_t size) -> char* { assert(false); });
                 if(dest_size == 0) {
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
                     toFulfillQueue.front().get().fulfill_map(view_manager.curr_view->members);
@@ -114,16 +113,15 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from);
     connections.read(sender_id, msg_buf + header_size, payload_size);
     size_t reply_size = 0;
-    handle_receive(
-        indx, received_from, msg_buf + header_size, payload_size,
-        [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
+    handle_receive(indx, received_from, msg_buf + header_size, payload_size,
+                   [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
         reply_size = _size;
         if(reply_size <= buffer_size) {
             return msg_buf;
         } else {
             return nullptr;
         }
-        });
+    });
     if(reply_size > 0) {
         connections.write(received_from, msg_buf, reply_size);
     }

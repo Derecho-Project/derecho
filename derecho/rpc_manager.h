@@ -123,8 +123,8 @@ public:
      * if the message was an RPC function call and the function threw an exception.
      */
     std::exception_ptr handle_receive(
-        const Opcode& indx, const node_id_t& received_from, char const* const buf,
-        std::size_t payload_size, const std::function<char*(int)>& out_alloc);
+            const Opcode& indx, const node_id_t& received_from, char const* const buf,
+            std::size_t payload_size, const std::function<char*(int)>& out_alloc);
 
     /**
      * Alternative handler for RPC messages received for functions managed by
@@ -138,8 +138,8 @@ public:
      * if the message was an RPC function call and the function threw an exception.
      */
     std::exception_ptr handle_receive(
-        char* buf, std::size_t size,
-        const std::function<char*(int)>& out_alloc);
+            char* buf, std::size_t size,
+            const std::function<char*(int)>& out_alloc);
 
     /**
      * Handler to be called by MulticastGroup when it receives a message that

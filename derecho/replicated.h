@@ -72,14 +72,14 @@ private:
                                                                             buffer, max_payload_size);
             buffer += buffer_offset;
             auto send_return_struct = wrapped_this->template send<tag>(
-                [&buffer, &max_payload_size](size_t size) -> char* {
+                    [&buffer, &max_payload_size](size_t size) -> char* {
                 if(size <= max_payload_size) {
                     return buffer;
                 } else {
                     return nullptr;
                 }
-                },
-                std::forward<Args>(args)...);
+                    },
+                    std::forward<Args>(args)...);
 
             group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
@@ -97,15 +97,15 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager->view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                [this, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &max_payload_size, &size](size_t _size) -> char* {
                 size = _size;
                 if(size <= max_payload_size) {
                     return p2pSendBuffer.get();
                 } else {
                     return nullptr;
                 }
-                },
-                std::forward<Args>(args)...);
+                    },
+                    std::forward<Args>(args)...);
             group_rpc_manager->finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
             return std::move(return_pair.results);
         } else {

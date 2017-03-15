@@ -73,7 +73,6 @@ private:
      * its keys are continuous integers starting at 0 and it should be a std::vector. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
 
-
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
      * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */
@@ -95,7 +94,6 @@ private:
      * subgroups that need to have their state initialized from the leader.
      */
     void receive_objects(const std::set<std::pair<subgroup_id_t, node_id_t>>& subgroups_and_leaders);
-
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
@@ -140,7 +138,7 @@ private:
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(const View& curr_view,
-            const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
+                                                                    const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
 
     /**
      * Delegate constructor for joining an existing managed group, called after

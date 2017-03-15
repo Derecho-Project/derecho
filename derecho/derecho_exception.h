@@ -28,5 +28,4 @@ struct empty_reference_exception : public derecho_exception {
 public:
     empty_reference_exception(const std::string& message) : derecho_exception(message) {}
 };
-
 }
