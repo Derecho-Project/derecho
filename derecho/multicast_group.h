@@ -26,7 +26,7 @@
 namespace derecho {
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
-using message_callback = std::function<void(uint32_t, int, long long int, char*, long long int)>;
+using message_callback = std::function<void(uint32_t, uint32_t, long long int, char*, long long int)>;
 
 using rpc_handler_t = std::function<void(node_id_t, char*, uint32_t)>;
 
@@ -101,8 +101,8 @@ struct MessageBuffer {
 };
 
 struct Message {
-    /** The rank of the message's sender within this group. */
-    int sender_rank;
+    /** The unique node ID of the message's sender. */
+    uint32_t sender_id;
     /** The message's index (relative to other messages sent by that sender). */
     long long int index;
     /** The message's size in bytes. */

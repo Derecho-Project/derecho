@@ -29,7 +29,7 @@ map<uint32_t, std::string> node_addresses;
 
 shared_ptr<derecho::Group<>> managed_group;
 
-void stability_callback(uint32_t subgroup, int sender_id, long long int index, char *data,
+void stability_callback(uint32_t subgroup, uint32_t sender_id, long long int index, char *data,
                         long long int size) {
     managed_group->log_event(std::stringstream() << "Message " << index
                                                  << " from sender " << sender_id

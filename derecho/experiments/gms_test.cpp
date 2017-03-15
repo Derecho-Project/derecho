@@ -38,11 +38,11 @@ int main(int argc, char *argv[]) {
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &received_count](
-            uint32_t subgroup, int sender_rank, long long int index, char *buf,
+            uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
             long long int msg_size) {
             received_count++;
             if(received_count % 1000 == 0) {
-                cout << "In stability callback; sender = " << sender_rank
+                cout << "In stability callback; sender = " << sender_id
                         << ", index = " << index << endl;
             }
             if(received_count == num_messages) {

@@ -160,7 +160,7 @@ MulticastGroup::MulticastGroup(
     // Convience function that takes a msg from the old group and
     // produces one suitable for this group.
     auto convert_msg = [this](Message& msg, subgroup_id_t subgroup_num) {
-        msg.sender_rank = member_index;
+        msg.sender_id = members[member_index];
         msg.index = future_message_indices[subgroup_num]++;
 
         header* h = (header*)msg.message_buffer.buffer.get();
@@ -203,7 +203,7 @@ MulticastGroup::MulticastGroup(
         }
 
         for(auto& q : p.second) {
-            if(q.second.sender_rank == old_group.member_index) {
+            if(q.second.sender_id == members[member_index]) {
                 pending_sends[p.first].push(convert_msg(q.second, p.first));
             } else {
                 free_message_buffers[p.first].push_back(std::move(q.second.message_buffer));
@@ -264,14 +264,13 @@ MulticastGroup::MulticastGroup(
 
 std::function<void(persistence::message)> MulticastGroup::make_file_written_callback() {
     return [this](persistence::message m) {
+        callbacks.local_persistence_callback(m.subgroup_num, m.sender, m.index, m.data,
+                                             m.length);
         //m.sender is an ID, not a rank
         uint sender_rank;
         for(sender_rank = 0; sender_rank < num_members; ++sender_rank) {
             if(members[sender_rank] == m.sender) break;
         }
-        callbacks.local_persistence_callback(m.subgroup_num, sender_rank, m.index, m.data,
-                                             m.length);
-
         // m.data points to the char[] buffer in a MessageBuffer, so we need to find
         // the msg corresponding to m and put its MessageBuffer on free_message_buffers
         auto sequence_number = m.index * num_members + sender_rank;
@@ -328,7 +327,7 @@ bool MulticastGroup::create_rdmc_groups() {
                    index++;
                    sequence_number += num_shard_members;
                    sst->num_received[member_index][subgroup_offset + shard_rank]++;
-                   locally_stable_messages[subgroup_num][sequence_number] = {(int)shard_rank, index, 0, 0};
+                   locally_stable_messages[subgroup_num][sequence_number] = {members[member_index], index, 0, 0};
                }
 
                std::atomic_signal_fence(std::memory_order_acq_rel);
@@ -352,14 +351,13 @@ bool MulticastGroup::create_rdmc_groups() {
                            sizeof(long long int));
                }
             };
-            // Capture rdmc_receive_handler by copy! The reference to it won't be valid
-            // after this constructor ends!
+            // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
             auto receive_handler_plus_notify =
                     [this, rdmc_receive_handler](char* data, size_t size) {
-               rdmc_receive_handler(data, size);
-               // signal background writer thread
-               sender_cv.notify_all();
-                    };
+                rdmc_receive_handler(data, size);
+                // signal background writer thread
+                sender_cv.notify_all();
+            };
 
             std::vector<uint32_t> rotated_shard_members(shard_members.size());
             for(uint l = 0; l < num_shard_members; ++l) {
@@ -386,13 +384,13 @@ bool MulticastGroup::create_rdmc_groups() {
                 rdmc_group_num_offset++;
             } else {
                 if(!rdmc::create_group(
-                           rdmc_group_num_offset, rotated_shard_members, block_size, type,
-                           [this, subgroup_num, shard_rank, num_shard_members](size_t length) -> rdmc::receive_destination {
+                        rdmc_group_num_offset, rotated_shard_members, block_size, type,
+                        [this, subgroup_num, shard_rank, num_shard_members](size_t length) {
                     std::lock_guard<std::mutex> lock(msg_state_mtx);
                     assert(!free_message_buffers[subgroup_num].empty());
 
                     Message msg;
-                    msg.sender_rank = shard_rank;
+                    msg.sender_id = members[member_index];
                     msg.index = sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_rank] + 1;
                     msg.size = length;
                     msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
@@ -404,8 +402,8 @@ bool MulticastGroup::create_rdmc_groups() {
 
                     assert(ret.mr->buffer != nullptr);
                     return ret;
-                           },
-                           rdmc_receive_handler, [](boost::optional<uint32_t>) {})) {
+                },
+                rdmc_receive_handler, [](boost::optional<uint32_t>) {})) {
                     return false;
                 }
                 rdmc_group_num_offset++;
@@ -440,27 +438,32 @@ void MulticastGroup::initialize_sst_row() {
 
 void MulticastGroup::deliver_message(Message& msg, subgroup_id_t subgroup_num) {
     if(msg.size > 0) {
+        std::cout << "MulticastGroup: delivering message with sender_id = " << msg.sender_id << std::endl;
         char* buf = msg.message_buffer.buffer.get();
         header* h = (header*)(buf);
         // cooked send
         if(h->cooked_send) {
             buf += h->header_size;
             auto payload_size = msg.size - h->header_size;
-            rpc_callback(members[msg.sender_rank], buf, payload_size);
+            rpc_callback(msg.sender_id, buf, payload_size);
         }
         // raw send
         else {
-            callbacks.global_stability_callback(subgroup_num, msg.sender_rank, msg.index,
+            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                                 buf + h->header_size, msg.size);
         }
         if(file_writer) {
-            // msg.sender_rank is the 0-indexed rank within this group, but
-            // persistence::message needs the sender's globally unique ID
             persistence::message msg_for_filewriter{buf + h->header_size,
                                                     msg.size, (uint32_t)sst->vid[member_index],
-                                                    members[msg.sender_rank], (uint64_t)msg.index,
+                                                    msg.sender_id, (uint64_t)msg.index,
                                                     h->cooked_send};
-            auto sequence_number = msg.index * num_members + msg.sender_rank;
+            //the sequence number needs to use the sender's within-shard rank, not its ID
+            auto& shard_members = subgroup_to_membership.at(subgroup_num);
+            uint sender_rank;
+            for(sender_rank = 0; sender_rank < shard_members.size(); ++sender_rank) {
+                if(shard_members[sender_rank] == msg.sender_id) break;
+            }
+            auto sequence_number = msg.index * num_members + sender_rank;
             non_persistent_messages[subgroup_num].emplace(sequence_number, std::move(msg));
             file_writer->write_message(msg_for_filewriter);
         } else {
@@ -658,7 +661,7 @@ void MulticastGroup::send_loop() {
             sender_cv.wait(lock, should_wake);
             if(!thread_shutdown) {
                 current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
-                util::debug_log().log_event(std::stringstream() << "Calling send in subgroup " << subgroup_to_send << " on message " << current_sends[subgroup_to_send]->index << " from sender " << current_sends[subgroup_to_send]->sender_rank);
+                util::debug_log().log_event(std::stringstream() << "Calling send in subgroup " << subgroup_to_send << " on message " << current_sends[subgroup_to_send]->index << " from sender " << current_sends[subgroup_to_send]->sender_id);
                 if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
                                current_sends[subgroup_to_send]->message_buffer.mr, 0,
                                current_sends[subgroup_to_send]->size)) {
@@ -731,7 +734,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 
     // Create new Message
     Message msg;
-    msg.sender_rank = shard_index;
+    msg.sender_id = members[member_index];
     msg.index = future_message_indices[subgroup_num];
     msg.size = msg_size;
     msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());

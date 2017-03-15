@@ -28,12 +28,12 @@ int main(int argc, char* argv[]) {
     }
 
     Message m;
-    m.sender_rank = 1;
+    m.sender_id = 1;
     m.index = 0;
     m.size = 1000;
     //    m.message_buffer = std::move(buffer);
 
-    persistence::message message{&buf[0], m.size, 1, (uint32_t)m.sender_rank, (uint64_t)m.index};
+    persistence::message message{&buf[0], m.size, 1, (uint32_t)m.sender_id, (uint64_t)m.index};
 
     file_writer->write_message(message);
 

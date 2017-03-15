@@ -27,7 +27,7 @@ unsigned int message_number = 0;
 vector<uint64_t> message_times;
 shared_ptr<derecho::Group<>> managed_group;
 
-void stability_callback(uint32_t subgroup, int sender_id, long long int index, char *data,
+void stability_callback(uint32_t subgroup, uint32_t sender_id, long long int index, char *data,
                         long long int size) {
     message_times.push_back(get_time());
 

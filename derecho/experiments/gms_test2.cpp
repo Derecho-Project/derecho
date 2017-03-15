@@ -36,12 +36,12 @@ int main(int argc, char *argv[]) {
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
-            uint32_t subgroup, int sender_rank, long long int index, char *buf,
+            uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
             long long int msg_size) {
-            cout << "In stability callback; sender rank = " << sender_rank
+            cout << "In stability callback; sender ID = " << sender_id
                  << ", index = " << index << endl;
             printf("Message: %.*s\n", (int)msg_size, buf);
-            if(index == num_messages - 1 && sender_rank == (int)num_nodes - 1) {
+            if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
             }
         };

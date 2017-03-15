@@ -883,6 +883,13 @@ std::vector<std::vector<int64_t>> ViewManager::translate_types_to_ids(
         const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
         const View& new_view) {
     std::vector<std::vector<int64_t>> old_shard_leaders_by_id(new_view.subgroup_shard_views.size());
+    if(!new_view.is_adequately_provisioned) {
+        /* If we went from adequately provisioned to inadequately provisioned,
+         * the new view won't have any subgroups!
+         * We can't identify the old shard leaders in the new view at all,
+         * so I guess we'll have to return an empty vector. */
+        return old_shard_leaders_by_id;
+    }
     for(const auto& type_vector_pair : old_shard_leaders_by_type) {
         const auto& leaders_by_index_and_shard = type_vector_pair.second;
         for(std::size_t subgroup_index = 0; subgroup_index < leaders_by_index_and_shard.size(); ++subgroup_index) {

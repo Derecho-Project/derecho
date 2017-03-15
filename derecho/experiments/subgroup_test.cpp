@@ -35,14 +35,14 @@ int main(int argc, char* argv[]) {
     int num_messages = 100;
 
     auto stability_callback = [&node_id, &num_messages](
-        uint32_t subgroup_num, int sender_rank, long long int index, char* buf,
+        uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
         long long int msg_size) {
       if (index == num_messages-1) {
-            cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_rank << endl;
+            cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_id << endl;
             cout << "The last message is: " << endl;
             cout << buf << endl;
       }
-        cout << "In stability callback; sender = " << sender_rank
+        cout << "In stability callback; sender = " << sender_id
              << ", index = " << index << endl;
     };
 

@@ -32,6 +32,9 @@ SST<DerivedSST>::~SST() {
     if(rows != nullptr) {
         delete[](const_cast<char*>(rows));
     }
+    if(snapshot != nullptr) {
+        delete[](snapshot);
+    }
 
     thread_shutdown = true;
     for(auto& thread : background_threads) {

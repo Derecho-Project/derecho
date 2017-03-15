@@ -22,7 +22,7 @@ int main() {
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 10;
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char* buf,
+    auto stability_callback = [](uint32_t subgroup, uint32_t sender_id, long long int index, char* buf,
                                  long long int msg_size) {
         cout << "Some message is stable" << endl;
     };
