@@ -238,6 +238,9 @@ std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::re
         tcp::socket& leader_socket) {
     std::size_t buffer_size;
     leader_socket.read((char*)&buffer_size, sizeof(buffer_size));
+    if(buffer_size == 0) {
+        return std::make_unique<vector_int64_2d>();
+    }
     char buffer[buffer_size];
     leader_socket.read(buffer, buffer_size);
     return mutils::from_bytes<std::vector<std::vector<int64_t>>>(nullptr, buffer);
