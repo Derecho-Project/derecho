@@ -5,6 +5,8 @@
  * @author edward
  */
 
+#include <vector>
+
 #include "subgroup_functions.h"
 #include "view.h"
 
