@@ -24,9 +24,9 @@ int main(int argc, char *argv[]) {
     num_nodes = node_addresses.size();
 
     bool success = rdmc::initialize(node_addresses, node_rank);
-    if (!success) {
-      std::cout << "Failed RDMC initialization" << std::endl;
-      std::cout << "Exiting" << std::endl;
+    if(!success) {
+        std::cout << "Failed RDMC initialization" << std::endl;
+        std::cout << "Exiting" << std::endl;
     }
     // size of one message
     long long int msg_size = atoll(argv[1]);
@@ -76,7 +76,7 @@ int main(int argc, char *argv[]) {
             [&counts, i](char *data, size_t size) { ++counts[i]; },
             [](boost::optional<uint32_t>) {});
         if(!success) {
-	  std::cout << "Failed RDMC group creation" << std::endl;
+            std::cout << "Failed RDMC group creation" << std::endl;
             std::cout << "Exiting" << std::endl;
         }
     }

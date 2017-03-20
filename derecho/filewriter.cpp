@@ -41,7 +41,7 @@ FileWriter::~FileWriter() {
 }
 
 void FileWriter::set_message_written_upcall(
-    const std::function<void(message)>& _message_written_upcall) {
+        const std::function<void(message)>& _message_written_upcall) {
     message_written_upcall = _message_written_upcall;
 }
 
@@ -74,6 +74,7 @@ void FileWriter::perform_writes(std::string filename) {
             metadata.offset = current_offset;
             metadata.length = m.length;
             metadata.is_cooked = m.cooked;
+            metadata.subgroup_num = m.subgroup_num;
 
             data_file.write(m.data, m.length);
             mutils::post_object(std::bind(&std::ofstream::write, &metadata_file, _1, _2), metadata);

@@ -33,6 +33,10 @@ target_link_libraries(derecho_bw_test derecho)
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
 
+# subgroup_test
+add_executable(subgroup_test subgroup_test.cpp initialize.cpp)
+target_link_libraries(subgroup_test derecho)
+
 # raw_send_test
 add_executable(raw_send_test raw_send_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(raw_send_test derecho mutils mutils-serialization)
@@ -42,15 +46,15 @@ add_executable(ssd_bw_test ssd_bw_test.cpp block_size.cpp aggregate_bandwidth.cp
 target_link_libraries(ssd_bw_test derecho)
 
 # gms_test
-add_executable(gms_test gms_test.cpp block_size.cpp)
+add_executable(gms_test gms_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(gms_test derecho)
 
 # gms_test
-add_executable(gms_test2 gms_test2.cpp block_size.cpp)
+add_executable(gms_test2 gms_test2.cpp block_size.cpp initialize.cpp)
 target_link_libraries(gms_test2 derecho)
 
 # gms_bw_test
-add_executable(gms_bw_test gms_bw_test.cpp)
+add_executable(gms_bw_test gms_bw_test.cpp initialize.cpp)
 target_link_libraries(gms_bw_test derecho)
 
 # rdmc_bw_test
@@ -74,19 +78,23 @@ add_executable(write_to_ssd write_to_ssd.cpp block_size.cpp aggregate_bandwidth.
 target_link_libraries(write_to_ssd derecho)
 
 # timeline_test
-add_executable(timeline_test timeline_test.cpp)
+add_executable(timeline_test timeline_test.cpp initialize.cpp)
 target_link_libraries(timeline_test derecho)
 
-add_executable(viewchange_timeline viewchange_timeline.cpp)
+add_executable(viewchange_timeline viewchange_timeline.cpp initialize.cpp)
 target_link_libraries(viewchange_timeline derecho)
 
-add_executable(basic_persistence_test basic_persistence_test.cpp)
+add_executable(basic_persistence_test basic_persistence_test.cpp initialize.cpp)
 target_link_libraries(basic_persistence_test derecho)
 
-add_executable(log_recovery_crash log_recovery_crash.cpp)
+add_executable(log_recovery_crash log_recovery_crash.cpp initialize.cpp)
 target_link_libraries(log_recovery_crash derecho)
 
 add_executable(local_filewriter_test local_filewriter_test.cpp)
 target_link_libraries(local_filewriter_test derecho)
+
+# typed_subgroup_test
+add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
+target_link_libraries(typed_subgroup_test derecho)
 
 add_custom_target(format_experiments clang-format-3.6 -i *.cpp *.h)

@@ -32,6 +32,9 @@ SST<DerivedSST>::~SST() {
     if(rows != nullptr) {
         delete[](const_cast<char*>(rows));
     }
+    if(snapshot != nullptr) {
+        delete[](snapshot);
+    }
 
     thread_shutdown = true;
     for(auto& thread : background_threads) {
@@ -204,6 +207,28 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
                 std::cout << "Reporting failure on row " << index2
                           << " due to a missing poll completion" << std::endl;
                 failed_node_indexes.push_back(index2);
+
+                std::cout << "Writes was posted to rows: " << std::endl;
+                for(uint i = 0; i < num_members; ++i) {
+                    if(posted_write_to[i]) {
+                        std::cout << i << " ";
+                    }
+                }
+                std::cout << std::endl;
+                std::cout << "Got completions from rows: " << std::endl;
+                for(uint i = 0; i < num_members; ++i) {
+                    if(polled_successfully_from[i]) {
+                        std::cout << i << " ";
+                    }
+                }
+                std::cout << std::endl;
+
+		std::cout << "Set of indices: ";
+		for (auto i : receiver_ranks) {
+		  std::cout << i << " ";
+		}
+		std::cout << std::endl;
+		std::cout << "Number of members: " << num_members << std::endl;
             }
             continue;
         }

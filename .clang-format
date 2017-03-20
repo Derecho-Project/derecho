@@ -12,7 +12,7 @@ AllowShortLoopsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: All
 AlwaysBreakTemplateDeclarations: true
 AlwaysBreakBeforeMultilineStrings: false
-BreakBeforeBinaryOperators: false
+BreakBeforeBinaryOperators: true 
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializersBeforeComma: false
 BinPackParameters: true
@@ -48,7 +48,7 @@ SpaceInEmptyParentheses: false
 SpacesInCStyleCastParentheses: false
 SpacesInContainerLiterals: true
 SpaceBeforeAssignmentOperators: true
-ContinuationIndentWidth: 4
+ContinuationIndentWidth: 8
 CommentPragmas:  '^ IWYU pragma:'
 ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 SpaceBeforeParens: Never

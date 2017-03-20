@@ -22,8 +22,10 @@
 
 #include "derecho/logger.h"
 #include "derecho/derecho.h"
+#include "initialize.h"
 
 using namespace std;
+using derecho::RawObject;
 
 const int GMS_PORT = 12345;
 const size_t message_size = 1000;
@@ -34,18 +36,18 @@ map<uint32_t, std::string> node_addresses;
 
 const int num_messages = 1000;
 bool done = false;
-shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<>> managed_group;
 
-void stability_callback(int sender_id, long long int index, char* data, long long int size) {
+void stability_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Global stability for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
 }
 
-void persistence_callback(int sender_id, long long int index, char* data, long long int size) {
+void persistence_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
     util::debug_log().log_event(stringstream() << "Persistence complete for message "
-            << index << " from sender " << sender_id);
+                                               << index << " from sender " << sender_id);
     if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
         cout << "Done" << endl;
         done = true;
@@ -53,30 +55,22 @@ void persistence_callback(int sender_id, long long int index, char* data, long l
 }
 
 void send_messages(int count) {
+    derecho::RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
     for(int i = 0; i < count; ++i) {
-        char* buffer = managed_group->get_sendbuffer_ptr(message_size);
+        char* buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
         while(!buffer) {
-            buffer = managed_group->get_sendbuffer_ptr(message_size);
+            buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
         }
         memset(buffer, rand() % 256, message_size);
-        managed_group->send();
+        group_as_subgroup.send();
     }
-}
-
-void query_node_info(derecho::node_id_t& node_id, derecho::ip_addr& node_ip, derecho::ip_addr& leader_ip) {
-     cout << "Please enter this node's ID: ";
-     cin >> node_id;
-     cout << "Please enter this node's IP address: ";
-     cin >> node_ip;
-     cout << "Please enter the leader node's IP address: ";
-     cin >> leader_ip;
 }
 
 int main(int argc, char* argv[]) {
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     num_nodes = std::atoi(argv[1]);
@@ -91,12 +85,14 @@ int main(int argc, char* argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, persistence_callback};
     derecho::DerechoParams param_object{message_size, block_size, message_log_filename};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+
     if(node_id == leader_id) {
-        managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
-                my_ip, rpc::Dispatcher<>(node_id), callbacks, param_object);
+        managed_group = make_shared<derecho::Group<>>(
+            my_ip, callbacks, one_raw_group, param_object);
     } else {
-        managed_group = make_shared<derecho::Group<rpc::Dispatcher<>>>(
-                node_id, my_ip, leader_id, leader_ip, rpc::Dispatcher<>(node_id), callbacks);
+        managed_group = make_shared<derecho::Group<>>(
+            node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
     cout << "Created group, waiting for others to join." << endl;
     while(managed_group->get_members().size() < (num_nodes - 1)) {
@@ -105,7 +101,7 @@ int main(int argc, char* argv[]) {
     cout << "Starting to send messages." << endl;
     //Node n-1 will "crash" before sending all the messages
     if(node_id == num_nodes - 1) {
-        send_messages(num_messages-250);
+        send_messages(num_messages - 250);
         managed_group->log_event("About to exit");
         ofstream log_stream(debug_log_filename);
         managed_group->print_log(log_stream);

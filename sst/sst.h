@@ -46,6 +46,11 @@ public:
         this->base = base;
         return padded_len(field_len);
     }
+
+    char* get_base() {
+        return const_cast<char*>(base);
+    }
+
     void set_rowLen(const int& _rowLen) { rowLen = _rowLen; }
 };
 
@@ -100,14 +105,6 @@ public:
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
-
-    void __attribute__((noinline)) debug_print(int row_num) {
-        volatile T* arr = (*this)[row_num];
-        for(unsigned int j = 0; j < length; ++j) {
-            std::cout << arr[j] << " ";
-        }
-        std::cout << std::endl;
-    }
 };
 
 typedef std::function<void(uint32_t)> failure_upcall_t;
@@ -213,6 +210,7 @@ private:
     std::condition_variable thread_start_cv;
 
 public:
+    // constructor
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
               thread_shutdown(false),
@@ -224,7 +222,7 @@ public:
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
 
-      //Figure out my SST index
+        //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
                 my_index = i;
@@ -344,7 +342,7 @@ private:
 
     // returns snapshot == current
     bool compare_snapshot_and_current() {
-        int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+      int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
         if(res == 0) {
             return true;
         }

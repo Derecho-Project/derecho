@@ -2,8 +2,8 @@
 #include <thread>
 #include <map>
 
-#include "sst/verbs.h"
 #include "sst/poll_utils.h"
+#include "sst/verbs.h"
 
 using namespace std;
 using namespace sst;
@@ -22,14 +22,13 @@ int main () {
 
   // create all tcp connections and initialize global rdma resources
   verbs_initialize(ip_addrs, node_rank);
-  
   // create read and write buffers
   char *write_buf = (char*) malloc (10);
   char *read_buf = (char*) malloc (10);
 
   // write message (in a way that distinguishes nodes)
-  for (int i = 0; i < 9; ++i) {
-    write_buf[i] = '0';
+  for (int i = 0; i < 10; ++i) {
+    write_buf[i] = '0' + i + node_rank%10;
   }
   write_buf[9] = 0;
 
@@ -62,12 +61,12 @@ int main () {
   
   sync(r_index);
   cout << "Buffer written by remote side is : " << read_buf << endl;
+  
+  // // destroy resources
+  // delete(res);
 
-  // destroy resources
-  delete(res);
-
-  // destroy global resources
-  verbs_destroy();
+  // // destroy global resources
+  // verbs_destroy();
 
   return 0;
 }

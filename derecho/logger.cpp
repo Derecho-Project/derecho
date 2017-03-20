@@ -1,7 +1,5 @@
 #include "logger.h"
 
-#include "group.h"
-
 namespace derecho {
 
 std::chrono::high_resolution_clock::time_point program_start_time;
@@ -16,7 +14,7 @@ void Logger::log_event(std::string event_text) {
     std::lock_guard<std::mutex> lock(log_mutex);
     auto currtime = std::chrono::high_resolution_clock::now();
     times[curr_event] = std::chrono::duration_cast<std::chrono::microseconds>(
-                            currtime - derecho::program_start_time).count();
+                                currtime - derecho::program_start_time).count();
     events[curr_event] = event_text;
     curr_event++;
 }

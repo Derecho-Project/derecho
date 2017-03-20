@@ -1,10 +1,11 @@
 #pragma once
 
-#include "tcp/tcp.h"
-
 #include <map>
 #include <mutex>
 #include <cassert>
+
+#include "tcp/tcp.h"
+#include "locked_reference.h"
 
 namespace tcp {
 using ip_addr_t = std::string;
@@ -29,6 +30,7 @@ public:
     bool write_all(char const* buffer, size_t size);
     bool read(node_id_t node_id, char* buffer, size_t size);
     bool add_node(node_id_t new_id, const ip_addr_t new_ip_addr);
+    bool delete_node(node_id_t remove_id);
     template <class T>
     bool exchange(node_id_t node_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
@@ -37,5 +39,6 @@ public:
         return it->second.exchange(local, remote);
     }
     int32_t probe_all();
+    derecho::LockedReference<std::unique_lock<std::mutex>, socket> get_socket(node_id_t node_id);
 };
 }

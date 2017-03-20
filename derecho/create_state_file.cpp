@@ -11,7 +11,6 @@
 
 #include "view.h"
 #include "persistence.h"
-#include "derecho_caller.h"
 
 int main(int argc, char* argv[]) {
     if(argc < 2) {
@@ -20,7 +19,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string view_file_name(argv[1]);
-    derecho::View<rpc::Dispatcher<>> view;
+    derecho::View view;
     std::cin >> view;
     derecho::persist_object(view, view_file_name);
     return 0;

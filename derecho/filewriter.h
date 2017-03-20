@@ -40,18 +40,18 @@ private:
     void issue_callbacks();
 
 public:
-    FileWriter(const std::function<void(persistence::message)> &_message_written_upcall,
-               const std::string &filename);
+    FileWriter(const std::function<void(persistence::message)>& _message_written_upcall,
+               const std::string& filename);
     ~FileWriter();
 
-    FileWriter(FileWriter &) = delete;
-    FileWriter(FileWriter &&) = default;
+    FileWriter(FileWriter&) = delete;
+    FileWriter(FileWriter&&) = default;
 
-    FileWriter &operator=(FileWriter &) = delete;
-    FileWriter &operator=(FileWriter &&) = default;
+    FileWriter& operator=(FileWriter&) = delete;
+    FileWriter& operator=(FileWriter&&) = default;
 
-    void set_message_written_upcall(const std::function<void(persistence::message)> &
-                                        _message_written_upcall);
+    void set_message_written_upcall(const std::function<void(persistence::message)>&
+                                            _message_written_upcall);
     void write_message(persistence::message m);
 };
 }

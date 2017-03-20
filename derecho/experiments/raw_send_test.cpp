@@ -17,8 +17,7 @@ using std::string;
 using std::cout;
 using std::endl;
 
-using derecho::MulticastGroup;
-
+using derecho::RawObject;
 
 int main(int argc, char *argv[]) {
     srand(time(NULL));
@@ -29,7 +28,7 @@ int main(int argc, char *argv[]) {
 
     map<uint32_t, std::string> node_addresses;
 
-	rdmc::query_addresses(node_addresses, node_rank);
+    rdmc::query_addresses(node_addresses, node_rank);
     num_nodes = node_addresses.size();
 
     vector<uint32_t> members(num_nodes);
@@ -43,28 +42,30 @@ int main(int argc, char *argv[]) {
     uint num_messages_received = 0;
 
     auto stability_callback = [&num_messages_received](
-        int sender_id, long long int index, char *buf,
+        uint32_t subgroup, int sender_id, long long int index, char *buf,
         long long int msg_size) mutable {
         cout << "Here" << endl;
-	cout << buf << endl;
+        cout << buf << endl;
         num_messages_received++;
     };
 
-    rpc::Dispatcher<> empty_dispatcher(node_rank);
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams parameters{max_msg_size, block_size};
 
-    std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+
+    std::unique_ptr<derecho::Group<>> managed_group;
 
     if(node_rank == server_rank) {
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_addresses[node_rank], std::move(empty_dispatcher),
-                callbacks, parameters);
+        managed_group = std::make_unique<derecho::Group<>>(
+            node_addresses[node_rank],
+            callbacks, one_raw_group, parameters);
     } else {
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_rank, node_addresses[node_rank], server_rank,
-                node_addresses[server_rank], std::move(empty_dispatcher),
-                callbacks);
+        managed_group = std::make_unique<derecho::Group<>>(
+            node_rank, node_addresses[node_rank],
+            node_addresses[server_rank],
+            callbacks,
+            one_raw_group);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -77,16 +78,17 @@ int main(int argc, char *argv[]) {
         cout << id << " ";
     }
     cout << endl;
+    derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
     for(int i = 0; i < num_messages; ++i) {
-        char *buf = managed_group->get_sendbuffer_ptr(max_msg_size);
+        char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         while(!buf) {
-            buf = managed_group->get_sendbuffer_ptr(max_msg_size);
+            buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         }
-	for (uint i = 0; i < max_msg_size; ++i) {
-	  buf[i] = 'a'+(rand()%26);
-	}
-	cout << buf << endl;
-	managed_group->send();
+        for(uint i = 0; i < max_msg_size; ++i) {
+            buf[i] = 'a' + (rand() % 26);
+        }
+        cout << buf << endl;
+        group_as_subgroup.send();
     }
 
     while(num_messages_received < num_messages * num_nodes) {

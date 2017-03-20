@@ -1,7 +1,3 @@
-#include "time/time.h"
-#include "derecho/derecho.h"
-#include "rdmc/util.h"
-#include "derecho/logger.h"
 
 #include <chrono>
 #include <cstdlib>
@@ -13,11 +9,18 @@
 #include <thread>
 #include <vector>
 
+#include "time/time.h"
+#include "derecho/derecho.h"
+#include "rdmc/util.h"
+#include "derecho/logger.h"
+#include "initialize.h"
+
 using namespace std;
 using namespace std::chrono_literals;
 using std::chrono::high_resolution_clock;
 using std::chrono::duration;
 using std::chrono::microseconds;
+using derecho::RawObject;
 
 const int GMS_PORT = 12345;
 const uint64_t SECOND = 1000000000ull;
@@ -29,14 +32,14 @@ map<uint32_t, std::string> node_addresses;
 
 unsigned int message_number = 0;
 vector<uint64_t> message_times;
-shared_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
+shared_ptr<derecho::Group<>> managed_group;
 
-void stability_callback(int sender_id, long long int index, char *data, long long int size) {
+void stability_callback(uint32_t subgroup, int sender_id, long long int index, char *data, long long int size) {
     using namespace derecho;
     message_times.push_back(get_time());
 
     util::debug_log().log_event(stringstream() << "Global stability for message " << index
-                       << " from sender " << sender_id);
+                                               << " from sender " << sender_id);
 
     while(!managed_group) {
     }
@@ -55,23 +58,15 @@ void stability_callback(int sender_id, long long int index, char *data, long lon
 void send_messages(uint64_t duration) {
     uint64_t end_time = get_time() + duration;
     while(get_time() < end_time) {
-        char *buffer = managed_group->get_sendbuffer_ptr(message_size);
+        derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
+        char *buffer = group_as_subgroup.get_sendbuffer_ptr(message_size);
         if(buffer) {
             memset(buffer, rand() % 256, message_size);
             //          cout << "Send function call succeeded at the client
             //          side" << endl;
-            managed_group->send();
+            group_as_subgroup.send();
         }
     }
-}
-
-void query_node_info(derecho::node_id_t& node_id, derecho::ip_addr& node_ip, derecho::ip_addr& leader_ip) {
-     cout << "Please enter this node's ID: ";
-     cin >> node_id;
-     cout << "Please enter this node's IP address: ";
-     cin >> node_ip;
-     cout << "Please enter the leader node's IP address: ";
-     cin >> leader_ip;
 }
 
 /*
@@ -82,13 +77,12 @@ int main(int argc, char *argv[]) {
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
-                << endl;
+             << endl;
         return -1;
     }
     uint32_t num_nodes = std::atoi(argv[1]);
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
-    derecho::node_id_t leader_id = 0;
     derecho::ip_addr leader_ip;
 
     query_node_info(node_id, my_ip, leader_ip);
@@ -120,17 +114,14 @@ int main(int argc, char *argv[]) {
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
-    rpc::Dispatcher<> empty_dispatcher(node_id);
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
-
-    if(node_id == leader_id) {
-        assert(my_ip == leader_ip);
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                my_ip, std::move(empty_dispatcher), callbacks, param_object);
+    if(my_ip == leader_ip) {
+        managed_group = std::make_unique<derecho::Group<>>(
+            my_ip, callbacks, one_raw_group, param_object);
     } else {
-        managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher),
-                callbacks);
+        managed_group = std::make_unique<derecho::Group<>>(
+            node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
 
     cout << "Created group, waiting for others to join." << endl;

@@ -44,6 +44,23 @@ bool initialize(const std::map<uint32_t, std::string>& addresses,
 void add_address(uint32_t index, const std::string& address);
 void shutdown();
 
+/**
+ * Creates a new RDMC group.
+ * @param group_number The group's unique identifier.
+ * @param members A vector of node IDs representing the members of this group.
+ * The order of this vector will be used as the rank order of the members.
+ * @param block_size The size, in bytes, of blocks to use when sending in this
+ * group.
+ * @param algorithm Which RDMC send algorithm to use in this group.
+ * @param incoming_receive The function to call when there is a new incoming
+ * message in this group; it must provide a destination to receive the message
+ * into.
+ * @param send_callback The function to call when RDMC completes receiving a
+ * message in this group
+ * @param failure_callback The function to call when RDMC detects a failure in
+ * this group. It will be called with the suspected failed node's ID.
+ * @return True if group creation succeeds, false if it fails.
+ */
 bool create_group(uint16_t group_number, std::vector<uint32_t> members,
                   size_t block_size, send_algorithm algorithm,
                   incoming_message_callback_t incoming_receive,

@@ -1,4 +1,5 @@
 *~
+*.csv
 CMakeFiles
 /CMakeCache.txt
 /Makefile
@@ -19,6 +20,7 @@ CMakeFiles
 /derecho/experiments/single_sender_multiple_messages
 /derecho/experiments/single_sender_one_message
 /derecho/experiments/ssd_bw_test
+/derecho/experiments/subgroup_test
 /derecho/experiments/test_group_interface
 /derecho/experiments/timeline_test
 /derecho/experiments/viewchange_timeline

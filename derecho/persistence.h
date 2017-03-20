@@ -21,6 +21,7 @@ struct message {
     uint32_t sender;
     uint64_t index;
     bool cooked;
+    uint32_t subgroup_num;
 };
 
 struct __attribute__((__packed__)) header {
@@ -36,7 +37,8 @@ struct __attribute__((__packed__)) message_metadata {
     uint32_t sender;
     uint32_t padding2;
     uint64_t index;
-
+    uint32_t subgroup_num;
+    uint32_t padding3;
     uint64_t offset;
     uint64_t length;
 };

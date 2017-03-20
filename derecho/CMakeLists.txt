@@ -12,7 +12,7 @@ include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 
-add_library(derecho SHARED derecho_sst.cpp logger.cpp filewriter.cpp connection_manager.cpp)
+add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager.cpp multicast_group.cpp raw_subgroup.cpp subgroup_functions.cpp logger.cpp filewriter.cpp connection_manager.cpp)
 target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization)
 add_dependencies(derecho mutils_serialization_target mutils_target)
 

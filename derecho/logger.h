@@ -20,9 +20,8 @@ namespace derecho {
  * but correctly typed).
  */
 template <typename S, typename T,
-          class = typename std::enable_if<std::is_base_of<
-              std::basic_ostream<typename S::char_type, typename S::traits_type>,
-              S>::value>::type>
+          class = typename std::enable_if<std::is_base_of<std::basic_ostream<typename S::char_type, typename S::traits_type>,
+                                                          S>::value>::type>
 S&& operator<<(S&& out, const T& t) {
     static_cast<std::basic_ostream<typename S::char_type, typename S::traits_type>&>(out) << t;
     return std::move(out);

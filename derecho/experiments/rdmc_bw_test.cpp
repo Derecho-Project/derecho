@@ -26,9 +26,9 @@ int main(int argc, char *argv[]) {
     num_nodes = node_addresses.size();
 
     bool success = rdmc::initialize(node_addresses, node_rank);
-    if (!success) {
-      std::cout << "Failed RDMC initialization" << std::endl;
-      std::cout << "Exiting" << std::endl;
+    if(!success) {
+        std::cout << "Failed RDMC initialization" << std::endl;
+        std::cout << "Exiting" << std::endl;
     }
 
     // size of one message
