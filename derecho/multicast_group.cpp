@@ -447,7 +447,7 @@ void MulticastGroup::deliver_message(Message& msg, subgroup_id_t subgroup_num) {
         if(h->cooked_send) {
             buf += h->header_size;
             auto payload_size = msg.size - h->header_size;
-            rpc_callback(msg.sender_id, buf, payload_size);
+            rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         }
         // raw send
         else {

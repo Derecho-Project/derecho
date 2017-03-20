@@ -143,7 +143,6 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
         const std::unique_ptr<vector_int64_2d>& old_shard_leaders) {
     std::set<std::pair<subgroup_id_t, uint32_t>> subgroups_to_receive;
     if(!curr_view.is_adequately_provisioned) {
-        std::cout << "construct_objects: View is not adequately provisioned! Returning early." << std::endl;
         return subgroups_to_receive;
     }
     assert(replicated_objects.template get<FirstType>().empty());
@@ -214,8 +213,8 @@ std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(cons
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
-    curr_view.get().multicast_group->register_rpc_callback([this](node_id_t sender, char* buf, uint32_t size) {
-        rpc_manager.rpc_message_handler(sender, buf, size);
+    curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
+        rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);

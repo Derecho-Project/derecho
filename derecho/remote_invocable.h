@@ -41,8 +41,8 @@ template <FunctionTag tag, typename Ret, typename... Args>
 struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
     using remote_function_type = std::function<Ret(Args...)>;
     const remote_function_type remote_invocable_function;
-    static const Opcode invoke_id;
-    static const Opcode reply_id;
+    static const Opcode invoke_opcode;
+    static const Opcode reply_opcode;
 
     //Maps invocation-instance IDs to results sets
     std::map<std::size_t, PendingResults<Ret>> results_map;
@@ -229,12 +229,12 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
             out[0] = false;
             ((long int*)(out + 1))[0] = invocation_id;
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
-            return recv_ret{reply_id, result_size, out, nullptr};
+            return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(...) {
             char* out = out_alloc(sizeof(long int) + 1);
             out[0] = true;
             ((long int*)(out + 1))[0] = invocation_id;
-            return recv_ret{reply_id, sizeof(long int) + 1, out,
+            return recv_ret{reply_opcode, sizeof(long int) + 1, out,
                             std::current_exception()};
         }
     }
@@ -252,7 +252,7 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
         mutils::callFunc([&](const auto&... a) { remote_invocable_function(*a...); },
                          deserialize(dsm, recv_buf));
         // remote_invocable_function(*deserialize<Args>(dsm, recv_buf)...);
-        return recv_ret{reply_id, 0, nullptr};
+        return recv_ret{reply_opcode, 0, nullptr};
     }
 
     /**
@@ -275,20 +275,20 @@ struct RemoteInvocable<tag, std::function<Ret(Args...)>> {
     RemoteInvocable(std::map<Opcode, receive_fun_t>& receivers,
                     std::function<Ret(Args...)> f)
             : remote_invocable_function(f) {
-        receivers[invoke_id] = [this](auto... a) {
+        receivers[invoke_opcode] = [this](auto... a) {
             return this->receive_call(a...);
         };
-        receivers[reply_id] = [this](auto... a) {
+        receivers[reply_opcode] = [this](auto... a) {
             return this->receive_response(a...);
         };
     }
 };
 
 template <FunctionTag tag, typename Ret, typename... Args>
-const Opcode RemoteInvocable<tag, std::function<Ret(Args...)>>::invoke_id{mutils::gensym()};
+const Opcode RemoteInvocable<tag, std::function<Ret(Args...)>>::invoke_opcode{mutils::gensym()};
 
 template <FunctionTag tag, typename Ret, typename... Args>
-const Opcode RemoteInvocable<tag, std::function<Ret(Args...)>>::reply_id{mutils::gensym()};
+const Opcode RemoteInvocable<tag, std::function<Ret(Args...)>>::reply_opcode{mutils::gensym()};
 
 /** This matches uses of wrapped<> where the second argument is not a function,
  * and does nothing. */
@@ -411,7 +411,7 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
-        populate_header(buf, payload_size, hndl.invoke_id, nid);
+        populate_header(buf, payload_size, hndl.invoke_opcode, nid);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*

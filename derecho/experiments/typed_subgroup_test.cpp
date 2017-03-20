@@ -136,6 +136,7 @@ int main(int argc, char** argv) {
     derecho::SubgroupInfo subgroup_info{{
         {std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
             if(curr_view.num_members < 3) {
+                std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
                 throw derecho::subgroup_provisioning_exception();
             }
             derecho::subgroup_shard_layout_t subgroup_vector(1);
@@ -145,6 +146,7 @@ int main(int argc, char** argv) {
         }},
         {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
             if(curr_view.num_members < 3) {
+                std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
                 throw derecho::subgroup_provisioning_exception();
             }
             derecho::subgroup_shard_layout_t subgroup_vector(1);
@@ -153,8 +155,10 @@ int main(int argc, char** argv) {
         }},
         {std::type_index(typeid(Cache)), [](const derecho::View& curr_view) {
             if(curr_view.num_members < 6) {
+                std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
                 throw derecho::subgroup_provisioning_exception();
             }
+            std::cout << "Cache function found enough members! curr_view = " << curr_view.debug_string() << std::endl;
             derecho::subgroup_shard_layout_t subgroup_vector(1);
             subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
             return subgroup_vector;
@@ -200,6 +204,8 @@ int main(int argc, char** argv) {
     if(node_id == 0) {
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 0...");
+        cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
+        foo_rpc_handle.ordered_query<Foo::READ_STATE>();
     }
     if(node_id == 1) {
         int new_value = 3;
@@ -234,38 +240,36 @@ int main(int argc, char** argv) {
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
-            derecho::rpc::QueryResults<bool>::ReplyMap& replies =
-                cache_rpc_handle.ordered_query<Cache::CONTAINS>("Ken").get();
+            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<Cache::CONTAINS>("Ken");
+            derecho::rpc::QueryResults<bool>::ReplyMap& replies = results.get();
             //Fold "&&" over the results to see if they're all true
             bool contains_accum = true;
             for(auto& reply_pair : replies) {
-                contains_accum = contains_accum && reply_pair.second.get();
+                bool contains_result = reply_pair.second.get();
+                cout << std::boolalpha << "  Reply from node " << reply_pair.first << ": " << contains_result << endl;
+                contains_accum = contains_accum && contains_result;
             }
             found = contains_accum;
         }
         cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string>::ReplyMap& replies =
-            cache_rpc_handle.ordered_query<Cache::GET>("Ken").get();
-        for(auto& reply_pair : replies) {
+        derecho::rpc::QueryResults<std::string> results =
+            cache_rpc_handle.ordered_query<Cache::GET>("Ken");
+        for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }
     }
     if(node_id == 4) {
         cout << "Putting Ken = Birman in the cache" << endl;
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
+        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
     }
     if(node_id == 5) {
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
+        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
     }
 
-    cout << "Type 'q' to quit..." << endl;
-    bool quit = false;
-    while(!quit) {
-        char input;
-        std::cin >> input;
-        if(input == 'q') {
-            quit = true;
-        }
+    cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+    while(true) {
     }
 }

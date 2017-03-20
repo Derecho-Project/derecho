@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <utility>
+#include <type_traits>
 
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "tcp/tcp.h"
@@ -71,6 +72,7 @@ private:
             int buffer_offset = group_rpc_manager->populate_nodelist_header(destination_nodes,
                                                                             buffer, max_payload_size);
             buffer += buffer_offset;
+            std::cout << "Replicated: doing ordered send/query for function tagged " << tag << std::endl;
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                 if(size <= max_payload_size) {
@@ -78,8 +80,8 @@ private:
                 } else {
                     return nullptr;
                 }
-                    },
-                    std::forward<Args>(args)...);
+            },
+            std::forward<Args>(args)...);
 
             group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
@@ -200,6 +202,8 @@ public:
     /**
      * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
      * invoking the RPC function identified by the FunctionTag template parameter.
+     * The caller must keep the returned QueryResults object in scope in order to
+     * receive replies.
      * @param args The arguments to the RPC function
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
      * of the RPC function being invoked.
@@ -226,7 +230,8 @@ public:
     /**
      * Sends a peer-to-peer message over TCP to a single member of the subgroup
      * that replicates this Replicated<T>, invoking the RPC function identified
-     * by the FunctionTag template parameter.
+     * by the FunctionTag template parameter. The caller must keep the returned
+     * QueryResults object in scope in order to receive replies.
      * @param dest_node The ID of the node that the P2P message should be sent to
      * @param args The arguments to the RPC function being invoked
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type

@@ -85,9 +85,13 @@ template <typename T>
 using reply_map = std::map<node_id_t, std::future<T>>;
 
 /**
- * Data structure that holds a set of futures for a single RPC function call;
- * there is one future for each node contacted to make the call, which will
- * eventually contain that node's reply.
+ * Data structure that (indirectly) holds a set of futures for a single RPC
+ * function call; there is one future for each node contacted to make the
+ * call, and it will eventually contain that node's reply. The futures are
+ * actually stored inside an internal struct of type ReplyMap, which can be
+ * retreived with the get() method. The ReplyMap will not be returned until
+ * it is "fulfilled" by the sender, which should happen when the RPC call
+ * is actually sent over the network.
  * @tparam Ret The return type of the RPC function that this query invoked
  */
 template <typename Ret>
@@ -163,7 +167,9 @@ public:
     }
 
     /**
-     * Block until the ReplyMap is fulfilled, then return the map.
+     * Block until the ReplyMap is fulfilled, then return the map by reference.
+     * The ReplyMap is only valid as long as this QueryResults remains in
+     * scope, and cannot be copied.
      */
     ReplyMap& get() {
         using namespace std::chrono;
@@ -183,14 +189,15 @@ struct QueryResults<void> {
     */
 };
 
+/**
+ * Abstract base type for PendingResults. This allows us to store a pointer to
+ * any template specialization of PendingResults without knowing the template
+ * parameter.
+ */
 class PendingBase {
 public:
-    virtual void fulfill_map(const node_list_t&) {
-        assert(false);
-    }
-    virtual void set_exception_for_removed_node(const node_id_t&) {
-        assert(false);
-    }
+    virtual void fulfill_map(const node_list_t&) = 0;
+    virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual ~PendingBase() {}
 };
 
@@ -257,6 +264,7 @@ struct PendingResults<void> : public PendingBase {
     */
 
     void fulfill_map(const node_list_t&) {}
+    void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }
 };
 

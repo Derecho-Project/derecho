@@ -36,7 +36,7 @@ std::exception_ptr RPCManager::handle_receive(
             &dsm, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
         return out_alloc(size + reply_header_size) + reply_header_size;
-            });
+    });
     auto* reply_buf = reply_return.payload;
     if(reply_buf) {
         reply_buf -= reply_header_size;
@@ -59,7 +59,8 @@ std::exception_ptr RPCManager::handle_receive(
                           payload_size, out_alloc);
 }
 
-void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_t payload_size) {
+void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size) {
+    // WARNING: This assumes the current view doesn't change during execution! (It accesses curr_view without a lock).
     // extract the destination vector
     size_t dest_size = ((size_t*)msg_buf)[0];
     msg_buf += sizeof(size_t);
@@ -91,8 +92,10 @@ void RPCManager::rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_
                         replySendBuffer.get(), reply_size,
                         [](size_t size) -> char* { assert(false); });
                 if(dest_size == 0) {
+                    //Destination was "all nodes in my shard of the subgroup"
+                    int my_shard = view_manager.curr_view->multicast_group->get_subgroup_to_shard_and_rank().at(subgroup_id).first;
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
-                    toFulfillQueue.front().get().fulfill_map(view_manager.curr_view->members);
+                    toFulfillQueue.front().get().fulfill_map(view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard)->members);
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
                     toFulfillQueue.pop();
                 }
@@ -132,14 +135,14 @@ void RPCManager::new_view_callback(const View& new_view) {
         //If this node is in the joined list, we need to set up a connection to everyone
         for(int i = 0; i < new_view.num_members; ++i) {
             if(new_view.members[i] != nid) {
-                std::cout << "RPCManager adding a connection to node " << new_view.members[i] << std::endl;
+//                std::cout << "RPCManager adding a connection to node " << new_view.members[i] << std::endl;
                 connections.add_node(new_view.members[i], new_view.member_ips[i]);
             }
         }
     } else {
         //This node is already a member, so we already have connections to the previous view's members
         for(const node_id_t& joiner_id : new_view.joined) {
-            std::cout << "RPCManager adding a connection to node " << joiner_id << std::endl;
+//            std::cout << "RPCManager adding a connection to node " << joiner_id << std::endl;
             connections.add_node(joiner_id,
                                  new_view.member_ips[new_view.rank_of(joiner_id)]);
         }
@@ -193,7 +196,7 @@ void RPCManager::finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t
     fulfilledList.push_back(pending_results_handle);
 }
 
-void RPCManager::rpc_process_loop() {
+void RPCManager::p2p_receive_loop() {
     auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
     std::unique_ptr<char[]> rpcBuffer = std::unique_ptr<char[]>(new char[max_payload_size]);
     while(!thread_shutdown) {

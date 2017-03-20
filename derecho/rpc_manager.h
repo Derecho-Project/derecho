@@ -56,7 +56,7 @@ class RPCManager {
     std::thread rpc_thread;
 
     /** Listens for P2P RPC calls over the TCP connections and handles them. */
-    void rpc_process_loop();
+    void p2p_receive_loop();
 
     /**
      * Handler to be called by rpc_process_loop each time it receives a
@@ -76,7 +76,7 @@ public:
               connections(node_id, std::map<node_id_t, ip_addr>(),
                           group_view_manager.derecho_params.rpc_port),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
-        rpc_thread = std::thread(&RPCManager::rpc_process_loop, this);
+        rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
     ~RPCManager();
@@ -145,11 +145,13 @@ public:
      * Handler to be called by MulticastGroup when it receives a message that
      * appears to be a "cooked send" RPC message. Parses the message and
      * delivers it to the appropriate RPC function registered with this RPCManager.
+     * @param subgroup_id The internal subgroup number of the subgroup this
+     * message was received in
      * @param sender_id The ID of the node that sent the message
      * @param msg_buf A buffer containing the message
      * @param payload_size The size of the message in the buffer, in bytes
      */
-    void rpc_message_handler(node_id_t sender_id, char* msg_buf, uint32_t payload_size);
+    void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size);
 
     /**
      * Returns a LockedReference to the TCP socket connected to the specified

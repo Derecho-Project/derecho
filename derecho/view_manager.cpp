@@ -147,7 +147,7 @@ ViewManager::~ViewManager() {
 }
 
 void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
-    std::cout << "Successfully connected to leader, about to receive the View." << std::endl;
+    log_event("Successfully connected to leader, about to receive the View.");
     node_id_t leader_id = 0;
     leader_connection.exchange(my_id, leader_id);
 
@@ -621,7 +621,6 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_to_shard_n_index,
                                                     subgroup_to_num_received_offset, subgroup_to_membership);
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
-    std::cout << "After make_subgroup_maps, num_received_size = " << num_received_size << " and num_subgroups = " << num_subgroups << std::endl;
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
@@ -638,11 +637,9 @@ void ViewManager::transition_multicast_group() {
     std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_n_index;
     std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
     std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
-    std::cout << "Transition_multicast_group: about to initialize subgroups" << std::endl;
     uint32_t num_received_size = make_subgroup_maps(curr_view, *next_view, subgroup_to_shard_n_index,
                                                     subgroup_to_num_received_offset, subgroup_to_membership);
     const auto num_subgroups = next_view->subgroup_shard_views.size();
-    std::cout << "After make_subgroup_maps, num_received_size = " << num_received_size << " and num_subgroups = " << num_subgroups << std::endl;
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, next_view->failed, false),
@@ -784,7 +781,6 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                          std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership) {
-    std::cout << "Called make_subgroup_maps with view: " << curr_view.debug_string() << std::endl;
     uint32_t subgroup_offset = 0;
     for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
         subgroup_shard_layout_t subgroup_shard_views;
@@ -794,7 +790,6 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
-            std::cout << "Got a subgroup_provisioning_exception, marking the view as invalid" << std::endl;
             curr_view.is_adequately_provisioned = false;
             subgroup_to_shard_n_index.clear();
             subgroup_to_num_received_offset.clear();
