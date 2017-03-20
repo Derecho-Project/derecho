@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
             cout << "In stability callback; sender ID = " << sender_id
                  << ", index = " << index << endl;
             printf("Message: %.*s\n", (int)msg_size, buf);
-            if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
+            if(index == num_messages - 1 && sender_id == num_nodes - 1) {
                 done = true;
             }
         };

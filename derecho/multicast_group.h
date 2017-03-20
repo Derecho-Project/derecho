@@ -145,7 +145,7 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
      * (this node's shard number, this node's shard rank)*/
     const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_and_rank;
-    const std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_n_sender_index;
+    const std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
     /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
      * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
@@ -240,8 +240,8 @@ public:
             std::shared_ptr<DerechoSST> _sst,
             CallbackSet callbacks,
             uint32_t total_num_subgroups,
-            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
+            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
+            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
             const DerechoParams derecho_params,
@@ -253,8 +253,8 @@ public:
             std::shared_ptr<DerechoSST> _sst,
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
-            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
+            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
+            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
             std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);

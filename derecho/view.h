@@ -49,8 +49,8 @@ public:
      * The vectors will have room for num_members elements. */
     SubView(int32_t num_members);
 
-    DEFAULT_SERIALIZATION_SUPPORT(SubView, members,is_sender, member_ips, joined, departed);
-    SubView(const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+    DEFAULT_SERIALIZATION_SUPPORT(SubView, members, is_sender, member_ips, joined, departed);
+    SubView(const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<ip_addr>& member_ips,
             const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed)
             : members(members),
               is_sender(is_sender),
