@@ -287,41 +287,48 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
     return stream;
 }
 
-std::istream& operator>>(std::istream& stream, View& view) {
+View parse_view(std::istream& stream) {
     std::string line;
+    int32_t vid;
     if(std::getline(stream, line)) {
-        view.vid = std::stoi(line);
+        vid = std::stoi(line);
     }
+    std::vector<node_id_t> members;
     //"List of member IDs" line
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::copy(std::istream_iterator<node_id_t>(linestream), std::istream_iterator<node_id_t>(),
-                  std::back_inserter(view.members));
+                  std::back_inserter(members));
     }
+    std::vector<ip_addr> member_ips;
     //"List of member IPs" line
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::copy(std::istream_iterator<ip_addr>(linestream), std::istream_iterator<ip_addr>(),
-                  std::back_inserter(view.member_ips));
+                  std::back_inserter(member_ips));
     }
+    std::vector<char> failed;
     //Failures array line, which was printed as "T" or "F" strings
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::string fail_str;
         while(linestream >> fail_str) {
-            view.failed.emplace_back(fail_str == "T" ? true : false);
+            failed.emplace_back(fail_str == "T" ? true : false);
         }
     }
+    int32_t num_failed;
     //The last three lines each contain a single number
     if(std::getline(stream, line)) {
-        view.num_failed = std::stoi(line);
+        num_failed = std::stoi(line);
     }
+    int32_t num_members;
     if(std::getline(stream, line)) {
-        view.num_members = std::stoi(line);
+        num_members = std::stoi(line);
     }
+    int32_t my_rank;
     if(std::getline(stream, line)) {
-        view.my_rank = std::stoi(line);
+        my_rank = std::stoi(line);
     }
-    return stream;
+    return View(vid, members, member_ips, failed, num_failed, {}, {}, num_members, my_rank);
 }
 }

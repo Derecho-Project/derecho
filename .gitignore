@@ -37,3 +37,4 @@ CMakeFiles
 /sst/experiments/Makefile
 /sst/experiments/sst_test
 /sst/experiments/multicast_throughput
+/derecho/experiments/typed_subgroup_test

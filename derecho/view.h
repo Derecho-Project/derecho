@@ -65,7 +65,7 @@ public:
     /** Sequential view ID: 0, 1, ... */
     int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */
-    std::vector<node_id_t> members;
+    const std::vector<node_id_t> members;
     /** IP addresses of members in the current view, indexed by their SST rank. */
     std::vector<ip_addr> member_ips;
     /** failed[i] is true if members[i] is considered to have failed.
@@ -143,7 +143,6 @@ public:
          const std::vector<char>& failed, const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t my_rank);
 
-  View() {};
 };
 
 /**
@@ -164,10 +163,9 @@ std::unique_ptr<View> load_view(const std::string& view_file_name);
  * @return The output stream
  */
   std::ostream& operator<<(std::ostream& stream, const View& view);
-
-/**
- * Parses the plaintext representation created by operator<< and modifies the View
- * argument to contain the view it represents.
- */
-  std::istream& operator>>(std::istream& stream, View& view);
+  /**
+   * Parses the plaintext representation created by operator<< and modifies the View
+   * argument to contain the view it represents.
+   */
+  View parse_view(std::istream& stream);
 }
