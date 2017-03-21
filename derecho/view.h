@@ -96,15 +96,9 @@ public:
     std::map<std::type_index, std::vector<subgroup_id_t>> subgroup_ids_by_type;
     /** Maps subgroup ID -> shard number -> SubView for that subgroup/shard */
     std::vector<std::vector<std::unique_ptr<SubView>>> subgroup_shard_views;
+    std::map<node_id_t, uint32_t> node_id_to_rank;
 
     bool i_know_i_am_leader = false;  // I am the leader (and know it)
-
-    /** Creates a completely empty new View. Vectors such as members will
-     * be empty (size 0), so the client will need to resize them. */
-    View();
-    /** Creates an empty new View with num_members members.
-     * The vectors will have room for num_members elements. */
-    View(int32_t num_members);
 
     /**
      * Constructs a SubView containing the provided subset of this View's
@@ -144,15 +138,13 @@ public:
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t my_rank);
-};
 
-/**
- * Creates a View for the initial leader of a group, to be used when it starts up.
- * @param my_id The leader's ID (should be 0)
- * @param my_ip The leader's IP address
- * @return A unique_ptr to first view that should be installed at that leader.
- */
-std::unique_ptr<View> make_initial_view(const node_id_t my_id, const ip_addr my_ip);
+  View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+         const std::vector<char>& failed, const std::vector<node_id_t>& joined,
+         const std::vector<node_id_t>& departed, const int32_t my_rank);
+
+  View() {};
+};
 
 /**
  * Custom implementation of load_object for Views. The View from the swap file
@@ -171,11 +163,11 @@ std::unique_ptr<View> load_view(const std::string& view_file_name);
  * @param view The View to print
  * @return The output stream
  */
-std::ostream& operator<<(std::ostream& stream, const View& view);
+  std::ostream& operator<<(std::ostream& stream, const View& view);
 
 /**
  * Parses the plaintext representation created by operator<< and modifies the View
  * argument to contain the view it represents.
  */
-std::istream& operator>>(std::istream& stream, View& view);
+  std::istream& operator>>(std::istream& stream, View& view);
 }

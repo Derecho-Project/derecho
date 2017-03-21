@@ -493,14 +493,14 @@ void MulticastGroup::deliver_message(Message& msg, subgroup_id_t subgroup_num) {
 
 void MulticastGroup::deliver_messages_upto(
         const std::vector<long long int>& max_indices_for_senders,
-        subgroup_id_t subgroup_num, uint32_t num_shard_members) {
-    assert(max_indices_for_senders.size() == (size_t)num_shard_members);
+        subgroup_id_t subgroup_num, uint32_t num_shard_senders) {
+    assert(max_indices_for_senders.size() == (size_t)num_shard_senders);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     auto curr_seq_num = sst->delivered_num[member_index][subgroup_num];
     auto max_seq_num = curr_seq_num;
-    for(uint sender = 0; sender < max_indices_for_senders.size(); sender++) {
+    for(uint sender = 0; sender < num_shard_senders; sender++) {
         max_seq_num = std::max(max_seq_num,
-                               max_indices_for_senders[sender] * num_shard_members + sender);
+                               max_indices_for_senders[sender] * num_shard_senders + sender);
     }
     for(auto seq_num = curr_seq_num; seq_num <= max_seq_num; seq_num++) {
         auto msg_ptr = locally_stable_messages[subgroup_num].find(seq_num);

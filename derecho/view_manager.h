@@ -152,14 +152,17 @@ private:
     // Ken's helper methods
     void deliver_in_order(const View& Vc, const int shard_leader_rank,
                           const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                          const std::vector<node_id_t>& shard_members);
+                          const std::vector<node_id_t>& shard_members, uint num_shard_senders);
     void ragged_edge_cleanup(View& Vc);
     void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                     const uint32_t num_received_offset,
-                                    const std::vector<node_id_t>& shard_members);
+                                    const std::vector<node_id_t>& shard_members,
+				    uint num_shard_senders);
     void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+				      uint shard_leader_rank,
                                       const uint32_t num_received_offset,
-                                      const std::vector<node_id_t>& shard_members);
+                                      const std::vector<node_id_t>& shard_members,
+				      uint num_shard_senders);
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -195,7 +198,7 @@ private:
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 
-    static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
+  static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
     static std::vector<std::vector<int64_t>> translate_types_to_ids(
             const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
             const View& new_view);
