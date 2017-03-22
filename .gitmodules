@@ -7,3 +7,6 @@
 [submodule "third_party/mutils-containers"]
 	path = third_party/mutils-containers
 	url = https://github.com/mpmilano/mutils-containers.git
+[submodule "third_party/spdlog"]
+	path = third_party/spdlog
+	url = https://github.com/gabime/spdlog.git
