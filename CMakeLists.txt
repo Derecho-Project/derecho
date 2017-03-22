@@ -25,4 +25,6 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-containers)
 
+include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+
 include_directories(${derecho_SOURCE_DIR}/third_party)

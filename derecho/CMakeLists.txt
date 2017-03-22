@@ -8,6 +8,7 @@ include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
