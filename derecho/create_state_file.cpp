@@ -19,8 +19,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::string view_file_name(argv[1]);
-    derecho::View view;
-    std::cin >> view;
+    derecho::View view = derecho::parse_view(std::cin);
     derecho::persist_object(view, view_file_name);
     return 0;
 }

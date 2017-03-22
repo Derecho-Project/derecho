@@ -24,7 +24,7 @@ ViewManager::ViewManager(const ip_addr my_ip,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : gms_port(gms_port),
-          curr_view(make_initial_view(0, my_ip)),
+          curr_view(std::make_unique<View>(0, std::vector<node_id_t>{0}, std::vector<ip_addr>{my_ip}, std::vector<char>{0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 1, 0)),
           last_suspected(2),  //The initial view always has 2 members
           server_socket(gms_port),
           thread_shutdown(false),
@@ -106,8 +106,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
          * otherwise the view obtained from the recovery script will have a leader that is
          * not me. So reset to an empty view and wait for the first non-leader member to
          * restart and join. */
-        curr_view = make_initial_view(my_id, my_ip);
-        curr_view->vid = last_view->vid + 1;
+      curr_view = std::make_unique<View>(last_view->vid+1, std::vector<node_id_t>{my_id}, std::vector<ip_addr>{my_ip}, std::vector<char>{0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 1, 0);
         initialize_rdmc_sst();
         if(_derecho_params) {
             derecho_params = _derecho_params.value();
@@ -198,12 +197,7 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     node_id_t joiner_id = 0;
     client_socket.exchange(my_id, joiner_id);
     ip_addr& joiner_ip = client_socket.remote_ip;
-    curr_view->num_members++;
-    curr_view->member_ips.emplace_back(joiner_ip);
-    curr_view->members.emplace_back(joiner_id);
-    curr_view->failed.emplace_back(false);
-    curr_view->joined.emplace_back(joiner_id);
-
+    curr_view = std::make_unique<View>(0, std::vector<node_id_t>{my_id, joiner_id}, std::vector<ip_addr>{curr_view->member_ips[0], joiner_ip}, std::vector<char>{0, 0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 2, 0);
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         bool success = client_socket.write(bytes, size);
         assert(success);
@@ -414,9 +408,12 @@ void ViewManager::register_predicates() {
         int next_num_members = Vc.num_members - leave_ranks.size()
                 + join_indexes.size();
         //Initialize the next view
-        next_view = std::make_unique<View>(next_num_members);
-        next_view->vid = Vc.vid + 1;
-        next_view->num_failed = Vc.num_failed - leave_ranks.size();
+        // next_view = std::make_unique<View>(next_num_members);
+        // next_view->vid = Vc.vid + 1;
+        // next_view->num_failed = Vc.num_failed - leave_ranks.size();
+	std::vector<node_id_t> joined, members(next_num_members), departed;
+	std::vector<char> failed(next_num_members);
+	std::vector<ip_addr> member_ips(next_num_members);
         for(std::size_t i = 0; i < join_indexes.size(); ++i) {
             const int join_index = join_indexes[i];
             node_id_t joiner_id = gmsSST.changes[myRank][join_index];
@@ -424,38 +421,47 @@ void ViewManager::register_predicates() {
             joiner_ip_packed.s_addr = gmsSST.joiner_ips[myRank][join_index];
             char* joiner_ip_cstr = inet_ntoa(joiner_ip_packed);
             std::string joiner_ip(joiner_ip_cstr);
-
-            next_view->joined.emplace_back(joiner_id);
+	    
+            joined.emplace_back(joiner_id);
             //New members go at the end of the members list, but it may shrink in the new view
             int new_member_rank = Vc.num_members - leave_ranks.size() + i;
-            next_view->members[new_member_rank] = joiner_id;
-            next_view->member_ips[new_member_rank] = joiner_ip;
+            members[new_member_rank] = joiner_id;
+            member_ips[new_member_rank] = joiner_ip;
             log_event(std::stringstream() << "Next view will add new member with ID " << joiner_id);
         }
         for(const auto& leaver_rank : leave_ranks) {
-            next_view->departed.emplace_back(Vc.members[leaver_rank]);
+            departed.emplace_back(Vc.members[leaver_rank]);
         }
         log_event(std::stringstream() << "Next view will exclude " << leave_ranks.size() << " failed members.");
-        next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
 
         //Copy member information, excluding the members that have failed
         int m = 0;
         for(int n = 0; n < Vc.num_members; n++) {
             //This is why leave_ranks needs to be a set
             if(leave_ranks.find(n) == leave_ranks.end()) {
-                next_view->members[m] = Vc.members[n];
-                next_view->member_ips[m] = Vc.member_ips[n];
-                next_view->failed[m] = Vc.failed[n];
+                members[m] = Vc.members[n];
+                member_ips[m] = Vc.member_ips[n];
+                failed[m] = Vc.failed[n];
                 ++m;
             }
         }
 
         //Initialize my_rank in next_view
+	int32_t my_new_rank = -1;
         node_id_t myID = Vc.members[myRank];
-        if((next_view->my_rank = next_view->rank_of(myID)) == -1) {
+	for (int i = 0; i < next_num_members; ++i) {
+	  if (members[i] == myID) {
+	    my_new_rank = i;
+	    break;
+	  }
+	}
+        if(my_new_rank == -1) {
             throw derecho_exception((std::stringstream() << "Some other node reported that I failed.  Node " << myID << " terminating").str());
         }
 
+        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank);
+        next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
+	
         // At this point we need to await "meta wedged."
         // To do that, we create a predicate that will fire when meta wedged is
         // true, and put the rest of the code in its trigger.
@@ -954,11 +960,11 @@ int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& fa
 
 void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
                                    const uint32_t subgroup_num, const uint32_t num_received_offset,
-                                   const std::vector<node_id_t>& shard_members) {
+                                   const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
     // Ragged cleanup is finished, deliver in the implied order
-    std::vector<long long int> max_received_indices(shard_members.size());
+    std::vector<long long int> max_received_indices(num_shard_senders);
     std::string deliveryOrder(" ");
-    for(uint n = 0; n < shard_members.size(); n++) {
+    for(uint n = 0; n < num_shard_senders; n++) {
         deliveryOrder += "Subgroup " + std::to_string(subgroup_num)
                          + " " + std::to_string(Vc.members[Vc.my_rank])
                          + std::string(":0..")
@@ -978,11 +984,18 @@ void ViewManager::ragged_edge_cleanup(View& Vc) {
         const uint32_t shard_num = shard_rank_pair.second.first;
         const uint32_t num_received_offset = subgroup_to_num_received_offset.at(subgroup_id);
         SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
-
-        if(shard_view.my_rank == curr_view->rank_of_shard_leader(subgroup_id, shard_num)) {
-            leader_ragged_edge_cleanup(Vc, subgroup_id, num_received_offset, shard_view.members);
-        } else {
-            follower_ragged_edge_cleanup(Vc, subgroup_id, num_received_offset, shard_view.members);
+        uint num_shard_senders = 0;
+        for(auto v : shard_view.is_sender) {
+            if(v) {
+                num_shard_senders++;
+            }
+        }
+        if(num_shard_senders) {
+            if(shard_view.my_rank == curr_view->rank_of_shard_leader(subgroup_id, shard_num)) {
+	      leader_ragged_edge_cleanup(Vc, subgroup_id, num_received_offset, shard_view.members, num_shard_senders);
+            } else {
+	      follower_ragged_edge_cleanup(Vc, curr_view->rank_of_shard_leader(subgroup_id, shard_num), subgroup_id, num_received_offset, shard_view.members, num_shard_senders);
+            }
         }
     }
     util::debug_log().log_event("Done with RaggedEdgeCleanup");
@@ -990,20 +1003,22 @@ void ViewManager::ragged_edge_cleanup(View& Vc) {
 
 void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
-                                             const std::vector<node_id_t>& shard_members) {
+                                             const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
     int myRank = Vc.my_rank;
     // int Leader = Vc.rank_of_leader();  // We don't want this to change under our feet
     bool found = false;
     for(uint n = 0; n < shard_members.size() && !found; n++) {
-        if(Vc.gmsSST->globalMinReady[n][subgroup_num]) {
+        const auto node_id = shard_members[n];
+	const auto node_rank = Vc.rank_of(node_id);
+        if(Vc.gmsSST->globalMinReady[node_rank][subgroup_num]) {
             gmssst::set(Vc.gmsSST->globalMin[myRank] + num_received_offset,
-                        Vc.gmsSST->globalMin[n] + num_received_offset, shard_members.size());
+                        Vc.gmsSST->globalMin[node_rank] + num_received_offset, num_shard_senders);
             found = true;
         }
     }
 
     if(!found) {
-        for(uint n = 0; n < shard_members.size(); n++) {
+        for(uint n = 0; n < num_shard_senders; n++) {
             int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
                 const auto node_id = shard_members[r];
@@ -1021,31 +1036,31 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
     gmssst::set(Vc.gmsSST->globalMinReady[myRank][subgroup_num], true);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->globalMin[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(int) * shard_members.size());
+                   sizeof(int) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->globalMinReady[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
                    sizeof(bool));
 
-    deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members);
+    deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
 }
 
 void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+					       uint shard_leader_rank,
                                                const uint32_t num_received_offset,
-                                               const std::vector<node_id_t>& shard_members) {
+                                               const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
     int myRank = Vc.my_rank;
     // Learn the leader's data and push it before acting upon it
     util::debug_log().log_event("Received leader's globalMin; echoing it");
-    int shard_leader_rank = Vc.rank_of(shard_members[0]);
     gmssst::set(Vc.gmsSST->globalMin[myRank] + num_received_offset, Vc.gmsSST->globalMin[shard_leader_rank] + num_received_offset,
-                shard_members.size());
+                num_shard_senders);
     gmssst::set(Vc.gmsSST->globalMinReady[myRank][subgroup_num], true);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->globalMin[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(int) * shard_members.size());
+                   sizeof(int) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->globalMinReady[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
                    sizeof(bool));
-    deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset, shard_members);
+    deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
 }
 
 /* ------------------------------------------------------------------------- */

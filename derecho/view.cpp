@@ -51,22 +51,6 @@ uint32_t SubView::num_senders() const {
     return num;
 }
 
-View::View()
-        : View(0) {}
-
-View::View(int num_members)
-        : vid(0),
-          members(num_members),
-          member_ips(num_members),
-          failed(num_members, 0),
-          num_failed(0),
-          joined(0),
-          departed(0),
-          num_members(num_members),
-          my_rank(0),
-          multicast_group(nullptr),
-          gmsSST(nullptr) {}
-
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t my_rank)
@@ -79,6 +63,9 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           departed(departed),
           num_members(num_members),
           my_rank(my_rank) {
+    for(int rank = 0; rank < num_members; ++rank) {
+        node_id_to_rank[members[rank]] = rank;
+    }
 }
 
 int View::rank_of_leader() const {
@@ -88,6 +75,27 @@ int View::rank_of_leader() const {
         }
     }
     return -1;
+}
+
+View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+           const std::vector<char>& failed, const std::vector<node_id_t>& joined,
+           const std::vector<node_id_t>& departed, const int32_t my_rank)
+        : vid(vid),
+          members(members),
+          member_ips(member_ips),
+          failed(failed),
+          joined(joined),
+          departed(departed),
+	  my_rank(my_rank) {
+  for(int rank = 0; rank < num_members; ++rank) {
+    node_id_to_rank[members[rank]] = rank;
+  }
+  for (auto c : failed) {
+    if (c) {
+      num_failed++;
+    }
+  }
+  num_members = members.size();
 }
 
 int View::rank_of(const ip_addr& who) const {
@@ -100,10 +108,9 @@ int View::rank_of(const ip_addr& who) const {
 }
 
 int View::rank_of(const node_id_t& who) const {
-    for(int rank = 0; rank < num_members; ++rank) {
-        if(members[rank] == who) {
-            return rank;
-        }
+    auto it = node_id_to_rank.find(who);
+    if(it != node_id_to_rank.end()) {
+        return it->second;
     }
     return -1;
 }
@@ -127,7 +134,7 @@ std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_m
     return sub_view;
 }
 
-int View::rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
+int View::rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const{
     SubView& shard_view = *subgroup_shard_views.at(subgroup_id).at(shard_index);
     for(std::size_t rank = 0; rank < shard_view.members.size(); ++rank) {
         //Inefficient to call rank_of every time, but no guarantee the subgroup members will have ascending ranks
@@ -264,16 +271,6 @@ std::unique_ptr<View> load_view(const std::string& view_file_name) {
     }
 }
 
-std::unique_ptr<View> make_initial_view(const node_id_t my_id, const ip_addr my_ip) {
-    std::unique_ptr<View> new_view = std::make_unique<View>(1);
-    new_view->members[0] = my_id;
-    new_view->my_rank = 0;
-    new_view->member_ips[0] = my_ip;
-    new_view->failed[0] = false;
-    new_view->i_know_i_am_leader = true;
-    return new_view;
-}
-
 std::ostream& operator<<(std::ostream& stream, const View& view) {
     stream << view.vid << std::endl;
     std::copy(view.members.begin(), view.members.end(), std::ostream_iterator<node_id_t>(stream, " "));
@@ -290,41 +287,48 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
     return stream;
 }
 
-std::istream& operator>>(std::istream& stream, View& view) {
+View parse_view(std::istream& stream) {
     std::string line;
+    int32_t vid;
     if(std::getline(stream, line)) {
-        view.vid = std::stoi(line);
+        vid = std::stoi(line);
     }
+    std::vector<node_id_t> members;
     //"List of member IDs" line
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::copy(std::istream_iterator<node_id_t>(linestream), std::istream_iterator<node_id_t>(),
-                  std::back_inserter(view.members));
+                  std::back_inserter(members));
     }
+    std::vector<ip_addr> member_ips;
     //"List of member IPs" line
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::copy(std::istream_iterator<ip_addr>(linestream), std::istream_iterator<ip_addr>(),
-                  std::back_inserter(view.member_ips));
+                  std::back_inserter(member_ips));
     }
+    std::vector<char> failed;
     //Failures array line, which was printed as "T" or "F" strings
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
         std::string fail_str;
         while(linestream >> fail_str) {
-            view.failed.emplace_back(fail_str == "T" ? true : false);
+            failed.emplace_back(fail_str == "T" ? true : false);
         }
     }
+    int32_t num_failed;
     //The last three lines each contain a single number
     if(std::getline(stream, line)) {
-        view.num_failed = std::stoi(line);
+        num_failed = std::stoi(line);
     }
+    int32_t num_members;
     if(std::getline(stream, line)) {
-        view.num_members = std::stoi(line);
+        num_members = std::stoi(line);
     }
+    int32_t my_rank;
     if(std::getline(stream, line)) {
-        view.my_rank = std::stoi(line);
+        my_rank = std::stoi(line);
     }
-    return stream;
+    return View(vid, members, member_ips, failed, num_failed, {}, {}, num_members, my_rank);
 }
 }
