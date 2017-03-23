@@ -18,10 +18,11 @@
 #include "derecho_sst.h"
 #include "filewriter.h"
 #include "subgroup_info.h"
-#include "mutils-serialization/SerializationMacros.hpp"
-#include "mutils-serialization/SerializationSupport.hpp"
 #include "rdmc/rdmc.h"
 #include "sst/sst.h"
+#include "mutils-serialization/SerializationMacros.hpp"
+#include "mutils-serialization/SerializationSupport.hpp"
+#include "spdlog/spdlog.h"
 
 namespace derecho {
 
@@ -118,6 +119,7 @@ struct Message {
  * to handle failures. */
 class MulticastGroup {
 private:
+    std::shared_ptr<spdlog::logger> logger;
     /** vector of member id's */
     std::vector<node_id_t> members;
     /** inverse map of node_ids to sst_row */

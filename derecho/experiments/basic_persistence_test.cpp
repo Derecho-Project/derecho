@@ -9,7 +9,6 @@
 #include <fstream>
 
 #include "derecho/derecho.h"
-#include "derecho/logger.h"
 #include "initialize.h"
 
 using namespace std;
@@ -32,14 +31,16 @@ shared_ptr<derecho::Group<>> managed_group;
 
 void stability_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
-    util::debug_log().log_event(stringstream() << "Global stability for message "
-                                               << index << " from sender " << sender_id);
+    stringstream string_formatter;
+    string_formatter << "Global stability for message " << index << " from sender " << sender_id;
+    managed_group->log_event(string_formatter.str());
 }
 
 void persistence_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
     using namespace derecho;
-    util::debug_log().log_event(stringstream() << "Persistence complete for message "
-                                               << index << " from sender " << sender_id);
+    stringstream string_formatter;
+    string_formatter << "Persistence complete for message " << index << " from sender " << sender_id;
+    managed_group->log_event(string_formatter.str());
     if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
         cout << "Done" << endl;
         done = true;
@@ -76,8 +77,7 @@ int main(int argc, char* argv[]) {
 
     query_node_info(node_id, my_ip, leader_ip);
 
-    string log_filename = (std::stringstream() << "events_node" << node_id << ".csv").str();
-    string message_filename = (std::stringstream() << "data" << node_id << ".dat").str();
+    string message_filename("data" + std::to_string(node_id) + ".dat");
 
     derecho::CallbackSet callbacks{stability_callback, persistence_callback};
     derecho::DerechoParams param_object{message_size, block_size, message_filename};
@@ -100,8 +100,6 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     // managed_group->barrier_sync();
-    ofstream logfile(log_filename);
-    managed_group->print_log(logfile);
 
     // Give log time to print before exiting
     std::this_thread::sleep_for(5s);
