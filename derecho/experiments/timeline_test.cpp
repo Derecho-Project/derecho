@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     uint64_t t1 = get_time();
     universal_barrier_group->barrier_wait();
     uint64_t t2 = get_time();
-    derecho::program_start_time = high_resolution_clock::now();
+//    derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     uint64_t t3 = get_time();
 
@@ -109,7 +109,6 @@ int main(int argc, char *argv[]) {
         managed_group->log_event("About to start sending");
         send_messages(10 * SECOND);
         managed_group->log_event("About to exit");
-        managed_group->print_log(cout);
         exit(0);
     } else {
         if(node_id == leader_id) {
@@ -126,7 +125,6 @@ int main(int argc, char *argv[]) {
         }
         send_messages(30 * SECOND);
         // managed_group->barrier_sync();
-        managed_group->print_log(cout);
         std::this_thread::sleep_for(5s);
         managed_group->leave();
     }

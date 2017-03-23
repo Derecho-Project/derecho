@@ -65,7 +65,8 @@ Group<ReplicatedTypes...>::Group(
         std::vector<view_upcall_t> _view_upcalls,
         const int gms_port,
         Factory<ReplicatedTypes>... factories)
-        : my_id(0),
+        : logger(create_logger()),
+          my_id(0),
           view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
           rpc_manager(0, view_manager),
           factories(make_kind_map(factories...)),
@@ -98,7 +99,8 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
-        : my_id(my_id),
+        : logger(create_logger()),
+          my_id(my_id),
           view_manager(my_id, leader_connection, callbacks, subgroup_info, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
@@ -121,7 +123,8 @@ Group<ReplicatedTypes...>::Group(const std::string& recovery_filename,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
-        : my_id(my_id),
+        : logger(create_logger()),
+          my_id(my_id),
           view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
@@ -233,6 +236,18 @@ void Group<ReplicatedTypes...>::set_up_components() {
 }
 
 template <typename... ReplicatedTypes>
+std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const {
+    spdlog::set_async_mode(1048576);
+    std::shared_ptr<spdlog::logger> log = spdlog::rotating_logger_mt("debug_log", "derecho_debug_log", 1024 * 1024 * 5, 3);
+    log->set_pattern("[%H:%M:%S.%f] [%l] %v");
+    log->set_level(spdlog::level::debug);
+    auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch());
+    log->debug("Program start time (microseconds): {}", start_ms.count());
+    return log;
+}
+
+template <typename... ReplicatedTypes>
 std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
         tcp::socket& leader_socket) {
     std::size_t buffer_size;
@@ -303,11 +318,6 @@ void Group<ReplicatedTypes...>::barrier_sync() {
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::debug_print_status() const {
     view_manager.debug_print_status();
-}
-
-template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::print_log(std::ostream& output_dest) const {
-    view_manager.print_log(output_dest);
 }
 
 } /* namespace derecho */

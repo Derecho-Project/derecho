@@ -17,7 +17,6 @@
 
 #include "tcp/tcp.h"
 
-#include "logger.h"
 #include "replicated.h"
 #include "rpc_manager.h"
 #include "view_manager.h"
@@ -25,6 +24,7 @@
 #include "subgroup_info.h"
 #include "raw_subgroup.h"
 
+#include "spdlog/spdlog.h"
 #include "mutils-containers/TypeMap2.hpp"
 #include "mutils-containers/KindMap.hpp"
 
@@ -45,6 +45,8 @@ private:
     //Type alias for a vector of Replicated, otherwise KindMap can't understand it's a template
     template <typename T>
     using replicated_vector = std::vector<Replicated<T>>;
+
+    std::shared_ptr<spdlog::logger> logger;
 
     const node_id_t my_id;
     /** Contains all state related to managing Views, including the
@@ -85,6 +87,14 @@ private:
 
     /** Deserializes a vector of shard leader IDs sent over the given socket. */
     static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
+
+    /**
+     * Constructs a spdlog::logger instance and registers it in spdlog's global
+     * registry, so that dependent objects like ViewManager can retrieve a
+     * pointer to the same logger without needing to pass it around.
+     * @return A pointer to the logger that was created.
+     */
+    std::shared_ptr<spdlog::logger> create_logger() const;
 
     /**
      * Updates the state of the replicated objects that correspond to subgroups
@@ -137,8 +147,8 @@ private:
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
-    std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(const View& curr_view,
-                                                                    const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
+    std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
+            const View& curr_view, const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
 
     /**
      * Delegate constructor for joining an existing managed group, called after
@@ -267,13 +277,11 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
     void debug_print_status() const;
-    static void log_event(const std::string& event_text) {
-        util::debug_log().log_event(event_text);
+
+    void log_event(const std::string& event_text) {
+        logger->debug(event_text);
     }
-    static void log_event(const std::stringstream& event_text) {
-        util::debug_log().log_event(event_text);
-    }
-    void print_log(std::ostream& output_dest) const;
+
 };
 
 } /* namespace derecho */

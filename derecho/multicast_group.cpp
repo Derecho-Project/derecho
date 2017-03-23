@@ -4,12 +4,10 @@
 #include <limits>
 #include <thread>
 
-#include "logger.h"
 #include "multicast_group.h"
 
 namespace derecho {
 
-using std::chrono::milliseconds;
 
 /**
  * Helper function to find the index of an element in a container.
@@ -61,7 +59,8 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         const DerechoParams derecho_params,
         std::vector<char> already_failed)
-        : members(_members),
+        : logger(spdlog::get("debug_log")),
+          members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           block_size(derecho_params.block_size),
@@ -129,7 +128,8 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         std::vector<char> already_failed, uint32_t rpc_port)
-        : members(_members),
+        : logger(old_group.logger),
+          members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           block_size(old_group.block_size),
@@ -315,7 +315,7 @@ bool MulticastGroup::create_rdmc_groups() {
             auto rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank, node_id, num_shard_members, num_shard_senders](char* data, size_t size) {
                assert(this->sst);
                uint32_t subgroup_offset = subgroup_to_num_received_offset.at(subgroup_num);
-               util::debug_log().log_event(std::stringstream() << "Locally received message in subgroup " << subgroup_num << ", sender rank " << shard_rank << ", index " << (sst->num_received[member_index][subgroup_offset + shard_rank] + 1));
+               logger->debug("Locally received message in subgroup {}, sender rank {} , index {}", subgroup_num, shard_rank, (sst->num_received[member_index][subgroup_offset + shard_rank] + 1));
                std::lock_guard<std::mutex> lock(msg_state_mtx);
                header *h = (header *)data;
                sst->num_received[member_index][subgroup_offset + sender_rank]++;
@@ -349,7 +349,7 @@ bool MulticastGroup::create_rdmc_groups() {
                uint min_index = std::distance(&sst->num_received[member_index][subgroup_offset], min_ptr);
                auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
                if((int)new_seq_num > sst->seq_num[member_index][subgroup_num]) {
-                   util::debug_log().log_event(std::stringstream() << "Updating seq_num for subgroup " << subgroup_num << " to "  << new_seq_num);
+                   logger->debug("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
                    sst->seq_num[member_index][subgroup_num] = new_seq_num;
                    std::atomic_signal_fence(std::memory_order_acq_rel);
                    sst->put(get_shard_sst_indices(subgroup_num),
@@ -530,7 +530,7 @@ void MulticastGroup::register_predicates() {
                 }
             }
             if(min_seq_num > sst.stable_num[member_index][subgroup_num]) {
-                util::debug_log().log_event(std::stringstream() << "Subgroup " << subgroup_num << ", updating stable_num to " << min_seq_num);
+                logger->debug("Subgroup {}, updating stable_num to {}", subgroup_num, min_seq_num);
                 sst.stable_num[member_index][subgroup_num] = min_seq_num;
                 sst.put(get_shard_sst_indices(subgroup_num),
                         (char*)std::addressof(sst.stable_num[0][subgroup_num]) - sst.getBaseAddress(),
@@ -557,7 +557,7 @@ void MulticastGroup::register_predicates() {
                 long long int least_undelivered_seq_num =
                         locally_stable_messages[subgroup_num].begin()->first;
                 if(least_undelivered_seq_num <= min_stable_num) {
-                    util::debug_log().log_event(std::stringstream() << "Subgroup " << subgroup_num << ", can deliver a locally stable message: min_stable_num=" << min_stable_num << " and least_undelivered_seq_num=" << least_undelivered_seq_num);
+                    logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}", subgroup_num, min_stable_num, least_undelivered_seq_num);
                     Message& msg = locally_stable_messages[subgroup_num].begin()->second;
                     deliver_message(msg, subgroup_num);
                     sst.delivered_num[member_index][subgroup_num] = least_undelivered_seq_num;
@@ -693,7 +693,7 @@ void MulticastGroup::send_loop() {
             sender_cv.wait(lock, should_wake);
             if(!thread_shutdown) {
                 current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
-                util::debug_log().log_event(std::stringstream() << "Calling send in subgroup " << subgroup_to_send << " on message " << current_sends[subgroup_to_send]->index << " from sender " << current_sends[subgroup_to_send]->sender_id);
+                logger->debug("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id);
                 if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
                                current_sends[subgroup_to_send]->message_buffer.mr, 0,
                                current_sends[subgroup_to_send]->size)) {
@@ -710,7 +710,7 @@ void MulticastGroup::send_loop() {
 
 void MulticastGroup::check_failures_loop() {
     while(!thread_shutdown) {
-        std::this_thread::sleep_for(milliseconds(sender_timeout));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sender_timeout));
         if(sst) sst->put((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
     }
     std::cout << "timeout_thread shutting down" << std::endl;

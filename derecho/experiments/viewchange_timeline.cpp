@@ -31,9 +31,9 @@ shared_ptr<derecho::Group<>> managed_group;
 
 void stability_callback(uint32_t subgroup, uint32_t sender_id, long long int index, char *data,
                         long long int size) {
-    managed_group->log_event(std::stringstream() << "Message " << index
-                                                 << " from sender " << sender_id
-                                                 << " delivered");
+    std::stringstream string_formatter;
+    string_formatter << "Message " << index << " from sender " << sender_id << " delivered";
+    managed_group->log_event(string_formatter.str());
 }
 
 void send_messages(uint64_t duration) {
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
     auto t1 = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t2 = high_resolution_clock::now();
-    derecho::program_start_time = high_resolution_clock::now();
+//    derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t3 = high_resolution_clock::now();
 
@@ -87,8 +87,6 @@ int main(int argc, char *argv[]) {
 
     using derecho::RawObject;
 
-    string log_filename =
-        (std::stringstream() << "events_node" << node_id << ".csv").str();
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
@@ -102,9 +100,6 @@ int main(int argc, char *argv[]) {
         managed_group->log_event("About to start sending");
         send_messages(10 * SECOND);
         managed_group->log_event("About to exit");
-        ofstream logfile(log_filename);
-        managed_group->print_log(logfile);
-        logfile.close();
         exit(0);
     } else {
         if(node_id == leader_id) {
@@ -120,8 +115,6 @@ int main(int argc, char *argv[]) {
         }
         send_messages(30 * SECOND);
         // managed_group->barrier_sync();
-        ofstream logfile{log_filename};
-        managed_group->print_log(logfile);
         std::this_thread::sleep_for(5s);
         managed_group->leave();
     }

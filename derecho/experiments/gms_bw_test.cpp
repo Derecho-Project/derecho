@@ -12,7 +12,6 @@
 #include "time/time.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
-#include "derecho/logger.h"
 #include "initialize.h"
 
 using namespace std;
@@ -38,8 +37,9 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
     using namespace derecho;
     message_times.push_back(get_time());
 
-    util::debug_log().log_event(stringstream() << "Global stability for message " << index
-                                               << " from sender " << sender_id);
+    stringstream string_formatter;
+    string_formatter << "Global stability for message " << index << " from sender " << sender_id;
+    managed_group->log_event(string_formatter.str());
 
     while(!managed_group) {
     }
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     auto t1 = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t2 = high_resolution_clock::now();
-    derecho::program_start_time = high_resolution_clock::now();
+//    derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t3 = high_resolution_clock::now();
 
@@ -108,9 +108,6 @@ int main(int argc, char *argv[]) {
     fflush(stdout);
     cout << endl
          << endl;
-
-    string log_filename =
-        (std::stringstream() << "events_node" << node_id << ".csv").str();
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{message_size, block_size};
@@ -131,8 +128,6 @@ int main(int argc, char *argv[]) {
     cout << "Starting to send messages." << endl;
     send_messages(30 * SECOND);
     // managed_group->barrier_sync();
-    ofstream logfile(log_filename);
-    managed_group->print_log(logfile);
 
     // Give log time to print before exiting
     std::this_thread::sleep_for(5s);

@@ -13,11 +13,11 @@
 #include <thread>
 #include <vector>
 
-#include "logger.h"
 #include "view.h"
 #include "tcp/tcp.h"
 #include "subgroup_info.h"
 #include "locked_reference.h"
+#include "spdlog/spdlog.h"
 
 #include "mutils-serialization/SerializationSupport.hpp"
 
@@ -71,6 +71,8 @@ private:
     friend class rpc::RPCManager;
     template <typename T>
     friend class Replicated;
+
+    std::shared_ptr<spdlog::logger> logger;
 
     /** The port that this instance of the GMS communicates on. */
     const int gms_port;
@@ -198,7 +200,7 @@ private:
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 
-  static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
+    static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
     static std::vector<std::vector<int64_t>> translate_types_to_ids(
             const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
             const View& new_view);
@@ -311,13 +313,6 @@ public:
     }
 
     void debug_print_status() const;
-    static void log_event(const std::string& event_text) {
-        util::debug_log().log_event(event_text);
-    }
-    static void log_event(const std::stringstream& event_text) {
-        util::debug_log().log_event(event_text);
-    }
-    void print_log(std::ostream& output_dest) const;
 };
 
 } /* namespace derecho */

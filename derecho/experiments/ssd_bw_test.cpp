@@ -182,10 +182,5 @@ int main(int argc, char *argv[]) {
     // log_results(num_nodes, buffer_size, avg_bw, "data_derecho_bw");
 
     managed_group->barrier_sync();
-    std::string log_filename =
-        (std::stringstream() << "events_node" << node_rank << ".csv").str();
-    std::ofstream logfile(log_filename);
-    managed_group->print_log(logfile);
-    managed_group->leave();
     cout << "Finished destroying managed_group" << endl;
 }
