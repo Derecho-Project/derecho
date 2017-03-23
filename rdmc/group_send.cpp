@@ -4,6 +4,7 @@
 #include "util.h"
 
 #include <cstring>
+#include <cassert>
 
 using namespace std;
 using namespace rdma;
@@ -383,7 +384,7 @@ void polling_group::complete_message() {
     //     memset(first_block_buffer, 1, block_size);
     //     memset(first_block_buffer, 0, block_size);
     // }
-    first_block_number = boost::none;
+    first_block_number = std::experimental::nullopt;
 
     if(member_index != 0) {
         num_received_blocks = 0;

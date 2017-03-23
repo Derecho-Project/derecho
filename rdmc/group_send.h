@@ -6,14 +6,14 @@
 #include "schedule.h"
 #include "verbs_helper.h"
 
-#include <boost/optional.hpp>
+#include <experimental/optional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <vector>
 
-using boost::optional;
+using std::experimental::optional;
 using std::vector;
 using std::map;
 using std::unique_ptr;

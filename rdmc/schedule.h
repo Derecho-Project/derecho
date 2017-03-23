@@ -2,11 +2,11 @@
 #ifndef SCHEDULE_H
 #define SCHEDULE_H
 
-#include <boost/optional.hpp>
+#include <experimental/optional>
 #include <cmath>
 #include <vector>
 
-using boost::optional;
+using std::experimental::optional;
 using std::vector;
 
 class schedule {

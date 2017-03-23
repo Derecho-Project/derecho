@@ -6,7 +6,6 @@
 
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
-#include "boost/optional.hpp"
 #include "block_size.h"
 #include "aggregate_bandwidth.h"
 #include "log_results.h"
@@ -74,7 +73,7 @@ int main(int argc, char *argv[]) {
                 return {mrs[i], 0};
             },
             [&counts, i](char *data, size_t size) { ++counts[i]; },
-            [](boost::optional<uint32_t>) {});
+            [](std::experimental::optional<uint32_t>) {});
         if(!success) {
             std::cout << "Failed RDMC group creation" << std::endl;
             std::cout << "Exiting" << std::endl;

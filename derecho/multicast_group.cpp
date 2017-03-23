@@ -392,7 +392,7 @@ bool MulticastGroup::create_rdmc_groups() {
                     return {nullptr, 0};
                 },
                 receive_handler_plus_notify,
-                [](boost::optional<uint32_t>) {})) {
+                [](std::experimental::optional<uint32_t>) {})) {
                     return false;
                 }
                 subgroup_to_rdmc_group[subgroup_num] = rdmc_group_num_offset;
@@ -418,7 +418,7 @@ bool MulticastGroup::create_rdmc_groups() {
                     assert(ret.mr->buffer != nullptr);
                     return ret;
                 },
-                rdmc_receive_handler, [](boost::optional<uint32_t>) {})) {
+                rdmc_receive_handler, [](std::experimental::optional<uint32_t>) {})) {
                     return false;
                 }
                 rdmc_group_num_offset++;
