@@ -282,9 +282,6 @@ public:
         logger->debug(event_text);
     }
 
-    spdlog::logger& debug_log() {
-        return *logger;
-    }
 };
 
 } /* namespace derecho */
