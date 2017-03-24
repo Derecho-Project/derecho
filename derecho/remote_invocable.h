@@ -415,7 +415,7 @@ struct RemoteInvocablePairs;
  */
 template <FunctionTag id, typename FunType>
 struct RemoteInvocablePairs<wrapped<id, FunType>>
-        : public RemoteInvocable<id, FunType> {
+        : public RemoteInvoker<id, FunType>, public RemoteInvocable<id, FunType> {
     RemoteInvocablePairs(std::map<Opcode, receive_fun_t>& receivers, FunType function_ptr)
             : RemoteInvoker<id, FunType>(receivers),
               RemoteInvocable<id, FunType>(receivers, function_ptr) {}
