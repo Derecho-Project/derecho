@@ -7,13 +7,13 @@
  * of parsing by bash scripts.
  */
 
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
 #include <strings.h>
 
-#include <mutils-serialization/SerializationSupport.hpp>
 #include "persistence.h"
+#include <mutils-serialization/SerializationSupport.hpp>
 
 using namespace derecho::persistence;
 

@@ -34,7 +34,7 @@ int main() {
                 // update the ip addrs map
                 ip_addrs[remote_id] = remote_ip;
                 // send the connections over to the remote node
-                auto bind_socket_write = [&client_socket](const char* bytes, size_t size) {client_socket.write(bytes, size); };
+                auto bind_socket_write = [&client_socket](const char* bytes, size_t size) { client_socket.write(bytes, size); };
                 size_t size_of_map = mutils::bytes_size(ip_addrs);
                 client_socket.write((char*)&size_of_map, sizeof(size_of_map));
                 mutils::post_object(bind_socket_write, ip_addrs);

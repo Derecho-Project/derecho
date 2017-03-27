@@ -10,9 +10,9 @@
 #include <functional>
 #include <numeric>
 
+#include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
 #include "mutils/tuple_extras.hpp"
-#include "mutils-serialization/SerializationSupport.hpp"
 
 #include "rpc_utils.h"
 
@@ -325,7 +325,7 @@ template <typename NewClass, FunctionTag opcode, typename Ret, typename... Args>
 auto wrap(std::unique_ptr<NewClass>* _this, const partial_wrapped<opcode, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<opcode, std::function<Ret(Args...)>>{
-            [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
+                    [_this, fun = partial.fun](Args... a){return ((_this->get())->*fun)(a...);
 }
 };
 }
@@ -405,7 +405,7 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
         const auto header_size = header_space();
         auto sent_return = hndl.send(
                 [&out_alloc, &header_size](std::size_t size) {
-                return out_alloc(size + header_size) + header_size;
+                    return out_alloc(size + header_size) + header_size;
                 },
                 std::forward<Args>(args)...);
 

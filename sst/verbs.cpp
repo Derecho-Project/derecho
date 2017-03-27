@@ -115,19 +115,16 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     // register the memory buffer
     int mr_flags = 0;
     // allow access for only local writes and remote reads
-    mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-               IBV_ACCESS_REMOTE_WRITE;
+    mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
     // register memory with the protection domain and the buffer
     write_mr = ibv_reg_mr(g_res->pd, write_buf, size_w, mr_flags);
     read_mr = ibv_reg_mr(g_res->pd, read_buf, size_r, mr_flags);
     check_for_error(
-        write_mr,
-        "Could not register memory region : write_mr, error code is : " +
-            std::to_string(errno));
+            write_mr,
+            "Could not register memory region : write_mr, error code is : " + std::to_string(errno));
     check_for_error(
-        read_mr,
-        "Could not register memory region : read_mr, error code is : " +
-            std::to_string(errno));
+            read_mr,
+            "Could not register memory region : read_mr, error code is : " + std::to_string(errno));
 
     // set the queue pair up for creation
     struct ibv_qp_init_attr qp_init_attr;
@@ -145,8 +142,7 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     // create the queue pair
     qp = ibv_create_qp(g_res->pd, &qp_init_attr);
 
-    check_for_error(qp, "Could not create queue pair, error code is : " +
-                            std::to_string(errno));
+    check_for_error(qp, "Could not create queue pair, error code is : " + std::to_string(errno));
 
     // connect the QPs
     connect_qp();
@@ -160,23 +156,20 @@ resources::~resources() {
     int rc = 0;
     if(qp) {
         rc = ibv_destroy_qp(qp);
-        check_for_error(qp, "Could not destroy queue pair, error code is " +
-                                std::to_string(rc));
+        check_for_error(qp, "Could not destroy queue pair, error code is " + std::to_string(rc));
     }
 
     if(write_mr) {
         rc = ibv_dereg_mr(write_mr);
         check_for_error(
-            !rc,
-            "Could not de-register memory region : write_mr, error code is " +
-                std::to_string(rc));
+                !rc,
+                "Could not de-register memory region : write_mr, error code is " + std::to_string(rc));
     }
     if(read_mr) {
         rc = ibv_dereg_mr(read_mr);
         check_for_error(
-            !rc,
-            "Could not de-register memory region : read_mr, error code is " +
-                std::to_string(rc));
+                !rc,
+                "Could not de-register memory region : read_mr, error code is " + std::to_string(rc));
     }
 }
 
@@ -193,15 +186,12 @@ void resources::set_qp_initialized() {
     attr.port_num = ib_port;
     attr.pkey_index = 0;
     // give access to local writes and remote reads
-    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE;
-    flags =
-        IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
+    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+    flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     // modify the queue pair to init state
     rc = ibv_modify_qp(qp, &attr, flags);
     check_for_error(
-        !rc, "Failed to modify queue pair to init state, error code is " +
-                 std::to_string(rc));
+            !rc, "Failed to modify queue pair to init state, error code is " + std::to_string(rc));
 }
 
 void resources::set_qp_ready_to_receive() {
@@ -232,13 +222,12 @@ void resources::set_qp_ready_to_receive() {
         attr.ah_attr.grh.sgid_index = gid_idx;
         attr.ah_attr.grh.traffic_class = 0;
     }
-    flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
-            IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
+    flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
     rc = ibv_modify_qp(qp, &attr, flags);
     check_for_error(!rc,
                     "Failed to modify queue pair to ready-to-receive state, "
-                    "error code is " +
-                        std::to_string(rc));
+                    "error code is "
+                            + std::to_string(rc));
 }
 
 void resources::set_qp_ready_to_send() {
@@ -252,13 +241,11 @@ void resources::set_qp_ready_to_send() {
     attr.rnr_retry = 0;
     attr.sq_psn = 0;
     attr.max_rd_atomic = 1;
-    flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
-            IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
+    flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
     rc = ibv_modify_qp(qp, &attr, flags);
     check_for_error(
-        !rc,
-        "Failed to modify queue pair to ready-to-send state, error code is " +
-            std::to_string(rc));
+            !rc,
+            "Failed to modify queue pair to ready-to-send state, error code is " + std::to_string(rc));
 }
 
 /**
@@ -276,8 +263,7 @@ void resources::connect_qp() {
     union ibv_gid my_gid;
     if(gid_idx >= 0) {
         int rc = ibv_query_gid(g_res->ib_ctx, ib_port, gid_idx, &my_gid);
-        check_for_error(!rc, "ibv_query_gid failed, error code is " +
-                                 std::to_string(errno));
+        check_for_error(!rc, "ibv_query_gid failed, error code is " + std::to_string(errno));
     } else {
         memset(&my_gid, 0, sizeof my_gid);
     }
@@ -288,8 +274,7 @@ void resources::connect_qp() {
     local_con_data.qp_num = htonl(qp->qp_num);
     local_con_data.lid = htons(g_res->port_attr.lid);
     memcpy(local_con_data.gid, &my_gid, 16);
-    bool success =
-        sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
+    bool success = sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
     check_for_error(success,
                     "Could not exchange qp data in connect_qp");
     remote_con_data.addr = ntohll(tmp_con_data.addr);
@@ -314,8 +299,8 @@ void resources::connect_qp() {
     // just send a dummy char back and forth
     success = sync(remote_index);
     check_for_error(
-        success,
-        "Could not sync in connect_qp after qp transition to RTS state");
+            success,
+            "Could not sync in connect_qp after qp transition to RTS state");
 }
 
 /**
@@ -370,7 +355,7 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
 void resources::post_remote_read(uint32_t id, long long int size) {
     int rc = post_remote_send(id, 0, size, 0);
     check_for_error(
-        !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
 }
 /**
  * @param offset The offset, in bytes, of the remote memory buffer at which to
@@ -380,7 +365,7 @@ void resources::post_remote_read(uint32_t id, long long int size) {
 void resources::post_remote_read(uint32_t id, long long int offset, long long int size) {
     int rc = post_remote_send(id, offset, size, 0);
     check_for_error(
-        !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
 }
 /**
  * @param size The number of bytes to write from the local buffer to remote
@@ -389,7 +374,7 @@ void resources::post_remote_read(uint32_t id, long long int offset, long long in
 void resources::post_remote_write(uint32_t id, long long int size) {
     int rc = post_remote_send(id, 0, size, 1);
     check_for_error(
-        !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
 }
 
 /**
@@ -401,7 +386,7 @@ void resources::post_remote_write(uint32_t id, long long int size) {
 void resources::post_remote_write(uint32_t id, long long int offset, long long int size) {
     int rc = post_remote_send(id, offset, size, 1);
     check_for_error(
-        !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
 }
 
 void polling_loop() {
@@ -499,8 +484,7 @@ void resources_create() {
     ib_dev = NULL;
     // query port properties
     rc = ibv_query_port(g_res->ib_ctx, ib_port, &g_res->port_attr);
-    check_for_error(!rc, "Could not query port properties, error code is " +
-                             std::to_string(rc));
+    check_for_error(!rc, "Could not query port properties, error code is " + std::to_string(rc));
 
     // allocate Protection Domain
     g_res->pd = ibv_alloc_pd(g_res->ib_ctx);
@@ -513,8 +497,7 @@ void resources_create() {
     cq_size = 1000;
     g_res->cq = ibv_create_cq(g_res->ib_ctx, cq_size, NULL, NULL, 0);
     check_for_error(g_res->cq,
-                    "Could not create completion queue, error code is " +
-                        std::to_string(errno));
+                    "Could not create completion queue, error code is " + std::to_string(errno));
 
     // start the polling thread
     polling_thread = std::thread(polling_loop);

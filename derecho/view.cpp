@@ -1,6 +1,6 @@
-#include <memory>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <sstream>
 #include <string>
 
@@ -13,7 +13,7 @@ using std::shared_ptr;
 
 SubView::SubView(int32_t num_members)
         : members(num_members),
-	  is_sender(num_members, 1),
+          is_sender(num_members, 1),
           member_ips(num_members),
           joined(0),
           departed(0),
@@ -29,16 +29,16 @@ int SubView::rank_of(const node_id_t& who) const {
 }
 
 int SubView::sender_rank_of(uint32_t rank) const {
-  if (!is_sender[rank]) {
-    return -1;
-  }
-  int num = 0;
-  for (uint i = 0; i < rank; ++i) {
-    if (is_sender[i]) {
-      num++;
+    if(!is_sender[rank]) {
+        return -1;
     }
-  }
-  return num;
+    int num = 0;
+    for(uint i = 0; i < rank; ++i) {
+        if(is_sender[i]) {
+            num++;
+        }
+    }
+    return num;
 }
 
 uint32_t SubView::num_senders() const {
@@ -86,16 +86,16 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           failed(failed),
           joined(joined),
           departed(departed),
-	  my_rank(my_rank) {
-  for(int rank = 0; rank < num_members; ++rank) {
-    node_id_to_rank[members[rank]] = rank;
-  }
-  for (auto c : failed) {
-    if (c) {
-      num_failed++;
+          my_rank(my_rank) {
+    for(int rank = 0; rank < num_members; ++rank) {
+        node_id_to_rank[members[rank]] = rank;
     }
-  }
-  num_members = members.size();
+    for(auto c : failed) {
+        if(c) {
+            num_failed++;
+        }
+    }
+    num_members = members.size();
 }
 
 int View::rank_of(const ip_addr& who) const {
@@ -134,7 +134,7 @@ std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_m
     return sub_view;
 }
 
-int View::rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const{
+int View::rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
     SubView& shard_view = *subgroup_shard_views.at(subgroup_id).at(shard_index);
     for(std::size_t rank = 0; rank < shard_view.members.size(); ++rank) {
         //Inefficient to call rank_of every time, but no guarantee the subgroup members will have ascending ranks

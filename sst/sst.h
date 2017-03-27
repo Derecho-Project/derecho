@@ -11,8 +11,8 @@
 #include <mutex>
 #include <numeric>
 #include <stdexcept>
-#include <string>
 #include <string.h>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -221,7 +221,6 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
-
         //Figure out my SST index
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
@@ -262,7 +261,7 @@ public:
                     continue;
                 }
                 res_vec[sst_index] = std::make_unique<resources>(
-                    node_rank, write_addr, read_addr, rowLen, rowLen);
+                        node_rank, write_addr, read_addr, rowLen, rowLen);
                 // update qp_num_to_index
                 qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
             }
@@ -293,7 +292,7 @@ public:
     int get_local_index() const { return my_index; }
 
     const char* getBaseAddress() {
-      return const_cast<char*>(rows);
+        return const_cast<char*>(rows);
     }
 
     /** Writes the entire local row to all remote nodes. */
@@ -342,7 +341,7 @@ private:
 
     // returns snapshot == current
     bool compare_snapshot_and_current() {
-      int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+        int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
         if(res == 0) {
             return true;
         }

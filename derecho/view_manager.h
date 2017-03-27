@@ -13,11 +13,11 @@
 #include <thread>
 #include <vector>
 
-#include "view.h"
-#include "tcp/tcp.h"
-#include "subgroup_info.h"
 #include "locked_reference.h"
 #include "spdlog/spdlog.h"
+#include "subgroup_info.h"
+#include "tcp/tcp.h"
+#include "view.h"
 
 #include "mutils-serialization/SerializationSupport.hpp"
 
@@ -159,12 +159,12 @@ private:
     void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                     const uint32_t num_received_offset,
                                     const std::vector<node_id_t>& shard_members,
-				    uint num_shard_senders);
+                                    uint num_shard_senders);
     void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
-				      uint shard_leader_rank,
+                                      uint shard_leader_rank,
                                       const uint32_t num_received_offset,
                                       const std::vector<node_id_t>& shard_members,
-				      uint num_shard_senders);
+                                      uint num_shard_senders);
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);

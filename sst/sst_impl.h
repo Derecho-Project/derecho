@@ -13,12 +13,12 @@
 #include <mutex>
 #include <pthread.h>
 #include <sys/time.h>
-#include <time.h>
 #include <thread>
+#include <time.h>
 #include <vector>
 
-#include "predicates.h"
 #include "poll_utils.h"
+#include "predicates.h"
 #include "sst.h"
 
 namespace sst {
@@ -71,7 +71,7 @@ void SST<DerivedSST>::detect() {
     clock_gettime(CLOCK_REALTIME, &last_time);
 
     while(!thread_shutdown) {
-      bool predicate_fired = false;
+        bool predicate_fired = false;
         // Take the predicate lock before reading the predicate lists
         std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
 
@@ -112,7 +112,7 @@ void SST<DerivedSST>::detect() {
                 if(curr_pred_state == true && *pred_state_it == false) {
                     predicate_fired = true;
                     std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(
-                        (*pred_it)->second);
+                            (*pred_it)->second);
                     predicates_lock.unlock();
                     (*trigger)(*derived_this);
                     predicates_lock.lock();
@@ -130,12 +130,13 @@ void SST<DerivedSST>::detect() {
         } else {
             clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
-            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3 + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > 1) {
                 predicates_lock.unlock();
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
-		predicates_lock.lock();
+                predicates_lock.lock();
             }
         }
         //Still to do: Clean up deleted predicates
@@ -199,8 +200,7 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
         if(!ce) {
             // find some node that hasn't been polled yet and report it
             for(unsigned int index2 = 0; index2 < num_members; ++index2) {
-                if(!posted_write_to[index2] ||
-                   polled_successfully_from[index2]) {
+                if(!posted_write_to[index2] || polled_successfully_from[index2]) {
                     continue;
                 }
 
@@ -223,12 +223,12 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
                 }
                 std::cout << std::endl;
 
-		std::cout << "Set of indices: ";
-		for (auto i : receiver_ranks) {
-		  std::cout << i << " ";
-		}
-		std::cout << std::endl;
-		std::cout << "Number of members: " << num_members << std::endl;
+                std::cout << "Set of indices: ";
+                for(auto i : receiver_ranks) {
+                    std::cout << i << " ";
+                }
+                std::cout << std::endl;
+                std::cout << "Number of members: " << num_members << std::endl;
             }
             continue;
         }

@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "view_manager.h"
 #include "derecho_exception.h"
+#include "view_manager.h"
 
 namespace derecho {
 

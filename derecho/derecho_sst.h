@@ -1,12 +1,12 @@
 #pragma once
 
-#include <atomic>
-#include <cstring>
-#include <cstdint>
-#include <mutex>
-#include <string>
-#include <sstream>
 #include "sst/sst.h"
+#include <atomic>
+#include <cstdint>
+#include <cstring>
+#include <mutex>
+#include <sstream>
+#include <string>
 
 namespace derecho {
 
@@ -89,10 +89,11 @@ public:
     /** Set after calling rdmc::wedged(), reports that this member is wedged.
      * Must be after num_received!*/
     SSTField<bool> wedged;
-    /** Array of how many messages to accept from each sender, K1-able*/
-    SSTFieldVector<int> globalMin;
-    /** Must come after GlobalMin */
-    SSTFieldVector<bool> globalMinReady;
+    /** Array of how many messages to accept from each sender in the current view change */
+    SSTFieldVector<int> global_min;
+    /** Array indicating whether each shard leader (indexed by subgroup number)
+     * has published a global_min for the current view change*/
+    SSTFieldVector<bool> global_min_ready;
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTField<bool> heartbeat;
     /**
@@ -111,22 +112,22 @@ public:
               changes(parameters.members.size()),
               joiner_ips(parameters.members.size()),
               num_received(num_received_size),
-              globalMin(num_received_size),
-              globalMinReady(num_subgroups) {
+              global_min(num_received_size),
+              global_min_ready(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
-                num_received, wedged, globalMin, globalMinReady, heartbeat);
+                num_received, wedged, global_min, global_min_ready, heartbeat);
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
             for(size_t i = 0; i < parameters.members.size(); ++i) {
                 suspected[row][i] = false;
                 changes[row][i] = 0;
-                globalMinReady[row][i] = false;
+                global_min_ready[row][i] = false;
             }
             for(size_t i = 0; i < num_received_size; ++i) {
-                globalMin[row][i] = 0;
+                global_min[row][i] = 0;
             }
             memset(const_cast<uint32_t*>(joiner_ips[row]), 0, parameters.members.size());
             num_changes[row] = 0;
@@ -219,7 +220,7 @@ void set(volatile Elem* array, volatile Elem* value, const size_t length) {
  * @param value The array whose contents should be copied to this member
  */
 template <typename Arr, size_t Len>
-void set(volatile Arr(&e)[Len], const volatile Arr(&value)[Len]) {
+void set(volatile Arr (&e)[Len], const volatile Arr (&value)[Len]) {
     static thread_local std::mutex set_mutex;
     {
         std::lock_guard<std::mutex> lock(set_mutex);
@@ -242,7 +243,7 @@ void set(volatile Arr(&e)[Len], const volatile Arr(&value)[Len]) {
  * @param num
  */
 template <size_t L1, size_t L2, typename Arr>
-void set(volatile Arr(&dst)[L1], const volatile Arr(&src)[L2], const size_t& num) {
+void set(volatile Arr (&dst)[L1], const volatile Arr (&src)[L2], const size_t& num) {
     static thread_local std::mutex set_mutex;
     {
         std::lock_guard<std::mutex> lock(set_mutex);

@@ -7,12 +7,12 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <map>
-#include <typeindex>
-#include <cstdint>
-#include <vector>
 #include <memory>
+#include <typeindex>
+#include <vector>
 
 #include "derecho_exception.h"
 

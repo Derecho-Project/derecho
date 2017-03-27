@@ -9,8 +9,8 @@
 #include <iostream>
 #include <string>
 
-#include "view.h"
 #include "persistence.h"
+#include "view.h"
 
 int main(int argc, char* argv[]) {
     if(argc < 2) {

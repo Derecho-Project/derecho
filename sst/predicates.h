@@ -29,8 +29,7 @@ template <class DerivedSST>
 class Predicates {
     using pred = std::function<bool(const DerivedSST&)>;
     using trig = std::function<void(DerivedSST&)>;
-    using pred_list =
-        std::list<std::unique_ptr<std::pair<pred, std::shared_ptr<trig>>>>;
+    using pred_list = std::list<std::unique_ptr<std::pair<pred, std::shared_ptr<trig>>>>;
     /** Predicate list for one-time predicates. */
     pred_list one_time_predicates;
     /** Predicate list for recurrent predicates */
@@ -81,7 +80,8 @@ public:
         return insert(predicate, [triggers](DerivedSST& t) {
             for(const auto& trigger : triggers)
                 trigger(t);
-        }, type);
+        },
+                      type);
     }
 
     /** Removes a (predicate, trigger) pair previously registered with insert(). */
@@ -106,15 +106,15 @@ auto Predicates<DerivedSST>::insert(pred predicate, trig trigger, PredicateType 
     std::lock_guard<std::mutex> lock(predicate_mutex);
     if(type == PredicateType::ONE_TIME) {
         one_time_predicates.push_back(std::make_unique<std::pair<pred, std::shared_ptr<trig>>>(
-            predicate, std::make_shared<trig>(trigger)));
+                predicate, std::make_shared<trig>(trigger)));
         return pred_handle(--one_time_predicates.end(), type);
     } else if(type == PredicateType::RECURRENT) {
         recurrent_predicates.push_back(std::make_unique<std::pair<pred, std::shared_ptr<trig>>>(
-            predicate, std::make_shared<trig>(trigger)));
+                predicate, std::make_shared<trig>(trigger)));
         return pred_handle(--recurrent_predicates.end(), type);
     } else {
         transition_predicates.push_back(std::make_unique<std::pair<pred, std::shared_ptr<trig>>>(
-            predicate, std::make_shared<trig>(trigger)));
+                predicate, std::make_shared<trig>(trigger)));
         transition_predicate_states.push_back(false);
         return pred_handle(--transition_predicates.end(), type);
     }

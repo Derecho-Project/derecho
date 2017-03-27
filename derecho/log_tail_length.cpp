@@ -6,14 +6,14 @@
  * as three (whitespace-separated) input arguments.
  */
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <cstdlib>
 #include <cstdint>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <string>
 
-#include <mutils-serialization/SerializationSupport.hpp>
 #include "persistence.h"
+#include <mutils-serialization/SerializationSupport.hpp>
 
 using namespace derecho::persistence;
 

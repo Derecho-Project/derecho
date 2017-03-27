@@ -10,16 +10,16 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "tcp/tcp.h"
 
-#include "rpc_utils.h"
-#include "rpc_manager.h"
-#include "remote_invocable.h"
 #include "derecho_exception.h"
+#include "remote_invocable.h"
+#include "rpc_manager.h"
+#include "rpc_utils.h"
 
 namespace derecho {
 
@@ -75,13 +75,13 @@ private:
             std::cout << "Replicated: doing ordered send/query for function tagged " << tag << std::endl;
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
-                if(size <= max_payload_size) {
-                    return buffer;
-                } else {
-                    return nullptr;
-                }
-            },
-            std::forward<Args>(args)...);
+                        if(size <= max_payload_size) {
+                            return buffer;
+                        } else {
+                            return nullptr;
+                        }
+                    },
+                    std::forward<Args>(args)...);
 
             group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
@@ -100,12 +100,12 @@ private:
             auto max_payload_size = group_rpc_manager->view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
                     [this, &max_payload_size, &size](size_t _size) -> char* {
-                size = _size;
-                if(size <= max_payload_size) {
-                    return p2pSendBuffer.get();
-                } else {
-                    return nullptr;
-                }
+                        size = _size;
+                        if(size <= max_payload_size) {
+                            return p2pSendBuffer.get();
+                        } else {
+                            return nullptr;
+                        }
                     },
                     std::forward<Args>(args)...);
             group_rpc_manager->finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
@@ -279,8 +279,7 @@ public:
      * @param receiver_socket
      */
     void send_object(tcp::socket& receiver_socket) const {
-        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
-            receiver_socket.write(bytes, size); };
+        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
         mutils::post_object(bind_socket_write, object_size());
         send_object_raw(receiver_socket);
     }
@@ -294,8 +293,7 @@ public:
      * @param receiver_socket
      */
     void send_object_raw(tcp::socket& receiver_socket) const {
-        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
-            receiver_socket.write(bytes, size); };
+        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
         mutils::post_object(bind_socket_write, **user_object_ptr);
     }
 

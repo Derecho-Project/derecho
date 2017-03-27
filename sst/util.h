@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include "args-finder.hpp"
 #include <memory>
 #include <type_traits>
-#include "args-finder.hpp"
 
 namespace sst {
 
@@ -47,7 +47,7 @@ enum class NullEnum {};
  */
 template <int index, typename F, typename Tuple1, typename Tuple2>
 std::enable_if_t<index == std::tuple_size<Tuple2>::value> for_each_hlpr(
-    const F &f, const Tuple1 &t1, Tuple2 &t2) {}
+        const F &f, const Tuple1 &t1, Tuple2 &t2) {}
 
 /**
  * Helper function that recursively applies a function to the tuples given to
@@ -67,7 +67,7 @@ void for_each_hlpr(const F &f, const Tuple1 &t1, Tuple2 &t2) {
  */
 template <int index, typename F, typename Tuple1>
 std::enable_if_t<index == std::tuple_size<Tuple1>::value> for_each_hlpr(
-    const F &f, const Tuple1 &t1) {}
+        const F &f, const Tuple1 &t1) {}
 
 /**
  * Helper function that recursively applies a function to the tuple given to
@@ -100,8 +100,8 @@ void for_each_hlpr(const F &f, const Tuple1 &t1) {
 template <typename F, typename Tuple1, typename Tuple2>
 void for_each(const F &f, Tuple1 &t1, const Tuple2 &t2) {
     static_assert(
-        std::tuple_size<Tuple1>::value >= std::tuple_size<Tuple2>::value,
-        "Error, dual-foreach needs smaller one second!");
+            std::tuple_size<Tuple1>::value >= std::tuple_size<Tuple2>::value,
+            "Error, dual-foreach needs smaller one second!");
     for_each_hlpr<0>(f, t1, t2);
 }
 

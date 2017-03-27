@@ -1,7 +1,7 @@
 #include "connection_manager.h"
 
-#include <iostream>
 #include <cassert>
+#include <iostream>
 #include <set>
 
 namespace tcp {

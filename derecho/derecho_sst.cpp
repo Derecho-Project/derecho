@@ -1,6 +1,6 @@
-#include <cstring>
-#include <atomic>
 #include "derecho_sst.h"
+#include <atomic>
+#include <cstring>
 
 namespace derecho {
 
@@ -18,10 +18,10 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
            (old_sst.joiner_ips.size() - num_changes_installed) * sizeof(uint32_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
-        globalMinReady[local_row][i] = false;
+        global_min_ready[local_row][i] = false;
     }
-    for(size_t i = 0; i < globalMin.size(); ++i) {
-        globalMin[local_row][i] = 0;
+    for(size_t i = 0; i < global_min.size(); ++i) {
+        global_min[local_row][i] = 0;
     }
     num_changes[local_row] = old_sst.num_changes[row];
     num_committed[local_row] = old_sst.num_committed[row];
@@ -81,13 +81,13 @@ std::string DerechoSST::to_string() const {
         }
         s << "}"
           << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
-        for(unsigned int n = 0; n < globalMin.size(); n++) {
-            s << globalMin[row][n] << " ";
+        for(unsigned int n = 0; n < global_min.size(); n++) {
+            s << global_min[row][n] << " ";
         }
 
         s << "}, GlobalMinReady= { ";
-        for(uint n = 0; n < globalMinReady.size(); n++) {
-            s << globalMinReady[row] << " ";
+        for(uint n = 0; n < global_min_ready.size(); n++) {
+            s << global_min_ready[row] << " ";
         }
         s << "}" << std::endl;
     }

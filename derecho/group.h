@@ -1,10 +1,11 @@
 #pragma once
 
 #include <chrono>
-#include <ctime>
 #include <cstdint>
-#include <experimental/optional>
+#include <ctime>
 #include <exception>
+#include <experimental/optional>
+#include <iostream>
 #include <list>
 #include <map>
 #include <mutex>
@@ -13,20 +14,19 @@
 #include <typeindex>
 #include <utility>
 #include <vector>
-#include <iostream>
 
 #include "tcp/tcp.h"
 
+#include "derecho_exception.h"
+#include "raw_subgroup.h"
 #include "replicated.h"
 #include "rpc_manager.h"
-#include "view_manager.h"
-#include "derecho_exception.h"
 #include "subgroup_info.h"
-#include "raw_subgroup.h"
+#include "view_manager.h"
 
-#include "spdlog/spdlog.h"
-#include "mutils-containers/TypeMap2.hpp"
 #include "mutils-containers/KindMap.hpp"
+#include "mutils-containers/TypeMap2.hpp"
+#include "spdlog/spdlog.h"
 
 namespace derecho {
 
@@ -281,7 +281,6 @@ public:
     void log_event(const std::string& event_text) {
         logger->debug(event_text);
     }
-
 };
 
 } /* namespace derecho */

@@ -4,12 +4,12 @@
 #include <condition_variable>
 #include <experimental/optional>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <ostream>
-#include <list>
+#include <queue>
 #include <set>
 #include <tuple>
 #include <vector>
@@ -17,12 +17,12 @@
 #include "connection_manager.h"
 #include "derecho_sst.h"
 #include "filewriter.h"
-#include "subgroup_info.h"
-#include "rdmc/rdmc.h"
-#include "sst/sst.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
+#include "rdmc/rdmc.h"
 #include "spdlog/spdlog.h"
+#include "sst/sst.h"
+#include "subgroup_info.h"
 
 namespace derecho {
 
@@ -33,7 +33,6 @@ using subgroup_id_t = uint32_t;
 using message_callback = std::function<void(subgroup_id_t, node_id_t, long long int, char*, long long int)>;
 
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
-
 
 /**
  * Bundles together a set of callback functions for message delivery events.
@@ -226,10 +225,10 @@ private:
 
     void deliver_message(Message& msg, uint32_t subgroup_num);
 
-    uint32_t get_num_senders(std::vector<int> shard_senders){
+    uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
-        for (const auto i : shard_senders) {
-            if (i) {
+        for(const auto i : shard_senders) {
+            if(i) {
                 num++;
             }
         }

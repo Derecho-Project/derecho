@@ -229,7 +229,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
                                                            const vector_int64_2d& old_shard_leaders) {
         //ugh, we have to copy the vector to get it as a pointer
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
-            = construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
+                = construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
         receive_objects(subgroups_and_leaders);
         raw_subgroups = construct_raw_subgroups(view);
     });

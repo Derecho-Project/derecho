@@ -1,11 +1,11 @@
 #pragma once
 
+#include <cassert>
 #include <map>
 #include <mutex>
-#include <cassert>
 
-#include "tcp/tcp.h"
 #include "locked_reference.h"
+#include "tcp/tcp.h"
 
 namespace tcp {
 using ip_addr_t = std::string;

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <iostream>
-#include <fstream>
 #include <cstdint>
 #include <cstdio>
+#include <fstream>
+#include <iostream>
 #include <string>
 
 #include <mutils-serialization/SerializationSupport.hpp>
@@ -60,7 +60,7 @@ template <typename T>
 void persist_object(const T& object, const std::string& filename) {
     std::ofstream swap_file(filename + SWAP_FILE_EXTENSION);
     auto swap_file_write_func = [&](char const* const c, std::size_t n) {
-        swap_file.write(c,n);
+        swap_file.write(c, n);
     };
     mutils::post_object(swap_file_write_func, mutils::bytes_size(object));
     mutils::post_object(swap_file_write_func, object);

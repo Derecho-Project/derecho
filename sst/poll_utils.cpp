@@ -16,7 +16,7 @@ std::mutex PollingData::poll_mutex;
 PollingData polling_data;
 
 bool PollingData::check_waiting() {
-    return std::accumulate(if_waiting.begin(), if_waiting.end(), false, [](bool a, bool b) {return a || b; });
+    return std::accumulate(if_waiting.begin(), if_waiting.end(), false, [](bool a, bool b) { return a || b; });
 }
 
 void PollingData::insert_completion_entry(uint32_t index, std::pair<int32_t, int32_t> ce) {
