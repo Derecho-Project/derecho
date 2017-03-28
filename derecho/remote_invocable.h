@@ -194,10 +194,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             return this->receive_response(a...);
         };
     }
+
+
 };
-// Everything above is used only by the send()/receive_response() side
-// -------------------------------------------------------------------
-// Everything below is used only by the receive_call() side
+    // Everything above is used only by the send()/receive_response() side
+    // -------------------------------------------------------------------
+    // Everything below is used only by the receive_call() side
 
 /**
  * Provides functions to implement handling RPC calls to a single function,
@@ -385,7 +387,7 @@ template <typename NewClass, FunctionTag Tag, typename Ret, typename... Args>
 auto wrap(std::unique_ptr<NewClass>* _this, const partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
-                    [_this, fun = partial.fun](Args... a){return ((_this->get())->*fun)(a...);
+            [ _this, fun = partial.fun ](Args... a){return ((_this->get())->*fun)(a...);
 }
 };
 }
@@ -486,9 +488,9 @@ struct RemoteInvocableClass : private RemoteInvocablePairs<Fs...> {
         const auto header_size = header_space();
         auto sent_return = hndl.send(
                 [&out_alloc, &header_size](std::size_t size) {
-                    return out_alloc(size + header_size) + header_size;
-                },
-                std::forward<Args>(args)...);
+            return out_alloc(size + header_size) + header_size;
+        },
+        std::forward<Args>(args)...);
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
