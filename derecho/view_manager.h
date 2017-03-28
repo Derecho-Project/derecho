@@ -155,7 +155,6 @@ private:
     void deliver_in_order(const View& Vc, const int shard_leader_rank,
                           const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
                           const std::vector<node_id_t>& shard_members, uint num_shard_senders);
-    void ragged_edge_cleanup(View& Vc);
     void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                     const uint32_t num_received_offset,
                                     const std::vector<node_id_t>& shard_members,

@@ -96,6 +96,7 @@ public:
     std::map<std::type_index, std::vector<subgroup_id_t>> subgroup_ids_by_type;
     /** Maps subgroup ID -> shard number -> SubView for that subgroup/shard */
     std::vector<std::vector<std::unique_ptr<SubView>>> subgroup_shard_views;
+    /** Reverse index of members[]; maps node ID -> SST rank */
     std::map<node_id_t, uint32_t> node_id_to_rank;
 
     bool i_know_i_am_leader = false;  // I am the leader (and know it)
@@ -126,7 +127,10 @@ public:
     /** Wedges the view, which means wedging both SST and DerechoGroup. */
     void wedge();
 
-    int rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const;
+    /** Computes the within-shard rank of a particular shard's leader, based on failed[].
+     * This is not a member of SubView because it needs access to failed[], but it returns
+     * a SubView rank, not an SST rank in this View. */
+    int subview_rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const;
 
     /** Builds a human-readable string representing the state of the view.
      *  Used for debugging only.*/

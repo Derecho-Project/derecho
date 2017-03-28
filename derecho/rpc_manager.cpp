@@ -135,18 +135,19 @@ void RPCManager::new_view_callback(const View& new_view) {
         //If this node is in the joined list, we need to set up a connection to everyone
         for(int i = 0; i < new_view.num_members; ++i) {
             if(new_view.members[i] != nid) {
-                //                std::cout << "RPCManager adding a connection to node " << new_view.members[i] << std::endl;
                 connections.add_node(new_view.members[i], new_view.member_ips[i]);
+                logger->debug("Established a TCP connection to node {}", new_view.members[i]);
             }
         }
     } else {
         //This node is already a member, so we already have connections to the previous view's members
         for(const node_id_t& joiner_id : new_view.joined) {
-            //            std::cout << "RPCManager adding a connection to node " << joiner_id << std::endl;
             connections.add_node(joiner_id,
                                  new_view.member_ips[new_view.rank_of(joiner_id)]);
+            logger->debug("Established a TCP connection to node {}", joiner_id);
         }
         for(const node_id_t& removed_id : new_view.departed) {
+            logger->debug("Removing TCP connection for failed node {}", removed_id);
             connections.delete_node(removed_id);
         }
     }

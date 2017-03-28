@@ -37,6 +37,8 @@ class RPCManager {
     /** An emtpy DeserializationManager, in case we need it later. */
     mutils::DeserializationManager dsm{{}};
 
+    std::shared_ptr<spdlog::logger> logger;
+
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
     ViewManager& view_manager;
@@ -71,6 +73,7 @@ public:
     RPCManager(node_id_t node_id, ViewManager& group_view_manager)
             : nid(node_id),
               receivers(new std::decay_t<decltype(*receivers)>()),
+              logger(spdlog::get("debug_log")),
               view_manager(group_view_manager),
               //Connections is initially empty, all connections are added in the new view callback
               connections(node_id, std::map<node_id_t, ip_addr>(),

@@ -209,7 +209,13 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     node_id_t joiner_id = 0;
     client_socket.exchange(my_id, joiner_id);
     ip_addr& joiner_ip = client_socket.remote_ip;
-    curr_view = std::make_unique<View>(0, std::vector<node_id_t>{my_id, joiner_id}, std::vector<ip_addr>{curr_view->member_ips[0], joiner_ip}, std::vector<char>{0, 0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 2, 0);
+    curr_view = std::make_unique<View>(0,
+                                       std::vector<node_id_t>{my_id, joiner_id},
+                                       std::vector<ip_addr>{curr_view->member_ips[0], joiner_ip},
+                                       std::vector<char>{0, 0},
+                                       std::vector<node_id_t>{joiner_id},
+                                       std::vector<node_id_t>{},
+                                       0);
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         bool success = client_socket.write(bytes, size);
         assert(success);
@@ -221,7 +227,7 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
     mutils::post_object(bind_socket_write, derecho_params);
-    //Sending a "0" will cause the second member's receive_objects to terminate immediately
+    //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
     mutils::post_object(bind_socket_write, std::size_t{0});
     rdma::impl::verbs_add_connection(joiner_id, joiner_ip, my_id);
     sst::add_node(joiner_id, joiner_ip);
@@ -503,12 +509,65 @@ void ViewManager::register_predicates() {
             std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
             assert(next_view);
 
-            auto globalMin_ready_continuation = [this](DerechoSST& gmsSST) {
+            //First, for subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader
+            auto follower_subgroups_and_shards = std::make_shared<std::map<subgroup_id_t, uint32_t>>();
+            for(const auto& shard_rank_pair : curr_view->multicast_group->get_subgroup_to_shard_and_rank()) {
+                const subgroup_id_t subgroup_id = shard_rank_pair.first;
+                const uint32_t shard_num = shard_rank_pair.second.first;
+                SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
+                uint num_shard_senders = 0;
+                for(auto v : shard_view.is_sender) {
+                    if(v) num_shard_senders++;
+                }
+                if(num_shard_senders) {
+                    if(shard_view.my_rank == curr_view->subview_rank_of_shard_leader(subgroup_id, shard_num)) {
+                        leader_ragged_edge_cleanup(*curr_view, subgroup_id,
+                                                   curr_view->multicast_group->get_subgroup_to_num_received_offset()
+                                                           .at(subgroup_id),
+                                                   shard_view.members, num_shard_senders);
+                    } else {
+                        //Keep track of which subgroups I'm a non-leader in, and what my corresponding shard ID is
+                        follower_subgroups_and_shards->emplace(subgroup_id, shard_num);
+                    }
+                }
+            }
+
+            //Wait for the shard leaders of subgroups I'm not a leader in to post global_min_ready before continuing
+            auto leader_global_mins_are_ready = [this, follower_subgroups_and_shards](const DerechoSST& gmsSST) {
+                for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
+                    SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
+                                                   .at(subgroup_shard_pair.second);
+                    node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
+                            subgroup_shard_pair.first, subgroup_shard_pair.second)];
+                    if(!gmsSST.global_min_ready[curr_view->rank_of(shard_leader)][subgroup_shard_pair.first])
+                        return false;
+                }
+                return true;
+            };
+
+            auto global_min_ready_continuation = [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
                 std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
                 assert(next_view);
 
-                ragged_edge_cleanup(*curr_view);
-                //Calculate and save the shard leaders for the old view
+                logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
+                //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
+                for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
+                    SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
+                                                   .at(subgroup_shard_pair.second);
+                    uint num_shard_senders = 0;
+                    for(auto v : shard_view.is_sender) {
+                        if(v) num_shard_senders++;
+                    }
+                    node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
+                            subgroup_shard_pair.first, subgroup_shard_pair.second)];
+                    follower_ragged_edge_cleanup(*curr_view, subgroup_shard_pair.first,
+                                                 curr_view->rank_of(shard_leader),
+                                                 curr_view->multicast_group->get_subgroup_to_num_received_offset()
+                                                         .at(subgroup_shard_pair.first),
+                                                 shard_view.members,
+                                                 num_shard_senders);
+                }
+                //Calculate and save the IDs of shard leaders for the old view
                 //If the old view was inadequately provisioned, this will be empty
                 std::map<std::type_index, std::vector<std::vector<int64_t>>> old_shard_leaders_by_type
                         = make_shard_leaders_map(*curr_view);
@@ -616,21 +675,12 @@ void ViewManager::register_predicates() {
                 view_change_cv.notify_all();
             };
 
-            if(curr_view->i_am_leader()) {
-                // The leader doesn't need to wait any more, it can execute continuously from here.
-                write_lock.unlock();
-                globalMin_ready_continuation(gmsSST);
-            } else {
-                // Non-leaders need another level of continuation to wait for GlobalMinReady
-                auto leader_globalMin_is_ready = [this](const DerechoSST& gmsSST) {
-                    return gmsSST.global_min_ready[curr_view->rank_of_leader()];
-                };
-                gmsSST.predicates.insert(leader_globalMin_is_ready,
-                                         globalMin_ready_continuation,
-                                         sst::PredicateType::ONE_TIME);
-            }
+            //Last statement in meta_wedged_continuation: register global_min_ready_continuation
+            gmsSST.predicates.insert(leader_global_mins_are_ready, global_min_ready_continuation, sst::PredicateType::ONE_TIME);
 
         };
+
+        //Last statement in start_view_change: register meta_wedged_continuation
         gmsSST.predicates.insert(is_meta_wedged, meta_wedged_continuation, sst::PredicateType::ONE_TIME);
 
     };
@@ -820,7 +870,7 @@ std::map<std::type_index, std::vector<std::vector<int64_t>>> ViewManager::make_s
             std::size_t num_shards = view.subgroup_shard_views[subgroup_id].size();
             shard_leaders_by_type[type_to_ids.first][subgroup_index].resize(num_shards, -1);
             for(uint32_t shard = 0; shard < num_shards; ++shard) {
-                int shard_leader_rank = view.rank_of_shard_leader(subgroup_id, shard);
+                int shard_leader_rank = view.subview_rank_of_shard_leader(subgroup_id, shard);
                 if(shard_leader_rank >= 0) {
                     shard_leaders_by_type[type_to_ids.first][subgroup_index][shard]
                             = view.subgroup_shard_views[subgroup_id][shard]->members[shard_leader_rank];
@@ -920,34 +970,10 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
     Vc.multicast_group->deliver_messages_upto(max_received_indices, subgroup_num, shard_members.size());
 }
 
-void ViewManager::ragged_edge_cleanup(View& Vc) {
-    logger->debug("Running RaggedEdgeCleanup");
-    const auto& subgroup_to_num_received_offset = Vc.multicast_group->get_subgroup_to_num_received_offset();
-    for(const auto& shard_rank_pair : Vc.multicast_group->get_subgroup_to_shard_and_rank()) {
-        const subgroup_id_t subgroup_id = shard_rank_pair.first;
-        const uint32_t shard_num = shard_rank_pair.second.first;
-        const uint32_t num_received_offset = subgroup_to_num_received_offset.at(subgroup_id);
-        SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
-        uint num_shard_senders = 0;
-        for(auto v : shard_view.is_sender) {
-            if(v) {
-                num_shard_senders++;
-            }
-        }
-        if(num_shard_senders) {
-            if(shard_view.my_rank == curr_view->rank_of_shard_leader(subgroup_id, shard_num)) {
-                leader_ragged_edge_cleanup(Vc, subgroup_id, num_received_offset, shard_view.members, num_shard_senders);
-            } else {
-                follower_ragged_edge_cleanup(Vc, curr_view->rank_of_shard_leader(subgroup_id, shard_num), subgroup_id, num_received_offset, shard_view.members, num_shard_senders);
-            }
-        }
-    }
-    logger->debug("Done with RaggedEdgeCleanup");
-}
-
 void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
+    logger->debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num);
     int myRank = Vc.my_rank;
     // int Leader = Vc.rank_of_leader();  // We don't want this to change under our feet
     bool found = false;
@@ -976,7 +1002,7 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
         }
     }
 
-    logger->debug("Shard leader finished computing globalMin");
+    logger->debug("Shard leader for subgroup {} finished computing global_min", subgroup_num);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
@@ -986,6 +1012,7 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
                    sizeof(bool));
 
     deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
+    logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
 }
 
 void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
@@ -994,7 +1021,7 @@ void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t sub
                                                const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
     int myRank = Vc.my_rank;
     // Learn the leader's data and push it before acting upon it
-    logger->debug("Received leader's globalMin; echoing it");
+    logger->debug("Running follower RaggedEdgeCleanup for subgroup {}; echoing leader's global_min", subgroup_num);
     gmssst::set(Vc.gmsSST->global_min[myRank] + num_received_offset, Vc.gmsSST->global_min[shard_leader_rank] + num_received_offset,
                 num_shard_senders);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
@@ -1005,6 +1032,7 @@ void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t sub
                    (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
                    sizeof(bool));
     deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
+    logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
 }
 
 /* ----------  3. Public-Interface methods of ViewManager ------------- */
