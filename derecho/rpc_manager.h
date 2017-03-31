@@ -28,11 +28,13 @@ class Replicated;
 namespace rpc {
 
 class RPCManager {
+    static_assert(std::is_trivially_copyable<Opcode>::value, "Oh no! Opcode is not trivially copyable!");
     /** The ID of the node this RPCManager is running on. */
     const node_id_t nid;
-    /** A map from opcodes to RPC functions, either the "server" stubs that receive
+    /** A map from FunctionIDs to RPC functions, either the "server" stubs that receive
      * remote calls to invoke functions, or the "client" stubs that receive responses
-     * from the targets of an earlier remote call. */
+     * from the targets of an earlier remote call.
+     * Note that a FunctionID is (class ID, subgroup ID, Function Tag). */
     std::unique_ptr<std::map<Opcode, receive_fun_t>> receivers;
     /** An emtpy DeserializationManager, in case we need it later. */
     mutils::DeserializationManager dsm{{}};
@@ -89,6 +91,9 @@ public:
      * RpcManager.
      * @param cls A raw pointer(??) to a pointer to the object being set up as
      * a RemoteInvocableClass
+     * @param instance_id A number uniquely identifying the object, corresponding
+     * to the subgroup that will be receiving RPC invocations for it (in practice,
+     * this is the subgroup ID).
      * @param f A variable-length list of pointer-to-member-functions, one for
      * each method of NewClass that should be an RPC function
      * @return The RemoteInvocableClass that wraps NewClass, by pointer
@@ -97,10 +102,12 @@ public:
      * @tparam NewFuns The types of the member function pointers
      */
     template <class NewClass, typename... NewFuns>
-    auto setup_rpc_class(std::unique_ptr<NewClass>* cls, NewFuns... f) {
+    auto setup_rpc_class(std::unique_ptr<NewClass>* cls, uint32_t instance_id, NewFuns... f) {
         //NewFuns must be of type Ret (NewClass::*) (Args...)
         //or of type wrapped<opcode,Ret,Args...>
-        return build_remoteinvocableclass<NewClass>(nid, *receivers, wrap(cls, wrap(f))...);
+        //ACTUALLY, NEITHER! It must be a list of partial_wrapped<Tag, Ret, NewClass, Args>,
+        //because the user calls setup_rpc_class with wrap<Tag>(&NewClass::method) and that returns a partial_wrapped
+        return build_remoteinvocableclass<NewClass>(nid, instance_id, *receivers, bind_to_instance(cls, f)...);
     }
 
     /**

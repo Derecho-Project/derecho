@@ -47,10 +47,11 @@ struct test1_str {
      * @param ptr A pointer to an instance of this class
      * @return Whatever the result of Dispatcher::setup_rpc_class() is.
      */
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str>* ptr) {
-        assert(ptr);
-        return m.setup_rpc_class(ptr, derecho::rpc::wrap<READ_STATE>(&test1_str::read_state),
-                                 derecho::rpc::wrap<CHANGE_STATE>(&test1_str::change_state));
+    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str>* instance_ptr, uint32_t instance_id) {
+        assert(instance_ptr);
+        return m.setup_rpc_class(instance_ptr, instance_id,
+                                 derecho::rpc::tag<READ_STATE>(&test1_str::read_state),
+                                 derecho::rpc::tag<CHANGE_STATE>(&test1_str::change_state));
     }
 };
 

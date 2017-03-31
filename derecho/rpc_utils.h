@@ -16,6 +16,9 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <tuple>
+#include <type_traits>
+#include <typeindex>
 #include <utility>
 #include <vector>
 
@@ -28,16 +31,22 @@ using node_id_t = uint32_t;
 
 namespace rpc {
 
-struct Opcode {
-    using t = unsigned long long;
-    t id;
-    Opcode(const decltype(id)& id) : id(id) {}
-    Opcode() = default;
-    bool operator==(const Opcode& n) const { return id == n.id; }
-    bool operator<(const Opcode& n) const { return id < n.id; }
-};
-auto& operator<<(std::ostream& out, const Opcode& op) { return out << op.id; }
 using FunctionTag = unsigned long long;
+
+struct Opcode {
+    std::type_index class_id = std::type_index(typeid(void));
+    uint32_t subgroup_id;
+    FunctionTag function_id;
+    bool is_reply;
+};
+bool operator<(const Opcode& lhs, const Opcode& rhs) {
+    return std::tie(lhs.class_id, lhs.subgroup_id, lhs.function_id, lhs.is_reply)
+           < std::tie(rhs.class_id, rhs.subgroup_id, rhs.function_id, rhs.is_reply);
+}
+bool operator==(const Opcode& lhs, const Opcode& rhs) {
+    return lhs.class_id == rhs.class_id && lhs.subgroup_id == rhs.subgroup_id
+           && lhs.function_id == rhs.function_id && lhs.is_reply == rhs.is_reply;
+}
 
 using node_list_t = std::vector<node_id_t>;
 
@@ -275,7 +284,7 @@ namespace remote_invocation_utilities {
 
 inline std::size_t header_space() {
     return sizeof(std::size_t) + sizeof(Opcode) + sizeof(node_id_t);
-    //          size           operation           from
+    //          size                      operation           from
 }
 
 inline char* extra_alloc(int i) {

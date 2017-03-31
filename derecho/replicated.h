@@ -48,11 +48,12 @@ private:
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
+    /** The ID of this node */
     const node_id_t node_id;
+    /** The internally-generated subgroup ID of the subgroup that replicates this object. */
     subgroup_id_t subgroup_id;
-    /** Non-owning, non-managed pointer to Group's RPCManager - really a
-     * reference, but needs to be lazily initialized */
-    rpc::RPCManager* group_rpc_manager;
+    /** Reference to the RPCManager for the Group this Replicated is in */
+    rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     /** Buffer for replying to P2P messages, cached here so it doesn't need to be
@@ -64,13 +65,13 @@ private:
                                Args&&... args) {
         if(is_valid()) {
             char* buffer;
-            while(!(buffer = group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id, 0, 0, true))) {
+            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, 0, 0, true))) {
             };
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager->view_manager.view_mutex);
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
 
             std::size_t max_payload_size;
-            int buffer_offset = group_rpc_manager->populate_nodelist_header(destination_nodes,
-                                                                            buffer, max_payload_size);
+            int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
+                                                                           buffer, max_payload_size);
             buffer += buffer_offset;
             std::cout << "Replicated: doing ordered send/query for function tagged " << tag << std::endl;
             auto send_return_struct = wrapped_this->template send<tag>(
@@ -83,7 +84,7 @@ private:
                     },
                     std::forward<Args>(args)...);
 
-            group_rpc_manager->finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
+            group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
             return std::move(send_return_struct.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -95,9 +96,9 @@ private:
         if(is_valid()) {
             assert(dest_node != node_id);
             //Ensure a view change isn't in progress
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager->view_manager.view_mutex);
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
-            auto max_payload_size = group_rpc_manager->view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+            auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
                     [this, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
@@ -108,7 +109,7 @@ private:
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager->finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -117,8 +118,8 @@ private:
 
 public:
     /**
-     * Constructs a Replicated<T> that enables RPC function calls for an object
-     * of type T.
+     * Constructs a Replicated<T> that enables sending and receiving RPC
+     * function calls for an object of type T.
      * @param nid The ID of the node on which this Replicated<T> is running.
      * @param subgroup_id The internally-generated subgroup ID for the subgroup
      * that participates in replicating this object
@@ -132,16 +133,28 @@ public:
             : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory())),
               node_id(nid),
               subgroup_id(subgroup_id),
-              group_rpc_manager(&group_rpc_manager),
-              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get())),
+              group_rpc_manager(group_rpc_manager),
+              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get(), subgroup_id)),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
-    Replicated(node_id_t nid, rpc::RPCManager& group_rpc_manager)
+    /**
+     * Constructs a Replicated<T> for an object without actually constructing an
+     * instance of that object; the resulting Replicated will be in an invalid
+     * state until receive_object() is called. This should be used when a new
+     * subgroup member expects to receive the replicated object's state after
+     * joining.
+     * @param nid This node's node ID
+     * @param subgroup_id The internally-generated subgroup ID for the subgroup
+     * that participates in replicating this object
+     * @param group_rpc_manager A reference to the RPCManager for the Group
+     * that owns this Replicated<T>
+     */
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
             : user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
-              subgroup_id(0),
-              group_rpc_manager(&group_rpc_manager),
-              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get())),
+              subgroup_id(subgroup_id),
+              group_rpc_manager(group_rpc_manager),
+              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get(), subgroup_id)),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     Replicated(Replicated&&) = default;
@@ -251,8 +264,8 @@ public:
      * @return
      */
     char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns) {
-        return group_rpc_manager->view_manager.get_sendbuffer_ptr(subgroup_id,
-                                                                  payload_size, pause_sending_turns, false);
+        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id,
+                                                                 payload_size, pause_sending_turns, false);
     }
 
     /**
@@ -260,7 +273,7 @@ public:
      * assuming it has been previously filled with a call to get_sendbuffer_ptr().
      */
     void raw_send() {
-        group_rpc_manager->view_manager.send(subgroup_id);
+        group_rpc_manager.view_manager.send(subgroup_id);
     }
 
     /**
@@ -308,8 +321,9 @@ public:
      * @return The number of bytes read from the buffer.
      */
     std::size_t receive_object(char* buffer) {
-        *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager->dsm, buffer));
+        *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
         return mutils::bytes_size(**user_object_ptr);
     }
 };
+
 }

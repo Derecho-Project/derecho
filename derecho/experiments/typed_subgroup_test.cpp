@@ -35,10 +35,11 @@ public:
     enum Functions { READ_STATE,
                      CHANGE_STATE };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Foo>* ptr) {
-        assert(ptr);
-        return m.setup_rpc_class(ptr, derecho::rpc::wrap<READ_STATE>(&Foo::read_state),
-                                 derecho::rpc::wrap<CHANGE_STATE>(&Foo::change_state));
+    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Foo>* instance_ptr, uint32_t instance_id) {
+        assert(instance_ptr);
+        return m.setup_rpc_class(instance_ptr, instance_id,
+                                 derecho::rpc::tag<READ_STATE>(&Foo::read_state),
+                                 derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
     }
 
     Foo(int initial_state = 0) : state(initial_state) {}
@@ -62,11 +63,12 @@ public:
                      CLEAR,
                      PRINT };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Bar>* ptr) {
-        assert(ptr);
-        return m.setup_rpc_class(ptr, derecho::rpc::wrap<APPEND>(&Bar::append),
-                                 derecho::rpc::wrap<CLEAR>(&Bar::clear),
-                                 derecho::rpc::wrap<PRINT>(&Bar::print));
+    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Bar>* instance_ptr, uint32_t instance_id) {
+        assert(instance_ptr);
+        return m.setup_rpc_class(instance_ptr, instance_id,
+                                 derecho::rpc::tag<APPEND>(&Bar::append),
+                                 derecho::rpc::tag<CLEAR>(&Bar::clear),
+                                 derecho::rpc::tag<PRINT>(&Bar::print));
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
@@ -100,12 +102,13 @@ public:
                      CONTAINS,
                      INVALIDATE };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Cache>* ptr) {
-        assert(ptr);
-        return m.setup_rpc_class(ptr, derecho::rpc::wrap<PUT>(&Cache::put),
-                                 derecho::rpc::wrap<GET>(&Cache::get),
-                                 derecho::rpc::wrap<CONTAINS>(&Cache::contains),
-                                 derecho::rpc::wrap<INVALIDATE>(&Cache::invalidate));
+    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Cache>* instance_ptr, uint32_t instance_id) {
+        assert(instance_ptr);
+        return m.setup_rpc_class(instance_ptr, instance_id,
+                                 derecho::rpc::tag<PUT>(&Cache::put),
+                                 derecho::rpc::tag<GET>(&Cache::get),
+                                 derecho::rpc::tag<CONTAINS>(&Cache::contains),
+                                 derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
     }
 
     Cache() : cache_map() {}
@@ -158,7 +161,6 @@ int main(int argc, char** argv) {
                 std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
                 throw derecho::subgroup_provisioning_exception();
             }
-            std::cout << "Cache function found enough members! curr_view = " << curr_view.debug_string() << std::endl;
             derecho::subgroup_shard_layout_t subgroup_vector(1);
             subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
             return subgroup_vector;
