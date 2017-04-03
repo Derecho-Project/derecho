@@ -134,7 +134,7 @@ public:
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get(), subgroup_id)),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     /**
@@ -154,7 +154,7 @@ public:
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(T::register_functions(group_rpc_manager, user_object_ptr.get(), subgroup_id)),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     Replicated(Replicated&&) = default;
@@ -244,7 +244,9 @@ public:
      * Sends a peer-to-peer message over TCP to a single member of the subgroup
      * that replicates this Replicated<T>, invoking the RPC function identified
      * by the FunctionTag template parameter. The caller must keep the returned
-     * QueryResults object in scope in order to receive replies.
+     * QueryResults object in scope in order to receive replies. It is up to the
+     * caller to ensure that the node ID specified in the parameter is actually
+     * a member of the subgroup that this Replicated<T> is bound to.
      * @param dest_node The ID of the node that the P2P message should be sent to
      * @param args The arguments to the RPC function being invoked
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
@@ -326,4 +328,89 @@ public:
     }
 };
 
+template <typename T>
+class ExternalCaller {
+private:
+    /** The ID of this node */
+    const node_id_t node_id;
+    /** The internally-generated subgroup ID of the subgroup that this ExternalCaller will contact. */
+    subgroup_id_t subgroup_id;
+    /** Reference to the RPCManager for the Group this ExternalCaller is in */
+    rpc::RPCManager& group_rpc_manager;
+    /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
+    std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
+    /** Buffer for replying to P2P messages, cached here so it doesn't need to be
+     * created in every p2p_send call. */
+    std::unique_ptr<char[]> p2pSendBuffer;
+
+    //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
+    //but I'm afraid that will introduce unnecessary overheads.
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_send_or_query(node_id_t dest_node, Args&&... args) {
+        if(is_valid()) {
+            assert(dest_node != node_id);
+            //Ensure a view change isn't in progress
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+            size_t size;
+            auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+            auto return_pair = wrapped_this->template send<tag>(
+                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                        size = _size;
+                        if(size <= max_payload_size) {
+                            return p2pSendBuffer.get();
+                        } else {
+                            return nullptr;
+                        }
+                    },
+                    std::forward<Args>(args)...);
+            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            return std::move(return_pair.results);
+        } else {
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        }
+    }
+
+public:
+    ExternalCaller(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
+            : node_id(nid),
+              subgroup_id(subgroup_id),
+              group_rpc_manager(group_rpc_manager),
+              wrapped_this(group_rpc_manager.make_remote_invoker(subgroup_id, T::register_functions())),
+              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+
+    ExternalCaller(ExternalCaller&&) = default;
+    ExternalCaller(const ExternalCaller&) = delete;
+
+    bool is_valid() const { return true; }
+
+    /**
+     * Sends a peer-to-peer message over TCP to a single member of the subgroup
+     * that this ExternalCaller targets, invoking the RPC function identified
+     * by the FunctionTag template parameter, but does not wait for a response.
+     * This should only be used for RPC functions whose return type is void.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     */
+    template <rpc::FunctionTag tag, typename... Args>
+    void p2p_send(node_id_t dest_node, Args&&... args) {
+        p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+    }
+
+    /**
+     * Sends a peer-to-peer message over TCP to a single member of the subgroup
+     * that this ExternalCaller targets, invoking the RPC function identified
+     * by the FunctionTag template parameter. The caller must keep the returned
+     * QueryResults object in scope in order to receive replies. It is up to the
+     * caller to ensure that the node ID specified in the parameter is actually
+     * a member of the subgroup that this ExternalCaller is bound to.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked
+     */
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_query(node_id_t dest_node, Args&&... args) {
+        return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+    }
+};
 }

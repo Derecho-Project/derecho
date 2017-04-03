@@ -7,11 +7,11 @@
 
 #include <chrono>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <map>
 
 #include "derecho/derecho.h"
 #include "initialize.h"
@@ -35,11 +35,9 @@ public:
     enum Functions { READ_STATE,
                      CHANGE_STATE };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Foo>* instance_ptr, uint32_t instance_id) {
-        assert(instance_ptr);
-        return m.setup_rpc_class(instance_ptr, instance_id,
-                                 derecho::rpc::tag<READ_STATE>(&Foo::read_state),
-                                 derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
+    static auto register_functions() {
+        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&Foo::read_state),
+                               derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
     }
 
     Foo(int initial_state = 0) : state(initial_state) {}
@@ -63,12 +61,10 @@ public:
                      CLEAR,
                      PRINT };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Bar>* instance_ptr, uint32_t instance_id) {
-        assert(instance_ptr);
-        return m.setup_rpc_class(instance_ptr, instance_id,
-                                 derecho::rpc::tag<APPEND>(&Bar::append),
-                                 derecho::rpc::tag<CLEAR>(&Bar::clear),
-                                 derecho::rpc::tag<PRINT>(&Bar::print));
+    static auto register_functions() {
+        return std::make_tuple(derecho::rpc::tag<APPEND>(&Bar::append),
+                               derecho::rpc::tag<CLEAR>(&Bar::clear),
+                               derecho::rpc::tag<PRINT>(&Bar::print));
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
@@ -102,13 +98,11 @@ public:
                      CONTAINS,
                      INVALIDATE };
 
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<Cache>* instance_ptr, uint32_t instance_id) {
-        assert(instance_ptr);
-        return m.setup_rpc_class(instance_ptr, instance_id,
-                                 derecho::rpc::tag<PUT>(&Cache::put),
-                                 derecho::rpc::tag<GET>(&Cache::get),
-                                 derecho::rpc::tag<CONTAINS>(&Cache::contains),
-                                 derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
+    static auto register_functions() {
+        return std::make_tuple(derecho::rpc::tag<PUT>(&Cache::put),
+                               derecho::rpc::tag<GET>(&Cache::get),
+                               derecho::rpc::tag<CONTAINS>(&Cache::contains),
+                               derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
     }
 
     Cache() : cache_map() {}
@@ -136,52 +130,51 @@ int main(int argc, char** argv) {
     derecho::message_callback stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
 
-    derecho::SubgroupInfo subgroup_info{{
-        {std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
-            if(curr_view.num_members < 3) {
-                std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
-                throw derecho::subgroup_provisioning_exception();
-            }
-            derecho::subgroup_shard_layout_t subgroup_vector(1);
-            //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-            subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-            return subgroup_vector;
-        }},
-        {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
-            if(curr_view.num_members < 3) {
-                std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
-                throw derecho::subgroup_provisioning_exception();
-            }
-            derecho::subgroup_shard_layout_t subgroup_vector(1);
-            subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-            return subgroup_vector;
-        }},
-        {std::type_index(typeid(Cache)), [](const derecho::View& curr_view) {
-            if(curr_view.num_members < 6) {
-                std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
-                throw derecho::subgroup_provisioning_exception();
-            }
-            derecho::subgroup_shard_layout_t subgroup_vector(1);
-            subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
-            return subgroup_vector;
-        }}
-    }};
+    derecho::SubgroupInfo subgroup_info{
+            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
+                  if(curr_view.num_members < 3) {
+                      std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+                  //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
+                  subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
+                  return subgroup_vector;
+              }},
+             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
+                  if(curr_view.num_members < 3) {
+                      std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+                  subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
+                  return subgroup_vector;
+              }},
+             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view) {
+                  if(curr_view.num_members < 6) {
+                      std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+                  subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
+                  return subgroup_vector;
+              }}}};
 
-    auto foo_factory = []() {return std::make_unique<Foo>(-1); };
-    auto bar_factory = []() {return std::make_unique<Bar>(); };
-    auto cache_factory = []() {return std::make_unique<Cache>(); };
+    auto foo_factory = []() { return std::make_unique<Foo>(-1); };
+    auto bar_factory = []() { return std::make_unique<Bar>(); };
+    auto cache_factory = []() { return std::make_unique<Cache>(); };
 
     std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
-            my_ip, callback_set, subgroup_info, derecho_params,
-            std::vector<derecho::view_upcall_t>{}, 12345,
-            foo_factory, bar_factory, cache_factory);
+                my_ip, callback_set, subgroup_info, derecho_params,
+                std::vector<derecho::view_upcall_t>{}, 12345,
+                foo_factory, bar_factory, cache_factory);
     } else {
         group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
-            node_id, my_ip, leader_ip, callback_set, subgroup_info,
-            std::vector<derecho::view_upcall_t>{}, 12345,
-            foo_factory, bar_factory, cache_factory);
+                node_id, my_ip, leader_ip, callback_set, subgroup_info,
+                std::vector<derecho::view_upcall_t>{}, 12345,
+                foo_factory, bar_factory, cache_factory);
     }
 
     cout << "Finished constructing/joining Group" << endl;
@@ -254,8 +247,7 @@ int main(int argc, char** argv) {
             found = contains_accum;
         }
         cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string> results =
-            cache_rpc_handle.ordered_query<Cache::GET>("Ken");
+        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<Cache::GET>("Ken");
         for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }

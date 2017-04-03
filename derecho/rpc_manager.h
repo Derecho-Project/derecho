@@ -87,27 +87,60 @@ public:
     ~RPCManager();
     /**
      * Given a pointer to an object and a list of its methods, constructs a
-     * RemoteInvocableClass for that object that can be registered with this
-     * RpcManager.
+     * RemoteInvocableClass for that object with its receive functions
+     * registered to this RPCManager.
      * @param cls A raw pointer(??) to a pointer to the object being set up as
      * a RemoteInvocableClass
      * @param instance_id A number uniquely identifying the object, corresponding
      * to the subgroup that will be receiving RPC invocations for it (in practice,
      * this is the subgroup ID).
-     * @param f A variable-length list of pointer-to-member-functions, one for
-     * each method of NewClass that should be an RPC function
-     * @return The RemoteInvocableClass that wraps NewClass, by pointer
-     * @tparam NewClass The type of the object being wrapped with a
+     * @param funs A tuple of "partially wrapped" pointer-to-member-functions
+     * (the return type of rpc::tag<>(), which is called by the client), one for
+     * each method of UserProvidedClass that should be an RPC function
+     * @return The RemoteInvocableClass that wraps UserProvidedClass, by pointer
+     * @tparam UserProvidedClass The type of the object being wrapped with a
      * RemoteInvocableClass
-     * @tparam NewFuns The types of the member function pointers
+     * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
      */
-    template <class NewClass, typename... NewFuns>
-    auto setup_rpc_class(std::unique_ptr<NewClass>* cls, uint32_t instance_id, NewFuns... f) {
-        //NewFuns must be of type Ret (NewClass::*) (Args...)
-        //or of type wrapped<opcode,Ret,Args...>
-        //ACTUALLY, NEITHER! It must be a list of partial_wrapped<Tag, Ret, NewClass, Args>,
-        //because the user calls setup_rpc_class with wrap<Tag>(&NewClass::method) and that returns a partial_wrapped
-        return build_remoteinvocableclass<NewClass>(nid, instance_id, *receivers, bind_to_instance(cls, f)...);
+    template <typename UserProvidedClass, typename FunctionTuple>
+    auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t instance_id, FunctionTuple funs) {
+        //FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
+        //which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
+        //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
+        return mutils::callFunc([&](const auto&... unpacked_functions) {
+            return build_remoteinvocableclass<UserProvidedClass>(nid, instance_id, *receivers,
+                                                                 bind_to_instance(cls, unpacked_functions)...);
+        },
+                                funs);
+    }
+
+    /**
+     * Given a subgroup ID and a list of functions, constructs a
+     * RemoteInvokerForClass for the type of object given by the template
+     * parameter, with its receive functions registered to this RPCManager.
+     * @param instance_id A number uniquely identifying the subgroup to which
+     * RPC invocations for this object should be sent.
+     * @param funs A tuple of "partially wrapped" pointer-to-member-functions
+     * (the return type of rpc::tag<>(), which is called by the client), one for
+     * each method of UserProvidedClass that should be an RPC function
+     * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
+     * by pointer
+     * @tparam UserProvidedClass The type of the object being wrapped with a
+     * RemoteInvokerForClass
+     * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
+     */
+    template <typename UserProvidedClass, typename FunctionTuple>
+    auto make_remote_invoker(uint32_t instance_id, FunctionTuple funs) {
+        return mutils::callFunc([&](const auto&... unpacked_functions) {
+            //Supply the template parameters for build_remote_invoker_for_class by
+            //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
+            return build_remote_invoker_for_class<UserProvidedClass,
+                                                  decltype(bind_to_instance(
+                                                          std::declval<std::unique_ptr<UserProvidedClass>*>(),
+                                                          unpacked_functions))...>(
+                    nid, instance_id, *receivers);
+        },
+                                funs);
     }
 
     /**
@@ -206,5 +239,18 @@ public:
      */
     void finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle);
 };
+
+//Now that RPCManager is finished being declared, we can declare these convenience types
+//(the declarations should really live in remote_invocable.h, but they depend on RPCManager existing)
+template <typename T>
+using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
+                                                         .make_remote_invocable_class(std::declval<std::unique_ptr<T>*>(),
+                                                                                      std::declval<uint32_t>(),
+                                                                                      T::register_functions()))>;
+
+template <typename T>
+using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
+                                                        .make_remote_invoker(std::declval<uint32_t>(),
+                                                                             T::register_functions()))>;
 }
 }

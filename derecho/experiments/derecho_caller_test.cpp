@@ -5,8 +5,8 @@
 #include <time.h>
 #include <vector>
 
-#include "derecho/derecho.h"
 #include "block_size.h"
+#include "derecho/derecho.h"
 #include "rdmc/util.h"
 
 using std::vector;
@@ -38,20 +38,9 @@ struct test1_str {
     enum Functions { READ_STATE,
                      CHANGE_STATE };
 
-    /**
-     * This function will be called by Dispatcher to register functions from
-     * this class as RPC functions. When called, it should call Dispatcher's
-     * setup_rpc_class and supply each method that should be an RPC function
-     * as an argument.
-     * @param d The Dispatcher instance calling this function
-     * @param ptr A pointer to an instance of this class
-     * @return Whatever the result of Dispatcher::setup_rpc_class() is.
-     */
-    static auto register_functions(derecho::rpc::RPCManager& m, std::unique_ptr<test1_str>* instance_ptr, uint32_t instance_id) {
-        assert(instance_ptr);
-        return m.setup_rpc_class(instance_ptr, instance_id,
-                                 derecho::rpc::tag<READ_STATE>(&test1_str::read_state),
-                                 derecho::rpc::tag<CHANGE_STATE>(&test1_str::change_state));
+    static auto register_functions() {
+        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&test1_str::read_state),
+                               derecho::rpc::tag<CHANGE_STATE>(&test1_str::change_state));
     }
 };
 
@@ -97,9 +86,9 @@ int main(int argc, char* argv[]) {
         old_members.insert(old_members.begin(), new_view.departed.begin(), new_view.departed.end());
         //"copy from members to old_members as long as members[i] is not in joined"
         std::copy_if(new_view.members.begin(), new_view.members.end(), std::back_inserter(old_members),
-                     [&new_view](const derecho::node_id_t& elem){
-            return std::find(new_view.joined.begin(), new_view.joined.end(), elem) == new_view.joined.end();
-        });
+                     [&new_view](const derecho::node_id_t& elem) {
+                         return std::find(new_view.joined.begin(), new_view.joined.end(), elem) == new_view.joined.end();
+                     });
         cout << "New members are : " << endl;
         for(auto n : new_view.members) {
             cout << n << " ";
@@ -114,17 +103,17 @@ int main(int argc, char* argv[]) {
 
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
-            my_ip, {stability_callback, {}}, subgroup_info,
-            derecho_params, {new_view_callback}, 12345,
-            []() {return std::make_unique<test1_str>(); });
+                my_ip, {stability_callback, {}}, subgroup_info,
+                derecho_params, {new_view_callback}, 12345,
+                []() { return std::make_unique<test1_str>(); });
     }
 
     else {
         managed_group = new derecho::Group<test1_str>(
-            my_id, my_ip, leader_ip,
-            {stability_callback, {}}, subgroup_info,
-            {new_view_callback}, 12345,
-            []() {return std::make_unique<test1_str>(); });
+                my_id, my_ip, leader_ip,
+                {stability_callback, {}}, subgroup_info,
+                {new_view_callback}, 12345,
+                []() { return std::make_unique<test1_str>(); });
     }
 
     cout << "Finished constructing/joining Group" << endl;
@@ -134,7 +123,8 @@ int main(int argc, char* argv[]) {
         cout << "Changing each other's state to 35" << endl;
         derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
         output_result<bool>(rpc_handle.ordered_query<test1_str::CHANGE_STATE>({1 - my_id},
-                                                                              36 - my_id).get());
+                                                                              36 - my_id)
+                                    .get());
     }
 
     while(managed_group->get_members().size() < 3) {
