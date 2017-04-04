@@ -114,6 +114,7 @@ public:
 using std::cout;
 using std::endl;
 using derecho::Replicated;
+using derecho::ExternalCaller;
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
@@ -182,8 +183,11 @@ int main(int argc, char** argv) {
     bool inadequately_provisioned = true;
     while(inadequately_provisioned) {
         try {
-            //Any get_subgroup should fail if the View has inadequately_provisioned set
-            group->get_subgroup<Foo>();
+            if(node_id < 3) {
+                group->get_subgroup<Foo>();
+            } else {
+                group->get_subgroup<Cache>();
+            }
             inadequately_provisioned = false;
         } catch(derecho::subgroup_provisioning_exception& e) {
             inadequately_provisioned = true;
@@ -192,17 +196,17 @@ int main(int argc, char** argv) {
 
     cout << "All members have joined, subgroups are provisioned" << endl;
 
-    Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-    Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
-    Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
-
     if(node_id == 0) {
+        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_query<Foo::READ_STATE>();
     }
     if(node_id == 1) {
+        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
         derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
@@ -215,6 +219,8 @@ int main(int argc, char** argv) {
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 1...");
     }
     if(node_id == 2) {
+        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<Foo::READ_STATE>();
@@ -232,6 +238,7 @@ int main(int argc, char** argv) {
     }
 
     if(node_id == 3) {
+        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
@@ -253,11 +260,20 @@ int main(int argc, char** argv) {
         }
     }
     if(node_id == 4) {
+        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
+        derecho::node_id_t p2p_target = 2;
+        cout << "Reading Foo's state from node " << p2p_target << endl;
+        ExternalCaller<Foo>& p2p_foo_handle = group->get_nonmember_subgroup<Foo>();
+        derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<Foo::READ_STATE>(p2p_target);
+        int response = foo_results.get().get(p2p_target);
+        cout << "  Response: " << response << endl;
+
     }
     if(node_id == 5) {
+        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");

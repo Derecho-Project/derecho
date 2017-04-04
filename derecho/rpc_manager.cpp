@@ -86,8 +86,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             }
         });
         if(reply_size > 0) {
-            node_id_t id = sender_id;
-            if(id == nid) {
+            if(sender_id == nid) {
                 handle_receive(
                         replySendBuffer.get(), reply_size,
                         [](size_t size) -> char* { assert(false); });
@@ -100,7 +99,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     toFulfillQueue.pop();
                 }
             } else {
-                connections.write(id, replySendBuffer.get(), reply_size);
+                connections.write(sender_id, replySendBuffer.get(), reply_size);
             }
         }
     }
