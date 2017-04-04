@@ -25,6 +25,8 @@ namespace derecho {
 
 template <typename T>
 class Replicated;
+template <typename T>
+class ExternalCaller;
 
 namespace rpc {
 class RPCManager;
@@ -71,6 +73,8 @@ private:
     friend class rpc::RPCManager;
     template <typename T>
     friend class Replicated;
+    template <typename T>
+    friend class ExternalCaller;
 
     std::shared_ptr<spdlog::logger> logger;
 

@@ -166,25 +166,23 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                    && (*old_shard_leaders)[subgroup_id][shard_num] > -1
                    && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
                     //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
-                    replicated_objects.template get<FirstType>().emplace_back(Replicated<FirstType>(my_id, subgroup_id, rpc_manager));
+                    replicated_objects.template get<FirstType>().emplace(
+                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager));
                     subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
                 } else {
-                    replicated_objects.template get<FirstType>().emplace_back(
-                            Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
-                                                  factories.template get<FirstType>()));
+                    replicated_objects.template get<FirstType>().emplace(
+                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
+                                                                  factories.template get<FirstType>()));
                 }
-                break;  //This node can be in at most one shard
+                //Store a reference to the Replicated<T> just constructed
+                objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
+                break;  //This node can be in at most one shard, so stop here
             }
         }
         if(!in_subgroup) {
-            //TODO: We need to only construct a Replicated if the node is a member of the subgroup
-            //And construct something else like an ExternalCaller if it's not
-
-            //Put an empty Replicated in the vector, so that it still grows by 1 and has an entry at subgroup_index
-            replicated_objects.template get<FirstType>().emplace_back(Replicated<FirstType>(my_id, subgroup_id, rpc_manager));
+            external_callers.template get<FirstType>().emplace(subgroup_index,
+                                                               ExternalCaller<FirstType>(my_id, subgroup_id, rpc_manager));
         }
-        //Regardless of how the Replicated was constructed, store a reference to it
-        objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().back());
     }
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders));
 }
@@ -286,7 +284,21 @@ auto& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
     }
     SubgroupType* overload_selector = nullptr;
-    return get_subgroup(overload_selector, subgroup_index);
+    try {
+        return get_subgroup(overload_selector, subgroup_index);
+    } catch(std::out_of_range& ex) {
+        throw invalid_subgroup_exception("Not a member of the requested subgroup.");
+    }
+}
+
+template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(uint32_t subgroup_index) {
+    try {
+        return external_callers.template get<SubgroupType>().at(subgroup_index);
+    } catch(std::out_of_range& ex) {
+        throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
+    }
 }
 
 template <typename... ReplicatedTypes>

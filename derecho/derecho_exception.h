@@ -16,7 +16,6 @@ namespace derecho {
  * Base exception class for all exceptions raised by Derecho.
  */
 struct derecho_exception : public std::exception {
-public:
     const std::string message;
     derecho_exception(const std::string& message) : message(message) {}
 
@@ -28,7 +27,14 @@ public:
  * valid object).
  */
 struct empty_reference_exception : public derecho_exception {
-public:
     empty_reference_exception(const std::string& message) : derecho_exception(message) {}
+};
+
+/**
+ * Exception that means the user made an invalid request for a subgroup handle,
+ * such as by supplying an out-of-bounds subgroup index.
+ */
+struct invalid_subgroup_exception : public derecho_exception {
+    invalid_subgroup_exception(const std::string& message) : derecho_exception(message) {}
 };
 }

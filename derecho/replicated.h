@@ -73,7 +73,7 @@ private:
             int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
                                                                            buffer, max_payload_size);
             buffer += buffer_offset;
-            std::cout << "Replicated: doing ordered send/query for function tagged " << tag << std::endl;
+            std::cout << "Replicated: doing ordered send/query for function tagged " << tag << " in subgroup " << subgroup_id << std::endl;
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
@@ -375,7 +375,7 @@ public:
             : node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invoker(subgroup_id, T::register_functions())),
+              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     ExternalCaller(ExternalCaller&&) = default;

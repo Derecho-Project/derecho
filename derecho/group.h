@@ -42,9 +42,11 @@ class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    //Type alias for a vector of Replicated, otherwise KindMap can't understand it's a template
+    //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
     template <typename T>
-    using replicated_vector = std::vector<Replicated<T>>;
+    using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+    template <typename T>
+    using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
     std::shared_ptr<spdlog::logger> logger;
 
@@ -59,14 +61,21 @@ private:
     mutils::KindMap<Factory, ReplicatedTypes...> factories;
     /** Maps each type T to a map of (index -> Replicated<T>) for that type's
      * subgroup(s). If this node is not a member of a subgroup for a type, the
-     * Replicated<T> will be invalid/empty. If this node is a member of a subgroup,
-     * the Replicated<T> will refer to the one shard that this node belongs to. */
-    mutils::KindMap<replicated_vector, ReplicatedTypes...> replicated_objects;
+     * map will have no entry for that type and index. (Instead, external_callers
+     * will have an entry for that type-index pair). If this node is a member
+     * of a subgroup, the Replicated<T> will refer to the one shard that this
+     * node belongs to. */
+    mutils::KindMap<replicated_index_map, ReplicatedTypes...> replicated_objects;
     /** Maps subgroup index -> RawSubgroup for the subgroups of type RawObject.
      * If this node is not a member of RawObject subgroup i, the RawSubgroup at
      * index i will be invalid; otherwise, the RawObject will refer to the one
      * shard of that subgroup that this node belongs to. */
     std::vector<RawSubgroup> raw_subgroups;
+    /** Maps each type T to a map of (index -> ExternalCaller<T>) for the
+     * subgroup(s) of that type that this node is not a member of. The
+     * ExternalCaller for subgroup i of type T can be used to contact any member
+     * of any shard of that subgroup, so shards are not indexed. */
+    mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
     /** Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
      * index X is a reference to the Replicated<T> for this node's shard of
      * subgroup X, which may or may not be valid. The references are the abstract
@@ -250,12 +259,12 @@ public:
     ~Group();
 
     /**
-     * Gets the "handle" for the subgroup of the specified type and index, which
-     * is either a Replicated<T> or a RawSubgroup. If this node is a member of
-     * the desired subgroup, the Replicated<T> will contain the replicated
-     * state of an object of type T and be usable to send multicasts to this node's
-     * shard of the subgroup. If this node is not a member of the subgroup, it
-     * will be an invalid/empty Replicated<T>.
+     * Gets the "handle" for the subgroup of the specified type and index (which
+     * is either a Replicated<T> or a RawSubgroup) assuming this node is a
+     * member of the desired subgroup. If the subgroup has type RawObject, the
+     * return value will be a RawSubgroup; otherwise it will be a Replicated<T>.
+     * The Replicated<T> will contain the replicated state of an object of type
+     * T and be usable to send multicasts to this node's shard of the subgroup.
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object. Defaults to 0, so
      * if there is only one subgroup of type T, it can be retrieved with
@@ -263,9 +272,28 @@ public:
      * @tparam SubgroupType The object type identifying the subgroup
      * @return A reference to either a Replicated<SubgroupType> or a RawSubgroup
      * for this subgroup
+     * @throws subgroup_provisioning_exception If there are no subgroups because
+     * the current View is inadequately provisioned
+     * @throws invalid_subgroup_exception If this node is not a member of the
+     * requested subgroup.
      */
     template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_index = 0);
+
+    /**
+     * Gets the "handle" for a subgroup of the specified type and index,
+     * assuming this node is not a member of the subgroup. The returned
+     * ExternalCaller can be used to make peer-to-peer RPC calls to a specific
+     * member of the subgroup.
+     * @param subgroup_index The index of the subgroup within the set of
+     * subgroups that replicate the same type of object.
+     * @tparam SubgroupType The object type identifying the subgroup
+     * @return A reference to the ExternalCaller for this subgroup
+     * @throws invalid_subgroup_exception If this node is actually a member of
+     * the requested subgroup, or if no such subgroup exists
+     */
+    template <typename SubgroupType>
+    ExternalCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();

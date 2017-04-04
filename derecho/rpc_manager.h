@@ -24,6 +24,8 @@ namespace derecho {
 
 template <typename T>
 class Replicated;
+template <typename T>
+class ExternalCaller;
 
 namespace rpc {
 
@@ -43,6 +45,8 @@ class RPCManager {
 
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
+    template <typename T>
+    friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
     /** Contains a TCP connection to each member of the group. */
@@ -250,7 +254,7 @@ using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
 
 template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
-                                                        .make_remote_invoker(std::declval<uint32_t>(),
-                                                                             T::register_functions()))>;
+                                                        .make_remote_invoker<T>(std::declval<uint32_t>(),
+                                                                                T::register_functions()))>;
 }
 }
