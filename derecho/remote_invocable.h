@@ -514,12 +514,14 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
 };
 
 /**
- * Wraps a class to make it a "replicated object" with methods that
- * can be invoked by RPC. Each RPC-invokable method must be supplied as a
- * template parameter, in order to associate it with a compile-time constant
- * name (the tag).
+ * Transforms a class into a "replicated object" with methods that can be
+ * invoked by RPC, given a place to store RPC message handlers (which should be
+ * the "receivers map" of RPCManager). Each RPC-invokable method must be
+ * supplied as a template parameter, in order to associate it with a compile-time
+ * constant name (the tag).
  * @tparam IdentifyingClass The class to make into an RPC-invokable class
- * @tparam Fs A list of "wrapped" function pointers to members of that class, each associated with a name.
+ * @tparam Fs A list of "wrapped" function pointers to members of that class,
+ * each associated with a tag.
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
@@ -584,18 +586,30 @@ public:
  * @param instance_id A number uniquely identifying this instance of the
  * template-parameter class; in practice, the ID of the subgroup that will be
  * replicating this object.
- * @param rvrs A map from RPC opcodes to RPC message handler functions
+ * @param rvrs A map from RPC opcodes to RPC message handler functions, into
+ * which new handlers will be added for this RemoteInvocableClass
  * @param fs A list of "wrapped" function pointers to members of the wrapped
  * class, each associated with a name, which should become RPC functions
  * @return A unique_ptr to a RemoteInvocableClass of type IdentifyingClass.
  */
 template <class IdentifyingClass, typename... WrappedFuns>
-auto build_remoteinvocableclass(const node_id_t nid, const uint32_t instance_id,
+auto build_remote_invocable_class(const node_id_t nid, const uint32_t instance_id,
                                 std::map<Opcode, receive_fun_t>& rvrs,
                                 const WrappedFuns&... fs) {
     return std::make_unique<RemoteInvocableClass<IdentifyingClass, WrappedFuns...>>(nid, instance_id, rvrs, fs...);
 }
 
+/**
+ * Transforms a class into an RPC client for the methods of that class, given a
+ * place to store RPC message handlers (which should be the "receivers map" of
+ * RPCManager). Each RPC-invokable method must be supplied as a template
+ * parameter, in order to associate it with a compile-time constant name (the
+ * tag). This must be the same tag that the "RPC server" being contacted used
+ * for the RemoteInvocableClass version of this class.
+ * @tparam IdentifyingClass The class to make into an RPC-invoking client
+ * @tparam Fs A list of "wrapped" function pointers to members of that class,
+ * each associated with a tag.
+ */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvokerForClass : private RemoteInvokers<WrappedFuns...> {
 public:
@@ -637,6 +651,18 @@ public:
     }
 };
 
+/**
+ * Constructs a RemoteInvokerForClass that can act as a client for the class in
+ * the template parameter.
+ * @param nid The Node ID of the node running this code
+ * @param instance_id A number identifying the servers that should be contacted
+ * when calling RPC methods on this class (since more than one instance of the
+ * template-parameter class could be running as a RemoteInvocableClass); in
+ * practice this is the subgroup ID of the subgroup to contact.
+ * @param rvrs A map from RPC opcodes to RPC message handler functions, into
+ * which new handlers will be added for this RemoteInvokerForClass
+ * @return A unique_ptr to a RemoteInvokerForClass of type IdentifyingClass
+ */
 template <class IdentifyingClass, typename... WrappedFuns>
 auto build_remote_invoker_for_class(const node_id_t nid, const uint32_t instance_id,
                                     std::map<Opcode, receive_fun_t>& rvrs) {
