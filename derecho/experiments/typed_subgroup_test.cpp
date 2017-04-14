@@ -17,6 +17,10 @@
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
+/**
+ * Example replicated object, containing some serializable state and providing
+ * two RPC methods. In order to be serialized it must extend ByteRepresentable.
+ */
 class Foo : public mutils::ByteRepresentable {
     int state;
 
@@ -32,14 +36,26 @@ public:
         return true;
     }
 
+    /** Named integers that will be used to tag the RPC methods */
     enum Functions { READ_STATE,
                      CHANGE_STATE };
 
+    /**
+     * All replicated objects must provide this static method, which should
+     * return a tuple containing all the methods that can be invoked by RPC.
+     * Each method should be "tagged" with derecho::rpc::tag(), whose template
+     * parameter indicates which numeric constant will identify the method.
+     * @return A tuple of "tagged" function pointers.
+     */
     static auto register_functions() {
         return std::make_tuple(derecho::rpc::tag<READ_STATE>(&Foo::read_state),
                                derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
     }
 
+    /**
+     * Constructs a Foo with an initial value.
+     * @param initial_state
+     */
     Foo(int initial_state = 0) : state(initial_state) {}
     DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
 };
@@ -68,7 +84,6 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
-    //Constructor for deserialization only
     Bar(const std::string& s = "") : log(s) {}
 };
 
@@ -106,6 +121,11 @@ public:
     }
 
     Cache() : cache_map() {}
+    /**
+     * This constructor is required by default serialization support, in order
+     * to reconstruct an object after deserialization.
+     * @param cache_map The state of the cache.
+     */
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
@@ -123,6 +143,7 @@ int main(int argc, char** argv) {
 
     query_node_info(node_id, my_ip, leader_ip);
 
+    //Derecho message parameters
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
@@ -131,6 +152,8 @@ int main(int argc, char** argv) {
     derecho::message_callback stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
 
+    //Since this is just a test, assume there will always be 6 members with IDs 0-5
+    //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
                   if(curr_view.num_members < 3) {
@@ -161,6 +184,8 @@ int main(int argc, char** argv) {
                   return subgroup_vector;
               }}}};
 
+    //Each replicated type needs a factory; this can be used to supply constructor arguments
+    //for the subgroup's initial state
     auto foo_factory = []() { return std::make_unique<Foo>(-1); };
     auto bar_factory = []() { return std::make_unique<Bar>(); };
     auto cache_factory = []() { return std::make_unique<Cache>(); };
@@ -180,6 +205,7 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
+    //Keep attempting to get a subgroup pointer to see if the group is "adequately provisioned"
     bool inadequately_provisioned = true;
     while(inadequately_provisioned) {
         try {
@@ -262,6 +288,7 @@ int main(int argc, char** argv) {
     if(node_id == 4) {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
+        //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
         derecho::node_id_t p2p_target = 2;
