@@ -214,13 +214,17 @@ public:
      * @param my_ip The IP address of the node executing this code
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
+     * @param subgroup_info The set of functions defining subgroup membership
+     * for this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
-     * @param _view_upcalls
+     * @param _view_upcalls Any extra View Upcalls to be called when a view
+     * changes.
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
      */
-    ViewManager(const ip_addr my_ip,
+    ViewManager(const node_id_t my_id,
+                const ip_addr my_ip,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
@@ -229,14 +233,17 @@ public:
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
-     * contacted the group's leader and received a View and DerechoParams.
-     * @param existing_config A pair containing the current view and DerechoParams
-     * (by pointer). Awkwardly must be a pair because these are returned from the
-     * join_existing function and there's no way to "unpack" a pair into a
-     * parameter list.
+     * opened a socket to the group's leader.
+     * @param my_id The node ID of this node
+     * @param leader_connection A Socket connected to the leader on its
+     * group-management service port.
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
-     * @param _view_upcalls
+     * @param subgroup_info The set of functions defining subgroup membership
+     * in this group. Must be the same as the SubgroupInfo used to set up the
+     * leader.
+     * @param _view_upcalls Any extra View Upcalls to be called when a view
+     * changes.
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
      */

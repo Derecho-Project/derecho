@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
     };
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-            my_ip, callbacks, subgroup_info, param_object);
+            node_id, my_ip, callbacks, subgroup_info, param_object);
     } else {
         std::cout << "Connecting to leader at " << leader_ip << std::endl;
         managed_group = std::make_unique<derecho::Group<>>(

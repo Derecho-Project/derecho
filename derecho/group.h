@@ -45,6 +45,7 @@ private:
     //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
     template <typename T>
     using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+    //Same thing for a sparse-vector of ExternalCaller
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
@@ -148,6 +149,7 @@ private:
      * an existing group and there was a previous leader for its shard of a
      * subgroup, an "empty" Replicated<T> will also be constructed for that
      * subgroup, since all object state will be received from the shard leader.
+     *
      * @param curr_view A reference to the current view as reported by View_manager
      * @param old_shard_leaders A pointer to the array of old shard leaders for
      * each subgroup (indexed by subgroup ID), if one exists.
@@ -181,20 +183,28 @@ private:
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
-     * the leader (ID 0). The DerechoParams will be passed through to construct
-     * the  underlying DerechoGroup. If they specify a filename, the group will
+     * the leader. The DerechoParams will be passed through to construct
+     * the underlying DerechoGroup. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
+     *
+     * @param my_id The node ID of the node executing this code
      * @param my_ip The IP address of the node executing this code
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
+     * @param subgroup_info The set of functions that define how membership in
+     * each subgroup and shard will be determined in this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
-     * @param _view_upcalls
+     * @param _view_upcalls A list of functions to be called when the group
+     * experiences a View-Change event (optional).
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
-     *
+     * @param factories A variable number of Factory functions, one for each
+     * template parameter of Group, providing a way to construct instances of
+     * each Replicated Object
      */
-    Group(const ip_addr my_ip,
+    Group(const node_id_t my_id,
+          const ip_addr my_ip,
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
@@ -206,15 +216,23 @@ public:
      * Constructor that joins an existing managed Derecho group. The parameters
      * normally set by DerechoParams will be initialized by copying them from
      * the existing group's leader.
+     *
      * @param my_id The node ID of the node running this code
      * @param my_ip The IP address of the node running this code
      * @param leader_id The node ID of the existing group's leader
      * @param leader_ip The IP address of the existing group's leader
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
-     * @param _view_upcalls
+     * @param subgroup_info The set of functions that define how membership in
+     * each subgroup and shard will be determined in this group. Must be the
+     * same as the SubgroupInfo that was used to configure the group's leader.
+     * @param _view_upcalls A list of functions to be called when the group
+     * experiences a View-Change event (optional).
      * @param gms_port The port to contact other group members on when sending
      * group-management messages
+     * @param factories A variable number of Factory functions, one for each
+     * template parameter of Group, providing a way to construct instances of
+     * each Replicated Object
      */
     Group(const node_id_t my_id,
           const ip_addr my_ip,
@@ -233,6 +251,7 @@ public:
      * script log_recovery_helper.sh). Does NOT currently attempt to replay
      * completion events for missing messages that were transferred over from
      * another member's log.
+     *
      * @param recovery_filename The base name of the set of recovery files to
      * use (extensions will be added automatically)
      * @param my_id The node ID of the node executing this code
@@ -265,6 +284,7 @@ public:
      * return value will be a RawSubgroup; otherwise it will be a Replicated<T>.
      * The Replicated<T> will contain the replicated state of an object of type
      * T and be usable to send multicasts to this node's shard of the subgroup.
+     *
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object. Defaults to 0, so
      * if there is only one subgroup of type T, it can be retrieved with
@@ -285,6 +305,7 @@ public:
      * assuming this node is not a member of the subgroup. The returned
      * ExternalCaller can be used to make peer-to-peer RPC calls to a specific
      * member of the subgroup.
+     *
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object.
      * @tparam SubgroupType The object type identifying the subgroup

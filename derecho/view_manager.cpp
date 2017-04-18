@@ -19,7 +19,8 @@ using lock_guard_t = std::lock_guard<std::mutex>;
 using unique_lock_t = std::unique_lock<std::mutex>;
 using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
-ViewManager::ViewManager(const ip_addr my_ip,
+ViewManager::ViewManager(const node_id_t my_id,
+                         const ip_addr my_ip,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
@@ -34,7 +35,6 @@ ViewManager::ViewManager(const ip_addr my_ip,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params) {
-    const node_id_t my_id = 0;  //Apparently, the initial group leader always has ID 0
     initialize_rdmc_sst();
     //Wait for the first client (second group member) to join
     await_second_member(my_id);
@@ -438,9 +438,6 @@ void ViewManager::register_predicates() {
         int next_num_members = Vc.num_members - leave_ranks.size()
                                + join_indexes.size();
         //Initialize the next view
-        // next_view = std::make_unique<View>(next_num_members);
-        // next_view->vid = Vc.vid + 1;
-        // next_view->num_failed = Vc.num_failed - leave_ranks.size();
         std::vector<node_id_t> joined, members(next_num_members), departed;
         std::vector<char> failed(next_num_members);
         std::vector<ip_addr> member_ips(next_num_members);

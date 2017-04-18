@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
 
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_addresses[node_rank], callbacks, one_raw_group, param_object);
+            node_rank, node_addresses[node_rank], callbacks, one_raw_group, param_object);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
             node_rank, node_addresses[node_rank],

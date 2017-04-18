@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
-                my_ip, callback_set, subgroup_info, derecho_params,
+                node_id, my_ip, callback_set, subgroup_info, derecho_params,
                 std::vector<derecho::view_upcall_t>{}, 12345,
                 foo_factory, bar_factory, cache_factory);
     } else {

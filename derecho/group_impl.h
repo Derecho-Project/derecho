@@ -59,6 +59,7 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(
+        const node_id_t my_id,
         const ip_addr my_ip,
         const CallbackSet& callbacks,
         const SubgroupInfo& subgroup_info,
@@ -67,12 +68,11 @@ Group<ReplicatedTypes...>::Group(
         const int gms_port,
         Factory<ReplicatedTypes>... factories)
         : logger(create_logger()),
-          my_id(0),
-          view_manager(my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
-          rpc_manager(0, view_manager),
+          my_id(my_id),
+          view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params, _view_upcalls, gms_port),
+          rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
-    //    ^ In this constructor, this is the first node to start, so my ID will be 0
     //In this case there will be no subgroups to receive objects for
     construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();

@@ -33,7 +33,7 @@ int main() {
 
     std::unique_ptr<derecho::Group<>> g;
     if(my_ip == leader_ip) {
-        g = std::make_unique<derecho::Group<>>(my_ip, callbacks, one_raw_group, parameters);
+        g = std::make_unique<derecho::Group<>>(node_id, my_ip, callbacks, one_raw_group, parameters);
     } else {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }

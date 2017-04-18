@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<derecho::Group<>> managed_group;
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_addresses[node_rank],
+            node_rank, node_addresses[node_rank],
             derecho::CallbackSet{stability_callback, nullptr},
             one_raw_group,
             derecho::DerechoParams{max_msg_size, block_size});

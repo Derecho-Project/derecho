@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
     } else {
         if(node_id == leader_id) {
             managed_group = make_shared<derecho::Group<>>(
-                my_ip, callback_set, one_raw_group, param_object);
+                node_id, my_ip, callback_set, one_raw_group, param_object);
         } else {
             managed_group = make_shared<derecho::Group<>>(
                 node_id, my_ip, leader_ip, callback_set,

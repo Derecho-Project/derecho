@@ -54,7 +54,7 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<derecho::Group<>> g;
     if(my_ip == leader_ip) {
         g = std::make_unique<derecho::Group<>>(
-            my_ip, derecho::CallbackSet{stability_callback, nullptr},
+            node_id, my_ip, derecho::CallbackSet{stability_callback, nullptr},
             one_raw_group,
             derecho::DerechoParams{msg_size, block_size});
     } else {

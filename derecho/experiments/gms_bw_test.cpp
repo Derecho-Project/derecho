@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
 
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-            my_ip, callbacks, one_raw_group, param_object);
+            node_id, my_ip, callbacks, one_raw_group, param_object);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
             node_id, my_ip, leader_ip, callbacks, one_raw_group);
