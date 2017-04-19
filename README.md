@@ -10,7 +10,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++14: GCC 5.4+ or Clang 3.5+
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for ubuntu as `libibverbs-dev 1.1.8`).
+* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
 
 ### Getting Started
@@ -86,24 +86,24 @@ Here is an example of a declaration of a SubgroupInfo (which is the struct that 
 
 ```cpp
 derecho::SubgroupInfo subgroup_info{
-		{{std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
-			  if(curr_view.num_members < 6) {
-				  throw derecho::subgroup_provisioning_exception();
-			  }
-			  derecho::subgroup_shard_layout_t subgroup_vector(1);
-			  subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-			  subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
-			  return subgroup_vector;
-		  }},
-		 {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
-			  if(curr_view.num_members < 5) {
-				  throw derecho::subgroup_provisioning_exception();
-			  }
-			  derecho::subgroup_shard_layout_t subgroup_vector(2);
-			  subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1}));
-			  subgroup_vector[1].emplace_back(curr_view.make_subview({3, 4}));
-			  return subgroup_vector;
-		  }}}};
+    {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
+          if(curr_view.num_members < 6) {
+              throw derecho::subgroup_provisioning_exception();
+          }
+          derecho::subgroup_shard_layout_t subgroup_vector(1);
+          subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
+          subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
+          return subgroup_vector;
+      }},
+     {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
+          if(curr_view.num_members < 5) {
+              throw derecho::subgroup_provisioning_exception();
+          }
+          derecho::subgroup_shard_layout_t subgroup_vector(2);
+          subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1}));
+          subgroup_vector[1].emplace_back(curr_view.make_subview({3, 4}));
+          return subgroup_vector;
+      }}}};
 ```
 The function for Foo creates a vector with a single subgroup entry containing a size-2 vector, so it specifies that there will be one subgroup of type Foo, with two shards. It uses the convenience function `make_subview` to construct a SubView with a specific set of members; it assumes that the nodes in this Group will have IDs that sequentially increment from 0, so that a group with 6 members will have node IDs 0 through 5. By contrast, the function for Bar creates a vector with two entries, each of which is a size-1 vector, so it specifies that there will be two subgroups of type Bar, each of which has only one shard. Note that both functions throw `subgroup_provisioning_exception` if they receive an input View with fewer members than are necessary to construct their subgroups. Throwing this exception will cause the Group to stop setting up subgroups and wait for enough members to join before allowing any subgroup operations to proceed.
 

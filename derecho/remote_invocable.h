@@ -198,9 +198,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         };
     }
 };
-// Everything above is used only by the send()/receive_response() side
-// -------------------------------------------------------------------
-// Everything below is used only by the receive_call() side
+
 
 /**
  * Provides functions to implement handling RPC calls to a single function,

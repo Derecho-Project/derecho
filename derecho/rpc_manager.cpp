@@ -32,6 +32,8 @@ std::exception_ptr RPCManager::handle_receive(
     using namespace remote_invocation_utilities;
     assert(payload_size);
     auto reply_header_size = header_space();
+    //TODO: Check that the given Opcode is actually in our receivers map,
+    //and reply with a "no such method error" if it is not
     recv_ret reply_return = receivers->at(indx)(
             &dsm, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {

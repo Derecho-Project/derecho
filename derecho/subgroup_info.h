@@ -21,6 +21,13 @@ namespace derecho {
 class View;
 class SubView;
 
+/**
+ * An exception that indicates that a subgroup membership function was unable
+ * to finish executing because its enclosing Group was not in a valid state.
+ * Usually this means that the Group did not have enough members to completely
+ * provision the subgroup, or specific nodes that the subgroup needed were not
+ * available.
+ */
 class subgroup_provisioning_exception : derecho_exception {
 public:
     subgroup_provisioning_exception(const std::string& message = "") : derecho_exception(message) {}
