@@ -45,9 +45,9 @@ class Cache : public mutils::ByteRepresentable {
 
 public:
     void put(const std::string& key, const std::string& value);
-	std::string get(const std::string& key); 
+    std::string get(const std::string& key); 
     bool contains(const std::string& key);
-	bool invalidate(const std::string& key);
+    bool invalidate(const std::string& key);
     enum Functions { PUT,
                      GET,
                      CONTAINS,
