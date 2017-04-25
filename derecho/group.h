@@ -34,7 +34,7 @@ namespace derecho {
  * The top-level object for creating a Derecho group. This implements the group
  * management service (GMS) features and contains a MulticastGroup instance that
  * manages the actual sending and tracking of messages within the group.
- * @tparam ReplicatedObjects The types of user-provided objects that will represent
+ * @tparam ReplicatedTypes The types of user-provided objects that will represent
  * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedTypes>

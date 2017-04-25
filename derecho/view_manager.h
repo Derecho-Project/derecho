@@ -291,10 +291,10 @@ public:
     /** Gets a pointer into the managed DerechoGroup's send buffer, at a
      * position where there are at least payload_size bytes remaining in the
      * buffer. The returned pointer can be used to write a message into the
-     * buffer. (Analogous to MulticastGroup::get_position) */
+     * buffer. */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                              int pause_sending_turns = 0, bool cooked_send = false);
-    /** Instructs the managed MulticastGroup to send the next message. This
+    /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send(subgroup_id_t subgroup_num);
 

@@ -28,7 +28,7 @@ class SubView;
  * provision the subgroup, or specific nodes that the subgroup needed were not
  * available.
  */
-class subgroup_provisioning_exception : derecho_exception {
+class subgroup_provisioning_exception : public derecho_exception {
 public:
     subgroup_provisioning_exception(const std::string& message = "") : derecho_exception(message) {}
 };
@@ -47,11 +47,21 @@ struct RawObject {};
 using subgroup_shard_layout_t = std::vector<std::vector<std::unique_ptr<SubView>>>;
 
 /** The type of a lambda function that generates subgroup and shard views
- * for a specific subgroup type */
+ * for a specific subgroup type. This is a function that takes the current View
+ * as input and outputs a vector-of-vectors representing subgroups and shards. */
 using shard_view_generator_t = std::function<subgroup_shard_layout_t(const View&)>;
 
+/**
+ * Container for whatever information is needed to describe a Group's subgroups
+ * and shards. This used to contain more members, but right now it only contains
+ * one.
+ */
 struct SubgroupInfo {
-    /** subgroup type -> [](current view){subgroup index -> shard index -> SubView for shard}*/
+    /**
+     * A list of functions that generate SubViews for each subgroup and shard
+     * of a given type, indexed by the type of Replicated Object whose subgroups
+     * they describe.
+     */
     std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions;
 };
 }

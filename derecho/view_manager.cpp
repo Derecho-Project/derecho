@@ -863,6 +863,10 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
 std::map<std::type_index, std::vector<std::vector<int64_t>>> ViewManager::make_shard_leaders_map(const View& view) {
     std::map<std::type_index, std::vector<std::vector<int64_t>>> shard_leaders_by_type;
     for(const auto& type_to_ids : view.subgroup_ids_by_type) {
+        //Raw subgroups don't have any state to send to new members
+        if(type_to_ids.first == std::type_index(typeid(RawObject))) {
+            continue;
+        }
         shard_leaders_by_type[type_to_ids.first].resize(type_to_ids.second.size());
         for(uint32_t subgroup_index = 0; subgroup_index < type_to_ids.second.size(); ++subgroup_index) {
             subgroup_id_t subgroup_id = type_to_ids.second[subgroup_index];
