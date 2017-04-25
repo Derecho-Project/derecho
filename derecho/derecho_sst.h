@@ -98,7 +98,7 @@ public:
     SSTField<bool> heartbeat;
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
-     * (0, false, etc.). Initializing the derecho_group fields is left to derecho_group.
+     * (0, false, etc.). Initializing the MulticastGroup fields is left to MulticastGroup.
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
@@ -132,6 +132,7 @@ public:
             memset(const_cast<uint32_t*>(joiner_ips[row]), 0, parameters.members.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
+            num_installed[row] = 0;
             num_acked[row] = 0;
             wedged[row] = false;
             heartbeat[row] = true;
