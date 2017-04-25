@@ -709,8 +709,11 @@ void MulticastGroup::check_failures_loop() {
     pthread_setname_np(pthread_self(), "timeout_thread");
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(sender_timeout));
-        if(sst) sst->put((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+        if(sst) {
+            sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+        }
     }
+
     std::cout << "timeout_thread shutting down" << std::endl;
 }
 
