@@ -113,7 +113,7 @@ public:
         //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
         return mutils::callFunc([&](const auto&... unpacked_functions) {
             return build_remote_invocable_class<UserProvidedClass>(nid, instance_id, *receivers,
-                                                                 bind_to_instance(cls, unpacked_functions)...);
+                                                                   bind_to_instance(cls, unpacked_functions)...);
         },
                                 funs);
     }

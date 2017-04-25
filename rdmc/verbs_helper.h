@@ -40,12 +40,12 @@ class unsupported_feature : public exception {};
  */
 class memory_region {
     std::unique_ptr<ibv_mr, std::function<void(ibv_mr*)>> mr;
-	std::unique_ptr<char[]> allocated_buffer;
+    std::unique_ptr<char[]> allocated_buffer;
 
-	memory_region(size_t size, bool contiguous);
+    memory_region(size_t size, bool contiguous);
     friend class queue_pair;
-	friend class task;
-	
+    friend class task;
+
 public:
     memory_region(size_t size);
     memory_region(char* buffer, size_t size);
@@ -68,15 +68,15 @@ public:
 
 class completion_queue {
     std::unique_ptr<ibv_cq, std::function<void(ibv_cq*)>> cq;
-	friend class managed_queue_pair;
+    friend class managed_queue_pair;
     friend class task;
 
 public:
     explicit completion_queue(bool cross_channel);
 };
- 
+
 typedef std::function<void(uint64_t tag, uint32_t immediate, size_t length)>
-    completion_handler;
+        completion_handler;
 
 class message_type {
 public:
@@ -87,16 +87,16 @@ private:
     std::experimental::optional<tag_type> tag;
     message_type(tag_type t) : tag(t) {}
 
-	friend class queue_pair;
-	friend class task;
-	
+    friend class queue_pair;
+    friend class task;
+
 public:
     message_type(const std::string& name, completion_handler send_handler,
                  completion_handler recv_handler,
                  completion_handler write_handler = nullptr);
     message_type() {}
 
-	static message_type ignored();
+    static message_type ignored();
 };
 
 /**
@@ -109,8 +109,8 @@ protected:
     std::unique_ptr<ibv_qp, std::function<void(ibv_qp*)>> qp;
     explicit queue_pair() {}
 
-	friend class task;
-	
+    friend class task;
+
 public:
     ~queue_pair();
     explicit queue_pair(size_t remote_index);
@@ -130,7 +130,7 @@ public:
     bool post_write(const memory_region& mr, size_t offset, size_t length,
                     uint64_t wr_id, remote_memory_region remote_mr,
                     size_t remote_offset, const message_type& type,
-					bool signaled = false, bool send_inline = false);
+                    bool signaled = false, bool send_inline = false);
 };
 
 class managed_queue_pair : public queue_pair {
@@ -147,27 +147,26 @@ public:
 
 class task {
 protected:
-	struct task_impl;
-	std::unique_ptr<task_impl> impl;
-	std::shared_ptr<manager_queue_pair> mqp;
-	
+    struct task_impl;
+    std::unique_ptr<task_impl> impl;
+    std::shared_ptr<manager_queue_pair> mqp;
 
 public:
     task(std::shared_ptr<manager_queue_pair> manager_qp);
-	virtual ~task();
+    virtual ~task();
 
-    void append_wait(const completion_queue &cq, int count, bool signaled,
-					   bool last, uint64_t wr_id, const message_type &type);
-	void append_enable_send(const managed_queue_pair& qp, int count);
+    void append_wait(const completion_queue& cq, int count, bool signaled,
+                     bool last, uint64_t wr_id, const message_type& type);
+    void append_enable_send(const managed_queue_pair& qp, int count);
     void append_send(const managed_queue_pair& qp, const memory_region& mr,
-					 size_t offset, size_t length, uint32_t immediate);
+                     size_t offset, size_t length, uint32_t immediate);
     void append_recv(const managed_queue_pair& qp, const memory_region& mr,
-					 size_t offset, size_t length);
+                     size_t offset, size_t length);
     bool post() __attribute__((warn_unused_result));
 };
 
 struct feature_set {
-	bool contiguous_memory;
+    bool contiguous_memory;
     bool cross_channel;
 };
 feature_set get_supported_features();
@@ -186,8 +185,8 @@ void verbs_destroy();
 // the function requires that it is called simultaneously on all nodes and that
 // only one execution is active at any time.
 std::map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
-    const std::vector<uint32_t>& members, uint32_t node_rank,
-    const memory_region& mr);
+        const std::vector<uint32_t>& members, uint32_t node_rank,
+        const memory_region& mr);
 
 bool set_interrupt_mode(bool enabled);
 bool set_contiguous_memory_mode(bool enabled);

@@ -34,10 +34,10 @@ struct receive_destination {
 };
 
 typedef std::function<receive_destination(size_t size)>
-    incoming_message_callback_t;
+        incoming_message_callback_t;
 typedef std::function<void(char* buffer, size_t size)> completion_callback_t;
 typedef std::function<void(std::experimental::optional<uint32_t> suspected_victim)>
-    failure_callback_t;
+        failure_callback_t;
 
 bool initialize(const std::map<uint32_t, std::string>& addresses,
                 uint32_t node_rank) __attribute__((warn_unused_result));
@@ -66,14 +66,14 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
                   incoming_message_callback_t incoming_receive,
                   completion_callback_t send_callback,
                   failure_callback_t failure_callback)
-    __attribute__((warn_unused_result));
+        __attribute__((warn_unused_result));
 void destroy_group(uint16_t group_number);
 
 bool send(uint16_t group_number, std::shared_ptr<rdma::memory_region> mr,
           size_t offset, size_t length) __attribute__((warn_unused_result));
 
 // Convenience function to obtain the addresses of other nodes that might be
-// part of group communication. 
+// part of group communication.
 void query_addresses(std::map<uint32_t, std::string>& addresses,
                      uint32_t& node_rank);
 

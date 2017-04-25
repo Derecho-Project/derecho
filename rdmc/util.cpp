@@ -84,7 +84,7 @@ bool slurm_query_addresses(map<uint32_t, string> &addresses,
 }
 
 void query_peer_addresses(map<uint32_t, string> &addresses,
-						  uint32_t &node_rank) {
+                          uint32_t &node_rank) {
     if(slurm_query_addresses(addresses, node_rank)) return;
 
     uint32_t num_nodes;
@@ -139,8 +139,8 @@ void flush_events() {
     static bool print_header = true;
     if(print_header) {
         printf(
-            "time, file:line, event_name, group_number, message_number, "
-            "block_number\n");
+                "time, file:line, event_name, group_number, message_number, "
+                "block_number\n");
         print_header = false;
     }
     for(const auto &e : events) {

@@ -2,8 +2,8 @@
 #ifndef SCHEDULE_H
 #define SCHEDULE_H
 
-#include <experimental/optional>
 #include <cmath>
+#include <experimental/optional>
 #include <vector>
 
 using std::experimental::optional;
@@ -33,7 +33,7 @@ public:
 
 class chain_schedule : public schedule {
 public:
-	using schedule::schedule;
+    using schedule::schedule;
     vector<uint32_t> get_connections() const;
     optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;
@@ -43,9 +43,9 @@ public:
 
 class sequential_schedule : public schedule {
 public:
-	using schedule::schedule;
+    using schedule::schedule;
     vector<uint32_t> get_connections() const;
-	optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
+    optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;
     optional<block_transfer> get_first_block(size_t num_blocks) const;
     size_t get_total_steps(size_t num_blocks) const;
@@ -53,7 +53,7 @@ public:
 
 class tree_schedule : public schedule {
 public:
-	using schedule::schedule;
+    using schedule::schedule;
     vector<uint32_t> get_connections() const;
     optional<block_transfer> get_outgoing_transfer(size_t num_blocks, size_t send_step) const;
     optional<block_transfer> get_incoming_transfer(size_t num_blocks, size_t receive_step) const;
@@ -75,17 +75,17 @@ public:
               log2_num_members(floor(log2(num_members))) {}
 
     static optional<block_transfer> get_vertex_outgoing_transfer(
-        uint32_t vertex, size_t step, uint32_t num_members,
-        unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
+            uint32_t vertex, size_t step, uint32_t num_members,
+            unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
     static optional<block_transfer> get_vertex_incoming_transfer(
-        uint32_t vertex, size_t step, uint32_t num_members,
-        unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
+            uint32_t vertex, size_t step, uint32_t num_members,
+            unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
     static optional<block_transfer> get_outgoing_transfer(
-        uint32_t node, size_t step, uint32_t num_members,
-        unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
+            uint32_t node, size_t step, uint32_t num_members,
+            unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
     static optional<block_transfer> get_incoming_transfer(
-        uint32_t node, size_t step, uint32_t num_members,
-        unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
+            uint32_t node, size_t step, uint32_t num_members,
+            unsigned int log2_num_members, size_t num_blocks, size_t total_steps);
     static optional<size_t> get_intravertex_block(uint32_t vertex, size_t step,
                                                   uint32_t num_members,
                                                   unsigned int log2_num_members,

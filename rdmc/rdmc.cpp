@@ -1,7 +1,7 @@
 
+#include "rdmc.h"
 #include "group_send.h"
 #include "message.h"
-#include "rdmc.h"
 #include "schedule.h"
 #include "util.h"
 #include "verbs_helper.h"
@@ -15,8 +15,8 @@
 #include <mutex>
 #include <set>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 using namespace std;
 using namespace rdma;
@@ -51,7 +51,7 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
                   failure_callback_t failure_callback) {
     if(shutdown_flag) return false;
 
-	schedule* send_schedule;
+    schedule* send_schedule;
     uint32_t member_index = index_of(members, node_rank);
     if(algorithm == BINOMIAL_SEND) {
         send_schedule = new binomial_schedule(members.size(), member_index);
@@ -60,7 +60,7 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
     } else if(algorithm == CHAIN_SEND) {
         send_schedule = new chain_schedule(members.size(), member_index);
     } else if(algorithm == TREE_SEND) {
-		send_schedule = new tree_schedule(members.size(), member_index);
+        send_schedule = new tree_schedule(members.size(), member_index);
     } else {
         puts("Unsupported group type?!");
         fflush(stdout);
@@ -69,7 +69,7 @@ bool create_group(uint16_t group_number, std::vector<uint32_t> members,
 
     unique_lock<mutex> lock(groups_lock);
     auto g = make_shared<polling_group>(group_number, block_size, members,
-										member_index, incoming_upcall, callback,
+                                        member_index, incoming_upcall, callback,
                                         unique_ptr<schedule>(send_schedule));
     auto p = groups.emplace(group_number, std::move(g));
     return p.second;
@@ -100,7 +100,7 @@ bool send(uint16_t group_number, shared_ptr<memory_region> mr, size_t offset,
 }
 void query_addresses(std::map<uint32_t, std::string>& addresses,
                      uint32_t& node_rank) {
-	query_peer_addresses(addresses, node_rank);
+    query_peer_addresses(addresses, node_rank);
 }
 
 barrier_group::barrier_group(vector<uint32_t> members) {
@@ -120,8 +120,7 @@ barrier_group::barrier_group(vector<uint32_t> members) {
     set<uint32_t> targets;
     for(unsigned int m = 0; m < total_steps; m++) {
         auto target = (member_index + (1 << m)) % group_size;
-        auto target2 =
-            (group_size * (1 << m) + member_index - (1 << m)) % group_size;
+        auto target2 = (group_size * (1 << m) + member_index - (1 << m)) % group_size;
         targets.insert(target);
         targets.insert(target2);
     }
@@ -132,7 +131,7 @@ barrier_group::barrier_group(vector<uint32_t> members) {
     }
 
     auto remote_mrs = ::rdma::impl::verbs_exchange_memory_regions(
-        members, node_rank, *steps_mr.get());
+            members, node_rank, *steps_mr.get());
     for(unsigned int m = 0; m < total_steps; m++) {
         auto target = (member_index + (1 << m)) % group_size;
 
@@ -158,10 +157,10 @@ void barrier_group::barrier_wait() {
 
     for(unsigned int m = 0; m < total_steps; m++) {
         if(!queue_pairs[m].post_write(
-               *number_mr.get(), 0, 8,
-               form_tag(0, (node_rank + (1 << m)) % group_size),
-               remote_memory_regions[m], m * 8, message_type::ignored(),
-			   false, true)) {
+                   *number_mr.get(), 0, 8,
+                   form_tag(0, (node_rank + (1 << m)) % group_size),
+                   remote_memory_regions[m], m * 8, message_type::ignored(),
+                   false, true)) {
             throw rdmc::connection_broken();
         }
 

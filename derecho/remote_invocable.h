@@ -199,7 +199,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     }
 };
 
-
 /**
  * Provides functions to implement handling RPC calls to a single function,
  * identified by its compile-time "tag" or opcode. Many versions of this class
@@ -592,8 +591,8 @@ public:
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 auto build_remote_invocable_class(const node_id_t nid, const uint32_t instance_id,
-                                std::map<Opcode, receive_fun_t>& rvrs,
-                                const WrappedFuns&... fs) {
+                                  std::map<Opcode, receive_fun_t>& rvrs,
+                                  const WrappedFuns&... fs) {
     return std::make_unique<RemoteInvocableClass<IdentifyingClass, WrappedFuns...>>(nid, instance_id, rvrs, fs...);
 }
 

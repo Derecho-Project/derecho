@@ -7,8 +7,8 @@ constexpr bool all_predicate_builders() { return true; }
 
 template <typename Row, typename ExtensionList, typename... Rst>
 constexpr bool all_predicate_builders(
-    PredicateBuilder<Row, ExtensionList> const *const pb,
-    Rst const *const... rst) {
+        PredicateBuilder<Row, ExtensionList> const *const pb,
+        Rst const *const... rst) {
     static_assert(std::is_pod<Row>::value,
                   "Error: Predicate Builders need POD rows!");
     return all_predicate_builders(rst...);
@@ -59,18 +59,17 @@ struct NamedRowPredicates<PredicateBuilder, PredBuilders...> {
 
     /** including this hd, how many values are left? */
     using size =
-        typename std::integral_constant<std::size_t,
-                                        sizeof...(PredBuilders) + 1>::type;
+            typename std::integral_constant<std::size_t,
+                                            sizeof...(PredBuilders) + 1>::type;
 
     /** each different PredicateBuilder in this list can supply some number of
      * updater functions.
      *  this is the number of updater functions supplied by all
      * PredicateBuilders
      * combined. */
-    using num_updater_functions = typename std::integral_constant<
-        std::size_t,
-        util::sum(PredicateBuilder::num_updater_functions::value,
-                  PredBuilders::num_updater_functions::value...)>::type;
+    using num_updater_functions = typename std::integral_constant<std::size_t,
+                                                                  util::sum(PredicateBuilder::num_updater_functions::value,
+                                                                            PredBuilders::num_updater_functions::value...)>::type;
 
     using NamedRowPredicatesTypePack = NamedRowPredicates;
 
@@ -79,8 +78,8 @@ struct NamedRowPredicates<PredicateBuilder, PredBuilders...> {
      * over this list */
     template <typename T>
     using Getters = std::decay_t<decltype(std::tuple_cat(
-        std::declval<typename PredicateBuilder::template Getters<T>>(),
-        std::declval<typename PredBuilders::template Getters<T>>()...))>;
+            std::declval<typename PredicateBuilder::template Getters<T>>(),
+            std::declval<typename PredBuilders::template Getters<T>>()...))>;
 };
 
 } /* namespace SST */

@@ -17,4 +17,4 @@ endif (SLURM_FOUND)
 ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
 
-add_custom_target(format_rdmc clang-format-3.6 -i *.cpp *.h)
+add_custom_target(format_rdmc clang-format-3.8 -i *.cpp *.h)

@@ -28,7 +28,7 @@ protected:
     const uint32_t num_members;
     const uint32_t member_index;  // our index in the members list
 
-	const unique_ptr<schedule> transfer_schedule;
+    const unique_ptr<schedule> transfer_schedule;
 
     std::mutex monitor;
 
@@ -53,7 +53,8 @@ public:
     virtual void receive_ready_for_block(uint32_t step, uint32_t sender) = 0;
     virtual void complete_block_send() = 0;
     virtual void send_message(std::shared_ptr<rdma::memory_region> message_mr,
-                              size_t offset, size_t length) = 0;
+                              size_t offset, size_t length)
+            = 0;
 };
 
 class polling_group : public group {
@@ -82,13 +83,13 @@ private:
     map<size_t, rdma::queue_pair> queue_pairs;
     map<size_t, rdma::queue_pair> rfb_queue_pairs;
 
-	static struct {
+    static struct {
         rdma::message_type data_block;
         rdma::message_type ready_for_block;
     } message_types;
-	
+
 public:
-	static void initialize_message_types();
+    static void initialize_message_types();
 
     polling_group(uint16_t group_number, size_t block_size,
                   vector<uint32_t> members, uint32_t member_index,
