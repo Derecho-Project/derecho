@@ -463,7 +463,7 @@ void MulticastGroup::deliver_message(Message& msg, subgroup_id_t subgroup_num) {
         // raw send
         else {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-                                                buf + h->header_size, msg.size);
+                                                buf + h->header_size, msg.size - h->header_size);
         }
         if(file_writer) {
             persistence::message msg_for_filewriter{buf + h->header_size,
