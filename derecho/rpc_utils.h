@@ -33,6 +33,12 @@ namespace rpc {
 
 using FunctionTag = unsigned long long;
 
+/**
+ * An RPC function call can be uniquely identified by the tuple
+ * (class, subgroup ID, function ID, is-reply), which is what this struct
+ * encapsulates. Its comparsion operators simply inherit the ones from
+ * std::tuple.
+ */
 struct Opcode {
     std::type_index class_id = std::type_index(typeid(void));
     uint32_t subgroup_id;
@@ -50,6 +56,10 @@ bool operator==(const Opcode& lhs, const Opcode& rhs) {
 
 using node_list_t = std::vector<node_id_t>;
 
+/**
+ * Indicates that an RPC call failed because executing the RPC function on the
+ * remote node resulted in an exception.
+ */
 struct remote_exception_occurred : public std::exception {
     node_id_t who;
     remote_exception_occurred(node_id_t who) : who(who) {}
@@ -61,6 +71,11 @@ struct remote_exception_occurred : public std::exception {
     }
 };
 
+/**
+ * Indicates that an RPC call to a node failed because the node was removed
+ * from the Replicated Object's subgroup (and possibly from the enclosing Group
+ * entirely) after the RPC message was sent but before a reply was received.
+ */
 struct node_removed_from_group_exception : public std::exception {
     node_id_t who;
     node_removed_from_group_exception(node_id_t who) : who(who) {}
@@ -86,10 +101,19 @@ struct recv_ret {
     std::exception_ptr possible_exception;
 };
 
+/**
+ * Type signature for all the RemoteInvocable::receive_* methods. This alias is
+ * helpful for declaring a map of "RPC receive handlers" that are called when
+ * some RPC message is received.
+ */
 using receive_fun_t = std::function<recv_ret(
         mutils::DeserializationManager* dsm, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
+/**
+ * The type of map contained in a QueryResults::ReplyMap. The template parameter
+ * should be the return type of the query.
+ */
 template <typename T>
 using reply_map = std::map<node_id_t, std::future<T>>;
 
