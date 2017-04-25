@@ -63,6 +63,7 @@ void SST<DerivedSST>::start_predicate_evaluation() {
  */
 template <typename DerivedSST>
 void SST<DerivedSST>::detect() {
+    pthread_setname_np(pthread_self(), "sst_detect");
     if(!thread_start) {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });

@@ -46,6 +46,7 @@ void FileWriter::set_message_written_upcall(
 }
 
 void FileWriter::perform_writes(std::string filename) {
+    pthread_setname_np(pthread_self(), "writer_thread");
     ofstream data_file(filename, std::ios::app);
     ofstream metadata_file(filename + METADATA_EXTENSION, std::ios::app);
 
@@ -94,6 +95,7 @@ void FileWriter::perform_writes(std::string filename) {
 }
 
 void FileWriter::issue_callbacks() {
+    pthread_setname_np(pthread_self(), "clbk_thread");
     unique_lock<mutex> lock(pending_callbacks_mutex);
 
     while(!exit) {

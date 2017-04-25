@@ -199,6 +199,7 @@ void RPCManager::finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t
 }
 
 void RPCManager::p2p_receive_loop() {
+    pthread_setname_np(pthread_self(), "rpc_thread");
     auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
     std::unique_ptr<char[]> rpcBuffer = std::unique_ptr<char[]>(new char[max_payload_size]);
     while(!thread_shutdown) {
