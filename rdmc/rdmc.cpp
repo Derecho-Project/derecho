@@ -37,7 +37,7 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
         return false;
     }
 
-	polling_group::initialize_message_types();
+    polling_group::initialize_message_types();
     return true;
 }
 void add_address(uint32_t index, const string& address) {

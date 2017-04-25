@@ -463,7 +463,7 @@ void MulticastGroup::deliver_message(Message& msg, subgroup_id_t subgroup_num) {
         // raw send
         else {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-                                                buf + h->header_size, msg.size);
+                                                buf + h->header_size, msg.size - h->header_size);
         }
         if(file_writer) {
             persistence::message msg_for_filewriter{buf + h->header_size,
@@ -633,6 +633,7 @@ void MulticastGroup::wedge() {
 }
 
 void MulticastGroup::send_loop() {
+    pthread_setname_np(pthread_self(), "sender_thread");
     subgroup_id_t subgroup_to_send = 0;
     auto should_send_to_subgroup = [&](subgroup_id_t subgroup_num) {
         if(!rdmc_groups_created) {
@@ -705,6 +706,7 @@ void MulticastGroup::send_loop() {
 }
 
 void MulticastGroup::check_failures_loop() {
+    pthread_setname_np(pthread_self(), "timeout_thread");
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(sender_timeout));
         if(sst) sst->put((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));

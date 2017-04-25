@@ -74,6 +74,7 @@ static feature_set supported_features;
 
 static atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
+    pthread_setname_np(pthread_self(), "rdmc_poll");
     TRACE("Spawned main loop");
 
     const int max_work_completions = 1024;

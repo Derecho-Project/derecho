@@ -256,6 +256,7 @@ std::map<node_id_t, ip_addr> ViewManager::make_member_ips_map(const View& view) 
 
 void ViewManager::create_threads() {
     client_listener_thread = std::thread{[this]() {
+	pthread_setname_np(pthread_self(), "client_thread");
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
             logger->debug("Background thread got a client connection from {}", client_socket.remote_ip);
@@ -265,6 +266,7 @@ void ViewManager::create_threads() {
     }};
 
     old_view_cleanup_thread = std::thread([this]() {
+	pthread_setname_np(pthread_self(), "old_view");
         while(!thread_shutdown) {
             unique_lock_t old_views_lock(old_views_mutex);
             old_views_cv.wait(old_views_lock, [this]() {
