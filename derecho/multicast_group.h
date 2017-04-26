@@ -22,6 +22,7 @@
 #include "rdmc/rdmc.h"
 #include "spdlog/spdlog.h"
 #include "sst/sst.h"
+#include "sst/multicast.h"
 #include "subgroup_info.h"
 
 namespace derecho {
@@ -160,7 +161,7 @@ private:
     /** Offset to add to member ranks to form RDMC group numbers. */
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
-    bool rdmc_groups_created = false;
+    bool rdmc_sst_groups_created = false;
     /** Stores message buffers not currently in use. Protected by
      * msg_state_mtx */
     std::map<uint32_t, std::vector<MessageBuffer>> free_message_buffers;
@@ -203,10 +204,14 @@ private:
     /** The SST, shared between this group and its GMS. */
     std::shared_ptr<DerechoSST> sst;
 
+    /** The SSTs for multicasts **/
+    std::vector<std::unique_ptr<sst::multicast_group<DerechoSST>>> sst_multicast_group_ptrs;
+
     using pred_handle = typename sst::Predicates<DerechoSST>::pred_handle;
-    pred_handle stability_pred_handle;
-    pred_handle delivery_pred_handle;
-    pred_handle sender_pred_handle;
+    std::vector<pred_handle> receiver_pred_handles;
+    std::vector<pred_handle> stability_pred_handles;
+    std::vector<pred_handle> delivery_pred_handles;
+    std::vector<pred_handle> sender_pred_handles;
 
     std::unique_ptr<FileWriter> file_writer;
 
@@ -219,7 +224,7 @@ private:
     void check_failures_loop();
 
     std::function<void(persistence::message)> make_file_written_callback();
-    bool create_rdmc_groups();
+    bool create_rdmc_sst_groups();
     void initialize_sst_row();
     void register_predicates();
 
