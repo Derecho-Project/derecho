@@ -707,7 +707,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
-            num_subgroups, num_received_size);
+            num_subgroups, num_received_size, derecho_params.window_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -729,7 +729,7 @@ void ViewManager::transition_multicast_group() {
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, next_view->failed, false),
-            num_subgroups, num_received_size);
+            num_subgroups, num_received_size, derecho_params.window_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank], next_view->gmsSST,
