@@ -8,7 +8,7 @@
 #include <string>
 
 #include "sst/sst.h"
-#include "sst/sst_multicast_msg.h"
+#include "sst/multicast_msg.h"
 
 namespace derecho {
 

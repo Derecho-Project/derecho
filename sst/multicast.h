@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "sst/sst.h"
-#include "sst/sst_multicast_msg.h"
+#include "sst/multicast_msg.h"
 
 namespace sst {
 template <typename sstType>
@@ -29,6 +29,14 @@ class multicast_group {
     // SST
     std::shared_ptr<sstType> sst;
 
+    // rows indices
+    const std::vector<uint32_t> row_indices;
+
+    // start indexes for sst fields it uses
+    // need to know the range it can operate on
+    const uint32_t num_received_offset;
+    const uint32_t slots_offset;
+
     // number of members
     const uint32_t num_members;
     // window size
@@ -37,11 +45,11 @@ class multicast_group {
     std::thread timeout_thread;
 
     void initialize() {
-        for(uint i = 0; i < num_members; ++i) {
-            for(uint j = 0; j < num_members; ++j) {
+        for(auto i : row_indices) {
+            for(uint j = num_received_offset; j < num_received_offset + num_members; ++j) {
                 sst->num_received_sst[i][j] = 0;
             }
-            for(uint j = 0; j < window_size; ++j) {
+            for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
                 sst->slots[i][j].buf[0] = 0;
                 sst->slots[i][j].next_seq = 0;
             }
@@ -52,10 +60,16 @@ class multicast_group {
 
 public:
     multicast_group(std::shared_ptr<sstType> sst,
+		    std::vector<uint32_t> row_indices,
+		    uint32_t num_received_offset,
+		    uint32_t slots_offset,
                     uint32_t window_size)
             : my_rank(sst->get_local_index()),
-              sst(sst),
-              num_members(sst->get_num_rows()),
+              sst(sst), 
+	      row_indices(row_indices),
+	      num_received_offset(num_received_offset),
+	      slots_offset(slots_offset),
+              num_members(row_indices.size()),
               window_size(window_size) {
         initialize();
     }
@@ -68,13 +82,13 @@ public:
                 uint32_t slot = num_queued % window_size;
                 num_queued++;
                 // set size appropriately
-                sst->slots[my_rank][slot].size = msg_size;
-                return sst->slots[my_rank][slot].buf;
+                sst->slots[my_rank][slots_offset + slot].size = msg_size;
+                return sst->slots[my_rank][slots_offset + slot].buf;
             } else {
-                uint64_t min_multicast_num = sst->num_received_sst[0][my_rank];
-                for(uint32_t i = 1; i < num_members; ++i) {
-                    if(sst->num_received_sst[i][my_rank] < min_multicast_num) {
-                        min_multicast_num = sst->num_received_sst[i][my_rank];
+                uint64_t min_multicast_num = sst->num_received_sst[row_indices[0]][num_received_offset + my_rank];
+                for(auto i : row_indices) {
+                    if(sst->num_received_sst[i][num_received_offset + my_rank] < min_multicast_num) {
+                        min_multicast_num = sst->num_received_sst[i][num_received_offset + my_rank];
                     }
                 }
                 if(num_multicasts_finished == min_multicast_num) {
@@ -89,26 +103,21 @@ public:
     void send() {
         uint32_t slot = num_sent % window_size;
         num_sent++;
-        sst->slots[my_rank][slot].next_seq++;
+        sst->slots[my_rank][slots_offset + slot].next_seq++;
         sst->put(
-                sst->slots.get_base() + slot * sizeof(sst->slots[0][0]) - sst->getBaseAddress(),
+                (char*)std::addressof(sst->slots[0][slots_offset + slot]) - sst->getBaseAddress(),
                 sizeof(Message));
     }
 
     void debug_print() {
         using namespace std;
         cout << "Printing slots::next_seq" << endl;
-        for(uint i = 0; i < num_members; ++i) {
-            for(uint j = 0; j < window_size; ++j) {
+        for(auto i : row_indices) {
+            for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
                 cout << sst->slots[i][j].next_seq << " ";
             }
             cout << endl;
-        }
-        cout << endl;
-
-        cout << "Printing num_received_sst" << endl;
-        for(uint i = 0; i < num_members; ++i) {
-            for(uint j = 0; j < num_members; ++j) {
+	    for(uint j = num_received_offset; j < num_received_offset + num_members; ++j) {
                 cout << sst->num_received_sst[i][j] << " ";
             }
             cout << endl;
