@@ -86,7 +86,8 @@ MulticastGroup::MulticastGroup(
           receiver_pred_handles(total_num_subgroups),
           stability_pred_handles(total_num_subgroups),
           delivery_pred_handles(total_num_subgroups),
-          sender_pred_handles(total_num_subgroups) {
+          sender_pred_handles(total_num_subgroups),
+	  last_transfer_medium(total_num_subgroups) {
     assert(window_size >= 1);
 
     if(!derecho_params.filename.empty()) {
@@ -163,7 +164,8 @@ MulticastGroup::MulticastGroup(
           receiver_pred_handles(total_num_subgroups),
           stability_pred_handles(total_num_subgroups),
           delivery_pred_handles(total_num_subgroups),
-          sender_pred_handles(total_num_subgroups) {
+          sender_pred_handles(total_num_subgroups),
+	  last_transfer_medium(total_num_subgroups) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -972,6 +974,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         next_sends[subgroup_num] = std::move(msg);
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
 
+	last_transfer_medium[subgroup_num] = transfer_medium;
         return buf + sizeof(header);
     }
     else {
@@ -984,21 +987,27 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         ((header*)buf)->index = future_message_indices[subgroup_num];
         ((header*)buf)->cooked_send = cooked_send;
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
-	
+
+	last_transfer_medium[subgroup_num] = transfer_medium;
         return buf + sizeof(header);
     }
 }
 
 bool MulticastGroup::send(subgroup_id_t subgroup_num) {
-    std::lock_guard<std::mutex> lock(msg_state_mtx);
     if(thread_shutdown || !rdmc_sst_groups_created) {
         return false;
     }
-    assert(next_sends[subgroup_num]);
-    pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
-    next_sends[subgroup_num] = std::experimental::nullopt;
-    sender_cv.notify_all();
-    return true;
+    if(last_transfer_medium[subgroup_num]) {
+        std::lock_guard<std::mutex> lock(msg_state_mtx);
+        assert(next_sends[subgroup_num]);
+        pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
+        next_sends[subgroup_num] = std::experimental::nullopt;
+        sender_cv.notify_all();
+        return true;
+    } else {
+        sst_multicast_group_ptrs[subgroup_num]->send();
+        return true;
+    }
 }
 
 std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) {

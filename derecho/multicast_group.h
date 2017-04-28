@@ -231,6 +231,8 @@ private:
     std::vector<pred_handle> delivery_pred_handles;
     std::vector<pred_handle> sender_pred_handles;
 
+    std::vector<bool> last_transfer_medium;
+
     std::unique_ptr<FileWriter> file_writer;
 
     /** Continuously waits for a new pending send, then sends it. This function
