@@ -117,9 +117,9 @@ int main(int argc, char *argv[]) {
     };
     auto send_one = [&]() {
         RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, num_messages);
+        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
         while(!buf) {
-            buf = group_as_subgroup.get_sendbuffer_ptr(1, num_messages);
+            buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
         }
         group_as_subgroup.send();
     };
