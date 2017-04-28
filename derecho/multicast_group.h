@@ -76,6 +76,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
 struct __attribute__((__packed__)) header {
     uint32_t header_size;
     uint32_t pause_sending_turns;
+    uint32_t index;
     bool cooked_send;
 };
 
@@ -111,6 +112,17 @@ struct Message {
     long long unsigned int size;
     /** The MessageBuffer that contains the message's body. */
     MessageBuffer message_buffer;
+};
+
+struct SSTMessage {
+    /** The unique node ID of the message's sender. */
+    uint32_t sender_id;
+    /** The message's index (relative to other messages sent by that sender). */
+    long long int index;
+    /** The message's size in bytes. */
+    long long unsigned int size;
+    /** Pointer to the message */
+    volatile char* buf;
 };
 
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
@@ -151,6 +163,8 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
      * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
+    /** Needed to sync parallel message receives by RDMC and SST */
+    std::vector<long long int> max_received_sst, max_received_rdmc;
     /** Maps subgroup IDs (for subgroups this node is a member of) to the members
      * of this node's shard of that subgroup */
     const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
@@ -184,8 +198,12 @@ private:
 
     /** Messages that have finished sending/receiving but aren't yet globally stable */
     std::map<uint32_t, std::map<long long int, Message>> locally_stable_messages;
+    /** Parallel map for SST messages */
+    std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
     /** Messages that are currently being written to persistent storage */
     std::map<uint32_t, std::map<long long int, Message>> non_persistent_messages;
+    /** Messages that are currently being written to persistent storage */
+    std::map<uint32_t, std::map<long long int, SSTMessage>> non_persistent_sst_messages;
 
     std::vector<long long int> next_message_to_deliver;
     std::mutex msg_state_mtx;
@@ -229,6 +247,7 @@ private:
     void register_predicates();
 
     void deliver_message(Message& msg, uint32_t subgroup_num);
+    void deliver_message(SSTMessage& msg, uint32_t subgroup_num);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
@@ -276,8 +295,9 @@ public:
     void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders, uint32_t subgroup_num, uint32_t num_shard_senders);
     /** Get a pointer into the current buffer, to write data into it before sending */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                             int pause_sending_turns = 0, bool cooked_send = false);
-    /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_position.send)*
+                             bool transfer_medium = true, int pause_sending_turns = 0,
+			     bool cooked_send = false, bool null_send = false);
+    /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
     bool send(subgroup_id_t subgroup_num);

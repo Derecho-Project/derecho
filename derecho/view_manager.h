@@ -293,7 +293,8 @@ public:
      * buffer. The returned pointer can be used to write a message into the
      * buffer. */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                             int pause_sending_turns = 0, bool cooked_send = false);
+                             bool transfer_medium = true, int pause_sending_turns = 0,
+			     bool cooked_send = false, bool null_send = false);
     /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send(subgroup_id_t subgroup_num);

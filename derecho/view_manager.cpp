@@ -1068,9 +1068,10 @@ void ViewManager::leave() {
 }
 
 char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num, unsigned long long int payload_size,
-                                      int pause_sending_turns, bool cooked_send) {
+                                      bool transfer_medium, int pause_sending_turns,
+				      bool cooked_send, bool null_send) {
     shared_lock_t lock(view_mutex);
-    return curr_view->multicast_group->get_sendbuffer_ptr(subgroup_num, payload_size, pause_sending_turns, cooked_send);
+    return curr_view->multicast_group->get_sendbuffer_ptr(subgroup_num, payload_size, transfer_medium, pause_sending_turns, cooked_send, null_send);
 }
 
 void ViewManager::send(subgroup_id_t subgroup_num) {
