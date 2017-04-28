@@ -163,8 +163,8 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
      * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
-    /** Needed to sync parallel message receives by RDMC and SST */
-    std::vector<long long int> max_received_sst, max_received_rdmc;
+    /** Used for synchronizing receives by RDMC and SST */
+    std::vector<std::list<long long int>> received_intervals;
     /** Maps subgroup IDs (for subgroups this node is a member of) to the members
      * of this node's shard of that subgroup */
     const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
@@ -260,6 +260,41 @@ private:
         }
         return num;
     };
+
+    auto resolve_num_received(auto beg_index, auto end_index, auto num_received_entry) {
+        auto it = received_intervals[num_received_entry].end();
+	it--;
+        while(*it > beg_index) {
+            it--;
+        }
+        if(std::next(it) == received_intervals[num_received_entry].end()) {
+            if(*it == beg_index - 1) {
+                *it = end_index;
+            } else {
+                received_intervals[num_received_entry].push_back(beg_index);
+                received_intervals[num_received_entry].push_back(end_index);
+            }
+        } else {
+            auto next_it = std::next(it);
+            if(*it != beg_index - 1) {
+                received_intervals[num_received_entry].insert(next_it, beg_index);
+                if(*next_it != end_index + 1) {
+                    received_intervals[num_received_entry].insert(next_it, end_index);
+                } else {
+                    received_intervals[num_received_entry].erase(next_it);
+                }
+            } else {
+                if(*next_it != end_index + 1) {
+                    received_intervals[num_received_entry].insert(next_it, end_index);
+                } else {
+                    received_intervals[num_received_entry].erase(next_it);
+                }
+                received_intervals[num_received_entry].erase(it);
+            }
+        }
+
+        return *std::next(received_intervals[num_received_entry].begin());
+    }
 
 public:
     MulticastGroup(
