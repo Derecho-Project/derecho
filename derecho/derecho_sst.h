@@ -98,7 +98,7 @@ public:
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
     SSTFieldVector<sst::Message> slots;
-    SSTFieldVector<uint64_t> num_received_sst;
+    SSTFieldVector<long long int> num_received_sst;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTField<bool> heartbeat;

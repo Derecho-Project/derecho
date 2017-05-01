@@ -789,7 +789,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
                                          std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership) {
-    uint32_t subgroup_offset = 0;
+    uint32_t num_received_offset = 0;
     for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
         subgroup_shard_layout_t subgroup_shard_views;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
@@ -826,7 +826,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                 if(shard_view.my_rank != -1) {
                     subgroup_to_shard_and_rank[next_subgroup_number] = {shard_num, shard_view.my_rank};
                     subgroup_to_senders_and_sender_rank[next_subgroup_number] = {shard_view.is_sender, shard_view.sender_rank_of(shard_view.my_rank)};
-                    subgroup_to_num_received_offset[next_subgroup_number] = subgroup_offset;
+                    subgroup_to_num_received_offset[next_subgroup_number] = num_received_offset;
                     subgroup_to_membership[next_subgroup_number] = shard_view.members;
                 }
                 if(prev_view && prev_view->is_adequately_provisioned) {
@@ -849,10 +849,10 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
              * and save it under its subgroup ID (which was shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
                     std::move(subgroup_shard_views[subgroup_index]));
-            subgroup_offset += max_shard_senders;
+            num_received_offset += max_shard_senders;
         }
     }
-    return subgroup_offset;
+    return num_received_offset;
 }
 
 /**

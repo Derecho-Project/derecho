@@ -103,7 +103,7 @@ struct MessageBuffer {
     MessageBuffer& operator=(MessageBuffer&&) = default;
 };
 
-struct Message {
+struct RDMCMessage {
     /** The unique node ID of the message's sender. */
     uint32_t sender_id;
     /** The message's index (relative to other messages sent by that sender). */
@@ -186,22 +186,22 @@ private:
 
     /** next_message is the message that will be sent when send is called the next time.
      * It is boost::none when there is no message to send. */
-    std::vector<std::experimental::optional<Message>> next_sends;
+    std::vector<std::experimental::optional<RDMCMessage>> next_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
-    std::vector<std::queue<Message>> pending_sends;
+    std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
     /** one per subgroup */
-    std::vector<std::experimental::optional<Message>> current_sends;
+    std::vector<std::experimental::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<std::pair<uint32_t, long long int>, Message> current_receives;
+    std::map<std::pair<uint32_t, long long int>, RDMCMessage> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable */
-    std::map<uint32_t, std::map<long long int, Message>> locally_stable_messages;
+    std::map<uint32_t, std::map<long long int, RDMCMessage>> locally_stable_rdmc_messages;
     /** Parallel map for SST messages */
     std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
     /** Messages that are currently being written to persistent storage */
-    std::map<uint32_t, std::map<long long int, Message>> non_persistent_messages;
+    std::map<uint32_t, std::map<long long int, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
     std::map<uint32_t, std::map<long long int, SSTMessage>> non_persistent_sst_messages;
 
@@ -248,7 +248,7 @@ private:
     void initialize_sst_row();
     void register_predicates();
 
-    void deliver_message(Message& msg, uint32_t subgroup_num);
+    void deliver_message(RDMCMessage& msg, uint32_t subgroup_num);
     void deliver_message(SSTMessage& msg, uint32_t subgroup_num);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
@@ -262,6 +262,9 @@ private:
     };
 
     auto resolve_num_received(auto beg_index, auto end_index, auto num_received_entry) {
+        // std::cout << "num_received_entry = " << num_received_entry << std::endl;
+        // std::cout << "beg_index = " << beg_index << std::endl;
+        // std::cout << "end_index = " << end_index << std::endl;
         auto it = received_intervals[num_received_entry].end();
 	it--;
         while(*it > beg_index) {
@@ -292,7 +295,8 @@ private:
                 received_intervals[num_received_entry].erase(it);
             }
         }
-
+        // std::cout << "Returned value: "
+        //           << *std::next(received_intervals[num_received_entry].begin()) << std::endl;
         return *std::next(received_intervals[num_received_entry].begin());
     }
 

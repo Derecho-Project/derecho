@@ -104,22 +104,23 @@ int main(int argc, char *argv[]) {
     cout << endl;
 
     auto send_all = [&]() {
-        RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+        RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
         for(int i = 0; i < num_messages; ++i) {
-            cout << "Asking for a buffer" << endl;
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
+            // cout << "Asking for a buffer" << endl;
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(10, false);
             while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
+                buf = group_as_subgroup.get_sendbuffer_ptr(10, false);
             }
-            cout << "Obtained a buffer, sending" << endl;	    
+            buf[0] = '0' + i;
+            // cout << "Obtained a buffer, sending" << endl;
             group_as_subgroup.send();
         }
     };
     auto send_one = [&]() {
         RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
+        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, false, num_messages);
         while(!buf) {
-            buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
+            buf = group_as_subgroup.get_sendbuffer_ptr(1, false, num_messages);
         }
         group_as_subgroup.send();
     };

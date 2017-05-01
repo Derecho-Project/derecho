@@ -16,11 +16,11 @@ namespace sst {
 template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
-    uint64_t queued_num = -1;
+    long long int queued_num = -1;
     // number of messages for which RDMA write is complete
     uint64_t num_sent = 0;
     // the number of messages acknowledged by all the nodes
-    uint64_t finished_multicasts_num = 0;
+    long long int finished_multicasts_num = -1;
     // row of the node in the sst
     const uint32_t my_row;
     // rank of the node in the members list
@@ -91,13 +91,15 @@ public:
         assert(msg_size <= max_msg_size);
         while(true) {
             if(queued_num - finished_multicasts_num < window_size) {
-                uint32_t slot = queued_num % window_size;
                 queued_num++;
+                uint32_t slot = queued_num % window_size;
+		// std::cout << "queued_num " << queued_num << std::endl;
+		// std::cout << "Giving slot " << slot << std::endl;
                 // set size appropriately
                 sst->slots[my_row][slots_offset + slot].size = msg_size;
                 return sst->slots[my_row][slots_offset + slot].buf;
             } else {
-                uint64_t min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_rank];
+                long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_rank];
                 for(auto i : row_indices) {
                     if(sst->num_received_sst[i][num_received_offset + my_rank] < min_multicast_num) {
                         min_multicast_num = sst->num_received_sst[i][num_received_offset + my_rank];
@@ -113,7 +115,10 @@ public:
     }
 
     void send() {
+        // std::cout << "In send: " << std::endl;
         uint32_t slot = num_sent % window_size;
+        // std::cout << "slot = " << slot << std::endl;
+	// std::cout << "slots_offset = " << slots_offset << std::endl;
         num_sent++;
         sst->slots[my_row][slots_offset + slot].next_seq++;
         sst->put(
@@ -122,13 +127,15 @@ public:
     }
 
     void debug_print() {
-        using namespace std;
-        cout << "Printing slots::next_seq" << endl;
+      using std::cout;
+      using std::endl;
         for(auto i : row_indices) {
+            cout << "Printing slots::next_seq" << endl;
             for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
                 cout << sst->slots[i][j].next_seq << " ";
             }
             cout << endl;
+	    cout << "Printing num_received_sst" << endl;
 	    for(uint j = num_received_offset; j < num_received_offset + num_members; ++j) {
                 cout << sst->num_received_sst[i][j] << " ";
             }
