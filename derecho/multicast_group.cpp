@@ -614,7 +614,7 @@ void MulticastGroup::register_predicates() {
 
         auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members, shard_ranks_by_sender_rank, num_shard_senders, num_received_offset](const DerechoSST& sst) {
             for(uint j = 0; j < num_shard_senders; ++j) {
-                auto num_received = sst.num_received_sst[member_index][num_received_offset + shard_ranks_by_sender_rank.at(j)] + 1;
+                auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
                 uint32_t slot = num_received % window_size;
                 if((long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq
                    == num_received / window_size + 1) {
@@ -658,19 +658,19 @@ void MulticastGroup::register_predicates() {
             std::lock_guard<std::mutex> lock(msg_state_mtx);
             for(uint i = 0; i < num_times; ++i) {
                 for(uint j = 0; j < num_shard_senders; ++j) {
-                    auto num_received = sst.num_received_sst[member_index][num_received_offset + shard_ranks_by_sender_rank.at(j)] + 1;
+                    auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
                     uint32_t slot = num_received % window_size;
                     long long int next_seq = (long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq;
                     if(next_seq == num_received / window_size + 1) {
                         sst_receive_handler(j, num_received,
                                             sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].buf,
                                             sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].size);
-                        sst.num_received_sst[member_index][num_received_offset + shard_ranks_by_sender_rank.at(j)] = num_received;
+                        sst.num_received_sst[member_index][num_received_offset + j] = num_received;
                     }
                 }
             }
             sst.put((char*)std::addressof(sst.num_received_sst[0][num_received_offset]) - sst.getBaseAddress(),
-                    sizeof(sst.num_received_sst[0][0]) * num_shard_members);
+                    sizeof(sst.num_received_sst[0][0]) * num_shard_senders);
             // std::atomic_signal_fence(std::memory_order_acq_rel);
             auto* min_ptr = std::min_element(&sst.num_received[member_index][num_received_offset],
                                              &sst.num_received[member_index][num_received_offset + num_shard_senders]);
