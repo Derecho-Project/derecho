@@ -75,7 +75,7 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view_raw}}};
 
     std::unique_ptr<derecho::Group<>> managed_group;
     if(node_rank == server_rank) {
@@ -107,9 +107,9 @@ int main(int argc, char *argv[]) {
         RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             // cout << "Asking for a buffer" << endl;
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(10, false);
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(10, true);
             while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(10, false);
+                buf = group_as_subgroup.get_sendbuffer_ptr(10, true);
             }
             buf[0] = '0' + i;
             // cout << "Obtained a buffer, sending" << endl;
@@ -118,9 +118,9 @@ int main(int argc, char *argv[]) {
     };
     auto send_one = [&]() {
         RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, false, num_messages);
+        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
         while(!buf) {
-            buf = group_as_subgroup.get_sendbuffer_ptr(1, false, num_messages);
+            buf = group_as_subgroup.get_sendbuffer_ptr(1, true, num_messages);
         }
         group_as_subgroup.send();
     };
