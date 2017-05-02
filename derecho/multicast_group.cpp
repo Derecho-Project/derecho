@@ -721,10 +721,6 @@ void MulticastGroup::register_predicates() {
 
                 auto node_id = shard_members[shard_ranks_by_sender_rank.at(sender_rank)];
 
-                std::cout << "sender_rank = " << sender_rank
-                          << ", index_ignored = " << index_ignored
-                          << ", index = " << index
-                          << std::endl;
                 locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
                 // Add empty messages to locally_stable_sst_messages for each turn that the sender is skipping.
@@ -824,7 +820,7 @@ void MulticastGroup::register_predicates() {
                     if(!locally_stable_sst_messages[subgroup_num].empty()) {
                         least_undelivered_sst_seq_num = locally_stable_sst_messages[subgroup_num].begin()->first;
                     }
-                    if(least_undelivered_rdmc_seq_num < least_undelivered_sst_seq_num && least_undelivered_rdmc_seq_num < min_stable_num) {
+                    if(least_undelivered_rdmc_seq_num < least_undelivered_sst_seq_num && least_undelivered_rdmc_seq_num <= min_stable_num) {
                         update_sst = true;
                         logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}",
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
@@ -832,7 +828,7 @@ void MulticastGroup::register_predicates() {
                         deliver_message(msg, subgroup_num);
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
-                    } else if(least_undelivered_sst_seq_num < least_undelivered_rdmc_seq_num && least_undelivered_sst_seq_num < min_stable_num) {
+                    } else if(least_undelivered_sst_seq_num < least_undelivered_rdmc_seq_num && least_undelivered_sst_seq_num <= min_stable_num) {
                         update_sst = true;
                         logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}",
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
@@ -906,10 +902,6 @@ void MulticastGroup::register_predicates() {
 
                 auto node_id = shard_members[shard_ranks_by_sender_rank.at(sender_rank)];
 
-                std::cout << "sender_rank = " << sender_rank
-                          << ", index_ignored = " << index_ignored
-                          << ", index = " << index
-                          << std::endl;
                 locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
                 // Add empty messages to locally_stable_sst_messages for each turn that the sender is skipping.
