@@ -199,7 +199,8 @@ private:
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
+                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+				std::map<subgroup_id_t, Mode>& subgroup_to_mode);
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
 

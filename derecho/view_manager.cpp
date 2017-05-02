@@ -699,10 +699,14 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
     std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
     std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
+    std::map<subgroup_id_t, Mode> subgroup_to_mode;
 
-    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_to_shard_and_rank,
+    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view,
+						    subgroup_to_shard_and_rank,
                                                     subgroup_to_senders_and_sender_rank,
-                                                    subgroup_to_num_received_offset, subgroup_to_membership);
+                                                    subgroup_to_num_received_offset,
+						    subgroup_to_membership,
+						    subgroup_to_mode);
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
@@ -713,8 +717,9 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, num_subgroups, subgroup_to_shard_and_rank,
             subgroup_to_senders_and_sender_rank,
-            subgroup_to_num_received_offset, subgroup_to_membership, derecho_params,
-            curr_view->failed);
+            subgroup_to_num_received_offset, subgroup_to_membership,
+	    subgroup_to_mode,
+	    derecho_params, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group() {
@@ -722,9 +727,12 @@ void ViewManager::transition_multicast_group() {
     std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
     std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
     std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
+    std::map<subgroup_id_t, Mode> subgroup_to_mode;
     uint32_t num_received_size = make_subgroup_maps(curr_view, *next_view, subgroup_to_shard_and_rank,
                                                     subgroup_to_senders_and_sender_rank,
-                                                    subgroup_to_num_received_offset, subgroup_to_membership);
+                                                    subgroup_to_num_received_offset,
+						    subgroup_to_membership,
+						    subgroup_to_mode);
     const auto num_subgroups = next_view->subgroup_shard_views.size();
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
@@ -736,7 +744,7 @@ void ViewManager::transition_multicast_group() {
             std::move(*curr_view->multicast_group), num_subgroups,
             subgroup_to_shard_and_rank, subgroup_to_senders_and_sender_rank,
             subgroup_to_num_received_offset, subgroup_to_membership,
-            next_view->failed);
+            subgroup_to_mode, next_view->failed);
 
     curr_view->multicast_group.reset();
 
@@ -788,7 +796,8 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
                                          std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
                                          std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-                                         std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership) {
+                                         std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+					 std::map<subgroup_id_t, Mode>& subgroup_to_mode) {
     uint32_t num_received_offset = 0;
     for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
         subgroup_shard_layout_t subgroup_shard_views;
@@ -799,11 +808,15 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
             curr_view.is_adequately_provisioned = false;
-            subgroup_to_shard_and_rank.clear();
-            subgroup_to_num_received_offset.clear();
-            subgroup_to_membership.clear();
             curr_view.subgroup_shard_views.clear();
             curr_view.subgroup_ids_by_type.clear();
+
+            subgroup_to_shard_and_rank.clear();
+	    subgroup_to_senders_and_sender_rank.clear();
+            subgroup_to_num_received_offset.clear();
+            subgroup_to_membership.clear();
+	    subgroup_to_mode.clear();
+
             return 0;
         }
         std::size_t num_subgroups = subgroup_shard_views.size();
@@ -828,6 +841,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                     subgroup_to_senders_and_sender_rank[next_subgroup_number] = {shard_view.is_sender, shard_view.sender_rank_of(shard_view.my_rank)};
                     subgroup_to_num_received_offset[next_subgroup_number] = num_received_offset;
                     subgroup_to_membership[next_subgroup_number] = shard_view.members;
+		    subgroup_to_mode[next_subgroup_number] = shard_view.mode;
                 }
                 if(prev_view && prev_view->is_adequately_provisioned) {
                     //Initialize this shard's SubView.joined and SubView.departed

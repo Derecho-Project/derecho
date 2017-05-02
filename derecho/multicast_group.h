@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "connection_manager.h"
+#include "derecho_modes.h"
 #include "derecho_sst.h"
 #include "filewriter.h"
 #include "mutils-serialization/SerializationMacros.hpp"
@@ -168,6 +169,8 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the members
      * of this node's shard of that subgroup */
     const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
+    /** Maps subgroup IDs to operation mode */
+    const std::map<subgroup_id_t, Mode> subgroup_to_mode;
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
     rpc_handler_t rpc_callback;
@@ -310,6 +313,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             const DerechoParams derecho_params,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -323,6 +327,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
 
     ~MulticastGroup();
