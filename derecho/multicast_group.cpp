@@ -449,23 +449,27 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         if(!locally_stable_sst_messages[subgroup_num].empty()
                            && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
                             auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
-                            char* buf = const_cast<char*>(msg.buf);
-                            header* h = (header*)(buf);
-                            callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                msg.index, buf + h->header_size,
-                                                                msg.size - h->header_size);
+                            if(msg.size > 0) {
+                                char* buf = const_cast<char*>(msg.buf);
+                                header* h = (header*)(buf);
+                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                    msg.index, buf + h->header_size,
+                                                                    msg.size - h->header_size);
+                            }
                             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
                         } else {
                             assert(!locally_stable_rdmc_messages[subgroup_num].empty());
                             auto it2 = locally_stable_rdmc_messages[subgroup_num].begin();
                             assert(it2->first == seq_num);
                             auto& msg = it2->second;
-                            char* buf = msg.message_buffer.buffer.get();
-                            header* h = (header*)(buf);
-                            callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                msg.index, buf + h->header_size,
-                                                                msg.size - h->header_size);
-                            free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+                            if(msg.size > 0) {
+                                char* buf = msg.message_buffer.buffer.get();
+                                header* h = (header*)(buf);
+                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                    msg.index, buf + h->header_size,
+                                                                    msg.size - h->header_size);
+                                free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+                            }
                             locally_stable_rdmc_messages[subgroup_num].erase(it2);
                         }
                     }
@@ -921,23 +925,27 @@ void MulticastGroup::register_predicates() {
                     if(!locally_stable_sst_messages[subgroup_num].empty()
                        && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
                         auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
-                        char* buf = const_cast<char*>(msg.buf);
-                        header* h = (header*)(buf);
-                        callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                            msg.index, buf + h->header_size,
-                                                            msg.size - h->header_size);
+                        if(msg.size > 0) {
+                            char* buf = const_cast<char*>(msg.buf);
+                            header* h = (header*)(buf);
+                            callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                msg.index, buf + h->header_size,
+                                                                msg.size - h->header_size);
+                        }
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
                     } else {
                         assert(!locally_stable_rdmc_messages[subgroup_num].empty());
                         auto it2 = locally_stable_rdmc_messages[subgroup_num].begin();
                         assert(it2->first == seq_num);
                         auto& msg = it2->second;
-                        char* buf = msg.message_buffer.buffer.get();
-                        header* h = (header*)(buf);
-                        callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                            msg.index, buf + h->header_size,
-                                                            msg.size - h->header_size);
-                        free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+                        if(msg.size > 0) {
+                            char* buf = msg.message_buffer.buffer.get();
+                            header* h = (header*)(buf);
+                            callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                msg.index, buf + h->header_size,
+                                                                msg.size - h->header_size);
+                            free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+                        }
                         locally_stable_rdmc_messages[subgroup_num].erase(it2);
                     }
                 }
@@ -1031,8 +1039,8 @@ void MulticastGroup::wedge() {
         if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
             sst->predicates.remove(stability_pred_handles[subgroup_num]);
             sst->predicates.remove(delivery_pred_handles[subgroup_num]);
-            sst->predicates.remove(sender_pred_handles[subgroup_num]);
         }
+        sst->predicates.remove(sender_pred_handles[subgroup_num]);
     }
 
     for(uint i = 0; i < num_members; ++i) {
@@ -1084,8 +1092,7 @@ void MulticastGroup::send_loop() {
                     return false;
                 }
             }
-        }
-	else {
+        } else {
             for(uint i = 0; i < num_shard_members; ++i) {
                 auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
                 if(sst->num_received[node_id_to_sst_index.at(shard_members[i])][num_received_offset + shard_sender_index] < (long long int)(future_message_indices[subgroup_num] - 1 - window_size)) {
@@ -1287,7 +1294,7 @@ void MulticastGroup::debug_print() {
             }
             cout << endl;
         }
-	num_received_offset += num_shard_senders;
+        num_received_offset += num_shard_senders;
         cout << "Printing multicastSST fields" << endl;
         sst_multicast_group_ptrs[subgroup_num]->debug_print();
         cout << endl;
