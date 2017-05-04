@@ -2,7 +2,6 @@
  * @file ViewManager.h
  *
  * @date Feb 6, 2017
- * @author edward
  */
 #pragma once
 

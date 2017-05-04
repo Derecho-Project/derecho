@@ -2,7 +2,6 @@
  * @file sst_impl.h
  *
  * @date Oct 28, 2016
- * @author edward
  */
 
 #pragma once

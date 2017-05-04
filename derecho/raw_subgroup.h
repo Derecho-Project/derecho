@@ -2,7 +2,6 @@
  * @file raw_subgroup.h
  *
  * @date Feb 17, 2017
- * @author edward
  */
 
 #pragma once

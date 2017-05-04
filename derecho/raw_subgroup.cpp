@@ -2,7 +2,6 @@
  * @file raw_subgroup.cpp
  *
  * @date Feb 17, 2017
- * @author edward
  */
 
 #include "raw_subgroup.h"

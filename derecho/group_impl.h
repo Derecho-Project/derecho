@@ -2,7 +2,6 @@
  * @file group_impl.h
  * @brief Contains implementations of all the ManagedGroup functions
  * @date Apr 22, 2016
- * @author Edward
  */
 
 #include <mutils-serialization/SerializationSupport.hpp>

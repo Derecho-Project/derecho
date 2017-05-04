@@ -2,7 +2,6 @@
  * @file remote_invocable.h
  *
  * @date Feb 13, 2017
- * @author edward
  */
 
 #pragma once

@@ -2,7 +2,6 @@
  * @file rpc_utils.h
  *
  * @date Feb 3, 2017
- * @author edward
  */
 
 #pragma once

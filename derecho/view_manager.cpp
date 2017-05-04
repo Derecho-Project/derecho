@@ -2,7 +2,6 @@
  * @file ViewManager.cpp
  *
  * @date Feb 6, 2017
- * @author edward
  */
 
 #include <arpa/inet.h>

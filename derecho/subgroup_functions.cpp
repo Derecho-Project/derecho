@@ -2,7 +2,6 @@
  * @file subgroup_functions.cpp
  *
  * @date Feb 28, 2017
- * @author edward
  */
 
 #include <vector>

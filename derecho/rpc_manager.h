@@ -2,7 +2,6 @@
  * @file rpc_manager.h
  *
  * @date Feb 7, 2017
- * @author edward
  */
 
 #pragma once

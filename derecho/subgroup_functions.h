@@ -2,7 +2,6 @@
  * @file subgroup_functions.h
  *
  * @date Feb 28, 2017
- * @author edward
  */
 
 #pragma once
