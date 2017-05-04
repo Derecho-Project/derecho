@@ -12,7 +12,8 @@ using std::string;
 using std::shared_ptr;
 
 SubView::SubView(int32_t num_members)
-        : members(num_members),
+        : mode(Mode::ORDERED),
+          members(num_members),
           is_sender(num_members, 1),
           member_ips(num_members),
           joined(0),
@@ -115,9 +116,10 @@ int View::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const std::vector<int>& is_sender) const {
+  std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
     std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
     sub_view->members = with_members;
+    sub_view->mode = mode;
     // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
         sub_view->is_sender = is_sender;

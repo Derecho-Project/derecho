@@ -2,7 +2,6 @@
  * @file raw_subgroup.h
  *
  * @date Feb 17, 2017
- * @author edward
  */
 
 #pragma once
@@ -47,7 +46,7 @@ public:
      * @param pause_sending_turns
      * @return
      */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns = 0);
+    char* get_sendbuffer_ptr(unsigned long long int payload_size, bool transfer_medium = true, int pause_sending_turns = 0, bool null_send = false);
 
     /**
      * Submits the contents of the send buffer to be sent on the next ordered

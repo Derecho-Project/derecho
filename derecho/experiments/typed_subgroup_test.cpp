@@ -2,7 +2,6 @@
  * @file typed_subgroup_test.cpp
  *
  * @date Mar 1, 2017
- * @author edward
  */
 
 #include <chrono>

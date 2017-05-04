@@ -105,6 +105,14 @@ public:
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
+
+    void __attribute__((noinline)) debug_print(int row_num) {
+        volatile T* arr = (*this)[row_num];
+        for(unsigned int j = 0; j < length; ++j) {
+            std::cout << arr[j] << " ";
+        }
+        std::cout << std::endl;
+    }
 };
 
 typedef std::function<void(uint32_t)> failure_upcall_t;
@@ -153,7 +161,7 @@ private:
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
         rows = new char[rowLen * num_members];
-        snapshot = new char[rowLen * num_members];
+        // snapshot = new char[rowLen * num_members];
         volatile char* base = rows;
         set_bases_and_rowLens(base, rowLen, fields...);
     }
@@ -172,13 +180,14 @@ public:
 private:
     /** Pointer to memory where the SST rows are stored. */
     volatile char* rows;
-    char* snapshot;
+    // char* snapshot;
     /** Length of each row in this SST, in bytes. */
     int rowLen;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
     const std::vector<uint32_t>& members;
     /** Equal to members.size() */
     const unsigned int num_members;
+    std::vector<uint32_t> all_indices;
     /** Index (row number) of this node in the SST. */
     unsigned int my_index;
     /** Maps node IDs to SST row indexes. */
@@ -210,12 +219,12 @@ private:
     std::condition_variable thread_start_cv;
 
 public:
-    // constructor
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
               thread_shutdown(false),
               members(params.members),
               num_members(members.size()),
+              all_indices(num_members),
               my_node_id(params.my_node_id),
               row_is_frozen(num_members),
               failure_upcall(params.failure_upcall),
@@ -227,6 +236,8 @@ public:
                 my_index = i;
             }
         }
+
+        std::iota(all_indices.begin(), all_indices.end(), 0);
 
         if(!params.already_failed.empty()) {
             assert(params.already_failed.size() == num_members);
@@ -253,7 +264,7 @@ public:
         unsigned int node_rank, sst_index;
         for(auto const& rank_index : members_by_id) {
             std::tie(node_rank, sst_index) = rank_index;
-            char* write_addr, *read_addr;
+            char *write_addr, *read_addr;
             write_addr = const_cast<char*>(rows) + rowLen * sst_index;
             read_addr = const_cast<char*>(rows) + rowLen * my_index;
             if(sst_index != my_index) {
@@ -297,23 +308,35 @@ public:
 
     /** Writes the entire local row to all remote nodes. */
     void put() {
-        std::vector<uint32_t> indices(num_members);
-        std::iota(indices.begin(), indices.end(), 0);
-        put(indices, 0, rowLen);
+        put(all_indices, 0, rowLen);
+    }
+
+    void put_with_completion() {
+        put_with_completion(all_indices, 0, rowLen);
     }
 
     /** Writes the entire local row to some of the remote nodes. */
-    void put(std::vector<uint32_t> receiver_ranks) { put(receiver_ranks, 0, rowLen); }
+    void put(std::vector<uint32_t> receiver_ranks) {
+        put(receiver_ranks, 0, rowLen);
+    }
+
+    void put_with_completion(std::vector<uint32_t> receiver_ranks) {
+        put_with_completion(receiver_ranks, 0, rowLen);
+    }
 
     /** Writes a contiguous subset of the local row to all remote nodes. */
     void put(long long int offset, long long int size) {
-        std::vector<uint32_t> indices(num_members);
-        iota(indices.begin(), indices.end(), 0);
-        put(indices, offset, size);
+        put(all_indices, offset, size);
+    }
+
+    void put_with_completion(long long int offset, long long int size) {
+        put_with_completion(all_indices, offset, size);
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
     void put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+
+    void put_with_completion(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
 
 private:
     using char_p = volatile char*;
@@ -335,18 +358,18 @@ private:
         set_bases_and_rowLens(base, rlen, rest...);
     }
 
-    void take_snapshot() {
-        memcpy(snapshot, const_cast<char*>(rows), rowLen * num_members);
-    }
+    // void take_snapshot() {
+    //   memcpy(snapshot, const_cast<char*>(rows), rowLen * num_members);
+    // }
 
-    // returns snapshot == current
-    bool compare_snapshot_and_current() {
-        int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
-        if(res == 0) {
-            return true;
-        }
-        return false;
-    }
+    // // returns snapshot == current
+    // bool compare_snapshot_and_current() {
+    //     int res = memcmp(const_cast<char*>(rows), snapshot, rowLen * num_members);
+    //     if(res == 0) {
+    //         return true;
+    //     }
+    //     return false;
+    // }
 };
 
 } /* namespace sst */

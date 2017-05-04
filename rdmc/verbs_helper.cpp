@@ -1,8 +1,8 @@
 
 #include "tcp/tcp.h"
 
-#include "verbs_helper.h"
 #include "util.h"
+#include "verbs_helper.h"
 
 #include <atomic>
 #include <cstring>
@@ -87,18 +87,16 @@ static void polling_loop() {
             uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
             do {
                 if(polling_loop_shutdown_flag) return;
-                num_completions =
-                    ibv_poll_cq(verbs_resources.cq, max_work_completions,
-                                work_completions.get());
+                num_completions = ibv_poll_cq(verbs_resources.cq, max_work_completions,
+                                              work_completions.get());
             } while(num_completions == 0 && get_time() < poll_end);
 
             if(num_completions == 0) {
                 if(ibv_req_notify_cq(verbs_resources.cq, 0))
                     throw rdma::exception();
 
-                num_completions =
-                    ibv_poll_cq(verbs_resources.cq, max_work_completions,
-                                work_completions.get());
+                num_completions = ibv_poll_cq(verbs_resources.cq, max_work_completions,
+                                              work_completions.get());
 
                 if(num_completions == 0) {
                     pollfd file_descriptor;
@@ -178,10 +176,8 @@ static int modify_qp_to_init(struct ibv_qp *qp, int ib_port) {
     attr.qp_state = IBV_QPS_INIT;
     attr.port_num = ib_port;
     attr.pkey_index = 0;
-    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                           IBV_ACCESS_REMOTE_WRITE;
-    flags =
-        IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
+    attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+    flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     rc = ibv_modify_qp(qp, &attr, flags);
     if(rc) fprintf(stderr, "failed to modify QP state to INIT\n");
     return rc;
@@ -214,8 +210,7 @@ static int modify_qp_to_rtr(struct ibv_qp *qp, uint32_t remote_qpn,
         attr.ah_attr.grh.sgid_index = gid_idx;
         attr.ah_attr.grh.traffic_class = 0;
     }
-    flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
-            IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
+    flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
     rc = ibv_modify_qp(qp, &attr, flags);
     if(rc) fprintf(stderr, "failed to modify QP state to RTR\n");
     return rc;
@@ -232,8 +227,7 @@ static int modify_qp_to_rts(struct ibv_qp *qp) {
     attr.rnr_retry = 6;
     attr.sq_psn = 0;
     attr.max_rd_atomic = 1;
-    flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
-            IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
+    flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
     rc = ibv_modify_qp(qp, &attr, flags);
     if(rc) fprintf(stderr, "failed to modify QP state to RTS. ERRNO=%d\n", rc);
     return rc;
@@ -372,8 +366,7 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
         attr.comp_mask = 0;
         int ret = ibv_exp_query_device(res->ib_ctx, &attr);
         if(ret == 0) {
-            supported_features.cross_channel =
-                attr.exp_device_cap_flags & IBV_EXP_DEVICE_CROSS_CHANNEL;
+            supported_features.cross_channel = attr.exp_device_cap_flags & IBV_EXP_DEVICE_CROSS_CHANNEL;
         }
     }
 #endif
@@ -486,12 +479,11 @@ using ibv_mr_unique_ptr = unique_ptr<ibv_mr, std::function<void(ibv_mr *)>>;
 static ibv_mr_unique_ptr create_mr(char *buffer, size_t size) {
     if(!buffer || size == 0) throw rdma::invalid_args();
 
-    int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
-                   IBV_ACCESS_REMOTE_WRITE;
+    int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 
     ibv_mr_unique_ptr mr = ibv_mr_unique_ptr(
-        ibv_reg_mr(verbs_resources.pd, (void *)buffer, size, mr_flags),
-        [](ibv_mr *m) { ibv_dereg_mr(m); });
+            ibv_reg_mr(verbs_resources.pd, (void *)buffer, size, mr_flags),
+            [](ibv_mr *m) { ibv_dereg_mr(m); });
 
     if(!mr) {
         throw rdma::mr_creation_failure();
@@ -506,9 +498,7 @@ static ibv_mr_unique_ptr create_contiguous_mr(size_t size) {
     in.pd = verbs_resources.pd;
     in.addr = 0;
     in.length = size;
-    in.exp_access =
-        IBV_EXP_ACCESS_LOCAL_WRITE | IBV_EXP_ACCESS_REMOTE_READ |
-        IBV_EXP_ACCESS_REMOTE_WRITE | IBV_EXP_ACCESS_ALLOCATE_MR;
+    in.exp_access = IBV_EXP_ACCESS_LOCAL_WRITE | IBV_EXP_ACCESS_REMOTE_READ | IBV_EXP_ACCESS_REMOTE_WRITE | IBV_EXP_ACCESS_ALLOCATE_MR;
     in.create_flags = IBV_EXP_REG_MR_CREATE_CONTIG;
     in.comp_mask = IBV_EXP_REG_MR_CREATE_FLAGS;
     ibv_mr_unique_ptr mr = ibv_mr_unique_ptr(ibv_exp_reg_mr(&in),
@@ -542,8 +532,7 @@ uint32_t memory_region::get_rkey() const { return mr->rkey; }
 completion_queue::completion_queue(bool cross_channel) {
     ibv_cq *cq_ptr = nullptr;
     if(!cross_channel) {
-        cq_ptr =
-            ibv_create_cq(verbs_resources.ib_ctx, 1024, nullptr, nullptr, 0);
+        cq_ptr = ibv_create_cq(verbs_resources.ib_ctx, 1024, nullptr, nullptr, 0);
     } else {
 #ifdef MELLANOX_EXPERIMENTAL_VERBS
         ibv_exp_cq_init_attr attr;
@@ -595,8 +584,8 @@ queue_pair::queue_pair(size_t remote_index,
     qp_init_attr.cap.max_recv_sge = 1;
 
     qp = unique_ptr<ibv_qp, std::function<void(ibv_qp *)>>(
-        ibv_create_qp(verbs_resources.pd, &qp_init_attr),
-        [](ibv_qp *q) { ibv_destroy_qp(q); });
+            ibv_create_qp(verbs_resources.pd, &qp_init_attr),
+            [](ibv_qp *q) { ibv_destroy_qp(q); });
 
     if(!qp) {
         fprintf(stderr, "failed to create QP\n");
@@ -632,12 +621,7 @@ queue_pair::queue_pair(size_t remote_index,
     if(!sock.exchange(local_con_data, remote_con_data))
         throw rdma::qp_creation_failure();
 
-    bool success =
-        !modify_qp_to_init(qp.get(), local_config.ib_port) &&
-        !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid,
-                          remote_con_data.gid, local_config.ib_port,
-                          local_config.gid_idx) &&
-        !modify_qp_to_rts(qp.get());
+    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid, local_config.ib_port, local_config.gid_idx) && !modify_qp_to_rts(qp.get());
 
     if(!success) printf("Failed to initialize QP\n");
 
@@ -785,8 +769,7 @@ bool queue_pair::post_write(const memory_region &mr, size_t offset,
     sr.sg_list = &sge;
     sr.num_sge = 1;
     sr.opcode = IBV_WR_RDMA_WRITE;
-    sr.send_flags = (signaled ? IBV_SEND_SIGNALED : 0) |
-                    (send_inline ? IBV_SEND_INLINE : 0);
+    sr.send_flags = (signaled ? IBV_SEND_SIGNALED : 0) | (send_inline ? IBV_SEND_INLINE : 0);
     sr.wr.rdma.remote_addr = remote_mr.buffer + remote_offset;
     sr.wr.rdma.rkey = remote_mr.rkey;
 
@@ -799,7 +782,7 @@ bool queue_pair::post_write(const memory_region &mr, size_t offset,
 
 #ifdef MELLANOX_EXPERIMENTAL_VERBS
 managed_queue_pair::managed_queue_pair(
-    size_t remote_index, std::function<void(managed_queue_pair *)> post_recvs)
+        size_t remote_index, std::function<void(managed_queue_pair *)> post_recvs)
         : queue_pair(), scq(true), rcq(true) {
     auto it = sockets.find(remote_index);
     if(it == sockets.end()) throw rdma::invalid_args();
@@ -819,12 +802,10 @@ managed_queue_pair::managed_queue_pair(
     attr.cap.max_inline_data = 0;
     attr.qp_type = IBV_QPT_RC;
     attr.sq_sig_all = 0;
-    attr.comp_mask =
-        IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
+    attr.comp_mask = IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
     attr.pd = verbs_resources.pd;
     attr.xrcd = nullptr;
-    attr.exp_create_flags =
-        IBV_EXP_QP_CREATE_CROSS_CHANNEL | IBV_EXP_QP_CREATE_MANAGED_SEND;
+    attr.exp_create_flags = IBV_EXP_QP_CREATE_CROSS_CHANNEL | IBV_EXP_QP_CREATE_MANAGED_SEND;
     attr.max_inl_recv = 0;
 
     qp = decltype(qp)(ibv_exp_create_qp(verbs_resources.ib_ctx, &attr),
@@ -864,12 +845,7 @@ managed_queue_pair::managed_queue_pair(
     if(!sock.exchange(local_con_data, remote_con_data))
         throw rdma::qp_creation_failure();
 
-    bool success =
-        !modify_qp_to_init(qp.get(), local_config.ib_port) &&
-        !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid,
-                          remote_con_data.gid, local_config.ib_port,
-                          local_config.gid_idx) &&
-        !modify_qp_to_rts(qp.get());
+    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid, local_config.ib_port, local_config.gid_idx) && !modify_qp_to_rts(qp.get());
 
     if(!success) throw rdma::qp_creation_failure();
 
@@ -894,8 +870,7 @@ manager_queue_pair::manager_queue_pair() : queue_pair() {
     attr.cap.max_inline_data = 0;
     attr.qp_type = IBV_QPT_RC;
     attr.sq_sig_all = 0;
-    attr.comp_mask =
-        IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
+    attr.comp_mask = IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS | IBV_EXP_QP_INIT_ATTR_PD;
     attr.pd = verbs_resources.pd;
     attr.xrcd = nullptr;
     attr.exp_create_flags = IBV_EXP_QP_CREATE_CROSS_CHANNEL;
@@ -909,10 +884,7 @@ manager_queue_pair::manager_queue_pair() : queue_pair() {
         throw rdma::qp_creation_failure();
     }
 
-    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) &&
-                   !modify_qp_to_rtr(qp.get(), qp->qp_num, 0, nullptr,
-                                     local_config.ib_port, -1) &&
-                   !modify_qp_to_rts(qp.get());
+    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), qp->qp_num, 0, nullptr, local_config.ib_port, -1) && !modify_qp_to_rts(qp.get());
 
     if(!success) throw rdma::qp_creation_failure();
 }
@@ -947,8 +919,7 @@ void task::append_wait(const completion_queue &cq, int count, bool signaled,
     wr.sg_list = nullptr;
     wr.num_sge = 0;
     wr.exp_opcode = IBV_EXP_WR_CQE_WAIT;
-    wr.exp_send_flags = (signaled ? IBV_SEND_SIGNALED : 0) |
-                        (last ? IBV_EXP_SEND_WAIT_EN_LAST : 0);
+    wr.exp_send_flags = (signaled ? IBV_SEND_SIGNALED : 0) | (last ? IBV_EXP_SEND_WAIT_EN_LAST : 0);
     wr.ex.imm_data = 0;
     wr.task.cqe_wait.cq = cq.cq.get();
     wr.task.cqe_wait.cq_count = count;
@@ -1038,8 +1009,7 @@ bool task::post() {
     }
 
     for(size_t i = 0; i + 1 < impl->mqp_list.size(); i++) {
-        impl->send_wrs[impl->mqp_list[i]].next =
-            &impl->send_wrs[impl->mqp_list[i + 1]];
+        impl->send_wrs[impl->mqp_list[i]].next = &impl->send_wrs[impl->mqp_list[i + 1]];
     }
 
     tasks[index].item.qp = impl->mqp;
@@ -1146,8 +1116,8 @@ feature_set get_supported_features() {
 // }
 namespace impl {
 map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
-    const vector<uint32_t> &members, uint32_t node_rank,
-    const memory_region &mr) {
+        const vector<uint32_t> &members, uint32_t node_rank,
+        const memory_region &mr) {
     map<uint32_t, remote_memory_region> remote_mrs;
     for(uint32_t m : members) {
         if(m == node_rank) {
@@ -1163,10 +1133,7 @@ map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
         size_t size;
         uint32_t rkey;
 
-        bool still_connected =
-            it->second.exchange((uintptr_t)mr.buffer, buffer) &&
-            it->second.exchange((size_t)mr.size, size) &&
-            it->second.exchange((uint32_t)mr.get_rkey(), rkey);
+        bool still_connected = it->second.exchange((uintptr_t)mr.buffer, buffer) && it->second.exchange((size_t)mr.size, size) && it->second.exchange((uint32_t)mr.get_rkey(), rkey);
 
         if(!still_connected) {
             fprintf(stderr, "WARNING: lost connection to node %u\n",

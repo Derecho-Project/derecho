@@ -4,7 +4,6 @@
  * to set up and use the system. A client should be able to construct and use
  * groups, subgroups, replicated objects, etc. just by including this file.
  * @date Nov 29, 2016
- * @author edward
  */
 
 #pragma once

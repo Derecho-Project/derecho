@@ -42,7 +42,7 @@ private:
     /** Connect the queue pairs. */
     void connect_qp();
     /** Post a remote RDMA operation. */
-    int post_remote_send(uint32_t id, long long int offset, long long int size, int op);
+    int post_remote_send(uint32_t id, long long int offset, long long int size, int op, bool completion);
 
 public:
     /** Index of the remote node. */
@@ -79,6 +79,9 @@ public:
     void post_remote_write(uint32_t id, long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(uint32_t id, long long int offset, long long int size);
+    void post_remote_write_with_completion(uint32_t id, long long int size);
+    /** Post an RDMA write at an offset into remote memory. */
+    void post_remote_write_with_completion(uint32_t id, long long int offset, long long int size);
 };
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr);
@@ -86,7 +89,7 @@ bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,
                       uint32_t node_rank);
-/** Polls for completion of a single posted remote read. */
+/** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion();
 /** Destroys the global verbs resources. */
 void verbs_destroy();

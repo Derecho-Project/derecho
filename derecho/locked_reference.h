@@ -2,7 +2,6 @@
  * @file locked_reference.h
  *
  * @date Mar 13, 2017
- * @author edward
  */
 
 #pragma once

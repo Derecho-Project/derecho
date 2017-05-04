@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "derecho_modes.h"
 #include "derecho_sst.h"
 #include "multicast_group.h"
 #include "sst/sst.h"
@@ -17,17 +18,18 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 
 namespace derecho {
-
 /**
  * The subset of a View associated with a single shard, or a single subgroup if
  * the subgroup is non-sharded.
  */
 class SubView : public mutils::ByteRepresentable {
 public:
+    /** Operation mode, raw mode does not do stability and delivery */
+    Mode mode;
     /** Node IDs of members in this subgroup/shard, indexed by their order in the SST */
     std::vector<node_id_t> members;
     /** vector selecting the senders, 0 for non-sender, non-0 for sender*/
-    /** integers instead of booleans due to the serialization issue */
+    /** integers instead of booleans due to the serialization issue :-/ */
     std::vector<int> is_sender;
     /** IP addresses of members in this subgroup/shard, with the same indices as members. */
     std::vector<ip_addr> member_ips;
@@ -49,10 +51,11 @@ public:
      * The vectors will have room for num_members elements. */
     SubView(int32_t num_members);
 
-    DEFAULT_SERIALIZATION_SUPPORT(SubView, members, is_sender, member_ips, joined, departed);
-    SubView(const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<ip_addr>& member_ips,
+    DEFAULT_SERIALIZATION_SUPPORT(SubView, mode, members, is_sender, member_ips, joined, departed);
+    SubView(Mode mode, const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<ip_addr>& member_ips,
             const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed)
-            : members(members),
+            : mode(mode),
+              members(members),
               is_sender(is_sender),
               member_ips(member_ips),
               joined(joined),
@@ -110,7 +113,7 @@ public:
      * @throws subgroup_provisioning_exception if any of the requested members
      * are not actually in this View's members vector.
      */
-    std::unique_ptr<SubView> make_subview(const std::vector<node_id_t>& with_members, const std::vector<int>& is_sender = {}) const;
+  std::unique_ptr<SubView> make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
 
     /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
     int rank_of(const ip_addr& who) const;

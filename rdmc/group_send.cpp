@@ -3,8 +3,8 @@
 #include "message.h"
 #include "util.h"
 
-#include <cstring>
 #include <cassert>
+#include <cstring>
 
 using namespace std;
 using namespace rdma;
@@ -18,10 +18,10 @@ extern mutex groups_lock;
 decltype(polling_group::message_types) polling_group::message_types;
 
 group::group(uint16_t _group_number, size_t _block_size,
-                       vector<uint32_t> _members, uint32_t _member_index,
-                       incoming_message_callback_t upcall,
-                       completion_callback_t callback,
-                       unique_ptr<schedule> _schedule)
+             vector<uint32_t> _members, uint32_t _member_index,
+             incoming_message_callback_t upcall,
+             completion_callback_t callback,
+             unique_ptr<schedule> _schedule)
         : members(_members),
           group_number(_group_number),
           block_size(_block_size),
@@ -52,16 +52,15 @@ void polling_group::initialize_message_types() {
     };
     auto send_ready_for_block = [](uint64_t, uint32_t, size_t) {};
     auto receive_ready_for_block = [find_group](
-        uint64_t tag, uint32_t immediate, size_t length) {
+            uint64_t tag, uint32_t immediate, size_t length) {
         ParsedTag parsed_tag = parse_tag(tag);
         shared_ptr<group> g = find_group(parsed_tag.group_number);
         if(g) g->receive_ready_for_block(immediate, parsed_tag.target);
     };
 
-    message_types.data_block =
-        message_type("rdmc.data_block", send_data_block, receive_data_block);
+    message_types.data_block = message_type("rdmc.data_block", send_data_block, receive_data_block);
     message_types.ready_for_block = message_type(
-        "rdmc.ready_for_block", send_ready_for_block, receive_ready_for_block);
+            "rdmc.ready_for_block", send_ready_for_block, receive_ready_for_block);
 }
 polling_group::polling_group(uint16_t _group_number, size_t _block_size,
                              vector<uint32_t> _members, uint32_t _member_index,
@@ -69,14 +68,13 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
                              completion_callback_t callback,
                              unique_ptr<schedule> _schedule)
         : group(_group_number, _block_size, _members, _member_index, upcall,
-                     callback, std::move(_schedule)),
+                callback, std::move(_schedule)),
           first_block_buffer(nullptr) {
     if(member_index != 0) {
         first_block_buffer = unique_ptr<char[]>(new char[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
 
-        first_block_mr =
-            make_unique<memory_region>(first_block_buffer.get(), block_size);
+        first_block_mr = make_unique<memory_region>(first_block_buffer.get(), block_size);
     }
 
     auto connections = transfer_schedule->get_connections();
@@ -100,9 +98,8 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
 
     if(receive_step == 0) {
         num_blocks = parse_immediate(send_imm).total_blocks;
-        first_block_number =
-            min(transfer_schedule->get_first_block(num_blocks)->block_number,
-                num_blocks - 1);
+        first_block_number = min(transfer_schedule->get_first_block(num_blocks)->block_number,
+                                 num_blocks - 1);
         message_size = num_blocks * block_size;
         if(num_blocks == 1) {
             message_size = received_block_size;
@@ -128,8 +125,7 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
         assert(receive_step == 0);
         auto transfer = transfer_schedule->get_incoming_transfer(num_blocks,
                                                                  receive_step);
-        while((!transfer || transfer->block_number == *first_block_number) &&
-              receive_step < transfer_schedule->get_total_steps(num_blocks)) {
+        while((!transfer || transfer->block_number == *first_block_number) && receive_step < transfer_schedule->get_total_steps(num_blocks)) {
             transfer = transfer_schedule->get_incoming_transfer(num_blocks, ++receive_step);
         }
 
@@ -176,8 +172,7 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
         LOG_EVENT(group_number, message_number, *first_block_number,
                   "returned_from_send_next_block");
 
-        if(!sending && num_received_blocks == num_blocks &&
-           send_step == transfer_schedule->get_total_steps(num_blocks)) {
+        if(!sending && num_received_blocks == num_blocks && send_step == transfer_schedule->get_total_steps(num_blocks)) {
             complete_message();
         }
     } else {
@@ -231,8 +226,7 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
         }
         // If we just received the last block and aren't still sending then
         // issue a completion callback
-        if(++num_received_blocks == num_blocks && !sending &&
-           send_step == transfer_schedule->get_total_steps(num_blocks)) {
+        if(++num_received_blocks == num_blocks && !sending && send_step == transfer_schedule->get_total_steps(num_blocks)) {
             complete_message();
         }
     }
@@ -262,13 +256,12 @@ void polling_group::complete_block_send() {
     // If we just send the last block, and were already done
     // receiving, then signal completion and prepare for the next
     // message.
-    if(!sending && send_step == transfer_schedule->get_total_steps(num_blocks) &&
-       (member_index == 0 || num_received_blocks == num_blocks)) {
+    if(!sending && send_step == transfer_schedule->get_total_steps(num_blocks) && (member_index == 0 || num_received_blocks == num_blocks)) {
         complete_message();
     }
 }
 void polling_group::send_message(shared_ptr<memory_region> message_mr, size_t offset,
-                         size_t length) {
+                                 size_t length) {
     LOG_EVENT(group_number, -1, -1, "send()");
 
     unique_lock<mutex> lock(monitor);

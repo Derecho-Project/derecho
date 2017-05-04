@@ -55,8 +55,6 @@ void check_for_error(T var, string msg) {
 }
 
 namespace sst {
-/** Completion Queue poll timeout in millisec */
-const int MAX_POLL_CQ_TIMEOUT = 2000;
 /** IB device name. */
 const char *dev_name = NULL;
 /** Local IB port to work with. */
@@ -130,13 +128,13 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     struct ibv_qp_init_attr qp_init_attr;
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
     qp_init_attr.qp_type = IBV_QPT_RC;
-    qp_init_attr.sq_sig_all = 1;
+    qp_init_attr.sq_sig_all = 0;
     // same completion queue for both send and receive operations
     qp_init_attr.send_cq = g_res->cq;
     qp_init_attr.recv_cq = g_res->cq;
     // allow a lot of requests at a time
-    qp_init_attr.cap.max_send_wr = 10;
-    qp_init_attr.cap.max_recv_wr = 10;
+    qp_init_attr.cap.max_send_wr = 10000;
+    qp_init_attr.cap.max_recv_wr = 10000;
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
     // create the queue pair
@@ -312,7 +310,7 @@ void resources::connect_qp() {
  * @return The return code of the IB Verbs post_send operation.
  */
 int resources::post_remote_send(uint32_t id, long long int offset, long long int size,
-                                int op) {
+                                int op, bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
@@ -336,8 +334,9 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
     } else {
         sr.opcode = IBV_WR_RDMA_WRITE;
     }
-    sr.send_flags = IBV_SEND_SIGNALED;
-
+    if(completion) {
+        sr.send_flags = IBV_SEND_SIGNALED;
+    }
     // set the remote rkey and virtual address
     sr.wr.rdma.remote_addr = remote_props.addr + offset;
     sr.wr.rdma.rkey = remote_props.rkey;
@@ -353,9 +352,9 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
  * @param size The number of bytes to read from remote memory.
  */
 void resources::post_remote_read(uint32_t id, long long int size) {
-    int rc = post_remote_send(id, 0, size, 0);
+    int rc = post_remote_send(id, 0, size, 0, false);
     check_for_error(
-            !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA read, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
 }
 /**
  * @param offset The offset, in bytes, of the remote memory buffer at which to
@@ -363,18 +362,18 @@ void resources::post_remote_read(uint32_t id, long long int size) {
  * @param size The number of bytes to read from remote memory.
  */
 void resources::post_remote_read(uint32_t id, long long int offset, long long int size) {
-    int rc = post_remote_send(id, offset, size, 0);
+    int rc = post_remote_send(id, offset, size, 0, false);
     check_for_error(
-            !rc, "Could not post RDMA read, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA read, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
 }
 /**
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
 void resources::post_remote_write(uint32_t id, long long int size) {
-    int rc = post_remote_send(id, 0, size, 1);
+    int rc = post_remote_send(id, 0, size, 1, false);
     check_for_error(
-            !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA write (with no offset), error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
 }
 
 /**
@@ -384,9 +383,21 @@ void resources::post_remote_write(uint32_t id, long long int size) {
  * memory.
  */
 void resources::post_remote_write(uint32_t id, long long int offset, long long int size) {
-    int rc = post_remote_send(id, offset, size, 1);
+    int rc = post_remote_send(id, offset, size, 1, false);
     check_for_error(
-            !rc, "Could not post RDMA write, error code is " + std::to_string(rc));
+            !rc, "Could not post RDMA write with offset, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+}
+
+void resources::post_remote_write_with_completion(uint32_t id, long long int size) {
+    int rc = post_remote_send(id, 0, size, 1, true);
+    check_for_error(
+            !rc, "Could not post RDMA write (with no offset) with completion, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+}
+
+void resources::post_remote_write_with_completion(uint32_t id, long long int offset, long long int size) {
+    int rc = post_remote_send(id, offset, size, 1, true);
+    check_for_error(
+            !rc, "Could not post RDMA write with offset and completion, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
 }
 
 void polling_loop() {
@@ -465,7 +476,7 @@ void resources_create() {
     // if there isn't any IB device in host
     check_for_error(num_devices, "NO RDMA device present");
     // search for the specific device we want to work with
-    for(i = 0; i < num_devices; i++) {
+    for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
         }
@@ -494,7 +505,10 @@ void resources_create() {
     // get the device attributes for the device
     ibv_query_device(g_res->ib_ctx, &g_res->device_attr);
 
-    // set to 1000 entries, we actually don't need more than the number of nodes
+    // cout << "device_attr.max_qp_wr = " << g_res->device_attr.max_qp_wr << endl;
+    // cout << "device_attr.max_cqe = " << g_res->device_attr.max_cqe << endl;
+
+    // set to many entries
     cq_size = 1000;
     g_res->cq = ibv_create_cq(g_res->ib_ctx, cq_size, NULL, NULL, 0);
     check_for_error(g_res->cq,
@@ -553,9 +567,9 @@ void verbs_destroy() {
     //     check_for_error(!rc, "Could not close RDMA device");
     // }
 
-    // if (polling_thread.joinable()) {
-    // polling_thread.join();
-    // }
+    if(polling_thread.joinable()) {
+        polling_thread.join();
+    }
     std::cout << "Shutting down" << std::endl;
 }
 

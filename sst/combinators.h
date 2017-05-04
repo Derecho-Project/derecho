@@ -69,7 +69,7 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
      */
     const std::function<row_entry(volatile const Row &,
                                   volatile const Row_Extension &)>
-        curr_pred;
+            curr_pred;
 
     /**
      * The raw function passed in by the user
@@ -80,7 +80,7 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
      * 0 (there aren't any)
      */
     using num_updater_functions =
-        typename std::integral_constant<std::size_t, 0>::type;
+            typename std::integral_constant<std::size_t, 0>::type;
 
     /**
      * If the user has named this Predicate, then this will be a tuple
@@ -95,9 +95,9 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
      */
     template <typename T>
     using Getters = std::conditional_t<
-        /* if */ Metadata::has_name::value,
-        /* then */ std::tuple<std::function<row_entry(T)>>,
-        /* else */ std::tuple<>>;
+            /* if */ Metadata::has_name::value,
+            /* then */ std::tuple<std::function<row_entry(T)>>,
+            /* else */ std::tuple<>>;
 
     /**
      * Remember where we wanted to have a <T extends Row & Row_Extension>?
@@ -119,7 +119,7 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
         //{[captured_pred = this->curr_pred](volatile const T& t) { ...
         auto captured_pred = this->curr_pred;
         std::function<row_entry(volatile const T &)> f{[captured_pred](
-            volatile const T &t) { return captured_pred(t, t); }};
+                volatile const T &t) { return captured_pred(t, t); }};
         return std::make_tuple(f);
     }
 
@@ -160,12 +160,11 @@ struct PredicateBuilder {
      * E(pred), then it would be pred's name.
      * if no predicate has a name yet, this is -1.
      */
-    using is_named = std::integral_constant<
-        bool, (predicate_builder::choose_uniqueness_tag<hd>::value >= 0)>;
+    using is_named = std::integral_constant<bool, (predicate_builder::choose_uniqueness_tag<hd>::value >= 0)>;
 
     static_assert(is_named::value
-                      ? predicate_builder::choose_uniqueness_tag<hd>::value >= 0
-                      : true,
+                          ? predicate_builder::choose_uniqueness_tag<hd>::value >= 0
+                          : true,
                   "Internal Error: renaming failed!");
 
     using row_entry = typename hd::ExtensionType;
@@ -183,37 +182,33 @@ struct PredicateBuilder {
      * This takes the SST::InternalRow, SST::operator[], and SST::size().
      */
     typedef std::function<void(
-        volatile Row_Extension &,
-        std::function<util::ref_pair<volatile Row, volatile Row_Extension>(
-            int)>,
-        const int num_rows)>
-        updater_function_t;
+            volatile Row_Extension &,
+            std::function<util::ref_pair<volatile Row, volatile Row_Extension>(
+                    int)>,
+            const int num_rows)>
+            updater_function_t;
 
-    using num_updater_functions = std::integral_constant<
-        std::size_t,
-        PredicateBuilder<Row, tl>::num_updater_functions::value + 1>;
+    using num_updater_functions = std::integral_constant<std::size_t,
+                                                         PredicateBuilder<Row, tl>::num_updater_functions::value + 1>;
 
     template <typename InternalRow>
     using Getters = std::decay_t<decltype(std::tuple_cat(
-        std::declval<
-            /*If this function is named, then register its getter */
-            std::conditional_t</*if*/ hd::has_name::value, /*then*/ std::tuple<
-                                   std::function<row_entry(InternalRow)>>,
-                               /*else*/ std::tuple<>>>(),
-        /*and append that to the getters you've already built */
-        std::declval<typename PredicateBuilder<Row, tl>::template Getters<
-            InternalRow>>()))>;
+            std::declval<
+                    /*If this function is named, then register its getter */
+                    std::conditional_t</*if*/ hd::has_name::value, /*then*/ std::tuple<std::function<row_entry(InternalRow)>>,
+                                       /*else*/ std::tuple<>>>(),
+            /*and append that to the getters you've already built */
+            std::declval<typename PredicateBuilder<Row, tl>::template Getters<InternalRow>>()))>;
 
     using num_getters =
-        typename std::tuple_size<Getters<int /*dummy param*/>>::type;
+            typename std::tuple_size<Getters<int /*dummy param*/>>::type;
 
     /**
      * Takes a NameEnum, and returns a type-level boolean indicating whether
      * the Name of this NamedRowFunction was taken from that Enum.
      */
     template <typename NameEnum>
-    using name_enum_matches =
-        predicate_builder::NameEnumMatches<NameEnum, ExtensionList>;
+    using name_enum_matches = predicate_builder::NameEnumMatches<NameEnum, ExtensionList>;
 
     /**
      * Just don't touch this; it's the raw lambda for the updater function
@@ -263,7 +258,7 @@ struct PredicateBuilder {
         //{[captured_pred = this->curr_pred](volatile const T& t) { ...
         auto captured_pred = curr_pred;
         std::function<row_entry(volatile const T &)> f{[captured_pred](
-            volatile const T &t) { return captured_pred(t, t); }};
+                volatile const T &t) { return captured_pred(t, t); }};
         return std::tuple_cat(std::make_tuple(f),
                               prev_preds.template wrap_getters<T>());
     }
@@ -306,9 +301,8 @@ auto as_row_pred(const F &f) {
     auto pred_f = [converted_f](const volatile Row &r, const volatile auto &) {
         return converted_f(r);
     };
-    using pred_builder = PredicateBuilder<
-        Row,
-        TypeList<NamelessPredicateMetadata<Entry, -1, void, decltype(pred_f)>>>;
+    using pred_builder = PredicateBuilder<Row,
+                                          TypeList<NamelessPredicateMetadata<Entry, -1, void, decltype(pred_f)>>>;
     return pred_builder{pred_f, pred_f};
 }
 
@@ -316,10 +310,8 @@ auto as_row_pred(const F &f) {
 // but we're the tail.
 template <typename NameEnum, NameEnum Name, typename Row, typename fun_return,
           typename Up, typename Get>
-auto name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
-    using This_list =
-        TypeList<PredicateMetadata<NameEnum, Name, fun_return, Up, Get>>;
+auto name_predicate(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<fun_return, -1, Up, Get>>> &pb) {
+    using This_list = TypeList<PredicateMetadata<NameEnum, Name, fun_return, Up, Get>>;
     using next_builder = PredicateBuilder<Row, This_list>;
     static auto ret = next_builder{pb.curr_pred_raw, pb.curr_pred_raw};
     return ret;
@@ -330,16 +322,13 @@ auto name_predicate(const PredicateBuilder<
 // down the entire tree!
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, typename hd, typename... tl>
-const auto &name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
-                               pb) {
+const auto &name_predicate(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
+                                   pb) {
     constexpr int unique = static_cast<int>(Name);
     auto new_prev = change_uniqueness<unique>(pb.prev_preds);
-    using This_list = typename decltype(new_prev)::template append<
-        PredicateMetadata<NameEnum, Name, Ext, Up, Get>>;
+    using This_list = typename decltype(new_prev)::template append<PredicateMetadata<NameEnum, Name, Ext, Up, Get>>;
     using next_builder = PredicateBuilder<Row, This_list>;
-    static auto ret =
-        next_builder{new_prev, pb.updater_function_raw, pb.curr_pred_raw};
+    static auto ret = next_builder{new_prev, pb.updater_function_raw, pb.curr_pred_raw};
     return ret;
 }
 
@@ -347,14 +336,11 @@ const auto &name_predicate(const PredicateBuilder<
 // not touch previous ones
 template <typename NameEnum, NameEnum Name, typename Row, typename Ext,
           typename Up, typename Get, int unique, typename... tl>
-const auto &name_predicate(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
-                               pb) {
+const auto &name_predicate(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext, unique, Up, Get>, tl...>> &
+                                   pb) {
     static_assert(unique >= 0, "Internal error: overload resolution fails");
-    using next_builder = PredicateBuilder<
-        Row, TypeList<PredicateMetadata<NameEnum, Name, Ext, Up, Get>, tl...>>;
-    static auto ret =
-        next_builder{pb.prev_preds, pb.updater_function_raw, pb.curr_pred_raw};
+    using next_builder = PredicateBuilder<Row, TypeList<PredicateMetadata<NameEnum, Name, Ext, Up, Get>, tl...>>;
+    static auto ret = next_builder{pb.prev_preds, pb.updater_function_raw, pb.curr_pred_raw};
     return ret;
 }
 
@@ -373,10 +359,10 @@ auto E(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
     auto updater_f = [curr_pred_raw](volatile auto &my_row, auto lookup_row,
                                      const int num_rows) {
         using Prev_Row_Extension =
-            typename std::decay_t<decltype(my_row)>::super;
+                typename std::decay_t<decltype(my_row)>::super;
         const std::function<bool(const volatile Row &,
                                  const volatile Prev_Row_Extension &)>
-            curr_pred = curr_pred_raw;
+                curr_pred = curr_pred_raw;
         bool result = true;
         for(int i = 0; i < num_rows; ++i) {
             auto rowpair = lookup_row(i);
@@ -387,14 +373,12 @@ auto E(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
     };
 
     auto getter_f =
-        [](volatile const Row &, volatile const auto &r) { return r.stored; };
+            [](volatile const Row &, volatile const auto &r) { return r.stored; };
 
-    using next_builder = PredicateBuilder<
-        Row,
-        TypeList<NamelessPredicateMetadata<
-                     bool, predicate_builder::choose_uniqueness_tag<hd>::value,
-                     decltype(updater_f), decltype(getter_f)>,
-                 hd, tl...>>;
+    using next_builder = PredicateBuilder<Row,
+                                          TypeList<NamelessPredicateMetadata<bool, predicate_builder::choose_uniqueness_tag<hd>::value,
+                                                                             decltype(updater_f), decltype(getter_f)>,
+                                                   hd, tl...>>;
 
     return next_builder{pb, updater_f, getter_f};
 }
@@ -406,14 +390,14 @@ auto Min(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
     auto curr_pred_raw = pb.curr_pred_raw;
 
     auto updater_f = [curr_pred_raw](
-        volatile /*Row_Extension that is mine*/ auto &my_row,
-        auto /*wrapped SST::operator[] (returns Row,Row_Extension, because no access to InternalRow in PredicateBuilder)*/ lookup_row,
-        const int num_rows) {
+            volatile /*Row_Extension that is mine*/ auto &my_row,
+            auto /*wrapped SST::operator[] (returns Row,Row_Extension, because no access to InternalRow in PredicateBuilder)*/ lookup_row,
+            const int num_rows) {
         using Prev_Row_Extension =
-            typename std::decay_t<decltype(my_row)>::super;
+                typename std::decay_t<decltype(my_row)>::super;
         const std::function<min_t(const volatile Row &,
                                   const volatile Prev_Row_Extension &)>
-            curr_pred = curr_pred_raw;
+                curr_pred = curr_pred_raw;
         auto initial_val = lookup_row(0);
         min_t min = curr_pred(initial_val.l, initial_val.r);
         for(int i = 1; i < num_rows; ++i) {
@@ -425,14 +409,12 @@ auto Min(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
     };
 
     auto getter_f =
-        [](volatile const Row &, volatile const auto &r) { return r.stored; };
+            [](volatile const Row &, volatile const auto &r) { return r.stored; };
 
-    using outermore_builder = PredicateBuilder<
-        Row,
-        TypeList<NamelessPredicateMetadata<
-                     min_t, predicate_builder::choose_uniqueness_tag<hd>::value,
-                     decltype(updater_f), decltype(getter_f)>,
-                 hd, tl...>>;
+    using outermore_builder = PredicateBuilder<Row,
+                                               TypeList<NamelessPredicateMetadata<min_t, predicate_builder::choose_uniqueness_tag<hd>::value,
+                                                                                  decltype(updater_f), decltype(getter_f)>,
+                                                        hd, tl...>>;
 
     return outermore_builder{pb, updater_f, getter_f};
 }

@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "connection_manager.h"
+#include "derecho_modes.h"
 #include "derecho_sst.h"
 #include "filewriter.h"
 #include "mutils-serialization/SerializationMacros.hpp"
@@ -22,6 +23,7 @@
 #include "rdmc/rdmc.h"
 #include "spdlog/spdlog.h"
 #include "sst/sst.h"
+#include "sst/multicast.h"
 #include "subgroup_info.h"
 
 namespace derecho {
@@ -75,6 +77,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
 struct __attribute__((__packed__)) header {
     uint32_t header_size;
     uint32_t pause_sending_turns;
+    uint32_t index;
     bool cooked_send;
 };
 
@@ -101,7 +104,7 @@ struct MessageBuffer {
     MessageBuffer& operator=(MessageBuffer&&) = default;
 };
 
-struct Message {
+struct RDMCMessage {
     /** The unique node ID of the message's sender. */
     uint32_t sender_id;
     /** The message's index (relative to other messages sent by that sender). */
@@ -110,6 +113,17 @@ struct Message {
     long long unsigned int size;
     /** The MessageBuffer that contains the message's body. */
     MessageBuffer message_buffer;
+};
+
+struct SSTMessage {
+    /** The unique node ID of the message's sender. */
+    uint32_t sender_id;
+    /** The message's index (relative to other messages sent by that sender). */
+    long long int index;
+    /** The message's size in bytes. */
+    long long unsigned int size;
+    /** Pointer to the message */
+    volatile char* buf;
 };
 
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
@@ -150,9 +164,13 @@ private:
     /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
      * of this node's num_received counter within that subgroup's SST section */
     const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
+    /** Used for synchronizing receives by RDMC and SST */
+    std::vector<std::list<long long int>> received_intervals;
     /** Maps subgroup IDs (for subgroups this node is a member of) to the members
      * of this node's shard of that subgroup */
     const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
+    /** Maps subgroup IDs to operation mode */
+    const std::map<subgroup_id_t, Mode> subgroup_to_mode;
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
     rpc_handler_t rpc_callback;
@@ -160,7 +178,7 @@ private:
     /** Offset to add to member ranks to form RDMC group numbers. */
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
-    bool rdmc_groups_created = false;
+    bool rdmc_sst_groups_created = false;
     /** Stores message buffers not currently in use. Protected by
      * msg_state_mtx */
     std::map<uint32_t, std::vector<MessageBuffer>> free_message_buffers;
@@ -171,20 +189,24 @@ private:
 
     /** next_message is the message that will be sent when send is called the next time.
      * It is boost::none when there is no message to send. */
-    std::vector<std::experimental::optional<Message>> next_sends;
+    std::vector<std::experimental::optional<RDMCMessage>> next_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
-    std::vector<std::queue<Message>> pending_sends;
+    std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
     /** one per subgroup */
-    std::vector<std::experimental::optional<Message>> current_sends;
+    std::vector<std::experimental::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<std::pair<uint32_t, long long int>, Message> current_receives;
+    std::map<std::pair<uint32_t, long long int>, RDMCMessage> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable */
-    std::map<uint32_t, std::map<long long int, Message>> locally_stable_messages;
+    std::map<uint32_t, std::map<long long int, RDMCMessage>> locally_stable_rdmc_messages;
+    /** Parallel map for SST messages */
+    std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
     /** Messages that are currently being written to persistent storage */
-    std::map<uint32_t, std::map<long long int, Message>> non_persistent_messages;
+    std::map<uint32_t, std::map<long long int, RDMCMessage>> non_persistent_messages;
+    /** Messages that are currently being written to persistent storage */
+    std::map<uint32_t, std::map<long long int, SSTMessage>> non_persistent_sst_messages;
 
     std::vector<long long int> next_message_to_deliver;
     std::mutex msg_state_mtx;
@@ -203,10 +225,16 @@ private:
     /** The SST, shared between this group and its GMS. */
     std::shared_ptr<DerechoSST> sst;
 
+    /** The SSTs for multicasts **/
+    std::vector<std::unique_ptr<sst::multicast_group<DerechoSST>>> sst_multicast_group_ptrs;
+
     using pred_handle = typename sst::Predicates<DerechoSST>::pred_handle;
-    pred_handle stability_pred_handle;
-    pred_handle delivery_pred_handle;
-    pred_handle sender_pred_handle;
+    std::vector<pred_handle> receiver_pred_handles;
+    std::vector<pred_handle> stability_pred_handles;
+    std::vector<pred_handle> delivery_pred_handles;
+    std::vector<pred_handle> sender_pred_handles;
+
+    std::vector<bool> last_transfer_medium;
 
     std::unique_ptr<FileWriter> file_writer;
 
@@ -219,11 +247,12 @@ private:
     void check_failures_loop();
 
     std::function<void(persistence::message)> make_file_written_callback();
-    bool create_rdmc_groups();
+    bool create_rdmc_sst_groups();
     void initialize_sst_row();
     void register_predicates();
 
-    void deliver_message(Message& msg, uint32_t subgroup_num);
+    void deliver_message(RDMCMessage& msg, uint32_t subgroup_num);
+    void deliver_message(SSTMessage& msg, uint32_t subgroup_num);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
@@ -235,6 +264,45 @@ private:
         return num;
     };
 
+    auto resolve_num_received(auto beg_index, auto end_index, auto num_received_entry) {
+        // std::cout << "num_received_entry = " << num_received_entry << std::endl;
+        // std::cout << "beg_index = " << beg_index << std::endl;
+        // std::cout << "end_index = " << end_index << std::endl;
+        auto it = received_intervals[num_received_entry].end();
+	it--;
+        while(*it > beg_index) {
+            it--;
+        }
+        if(std::next(it) == received_intervals[num_received_entry].end()) {
+            if(*it == beg_index - 1) {
+                *it = end_index;
+            } else {
+                received_intervals[num_received_entry].push_back(beg_index);
+                received_intervals[num_received_entry].push_back(end_index);
+            }
+        } else {
+            auto next_it = std::next(it);
+            if(*it != beg_index - 1) {
+                received_intervals[num_received_entry].insert(next_it, beg_index);
+                if(*next_it != end_index + 1) {
+                    received_intervals[num_received_entry].insert(next_it, end_index);
+                } else {
+                    received_intervals[num_received_entry].erase(next_it);
+                }
+            } else {
+                if(*next_it != end_index + 1) {
+                    received_intervals[num_received_entry].insert(next_it, end_index);
+                } else {
+                    received_intervals[num_received_entry].erase(next_it);
+                }
+                received_intervals[num_received_entry].erase(it);
+            }
+        }
+        // std::cout << "Returned value: "
+        //           << *std::next(received_intervals[num_received_entry].begin()) << std::endl;
+        return *std::next(received_intervals[num_received_entry].begin());
+    }
+
 public:
     MulticastGroup(
             std::vector<node_id_t> _members, node_id_t my_node_id,
@@ -245,6 +313,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             const DerechoParams derecho_params,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -258,6 +327,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
 
     ~MulticastGroup();
@@ -271,8 +341,9 @@ public:
     void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders, uint32_t subgroup_num, uint32_t num_shard_senders);
     /** Get a pointer into the current buffer, to write data into it before sending */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                             int pause_sending_turns = 0, bool cooked_send = false);
-    /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_position.send)*
+                             bool transfer_medium = true, int pause_sending_turns = 0,
+			     bool cooked_send = false, bool null_send = false);
+    /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
     bool send(subgroup_id_t subgroup_num);

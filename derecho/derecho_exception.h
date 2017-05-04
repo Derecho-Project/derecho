@@ -2,7 +2,6 @@
  * @file derecho_exception.h
  *
  * @date Feb 13, 2017
- * @author edward
  */
 
 #pragma once

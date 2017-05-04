@@ -2,7 +2,6 @@
  * util.h
  *
  *  Created on: Mar 16, 2016
- *      Author: edward
  */
 
 #pragma once

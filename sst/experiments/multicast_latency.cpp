@@ -2,7 +2,7 @@
 #include <fstream>
 #include <sstream>
 
-#include "multicast.h"
+#include "sst/multicast.h"
 
 using namespace std;
 using namespace sst;

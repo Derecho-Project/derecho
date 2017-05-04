@@ -58,8 +58,7 @@ struct is_in_pack<T> : std::false_type {};
 
 template <typename T, typename hd, typename... rst>
 struct is_in_pack<T, hd, rst...>
-    : std::integral_constant<bool, std::is_same<T, hd>::value ||
-                                       is_in_pack<T, rst...>::value>::type {};
+        : std::integral_constant<bool, std::is_same<T, hd>::value || is_in_pack<T, rst...>::value>::type {};
 
 template <typename...>
 struct dedup_params_str;
@@ -71,11 +70,10 @@ struct dedup_params_str<> {
 
 template <typename T, typename... rst>
 struct dedup_params_str<T, rst...> {
-    using types = std::conditional_t<
-        is_in_pack<T, rst...>::value, typename dedup_params_str<rst...>::types,
-        std::decay_t<decltype(std::tuple_cat(
-            std::declval<std::tuple<T>>(),
-            std::declval<typename dedup_params_str<rst...>::types>()))>>;
+    using types = std::conditional_t<is_in_pack<T, rst...>::value, typename dedup_params_str<rst...>::types,
+                                     std::decay_t<decltype(std::tuple_cat(
+                                             std::declval<std::tuple<T>>(),
+                                             std::declval<typename dedup_params_str<rst...>::types>()))>>;
 };
 
 template <typename... T>
@@ -100,8 +98,7 @@ auto *extend_tuple_members_f(const std::tuple<tuple_contents...> &) {
  * Undefined when "tpl" is not a tuple (you'll get an awful compile error)
  */
 template <typename tpl>
-using extend_tuple_members =
-    std::decay_t<decltype(*extend_tuple_members_f(std::declval<tpl>()))>;
+using extend_tuple_members = std::decay_t<decltype(*extend_tuple_members_f(std::declval<tpl>()))>;
 
 /**
  * Takes a list of types T...; returns a struct which extends all of the T.
@@ -143,8 +140,8 @@ struct n_copies_str<0, T> {
 template <std::size_t n, typename T>
 struct n_copies_str {
     using type = std::decay_t<decltype(
-        std::tuple_cat(std::make_tuple(std::declval<T>()),
-                       std::declval<typename n_copies_str<n - 1, T>::type>()))>;
+            std::tuple_cat(std::make_tuple(std::declval<T>()),
+                           std::declval<typename n_copies_str<n - 1, T>::type>()))>;
 };
 
 template <std::size_t n, typename T>
@@ -184,14 +181,12 @@ struct NameEnumMatches_str;
 
 template <typename NameEnum, typename NameEnum2, NameEnum2 Name,
           typename... Ext_t>
-struct NameEnumMatches_str<
-    NameEnum, TypeList<PredicateMetadata<NameEnum2, Name, Ext_t...>>>
-    : std::integral_constant<bool, std::is_same<NameEnum, NameEnum2>::value> {};
+struct NameEnumMatches_str<NameEnum, TypeList<PredicateMetadata<NameEnum2, Name, Ext_t...>>>
+        : std::integral_constant<bool, std::is_same<NameEnum, NameEnum2>::value> {};
 
 template <typename NameEnum, int unique, typename Ext_t, typename... rst>
-struct NameEnumMatches_str<
-    NameEnum, TypeList<NamelessPredicateMetadata<Ext_t, unique, rst...>>>
-    : std::true_type {
+struct NameEnumMatches_str<NameEnum, TypeList<NamelessPredicateMetadata<Ext_t, unique, rst...>>>
+        : std::true_type {
     static_assert(unique >= 0,
                   "Error: this query should be performed only on "
                   "named RowPredicates. This does not have a name "
@@ -200,20 +195,15 @@ struct NameEnumMatches_str<
 
 template <typename NameEnum, typename NameEnum2, NameEnum2 Name, typename Ext_t,
           typename Up, typename Get, typename hd, typename... tl>
-struct NameEnumMatches_str<
-    NameEnum,
-    TypeList<PredicateMetadata<NameEnum2, Name, Ext_t, Up, Get>, hd, tl...>>
-    : std::integral_constant<
-          bool, NameEnumMatches_str<NameEnum, TypeList<hd, tl...>>::value &&
-                    std::is_same<NameEnum, NameEnum2>::value> {};
+struct NameEnumMatches_str<NameEnum,
+                           TypeList<PredicateMetadata<NameEnum2, Name, Ext_t, Up, Get>, hd, tl...>>
+        : std::integral_constant<bool, NameEnumMatches_str<NameEnum, TypeList<hd, tl...>>::value && std::is_same<NameEnum, NameEnum2>::value> {};
 
 template <typename NameEnum, int unique, typename Ext_t, typename Up,
           typename Get, typename hd, typename... tl>
-struct NameEnumMatches_str<
-    NameEnum,
-    TypeList<NamelessPredicateMetadata<Ext_t, unique, Up, Get>, hd, tl...>>
-    : std::integral_constant<
-          bool, NameEnumMatches_str<NameEnum, TypeList<hd, tl...>>::value> {};
+struct NameEnumMatches_str<NameEnum,
+                           TypeList<NamelessPredicateMetadata<Ext_t, unique, Up, Get>, hd, tl...>>
+        : std::integral_constant<bool, NameEnumMatches_str<NameEnum, TypeList<hd, tl...>>::value> {};
 
 template <typename NameEnum, typename List>
 using NameEnumMatches = typename NameEnumMatches_str<NameEnum, List>::type;
@@ -229,8 +219,7 @@ struct choose_uniqueness_tag_str<PredicateMetadata<NameEnum, Name, Ext_t...>> {
 };
 
 template <int uid, typename Ext_t, typename... rst>
-struct choose_uniqueness_tag_str<
-    NamelessPredicateMetadata<Ext_t, uid, rst...>> {
+struct choose_uniqueness_tag_str<NamelessPredicateMetadata<Ext_t, uid, rst...>> {
     using type = std::integral_constant<int, uid>;
 };
 
@@ -239,46 +228,42 @@ using choose_uniqueness_tag = typename choose_uniqueness_tag_str<T>::type;
 
 template <int name_index, typename Row, typename NameEnum, NameEnum Name,
           typename... Ext_t>
-auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
+auto extract_predicate_getters(const PredicateBuilder<Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
     static_assert(
-        static_cast<int>(Name) == name_index,
-        "Error: names must be consecutive integer-valued enum members");
+            static_cast<int>(Name) == name_index,
+            "Error: names must be consecutive integer-valued enum members");
     return std::make_tuple(pb.curr_pred);
 }
 
 template <int name_index, typename Row, int uniqueness_tag, typename Ext_t,
           typename... rst>
-auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, rst...>>> &
-                                   pb) {
+auto extract_predicate_getters(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, rst...>>> &
+                                       pb) {
     static_assert(
-        uniqueness_tag >= 0,
-        "Error: Please name this predicate before attempting to use it");
+            uniqueness_tag >= 0,
+            "Error: Please name this predicate before attempting to use it");
     return std::make_tuple(pb.curr_pred);
 }
 
 template <int name_index, typename Row, typename NameEnum, NameEnum Name,
           typename Ext_t, typename Up, typename Get, typename... tl>
-auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, tl...>> &
-                                   pb) {
+auto extract_predicate_getters(const PredicateBuilder<Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, tl...>> &
+                                       pb) {
     static_assert(
-        static_cast<int>(Name) == name_index,
-        "Error: names must be consecutive integer-valued enum members");
+            static_cast<int>(Name) == name_index,
+            "Error: names must be consecutive integer-valued enum members");
     return std::tuple_cat(
-        std::make_tuple(pb.curr_pred),
-        extract_predicate_getters<name_index + 1>(pb.prev_preds));
+            std::make_tuple(pb.curr_pred),
+            extract_predicate_getters<name_index + 1>(pb.prev_preds));
 }
 
 template <int name_index, typename Row, int uniqueness_tag, typename Ext_t,
           typename Up, typename Get, typename... tl>
-auto extract_predicate_getters(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
-                  tl...>> &pb) {
+auto extract_predicate_getters(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
+                                                                    tl...>> &pb) {
     static_assert(
-        uniqueness_tag >= 0,
-        "Error: Please name this predicate before attempting to use it");
+            uniqueness_tag >= 0,
+            "Error: Please name this predicate before attempting to use it");
     return std::tuple_cat(std::make_tuple(pb.curr_pred),
                           extract_predicate_getters<name_index>(pb.prev_preds));
 }
@@ -286,21 +271,19 @@ auto extract_predicate_getters(const PredicateBuilder<
 template <typename Result, typename F, typename Row, typename NameEnum,
           NameEnum Name, typename... Ext_t>
 auto map_updaters(
-    std::vector<Result> &accum, const F &f,
-    const PredicateBuilder<
-        Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
+        std::vector<Result> &accum, const F &f,
+        const PredicateBuilder<Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t...>>> &pb) {
     // This should be the tail. Nothing here.
 }
 
 template <typename Result, typename F, typename Row, int uniqueness_tag,
           typename Ext_t, typename... rst>
 auto map_updaters(
-    std::vector<Result> &accum, const F &f,
-    const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<
-                                    Ext_t, uniqueness_tag, rst...>>> &pb) {
+        std::vector<Result> &accum, const F &f,
+        const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, rst...>>> &pb) {
     static_assert(
-        uniqueness_tag >= 0,
-        "Error: Please name this predicate before attempting to use it");
+            uniqueness_tag >= 0,
+            "Error: Please name this predicate before attempting to use it");
     // This should be the tail. Nothing here.
 }
 
@@ -308,13 +291,12 @@ template <typename Result, typename F, typename Row, int uniqueness_tag,
           typename Ext_t, typename Up, typename Get, typename hd,
           typename... tl>
 auto map_updaters(
-    std::vector<Result> &accum, const F &f,
-    const PredicateBuilder<
-        Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
-                      hd, tl...>> &pb) {
+        std::vector<Result> &accum, const F &f,
+        const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext_t, uniqueness_tag, Up, Get>,
+                                             hd, tl...>> &pb) {
     static_assert(
-        uniqueness_tag >= 0,
-        "Error: Please name this predicate before attempting to use it");
+            uniqueness_tag >= 0,
+            "Error: Please name this predicate before attempting to use it");
     using Row_Extension = typename std::decay_t<decltype(pb)>::Row_Extension;
     Row_Extension *nptr{nullptr};
     accum.push_back(f(pb.updater_function, nptr));
@@ -325,10 +307,9 @@ template <typename Result, typename F, typename Row, typename NameEnum,
           NameEnum Name, typename Ext_t, typename Up, typename Get, typename hd,
           typename... tl>
 auto map_updaters(
-    std::vector<Result> &accum, const F &f,
-    const PredicateBuilder<
-        Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, hd,
-                      tl...>> &pb) {
+        std::vector<Result> &accum, const F &f,
+        const PredicateBuilder<Row, TypeList<PredicateMetadata<NameEnum, Name, Ext_t, Up, Get>, hd,
+                                             tl...>> &pb) {
     using Row_Extension = typename std::decay_t<decltype(pb)>::Row_Extension;
     Row_Extension *nptr{nullptr};
     accum.push_back(f(pb.updater_function, nptr));
@@ -336,21 +317,17 @@ auto map_updaters(
 }
 
 template <int unique, typename Row, typename Ext, typename Get>
-auto change_uniqueness(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, void, Get>>> &pb) {
-    using next_builder = PredicateBuilder<
-        Row, TypeList<NamelessPredicateMetadata<Ext, unique, void, Get>>>;
+auto change_uniqueness(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext, -1, void, Get>>> &pb) {
+    using next_builder = PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext, unique, void, Get>>>;
     return next_builder{pb.curr_pred_raw};
 }
 
 template <int unique, typename Row, typename Ext, typename Up, typename Get,
           typename hd, typename... tl>
-auto change_uniqueness(const PredicateBuilder<
-    Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
-                           pb) {
+auto change_uniqueness(const PredicateBuilder<Row, TypeList<NamelessPredicateMetadata<Ext, -1, Up, Get>, hd, tl...>> &
+                               pb) {
     auto new_prev = change_uniqueness<unique>(pb.prev_preds);
-    using This_list = typename decltype(new_prev)::template append<
-        NamelessPredicateMetadata<Ext, unique, Up, Get>>;
+    using This_list = typename decltype(new_prev)::template append<NamelessPredicateMetadata<Ext, unique, Up, Get>>;
     using next_builder = PredicateBuilder<Row, This_list>;
     return next_builder{new_prev, pb.updater_function_raw, pb.curr_pred_raw};
 }
