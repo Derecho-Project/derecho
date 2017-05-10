@@ -22,8 +22,8 @@
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "rdmc/rdmc.h"
 #include "spdlog/spdlog.h"
-#include "sst/sst.h"
 #include "sst/multicast.h"
+#include "sst/sst.h"
 #include "subgroup_info.h"
 
 namespace derecho {
@@ -269,7 +269,7 @@ private:
         // std::cout << "beg_index = " << beg_index << std::endl;
         // std::cout << "end_index = " << end_index << std::endl;
         auto it = received_intervals[num_received_entry].end();
-	it--;
+        it--;
         while(*it > beg_index) {
             it--;
         }
@@ -313,7 +313,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
+            const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             const DerechoParams derecho_params,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -327,7 +327,7 @@ public:
             const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-	    const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
+            const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
             std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
 
     ~MulticastGroup();
@@ -342,7 +342,7 @@ public:
     /** Get a pointer into the current buffer, to write data into it before sending */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                              bool transfer_medium = true, int pause_sending_turns = 0,
-			     bool cooked_send = false, bool null_send = false);
+                             bool cooked_send = false, bool null_send = false);
     /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
