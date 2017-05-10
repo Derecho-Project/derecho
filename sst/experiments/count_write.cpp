@@ -4,8 +4,8 @@
 #include <iostream>
 #include <map>
 
-#include "sst/sst.h"
 #include "sst/poll_utils.h"
+#include "sst/sst.h"
 //Since all SST instances are named sst, we can use this convenient hack
 #define LOCAL sst.get_local_index()
 
@@ -148,13 +148,13 @@ int main() {
         }
     };
 
-// start timer
-clock_gettime(CLOCK_REALTIME, &start_time);
+    // start timer
+    clock_gettime(CLOCK_REALTIME, &start_time);
 
-// register as a recurring predicate
-sst.predicates.insert(f, g, PredicateType::RECURRENT);
+    // register as a recurring predicate
+    sst.predicates.insert(f, g, PredicateType::RECURRENT);
 
-while(true) {
-}
-return 0;
+    while(true) {
+    }
+    return 0;
 }

@@ -1,7 +1,7 @@
 #include <fstream>
 #include <iostream>
-#include <time.h>
 #include <memory>
+#include <time.h>
 
 using std::cout;
 using std::cin;
@@ -28,11 +28,7 @@ int main() {
     struct timespec end_time;
     clock_gettime(CLOCK_REALTIME, &end_time);
     fssd.close();
-    long long int nanoseconds_elapsed =
-        (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 +
-        (end_time.tv_nsec - start_time.tv_nsec);
-    double bw =
-        (buffer_size * (long long int)num_messages * (long long int)8 + 0.0) /
-        nanoseconds_elapsed;
+    long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+    double bw = (buffer_size * (long long int)num_messages * (long long int)8 + 0.0) / nanoseconds_elapsed;
     cout << bw << endl;
 }

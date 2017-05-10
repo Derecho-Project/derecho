@@ -15,8 +15,7 @@ int main(int argc, char* argv[]) {
     };
 
     std::string filename = "data0.dat";
-    auto file_writer =
-        std::make_unique<FileWriter>(file_written_callback, filename);
+    auto file_writer = std::make_unique<FileWriter>(file_written_callback, filename);
 
     //    MessageBuffer buffer(1000);
     //    for(size_t i = 0; i < 1000; ++i) {
@@ -27,7 +26,7 @@ int main(int argc, char* argv[]) {
         byte = 'a';
     }
 
-    Message m;
+    RDMCMessage m;
     m.sender_id = 1;
     m.index = 0;
     m.size = 1000;

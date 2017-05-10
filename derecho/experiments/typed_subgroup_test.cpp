@@ -296,7 +296,6 @@ int main(int argc, char** argv) {
         derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<Foo::READ_STATE>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
-
     }
     if(node_id == 5) {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();

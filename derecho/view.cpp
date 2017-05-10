@@ -291,7 +291,7 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
 
 View parse_view(std::istream& stream) {
     std::string line;
-    int32_t vid;
+    int32_t vid = 0;
     if(std::getline(stream, line)) {
         vid = std::stoi(line);
     }
@@ -318,16 +318,16 @@ View parse_view(std::istream& stream) {
             failed.emplace_back(fail_str == "T" ? true : false);
         }
     }
-    int32_t num_failed;
+    int32_t num_failed = 0;
     //The last three lines each contain a single number
     if(std::getline(stream, line)) {
         num_failed = std::stoi(line);
     }
-    int32_t num_members;
+    int32_t num_members = 0;
     if(std::getline(stream, line)) {
         num_members = std::stoi(line);
     }
-    int32_t my_rank;
+    int32_t my_rank = -1;
     if(std::getline(stream, line)) {
         my_rank = std::stoi(line);
     }

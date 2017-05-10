@@ -9,10 +9,10 @@
 #include <thread>
 #include <vector>
 
-#include "time/time.h"
 #include "derecho/derecho.h"
-#include "rdmc/util.h"
 #include "initialize.h"
+#include "rdmc/util.h"
+#include "time/time.h"
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -46,8 +46,7 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
 
     unsigned int n = managed_group->get_members().size();
     if(message_number >= n) {
-        unsigned int dt =
-            message_times.back() - message_times[message_number - n];
+        unsigned int dt = message_times.back() - message_times[message_number - n];
         double bandwidth = (message_size * n * 8.0) / dt;
         managed_group->log_event(std::to_string(bandwidth));
     }
@@ -96,15 +95,15 @@ int main(int argc, char *argv[]) {
     auto t1 = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t2 = high_resolution_clock::now();
-//    derecho::program_start_time = high_resolution_clock::now();
+    //    derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t3 = high_resolution_clock::now();
 
     printf(
-        "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
-        "Max possible variation from local = %5.3f us\n",
-        duration<double, std::micro>(t3 - t1).count(),
-        duration<double, std::micro>(max((t2 - t1), (t3 - t2))).count());
+            "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
+            "Max possible variation from local = %5.3f us\n",
+            duration<double, std::micro>(t3 - t1).count(),
+            duration<double, std::micro>(max((t2 - t1), (t3 - t2))).count());
     fflush(stdout);
     cout << endl
          << endl;
@@ -115,10 +114,10 @@ int main(int argc, char *argv[]) {
 
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_id, my_ip, callbacks, one_raw_group, param_object);
+                node_id, my_ip, callbacks, one_raw_group, param_object);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
 
     cout << "Created group, waiting for others to join." << endl;

@@ -10,9 +10,9 @@
 #include <vector>
 
 #include "derecho/derecho.h"
+#include "initialize.h"
 #include "rdmc/util.h"
 #include "time/time.h"
-#include "initialize.h"
 
 using namespace std;
 using namespace std::chrono_literals;
@@ -72,15 +72,15 @@ int main(int argc, char *argv[]) {
     auto t1 = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t2 = high_resolution_clock::now();
-//    derecho::program_start_time = high_resolution_clock::now();
+    //    derecho::program_start_time = high_resolution_clock::now();
     universal_barrier_group->barrier_wait();
     auto t3 = high_resolution_clock::now();
 
     printf(
-        "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
-        "Max possible variation from local = %5.3f us\n",
-        duration<double, std::micro>(t3 - t1).count(),
-        duration<double, std::micro>(max((t2 - t1), (t3 - t2))).count());
+            "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
+            "Max possible variation from local = %5.3f us\n",
+            duration<double, std::micro>(t3 - t1).count(),
+            duration<double, std::micro>(max((t2 - t1), (t3 - t2))).count());
     fflush(stdout);
     cout << endl
          << endl;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
         std::this_thread::sleep_for(10s);
         cout << "Connecting to group" << endl;
         managed_group = make_shared<derecho::Group<>>(
-            node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                node_id, my_ip, leader_ip, callbacks, one_raw_group);
         managed_group->log_event("About to start sending");
         send_messages(10 * SECOND);
         managed_group->log_event("About to exit");
@@ -104,10 +104,10 @@ int main(int argc, char *argv[]) {
     } else {
         if(node_id == leader_id) {
             managed_group = make_shared<derecho::Group<>>(
-                node_id, my_ip, callbacks, one_raw_group, param_object);
+                    node_id, my_ip, callbacks, one_raw_group, param_object);
         } else {
             managed_group = make_shared<derecho::Group<>>(
-                node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                    node_id, my_ip, leader_ip, callbacks, one_raw_group);
         }
         cout << "Created group, waiting for others to join." << endl;
         while(managed_group->get_members().size() < (num_nodes - 1)) {

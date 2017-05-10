@@ -1,8 +1,8 @@
 #ifndef AGGREGATE_BANDWIDTH_H
 #define AGGREGATE_BANDWIDTH_H
 
-#include <vector>
 #include "sst/sst.h"
+#include <vector>
 
 class ResultSST : public sst::SST<ResultSST> {
 public:

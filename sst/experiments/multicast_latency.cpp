@@ -1,8 +1,9 @@
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 
 #include "sst/multicast.h"
+#include "sst/multicast_sst.h"
 
 using namespace std;
 using namespace sst;
@@ -38,22 +39,69 @@ int main() {
     vector<int64_t> send_times(num_messages);
 
     uint num_finished = 0;
+
+    std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
+            sst::SSTParams(members, node_id),
+            window_size);
+
+    auto check_failures_loop = [&sst]() {
+        pthread_setname_np(pthread_self(), "check_failures");
+        while(true) {
+            std::this_thread::sleep_for(chrono::microseconds(100));
+            if(sst) {
+                sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
+            }
+        }
+    };
+
+    thread failures_thread = std::thread(check_failures_loop);
+
     struct timespec recv_time, send_time;
-    group<max_msg_size> g(
-        members, node_id, window_size,
-        [&recv_times, &recv_time, &num_finished, &num_nodes, &num_messages](
+    auto sst_receive_handler = [&recv_times, &recv_time, &num_finished, &num_nodes, &num_messages](
             uint32_t sender_rank, uint64_t index, volatile char* msg,
             uint32_t size) {
-            // start timer
-            clock_gettime(CLOCK_REALTIME, &recv_time);
-            recv_times[sender_rank][index] = recv_time.tv_sec * 1e9 + recv_time.tv_nsec;
-            if(index == num_messages - 1) {
-                num_finished++;
+        // start timer
+        clock_gettime(CLOCK_REALTIME, &recv_time);
+        recv_times[sender_rank][index] = recv_time.tv_sec * 1e9 + recv_time.tv_nsec;
+        if(index == num_messages - 1) {
+            num_finished++;
+        }
+        if(num_finished == num_nodes) {
+            done = true;
+        }
+    };
+    auto receiver_pred = [](const multicast_sst&) {
+        return true;
+    };
+    auto num_times = window_size / num_nodes;
+    if(!num_times) {
+        num_times = 1;
+    }
+    auto receiver_trig = [num_times, num_nodes, node_id, sst_receive_handler](multicast_sst& sst) {
+        bool update_sst = false;
+        for(uint i = 0; i < num_times; ++i) {
+            for(uint j = 0; j < num_nodes; ++j) {
+                uint32_t slot = sst.num_received_sst[node_id][j] % window_size;
+                if((int64_t)sst.slots[j][slot].next_seq == (sst.num_received_sst[node_id][j]) / window_size + 1) {
+                    sst_receive_handler(j, sst.num_received_sst[node_id][j],
+                                        sst.slots[j][slot].buf,
+                                        sst.slots[j][slot].size);
+                    sst.num_received_sst[node_id][j]++;
+                    update_sst = true;
+                }
             }
-            if(num_finished == num_nodes) {
-                done = true;
-            }
-        });
+        }
+        if(update_sst) {
+            sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
+                    sizeof(sst.num_received_sst[0][0]) * num_nodes);
+        }
+    };
+    sst->predicates.insert(receiver_pred, receiver_trig,
+                           sst::PredicateType::RECURRENT);
+    vector<uint32_t> indices;
+    iota(indices.begin(), indices.end(), 0);
+    multicast_group<multicast_sst> g(
+				    sst, indices, window_size);
     for(uint i = 0; i < num_messages; ++i) {
         volatile char* buf;
         while((buf = g.get_buffer(max_msg_size)) == NULL) {

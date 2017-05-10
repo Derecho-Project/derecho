@@ -9,12 +9,12 @@
 #include <unistd.h>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include "block_size.h"
-#include "rdmc/util.h"
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
+#include "block_size.h"
+#include "derecho/derecho.h"
 #include "log_results.h"
+#include "rdmc/util.h"
 
 #include "rdmc/rdmc.h"
 
@@ -79,7 +79,8 @@ int main(int argc, char *argv[]) {
     cout << buffer_size << endl;
     char *buf = (char *)memalign(buffer_size, buffer_size);
     generate_buffer(buf, buffer_size);
-    int fd = open("messages", O_WRONLY | O_CREAT | O_DIRECT);
+    // since, we are creating the file, we need to set its permissions too
+    int fd = open("messages", O_WRONLY | O_CREAT | O_DIRECT, 0664);
     if(fd < 0) {
         cout << "Failed to open the file" << endl;
         return 0;
@@ -112,8 +113,7 @@ int main(int argc, char *argv[]) {
         &buf,
         &buffer_size,
         num_last_received = 0u
-    ](uint32_t subgroup, int sender_id, long long int index, char *msg_buf,
-      long long int msg_size) mutable {
+    ](uint32_t subgroup, int sender_id, long long int index, char *msg_buf, long long int msg_size) mutable {
         // cout << "In stability callback; sender = " << sender_id << ", index =
         // " << index << endl;
         int ret = write(fd, buf, buffer_size);
@@ -135,12 +135,12 @@ int main(int argc, char *argv[]) {
 
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_rank, node_addresses[node_rank], callbacks, one_raw_group, param_object);
+                node_rank, node_addresses[node_rank], callbacks, one_raw_group, param_object);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_rank, node_addresses[node_rank],
-            node_addresses[server_rank],
-            callbacks, one_raw_group);
+                node_rank, node_addresses[node_rank],
+                node_addresses[server_rank],
+                callbacks, one_raw_group);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -155,7 +155,7 @@ int main(int argc, char *argv[]) {
     cout << endl;
 
     auto send_all = [&]() {
-        derecho::RawSubgroup& group_as_subgroup = managed_group->get_subgroup<RawObject>();
+        derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             char *buf = group_as_subgroup.get_sendbuffer_ptr(buffer_size);
             while(!buf) {
@@ -172,9 +172,7 @@ int main(int argc, char *argv[]) {
     }
     struct timespec end_time;
     clock_gettime(CLOCK_REALTIME, &end_time);
-    long long int nanoseconds_elapsed =
-        (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 +
-        (end_time.tv_nsec - start_time.tv_nsec);
+    long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
     double bw;
     bw = (buffer_size * num_messages * num_nodes + 0.0) / nanoseconds_elapsed;
     double avg_bw = aggregate_bandwidth(members, node_rank, bw);

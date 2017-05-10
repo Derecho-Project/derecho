@@ -4,8 +4,8 @@
  */
 
 #include <iostream>
-#include <vector>
 #include <time.h>
+#include <vector>
 
 #include "derecho/derecho.h"
 #include "initialize.h"

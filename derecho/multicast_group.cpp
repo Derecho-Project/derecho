@@ -345,7 +345,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
         shard_senders = subgroup_to_senders_and_sender_rank.at(subgroup_num).first;
         num_shard_senders = get_num_senders(shard_senders);
         auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
-        sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(sst, shard_sst_indices, shard_senders, subgroup_to_num_received_offset.at(subgroup_num), window_size * subgroup_num, window_size);
+        sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(sst, shard_sst_indices, window_size, shard_senders, subgroup_to_num_received_offset.at(subgroup_num), window_size * subgroup_num);
         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
             // don't create RDMC group if the shard member is never going to send
             if(!shard_senders[shard_rank]) {

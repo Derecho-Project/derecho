@@ -22,7 +22,7 @@ using std::tie;
 
 class Sum_Sqr {
 public:
-  double operator()(double x, double y) {return x+y*y;}
+    double operator()(double x, double y) { return x + y * y; }
 } sum_sqr;
 
 /**
@@ -42,18 +42,18 @@ public:
  * @return A tuple containing the mean and standard deviation, in that order,
  * in microseconds.
  */
-tuple<double, double> compute_statistics(const vector <long long int> &start_times, const vector <long long int> &end_times, const double divisor = 1) {
-	int num_times = start_times.size();
-	vector<double> times;
-	times.resize (num_times);
-	// Convert to elapsed time
-	for (int i = 0; i < num_times; ++i) {
-		times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC * divisor);
-	}
+tuple<double, double> compute_statistics(const vector<long long int> &start_times, const vector<long long int> &end_times, const double divisor = 1) {
+    int num_times = start_times.size();
+    vector<double> times;
+    times.resize(num_times);
+    // Convert to elapsed time
+    for(int i = 0; i < num_times; ++i) {
+        times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC * divisor);
+    }
 
-	double mean = accumulate (times.begin(), times.end(), 0.0)/num_times;
-	double stdev = sqrt (accumulate (times.begin(), times.end(), 0.0, sum_sqr)/num_times - mean*mean);
-	return make_tuple(mean, stdev);
+    double mean = accumulate(times.begin(), times.end(), 0.0) / num_times;
+    double stdev = sqrt(accumulate(times.begin(), times.end(), 0.0, sum_sqr) / num_times - mean * mean);
+    return make_tuple(mean, stdev);
 }
 
 /**
@@ -64,12 +64,12 @@ tuple<double, double> compute_statistics(const vector <long long int> &start_tim
  * @return A vector of elapsed times, in microseconds, aligned with the input
  * vectors.
  */
-vector<double> timestamps_to_elapsed(const vector <long long int> &start_times, const vector <long long int> &end_times) {
-	vector<double> times(start_times.size());
-	for (size_t i = 0; i < times.size(); ++i) {
-		times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC);
-	}
-	return times;
+vector<double> timestamps_to_elapsed(const vector<long long int> &start_times, const vector<long long int> &end_times) {
+    vector<double> times(start_times.size());
+    for(size_t i = 0; i < times.size(); ++i) {
+        times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC);
+    }
+    return times;
 }
 
 /**
@@ -81,30 +81,30 @@ vector<double> timestamps_to_elapsed(const vector <long long int> &start_times, 
  * to 1. This can be used if we know that every time represents a round trip,
  * for example, to divide every time by 2.
  */
-void print_statistics (const vector <long long int> &start_times, const vector <long long int> &end_times, double factor = 1) {
-  int num_times = start_times.size();
-  vector<double> times;
-  times.resize (num_times);
-  for (int i = 0; i < num_times; ++i) {
-		times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC * factor);
-  }
-  sort (times.begin(), times.end());
-  cout << "Minimum 20 values : " << endl;
-  for (int i = 0; i < 20; ++i) {
-    cout << times[i] << endl;
-  }
-  cout << endl;
-  cout << "Maximum 20 values : " << endl;
-  for (int j = num_times-1; j > num_times-1-20; --j) {
-    cout << times[j] << endl;
-  }
-  cout << endl;
-  double mean, stdev;
-  tie(mean, stdev) = compute_statistics(start_times, end_times, factor);
-  cout << "Mean:" << mean << endl;
-  cout << "Standard Deviation: " << stdev << endl;
+void print_statistics(const vector<long long int> &start_times, const vector<long long int> &end_times, double factor = 1) {
+    int num_times = start_times.size();
+    vector<double> times;
+    times.resize(num_times);
+    for(int i = 0; i < num_times; ++i) {
+        times[i] = (end_times[i] - start_times[i]) / (NSEC_TO_USEC * factor);
+    }
+    sort(times.begin(), times.end());
+    cout << "Minimum 20 values : " << endl;
+    for(int i = 0; i < 20; ++i) {
+        cout << times[i] << endl;
+    }
+    cout << endl;
+    cout << "Maximum 20 values : " << endl;
+    for(int j = num_times - 1; j > num_times - 1 - 20; --j) {
+        cout << times[j] << endl;
+    }
+    cout << endl;
+    double mean, stdev;
+    tie(mean, stdev) = compute_statistics(start_times, end_times, factor);
+    cout << "Mean:" << mean << endl;
+    cout << "Standard Deviation: " << stdev << endl;
 }
 
-} //namespace experiments
+}  //namespace experiments
 
-} //namespace sst
+}  //namespace sst

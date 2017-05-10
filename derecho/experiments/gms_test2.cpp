@@ -1,10 +1,10 @@
-#include <iostream>
-#include <string>
 #include <cstdlib>
+#include <iostream>
 #include <map>
+#include <string>
 
-#include "derecho/derecho.h"
 #include "block_size.h"
+#include "derecho/derecho.h"
 #include "initialize.h"
 
 using std::string;
@@ -35,8 +35,8 @@ int main(int argc, char *argv[]) {
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
-            uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
-            long long int msg_size) {
+                uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
+                long long int msg_size) {
             cout << "In stability callback; sender ID = " << sender_id
                  << ", index = " << index << endl;
             printf("Message: %.*s\n", (int)msg_size, buf);
@@ -55,10 +55,10 @@ int main(int argc, char *argv[]) {
 
         if(my_ip == leader_ip) {
             managed_group = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, callbacks, one_raw_group, param_object);
+                    node_id, my_ip, callbacks, one_raw_group, param_object);
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                    node_id, my_ip, leader_ip, callbacks, one_raw_group);
         }
 
         cout << "Finished constructing/joining ManagedGroup" << endl;

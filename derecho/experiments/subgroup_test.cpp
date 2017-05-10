@@ -1,13 +1,13 @@
 #include <algorithm>
-#include <iostream>
-#include <vector>
-#include <string>
 #include <cstdlib>
+#include <iostream>
 #include <map>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
-#include "derecho/derecho.h"
 #include "block_size.h"
+#include "derecho/derecho.h"
 #include "initialize.h"
 
 using std::string;
@@ -35,13 +35,13 @@ int main(int argc, char* argv[]) {
     int num_messages = 100;
 
     auto stability_callback = [&node_id, &num_messages](
-        uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
-        long long int msg_size) {
-      if (index == num_messages-1) {
+            uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
+            long long int msg_size) {
+        if(index == num_messages - 1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_id << endl;
             cout << "The last message is: " << endl;
             cout << buf << endl;
-      }
+        }
         cout << "In stability callback; sender = " << sender_id
              << ", index = " << index << endl;
     };
@@ -56,8 +56,8 @@ int main(int argc, char* argv[]) {
     std::unordered_set<derecho::node_id_t> group_1_members{3, 4, 5};
     std::unordered_set<derecho::node_id_t> group_2_members{6, 7, 8};
     derecho::SubgroupInfo subgroup_info{
-        {{std::type_index(typeid(RawObject)),
-          [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view) {
+            {{std::type_index(typeid(RawObject)),
+              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view) {
                 std::vector<derecho::node_id_t> subgroup_0_members;
                 std::vector<derecho::node_id_t> subgroup_1_members;
                 std::vector<derecho::node_id_t> subgroup_2_members;
@@ -80,18 +80,17 @@ int main(int argc, char* argv[]) {
 		// if(subgroup_2_senders.size()) {
 		//   subgroup_2_senders[0] = 1;
 		// }
-		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, subgroup_0_senders));
+		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
 		subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
 		subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
-		return subgroup_vector; }}}
-    };
+		return subgroup_vector; }}}};
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_id, my_ip, callbacks, subgroup_info, param_object);
+                node_id, my_ip, callbacks, subgroup_info, param_object);
     } else {
         std::cout << "Connecting to leader at " << leader_ip << std::endl;
         managed_group = std::make_unique<derecho::Group<>>(
-            node_id, my_ip, leader_ip, callbacks, subgroup_info);
+                node_id, my_ip, leader_ip, callbacks, subgroup_info);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
