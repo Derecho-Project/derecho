@@ -1,12 +1,12 @@
-#include <fcntl.h>
-#include <unistd.h>
-#include <iostream>
-#include <fstream>
 #include <cstdio>
-#include <time.h>
-#include <string.h>
+#include <fcntl.h>
+#include <fstream>
+#include <iostream>
 #include <malloc.h>
 #include <memory>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 using std::cout;
 using std::cin;
@@ -55,10 +55,9 @@ int main() {
     long long int num_messages = 400;
     // int fd =
     // open("messages",O_RDWR|O_CREAT|O_DIRECT|O_SYNC,S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-    int fd =
-        open("messages", O_WRONLY | O_CREAT | O_DIRECT);  // also tried O_SYNC:
-                                                          // O_WRONLY | O_CREAT
-                                                          // | O_DIRECT | O_SYNC
+    int fd = open("messages", O_WRONLY | O_CREAT | O_DIRECT);  // also tried O_SYNC:
+                                                               // O_WRONLY | O_CREAT
+                                                               // | O_DIRECT | O_SYNC
     if(fd < 0) {
         cout << "Failed to open the file" << endl;
         return 0;
@@ -77,10 +76,7 @@ int main() {
     struct timespec end_time;
     clock_gettime(CLOCK_REALTIME, &end_time);
     close(fd);
-    long long int nanoseconds_elapsed =
-        (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 +
-        (end_time.tv_nsec - start_time.tv_nsec);
-    double bw = (buffer_size * (long long int)num_messages * 1024 + 0.0) /
-                nanoseconds_elapsed;
+    long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+    double bw = (buffer_size * (long long int)num_messages * 1024 + 0.0) / nanoseconds_elapsed;
     cout << bw << endl;
 }

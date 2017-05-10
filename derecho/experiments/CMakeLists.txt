@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3 -O1")
 
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
@@ -57,18 +57,6 @@ target_link_libraries(gms_test2 derecho)
 # gms_bw_test
 add_executable(gms_bw_test gms_bw_test.cpp initialize.cpp)
 target_link_libraries(gms_bw_test derecho)
-
-# rdmc_bw_test
-add_executable(rdmc_bw_test rdmc_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(rdmc_bw_test derecho)
-
-# rdmc_bw_test1
-add_executable(rdmc_bw_test1 rdmc_bw_test1.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(rdmc_bw_test1 derecho)
-
-# rdmc_bw_test2
-add_executable(rdmc_bw_test2 rdmc_bw_test2.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(rdmc_bw_test2 derecho)
 
 # window_size_test
 add_executable(window_size_test window_size_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )

@@ -28,16 +28,16 @@ int main() {
     sst[0].time_in_nanoseconds = -1;
     sst[1].time_in_nanoseconds = -1;
     sst.sync_with_members();
-    
+
     if(node_id == 0) {
         cout << server(sst, 0, 1) << endl;
         sst.sync_with_members();
-	client(sst, 0, 1);
+        client(sst, 0, 1);
         sst.sync_with_members();
     } else {
         client(sst, 1, 0);
         sst.sync_with_members();
-	cout << server(sst, 1, 0) << endl;
+        cout << server(sst, 1, 0) << endl;
         sst.sync_with_members();
     }
     return 0;

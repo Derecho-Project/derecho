@@ -10,7 +10,7 @@ using std::map;
 class mySST : public sst::SST<mySST> {
 public:
     mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST(this, sst::SSTParams{_members, my_id}) {
-      SSTInit(a);
+        SSTInit(a);
     }
     sst::SSTField<int> a;
 };
@@ -38,13 +38,12 @@ int main() {
     int b = 5 + my_id;
     sst.a(my_id, b);
     sst.put();
-    sst::sync(1-my_id);
+    sst::sync(1 - my_id);
     int n;
     cin >> n;
     for(uint i = 0; i < num_nodes; ++i) {
         cout << sst.a(i) << endl;
     }
-    while (true) {
-      
+    while(true) {
     }
 }

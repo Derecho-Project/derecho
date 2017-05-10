@@ -14,7 +14,18 @@ using namespace sst;
 
 volatile bool done = false;
 
-int main(int argc, char *argv[]) {
+struct exp_results {
+  uint32_t num_nodes;
+  int num_senders_selector;
+  uint max_msg_size;
+  double sum_message_rate;
+  void print(std::ofstream& fout) {
+      fout << num_nodes << " " << num_senders_selector << " "
+           << max_msg_size << " " << sum_message_rate << endl;
+  }
+};
+
+int main(int argc, char* argv[]) {
     constexpr uint max_msg_size = 1, window_size = 1000;
     const unsigned int num_messages = 1000000;
     int num_senders_selector = atoi(argv[1]);
@@ -37,8 +48,8 @@ int main(int argc, char *argv[]) {
     }
 
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
-        sst::SSTParams(members, node_id),
-        window_size);
+            sst::SSTParams(members, node_id),
+            window_size);
 
     auto check_failures_loop = [&sst]() {
         pthread_setname_np(pthread_self(), "check_failures");
@@ -54,8 +65,8 @@ int main(int argc, char *argv[]) {
 
     uint num_finished = 0;
     auto sst_receive_handler = [&num_finished, num_senders_selector, &num_nodes, &num_messages](
-        uint32_t sender_rank, uint64_t index,
-        volatile char* msg, uint32_t size) {
+            uint32_t sender_rank, uint64_t index,
+            volatile char* msg, uint32_t size) {
         if(index == num_messages - 1) {
             num_finished++;
         }
@@ -75,8 +86,7 @@ int main(int argc, char *argv[]) {
         for(uint i = 0; i < num_times; ++i) {
             for(uint j = 0; j < num_nodes; ++j) {
                 uint32_t slot = sst.num_received_sst[node_id][j] % window_size;
-                if(sst.slots[j][slot].next_seq ==
-                   (sst.num_received_sst[node_id][j]) / window_size + 1) {
+                if((int64_t)sst.slots[j][slot].next_seq == (sst.num_received_sst[node_id][j]) / window_size + 1) {
                     sst_receive_handler(j, sst.num_received_sst[node_id][j],
                                         sst.slots[j][slot].buf,
                                         sst.slots[j][slot].size);
@@ -86,8 +96,7 @@ int main(int argc, char *argv[]) {
             }
         }
         if(update_sst) {
-            sst.put(sst.num_received_sst.get_base() -
-                        sst.getBaseAddress(),
+            sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
                     sizeof(sst.num_received_sst[0][0]) * num_nodes);
         }
     };
@@ -97,7 +106,7 @@ int main(int argc, char *argv[]) {
     struct timespec start_time, end_time;
     vector<uint32_t> indices;
     iota(indices.begin(), indices.end(), 0);
-    sst::multicast_group<multicast_sst> g(sst, indices, 0, 0, window_size);
+    sst::multicast_group<multicast_sst> g(sst, indices, window_size);
     // uint count = 0;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
@@ -118,8 +127,7 @@ int main(int argc, char *argv[]) {
     }
     // end timer
     clock_gettime(CLOCK_REALTIME, &end_time);
-    double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) -
-                      (start_time.tv_sec * 1e9 + start_time.tv_nsec));
+    double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec));
     double message_rate = (num_messages * 1e9) / my_time;
     ;
     if(num_senders_selector == 0) {
@@ -132,8 +140,8 @@ int main(int argc, char *argv[]) {
     // cout << "Number of messages per second " << message_rate
     //      << endl;
     // cout << "Number of times null returned, count = " << count << endl;
-    double sum_message_rate =
-        aggregate_bandwidth(members, node_id, message_rate);
-    log_results(num_nodes, num_senders_selector, max_msg_size, sum_message_rate, "data_multicast");
+    double sum_message_rate = aggregate_bandwidth(members, node_id, message_rate);
+    log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, sum_message_rate},
+		"data_multicast");
     sst->sync_with_members();
 }

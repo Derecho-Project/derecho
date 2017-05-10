@@ -116,7 +116,7 @@ int View::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-  std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
+std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
     std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
     sub_view->members = with_members;
     sub_view->mode = mode;
@@ -291,7 +291,7 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
 
 View parse_view(std::istream& stream) {
     std::string line;
-    int32_t vid;
+    int32_t vid = 0;
     if(std::getline(stream, line)) {
         vid = std::stoi(line);
     }
@@ -318,16 +318,16 @@ View parse_view(std::istream& stream) {
             failed.emplace_back(fail_str == "T" ? true : false);
         }
     }
-    int32_t num_failed;
+    int32_t num_failed = 0;
     //The last three lines each contain a single number
     if(std::getline(stream, line)) {
         num_failed = std::stoi(line);
     }
-    int32_t num_members;
+    int32_t num_members = 0;
     if(std::getline(stream, line)) {
         num_members = std::stoi(line);
     }
-    int32_t my_rank;
+    int32_t my_rank = -1;
     if(std::getline(stream, line)) {
         my_rank = std::stoi(line);
     }

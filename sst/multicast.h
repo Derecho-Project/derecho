@@ -9,8 +9,8 @@
 #include <thread>
 #include <vector>
 
-#include "sst/sst.h"
 #include "sst/multicast_msg.h"
+#include "sst/sst.h"
 
 namespace sst {
 template <typename sstType>
@@ -68,14 +68,21 @@ class multicast_group {
 public:
     multicast_group(std::shared_ptr<sstType> sst,
                     std::vector<uint32_t> row_indices,
-                    std::vector<int> is_sender,
-                    uint32_t num_received_offset,
-                    uint32_t slots_offset,
-                    uint32_t window_size)
+                    uint32_t window_size,
+                    std::vector<int> is_sender = {},
+                    uint32_t num_received_offset = 0,
+                    uint32_t slots_offset = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
-	      is_sender(is_sender),
+              is_sender([is_sender, row_indices]() {
+                  if(is_sender.size() == 0) {
+		    return std::vector<int32_t>(row_indices.size(), 1);
+                  }
+		  else {
+		    return is_sender;
+                  }
+              }()),
               num_received_offset(num_received_offset),
               slots_offset(slots_offset),
               num_members(row_indices.size()),
@@ -88,14 +95,14 @@ public:
         }
         int j = 0;
         for(uint i = 0; i < num_members; ++i) {
-	  if (i == my_member_index) {
-	    my_sender_index = j;
-	  }
-	  if(is_sender[i]) {
+            if(i == my_member_index) {
+                my_sender_index = j;
+            }
+            if(is_sender[i]) {
                 j++;
             }
         }
-	num_senders = j;
+        num_senders = j;
 
         if(!is_sender[my_member_index]) {
             my_sender_index = -1;
@@ -111,8 +118,8 @@ public:
             if(queued_num - finished_multicasts_num < window_size) {
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
-		// std::cout << "queued_num " << queued_num << std::endl;
-		// std::cout << "Giving slot " << slot << std::endl;
+                // std::cout << "queued_num " << queued_num << std::endl;
+                // std::cout << "Giving slot " << slot << std::endl;
                 // set size appropriately
                 sst->slots[my_row][slots_offset + slot].size = msg_size;
                 return sst->slots[my_row][slots_offset + slot].buf;
@@ -136,7 +143,7 @@ public:
         // std::cout << "In send: " << std::endl;
         uint32_t slot = num_sent % window_size;
         // std::cout << "slot = " << slot << std::endl;
-	// std::cout << "slots_offset = " << slots_offset << std::endl;
+        // std::cout << "slots_offset = " << slots_offset << std::endl;
         num_sent++;
         sst->slots[my_row][slots_offset + slot].next_seq++;
         sst->put(
@@ -145,16 +152,16 @@ public:
     }
 
     void debug_print() {
-      using std::cout;
-      using std::endl;
+        using std::cout;
+        using std::endl;
         for(auto i : row_indices) {
             cout << "Printing slots::next_seq" << endl;
             for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
                 cout << sst->slots[i][j].next_seq << " ";
             }
             cout << endl;
-	    cout << "Printing num_received_sst" << endl;
-	    for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
+            cout << "Printing num_received_sst" << endl;
+            for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 cout << sst->num_received_sst[i][j] << " ";
             }
             cout << endl;

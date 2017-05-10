@@ -7,8 +7,8 @@
 #include <sstream>
 #include <string>
 
-#include "sst/sst.h"
 #include "sst/multicast_msg.h"
+#include "sst/sst.h"
 
 namespace derecho {
 
@@ -108,7 +108,7 @@ public:
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-  DerechoSST(const sst::SSTParams& parameters, const uint32_t num_subgroups, const uint32_t num_received_size, uint32_t window_size)
+    DerechoSST(const sst::SSTParams& parameters, const uint32_t num_subgroups, const uint32_t num_received_size, uint32_t window_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
               stable_num(num_subgroups),
@@ -126,7 +126,7 @@ public:
                 persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-		slots, num_received_sst, heartbeat);
+                slots, num_received_sst, heartbeat);
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;

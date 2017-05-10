@@ -1,12 +1,12 @@
-#include <iostream>
 #include <fstream>
-#include <vector>
+#include <iostream>
 #include <map>
-#include <time.h>
 #include <memory>
+#include <time.h>
+#include <vector>
 
-#include "derecho/derecho.h"
 #include "block_size.h"
+#include "derecho/derecho.h"
 #include "rdmc/util.h"
 
 static const int GMS_PORT = 12345;
@@ -42,8 +42,8 @@ int main(int argc, char *argv[]) {
     uint num_messages_received = 0;
 
     auto stability_callback = [&num_messages_received](
-        uint32_t subgroup, int sender_id, long long int index, char *buf,
-        long long int msg_size) mutable {
+            uint32_t subgroup, int sender_id, long long int index, char *buf,
+            long long int msg_size) mutable {
         cout << "Here" << endl;
         cout << buf << endl;
         num_messages_received++;
@@ -58,14 +58,14 @@ int main(int argc, char *argv[]) {
 
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_rank, node_addresses[node_rank],
-            callbacks, one_raw_group, parameters);
+                node_rank, node_addresses[node_rank],
+                callbacks, one_raw_group, parameters);
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-            node_rank, node_addresses[node_rank],
-            node_addresses[server_rank],
-            callbacks,
-            one_raw_group);
+                node_rank, node_addresses[node_rank],
+                node_addresses[server_rank],
+                callbacks,
+                one_raw_group);
     }
 
     cout << "Finished constructing/joining ManagedGroup" << endl;

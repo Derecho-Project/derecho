@@ -14,7 +14,7 @@ using std::map;
 class mySST : public sst::SST<mySST> {
 public:
     mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST<mySST>(this, sst::SSTParams{_members, my_id}) {
-      SSTInit(a);
+        SSTInit(a);
     }
     sst::SSTField<int> a;
 };
@@ -49,7 +49,7 @@ int main() {
     cin >> n;
 
     auto f = [my_id](const mySST& sst) {
-      return sst.a[1 - my_id] != 0;
+        return sst.a[1 - my_id] != 0;
     };
 
     if(my_id == 0) {

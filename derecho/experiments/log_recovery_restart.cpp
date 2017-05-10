@@ -11,8 +11,8 @@
 
 #include "derecho/derecho.h"
 #include "derecho/logger.h"
-#include "rdmc/util.h"
 #include "initialize.h"
+#include "rdmc/util.h"
 
 using std::map;
 using std::cout;
@@ -76,9 +76,9 @@ int main(int argc, char* argv[]) {
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
 
     managed_group = make_shared<derecho::Group<>>(
-        message_log_filename, node_id, my_ip,
-        derecho::CallbackSet{stability_callback, persistence_callback},
-        one_raw_group);
+            message_log_filename, node_id, my_ip,
+            derecho::CallbackSet{stability_callback, persistence_callback},
+            one_raw_group);
 
     send_messages(num_messages);
     while(!done) {

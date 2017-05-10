@@ -6,7 +6,6 @@
  * helper script.
  */
 
-#include <stddef.h>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -16,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <stddef.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -89,10 +89,10 @@ int main(int argc, char* argv[]) {
 
     if(node_id == leader_id) {
         managed_group = make_shared<derecho::Group<>>(
-            node_id, my_ip, callbacks, one_raw_group, param_object);
+                node_id, my_ip, callbacks, one_raw_group, param_object);
     } else {
         managed_group = make_shared<derecho::Group<>>(
-            node_id, my_ip, leader_ip, callbacks, one_raw_group);
+                node_id, my_ip, leader_ip, callbacks, one_raw_group);
     }
     cout << "Created group, waiting for others to join." << endl;
     while(managed_group->get_members().size() < (num_nodes - 1)) {

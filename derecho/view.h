@@ -113,7 +113,7 @@ public:
      * @throws subgroup_provisioning_exception if any of the requested members
      * are not actually in this View's members vector.
      */
-  std::unique_ptr<SubView> make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
+    std::unique_ptr<SubView> make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
 
     /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
     int rank_of(const ip_addr& who) const;

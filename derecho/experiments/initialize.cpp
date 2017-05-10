@@ -4,9 +4,9 @@
 
 #include "initialize.h"
 
+#include <cstdint>
 #include <iostream>
 #include <map>
-#include <cstdint>
 #include <string>
 
 using std::cout;
