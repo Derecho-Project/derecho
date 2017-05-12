@@ -43,7 +43,7 @@ struct RawObject {};
  * subgroup, so the vectors map subgroup index -> shard index -> sub-view of
  * that shard.
  */
-using subgroup_shard_layout_t = std::vector<std::vector<std::unique_ptr<SubView>>>;
+using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
 
 /** The type of a lambda function that generates subgroup and shard views
  * for a specific subgroup type. This is a function that takes the current View

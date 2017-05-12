@@ -512,7 +512,7 @@ void ViewManager::register_predicates() {
             for(const auto& shard_rank_pair : curr_view->multicast_group->get_subgroup_to_shard_and_rank()) {
                 const subgroup_id_t subgroup_id = shard_rank_pair.first;
                 const uint32_t shard_num = shard_rank_pair.second.first;
-                SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
+                SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
                 uint num_shard_senders = 0;
                 for(auto v : shard_view.is_sender) {
                     if(v) num_shard_senders++;
@@ -533,7 +533,7 @@ void ViewManager::register_predicates() {
             //Wait for the shard leaders of subgroups I'm not a leader in to post global_min_ready before continuing
             auto leader_global_mins_are_ready = [this, follower_subgroups_and_shards](const DerechoSST& gmsSST) {
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
-                    SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
+                    SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
                                                    .at(subgroup_shard_pair.second);
                     node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
                             subgroup_shard_pair.first, subgroup_shard_pair.second)];
@@ -550,7 +550,7 @@ void ViewManager::register_predicates() {
                 logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
                 //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
-                    SubView& shard_view = *curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
+                    SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
                                                    .at(subgroup_shard_pair.second);
                     uint num_shard_senders = 0;
                     for(auto v : shard_view.is_sender) {
@@ -658,7 +658,7 @@ void ViewManager::register_predicates() {
                         //if I was the leader of the shard in the old view...
                         if(my_id == old_shard_leaders_by_id[subgroup_id][shard]) {
                             //send its object state to the new members
-                            for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard]->joined) {
+                            for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard].joined) {
                                 if(shard_joiner != my_id) {
                                     send_subgroup_object(subgroup_id, shard_joiner);
                                 }
@@ -827,7 +827,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
             uint32_t max_shard_senders = 0;
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                SubView& shard_view = *subgroup_shard_views.at(subgroup_index).at(shard_num);
+                SubView& shard_view = subgroup_shard_views.at(subgroup_index).at(shard_num);
                 std::size_t shard_size = shard_view.members.size();
                 uint32_t num_shard_senders = shard_view.num_senders();
                 if(num_shard_senders > max_shard_senders) {
@@ -847,7 +847,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                     subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type
                                                              .at(subgroup_type_and_function.first)
                                                              .at(subgroup_index);
-                    SubView& prev_shard_view = *prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
+                    SubView& prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
                     std::set<node_id_t> prev_members(prev_shard_view.members.begin(), prev_shard_view.members.end());
                     std::set<node_id_t> curr_members(shard_view.members.begin(), shard_view.members.end());
                     std::set_difference(curr_members.begin(), curr_members.end(),
@@ -889,7 +889,7 @@ std::map<std::type_index, std::vector<std::vector<int64_t>>> ViewManager::make_s
                 int shard_leader_rank = view.subview_rank_of_shard_leader(subgroup_id, shard);
                 if(shard_leader_rank >= 0) {
                     shard_leaders_by_type[type_to_ids.first][subgroup_index][shard]
-                            = view.subgroup_shard_views[subgroup_id][shard]->members[shard_leader_rank];
+                            = view.subgroup_shard_views[subgroup_id][shard].members[shard_leader_rank];
                 }
             }
         }

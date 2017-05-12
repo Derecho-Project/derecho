@@ -84,10 +84,10 @@ MulticastGroup::MulticastGroup(
           sender_timeout(derecho_params.timeout_ms),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
-          receiver_pred_handles(total_num_subgroups),
-          stability_pred_handles(total_num_subgroups),
-          delivery_pred_handles(total_num_subgroups),
-          sender_pred_handles(total_num_subgroups),
+          receiver_pred_handles(),
+          stability_pred_handles(),
+          delivery_pred_handles(),
+          sender_pred_handles(),
           last_transfer_medium(total_num_subgroups) {
     assert(window_size >= 1);
 
@@ -163,10 +163,10 @@ MulticastGroup::MulticastGroup(
           sender_timeout(old_group.sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
-          receiver_pred_handles(total_num_subgroups),
-          stability_pred_handles(total_num_subgroups),
-          delivery_pred_handles(total_num_subgroups),
-          sender_pred_handles(total_num_subgroups),
+          receiver_pred_handles(),
+          stability_pred_handles(),
+          delivery_pred_handles(),
+          sender_pred_handles(),
           last_transfer_medium(total_num_subgroups) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
@@ -773,8 +773,8 @@ void MulticastGroup::register_predicates() {
                 sst.put((char*)std::addressof(sst.num_received[0][num_received_offset]) - sst.getBaseAddress(),
                         sizeof(long long int) * num_shard_senders);
             };
-            receiver_pred_handles[subgroup_num] = sst->predicates.insert(receiver_pred, receiver_trig,
-                                                                         sst::PredicateType::RECURRENT);
+            receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
+                                                                         sst::PredicateType::RECURRENT));
 
             auto stability_pred = [this](
                     const DerechoSST& sst) { return true; };
@@ -797,8 +797,8 @@ void MulticastGroup::register_predicates() {
                                     sizeof(long long int));
                         }
                     };
-            stability_pred_handles[subgroup_num] = sst->predicates.insert(
-                    stability_pred, stability_trig, sst::PredicateType::RECURRENT);
+            stability_pred_handles.emplace_back(sst->predicates.insert(
+                    stability_pred, stability_trig, sst::PredicateType::RECURRENT));
 
             auto delivery_pred = [this](
                     const DerechoSST& sst) { return true; };
@@ -854,7 +854,7 @@ void MulticastGroup::register_predicates() {
                 }
             };
 
-            delivery_pred_handles[subgroup_num] = sst->predicates.insert(delivery_pred, delivery_trig, sst::PredicateType::RECURRENT);
+            delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig, sst::PredicateType::RECURRENT));
 
             int shard_sender_index;
             std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
@@ -874,8 +874,8 @@ void MulticastGroup::register_predicates() {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
-                sender_pred_handles[subgroup_num] = sst->predicates.insert(sender_pred, sender_trig,
-                                                                           sst::PredicateType::RECURRENT);
+                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+                                                                           sst::PredicateType::RECURRENT));
             }
         } else {
             auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members,
@@ -984,8 +984,8 @@ void MulticastGroup::register_predicates() {
                 sst.put((char*)std::addressof(sst.num_received[0][num_received_offset]) - sst.getBaseAddress(),
                         sizeof(long long int) * num_shard_senders);
             };
-            receiver_pred_handles[subgroup_num] = sst->predicates.insert(receiver_pred, receiver_trig,
-                                                                         sst::PredicateType::RECURRENT);
+            receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
+                                                                         sst::PredicateType::RECURRENT));
 
             int shard_sender_index;
             std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
@@ -1004,8 +1004,8 @@ void MulticastGroup::register_predicates() {
                 auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
                     sender_cv.notify_all();
                 };
-                sender_pred_handles[subgroup_num] = sst->predicates.insert(sender_pred, sender_trig,
-                                                                           sst::PredicateType::RECURRENT);
+                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+                                                                           sst::PredicateType::RECURRENT));
             }
         }
     }
@@ -1034,13 +1034,22 @@ void MulticastGroup::wedge() {
         return;
     }
 
-    for(uint subgroup_num = 0; subgroup_num < total_num_subgroups; ++subgroup_num) {
-        sst->predicates.remove(receiver_pred_handles[subgroup_num]);
-        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-            sst->predicates.remove(stability_pred_handles[subgroup_num]);
-            sst->predicates.remove(delivery_pred_handles[subgroup_num]);
-        }
-        sst->predicates.remove(sender_pred_handles[subgroup_num]);
+    //Consume and remove all the predicate handles
+    for(auto handle_iter = sender_pred_handles.begin(); handle_iter != sender_pred_handles.end(); ) {
+        sst->predicates.remove(*handle_iter);
+        handle_iter = sender_pred_handles.erase(handle_iter);
+    }
+    for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end(); ) {
+        sst->predicates.remove(*handle_iter);
+        handle_iter = receiver_pred_handles.erase(handle_iter);
+    }
+    for(auto handle_iter = stability_pred_handles.begin(); handle_iter != stability_pred_handles.end(); ) {
+        sst->predicates.remove(*handle_iter);
+        handle_iter = stability_pred_handles.erase(handle_iter);
+    }
+    for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end(); ) {
+        sst->predicates.remove(*handle_iter);
+        handle_iter = delivery_pred_handles.erase(handle_iter);
     }
 
     for(uint i = 0; i < num_members; ++i) {

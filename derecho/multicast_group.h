@@ -229,10 +229,10 @@ private:
     std::vector<std::unique_ptr<sst::multicast_group<DerechoSST>>> sst_multicast_group_ptrs;
 
     using pred_handle = typename sst::Predicates<DerechoSST>::pred_handle;
-    std::vector<pred_handle> receiver_pred_handles;
-    std::vector<pred_handle> stability_pred_handles;
-    std::vector<pred_handle> delivery_pred_handles;
-    std::vector<pred_handle> sender_pred_handles;
+    std::list<pred_handle> receiver_pred_handles;
+    std::list<pred_handle> stability_pred_handles;
+    std::list<pred_handle> delivery_pred_handles;
+    std::list<pred_handle> sender_pred_handles;
 
     std::vector<bool> last_transfer_medium;
 
@@ -264,7 +264,7 @@ private:
         return num;
     };
 
-    auto resolve_num_received(auto beg_index, auto end_index, auto num_received_entry) {
+    long long int resolve_num_received(long long beg_index, long long end_index, uint32_t num_received_entry) {
         // std::cout << "num_received_entry = " << num_received_entry << std::endl;
         // std::cout << "beg_index = " << beg_index << std::endl;
         // std::cout << "end_index = " << end_index << std::endl;

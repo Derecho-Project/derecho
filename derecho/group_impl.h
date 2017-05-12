@@ -156,7 +156,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
         bool in_subgroup = false;
         uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-            const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num)->members;
+            const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num).members;
             //"If this node is in subview->members for this shard"
             if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                 in_subgroup = true;
@@ -197,7 +197,7 @@ std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(cons
             uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
             bool in_subgroup = false;
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-                const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num)->members;
+                const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num).members;
                 //"If this node is in subview->members for this shard"
                 if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                     in_subgroup = true;

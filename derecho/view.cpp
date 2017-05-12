@@ -116,13 +116,13 @@ int View::rank_of(const node_id_t& who) const {
     return -1;
 }
 
-std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
-    std::unique_ptr<SubView> sub_view = std::make_unique<SubView>(with_members.size());
-    sub_view->members = with_members;
-    sub_view->mode = mode;
+SubView View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
+    SubView sub_view(with_members.size());
+    sub_view.members = with_members;
+    sub_view.mode = mode;
     // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
-        sub_view->is_sender = is_sender;
+        sub_view.is_sender = is_sender;
     }
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         std::size_t member_pos = std::distance(
@@ -131,13 +131,14 @@ std::unique_ptr<SubView> View::make_subview(const std::vector<node_id_t>& with_m
             //The ID wasn't found in members[]
             throw subgroup_provisioning_exception();
         }
-        sub_view->member_ips[subview_rank] = member_ips[member_pos];
+        sub_view.member_ips[subview_rank] = member_ips[member_pos];
     }
+    //Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
     return sub_view;
 }
 
 int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
-    SubView& shard_view = *subgroup_shard_views.at(subgroup_id).at(shard_index);
+    const SubView& shard_view = subgroup_shard_views.at(subgroup_id).at(shard_index);
     for(std::size_t rank = 0; rank < shard_view.members.size(); ++rank) {
         //Inefficient to call rank_of every time, but no guarantee the subgroup members will have ascending ranks
         if(!failed[rank_of(shard_view.members[rank])]) {
