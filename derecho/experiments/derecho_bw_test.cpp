@@ -29,7 +29,7 @@ struct exp_result {
     int raw_mode;
     double bw;
 
-    void print(std::ofstream& fout) {
+    void print(std::ofstream &fout) {
         fout << num_nodes << " " << num_senders_selector << " "
              << max_msg_size << " " << window_size << " "
              << num_messages << " " << send_medium << " "
@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
         num_last_received = 0u
     ](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
         // cout << "In stability callback; sender = " << sender_id
-        //      << ", index = " << index << endl;
+        //        << ", index = " << index << endl;
         if(num_senders_selector == 0) {
             if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
@@ -134,9 +134,9 @@ int main(int argc, char *argv[]) {
         RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             // cout << "Asking for a buffer" << endl;
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(10, send_medium);
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
             while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(10, send_medium);
+                buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
             }
             buf[0] = '0' + i;
             // cout << "Obtained a buffer, sending" << endl;

@@ -84,10 +84,6 @@ MulticastGroup::MulticastGroup(
           sender_timeout(derecho_params.timeout_ms),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
-          receiver_pred_handles(),
-          stability_pred_handles(),
-          delivery_pred_handles(),
-          sender_pred_handles(),
           last_transfer_medium(total_num_subgroups) {
     assert(window_size >= 1);
 
@@ -163,10 +159,6 @@ MulticastGroup::MulticastGroup(
           sender_timeout(old_group.sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
-          receiver_pred_handles(),
-          stability_pred_handles(),
-          delivery_pred_handles(),
-          sender_pred_handles(),
           last_transfer_medium(total_num_subgroups) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
