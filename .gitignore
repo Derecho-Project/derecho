@@ -41,3 +41,5 @@ CMakeFiles
 /sst/experiments/cpu_load_experiment
 /sst/experiments/multicast_throughput
 /derecho/experiments/typed_subgroup_test
+/TAGS
+/derecho/experiments/CMakeCache.txt

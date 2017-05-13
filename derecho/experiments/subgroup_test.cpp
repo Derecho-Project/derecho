@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
                                        group_1_members, std::back_inserter(subgroup_1_members));
                 unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
                                        group_2_members, std::back_inserter(subgroup_2_members));
-                std::vector<std::vector<std::unique_ptr<derecho::SubView>>> subgroup_vector(3);
+                derecho::subgroup_shard_layout_t subgroup_vector(3);
 		std::vector<int> subgroup_0_senders(subgroup_0_members.size());
 		if(subgroup_0_senders.size()) {
 		  subgroup_0_senders[0] = 1;
@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 		// if(subgroup_2_senders.size()) {
 		//   subgroup_2_senders[0] = 1;
 		// }
-		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
+		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members)); // , derecho::Mode::ORDERED, subgroup_0_senders
 		subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
 		subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
 		return subgroup_vector; }}}};

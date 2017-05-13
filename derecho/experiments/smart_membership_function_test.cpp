@@ -82,10 +82,10 @@ struct SubgroupAllocationState {
 class LoadBalancerAllocator {
     std::shared_ptr<SubgroupAllocationState> current_allocation_state;
     std::unique_ptr<derecho::subgroup_shard_layout_t> previous_assignment;
-    const int total_subgroup_functions;
+    const uint total_subgroup_functions;
 
 public:
-    LoadBalancerAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, int total_subgroup_functions)
+    LoadBalancerAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, uint total_subgroup_functions)
         : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
     //This should never be copied, but it must be copied once to store it inside a std::function (d'oh)
     LoadBalancerAllocator(const LoadBalancerAllocator& copy)
@@ -161,13 +161,13 @@ public:
 class CacheAllocator {
     std::shared_ptr<SubgroupAllocationState> current_allocation_state;
     std::unique_ptr<derecho::subgroup_shard_layout_t> previous_assignment;
-    const int total_subgroup_functions;
+    const uint total_subgroup_functions;
 
 public:
     const unsigned int NUM_SHARDS = 2;
     const unsigned int NODES_PER_SHARD = 2;
 
-    CacheAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, int total_subgroup_functions)
+    CacheAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, uint total_subgroup_functions)
         : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
     CacheAllocator(const CacheAllocator& copy)
         : current_allocation_state(copy.current_allocation_state),
