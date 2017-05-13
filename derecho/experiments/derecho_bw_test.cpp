@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
     const int send_medium = atoi(argv[5]);
     const int raw_mode = atoi(argv[6]);
 
-    bool done = false;
+    volatile bool done = false;
     auto stability_callback = [
         &num_messages,
         &done,
