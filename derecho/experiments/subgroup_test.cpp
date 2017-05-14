@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
 		// if(subgroup_2_senders.size()) {
 		//   subgroup_2_senders[0] = 1;
 		// }
-		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members)); // , derecho::Mode::ORDERED, subgroup_0_senders
+		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
 		subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
 		subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
 		return subgroup_vector; }}}};

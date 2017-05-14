@@ -983,7 +983,7 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
         max_received_indices[n] = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + n];
     }
     logger->debug("Delivering ragged-edge messages in order: {}", deliveryOrder);
-    Vc.multicast_group->deliver_messages_upto(max_received_indices, subgroup_num, shard_members.size());
+    Vc.multicast_group->deliver_messages_upto(max_received_indices, subgroup_num, num_shard_senders);
 }
 
 void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
