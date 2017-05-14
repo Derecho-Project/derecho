@@ -464,7 +464,6 @@ void resources_create() {
     struct ibv_device **dev_list = NULL;
     struct ibv_device *ib_dev = NULL;
     int i;
-    int cq_size = 0;
     int num_devices;
     int rc = 0;
 
@@ -479,6 +478,8 @@ void resources_create() {
     for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
+	    fprintf(stdout, "device not specified, using first one found: %s\n",
+                    local_config.dev_name);
         }
         if(!strcmp(ibv_get_device_name(dev_list[i]), dev_name)) {
             ib_dev = dev_list[i];
@@ -509,7 +510,7 @@ void resources_create() {
     // cout << "device_attr.max_cqe = " << g_res->device_attr.max_cqe << endl;
 
     // set to many entries
-    cq_size = 1000;
+    int cq_size = 1000;
     g_res->cq = ibv_create_cq(g_res->ib_ctx, cq_size, NULL, NULL, 0);
     check_for_error(g_res->cq,
                     "Could not create completion queue, error code is " + std::to_string(errno));

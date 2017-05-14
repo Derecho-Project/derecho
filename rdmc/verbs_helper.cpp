@@ -293,7 +293,7 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
     local_config.dev_name = getenv("RDMC_DEVICE_NAME");
     fprintf(stdout, "found %d device(s)\n", num_devices);
     /* search for the specific device we want to work with */
-    for(i = 0; i < num_devices; i++) {
+    for(i = 1; i < num_devices; i++) {
         if(!local_config.dev_name) {
             local_config.dev_name = strdup(ibv_get_device_name(dev_list[i]));
             fprintf(stdout, "device not specified, using first one found: %s\n",
