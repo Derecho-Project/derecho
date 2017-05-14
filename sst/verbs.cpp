@@ -479,7 +479,7 @@ void resources_create() {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
 	    fprintf(stdout, "device not specified, using first one found: %s\n",
-                    local_config.dev_name);
+                    dev_name);
         }
         if(!strcmp(ibv_get_device_name(dev_list[i]), dev_name)) {
             ib_dev = dev_list[i];
