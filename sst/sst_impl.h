@@ -277,4 +277,19 @@ void SST<DerivedSST>::sync_with_members() const {
         }
     }
 }
+
+/**
+ * Same as before but syncs with only a subset of the members
+ */
+template <typename DerivedSST>
+void SST<DerivedSST>::sync_with_members(std::vector<uint32_t> row_indices) const {
+    for(auto const& row_index : row_indices) {
+        if(row_index == my_index) {
+            continue;
+        }
+        if(!row_is_frozen[row_index]) {
+            sync(members[row_index]);
+        }
+    }
+}
 }

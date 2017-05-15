@@ -696,11 +696,16 @@ void MulticastGroup::register_predicates() {
         }
 
         if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-            auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members, shard_ranks_by_sender_rank, num_shard_senders, num_received_offset](const DerechoSST& sst) {
+            auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members,
+				  shard_ranks_by_sender_rank, num_shard_senders,
+				  num_received_offset](const DerechoSST& sst) {
                 for(uint j = 0; j < num_shard_senders; ++j) {
                     auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
                     uint32_t slot = num_received % window_size;
-                    if((long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq
+                    if((long long int)sst.slots
+                               [node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])]
+                               [subgroup_num * window_size + slot]
+                                       .next_seq
                        == num_received / window_size + 1) {
                         return true;
                     }
@@ -711,7 +716,10 @@ void MulticastGroup::register_predicates() {
             if(!num_times) {
                 num_times = 1;
             }
-            auto sst_receive_handler = [this, subgroup_num, shard_members, num_shard_members, shard_ranks_by_sender_rank, num_shard_senders, num_received_offset](uint32_t sender_rank, uint64_t index_ignored, volatile char* data, uint32_t size) {
+            auto sst_receive_handler = [this, subgroup_num, shard_members, num_shard_members,
+					shard_ranks_by_sender_rank, num_shard_senders,
+					num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
+							     volatile char* data, uint32_t size) {
                 header* h = (header*)data;
                 long long int index = h->index;
                 auto beg_index = index;
@@ -740,7 +748,10 @@ void MulticastGroup::register_predicates() {
                     for(uint j = 0; j < num_shard_senders; ++j) {
                         auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
                         uint32_t slot = num_received % window_size;
-                        long long int next_seq = (long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq;
+                        long long int next_seq = (long long int)sst.slots
+                                                         [node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])]
+                                                         [subgroup_num * window_size + slot]
+                                                                 .next_seq;
                         if(next_seq == num_received / window_size + 1) {
                             sst_receive_handler(j, num_received,
                                                 sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].buf,

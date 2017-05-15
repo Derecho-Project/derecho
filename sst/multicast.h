@@ -61,7 +61,7 @@ class multicast_group {
                 sst->slots[i][j].next_seq = 0;
             }
         }
-        sst->sync_with_members();
+        sst->sync_with_members(row_indices);
         std::cout << "Initialization complete" << std::endl;
     }
 

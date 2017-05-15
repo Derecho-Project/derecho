@@ -105,8 +105,8 @@ int main(int argc, char* argv[]) {
         my_subgroup_num = 1;
     else
         my_subgroup_num = 2;
-    // all are senders except node id's 1 and 2 in shard 0
-    if(node_id != 1 && node_id != 2) {
+    // all are senders except node id's 1 and 2 in shard 0 and nodes >= 9
+    if(node_id != 1 && node_id != 2 && node_id <= 8) {
         for(int i = 0; i < num_messages; ++i) {
             // random message size between 1 and 100
             unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);

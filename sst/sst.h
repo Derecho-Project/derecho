@@ -292,6 +292,9 @@ public:
     /** Does a TCP sync with each member of the SST. */
     void sync_with_members() const;
 
+    /** Syncs with a subset of the members */
+    void sync_with_members(std::vector<uint32_t> row_indices) const;
+
     /** Marks a row as frozen, so it will no longer update, and its corresponding
      * node will not receive writes. */
     void freeze(int row_index);
