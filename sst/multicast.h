@@ -124,10 +124,10 @@ public:
                 sst->slots[my_row][slots_offset + slot].size = msg_size;
                 return sst->slots[my_row][slots_offset + slot].buf;
             } else {
-                long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_member_index];
+	      long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
                 for(auto i : row_indices) {
-                    if(sst->num_received_sst[i][num_received_offset + my_member_index] < min_multicast_num) {
-                        min_multicast_num = sst->num_received_sst[i][num_received_offset + my_member_index];
+		  if(sst->num_received_sst[i][num_received_offset + my_sender_index] < min_multicast_num) {
+		    min_multicast_num = sst->num_received_sst[i][num_received_offset + my_sender_index];
                     }
                 }
                 if(finished_multicasts_num == min_multicast_num) {

@@ -78,7 +78,7 @@ int main(int argc, char *argv[]) {
         num_last_received = 0u
     ](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
         // cout << "In stability callback; sender = " << sender_id
-        //        << ", index = " << index << endl;
+        // << ", index = " << index << endl;
         if(num_senders_selector == 0) {
             if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
@@ -99,9 +99,57 @@ int main(int argc, char *argv[]) {
 
     derecho::SubgroupInfo one_raw_group;
     if(raw_mode) {
-        one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view_raw}}};
+        if(num_senders_selector == 0) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view_raw}}};
+        } else if(num_senders_selector == 1) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view) {
+                                   subgroup_shard_layout_t subgroup_vector(1);
+                                   auto num_members = curr_view.members.size();
+                                   std::vector<int> is_sender(num_members, 1);
+                                   for(uint i = 0; i <= (num_members - 1) / 2; ++i) {
+                                       is_sender[i] = 0;
+                                   }
+                                   subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, derecho::Mode::RAW, is_sender));
+                                   return subgroup_vector;
+                               }}}};
+        } else {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view) {
+                                   subgroup_shard_layout_t subgroup_vector(1);
+                                   auto num_members = curr_view.members.size();
+                                   std::vector<int> is_sender(num_members, 1);
+                                   for(uint i = 0; i < num_members - 1; ++i) {
+                                       is_sender[i] = 0;
+                                   }
+                                   subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, derecho::Mode::RAW, is_sender));
+                                   return subgroup_vector;
+                               }}}};
+        }
     } else {
-        one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+        if(num_senders_selector == 0) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+        } else if(num_senders_selector == 1) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view) {
+                                   subgroup_shard_layout_t subgroup_vector(1);
+                                   auto num_members = curr_view.members.size();
+                                   std::vector<int> is_sender(num_members, 1);
+                                   for(uint i = 0; i <= (num_members - 1) / 2; ++i) {
+                                       is_sender[i] = 0;
+                                   }
+                                   subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, derecho::Mode::ORDERED, is_sender));
+                                   return subgroup_vector;
+                               }}}};
+        } else {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view) {
+                                   subgroup_shard_layout_t subgroup_vector(1);
+                                   auto num_members = curr_view.members.size();
+                                   std::vector<int> is_sender(num_members, 1);
+                                   for(uint i = 0; i < num_members - 1; ++i) {
+                                       is_sender[i] = 0;
+                                   }
+                                   subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, derecho::Mode::ORDERED, is_sender));
+                                   return subgroup_vector;
+                               }}}};
+        }
     }
 
     std::unique_ptr<derecho::Group<>> managed_group;
@@ -143,14 +191,6 @@ int main(int argc, char *argv[]) {
             group_as_subgroup.send();
         }
     };
-    auto send_one = [&]() {
-        RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(1, send_medium, num_messages);
-        while(!buf) {
-            buf = group_as_subgroup.get_sendbuffer_ptr(1, send_medium, num_messages);
-        }
-        group_as_subgroup.send();
-    };
 
     struct timespec start_time;
     // start timer
@@ -160,16 +200,10 @@ int main(int argc, char *argv[]) {
     } else if(num_senders_selector == 1) {
         if(node_rank > (num_nodes - 1) / 2) {
             send_all();
-        } else {
-            send_one();
         }
     } else {
         if(node_rank == num_nodes - 1) {
-            // cout << "Sending all messages" << endl;
             send_all();
-        } else {
-            // cout << "Sending one message" << endl;
-            send_one();
         }
     }
     while(!done) {
