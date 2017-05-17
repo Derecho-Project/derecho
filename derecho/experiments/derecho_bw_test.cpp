@@ -186,12 +186,15 @@ int main(int argc, char *argv[]) {
         bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
     }
     double avg_bw = aggregate_bandwidth(members, node_rank, bw);
-    log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
-                           window_size, num_messages, send_medium,
-                           raw_mode, avg_bw},
-                "data_derecho_bw");
+    if(node_rank == 0) {
+        log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
+                               window_size, num_messages, send_medium,
+                               raw_mode, avg_bw},
+                    "data_derecho_bw");
+    }
 
     managed_group->barrier_sync();
-    managed_group->leave();
+    // managed_group->leave();
+    exit(0);
     cout << "Finished destroying managed_group" << endl;
 }
