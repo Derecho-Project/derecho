@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
                     is_sender[i] = 0;
                 }
             } else {
-                for(uint i = 0; i <= num_members - 1; ++i) {
+                for(uint i = 0; i < num_members - 1; ++i) {
                     is_sender[i] = 0;
                 }
             }
