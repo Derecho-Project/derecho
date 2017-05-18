@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "multicast_group.h"
+#include "rdmc/util.h"
 
 namespace derecho {
 
@@ -614,6 +615,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
 }
 
 void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num) {
+    DERECHO_LOG(-1, -1, "deliver_message()");
     if(msg.size > 0) {
         char* buf = const_cast<char*>(msg.buf);
         header* h = (header*)(buf);
@@ -625,8 +627,10 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
         }
         // raw send
         else {
+            DERECHO_LOG(-1, -1, "start_stability_callback");
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                                 buf + h->header_size, msg.size - h->header_size);
+            DERECHO_LOG(-1, -1, "end_stability_callback");
         }
         if(file_writer) {
             persistence::message msg_for_filewriter{buf + h->header_size,
@@ -654,6 +658,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
 void MulticastGroup::deliver_messages_upto(
         const std::vector<long long int>& max_indices_for_senders,
         subgroup_id_t subgroup_num, uint32_t num_shard_senders) {
+    DERECHO_LOG(-1, -1, "deliver_messages_upto");
     assert(max_indices_for_senders.size() == (size_t)num_shard_senders);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     auto curr_seq_num = sst->delivered_num[member_index][subgroup_num];
@@ -662,16 +667,21 @@ void MulticastGroup::deliver_messages_upto(
         max_seq_num = std::max(max_seq_num,
                                max_indices_for_senders[sender] * num_shard_senders + sender);
     }
+    // DERECHO_LOG(-1, -1, "deliver_messages_upto_loop");
     for(auto seq_num = curr_seq_num; seq_num <= max_seq_num; seq_num++) {
         auto msg_ptr = locally_stable_rdmc_messages[subgroup_num].find(seq_num);
         if(msg_ptr != locally_stable_rdmc_messages[subgroup_num].end()) {
             deliver_message(msg_ptr->second, subgroup_num);
+            // DERECHO_LOG(-1, -1, "erase_message");
             locally_stable_rdmc_messages[subgroup_num].erase(msg_ptr);
+            // DERECHO_LOG(-1, -1, "erase_message_done");
         } else {
             auto sst_msg_ptr = locally_stable_sst_messages[subgroup_num].find(seq_num);
             if(sst_msg_ptr != locally_stable_sst_messages[subgroup_num].end()) {
                 deliver_message(sst_msg_ptr->second, subgroup_num);
+                // DERECHO_LOG(-1, -1, "erase_message");
                 locally_stable_sst_messages[subgroup_num].erase(sst_msg_ptr);
+                // DERECHO_LOG(-1, -1, "erase_message_done");
             }
         }
     }
@@ -717,9 +727,10 @@ void MulticastGroup::register_predicates() {
                 num_times = 1;
             }
             auto sst_receive_handler = [this, subgroup_num, shard_members, num_shard_members,
-					shard_ranks_by_sender_rank, num_shard_senders,
-					num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
-							     volatile char* data, uint32_t size) {
+                                        shard_ranks_by_sender_rank, num_shard_senders,
+                                        num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
+                                                             volatile char* data, uint32_t size) {
+                DERECHO_LOG(sender_rank, index_ignored, "received_messages");
                 header* h = (header*)data;
                 long long int index = h->index;
                 auto beg_index = index;
@@ -793,6 +804,7 @@ void MulticastGroup::register_predicates() {
                             }
                         }
                         if(min_seq_num > sst.stable_num[member_index][subgroup_num]) {
+                            DERECHO_LOG(-1, min_seq_num, "stability_trig");
                             logger->debug("Subgroup {}, updating stable_num to {}", subgroup_num, min_seq_num);
                             sst.stable_num[member_index][subgroup_num] = min_seq_num;
                             sst.put(get_shard_sst_indices(subgroup_num),
@@ -836,16 +848,20 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
+                        DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
+                        // DERECHO_LOG(-1, -1, "message_erase_done");
                     } else if(least_undelivered_sst_seq_num < least_undelivered_rdmc_seq_num && least_undelivered_sst_seq_num <= min_stable_num) {
                         update_sst = true;
                         logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}",
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
+                        DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
+                        // DERECHO_LOG(-1, -1, "message_erase_done");
                     } else {
                         break;
                     }
@@ -1131,12 +1147,15 @@ void MulticastGroup::send_loop() {
             sender_cv.wait(lock, should_wake);
             if(!thread_shutdown) {
                 current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
+		DERECHO_LOG(-1, -1, "got_current_send");
                 logger->debug("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id);
+		DERECHO_LOG(-1, -1, "did_log_event");
                 if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
                                current_sends[subgroup_to_send]->message_buffer.mr, 0,
                                current_sends[subgroup_to_send]->size)) {
                     throw std::runtime_error("rdmc::send returned false");
                 }
+                DERECHO_LOG(-1, -1, "issued_rdmc_send");
                 pending_sends[subgroup_to_send].pop();
             }
         }
@@ -1235,6 +1254,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
 
         last_transfer_medium[subgroup_num] = transfer_medium;
+        DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     } else {
         char* buf = (char*)sst_multicast_group_ptrs[subgroup_num]->get_buffer(msg_size);
@@ -1248,6 +1268,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
 
         last_transfer_medium[subgroup_num] = transfer_medium;
+	DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     }
 }
@@ -1262,9 +1283,11 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
         next_sends[subgroup_num] = std::experimental::nullopt;
         sender_cv.notify_all();
+	DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     } else {
         sst_multicast_group_ptrs[subgroup_num]->send();
+	DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     }
 }

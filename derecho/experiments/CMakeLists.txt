@@ -91,7 +91,7 @@ add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
 # smart membership function
-add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-target_link_libraries(smart_membership_function_test derecho)
+# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+# target_link_libraries(smart_membership_function_test derecho)
 
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

@@ -55,13 +55,13 @@ int main(int argc, char *argv[]) {
 
         int num_messages = 1000;
 
-        bool done = false;
+        volatile bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
                 int32_t subgroup, int sender_id, long long int index, char *buf,
                 long long int msg_size) mutable {
             // cout << buf << endl;
             // cout << "Delivered a message" << endl;
-            // DERECHO_LOG(sender_id, index, "complete_send");
+            DERECHO_LOG(sender_id, index, "complete_send");
             end_times[sender_id].push_back(get_time());
             if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
@@ -75,8 +75,6 @@ int main(int argc, char *argv[]) {
 	else {
             one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}}};
         }
-
-        std::this_thread::sleep_for(std::chrono::milliseconds{10 * node_id});
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
         derecho::DerechoParams param_object{max_msg_size, block_size, std::string(), window_size};
@@ -138,7 +136,7 @@ int main(int argc, char *argv[]) {
             }
             buf[msg_size - 1] = 0;
             start_times.push_back(get_time());
-            // DERECHO_LOG(my_rank, i, "start_send");
+            DERECHO_LOG(my_rank, i, "start_send");
             group_as_subgroup.send();
 
             if(node_id == 0) {
