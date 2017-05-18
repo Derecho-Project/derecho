@@ -1,20 +1,20 @@
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <map>
-#include <cstdint>
-#include <vector>
-#include <iostream>
 #include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <iostream>
+#include <iostream>
+#include <map>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace std;
 
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
 
-#include "derecho/derecho.h"
 #include "block_size.h"
+#include "derecho/derecho.h"
 
 unique_ptr<rdmc::barrier_group> universal_barrier_group;
 
@@ -32,15 +32,11 @@ void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, der
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 2) {
-            cout << "Error: Expected number of nodes in experiment as the first argument."
-                 << endl;
-            return -1;
-        }
-        if(argc < 3) {
-            cout << "Error: Expected message size as second argument."
-                 << endl;
-            return -1;
+        if(argc < 5) {
+            cout << "Insufficient number of command line arguments" << endl;
+            cout << "Enter num_nodes, msg_size, window_size, send_medium, raw_mode" << endl;
+            cout << "Thank you" << endl;
+            exit(1);
         }
         uint32_t num_nodes = std::atoi(argv[1]);
         unsigned int msg_size = std::atoi(argv[2]);
@@ -51,38 +47,53 @@ int main(int argc, char *argv[]) {
 
         query_node_info(node_id, my_ip, leader_ip);
 
-        long long unsigned int max_msg_size = msg_size;
-        long long unsigned int block_size = msg_size * 2;
-	unsigned int window_size = 3;
+        const long long unsigned int max_msg_size = msg_size;
+        const long long unsigned int block_size = msg_size * 2;
+        const unsigned int window_size = atoi(argv[3]);
+        const int send_medium = atoi(argv[4]);
+        const int raw_mode = atoi(argv[5]);
 
         int num_messages = 1000;
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
-            int sender_rank, long long int index, char *buf,
-            long long int msg_size) {
+                int32_t subgroup, int sender_id, long long int index, char *buf,
+                long long int msg_size) mutable {
             // cout << buf << endl;
-            cout << "Delivered a message" << endl;
-            DERECHO_LOG(sender_rank, index, "complete_send");
-            end_times[sender_rank].push_back(get_time());
-            if(index == num_messages - 1 && sender_rank == (int)num_nodes - 1) {
+            // cout << "Delivered a message" << endl;
+            // DERECHO_LOG(sender_id, index, "complete_send");
+            end_times[sender_id].push_back(get_time());
+            if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
             }
         };
+
+        derecho::SubgroupInfo one_raw_group;
+        if(raw_mode) {
+            one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}}};
+        }
+	else {
+            one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}}};
+        }
 
         std::this_thread::sleep_for(std::chrono::milliseconds{10 * node_id});
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
         derecho::DerechoParams param_object{max_msg_size, block_size, std::string(), window_size};
-        rpc::Dispatcher<> empty_dispatcher(node_id);
-        std::unique_ptr<derecho::Group<rpc::Dispatcher<>>> managed_group;
+        std::unique_ptr<derecho::Group<>> managed_group;
 
         if(node_id == leader_id) {
-            managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                my_ip, std::move(empty_dispatcher), callbacks, param_object);
+            managed_group = std::make_unique<derecho::Group<>>(
+                    node_id, my_ip,
+		    callbacks,
+                    one_raw_group,
+                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
         } else {
-            managed_group = std::make_unique<derecho::Group<rpc::Dispatcher<>>>(
-                node_id, my_ip, leader_id, leader_ip, std::move(empty_dispatcher), callbacks);
+            managed_group = std::make_unique<derecho::Group<>>(
+                    node_id, my_ip,
+		    leader_ip,
+                    callbacks,
+                    one_raw_group);
         }
 
         while(managed_group->get_members().size() < num_nodes) {
@@ -105,9 +116,9 @@ int main(int argc, char *argv[]) {
         universal_barrier_group->barrier_wait();
         uint64_t t3 = get_time();
         printf(
-            "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
-            "Max possible variation from local = %5.3f us\n",
-            (t3 - t1) * 1e-3f, max(t2 - t1, t3 - t2) * 1e-3f);
+                "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
+                "Max possible variation from local = %5.3f us\n",
+                (t3 - t1) * 1e-3f, max(t2 - t1, t3 - t2) * 1e-3f);
         fflush(stdout);
 
         cout << "Finished constructing/joining ManagedGroup" << endl;
@@ -116,18 +127,19 @@ int main(int argc, char *argv[]) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
+	derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
-            char *buf = managed_group->get_sendbuffer_ptr(msg_size);
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size, send_medium);
             while(!buf) {
-                buf = managed_group->get_sendbuffer_ptr(msg_size);
+                buf = group_as_subgroup.get_sendbuffer_ptr(msg_size, send_medium);
             }
-            for(unsigned int j = 0; j < msg_size-1; ++j) {
+            for(unsigned int j = 0; j < msg_size - 1; ++j) {
                 buf[j] = 'a' + (i % 26);
             }
-	    buf[msg_size-1] = 0;
+            buf[msg_size - 1] = 0;
             start_times.push_back(get_time());
-            DERECHO_LOG(my_rank, i, "start_send");
-            managed_group->send();
+            // DERECHO_LOG(my_rank, i, "start_send");
+            group_as_subgroup.send();
 
             if(node_id == 0) {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));

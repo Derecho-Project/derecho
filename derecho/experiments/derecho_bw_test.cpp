@@ -18,7 +18,6 @@ using std::map;
 using std::cout;
 using std::endl;
 
-using namespace std::placeholders;
 using namespace derecho;
 
 struct exp_result {
