@@ -30,6 +30,10 @@ target_link_libraries(multiple_senders_multiple_messages derecho)
 add_executable(derecho_bw_test derecho_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
 target_link_libraries(derecho_bw_test derecho)
 
+# latency_test
+add_executable(latency_test latency_test.cpp block_size.cpp)
+target_link_libraries(latency_test derecho)
+
 # derecho_caller_test
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
