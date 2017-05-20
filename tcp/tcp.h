@@ -33,6 +33,7 @@ public:
     ~socket();
 
     bool is_empty();
+    std::string get_self_ip();
 
     bool read(char* buffer, size_t size);
     bool probe();
@@ -48,8 +49,7 @@ public:
             return false;
         }
 
-        return write((char*)&local, sizeof(T)) &&
-               read((char*)&remote, sizeof(T));
+        return write((char*)&local, sizeof(T)) && read((char*)&remote, sizeof(T));
     }
 };
 
