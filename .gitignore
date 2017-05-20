@@ -43,3 +43,5 @@ CMakeFiles
 /derecho/experiments/typed_subgroup_test
 /TAGS
 /derecho/experiments/CMakeCache.txt
+/tcp/script_copy.sh
+/derecho/experiments/latency_test

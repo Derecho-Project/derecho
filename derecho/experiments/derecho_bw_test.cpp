@@ -153,6 +153,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::unique_ptr<derecho::Group<>> managed_group;
+    std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
                 node_rank, node_addresses[node_rank],
