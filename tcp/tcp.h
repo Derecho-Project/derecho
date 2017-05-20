@@ -33,6 +33,7 @@ public:
     ~socket();
 
     bool is_empty();
+    std::string get_self_ip();
 
     bool read(char* buffer, size_t size);
     bool probe();

@@ -208,9 +208,10 @@ void ViewManager::await_second_member(const node_id_t my_id) {
     node_id_t joiner_id = 0;
     client_socket.exchange(my_id, joiner_id);
     ip_addr& joiner_ip = client_socket.remote_ip;
+    ip_addr my_ip = client_socket.get_self_ip();
     curr_view = std::make_unique<View>(0,
                                        std::vector<node_id_t>{my_id, joiner_id},
-                                       std::vector<ip_addr>{curr_view->member_ips[0], joiner_ip},
+                                       std::vector<ip_addr>{my_ip, joiner_ip},
                                        std::vector<char>{0, 0},
                                        std::vector<node_id_t>{joiner_id},
                                        std::vector<node_id_t>{},

@@ -62,8 +62,7 @@ bool socket::read(char *buffer, size_t size) {
 
     size_t total_bytes = 0;
     while(total_bytes < size) {
-        ssize_t new_bytes =
-            ::read(sock, buffer + total_bytes, size - total_bytes);
+        ssize_t new_bytes = ::read(sock, buffer + total_bytes, size - total_bytes);
         if(new_bytes > 0) {
             total_bytes += new_bytes;
         } else if(new_bytes == 0 || (new_bytes == -1 && errno != EINTR)) {
@@ -87,8 +86,7 @@ bool socket::write(const char *buffer, size_t size) {
 
     size_t total_bytes = 0;
     while(total_bytes < size) {
-        ssize_t bytes_written =
-            ::write(sock, buffer + total_bytes, size - total_bytes);
+        ssize_t bytes_written = ::write(sock, buffer + total_bytes, size - total_bytes);
         if(bytes_written >= 0) {
             total_bytes += bytes_written;
         } else if(bytes_written == -1 && errno != EINTR) {
@@ -96,6 +94,24 @@ bool socket::write(const char *buffer, size_t size) {
         }
     }
     return true;
+}
+
+std::string socket::get_self_ip() {
+    struct sockaddr_storage my_addr_info;
+    socklen_t len = sizeof my_addr_info;
+
+    getsockname(sock, (struct sockaddr *) &my_addr_info, &len);
+    char my_ip_cstr[INET6_ADDRSTRLEN + 1];
+    if(my_addr_info.ss_family == AF_INET) {
+        struct sockaddr_in *s = (struct sockaddr_in *)&my_addr_info;
+        inet_ntop(AF_INET, &s->sin_addr, my_ip_cstr,
+                  sizeof my_ip_cstr);
+    } else {
+        struct sockaddr_in6 *s = (struct sockaddr_in6 *)&my_addr_info;
+        inet_ntop(AF_INET6, &s->sin6_addr, my_ip_cstr,
+                  sizeof my_ip_cstr);
+    }
+    return std::string(my_ip_cstr);
 }
 
 connection_listener::connection_listener(int port) {
@@ -119,7 +135,7 @@ connection_listener::connection_listener(int port) {
     listen(listenfd, 5);
 
     fd = unique_ptr<int, std::function<void(int *)>>(
-        new int(listenfd), [](int *fd) { close(*fd); delete fd; });
+            new int(listenfd), [](int *fd) { close(*fd); delete fd; });
 }
 
 socket connection_listener::accept() {
