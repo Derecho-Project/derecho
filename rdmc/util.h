@@ -63,9 +63,7 @@ void start_flush_server();
     } while(0)
 
 #define LOG_EVENT(group_number, message_number, block_number, event_name) \
-    do {                                                                                       \
-        log_event(__FILE__, __LINE__, group_number, message_number, block_number, event_name); \
-    } while(0)
+    do {} while(0)
 
 inline void CHECK(bool b) {
     if(!b) {
