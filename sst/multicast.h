@@ -98,13 +98,13 @@ public:
             if(i == my_member_index) {
                 my_sender_index = j;
             }
-            if(is_sender[i]) {
+            if(this->is_sender[i]) {
                 j++;
             }
         }
         num_senders = j;
 
-        if(!is_sender[my_member_index]) {
+        if(!this->is_sender[my_member_index]) {
             my_sender_index = -1;
         }
         initialize();

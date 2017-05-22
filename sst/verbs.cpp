@@ -341,9 +341,8 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
     sr.wr.rdma.remote_addr = remote_props.addr + offset;
     sr.wr.rdma.rkey = remote_props.rkey;
 
-    // there is a receive request in the responder side, so we won't get any
-    // into
-    // RNR flow
+    // there is a receive request in the responder side
+    // , so we won't get any into RNR flow
     int ret_code = ibv_post_send(qp, &sr, &bad_wr);
     return ret_code;
 }

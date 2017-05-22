@@ -319,11 +319,11 @@ public:
     }
 
     /** Writes the entire local row to some of the remote nodes. */
-    void put(std::vector<uint32_t> receiver_ranks) {
+    void put(const std::vector<uint32_t>& receiver_ranks) {
         put(receiver_ranks, 0, rowLen);
     }
 
-    void put_with_completion(std::vector<uint32_t> receiver_ranks) {
+    void put_with_completion(const std::vector<uint32_t>& receiver_ranks) {
         put_with_completion(receiver_ranks, 0, rowLen);
     }
 
@@ -337,9 +337,9 @@ public:
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
-    void put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+    void put(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size);
 
-    void put_with_completion(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+    void put_with_completion(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size);
 
 private:
     using char_p = volatile char*;

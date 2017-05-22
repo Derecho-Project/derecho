@@ -32,7 +32,7 @@ void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, der
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 5) {
+        if(argc < 6) {
             cout << "Insufficient number of command line arguments" << endl;
             cout << "Enter num_nodes, msg_size, window_size, send_medium, raw_mode" << endl;
             cout << "Thank you" << endl;
@@ -152,10 +152,8 @@ int main(int argc, char *argv[]) {
         // for(int i = 100; i < num_messages - 100; i+= 5){
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }
+	managed_group->barrier_sync();
         exit(0);
-
-        managed_group->leave();
-
     } catch(const std::exception &e) {
         cout << "Main got an exception: " << e.what() << endl;
         throw e;

@@ -360,7 +360,6 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 auto beg_index = index;
                 long long int sequence_number = index * num_shard_senders + sender_rank;
 
-                DERECHO_LOG(node_id, index, "received_message");
                 logger->debug("Locally received message in subgroup {}, sender rank {}, index {}", subgroup_num, shard_rank, index);
 
                 // Move message from current_receives to locally_stable_rdmc_messages.
@@ -427,9 +426,11 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         logger->debug("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
                         sst->seq_num[member_index][subgroup_num] = new_seq_num;
                         // std::atomic_signal_fence(std::memory_order_acq_rel);
+                        // DERECHO_LOG(node_id, index, "received_message");
                         sst->put(shard_sst_indices,
                                  (char*)std::addressof(sst->seq_num[0][subgroup_num]) - sst->getBaseAddress(),
                                  sizeof(long long int));
+                        // DERECHO_LOG(node_id, new_seq_num, "updated_seq_num");
                     }
                     sst->put(shard_sst_indices,
                              (char*)std::addressof(sst->num_received[0][num_received_offset + sender_rank]) - sst->getBaseAddress(),
@@ -685,7 +686,7 @@ void MulticastGroup::register_predicates() {
 
             auto node_id = shard_members[shard_ranks_by_sender_rank.at(sender_rank)];
 
-            DERECHO_LOG(node_id, index, "received_message");
+            // DERECHO_LOG(node_id, index, "received_message");
             locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
             // Add empty messages to locally_stable_sst_messages for each turn that the sender is skipping.
@@ -735,7 +736,7 @@ void MulticastGroup::register_predicates() {
                               num_shard_members, shard_ranks_by_sender_rank,
                               num_shard_senders, num_received_offset, receiver_cnt](DerechoSST& sst) mutable {
             receiver_cnt++;
-            DERECHO_LOG(receiver_cnt, -1, "in receiver_trig");
+            // DERECHO_LOG(receiver_cnt, -1, "in receiver_trig");
             std::lock_guard<std::mutex> lock(msg_state_mtx);
             for(uint i = 0; i < num_times; ++i) {
                 for(uint j = 0; j < num_shard_senders; ++j) {
@@ -776,7 +777,7 @@ void MulticastGroup::register_predicates() {
             auto stability_trig =
                     [this, subgroup_num, shard_members, num_shard_members, stability_cnt](DerechoSST& sst) mutable {
                         stability_cnt++;
-                        DERECHO_LOG(stability_cnt, -1, "in stability_trig");
+                        // DERECHO_LOG(stability_cnt, -1, "in stability_trig");
                         // compute the min of the seq_num
                         long long int min_seq_num
                                 = sst.seq_num[node_id_to_sst_index.at(shard_members[0])][subgroup_num];
@@ -787,12 +788,13 @@ void MulticastGroup::register_predicates() {
                             }
                         }
                         if(min_seq_num > sst.stable_num[member_index][subgroup_num]) {
-                            DERECHO_LOG(stability_cnt, min_seq_num, "stability_trig");
                             logger->debug("Subgroup {}, updating stable_num to {}", subgroup_num, min_seq_num);
                             sst.stable_num[member_index][subgroup_num] = min_seq_num;
+                            // DERECHO_LOG(stability_cnt, min_seq_num, "stability_trig");
                             sst.put(get_shard_sst_indices(subgroup_num),
                                     (char*)std::addressof(sst.stable_num[0][subgroup_num]) - sst.getBaseAddress(),
                                     sizeof(long long int));
+                            // DERECHO_LOG(stability_cnt, min_seq_num, "updated_stable_num");
                         }
                     };
             stability_pred_handles.emplace_back(sst->predicates.insert(
@@ -804,7 +806,7 @@ void MulticastGroup::register_predicates() {
             auto delivery_trig = [this, subgroup_num, shard_members, num_shard_members, delivery_cnt](
                     DerechoSST& sst) mutable {
                 delivery_cnt++;
-                DERECHO_LOG(delivery_cnt, -1, "in delivery_trig");
+                // DERECHO_LOG(delivery_cnt, -1, "in delivery_trig");
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the stable_num
                 long long int min_stable_num
@@ -1025,10 +1027,10 @@ void MulticastGroup::send_loop() {
         while(!thread_shutdown) {
             sender_cv.wait(lock, should_wake);
             send_cnt++;
-            DERECHO_LOG(send_cnt, -1, "sender thread woke up");
+            // DERECHO_LOG(send_cnt, -1, "sender thread woke up");
             if(!thread_shutdown) {
                 current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
-                DERECHO_LOG(-1, -1, "got_current_send");
+                // DERECHO_LOG(-1, -1, "got_current_send");
                 logger->debug("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id);
                 // DERECHO_LOG(-1, -1, "did_log_event");
                 if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
@@ -1036,7 +1038,7 @@ void MulticastGroup::send_loop() {
                                current_sends[subgroup_to_send]->size)) {
                     throw std::runtime_error("rdmc::send returned false");
                 }
-                DERECHO_LOG(-1, -1, "issued_rdmc_send");
+                // DERECHO_LOG(-1, -1, "issued_rdmc_send");
                 pending_sends[subgroup_to_send].pop();
             }
         }
@@ -1164,11 +1166,11 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
         next_sends[subgroup_num] = std::experimental::nullopt;
         sender_cv.notify_all();
-        DERECHO_LOG(-1, -1, "user_send_finished");
+        // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     } else {
         sst_multicast_group_ptrs[subgroup_num]->send();
-        DERECHO_LOG(-1, -1, "user_send_finished");
+        // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     }
 }

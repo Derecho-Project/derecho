@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 PROJECT(sst CXX)
-SET(CMAKE_CXX_FLAGS "-std=c++14 -O1 -g -Wall -Wno-unused-function -Wno-unused-variable -fno-omit-frame-pointer -Wno-unused-but-set-variable -Wno-unused-result")
+SET(CMAKE_CXX_FLAGS "-std=c++14 -O3 -g -Wall -Wno-unused-function -Wno-unused-variable -fno-omit-frame-pointer -Wno-unused-but-set-variable -Wno-unused-result")
 
 add_subdirectory(experiments)
 

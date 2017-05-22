@@ -18,6 +18,7 @@
 
 #include "poll_utils.h"
 #include "predicates.h"
+// #include "rdmc/util.h"
 #include "sst.h"
 
 namespace sst {
@@ -141,7 +142,9 @@ void SST<DerivedSST>::detect() {
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size) {
+    // DERECHO_LOG(-1, -1, "start_put");
+    // int num_called = 0;
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
@@ -149,12 +152,14 @@ void SST<DerivedSST>::put(std::vector<uint32_t> receiver_ranks, long long int of
         }
         // perform a remote RDMA write on the owner of the row
         res_vec[index]->post_remote_write(0, offset, size);
+	// num_called++;
     }
+    // DERECHO_LOG(num_called, -1, "end_put");
     return;
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put_with_completion(std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size) {
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
 

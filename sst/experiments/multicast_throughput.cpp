@@ -28,6 +28,12 @@ struct exp_results {
 int main(int argc, char* argv[]) {
     constexpr uint max_msg_size = 1, window_size = 1000;
     const unsigned int num_messages = 1000000;
+    if(argc < 2) {
+        cout << "Insufficient number of command line arguments" << endl;
+        cout << "Enter num_senders" << endl;
+        cout << "Thank you" << endl;
+        exit(1);
+    }
     int num_senders_selector = atoi(argv[1]);
     // input number of nodes and the local node id
     uint32_t node_id, num_nodes;
@@ -74,20 +80,28 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    auto receiver_pred = [](const multicast_sst&) {
-        return true;
+    auto receiver_pred = [window_size, num_nodes, node_id](const multicast_sst& sst) {
+        for(uint j = 0; j < num_nodes; ++j) {
+            auto num_received = sst.num_received_sst[node_id][j] + 1;
+            uint32_t slot = num_received % window_size;
+            if((int64_t)sst.slots[j][slot].next_seq == (num_received / window_size + 1)) {
+                return true;
+            }
+        }
+        return false;
     };
     auto num_times = window_size / num_nodes;
     if(!num_times) {
         num_times = 1;
     }
-    auto receiver_trig = [num_times, num_nodes, node_id, sst_receive_handler](multicast_sst& sst) {
+    auto receiver_trig = [num_times, window_size, num_nodes, node_id, sst_receive_handler](multicast_sst& sst) {
         bool update_sst = false;
         for(uint i = 0; i < num_times; ++i) {
             for(uint j = 0; j < num_nodes; ++j) {
-                uint32_t slot = sst.num_received_sst[node_id][j] % window_size;
-                if((int64_t)sst.slots[j][slot].next_seq == (sst.num_received_sst[node_id][j]) / window_size + 1) {
-                    sst_receive_handler(j, sst.num_received_sst[node_id][j],
+                auto num_received = sst.num_received_sst[node_id][j] + 1;
+                uint32_t slot = num_received % window_size;
+                if((int64_t)sst.slots[j][slot].next_seq == (num_received / window_size + 1)) {
+                    sst_receive_handler(j, num_received,
                                         sst.slots[j][slot].buf,
                                         sst.slots[j][slot].size);
                     sst.num_received_sst[node_id][j]++;
@@ -104,7 +118,7 @@ int main(int argc, char* argv[]) {
                            sst::PredicateType::RECURRENT);
 
     struct timespec start_time, end_time;
-    vector<uint32_t> indices;
+    vector<uint32_t> indices(num_nodes);
     iota(indices.begin(), indices.end(), 0);
     sst::multicast_group<multicast_sst> g(sst, indices, window_size);
     // uint count = 0;

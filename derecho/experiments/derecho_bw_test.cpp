@@ -39,7 +39,7 @@ struct exp_result {
 };
 
 int main(int argc, char *argv[]) {
-    if(argc < 6) {
+    if(argc < 7) {
         cout << "Insufficient number of command line arguments" << endl;
         cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, send_medium, raw_mode" << endl;
         cout << "Thank you" << endl;
@@ -131,6 +131,7 @@ int main(int argc, char *argv[]) {
     one_raw_group = {{{std::type_index(typeid(RawObject)), membership_function}}};
 
     std::unique_ptr<derecho::Group<>> managed_group;
+    std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));
     if(node_rank == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
                 node_rank, node_addresses[node_rank],
