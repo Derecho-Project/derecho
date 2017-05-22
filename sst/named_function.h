@@ -40,7 +40,7 @@ auto build_named_function(Ret (*fun)(const Param &)) {
     return NamedFunction<NameEnum, Name, Param, Ret>{fun};
 }
 template <typename NameEnum, NameEnum Name, typename F>
-auto buid_named_function(F f) {
+auto build_named_function(F f) {
     return build_named_function(util::convert_fp(f));
 }
 
