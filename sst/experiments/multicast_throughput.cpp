@@ -6,6 +6,7 @@
 
 #include "derecho/experiments/aggregate_bandwidth.h"
 #include "derecho/experiments/log_results.h"
+#include "sst/max_msg_size.h"
 #include "sst/multicast.h"
 #include "sst/multicast_sst.h"
 
@@ -15,17 +16,18 @@ using namespace sst;
 volatile bool done = false;
 
 struct exp_results {
-  uint32_t num_nodes;
-  int num_senders_selector;
-  uint max_msg_size;
-  double sum_message_rate;
-  void print(std::ofstream& fout) {
-      fout << num_nodes << " " << num_senders_selector << " "
-           << max_msg_size << " " << sum_message_rate << endl;
-  }
+    uint32_t num_nodes;
+    int num_senders_selector;
+    uint max_msg_size;
+    double sum_message_rate;
+    void print(std::ofstream& fout) {
+        fout << num_nodes << " " << num_senders_selector << " "
+             << max_msg_size << " " << sum_message_rate << endl;
+    }
 };
 
 int main(int argc, char* argv[]) {
+    assert(max_msg_size == 1);
     constexpr uint max_msg_size = 1, window_size = 1000;
     const unsigned int num_messages = 1000000;
     if(argc < 2) {
@@ -81,14 +83,7 @@ int main(int argc, char* argv[]) {
         }
     };
     auto receiver_pred = [window_size, num_nodes, node_id](const multicast_sst& sst) {
-        for(uint j = 0; j < num_nodes; ++j) {
-            auto num_received = sst.num_received_sst[node_id][j] + 1;
-            uint32_t slot = num_received % window_size;
-            if((int64_t)sst.slots[j][slot].next_seq == (num_received / window_size + 1)) {
-                return true;
-            }
-        }
-        return false;
+        return true;
     };
     auto num_times = window_size / num_nodes;
     if(!num_times) {
@@ -156,6 +151,6 @@ int main(int argc, char* argv[]) {
     // cout << "Number of times null returned, count = " << count << endl;
     double sum_message_rate = aggregate_bandwidth(members, node_id, message_rate);
     log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, sum_message_rate},
-		"data_multicast");
+                "data_multicast");
     sst->sync_with_members();
 }
