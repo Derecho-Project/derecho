@@ -19,12 +19,10 @@ struct exp_results {
     uint32_t num_nodes;
     int num_senders_selector;
     uint max_msg_size;
-    unsigned long num_times;
     double sum_message_rate;
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << num_senders_selector << " "
-             << max_msg_size << " " << num_times << " "
-             << sum_message_rate << endl;
+             << max_msg_size << " " << sum_message_rate << endl;
     }
 };
 
@@ -84,11 +82,13 @@ int main(int argc, char* argv[]) {
 
     thread failures_thread = std::thread(check_failures_loop);
 
+    vector<bool> completed(num_senders, false);
     uint num_finished = 0;
-    auto sst_receive_handler = [&num_finished, num_senders_selector, &num_nodes, &num_messages](
+    auto sst_receive_handler = [&num_finished, num_senders_selector, &num_nodes, &num_messages, &completed](
             uint32_t sender_rank, uint64_t index,
             volatile char* msg, uint32_t size) {
         if(index == num_messages - 1) {
+            completed[sender_rank] = true;
             num_finished++;
         }
         if(num_finished == num_nodes || (num_senders_selector == 1 && num_finished == num_nodes / 2) || (num_senders_selector == 2 && num_finished == 1)) {
@@ -98,15 +98,10 @@ int main(int argc, char* argv[]) {
     auto receiver_pred = [window_size, num_nodes, node_id](const multicast_sst& sst) {
         return true;
     };
-    // window_size / num_senders
-    auto num_times = stoul(argv[2]);
-    // if(!num_times) {
-    //     num_times = 1;
-    // }
-    auto receiver_trig = [num_times, window_size, num_nodes, node_id, sst_receive_handler,
-                          row_offset, num_senders](multicast_sst& sst) {
-        bool update_sst = false;
-        for(uint i = 0; i < num_times; ++i) {
+    vector<int64_t> last_max_num_received(num_senders, -1);
+    auto receiver_trig = [&completed, last_max_num_received, window_size, num_nodes, node_id, sst_receive_handler,
+                          row_offset, num_senders](multicast_sst& sst) mutable {
+        while(true) {
             for(uint j = 0; j < num_senders; ++j) {
                 auto num_received = sst.num_received_sst[node_id][j] + 1;
                 uint32_t slot = num_received % window_size;
@@ -115,13 +110,25 @@ int main(int argc, char* argv[]) {
                                         sst.slots[row_offset + j][slot].buf,
                                         sst.slots[row_offset + j][slot].size);
                     sst.num_received_sst[node_id][j]++;
-                    update_sst = true;
                 }
             }
+            bool time_to_push = true;
+            for(uint j = 0; j < num_senders; ++j) {
+	      if (completed[j]) {
+		continue;
+	      }
+	      if(sst.num_received_sst[node_id][j] - last_max_num_received[j] <= window_size / 2) {
+                    time_to_push = false;
+                }
+            }
+            if(time_to_push) {
+                break;
+            }
         }
-        if(update_sst) {
-            sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
-                    sizeof(sst.num_received_sst[0][0]) * num_senders);
+        sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
+                sizeof(sst.num_received_sst[0][0]) * num_senders);
+        for(uint j = 0; j < num_senders; ++j) {
+            last_max_num_received[j] = sst.num_received_sst[node_id][j];
         }
     };
     // inserting later
@@ -173,12 +180,8 @@ int main(int argc, char* argv[]) {
         message_rate *= num_nodes / 2;
     }
 
-    // cout << "Time in nanoseconds " << my_time << endl;
-    // cout << "Number of messages per second " << message_rate
-    //      << endl;
-    // cout << "Number of times null returned, count = " << count << endl;
     double sum_message_rate = aggregate_bandwidth(members, node_id, message_rate);
-    log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, num_times, sum_message_rate},
+    log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, sum_message_rate},
                 "data_multicast");
     sst->sync_with_members();
 }

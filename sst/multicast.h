@@ -77,10 +77,9 @@ public:
               row_indices(row_indices),
               is_sender([is_sender, row_indices]() {
                   if(is_sender.size() == 0) {
-		    return std::vector<int32_t>(row_indices.size(), 1);
-                  }
-		  else {
-		    return is_sender;
+                      return std::vector<int32_t>(row_indices.size(), 1);
+                  } else {
+                      return is_sender;
                   }
               }()),
               num_received_offset(num_received_offset),
@@ -124,10 +123,10 @@ public:
                 sst->slots[my_row][slots_offset + slot].size = msg_size;
                 return sst->slots[my_row][slots_offset + slot].buf;
             } else {
-	      long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
+                long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
                 for(auto i : row_indices) {
-		  if(sst->num_received_sst[i][num_received_offset + my_sender_index] < min_multicast_num) {
-		    min_multicast_num = sst->num_received_sst[i][num_received_offset + my_sender_index];
+                    if(sst->num_received_sst[i][num_received_offset + my_sender_index] < min_multicast_num) {
+                        min_multicast_num = sst->num_received_sst[i][num_received_offset + my_sender_index];
                     }
                 }
                 if(finished_multicasts_num == min_multicast_num) {
