@@ -56,34 +56,35 @@ int main(int argc, char* argv[]) {
     std::unordered_set<derecho::node_id_t> group_1_members{3, 4, 5};
     std::unordered_set<derecho::node_id_t> group_2_members{6, 7, 8};
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(RawObject)),
-              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view) {
-                std::vector<derecho::node_id_t> subgroup_0_members;
-                std::vector<derecho::node_id_t> subgroup_1_members;
-                std::vector<derecho::node_id_t> subgroup_2_members;
-                unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                       group_0_members, std::back_inserter(subgroup_0_members));
-                unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                       group_1_members, std::back_inserter(subgroup_1_members));
-                unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                       group_2_members, std::back_inserter(subgroup_2_members));
-                derecho::subgroup_shard_layout_t subgroup_vector(3);
-		std::vector<int> subgroup_0_senders(subgroup_0_members.size());
-		if(subgroup_0_senders.size()) {
-		  subgroup_0_senders[0] = 1;
-		}
-		// std::vector<int> subgroup_1_senders(subgroup_1_members.size());
-		// if(subgroup_1_senders.size()) {
-		//   subgroup_1_senders[0] = 1;
-		// }
-		// std::vector<int> subgroup_2_senders(subgroup_2_members.size());
-		// if(subgroup_2_senders.size()) {
-		//   subgroup_2_senders[0] = 1;
-		// }
-		subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
-		subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
-		subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
-		return subgroup_vector; }}}};
+        {{std::type_index(typeid(RawObject)),
+            [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            std::vector<derecho::node_id_t> subgroup_0_members;
+            std::vector<derecho::node_id_t> subgroup_1_members;
+            std::vector<derecho::node_id_t> subgroup_2_members;
+            unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                                   group_0_members, std::back_inserter(subgroup_0_members));
+            unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                                   group_1_members, std::back_inserter(subgroup_1_members));
+            unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                                   group_2_members, std::back_inserter(subgroup_2_members));
+            derecho::subgroup_shard_layout_t subgroup_vector(3);
+            std::vector<int> subgroup_0_senders(subgroup_0_members.size());
+            if(subgroup_0_senders.size()) {
+                subgroup_0_senders[0] = 1;
+            }
+            // std::vector<int> subgroup_1_senders(subgroup_1_members.size());
+            // if(subgroup_1_senders.size()) {
+            //   subgroup_1_senders[0] = 1;
+            // }
+            // std::vector<int> subgroup_2_senders(subgroup_2_members.size());
+            // if(subgroup_2_senders.size()) {
+            //   subgroup_2_senders[0] = 1;
+            // }
+            subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
+            subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
+            subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
+            next_unassigned_rank = std::max(next_unassigned_rank, 9);
+            return subgroup_vector; }}}};
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, callbacks, subgroup_info, param_object);

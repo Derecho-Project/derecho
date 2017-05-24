@@ -70,7 +70,7 @@ uint32_t SubView::num_senders() const {
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed, const int32_t num_members,
-           const int32_t highest_assigned_rank)
+           const int32_t next_unassigned_rank)
         : vid(vid),
           members(members),
           member_ips(member_ips),
@@ -80,7 +80,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           departed(departed),
           num_members(num_members),
           my_rank(0), //This will always get overwritten by the receiver after deserializing
-          highest_assigned_rank(highest_assigned_rank) {
+          next_unassigned_rank(next_unassigned_rank) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
@@ -97,7 +97,7 @@ int View::rank_of_leader() const {
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const std::vector<node_id_t>& joined,
-           const std::vector<node_id_t>& departed, const int32_t my_rank, const int32_t highest_assigned_rank)
+           const std::vector<node_id_t>& departed, const int32_t my_rank, const int32_t next_unassigned_rank)
         : vid(vid),
           members(members),
           member_ips(member_ips),
@@ -106,7 +106,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           departed(departed),
           num_members(members.size()),
           my_rank(my_rank),
-          highest_assigned_rank(highest_assigned_rank) {
+          next_unassigned_rank(next_unassigned_rank) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }

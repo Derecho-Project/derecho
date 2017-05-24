@@ -28,8 +28,8 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
     }
 }
 
-subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& highest_assigned_rank, bool previous_was_successful);
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& highest_assigned_rank, bool previous_was_successful);
+subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
 
 struct SubgroupAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */

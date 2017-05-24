@@ -438,7 +438,7 @@ void ViewManager::register_predicates() {
         std::vector<node_id_t> joined, members(next_num_members), departed;
         std::vector<char> failed(next_num_members);
         std::vector<ip_addr> member_ips(next_num_members);
-        int highest_assigned_rank = curr_view->highest_assigned_rank;
+        int next_unassigned_rank = curr_view->next_unassigned_rank;
         for(std::size_t i = 0; i < join_indexes.size(); ++i) {
             const int join_index = join_indexes[i];
             node_id_t joiner_id = gmsSST.changes[myRank][join_index];
@@ -456,9 +456,9 @@ void ViewManager::register_predicates() {
         }
         for(const auto& leaver_rank : leave_ranks) {
             departed.emplace_back(Vc.members[leaver_rank]);
-            //Decrement highest_assigned_rank for every failure, unless the failure wasn't in a subgroup anyway
-            if(leaver_rank <= curr_view->highest_assigned_rank) {
-                highest_assigned_rank--;
+            //Decrement next_unassigned_rank for every failure, unless the failure wasn't in a subgroup anyway
+            if(leaver_rank <= curr_view->next_unassigned_rank) {
+                next_unassigned_rank--;
             }
         }
         logger->debug("Next view will exclude {} failed members.", leave_ranks.size());
@@ -488,7 +488,7 @@ void ViewManager::register_predicates() {
             throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(myID) + " terminating");
         }
 
-        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank, highest_assigned_rank);
+        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank, next_unassigned_rank);
         next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
 
         // At this point we need to await "meta wedged."
@@ -804,7 +804,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
         subgroup_shard_layout_t subgroup_shard_views;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {
-            auto temp = subgroup_type_and_function.second(curr_view, curr_view.highest_assigned_rank, previous_was_ok);
+            auto temp = subgroup_type_and_function.second(curr_view, curr_view.next_unassigned_rank, previous_was_ok);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {

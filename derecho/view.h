@@ -92,10 +92,10 @@ public:
      * throws a subgroup_provisioning_exception. If false, no subgroup operations will
      * work in this View. */
     bool is_adequately_provisioned = true;
-    /** The rank of the highest-ranked member that is assigned to a subgroup in
-     * this View. Members with a higher rank than this can be assumed to be
+    /** The rank of the lowest-ranked member that is not assigned to a subgroup
+     * in this View. Members with this rank or higher can be assumed to be
      * available to assign to any subgroup and will not appear in any SubView. */
-    int32_t highest_assigned_rank;
+    int32_t next_unassigned_rank;
     /** RDMC manager object used for sending multicasts */
     std::unique_ptr<MulticastGroup> multicast_group;
     /** Pointer to the SST instance used by the GMS in this View */
@@ -145,12 +145,12 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, highest_assigned_rank);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, next_unassigned_rank);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t highest_assigned_rank);
+         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t next_unassigned_rank);
 
     /** Standard constructor for making a new View */
     View(const int32_t vid,
@@ -160,7 +160,7 @@ public:
          const std::vector<node_id_t>& joined = {},
          const std::vector<node_id_t>& departed = {},
          const int32_t my_rank = 0,
-         const int32_t highest_assigned_rank = -1);
+         const int32_t next_unassigned_rank = 0);
 };
 
 /**
