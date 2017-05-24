@@ -24,7 +24,7 @@ struct exp_results {
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << num_senders_selector << " "
              << max_msg_size << " " << num_times << " "
-	     << sum_message_rate << endl;
+             << sum_message_rate << endl;
     }
 };
 
@@ -61,10 +61,10 @@ int main(int argc, char* argv[]) {
     if(num_senders_selector == 0) {
     } else if(num_senders_selector == 1) {
         num_senders = num_nodes / 2;
-	row_offset = (num_nodes+1)/2;
+        row_offset = (num_nodes + 1) / 2;
     } else {
         num_senders = 1;
-	row_offset = num_nodes-1;
+        row_offset = num_nodes - 1;
     }
 
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
@@ -124,10 +124,8 @@ int main(int argc, char* argv[]) {
                     sizeof(sst.num_received_sst[0][0]) * num_senders);
         }
     };
-    sst->predicates.insert(receiver_pred, receiver_trig,
-                           sst::PredicateType::RECURRENT);
+    // inserting later
 
-    struct timespec start_time, end_time;
     vector<uint32_t> indices(num_nodes);
     iota(indices.begin(), indices.end(), 0);
     std::vector<int> is_sender(num_nodes, 1);
@@ -142,7 +140,11 @@ int main(int argc, char* argv[]) {
         }
     }
     sst::multicast_group<multicast_sst> g(sst, indices, window_size, is_sender);
+    // now
+    sst->predicates.insert(receiver_pred, receiver_trig,
+                           sst::PredicateType::RECURRENT);
     // uint count = 0;
+    struct timespec start_time, end_time;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
     if(node_id == num_nodes - 1 || num_senders_selector == 0 || (node_id > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
