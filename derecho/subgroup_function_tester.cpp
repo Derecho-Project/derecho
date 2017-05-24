@@ -1,0 +1,141 @@
+/**
+ * @file subgroup_function_tester.cpp
+ *
+ * @date May 24, 2017
+ * @author edward
+ */
+
+#include <iostream>
+#include <vector>
+
+#include "view.h"
+#include "subgroup_functions.h"
+#include "subgroup_function_tester.h"
+
+namespace derecho {
+
+void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
+    using std::cout;
+    for(std::size_t subgroup_num = 0; subgroup_num < layout.size(); ++subgroup_num) {
+        cout << "Subgroup " << subgroup_num << ": ";
+        for(std::size_t shard_num = 0; shard_num < layout[subgroup_num].size(); ++shard_num) {
+            cout << layout[subgroup_num][shard_num].members << ", ";
+        }
+        cout << "\b\b" << std::endl;
+    }
+}
+
+/*
+ * This is exactly the same logic as the "initialize the next view" section of
+ * the start_view_change predicate, with the crucial difference that retrieving
+ * the joiner IPs from the SST has been stripped out (the joiner IPs are assumed
+ * to be known already) so that it doesn't need an SST to run correctly.
+ */
+std::unique_ptr<View> make_next_view(const View& curr_view,
+                                     const std::set<int>& leave_ranks,
+                                     const std::vector<node_id_t>& joiner_ids,
+                                     const std::vector<ip_addr>& joiner_ips) {
+    int next_num_members = curr_view.num_members - leave_ranks.size() + joiner_ids.size();
+    std::vector<node_id_t> joined, members(next_num_members), departed;
+    std::vector<char> failed(next_num_members);
+    std::vector<ip_addr> member_ips(next_num_members);
+    int next_unassigned_rank = curr_view.next_unassigned_rank;
+    for(std::size_t i = 0; i < joiner_ids.size(); ++i) {
+        joined.emplace_back(joiner_ids[i]);
+        //New members go at the end of the members list, but it may shrink in the new view
+        int new_member_rank = curr_view.num_members - leave_ranks.size() + i;
+        members[new_member_rank] = joiner_ids[i];
+        member_ips[new_member_rank] = joiner_ips[i];
+    }
+    for(const auto& leaver_rank : leave_ranks) {
+        departed.emplace_back(curr_view.members[leaver_rank]);
+        //Decrement next_unassigned_rank for every failure, unless the failure wasn't in a subgroup anyway
+        if(leaver_rank <= curr_view.next_unassigned_rank) {
+            next_unassigned_rank--;
+        }
+    }
+    //Copy member information, excluding the members that have failed
+    int m = 0;
+    for(int n = 0; n < curr_view.num_members; n++) {
+        //This is why leave_ranks needs to be a set
+        if(leave_ranks.find(n) == leave_ranks.end()) {
+            members[m] = curr_view.members[n];
+            member_ips[m] = curr_view.member_ips[n];
+            failed[m] = curr_view.failed[n];
+            ++m;
+        }
+    }
+
+    //Initialize my_rank in next_view
+    int32_t my_new_rank = -1;
+    node_id_t myID = curr_view.members[curr_view.my_rank];
+    for(int i = 0; i < next_num_members; ++i) {
+        if(members[i] == myID) {
+            my_new_rank = i;
+            break;
+        }
+    }
+    return std::make_unique<View>(curr_view.vid + 1, members, member_ips, failed,
+                                  joined, departed, my_new_rank, next_unassigned_rank);
+}
+
+} /* namespace derecho */
+
+
+using derecho::SubgroupAllocationPolicy;
+using derecho::DefaultSubgroupAllocator;
+
+void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
+                             const std::unique_ptr<derecho::View>& prev_view,
+                             derecho::View& curr_view) {
+    bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
+    for(std::size_t i = 0; i < allocators.size(); ++i) {
+        try {
+            derecho::subgroup_shard_layout_t assignment = allocators[i](curr_view, curr_view.next_unassigned_rank, previous_was_ok);
+            std::cout << "Subgroup type " << i << " got assignment: " << std::endl;
+            derecho::print_subgroup_layout(assignment);
+            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl << std::endl;;
+        } catch(derecho::subgroup_provisioning_exception& ex) {
+            curr_view.is_adequately_provisioned = false;
+            std::cout << "Subgroup type " << i << " failed to provision, marking View inadequate" << std::endl;
+            return;
+        }
+    }
+}
+
+int main (int argc, char *argv[]) {
+    SubgroupAllocationPolicy sharded_policy{5, true, 3, {}};
+    SubgroupAllocationPolicy uneven_sharded_policy{3, false, -1, {2, 5, 3}};
+    SubgroupAllocationPolicy unsharded_policy{1, true, 5, {}};
+
+    std::vector<DefaultSubgroupAllocator> test_allocators {
+            DefaultSubgroupAllocator(sharded_policy),
+            DefaultSubgroupAllocator(SubgroupAllocationPolicy{3, true, 4, {}}),
+            DefaultSubgroupAllocator(unsharded_policy),
+            DefaultSubgroupAllocator(uneven_sharded_policy),
+    };
+
+    std::vector<derecho::node_id_t> members(100);
+    std::iota(members.begin(), members.end(), 0);
+    std::vector<derecho::ip_addr> member_ips(100);
+    int invocation_count = 0;
+    std::generate(member_ips.begin(), member_ips.end(), [&invocation_count]() {
+       std::stringstream string_generator;
+       string_generator << "192.168.1." << invocation_count;
+       ++invocation_count;
+       return string_generator.str();
+    });
+    std::vector<char> none_failed(100, 0);
+    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips, none_failed);
+
+    run_subgroup_allocators(test_allocators, nullptr, *curr_view);
+
+    std::set<int> ranks_to_fail{1, 3, 17, 38, 40};
+    std::cout << "Failing nodes " << ranks_to_fail << std::endl;
+    std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
+    curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
+
+    run_subgroup_allocators(test_allocators, prev_view, *curr_view);
+
+
+}

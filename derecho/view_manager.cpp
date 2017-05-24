@@ -488,7 +488,8 @@ void ViewManager::register_predicates() {
             throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(myID) + " terminating");
         }
 
-        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank, next_unassigned_rank);
+        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed,
+                                           joined, departed, my_new_rank, next_unassigned_rank);
         next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
 
         // At this point we need to await "meta wedged."
@@ -799,8 +800,8 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
                                          std::map<subgroup_id_t, Mode>& subgroup_to_mode) {
     uint32_t num_received_offset = 0;
-    for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
-        bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
+    bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
+    for(auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
         subgroup_shard_layout_t subgroup_shard_views;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {

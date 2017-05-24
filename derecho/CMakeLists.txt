@@ -17,6 +17,9 @@ add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager
 target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization)
 add_dependencies(derecho mutils_serialization_target mutils_target)
 
+add_executable(subgroup_function_tester subgroup_function_tester.cpp)
+target_link_libraries(subgroup_function_tester derecho)
+
 add_executable(parse_state_file parse_state_file.cpp)
 target_link_libraries(parse_state_file derecho)
 

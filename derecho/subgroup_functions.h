@@ -40,7 +40,6 @@ struct SubgroupAllocationPolicy {
     /** If even_shards is false, this will contain an entry for each shard
      * indicating the number of members it should have. */
     std::vector<int> num_nodes_by_shard;
-
 };
 
 class DefaultSubgroupAllocator {
@@ -56,6 +55,6 @@ public:
           policy(to_copy.policy) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
-    subgroup_shard_layout_t operator()(const View& curr_view, int& highest_assigned_rank, bool previous_was_successful);
+    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
 };
 }
