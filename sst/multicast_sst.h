@@ -8,10 +8,10 @@ public:
     SSTFieldVector<Message> slots;
     SSTFieldVector<int64_t> num_received_sst;
     SSTField<bool> heartbeat;
-    multicast_sst(const SSTParams& parameters, uint32_t window_size)
+    multicast_sst(const SSTParams& parameters, uint32_t window_size, uint32_t num_senders)
             : SST<multicast_sst>(this, parameters),
               slots(window_size),
-              num_received_sst(parameters.members.size()) {
+              num_received_sst(num_senders) {
         SSTInit(slots, num_received_sst, heartbeat);
     }
 };
