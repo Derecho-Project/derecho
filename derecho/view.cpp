@@ -146,7 +146,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members, const Mod
         subview_member_ips[subview_rank] = member_ips[member_pos];
     }
     //Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
-    return SubView(mode, members, is_sender, subview_member_ips);
+    return SubView(mode, with_members, is_sender, subview_member_ips);
 }
 
 int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
