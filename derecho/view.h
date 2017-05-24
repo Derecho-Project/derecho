@@ -61,16 +61,18 @@ public:
               joined(joined),
               departed(departed),
               my_rank(-1) {}
+
+    SubView(Mode mode, const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<ip_addr>& member_ips);
 };
 
 class View : public mutils::ByteRepresentable {
 public:
     /** Sequential view ID: 0, 1, ... */
-    int32_t vid;
+    const int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */
     const std::vector<node_id_t> members;
     /** IP addresses of members in the current view, indexed by their SST rank. */
-    std::vector<ip_addr> member_ips;
+    const std::vector<ip_addr> member_ips;
     /** failed[i] is true if members[i] is considered to have failed.
      * Once a member is failed, it will be removed from the members list in a future view. */
     std::vector<char> failed;  //Note: std::vector<bool> is broken, so we pretend these char values are C-style booleans
@@ -83,13 +85,17 @@ public:
     /** List of IDs of nodes that left since the previous view, if any. */
     std::vector<node_id_t> departed;
     /** Number of members in this view */
-    int32_t num_members;
+    const int32_t num_members;
     /** The rank of this node (as returned by rank_of()) */
     int32_t my_rank;
     /** Set to false during MulticastGroup setup if a subgroup membership function
      * throws a subgroup_provisioning_exception. If false, no subgroup operations will
      * work in this View. */
     bool is_adequately_provisioned = true;
+    /** The rank of the highest-ranked member that is assigned to a subgroup in
+     * this View. Members with a higher rank than this can be assumed to be
+     * available to assign to any subgroup and will not appear in any SubView. */
+    int32_t highest_assigned_rank;
     /** RDMC manager object used for sending multicasts */
     std::unique_ptr<MulticastGroup> multicast_group;
     /** Pointer to the SST instance used by the GMS in this View */
@@ -139,16 +145,22 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, my_rank);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, highest_assigned_rank);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t my_rank);
+         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t highest_assigned_rank);
 
-    View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
-         const std::vector<char>& failed, const std::vector<node_id_t>& joined,
-         const std::vector<node_id_t>& departed, const int32_t my_rank);
+    /** Standard constructor for making a new View */
+    View(const int32_t vid,
+         const std::vector<node_id_t>& members,
+         const std::vector<ip_addr>& member_ips,
+         const std::vector<char>& failed,
+         const std::vector<node_id_t>& joined = {},
+         const std::vector<node_id_t>& departed = {},
+         const int32_t my_rank = 0,
+         const int32_t highest_assigned_rank = -1);
 };
 
 /**

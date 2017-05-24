@@ -113,10 +113,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
         curr_view = std::make_unique<View>(last_view->vid + 1,
                                            std::vector<node_id_t>{my_id},
                                            std::vector<ip_addr>{my_ip},
-                                           std::vector<char>{0}, 0,
-                                           std::vector<node_id_t>{},
-                                           std::vector<node_id_t>{},
-                                           1, 0);
+                                           std::vector<char>{0});
         initialize_rdmc_sst();
         if(_derecho_params) {
             derecho_params = _derecho_params.value();
@@ -213,9 +210,7 @@ void ViewManager::await_second_member(const node_id_t my_id) {
                                        std::vector<node_id_t>{my_id, joiner_id},
                                        std::vector<ip_addr>{my_ip, joiner_ip},
                                        std::vector<char>{0, 0},
-                                       std::vector<node_id_t>{joiner_id},
-                                       std::vector<node_id_t>{},
-                                       0);
+                                       std::vector<node_id_t>{joiner_id});
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         bool success = client_socket.write(bytes, size);
         assert(success);
@@ -443,6 +438,7 @@ void ViewManager::register_predicates() {
         std::vector<node_id_t> joined, members(next_num_members), departed;
         std::vector<char> failed(next_num_members);
         std::vector<ip_addr> member_ips(next_num_members);
+        int highest_assigned_rank = curr_view->highest_assigned_rank;
         for(std::size_t i = 0; i < join_indexes.size(); ++i) {
             const int join_index = join_indexes[i];
             node_id_t joiner_id = gmsSST.changes[myRank][join_index];
@@ -460,6 +456,10 @@ void ViewManager::register_predicates() {
         }
         for(const auto& leaver_rank : leave_ranks) {
             departed.emplace_back(Vc.members[leaver_rank]);
+            //Decrement highest_assigned_rank for every failure, unless the failure wasn't in a subgroup anyway
+            if(leaver_rank <= curr_view->highest_assigned_rank) {
+                highest_assigned_rank--;
+            }
         }
         logger->debug("Next view will exclude {} failed members.", leave_ranks.size());
 
@@ -488,7 +488,7 @@ void ViewManager::register_predicates() {
             throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(myID) + " terminating");
         }
 
-        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank);
+        next_view = std::make_unique<View>(Vc.vid + 1, members, member_ips, failed, joined, departed, my_new_rank, highest_assigned_rank);
         next_view->i_know_i_am_leader = Vc.i_know_i_am_leader;
 
         // At this point we need to await "meta wedged."
@@ -800,10 +800,11 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, Mode>& subgroup_to_mode) {
     uint32_t num_received_offset = 0;
     for(const auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
+        bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
         subgroup_shard_layout_t subgroup_shard_views;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {
-            auto temp = subgroup_type_and_function.second(curr_view);
+            auto temp = subgroup_type_and_function.second(curr_view, curr_view.highest_assigned_rank, previous_was_ok);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {

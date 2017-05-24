@@ -86,8 +86,8 @@ target_link_libraries(local_filewriter_test derecho)
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
-# smart membership function - commented out since it still doesn't compile yet
-# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-# target_link_libraries(smart_membership_function_test derecho)
+# smart membership function
+add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+target_link_libraries(smart_membership_function_test derecho)
 
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

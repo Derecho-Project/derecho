@@ -82,6 +82,7 @@ struct SubgroupAllocationState {
 class LoadBalancerAllocator {
     std::shared_ptr<SubgroupAllocationState> current_allocation_state;
     std::unique_ptr<derecho::subgroup_shard_layout_t> previous_assignment;
+    std::unique_ptr<derecho::subgroup_shard_layout_t> last_good_assignment;
     const uint total_subgroup_functions;
 
 public:
@@ -91,19 +92,25 @@ public:
     LoadBalancerAllocator(const LoadBalancerAllocator& copy)
         : current_allocation_state(copy.current_allocation_state),
           /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
-          previous_assignment(copy.previous_assignment ?
-                  std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
-                  : nullptr),
+          previous_assignment(deep_pointer_copy(copy.previous_assignment)),
+          last_good_assignment(deep_pointer_copy(copy.last_good_assignment)),
           total_subgroup_functions(copy.total_subgroup_functions) {}
     LoadBalancerAllocator(LoadBalancerAllocator&&) = default;
 
     /* Attempts to assign the first 3 members of the group to a single LoadBalancer subgroup,
      * retaining any nodes that were already assigned to this subgroup in the previous view
      */
-    derecho::subgroup_shard_layout_t operator()(const derecho::View& curr_view) {
+    derecho::subgroup_shard_layout_t operator()(const derecho::View& curr_view, bool previous_was_successful) {
         //If this is the first allocator to be called, initialize allocation state
         if(current_allocation_state->subgroups_completed.empty()) {
             current_allocation_state->unassigned_members.assign(curr_view.members.begin(), curr_view.members.end());
+        }
+        if(previous_was_successful) {
+            //Save the previous assignment since it was successful
+            last_good_assignment = deep_pointer_copy(previous_assignment);
+        } else {
+            //Overwrite previous_assignment with the one before that, if it exists
+            previous_assignment = deep_pointer_copy(last_good_assignment);
         }
         if(previous_assignment) {
             std::cout << "LoadBalancer had a previous assignment" << std::endl;
@@ -161,6 +168,8 @@ public:
 class CacheAllocator {
     std::shared_ptr<SubgroupAllocationState> current_allocation_state;
     std::unique_ptr<derecho::subgroup_shard_layout_t> previous_assignment;
+    std::unique_ptr<derecho::subgroup_shard_layout_t> last_good_assignment;
+
     const uint total_subgroup_functions;
 
 public:
@@ -172,16 +181,22 @@ public:
     CacheAllocator(const CacheAllocator& copy)
         : current_allocation_state(copy.current_allocation_state),
           /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
-          previous_assignment(copy.previous_assignment ?
-                  std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
-                  : nullptr),
+           previous_assignment(deep_pointer_copy(copy.previous_assignment)),
+          last_good_assignment(deep_pointer_copy(copy.last_good_assignment)),
           total_subgroup_functions(copy.total_subgroup_functions) {}
     CacheAllocator(CacheAllocator&&) = default;
 
-    derecho::subgroup_shard_layout_t operator()(const derecho::View& curr_view) {
+    derecho::subgroup_shard_layout_t operator()(const derecho::View& curr_view, bool previous_was_successful) {
         //If this is the first allocator to be called, initialize allocation state
         if(current_allocation_state->subgroups_completed.empty()) {
             current_allocation_state->unassigned_members.assign(curr_view.members.begin(), curr_view.members.end());
+        }
+        if(previous_was_successful) {
+            //Save the previous assignment since it was successful
+            last_good_assignment = deep_pointer_copy(previous_assignment);
+        } else {
+            //Overwrite previous_assignment with the one before that, if it exists
+            previous_assignment = deep_pointer_copy(last_good_assignment);
         }
         if(previous_assignment) {
             std::cout << "Cache had a previous assignment" << std::endl;
