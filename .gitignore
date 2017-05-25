@@ -5,7 +5,6 @@ CMakeFiles
 /Makefile
 /cmake_install.cmake
 /libderecho.so
-/derecho/conntest
 /derecho/create_state_file
 /derecho/experiments/basic_persistence_test
 /derecho/experiments/derecho_bw_test
@@ -19,6 +18,7 @@ CMakeFiles
 /derecho/experiments/rdmc_bw_test2
 /derecho/experiments/single_sender_multiple_messages
 /derecho/experiments/single_sender_one_message
+/derecho/experiments/smart_membership_function_test
 /derecho/experiments/ssd_bw_test
 /derecho/experiments/subgroup_test
 /derecho/experiments/test_group_interface
@@ -26,8 +26,7 @@ CMakeFiles
 /derecho/experiments/viewchange_timeline
 /derecho/experiments/window_size_test
 /derecho/experiments/write_to_ssd
-/derecho/gms_test
-/derecho/gms_test2
+/derecho/subgroup_function_tester
 /derecho/latest_logged_message
 /derecho/log_tail_length
 /derecho/parse_state_file

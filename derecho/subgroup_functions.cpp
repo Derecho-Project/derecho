@@ -25,6 +25,29 @@ subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int&
     return subgroup_vector;
 }
 
+
+ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard) {
+    return ShardAllocationPolicy{num_shards, true, nodes_per_shard, Mode::ORDERED, {}, {}};
+}
+
+ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard) {
+    return ShardAllocationPolicy{num_shards, true, nodes_per_shard, Mode::RAW, {}, {}};
+}
+
+ShardAllocationPolicy custom_shards_policy(const std::vector<int>& num_nodes_by_shard,
+                                           const std::vector<Mode>& delivery_modes_by_shard) {
+    return ShardAllocationPolicy{static_cast<int>(num_nodes_by_shard.size()), false, -1, Mode::ORDERED,
+        num_nodes_by_shard, delivery_modes_by_shard};
+}
+
+SubgroupAllocationPolicy one_subgroup_policy(const ShardAllocationPolicy& policy) {
+    return SubgroupAllocationPolicy{1, true, {policy}};
+}
+
+SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const ShardAllocationPolicy& subgroup_policy) {
+    return SubgroupAllocationPolicy{num_subgroups, true, {subgroup_policy}};
+}
+
 /**
  * Allocates members to a single subgroup, using that subgroup's
  * ShardAllocationPolicy, and pushes the resulting vector of SubViews onto the
@@ -51,7 +74,8 @@ void DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_
         std::vector<node_id_t> desired_nodes(&curr_view.members[next_unassigned_rank],
                                              &curr_view.members[next_unassigned_rank + nodes_needed]);
         next_unassigned_rank += nodes_needed;
-        (*previous_assignment).back().emplace_back(curr_view.make_subview(desired_nodes));
+        Mode delivery_mode = subgroup_policy.even_shards ? subgroup_policy.shards_mode : subgroup_policy.modes_by_shard[shard_num];
+        (*previous_assignment).back().emplace_back(curr_view.make_subview(desired_nodes, delivery_mode));
     }
 }
 
@@ -69,9 +93,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
             int num_shards_in_subgroup;
             if(policy.identical_subgroups) {
-                num_shards_in_subgroup = policy.shard_policy[0].num_shards;
+                num_shards_in_subgroup = policy.shard_policy_by_subgroup[0].num_shards;
             } else {
-                num_shards_in_subgroup = policy.shard_policy[subgroup_num].num_shards;
+                num_shards_in_subgroup = policy.shard_policy_by_subgroup[subgroup_num].num_shards;
             }
             for(int shard_num = 0; shard_num < num_shards_in_subgroup; ++shard_num) {
                 //Check each member of the shard in the previous assignment
@@ -98,9 +122,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
         previous_assignment = std::make_unique<subgroup_shard_layout_t>();
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
             if(policy.identical_subgroups) {
-                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy[0]);
+                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[0]);
             } else {
-                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy[subgroup_num]);
+                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[subgroup_num]);
             }
         }
     }

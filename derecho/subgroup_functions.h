@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "subgroup_info.h"
+#include "derecho_modes.h"
 
 namespace derecho {
 
@@ -36,13 +37,20 @@ struct ShardAllocationPolicy {
     int num_shards;
     /** Whether all shards should contain the same number of members. */
     bool even_shards;
-    /** If even_shards is true, this is the number of nodes per shard.
-     * (Ignored if even_shards is false). */
+    /** If even_shards is true, this is the number of nodes per shard. (Ignored
+     * if even_shards is false). */
     int nodes_per_shard;
+    /** If even_shards is true, this is the delivery mode that will be used for
+     * every shard. (Ignored if even_shards is false). */
+    Mode shards_mode;
     /** If even_shards is false, this will contain an entry for each shard
-     * indicating the number of members it should have. (Ignored if
-     * even_shards is true). */
+     * indicating the number of members it should have. (Ignored if even_shards
+     * is true). */
     std::vector<int> num_nodes_by_shard;
+    /** If even_shards is false, this will contain an entry for each shard
+     * indicating which delivery mode it should use. (Ignored if even_shards is
+     * true). */
+    std::vector<Mode> modes_by_shard;
 };
 
 struct SubgroupAllocationPolicy {
@@ -53,8 +61,60 @@ struct SubgroupAllocationPolicy {
     /** If identical_subgroups is true, contains a single entry with the allocation
      * policy for all subgroups of this type. If identical_subgroups is false,
      * contains an entry for each subgroup describing that subgroup's shards. */
-    std::vector<ShardAllocationPolicy> shard_policy;
+    std::vector<ShardAllocationPolicy> shard_policy_by_subgroup;
 };
+
+/* Helper functions that construct ShardAllocationPolicy values for common cases. */
+
+/**
+ * Returns a ShardAllocationPolicy that specifies num_shards shards with
+ * the same number of nodes in each shard.
+ * @param num_shards The number of shards to request in this policy.
+ * @param nodes_per_shard The number of nodes per shard to request.
+ * @return A ShardAllocationPolicy value with these parameters.
+ */
+ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard);
+/**
+ * Returns a ShardAllocationPolicy that specifies num_shards shards with
+ * the same number of nodes in each shard, and every shard running in "raw"
+ * delivery mode.
+ * @param num_shards The number of shards to request in this policy.
+ * @param nodes_per_shard The number of nodes per shard to request.
+ * @return A ShardAllocationPolicy value with these parameters.
+ */
+ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard);
+/**
+ * Returnsa ShardAllocationPolicy for a subgroup that has a different number of
+ * members in each shard, and possibly has each shard in a different delivery mode.
+ * Note that the two parameter vectors must be the same length.
+ * @param num_nodes_by_shard A vector specifying how many nodes should be in each
+ * shard; the ith shard will have num_nodes_by_shard[i] members.
+ * @param delivery_modes_by_shard A vector specifying the delivery mode (Raw or
+ * Ordered) for each shard, in the same order as the other vector.
+ * @return A ShardAllocationPolicy that specifies these shard sizes and modes.
+ */
+ShardAllocationPolicy custom_shards_policy(const std::vector<int>& num_nodes_by_shard,
+                                           const std::vector<Mode>& delivery_modes_by_shard);
+
+/**
+ * Returns a SubgroupAllocationPolicy for a replicated type that only has a
+ * single subgroup. The ShardAllocationPolicy argument can be the result of
+ * one of the ShardAllocationPolicy helper functions.
+ * @param policy The allocation policy to use for the single subgroup.
+ * @return A SubgroupAllocationPolicy for a single-subgroup type.
+ */
+SubgroupAllocationPolicy one_subgroup_policy(const ShardAllocationPolicy& policy);
+
+/**
+ * Returns a SubgroupAllocationPolicy for a replicated type that needs n
+ * subgroups with identical sharding policies.
+ * @param num_subgroups The number of subgroups to create.
+ * @param subgroup_policy The policy to use for sharding each subgroup.
+ * @return A SubgroupAllocationPolicy for a replicated type with num_subgroups
+ * copies of the same subgroup.
+ */
+SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const ShardAllocationPolicy& subgroup_policy);
+
 
 /**
  * Functor of type shard_view_generator_t that implements the default subgroup
