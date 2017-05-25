@@ -697,8 +697,8 @@ void MulticastGroup::register_predicates() {
 
         if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
             auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members,
-				  shard_ranks_by_sender_rank, num_shard_senders,
-				  num_received_offset](const DerechoSST& sst) {
+                                  shard_ranks_by_sender_rank, num_shard_senders,
+                                  num_received_offset](const DerechoSST& sst) {
                 for(uint j = 0; j < num_shard_senders; ++j) {
                     auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
                     uint32_t slot = num_received % window_size;
@@ -717,9 +717,9 @@ void MulticastGroup::register_predicates() {
                 num_times = 1;
             }
             auto sst_receive_handler = [this, subgroup_num, shard_members, num_shard_members,
-					shard_ranks_by_sender_rank, num_shard_senders,
-					num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
-							     volatile char* data, uint32_t size) {
+                                        shard_ranks_by_sender_rank, num_shard_senders,
+                                        num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
+                                                             volatile char* data, uint32_t size) {
                 header* h = (header*)data;
                 long long int index = h->index;
                 auto beg_index = index;
@@ -777,7 +777,7 @@ void MulticastGroup::register_predicates() {
                         sizeof(long long int) * num_shard_senders);
             };
             receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
-                                                                         sst::PredicateType::RECURRENT));
+                                                                      sst::PredicateType::RECURRENT));
 
             auto stability_pred = [this](
                     const DerechoSST& sst) { return true; };
@@ -878,7 +878,7 @@ void MulticastGroup::register_predicates() {
                     next_message_to_deliver[subgroup_num]++;
                 };
                 sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                           sst::PredicateType::RECURRENT));
+                                                                        sst::PredicateType::RECURRENT));
             }
         } else {
             auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members,
@@ -988,7 +988,7 @@ void MulticastGroup::register_predicates() {
                         sizeof(long long int) * num_shard_senders);
             };
             receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
-                                                                         sst::PredicateType::RECURRENT));
+                                                                      sst::PredicateType::RECURRENT));
 
             int shard_sender_index;
             std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
@@ -1008,7 +1008,7 @@ void MulticastGroup::register_predicates() {
                     sender_cv.notify_all();
                 };
                 sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                           sst::PredicateType::RECURRENT));
+                                                                        sst::PredicateType::RECURRENT));
             }
         }
     }
@@ -1038,19 +1038,19 @@ void MulticastGroup::wedge() {
     }
 
     //Consume and remove all the predicate handles
-    for(auto handle_iter = sender_pred_handles.begin(); handle_iter != sender_pred_handles.end(); ) {
+    for(auto handle_iter = sender_pred_handles.begin(); handle_iter != sender_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = sender_pred_handles.erase(handle_iter);
     }
-    for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end(); ) {
+    for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = receiver_pred_handles.erase(handle_iter);
     }
-    for(auto handle_iter = stability_pred_handles.begin(); handle_iter != stability_pred_handles.end(); ) {
+    for(auto handle_iter = stability_pred_handles.begin(); handle_iter != stability_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = stability_pred_handles.erase(handle_iter);
     }
-    for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end(); ) {
+    for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = delivery_pred_handles.erase(handle_iter);
     }

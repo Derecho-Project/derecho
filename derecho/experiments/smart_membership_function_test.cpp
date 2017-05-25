@@ -96,8 +96,16 @@ int main(int argc, char** argv) {
     auto load_balancer_factory = []() { return std::make_unique<LoadBalancer>(); };
     auto cache_factory = []() { return std::make_unique<Cache>(); };
 
-    derecho::SubgroupAllocationPolicy load_balancer_policy{1, true, 3, std::vector<int>()};
-    derecho::SubgroupAllocationPolicy cache_policy{3, true, 3, std::vector<int>()};
+    derecho::SubgroupAllocationPolicy load_balancer_policy {
+            1, true, {
+                    { 1, true, 3, std::vector<int>() }
+            }
+    };
+    derecho::SubgroupAllocationPolicy cache_policy {
+            1, true, {
+                    { 3, true, 3, std::vector<int>() }
+            }
+    };
     derecho::SubgroupInfo subgroup_info{{
             { std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy) },
             { std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy) }

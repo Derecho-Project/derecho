@@ -536,7 +536,7 @@ void ViewManager::register_predicates() {
             auto leader_global_mins_are_ready = [this, follower_subgroups_and_shards](const DerechoSST& gmsSST) {
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
                     SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
-                                                   .at(subgroup_shard_pair.second);
+                                                  .at(subgroup_shard_pair.second);
                     node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
                             subgroup_shard_pair.first, subgroup_shard_pair.second)];
                     if(!gmsSST.global_min_ready[curr_view->rank_of(shard_leader)][subgroup_shard_pair.first])
@@ -553,7 +553,7 @@ void ViewManager::register_predicates() {
                 //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
                     SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
-                                                   .at(subgroup_shard_pair.second);
+                                                  .at(subgroup_shard_pair.second);
                     uint num_shard_senders = 0;
                     for(auto v : shard_view.is_sender) {
                         if(v) num_shard_senders++;

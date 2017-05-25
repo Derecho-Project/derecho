@@ -34,7 +34,6 @@ SubView::SubView(Mode mode,
     }
 }
 
-
 int SubView::rank_of(const node_id_t& who) const {
     for(std::size_t rank = 0; rank < members.size(); ++rank) {
         if(members[rank] == who) {
@@ -79,7 +78,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0), //This will always get overwritten by the receiver after deserializing
+          my_rank(0),  //This will always get overwritten by the receiver after deserializing
           next_unassigned_rank(next_unassigned_rank) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;

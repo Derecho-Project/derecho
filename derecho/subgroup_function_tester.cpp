@@ -8,8 +8,6 @@
 #include <iostream>
 #include <vector>
 
-#include "view.h"
-#include "subgroup_functions.h"
 #include "subgroup_function_tester.h"
 
 std::string ip_generator() {
@@ -20,19 +18,26 @@ std::string ip_generator() {
     return string_generator.str();
 }
 
-int main (int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     using derecho::SubgroupAllocationPolicy;
     using derecho::DefaultSubgroupAllocator;
 
-    SubgroupAllocationPolicy sharded_policy{5, true, 3, {}};
-    SubgroupAllocationPolicy uneven_sharded_policy{3, false, -1, {2, 5, 3}};
-    SubgroupAllocationPolicy unsharded_policy{1, true, 5, {}};
+    SubgroupAllocationPolicy sharded_policy{1, true, {{5, true, 3, {}}}};
+    SubgroupAllocationPolicy unsharded_policy{1, true, {{1, true, 5, {}}}};
+    SubgroupAllocationPolicy uneven_sharded_policy{1, true, {{3, false, -1, {2, 5, 3}}}};
+    SubgroupAllocationPolicy multiple_copies_policy{2, true, {{3, true, 4, {}}}};
+    SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {
+            {3, true, 3, {}},
+            {3, false, -1, {4, 3, 4}},
+            {2, true, 2, {}}
+    }};
 
-    std::vector<DefaultSubgroupAllocator> test_allocators {
-            DefaultSubgroupAllocator(sharded_policy),
-            DefaultSubgroupAllocator(SubgroupAllocationPolicy{3, true, 4, {}}),
-            DefaultSubgroupAllocator(unsharded_policy),
-            DefaultSubgroupAllocator(uneven_sharded_policy),
+    std::vector<DefaultSubgroupAllocator> test_allocators{
+            {sharded_policy},
+            {unsharded_policy},
+            {uneven_sharded_policy},
+            {multiple_copies_policy},
+            {multiple_subgroups_policy},
     };
 
     std::vector<derecho::node_id_t> members(100);
@@ -52,8 +57,8 @@ int main (int argc, char *argv[]) {
 
     derecho::run_subgroup_allocators(test_allocators, prev_view, *curr_view);
 
-    std::set<int> more_ranks_to_fail{13, 20, 59, 69, 78};
-    std::cout << "TEST 3: Failing nodes both before and after the pointer: " << more_ranks_to_fail <<  std::endl;
+    std::set<int> more_ranks_to_fail{13, 20, 59, 78, 89};
+    std::cout << "TEST 3: Failing nodes both before and after the pointer. Ranks are " << more_ranks_to_fail << std::endl;
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, more_ranks_to_fail, {}, {});
 
@@ -109,11 +114,13 @@ void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
             derecho::subgroup_shard_layout_t assignment = allocators[i](curr_view, curr_view.next_unassigned_rank, previous_was_ok);
             std::cout << "Subgroup type " << i << " got assignment: " << std::endl;
             derecho::print_subgroup_layout(assignment);
-            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl << std::endl;;
+            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl
+                      << std::endl;
         } catch(derecho::subgroup_provisioning_exception& ex) {
             curr_view.is_adequately_provisioned = false;
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
-            std::cout << "Subgroup type " << i << " failed to provision, marking View inadequate" << std::endl << std::endl;
+            std::cout << "Subgroup type " << i << " failed to provision, marking View inadequate" << std::endl
+                      << std::endl;
             return;
         }
     }
@@ -168,4 +175,3 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
 }
 
 } /* namespace derecho */
-

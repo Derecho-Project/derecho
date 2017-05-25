@@ -10,23 +10,26 @@
 #include <algorithm>
 #include <iostream>
 #include <iterator>
+#include <memory>
+#include <vector>
 #include <set>
 
 #include "subgroup_info.h"
+#include "subgroup_functions.h"
+#include "view.h"
 
 namespace std {
 
 //This allows std::sets to be printed out in the obvious way
 template <typename T>
-std::ostream& operator<< (std::ostream& out, const std::set<T>& s) {
-  if ( !s.empty() ) {
-    out << '{';
-    std::copy(s.begin(), s.end(), std::ostream_iterator<T>(out, ", "));
-    out << "\b\b}";
-  }
-  return out;
+std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
+    if(!s.empty()) {
+        out << '{';
+        std::copy(s.begin(), s.end(), std::ostream_iterator<T>(out, ", "));
+        out << "\b\b}";
+    }
+    return out;
 }
-
 }
 
 namespace derecho {
@@ -57,5 +60,4 @@ void print_subgroup_layout(const subgroup_shard_layout_t& layout);
 void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
                              const std::unique_ptr<View>& prev_view,
                              View& curr_view);
-
 }
