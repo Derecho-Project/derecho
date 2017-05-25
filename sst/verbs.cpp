@@ -24,6 +24,7 @@
 
 #include "derecho/connection_manager.h"
 #include "poll_utils.h"
+#include "tcp/tcp.h"
 #include "verbs.h"
 
 using std::cout;

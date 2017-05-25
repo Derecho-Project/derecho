@@ -2,7 +2,6 @@
 #include <iostream>
 #include <map>
 
-#include "sst/tcp.h"
 #include "sst/verbs.h"
 
 using std::ofstream;
@@ -13,9 +12,6 @@ using std::endl;
 using std::string;
 
 using namespace sst;
-using namespace sst::tcp;
-
-long long int size = 16;
 
 // number of reruns
 long long int num_reruns = 10000;
@@ -26,8 +22,8 @@ int main() {
 
     // input number of nodes and the local node id
     int num_nodes, node_rank;
-    cin >> num_nodes;
     cin >> node_rank;
+    cin >> num_nodes;
 
     // input the ip addresses
     map<uint32_t, string> ip_addrs;
@@ -35,36 +31,39 @@ int main() {
         cin >> ip_addrs[i];
     }
 
-    // initialize tcp connections
-    tcp_initialize(node_rank, ip_addrs);
-
     // initialize the rdma resources
-    verbs_initialize();
-
-    // create buffer for write and read
-    char *write_buf, *read_buf;
-    write_buf = (char *)malloc(size);
-    read_buf = (char *)malloc(size);
+    verbs_initialize(ip_addrs, node_rank);
 
     int r_index = num_nodes - 1 - node_rank;
-    resources *res = new resources(r_index, read_buf, write_buf, size, size);
+    for(int size = 1; size < 100000; ++size) {
+        // create buffer for write and read
+        char *write_buf, *read_buf;
+        write_buf = (char *)malloc(size);
+        read_buf = (char *)malloc(size);
 
-    // start the timing experiment
-    struct timespec start_time;
-    struct timespec end_time;
-    long long int nanoseconds_elapsed;
+        resources res(r_index, read_buf, write_buf, size, size);
 
-    clock_gettime(CLOCK_REALTIME, &start_time);
-    for(int i = 0; i < num_reruns; ++i) {
-        // read the entire buffer
-        res->post_remote_write(size);
-        // poll for completion
-        verbs_poll_completion();
+        // start the timing experiment
+        struct timespec start_time;
+        struct timespec end_time;
+        long long int nanoseconds_elapsed;
+
+        if(node_rank == 0) {
+            clock_gettime(CLOCK_REALTIME, &start_time);
+            for(int i = 0; i < num_reruns; ++i) {
+                // write the entire buffer
+                res.post_remote_write(0, size);
+                // poll for completion
+                verbs_poll_completion();
+            }
+            clock_gettime(CLOCK_REALTIME, &end_time);
+            nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
+            fout << size << " " << (nanoseconds_elapsed + 0.0) / (1000 * num_reruns) << endl;
+            free(write_buf);
+            free(read_buf);
+        }
+	sync (r_index);
     }
-    clock_gettime(CLOCK_REALTIME, &end_time);
-    nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
-    fout << "(" << ip_addrs[node_rank] << ", " << ip_addrs[r_index] << ")"
-         << " " << (nanoseconds_elapsed + 0.0) / (1000 * num_reruns) << endl;
     sync(r_index);
     fout.close();
     return 0;
