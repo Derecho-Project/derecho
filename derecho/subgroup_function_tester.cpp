@@ -12,6 +12,76 @@
 #include "subgroup_functions.h"
 #include "subgroup_function_tester.h"
 
+std::string ip_generator() {
+    static int invocation_count = 0;
+    std::stringstream string_generator;
+    string_generator << "192.168.1." << invocation_count;
+    ++invocation_count;
+    return string_generator.str();
+}
+
+int main (int argc, char *argv[]) {
+    using derecho::SubgroupAllocationPolicy;
+    using derecho::DefaultSubgroupAllocator;
+
+    SubgroupAllocationPolicy sharded_policy{5, true, 3, {}};
+    SubgroupAllocationPolicy uneven_sharded_policy{3, false, -1, {2, 5, 3}};
+    SubgroupAllocationPolicy unsharded_policy{1, true, 5, {}};
+
+    std::vector<DefaultSubgroupAllocator> test_allocators {
+            DefaultSubgroupAllocator(sharded_policy),
+            DefaultSubgroupAllocator(SubgroupAllocationPolicy{3, true, 4, {}}),
+            DefaultSubgroupAllocator(unsharded_policy),
+            DefaultSubgroupAllocator(uneven_sharded_policy),
+    };
+
+    std::vector<derecho::node_id_t> members(100);
+    std::iota(members.begin(), members.end(), 0);
+    std::vector<derecho::ip_addr> member_ips(100);
+    std::generate(member_ips.begin(), member_ips.end(), ip_generator);
+    std::vector<char> none_failed(100, 0);
+    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips, none_failed);
+
+    std::cout << "TEST 1: Initial allocation" << std::endl;
+    derecho::run_subgroup_allocators(test_allocators, nullptr, *curr_view);
+
+    std::set<int> ranks_to_fail{1, 3, 17, 38, 40};
+    std::cout << "TEST 2: Failing some nodes that are in subgroups: " << ranks_to_fail << std::endl;
+    std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
+    curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
+
+    derecho::run_subgroup_allocators(test_allocators, prev_view, *curr_view);
+
+    std::set<int> more_ranks_to_fail{13, 20, 59, 69, 78};
+    std::cout << "TEST 3: Failing nodes both before and after the pointer: " << more_ranks_to_fail <<  std::endl;
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, more_ranks_to_fail, {}, {});
+
+    derecho::run_subgroup_allocators(test_allocators, prev_view, *curr_view);
+
+    //There are now 90 members left, so fail ranks 39-89
+    std::vector<int> range_39_to_89(50);
+    std::iota(range_39_to_89.begin(), range_39_to_89.end(), 39);
+    std::set<int> lots_of_members_to_fail(range_39_to_89.begin(), range_39_to_89.end());
+    std::cout << "TEST 4: Failing 50 nodes so the next view is inadequate" << std::endl;
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, lots_of_members_to_fail, {}, {});
+
+    derecho::run_subgroup_allocators(test_allocators, prev_view, *curr_view);
+
+    std::vector<derecho::node_id_t> new_members(40);
+    std::iota(new_members.begin(), new_members.end(), 100);
+    std::vector<derecho::ip_addr> new_member_ips(40);
+    std::generate(new_member_ips.begin(), new_member_ips.end(), ip_generator);
+    std::cout << "TEST 5: Adding new members 100-140" << std::endl;
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips);
+
+    derecho::run_subgroup_allocators(test_allocators, prev_view, *curr_view);
+
+    return 0;
+}
+
 namespace derecho {
 
 void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
@@ -26,11 +96,29 @@ void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
 }
 
 /*
- * This is exactly the same logic as the "initialize the next view" section of
- * the start_view_change predicate, with the crucial difference that retrieving
- * the joiner IPs from the SST has been stripped out (the joiner IPs are assumed
- * to be known already) so that it doesn't need an SST to run correctly.
+ * This is basically the same logic as the beginning of ViewManager::make_subgroup_maps()
  */
+void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
+                             const std::unique_ptr<View>& prev_view,
+                             View& curr_view) {
+    bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
+    int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
+    std::cout << "View has these members: " << curr_view.members << std::endl;
+    for(std::size_t i = 0; i < allocators.size(); ++i) {
+        try {
+            derecho::subgroup_shard_layout_t assignment = allocators[i](curr_view, curr_view.next_unassigned_rank, previous_was_ok);
+            std::cout << "Subgroup type " << i << " got assignment: " << std::endl;
+            derecho::print_subgroup_layout(assignment);
+            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl << std::endl;;
+        } catch(derecho::subgroup_provisioning_exception& ex) {
+            curr_view.is_adequately_provisioned = false;
+            curr_view.next_unassigned_rank = initial_next_unassigned_rank;
+            std::cout << "Subgroup type " << i << " failed to provision, marking View inadequate" << std::endl << std::endl;
+            return;
+        }
+    }
+}
+
 std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::set<int>& leave_ranks,
                                      const std::vector<node_id_t>& joiner_ids,
@@ -81,61 +169,3 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
 
 } /* namespace derecho */
 
-
-using derecho::SubgroupAllocationPolicy;
-using derecho::DefaultSubgroupAllocator;
-
-void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
-                             const std::unique_ptr<derecho::View>& prev_view,
-                             derecho::View& curr_view) {
-    bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
-    for(std::size_t i = 0; i < allocators.size(); ++i) {
-        try {
-            derecho::subgroup_shard_layout_t assignment = allocators[i](curr_view, curr_view.next_unassigned_rank, previous_was_ok);
-            std::cout << "Subgroup type " << i << " got assignment: " << std::endl;
-            derecho::print_subgroup_layout(assignment);
-            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl << std::endl;;
-        } catch(derecho::subgroup_provisioning_exception& ex) {
-            curr_view.is_adequately_provisioned = false;
-            std::cout << "Subgroup type " << i << " failed to provision, marking View inadequate" << std::endl;
-            return;
-        }
-    }
-}
-
-int main (int argc, char *argv[]) {
-    SubgroupAllocationPolicy sharded_policy{5, true, 3, {}};
-    SubgroupAllocationPolicy uneven_sharded_policy{3, false, -1, {2, 5, 3}};
-    SubgroupAllocationPolicy unsharded_policy{1, true, 5, {}};
-
-    std::vector<DefaultSubgroupAllocator> test_allocators {
-            DefaultSubgroupAllocator(sharded_policy),
-            DefaultSubgroupAllocator(SubgroupAllocationPolicy{3, true, 4, {}}),
-            DefaultSubgroupAllocator(unsharded_policy),
-            DefaultSubgroupAllocator(uneven_sharded_policy),
-    };
-
-    std::vector<derecho::node_id_t> members(100);
-    std::iota(members.begin(), members.end(), 0);
-    std::vector<derecho::ip_addr> member_ips(100);
-    int invocation_count = 0;
-    std::generate(member_ips.begin(), member_ips.end(), [&invocation_count]() {
-       std::stringstream string_generator;
-       string_generator << "192.168.1." << invocation_count;
-       ++invocation_count;
-       return string_generator.str();
-    });
-    std::vector<char> none_failed(100, 0);
-    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips, none_failed);
-
-    run_subgroup_allocators(test_allocators, nullptr, *curr_view);
-
-    std::set<int> ranks_to_fail{1, 3, 17, 38, 40};
-    std::cout << "Failing nodes " << ranks_to_fail << std::endl;
-    std::unique_ptr<derecho::View> prev_view(std::move(curr_view));
-    curr_view = derecho::make_next_view(*prev_view, ranks_to_fail, {}, {});
-
-    run_subgroup_allocators(test_allocators, prev_view, *curr_view);
-
-
-}
