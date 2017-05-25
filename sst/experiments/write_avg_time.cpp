@@ -20,6 +20,8 @@ int main() {
     ofstream fout;
     fout.open("data_write_avg_time", ofstream::app);
 
+    cout << "FOR THIS EXPERIMENT TO WORK, DO NOT START THE POLLING THREAD!!!" << endl;
+    
     // input number of nodes and the local node id
     int num_nodes, node_rank;
     cin >> node_rank;
@@ -35,7 +37,7 @@ int main() {
     verbs_initialize(ip_addrs, node_rank);
 
     int r_index = num_nodes - 1 - node_rank;
-    for(int size = 1; size < 100000; ++size) {
+    for(int size = 1; size <= 10000; ++size) {
         // create buffer for write and read
         char *write_buf, *read_buf;
         write_buf = (char *)malloc(size);
@@ -52,7 +54,7 @@ int main() {
             clock_gettime(CLOCK_REALTIME, &start_time);
             for(int i = 0; i < num_reruns; ++i) {
                 // write the entire buffer
-                res.post_remote_write(0, size);
+                res.post_remote_write_with_completion(0, size);
                 // poll for completion
                 verbs_poll_completion();
             }
