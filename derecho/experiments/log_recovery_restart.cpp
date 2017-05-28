@@ -73,7 +73,8 @@ int main(int argc, char* argv[]) {
     cin >> num_nodes;
     string debug_log_filename = (stringstream() << "events_node" << node_id << ".csv").str();
     string message_log_filename = (stringstream() << "data" << node_id << ".dat").str();
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
+                                        {std::type_index(typeid(RawObject))}};
 
     managed_group = make_shared<derecho::Group<>>(
             message_log_filename, node_id, my_ip,

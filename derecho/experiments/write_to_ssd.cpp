@@ -21,8 +21,8 @@ struct exp_result {
     long long unsigned int msg_size;
     double bw;
 
-    void print(std::ofstream& fout) {
-      fout << msg_size << " " << bw << endl;
+    void print(std::ofstream &fout) {
+        fout << msg_size << " " << bw << endl;
     }
 };
 
@@ -59,7 +59,8 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
+                                        {std::type_index(typeid(RawObject))}};
     std::unique_ptr<derecho::Group<>> g;
     if(my_ip == leader_ip) {
         g = std::make_unique<derecho::Group<>>(

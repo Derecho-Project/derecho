@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
         if(num_senders_selector == 0) {
             one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view_raw}}};
         } else if(num_senders_selector == 1) {
-            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
                                    subgroup_shard_layout_t subgroup_vector(1);
                                    auto num_members = curr_view.members.size();
                                    std::vector<int> is_sender(num_members, 1);
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
                                    return subgroup_vector;
                                }}}};
         } else {
-            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
                                    subgroup_shard_layout_t subgroup_vector(1);
                                    auto num_members = curr_view.members.size();
                                    std::vector<int> is_sender(num_members, 1);
@@ -130,7 +130,7 @@ int main(int argc, char *argv[]) {
         if(num_senders_selector == 0) {
             one_raw_group = {{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}}};
         } else if(num_senders_selector == 1) {
-            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
                                    subgroup_shard_layout_t subgroup_vector(1);
                                    auto num_members = curr_view.members.size();
                                    std::vector<int> is_sender(num_members, 1);
@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
                                    return subgroup_vector;
                                }}}};
         } else {
-            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            one_raw_group = {{{std::type_index(typeid(RawObject)), [](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
                                    subgroup_shard_layout_t subgroup_vector(1);
                                    auto num_members = curr_view.members.size();
                                    std::vector<int> is_sender(num_members, 1);
@@ -155,6 +155,7 @@ int main(int argc, char *argv[]) {
                                }}}};
         }
     }
+    one_raw_group.membership_function_order = {std::type_index(typeid(RawObject))};
 
     std::unique_ptr<derecho::Group<>> managed_group;
     std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));

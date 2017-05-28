@@ -56,8 +56,8 @@ int main(int argc, char* argv[]) {
     std::unordered_set<derecho::node_id_t> group_1_members{3, 4, 5};
     std::unordered_set<derecho::node_id_t> group_2_members{6, 7, 8};
     derecho::SubgroupInfo subgroup_info{
-        {{std::type_index(typeid(RawObject)),
-            [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(RawObject)),
+              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
             std::vector<derecho::node_id_t> subgroup_0_members;
             std::vector<derecho::node_id_t> subgroup_1_members;
             std::vector<derecho::node_id_t> subgroup_2_members;
@@ -84,7 +84,8 @@ int main(int argc, char* argv[]) {
             subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
             subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
             next_unassigned_rank = std::max(next_unassigned_rank, 9);
-            return subgroup_vector; }}}};
+            return subgroup_vector; }}},
+            {std::type_index(typeid(RawObject))}};
     if(my_ip == leader_ip) {
         managed_group = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, callbacks, subgroup_info, param_object);

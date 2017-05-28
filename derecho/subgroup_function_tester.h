@@ -11,11 +11,11 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
-#include <vector>
 #include <set>
+#include <vector>
 
-#include "subgroup_info.h"
 #include "subgroup_functions.h"
+#include "subgroup_info.h"
 #include "view.h"
 
 namespace std {

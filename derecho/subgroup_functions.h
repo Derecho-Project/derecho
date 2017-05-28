@@ -8,8 +8,8 @@
 
 #include <memory>
 
-#include "subgroup_info.h"
 #include "derecho_modes.h"
+#include "subgroup_info.h"
 
 namespace derecho {
 
@@ -115,7 +115,6 @@ SubgroupAllocationPolicy one_subgroup_policy(const ShardAllocationPolicy& policy
  */
 SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const ShardAllocationPolicy& subgroup_policy);
 
-
 /**
  * Functor of type shard_view_generator_t that implements the default subgroup
  * allocation algorithm, parameterized based on a SubgroupAllocationPolicy.
@@ -135,6 +134,39 @@ public:
               last_good_assignment(deep_pointer_copy(to_copy.last_good_assignment)),
               policy(to_copy.policy) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
+
+    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
+};
+
+struct CrossProductPolicy {
+    /** The (type, index) pair identifying the "source" subgroup of the cross-product.
+     * Each member of this subgroup will be a sender in T subgroups, where T is the
+     * number of shards in the target subgroup. */
+    std::pair<std::type_index, uint32_t> source_subgroup;
+    /** The (type, index) pair identifying the "target" subgroup of the cross-product.
+     * Each shard in this subgroup will have all of its members assigned to S subgroups
+     * as receivers, where S is the number of members in the source subgroup. */
+    std::pair<std::type_index, uint32_t> target_subgroup;
+};
+
+/**
+ * A shard_view_generator_t functor that creates a set of subgroups that is the
+ * "cross-product" of two subgroups, source and target. Each node in the source
+ * subgroup will be placed in T subgroups, one for each shard in the target
+ * subgroup (where the target subgroup has T shards). Thus, if there are S members
+ * in the source subgroup, and T shards in the target subgroup, S * T subgroups
+ * of a single type will be created. The nodes in the source subgroup will be
+ * marked as the only senders in these subgroups. A node that has rank i within
+ * the source subgroup can send a multicast to shard j of the target subgroup
+ * by selecting the cross-product subgroup at index (i * T + j).
+ */
+class CrossProductAllocator {
+    const CrossProductPolicy policy;
+
+public:
+    CrossProductAllocator(const CrossProductPolicy& allocation_policy) : policy(allocation_policy) {}
+    CrossProductAllocator(const CrossProductAllocator& to_copy) : policy(to_copy.policy) {}
+    CrossProductAllocator(CrossProductAllocator&&) = default;
 
     subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
 };

@@ -802,11 +802,11 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
     uint32_t num_received_offset = 0;
     bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
-    for(auto& subgroup_type_and_function : subgroup_info.subgroup_membership_functions) {
+    for(const auto& subgroup_type : subgroup_info.membership_function_order) {
         subgroup_shard_layout_t subgroup_shard_views;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {
-            auto temp = subgroup_type_and_function.second(curr_view, curr_view.next_unassigned_rank, previous_was_ok);
+            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank, previous_was_ok);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
             subgroup_shard_views = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
@@ -825,11 +825,11 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             return 0;
         }
         std::size_t num_subgroups = subgroup_shard_views.size();
-        curr_view.subgroup_ids_by_type[subgroup_type_and_function.first] = std::vector<subgroup_id_t>(num_subgroups);
+        curr_view.subgroup_ids_by_type[subgroup_type] = std::vector<subgroup_id_t>(num_subgroups);
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
             subgroup_id_t next_subgroup_number = curr_view.subgroup_shard_views.size();
-            curr_view.subgroup_ids_by_type[subgroup_type_and_function.first][subgroup_index] = next_subgroup_number;
+            curr_view.subgroup_ids_by_type[subgroup_type][subgroup_index] = next_subgroup_number;
             uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
             uint32_t max_shard_senders = 0;
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
@@ -851,7 +851,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                 if(prev_view && prev_view->is_adequately_provisioned) {
                     //Initialize this shard's SubView.joined and SubView.departed
                     subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type
-                                                             .at(subgroup_type_and_function.first)
+                                                             .at(subgroup_type)
                                                              .at(subgroup_index);
                     SubView& prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
                     std::set<node_id_t> prev_members(prev_shard_view.members.begin(), prev_shard_view.members.end());

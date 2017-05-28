@@ -27,15 +27,10 @@ int main(int argc, char* argv[]) {
     SubgroupAllocationPolicy sharded_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(5, 3));
     SubgroupAllocationPolicy unsharded_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 5));
     SubgroupAllocationPolicy uneven_sharded_policy = derecho::one_subgroup_policy(
-        derecho::custom_shards_policy({2, 5, 3}, three_ordered)
-    );
+            derecho::custom_shards_policy({2, 5, 3}, three_ordered));
     SubgroupAllocationPolicy multiple_copies_policy = derecho::identical_subgroups_policy(
             2, derecho::even_sharding_policy(3, 4));
-    SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {
-            derecho::even_sharding_policy(3,3),
-            derecho::custom_shards_policy({4, 3, 4}, three_ordered),
-            derecho::even_sharding_policy(2,2)
-    }};
+    SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {derecho::even_sharding_policy(3, 3), derecho::custom_shards_policy({4, 3, 4}, three_ordered), derecho::even_sharding_policy(2, 2)}};
 
     //The policies will be forwarded as constructor arguments to DefaultSubgroupAllocator with this syntax
     std::vector<DefaultSubgroupAllocator> test_allocators{

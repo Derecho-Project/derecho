@@ -8,15 +8,14 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
-#include <string>
 #include <sstream>
+#include <string>
 #include <tuple>
 #include <typeindex>
 #include <vector>
 
 #include "derecho/derecho.h"
 #include "initialize.h"
-
 
 class Cache : public mutils::ByteRepresentable {
     std::map<std::string, std::string> cache_map;
@@ -59,6 +58,7 @@ public:
 
 class LoadBalancer : public mutils::ByteRepresentable {
     std::vector<std::pair<std::string, std::string>> key_ranges_by_shard;
+
 public:
     //I can't think of any RPC methods this class needs, but it can't be a Replicated Object without an RPC method
     void dummy() {}
@@ -67,7 +67,7 @@ public:
         return std::make_tuple(derecho::rpc::tag<0>(&LoadBalancer::dummy));
     }
 
-    LoadBalancer() : LoadBalancer({ {"a", "i"}, {"j", "r"}, {"s", "z"} }) {}
+    LoadBalancer() : LoadBalancer({{"a", "i"}, {"j", "r"}, {"s", "z"}}) {}
     LoadBalancer(const std::vector<std::pair<std::string, std::string>>& key_ranges_by_shard)
             : key_ranges_by_shard(key_ranges_by_shard) {}
 
@@ -96,12 +96,13 @@ int main(int argc, char** argv) {
     auto load_balancer_factory = []() { return std::make_unique<LoadBalancer>(); };
     auto cache_factory = []() { return std::make_unique<Cache>(); };
 
-    derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1,3));
-    derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(3,3));
-    derecho::SubgroupInfo subgroup_info{{
-            { std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy) },
-            { std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy) }
-    }};
+    derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3));
+    derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(3, 3));
+    derecho::SubgroupInfo subgroup_info;
+    subgroup_info.subgroup_membership_functions = {
+            {std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy)},
+            {std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy)}};
+    subgroup_info.membership_function_order = keys_as_list(subgroup_info.subgroup_membership_functions);
 
     std::unique_ptr<derecho::Group<LoadBalancer, Cache>> group;
     if(my_ip == leader_ip) {
@@ -152,6 +153,4 @@ int main(int argc, char** argv) {
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }
-
 }
-

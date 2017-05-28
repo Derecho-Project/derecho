@@ -184,7 +184,8 @@ int main(int argc, char** argv) {
                   subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
                   next_unassigned_rank = std::max(next_unassigned_rank, 6);
                   return subgroup_vector;
-              }}}};
+              }}},
+            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache))}};
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state

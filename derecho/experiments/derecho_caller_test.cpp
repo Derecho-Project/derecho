@@ -78,7 +78,8 @@ int main(int argc, char* argv[]) {
                                  long long int msg_size) {};
 
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}}};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}},
+                                        {std::type_index(typeid(test1_str))}};
     derecho::Group<test1_str>* managed_group;
 
     auto new_view_callback = [](const derecho::View& new_view) {
