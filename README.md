@@ -80,32 +80,27 @@ To start using Derecho, a process must either start or join a Group by construct
 std::unique_ptr<derecho::Group<LoadBalancer, Cache, Storage>> group;
 ```
 
-In order to start or join a Group, all members (including processes that join later) must define functions that provide the membership (as a subset of the current View) for each subgroup and shard, given as input the current View. These functions are organized in a map keyed by `std::type_index`, where the key for a subgroup-membership function is the type of Replicated Object associated with that subgroup. Since there can be more than one subgroup that implements the same Replicated Object type (as separate instances of the same type of object), the return type of a subgroup membership function is a vector-of-vectors: the index of the outer vector identifies which subgroup is being described, and the inner vector contains an entry for each shard of that subgroup. 
+#### Defining Subgroup Membership
 
-Here is an example of a declaration of a SubgroupInfo (which is the struct that contains the map of subgroup membership functions) that defines subgroups for two types of Replicated Objects, Foo and Bar. 
+In order to start or join a Group, all members (including processes that join later) must define functions that provide the membership (as a subset of the current View) for each subgroup and shard, given as input the current View. These functions are organized in a map keyed by `std::type_index` in struct SubgroupInfo, where the key for a subgroup-membership function is the type of Replicated Object associated with that subgroup. Since there can be more than one subgroup that implements the same Replicated Object type (as separate instances of the same type of object), the return type of a subgroup membership function is a vector-of-vectors: the index of the outer vector identifies which subgroup is being described, and the inner vector contains an entry for each shard of that subgroup. 
 
+Derecho provides a default subgroup membership function that automatically assigns nodes from the Group into disjoint subgroups and shards, given a policy that describes the desired number of nodes in each subgroup/shard. It assigns nodes in ascending rank order, and leaves any "extra" nodes (not needed to fully populate all subgroups) at the end (highest rank) of the membership list. This function is stateful, remembering its previous output from View to View, and at each View change it attempts to preserve the correct number of nodes in each shard without re-assigning any nodes to new roles. It does this by assigning idle nodes from the end of the Group's membership list to replace failed members of subgroups.
+
+There are several helper functions in `subgroup_functions.h` that construct AllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of a SubgroupInfo that uses these functions to set up two types of Replicated Objects using the default membership function:
 ```cpp
-derecho::SubgroupInfo subgroup_info{
-    {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
-          if(curr_view.num_members < 6) {
-              throw derecho::subgroup_provisioning_exception();
-          }
-          derecho::subgroup_shard_layout_t subgroup_vector(1);
-          subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-          subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
-          return subgroup_vector;
-      }},
-     {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
-          if(curr_view.num_members < 5) {
-              throw derecho::subgroup_provisioning_exception();
-          }
-          derecho::subgroup_shard_layout_t subgroup_vector(2);
-          subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1}));
-          subgroup_vector[1].emplace_back(curr_view.make_subview({3, 4}));
-          return subgroup_vector;
-      }}}};
+derecho::SubgroupInfo subgroup_info {
+	{{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(
+			derecho::one_subgroup_policy(derecho::even_sharding_policy(2, 3)))},
+	 {std::type_index(typeid(Bar)), derecho::DefaultSubgroupAllocator(
+			derecho::identical_subgroups_policy(2, derecho::even_sharding_policy(1, 3)))}
+	}, 
+	{std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}
+};
+
 ```
-The function for Foo creates a vector with a single subgroup entry containing a size-2 vector, so it specifies that there will be one subgroup of type Foo, with two shards. It uses the convenience function `make_subview` to construct a SubView with a specific set of members; it assumes that the nodes in this Group will have IDs that sequentially increment from 0, so that a group with 6 members will have node IDs 0 through 5. By contrast, the function for Bar creates a vector with two entries, each of which is a size-1 vector, so it specifies that there will be two subgroups of type Bar, each of which has only one shard. Note that both functions throw `subgroup_provisioning_exception` if they receive an input View with fewer members than are necessary to construct their subgroups. Throwing this exception will cause the Group to stop setting up subgroups and wait for enough members to join before allowing any subgroup operations to proceed.
+Based on the policies constructed for the constructor argument of DefaultSubgroupAllocator, the function associated with Foo will create one subgroup of type Foo, with two shards of 3 members each. The function associated with Bar will create two subgroups of type Bar, each of which has only one shard of size 3. Note that the second component of SubgroupInfo is a list of the same Replicated Object types that are in the function map; this list specifies the order in which the membership functions will be run. 
+
+More advanced users may, of course, want to define their own subgroup membership functions. We will describe how to do this in a later section of the user guide.
 
 
 #### Constructing a Group
