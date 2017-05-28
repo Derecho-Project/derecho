@@ -33,6 +33,7 @@ std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
 }
 
 namespace derecho {
+//Functions that assist with testing subgroup layout allocation
 
 /**
  * Constructs the next View given the current View and the set of failures and
@@ -53,11 +54,21 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::vector<node_id_t>& joiner_ids,
                                      const std::vector<ip_addr>& joiner_ips);
 
-//Functions that assist with testing subgroup layout allocation
-
+/**
+ * Prints the membership of a subgroup/shard layout to stdout
+ * @param layout
+ */
 void print_subgroup_layout(const subgroup_shard_layout_t& layout);
 
-void run_subgroup_allocators(std::vector<DefaultSubgroupAllocator>& allocators,
-                             const std::unique_ptr<View>& prev_view,
-                             View& curr_view);
+/**
+ * Runs the same logic as ViewManager::make_subgroup_maps(), only without
+ * actually saving the subgroup_to_x maps. curr_view is still updated with the
+ * subgroup assignments, though.
+ * @param subgroup_info The SubgroupInfo to use for provisioning subgroups
+ * @param prev_view The previous view, if there was one, or nullptr
+ * @param curr_view The current view in which to assign subgroup membership
+ */
+void test_provision_subgroups(const SubgroupInfo& subgroup_info,
+                              const std::unique_ptr<View>& prev_view,
+                              View& curr_view);
 }
