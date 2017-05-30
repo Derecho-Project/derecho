@@ -21,8 +21,8 @@ struct exp_result {
     long long unsigned int msg_size;
     double bw;
 
-    void print(std::ofstream& fout) {
-      fout << msg_size << " " << bw << endl;
+    void print(std::ofstream &fout) {
+        fout << msg_size << " " << bw << endl;
     }
 };
 

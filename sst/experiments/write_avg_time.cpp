@@ -21,7 +21,7 @@ int main() {
     fout.open("data_write_avg_time", ofstream::app);
 
     cout << "FOR THIS EXPERIMENT TO WORK, DO NOT START THE POLLING THREAD!!!" << endl;
-    
+
     // input number of nodes and the local node id
     int num_nodes, node_rank;
     cin >> node_rank;
@@ -64,7 +64,7 @@ int main() {
             free(write_buf);
             free(read_buf);
         }
-	sync (r_index);
+        sync(r_index);
     }
     sync(r_index);
     fout.close();

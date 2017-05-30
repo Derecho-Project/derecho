@@ -19,7 +19,7 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }
-    for (size_t i = 0; i < global_min_ready.size(); ++i) {
+    for(size_t i = 0; i < global_min_ready.size(); ++i) {
         global_min_ready[local_row][i] = false;
     }
     for(size_t i = 0; i < global_min.size(); ++i) {
@@ -70,10 +70,10 @@ std::string DerechoSST::to_string() const {
             s << num_received[row][n] << " ";
         }
         s << "}, joiner_ips={ ";
-	for (int n = 0; n < (num_changes[row]-num_installed[row]); ++n) {
-	  s << joiner_ips[row][n] << " ";
-	}
-	s << "}, seq_num={ ";
+        for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
+            s << joiner_ips[row][n] << " ";
+        }
+        s << "}, seq_num={ ";
         for(unsigned int n = 0; n < seq_num.size(); n++) {
             s << seq_num[row][n] << " ";
         }

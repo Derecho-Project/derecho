@@ -71,8 +71,7 @@ int main(int argc, char *argv[]) {
         derecho::SubgroupInfo one_raw_group;
         if(raw_mode) {
             one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}}};
-        }
-	else {
+        } else {
             one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}}};
         }
 
@@ -83,13 +82,13 @@ int main(int argc, char *argv[]) {
         if(node_id == leader_id) {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,
-		    callbacks,
+                    callbacks,
                     one_raw_group,
                     derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,
-		    leader_ip,
+                    leader_ip,
                     callbacks,
                     one_raw_group);
         }
@@ -125,7 +124,7 @@ int main(int argc, char *argv[]) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
-	derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<derecho::RawObject>();
+        derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size, send_medium);
             while(!buf) {
@@ -152,7 +151,7 @@ int main(int argc, char *argv[]) {
         // for(int i = 100; i < num_messages - 100; i+= 5){
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }
-	managed_group->barrier_sync();
+        managed_group->barrier_sync();
         exit(0);
     } catch(const std::exception &e) {
         cout << "Main got an exception: " << e.what() << endl;

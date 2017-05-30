@@ -446,7 +446,7 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     // opcode)
     if(wc.status != IBV_WC_SUCCESS) {
         cout << "got bad completion with status: "
-	     << wc.status << ", vendor syndrome: " << wc.vendor_err;
+             << wc.status << ", vendor syndrome: " << wc.vendor_err;
         return {wc.wr_id, {wc.qp_num, -1}};
     }
     return {wc.wr_id, {wc.qp_num, 1}};
@@ -478,7 +478,7 @@ void resources_create() {
     for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
-	    fprintf(stdout, "device not specified, using first one found: %s\n",
+            fprintf(stdout, "device not specified, using first one found: %s\n",
                     dev_name);
         }
         if(!strcmp(ibv_get_device_name(dev_list[i]), dev_name)) {

@@ -101,7 +101,7 @@ int main() {
     vector<uint32_t> indices;
     iota(indices.begin(), indices.end(), 0);
     multicast_group<multicast_sst> g(
-				    sst, indices, window_size);
+            sst, indices, window_size);
     for(uint i = 0; i < num_messages; ++i) {
         volatile char* buf;
         while((buf = g.get_buffer(max_msg_size)) == NULL) {

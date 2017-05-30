@@ -130,15 +130,15 @@ public:
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
-	    for (size_t i = 0; i < suspected.size(); ++i) {
-	      suspected[row][i] = false;
-	    }
-	    for (size_t i = 0; i < changes.size(); ++i) {
-	      changes[row][i] = false;
-	    }
-	    for (size_t i = 0; i < global_min_ready.size(); ++i) {
-	      global_min_ready[row][i] = false;
-	    }
+            for(size_t i = 0; i < suspected.size(); ++i) {
+                suspected[row][i] = false;
+            }
+            for(size_t i = 0; i < changes.size(); ++i) {
+                changes[row][i] = false;
+            }
+            for(size_t i = 0; i < global_min_ready.size(); ++i) {
+                global_min_ready[row][i] = false;
+            }
             for(size_t i = 0; i < global_min.size(); ++i) {
                 global_min[row][i] = 0;
             }

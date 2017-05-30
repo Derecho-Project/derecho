@@ -152,7 +152,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t>& receiver_ranks, long long
         }
         // perform a remote RDMA write on the owner of the row
         res_vec[index]->post_remote_write(0, offset, size);
-	// num_called++;
+        // num_called++;
     }
     // DERECHO_LOG(num_called, -1, "end_put");
     return;

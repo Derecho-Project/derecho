@@ -114,10 +114,10 @@ int main(int argc, char* argv[]) {
             }
             bool time_to_push = true;
             for(uint j = 0; j < num_senders; ++j) {
-	      if (completed[j]) {
-		continue;
-	      }
-	      if(sst.num_received_sst[node_id][j] - last_max_num_received[j] <= window_size / 2) {
+                if(completed[j]) {
+                    continue;
+                }
+                if(sst.num_received_sst[node_id][j] - last_max_num_received[j] <= window_size / 2) {
                     time_to_push = false;
                 }
             }

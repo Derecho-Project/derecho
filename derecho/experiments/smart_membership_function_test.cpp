@@ -8,15 +8,14 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
-#include <string>
 #include <sstream>
+#include <string>
 #include <tuple>
 #include <typeindex>
 #include <vector>
 
 #include "derecho/derecho.h"
 #include "initialize.h"
-
 
 class Cache : public mutils::ByteRepresentable {
     std::map<std::string, std::string> cache_map;
@@ -59,6 +58,7 @@ public:
 
 class LoadBalancer : public mutils::ByteRepresentable {
     std::vector<std::pair<std::string, std::string>> key_ranges_by_shard;
+
 public:
     //I can't think of any RPC methods this class needs, but it can't be a Replicated Object without an RPC method
     void dummy() {}
@@ -67,7 +67,7 @@ public:
         return std::make_tuple(derecho::rpc::tag<0>(&LoadBalancer::dummy));
     }
 
-    LoadBalancer() : LoadBalancer({ {"a", "i"}, {"j", "r"}, {"s", "z"} }) {}
+    LoadBalancer() : LoadBalancer({{"a", "i"}, {"j", "r"}, {"s", "z"}}) {}
     LoadBalancer(const std::vector<std::pair<std::string, std::string>>& key_ranges_by_shard)
             : key_ranges_by_shard(key_ranges_by_shard) {}
 
@@ -86,15 +86,14 @@ class LoadBalancerAllocator {
 
 public:
     LoadBalancerAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, uint total_subgroup_functions)
-        : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
+            : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
     //This should never be copied, but it must be copied once to store it inside a std::function (d'oh)
     LoadBalancerAllocator(const LoadBalancerAllocator& copy)
-        : current_allocation_state(copy.current_allocation_state),
-          /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
-          previous_assignment(copy.previous_assignment ?
-                  std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
-                  : nullptr),
-          total_subgroup_functions(copy.total_subgroup_functions) {}
+            : current_allocation_state(copy.current_allocation_state),
+              /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
+              previous_assignment(copy.previous_assignment ? std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
+                                                           : nullptr),
+              total_subgroup_functions(copy.total_subgroup_functions) {}
     LoadBalancerAllocator(LoadBalancerAllocator&&) = default;
 
     /* Attempts to assign the first 3 members of the group to a single LoadBalancer subgroup,
@@ -109,8 +108,8 @@ public:
             std::cout << "LoadBalancer had a previous assignment" << std::endl;
             //Modify the previous assignment to replace failed members and return a copy of it
             for(std::size_t subgroup_rank = 0;
-                    subgroup_rank < (*previous_assignment)[0][0].members.size();
-                    ++subgroup_rank) {
+                subgroup_rank < (*previous_assignment)[0][0].members.size();
+                ++subgroup_rank) {
                 if(curr_view.rank_of((*previous_assignment)[0][0].members[subgroup_rank]) == -1) {
                     //rank_of == -1 means the node is not in the current view
                     if(current_allocation_state->unassigned_members.empty()) {
@@ -133,8 +132,7 @@ public:
             //These will be initialized from scratch by the calling ViewManager
             (*previous_assignment)[0][0].joined.clear();
             (*previous_assignment)[0][0].departed.clear();
-        }
-        else {
+        } else {
             if(current_allocation_state->unassigned_members.size() < 3) {
                 throw derecho::subgroup_provisioning_exception();
             }
@@ -168,14 +166,13 @@ public:
     const unsigned int NODES_PER_SHARD = 2;
 
     CacheAllocator(const std::shared_ptr<SubgroupAllocationState>& assignment_state, uint total_subgroup_functions)
-        : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
+            : current_allocation_state(assignment_state), total_subgroup_functions(total_subgroup_functions) {}
     CacheAllocator(const CacheAllocator& copy)
-        : current_allocation_state(copy.current_allocation_state),
-          /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
-          previous_assignment(copy.previous_assignment ?
-                  std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
-                  : nullptr),
-          total_subgroup_functions(copy.total_subgroup_functions) {}
+            : current_allocation_state(copy.current_allocation_state),
+              /* subgroup_shard_layout_t is copyable, so do the obvious thing and copy it. */
+              previous_assignment(copy.previous_assignment ? std::make_unique<derecho::subgroup_shard_layout_t>(*copy.previous_assignment)
+                                                           : nullptr),
+              total_subgroup_functions(copy.total_subgroup_functions) {}
     CacheAllocator(CacheAllocator&&) = default;
 
     derecho::subgroup_shard_layout_t operator()(const derecho::View& curr_view) {
@@ -199,9 +196,9 @@ public:
                         (*previous_assignment)[0][shard_num].member_ips[r] = curr_view.member_ips[curr_view.rank_of(new_member)];
                     } else {
                         std::cout << "Cache: Shard " << shard_num << ": keeping node " << (*previous_assignment)[0][shard_num].members[r] << " in rank " << r << std::endl;
-                         //Keep the node and delete it from unassigned_members
+                        //Keep the node and delete it from unassigned_members
                         current_allocation_state->unassigned_members.remove(
-                            (*previous_assignment)[0][shard_num].members[r]);
+                                (*previous_assignment)[0][shard_num].members[r]);
                     }
                 }
                 //These will be initialized from scratch by the calling ViewManager
@@ -212,9 +209,9 @@ public:
             std::cout << "Cache creating a new assignment..." << std::endl;
             auto unassigned_members_iter = current_allocation_state->unassigned_members.begin();
             if(std::find(current_allocation_state->subgroups_completed.begin(),
-                          current_allocation_state->subgroups_completed.end(),
-                          std::type_index(typeid(LoadBalancer)))
-                    == current_allocation_state->subgroups_completed.end()) {
+                         current_allocation_state->subgroups_completed.end(),
+                         std::type_index(typeid(LoadBalancer)))
+               == current_allocation_state->subgroups_completed.end()) {
                 //LoadBalancerAllocator has not been run yet, so leave it the first three nodes
                 if(current_allocation_state->unassigned_members.size() - 3 < NUM_SHARDS * NODES_PER_SHARD) {
                     throw derecho::subgroup_provisioning_exception();
@@ -269,10 +266,8 @@ int main(int argc, char** argv) {
     auto cache_factory = []() { return std::make_unique<Cache>(); };
 
     auto allocation_state = std::make_shared<SubgroupAllocationState>();
-    derecho::SubgroupInfo subgroup_info{{
-            { std::type_index(typeid(LoadBalancer)), LoadBalancerAllocator(allocation_state, 2) },
-            { std::type_index(typeid(Cache)), CacheAllocator(allocation_state, 2) }
-    }};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(LoadBalancer)), LoadBalancerAllocator(allocation_state, 2)},
+                                         {std::type_index(typeid(Cache)), CacheAllocator(allocation_state, 2)}}};
 
     std::unique_ptr<derecho::Group<LoadBalancer, Cache>> group;
     if(my_ip == leader_ip) {
@@ -323,6 +318,4 @@ int main(int argc, char** argv) {
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }
-
 }
-

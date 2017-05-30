@@ -1,6 +1,6 @@
 #include <chrono>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <thread>
 
 #include "derecho/experiments/aggregate_bandwidth.h"
@@ -36,7 +36,7 @@ struct exp_result {
     void print(std::ofstream& fout) {
         fout << num_nodes << " "
              << max_msg_size << " "
-	     << sum_message_rate << endl;
+             << sum_message_rate << endl;
     }
 };
 
@@ -76,7 +76,6 @@ int main() {
         }
     };
 
-    
     thread failures_thread = std::thread(check_failures_loop);
 
     struct timespec start_time, end_time;
