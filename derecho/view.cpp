@@ -185,7 +185,7 @@ void View::merge_changes() {
     bool found = false;
     for(int n = 0; n < num_members; n++) {
         if(failed[n]) {
-            // Make sure that the failed process is listed in the Changes vector as a proposed change
+            // Make sure that the failed process is listed in the changes vector as a proposed change
             for(int c = gmsSST->num_committed[myRank]; c < gmsSST->num_changes[myRank] && !found; c++) {
                 if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
                     // Already listed
@@ -203,13 +203,14 @@ void View::merge_changes() {
             gmssst::increment(gmsSST->num_changes[myRank]);
         }
     }
-    gmsSST->put((char*)std::addressof(gmsSST->changes[0][0]) - gmsSST->getBaseAddress(), gmsSST->changes.size() * sizeof(node_id_t) + gmsSST->joiner_ips.size() * sizeof(uint32_t) + sizeof(int) + sizeof(int));
+    gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
+                gmsSST->num_acked.get_base() - gmsSST->changes.get_base());
 }
 
 void View::wedge() {
     multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
-    gmsSST->put((char*)std::addressof(gmsSST->wedged[0]) - gmsSST->getBaseAddress(), sizeof(bool));
+    gmsSST->put(gmsSST->wedged.get_base() - gmsSST->getBaseAddress(), sizeof(gmsSST->wedged[0]));
 }
 
 std::string View::debug_string() const {

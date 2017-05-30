@@ -115,8 +115,8 @@ public:
               delivered_num(num_subgroups),
               persisted_num(num_subgroups),
               suspected(parameters.members.size()),
-              changes(parameters.members.size()),
-              joiner_ips(parameters.members.size()),
+              changes(100 + parameters.members.size()),
+              joiner_ips(100 + parameters.members.size()),
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
@@ -130,15 +130,19 @@ public:
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
-            for(size_t i = 0; i < parameters.members.size(); ++i) {
-                suspected[row][i] = false;
-                changes[row][i] = 0;
-                global_min_ready[row][i] = false;
-            }
-            for(size_t i = 0; i < num_received_size; ++i) {
+	    for (size_t i = 0; i < suspected.size(); ++i) {
+	      suspected[row][i] = false;
+	    }
+	    for (size_t i = 0; i < changes.size(); ++i) {
+	      changes[row][i] = false;
+	    }
+	    for (size_t i = 0; i < global_min_ready.size(); ++i) {
+	      global_min_ready[row][i] = false;
+	    }
+            for(size_t i = 0; i < global_min.size(); ++i) {
                 global_min[row][i] = 0;
             }
-            memset(const_cast<uint32_t*>(joiner_ips[row]), 0, parameters.members.size());
+            memset(const_cast<uint32_t*>(joiner_ips[row]), 0, joiner_ips.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_installed[row] = 0;
