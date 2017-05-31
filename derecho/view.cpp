@@ -32,6 +32,9 @@ SubView::SubView(Mode mode,
     if(is_sender.size()) {
         this->is_sender = is_sender;
     }
+    else {
+        this->is_sender.resize(members.size(), 1);
+    }
 }
 
 int SubView::rank_of(const node_id_t& who) const {
