@@ -145,21 +145,21 @@ void flush_events() {
     }
     for(const auto &e : events) {
         if(e.group_number == (uint32_t)(-1)) {
-            printf("%5.3f, %s:%d, %s\n", 1.0e-6 * (e.time - epoch_start),
+            printf("%5.6f, %s:%d, %s\n", 1.0e-6 * (e.time - epoch_start),
                    basename(e.file), e.line, e.event_name);
 
         } else if(e.message_number == (size_t)(-1)) {
-            printf("%5.3f, %s:%d, %s, %" PRIu32 "\n",
+            printf("%5.6f, %s:%d, %s, %" PRIu32 "\n",
                    1.0e-6 * (e.time - epoch_start), basename(e.file), e.line,
                    e.event_name, e.group_number);
 
         } else if(e.block_number == (size_t)(-1)) {
-            printf("%5.3f, %s:%d, %s, %" PRIu32 ", %zu\n",
+            printf("%5.6f, %s:%d, %s, %" PRIu32 ", %zu\n",
                    1.0e-6 * (e.time - epoch_start), basename(e.file), e.line,
                    e.event_name, e.group_number, e.message_number);
 
         } else {
-            printf("%5.3f, %s:%d, %s, %" PRIu32 ", %zu, %zu\n",
+            printf("%5.6f, %s:%d, %s, %" PRIu32 ", %zu, %zu\n",
                    1.0e-6 * (e.time - epoch_start), basename(e.file), e.line,
                    e.event_name, e.group_number, e.message_number,
                    e.block_number);

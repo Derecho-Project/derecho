@@ -25,14 +25,12 @@
 #include "derecho/connection_manager.h"
 #include "derecho/derecho_ports.h"
 #include "poll_utils.h"
+#include "rdmc/util.h"
 #include "tcp/tcp.h"
 #include "verbs.h"
 
 using std::cout;
-using std::cerr;
 using std::endl;
-using std::map;
-using std::string;
 
 #define MSG "SEND operation      "
 #define RDMAMSGR "RDMA read operation "
@@ -48,13 +46,6 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 #error __BYTE_ORDER is neither
 __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
-
-template <class T>
-void check_for_error(T var, string msg) {
-    if(!var) {
-        cerr << msg << endl;
-    }
-}
 
 namespace sst {
 /** IB device name. */
@@ -106,10 +97,14 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     remote_index = r_index;
 
     write_buf = write_addr;
-    check_for_error(write_buf, "Write address is NULL");
+    if(!write_buf) {
+        cout << "Write address is NULL" << endl;
+    }
 
     read_buf = read_addr;
-    check_for_error(read_buf, "Read address is NULL");
+    if(!read_buf) {
+        cout << "Read address is NULL" << endl;
+    }
 
     // register the memory buffer
     int mr_flags = 0;
@@ -118,12 +113,12 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     // register memory with the protection domain and the buffer
     write_mr = ibv_reg_mr(g_res->pd, write_buf, size_w, mr_flags);
     read_mr = ibv_reg_mr(g_res->pd, read_buf, size_r, mr_flags);
-    check_for_error(
-            write_mr,
-            "Could not register memory region : write_mr, error code is : " + std::to_string(errno));
-    check_for_error(
-            read_mr,
-            "Could not register memory region : read_mr, error code is : " + std::to_string(errno));
+    if(!write_mr) {
+        cout << "Could not register memory region : write_mr, error code is: " << errno << endl;
+    }
+    if(!read_mr) {
+        cout << "Could not register memory region : read_mr, error code is: " << errno << endl;
+    }
 
     // set the queue pair up for creation
     struct ibv_qp_init_attr qp_init_attr;
@@ -141,7 +136,9 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
     // create the queue pair
     qp = ibv_create_qp(g_res->pd, &qp_init_attr);
 
-    check_for_error(qp, "Could not create queue pair, error code is : " + std::to_string(errno));
+    if(!qp) {
+        cout << "Could not create queue pair, error code is: " << errno << endl;
+    }
 
     // connect the QPs
     connect_qp();
@@ -155,20 +152,22 @@ resources::~resources() {
     int rc = 0;
     if(qp) {
         rc = ibv_destroy_qp(qp);
-        check_for_error(qp, "Could not destroy queue pair, error code is " + std::to_string(rc));
+        if(!qp) {
+            cout << "Could not destroy queue pair, error code is " << rc << endl;
+        }
     }
 
     if(write_mr) {
         rc = ibv_dereg_mr(write_mr);
-        check_for_error(
-                !rc,
-                "Could not de-register memory region : write_mr, error code is " + std::to_string(rc));
+        if(rc) {
+            cout << "Could not de-register memory region : write_mr, error code is " << rc << endl;
+        }
     }
     if(read_mr) {
         rc = ibv_dereg_mr(read_mr);
-        check_for_error(
-                !rc,
-                "Could not de-register memory region : read_mr, error code is " + std::to_string(rc));
+        if(rc) {
+            cout << "Could not de-register memory region : read_mr, error code is " << rc << endl;
+        }
     }
 }
 
@@ -189,8 +188,9 @@ void resources::set_qp_initialized() {
     flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
     // modify the queue pair to init state
     rc = ibv_modify_qp(qp, &attr, flags);
-    check_for_error(
-            !rc, "Failed to modify queue pair to init state, error code is " + std::to_string(rc));
+    if(rc) {
+        cout << "Failed to modify queue pair to init state, error code is " << rc << endl;
+    }
 }
 
 void resources::set_qp_ready_to_receive() {
@@ -223,10 +223,9 @@ void resources::set_qp_ready_to_receive() {
     }
     flags = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
     rc = ibv_modify_qp(qp, &attr, flags);
-    check_for_error(!rc,
-                    "Failed to modify queue pair to ready-to-receive state, "
-                    "error code is "
-                            + std::to_string(rc));
+    if(rc) {
+        cout << "Failed to modify queue pair to ready-to-receive state, error code is " << rc << endl;
+    }
 }
 
 void resources::set_qp_ready_to_send() {
@@ -242,9 +241,9 @@ void resources::set_qp_ready_to_send() {
     attr.max_rd_atomic = 1;
     flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
     rc = ibv_modify_qp(qp, &attr, flags);
-    check_for_error(
-            !rc,
-            "Failed to modify queue pair to ready-to-send state, error code is " + std::to_string(rc));
+    if(rc) {
+        cout << "Failed to modify queue pair to ready-to-send state, error code is " << rc << endl;
+    }
 }
 
 /**
@@ -262,7 +261,9 @@ void resources::connect_qp() {
     union ibv_gid my_gid;
     if(gid_idx >= 0) {
         int rc = ibv_query_gid(g_res->ib_ctx, ib_port, gid_idx, &my_gid);
-        check_for_error(!rc, "ibv_query_gid failed, error code is " + std::to_string(errno));
+        if(rc) {
+            cout << "ibv_query_gid failed, error code is " << errno << endl;
+        }
     } else {
         memset(&my_gid, 0, sizeof my_gid);
     }
@@ -274,8 +275,9 @@ void resources::connect_qp() {
     local_con_data.lid = htons(g_res->port_attr.lid);
     memcpy(local_con_data.gid, &my_gid, 16);
     bool success = sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
-    check_for_error(success,
-                    "Could not exchange qp data in connect_qp");
+    if(!success) {
+        cout << "Could not exchange qp data in connect_qp" << endl;
+    }
     remote_con_data.addr = ntohll(tmp_con_data.addr);
     remote_con_data.rkey = ntohl(tmp_con_data.rkey);
     remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
@@ -297,9 +299,9 @@ void resources::connect_qp() {
     // prevent packet loss
     // just send a dummy char back and forth
     success = sync(remote_index);
-    check_for_error(
-            success,
-            "Could not sync in connect_qp after qp transition to RTS state");
+    if(!success) {
+        cout << "Could not sync in connect_qp after qp transition to RTS state" << endl;
+    }
 }
 
 /**
@@ -310,14 +312,12 @@ void resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int resources::post_remote_send(uint32_t id, long long int offset, long long int size,
-                                int op, bool completion) {
+int resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
+                                const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
 
-    // prepare the scatter/gather entry
-    memset(&sge, 0, sizeof(sge));
     // don't care where the read buffer is saved
     sge.addr = (uintptr_t)(read_buf + offset);
     sge.length = size;
@@ -342,38 +342,43 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
     sr.wr.rdma.remote_addr = remote_props.addr + offset;
     sr.wr.rdma.rkey = remote_props.rkey;
 
+    // DERECHO_LOG(-1, -1, "Calling ibv_post_send");
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
-    int ret_code = ibv_post_send(qp, &sr, &bad_wr);
-    return ret_code;
+    auto ret = ibv_post_send(qp, &sr, &bad_wr);
+    // DERECHO_LOG(-1, -1, "Returning from ibv_post_send");
+    return ret;
 }
 
 /**
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(uint32_t id, long long int size) {
+void resources::post_remote_read(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 0, false);
-    check_for_error(
-            !rc, "Could not post RDMA read, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 /**
  * @param offset The offset, in bytes, of the remote memory buffer at which to
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(uint32_t id, long long int offset, long long int size) {
+void resources::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 0, false);
-    check_for_error(
-            !rc, "Could not post RDMA read, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 /**
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources::post_remote_write(uint32_t id, long long int size) {
+void resources::post_remote_write(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, false);
-    check_for_error(
-            !rc, "Could not post RDMA write (with no offset), error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 
 /**
@@ -382,32 +387,35 @@ void resources::post_remote_write(uint32_t id, long long int size) {
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources::post_remote_write(uint32_t id, long long int offset, long long int size) {
+void resources::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, false);
-    check_for_error(
-            !rc, "Could not post RDMA write with offset, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 
-void resources::post_remote_write_with_completion(uint32_t id, long long int size) {
+void resources::post_remote_write_with_completion(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, true);
-    check_for_error(
-            !rc, "Could not post RDMA write (with no offset) with completion, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 
-void resources::post_remote_write_with_completion(uint32_t id, long long int offset, long long int size) {
+void resources::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, true);
-    check_for_error(
-            !rc, "Could not post RDMA write with offset and completion, error code is " + std::to_string(rc) + " remote_index is " + std::to_string(remote_index));
+    if(rc) {
+        cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 
 void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
-    std::cout << "Polling thread starting" << std::endl;
+    cout << "Polling thread starting" << endl;
     while(!shutdown) {
         auto ce = verbs_poll_completion();
         util::polling_data.insert_completion_entry(ce.first, ce.second);
     }
-    std::cout << "Polling thread ending" << std::endl;
+    cout << "Polling thread ending" << endl;
 }
 
 /**
@@ -439,7 +447,7 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     // not sure what to do when we cannot read entries off the CQ
     // this means that something is wrong with the local node
     if(poll_result < 0) {
-        check_for_error(false, "Poll completion failed");
+        cout << "Poll completion failed" << endl;
         exit(-1);
     }
     // check the completion status (here we don't care about the completion
@@ -469,11 +477,14 @@ void resources_create() {
 
     // get device names in the system
     dev_list = ibv_get_device_list(&num_devices);
-    check_for_error(dev_list,
-                    "ibv_get_device_list failed; returned a NULL list");
+    if(!dev_list) {
+        cout << "ibv_get_device_list failed; returned a NULL list" << endl;
+    }
 
     // if there isn't any IB device in host
-    check_for_error(num_devices, "NO RDMA device present");
+    if(!num_devices) {
+        cout << "NO RDMA device present" << endl;
+    }
     // search for the specific device we want to work with
     for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
@@ -487,21 +498,29 @@ void resources_create() {
         }
     }
     // if the device wasn't found in host
-    check_for_error(ib_dev, "No RDMA devices found in the host");
+    if(!ib_dev) {
+        cout << "No RDMA devices found in the host" << endl;
+    }
     // get device handle
     g_res->ib_ctx = ibv_open_device(ib_dev);
-    check_for_error(g_res->ib_ctx, "Could not open RDMA device");
+    if(!g_res->ib_ctx) {
+        cout << "Could not open RDMA device" << endl;
+    }
     // we are now done with device list, free it
     ibv_free_device_list(dev_list);
     dev_list = NULL;
     ib_dev = NULL;
     // query port properties
     rc = ibv_query_port(g_res->ib_ctx, ib_port, &g_res->port_attr);
-    check_for_error(!rc, "Could not query port properties, error code is " + std::to_string(rc));
+    if(rc) {
+        cout << "Could not query port properties, error code is " << rc << endl;
+    }
 
     // allocate Protection Domain
     g_res->pd = ibv_alloc_pd(g_res->ib_ctx);
-    check_for_error(g_res->pd, "Could not allocate protection domain");
+    if(!g_res->pd) {
+        cout << "Could not allocate protection domain" << endl;
+    }
 
     // get the device attributes for the device
     ibv_query_device(g_res->ib_ctx, &g_res->device_attr);
@@ -512,14 +531,15 @@ void resources_create() {
     // set to many entries
     int cq_size = 1000;
     g_res->cq = ibv_create_cq(g_res->ib_ctx, cq_size, NULL, NULL, 0);
-    check_for_error(g_res->cq,
-                    "Could not create completion queue, error code is " + std::to_string(errno));
+    if(!g_res->cq) {
+        cout << "Could not create completion queue, error code is " << errno << endl;
+    }
 
     // start the polling thread
     polling_thread = std::thread(polling_loop);
 }
 
-bool add_node(uint32_t new_id, const string new_ip_addr) {
+bool add_node(uint32_t new_id, const std::string new_ip_addr) {
     return sst_connections->add_node(new_id, new_ip_addr);
 }
 
@@ -535,7 +555,7 @@ bool sync(uint32_t r_index) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank) {
+void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs, uint32_t node_rank) {
     sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
 
     // init all of the resources, so cleanup will be easy
@@ -552,26 +572,32 @@ void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank)
  * only be called once all SST instances have been destroyed.
  */
 void verbs_destroy() {
-    std::cout << "Waiting for polling thread to exit" << std::endl;
+    cout << "Waiting for polling thread to exit" << endl;
     shutdown = true;
-    // int rc;
-    // if(g_res->cq) {
-    //     rc = ibv_destroy_cq(g_res->cq);
-    //     check_for_error(!rc, "Could not destroy completion queue");
-    // }
-    // if(g_res->pd) {
-    //     rc = ibv_dealloc_pd(g_res->pd);
-    //     check_for_error(!rc, "Could not deallocate protection domain");
-    // }
-    // if(g_res->ib_ctx) {
-    //     rc = ibv_close_device(g_res->ib_ctx);
-    //     check_for_error(!rc, "Could not close RDMA device");
-    // }
-
     if(polling_thread.joinable()) {
         polling_thread.join();
     }
-    std::cout << "Shutting down" << std::endl;
+    // int rc;
+    // if(g_res->cq) {
+    //     rc = ibv_destroy_cq(g_res->cq);
+    //     if(rc) {
+    //         cout << "Could not destroy completion queue" << endl;
+    //     }
+    // }
+    // if(g_res->pd) {
+    //     rc = ibv_dealloc_pd(g_res->pd);
+    //     if(rc) {
+    //         cout << "Could not deallocate protection domain" << endl;
+    //     }
+    // }
+    // if(g_res->ib_ctx) {
+    //     rc = ibv_close_device(g_res->ib_ctx);
+    //     if(rc) {
+    //         cout << "Could not close RDMA device" << endl;
+    //     }
+    // }
+
+    cout << "Shutting down" << endl;
 }
 
 }  // namespace sst

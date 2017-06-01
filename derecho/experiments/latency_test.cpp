@@ -152,6 +152,8 @@ int main(int argc, char *argv[]) {
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }
         managed_group->barrier_sync();
+	// managed_group->leave();
+	// sst::verbs_destroy();
         exit(0);
     } catch(const std::exception &e) {
         cout << "Main got an exception: " << e.what() << endl;

@@ -18,7 +18,7 @@
 
 #include "poll_utils.h"
 #include "predicates.h"
-// #include "rdmc/util.h"
+#include "rdmc/util.h"
 #include "sst.h"
 
 namespace sst {
@@ -142,7 +142,7 @@ void SST<DerivedSST>::detect() {
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
     // DERECHO_LOG(-1, -1, "start_put");
     // int num_called = 0;
     for(auto index : receiver_ranks) {
@@ -159,7 +159,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t>& receiver_ranks, long long
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t>& receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
 

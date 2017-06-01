@@ -42,7 +42,7 @@ private:
     /** Connect the queue pairs. */
     void connect_qp();
     /** Post a remote RDMA operation. */
-    int post_remote_send(uint32_t id, long long int offset, long long int size, int op, bool completion);
+    int post_remote_send(const uint32_t id, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
     /** Index of the remote node. */
@@ -72,16 +72,16 @@ public:
       all call post_remote_send with different parameters
     */
     /** Post an RDMA read at the beginning address of remote memory. */
-    void post_remote_read(uint32_t id, long long int size);
+    void post_remote_read(const uint32_t id, const long long int size);
     /** Post an RDMA read at an offset into remote memory. */
-    void post_remote_read(uint32_t id, long long int offset, long long int size);
+    void post_remote_read(const uint32_t id, const long long int offset, const long long int size);
     /** Post an RDMA write at the beginning address of remote memory. */
-    void post_remote_write(uint32_t id, long long int size);
+    void post_remote_write(const uint32_t id, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write(uint32_t id, long long int offset, long long int size);
-    void post_remote_write_with_completion(uint32_t id, long long int size);
+    void post_remote_write(const uint32_t id, const long long int offset, long long int size);
+    void post_remote_write_with_completion(const uint32_t id, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(uint32_t id, long long int offset, long long int size);
+    void post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size);
 };
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr);
