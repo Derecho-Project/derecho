@@ -25,7 +25,7 @@ using std::make_shared;
 
 using derecho::RawObject;
 
-const int GMS_PORT = 12345;
+const int GMS_PORT = derecho_gms_port;
 const size_t message_size = 1000;
 const size_t block_size = 1000;
 

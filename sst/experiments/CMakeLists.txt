@@ -21,17 +21,17 @@ target_link_libraries(simple_predicate sst)
 add_executable(test_write test_write.cpp)
 target_link_libraries(test_write sst)
 
-# multicast_latency
-add_executable(multicast_latency multicast_latency.cpp)
-target_link_libraries(multicast_latency sst)
+# # multicast_latency
+# add_executable(multicast_latency multicast_latency.cpp)
+# target_link_libraries(multicast_latency sst)
 
 # multicast_throughput
 add_executable(multicast_throughput multicast_throughput.cpp ${derecho_SOURCE_DIR}/derecho/experiments/aggregate_bandwidth.cpp)
 target_link_libraries(multicast_throughput sst)
 
-# cpu_load_experiment
-add_executable(cpu_load_experiment cpu_load_experiment.cpp ${derecho_SOURCE_DIR}/derecho/experiments/aggregate_bandwidth.cpp)
-target_link_libraries(cpu_load_experiment sst)
+# # cpu_load_experiment
+# add_executable(cpu_load_experiment cpu_load_experiment.cpp ${derecho_SOURCE_DIR}/derecho/experiments/aggregate_bandwidth.cpp)
+# target_link_libraries(cpu_load_experiment sst)
 
 # write_avg_time
 add_executable(write_avg_time write_avg_time.cpp)

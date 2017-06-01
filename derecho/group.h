@@ -209,7 +209,7 @@ public:
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345,
+          const int gms_port = derecho_gms_port,
           Factory<ReplicatedTypes>... factories);
 
     /**
@@ -240,7 +240,7 @@ public:
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345,
+          const int gms_port = derecho_gms_port,
           Factory<ReplicatedTypes>... factories);
     /**
      * Constructor that re-starts a failed group member from log files.
@@ -272,7 +272,7 @@ public:
           const SubgroupInfo& subgroup_info,
           std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = 12345,
+          const int gms_port = derecho_gms_port,
           Factory<ReplicatedTypes>... factories);
 
     ~Group();
