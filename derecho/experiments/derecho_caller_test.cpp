@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, {stability_callback, {}}, subgroup_info,
-                derecho_params, {new_view_callback}, derecho_gms_port,
+                derecho_params, {new_view_callback}, derecho::derecho_gms_port,
                 []() { return std::make_unique<test1_str>(); });
     }
 
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, leader_ip,
                 {stability_callback, {}}, subgroup_info,
-                {new_view_callback}, derecho_gms_port,
+                {new_view_callback}, derecho::derecho_gms_port,
                 []() { return std::make_unique<test1_str>(); });
     }
 

@@ -1,9 +1,3 @@
-
-#include "tcp/tcp.h"
-
-#include "util.h"
-#include "verbs_helper.h"
-
 #include <atomic>
 #include <cstring>
 #include <fcntl.h>
@@ -13,6 +7,11 @@
 #include <poll.h>
 #include <thread>
 #include <vector>
+
+#include "derecho/derecho_ports.h"
+#include "tcp/tcp.h"
+#include "util.h"
+#include "verbs_helper.h"
 
 extern "C" {
 #include <infiniband/verbs.h>
@@ -25,7 +24,6 @@ extern "C" {
 using namespace std;
 
 namespace rdma {
-const uint32_t TCP_PORT = 19875;
 
 struct config_t {
     const char *dev_name;  // IB device name
@@ -253,7 +251,7 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
                       uint32_t node_rank) {
     memset(&verbs_resources, 0, sizeof(verbs_resources));
 
-    connection_listener = make_unique<tcp::connection_listener>(TCP_PORT);
+    connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
 
     TRACE("Starting connection phase");
 
@@ -409,15 +407,15 @@ bool verbs_add_connection(uint32_t index, const string &address,
             fprintf(stderr,
                     "WARNING: attempted to connect to node %u at %s:%d but we "
                     "already have a connection to a node with that index.",
-                    (unsigned int)index, address.c_str(), TCP_PORT);
+                    (unsigned int)index, address.c_str(), derecho::rdmc_tcp_port);
             return false;
         }
 
         try {
-            sockets[index] = tcp::socket(address, TCP_PORT);
+            sockets[index] = tcp::socket(address, derecho::rdmc_tcp_port);
         } catch(tcp::exception) {
             fprintf(stderr, "WARNING: failed to node %u at %s:%d",
-                    (unsigned int)index, address.c_str(), TCP_PORT);
+                    (unsigned int)index, address.c_str(), derecho::rdmc_tcp_port);
             return false;
         }
 
@@ -427,14 +425,14 @@ bool verbs_add_connection(uint32_t index, const string &address,
         if(!sockets[index].exchange(node_rank, remote_rank)) {
             fprintf(stderr,
                     "WARNING: failed to exchange rank with node %u at %s:%d",
-                    (unsigned int)index, address.c_str(), TCP_PORT);
+                    (unsigned int)index, address.c_str(), derecho::rdmc_tcp_port);
             sockets.erase(index);
             return false;
         } else if(remote_rank != index) {
             fprintf(stderr,
                     "WARNING: node at %s:%d replied with wrong rank (expected"
                     "%d but got %d)",
-                    address.c_str(), TCP_PORT, (unsigned int)index,
+                    address.c_str(), derecho::rdmc_tcp_port, (unsigned int)index,
                     (unsigned int)remote_rank);
 
             sockets.erase(index);

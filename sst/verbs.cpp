@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "derecho/connection_manager.h"
+#include "derecho/derecho_ports.h"
 #include "poll_utils.h"
 #include "tcp/tcp.h"
 #include "verbs.h"
@@ -63,7 +64,6 @@ int ib_port = 1;
 /** GID index to use. */
 int gid_idx = 0;
 
-static const int port = 22549;
 tcp::tcp_connections *sst_connections;
 
 //  unsigned int max_time_to_completion = 0;
@@ -536,7 +536,7 @@ bool sync(uint32_t r_index) {
  * This must be called before creating or using any SST instance.
  */
 void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank) {
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, port);
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
 
     // init all of the resources, so cleanup will be easy
     resources_init();

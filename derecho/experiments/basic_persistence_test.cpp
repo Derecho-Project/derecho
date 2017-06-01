@@ -18,7 +18,7 @@ using std::chrono::duration;
 using std::chrono::microseconds;
 using derecho::RawObject;
 
-const int GMS_PORT = derecho_gms_port;
+const int GMS_PORT = derecho::derecho_gms_port;
 const size_t message_size = 1000;
 const size_t block_size = 1000;
 

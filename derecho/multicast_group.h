@@ -16,6 +16,7 @@
 
 #include "connection_manager.h"
 #include "derecho_modes.h"
+#include "derecho_ports.h"
 #include "derecho_sst.h"
 #include "filewriter.h"
 #include "mutils-serialization/SerializationMacros.hpp"
@@ -53,7 +54,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
-    uint32_t rpc_port = 12487;
+    uint32_t rpc_port = derecho_rpc_port;
 
     DerechoParams(long long unsigned int max_payload_size,
                   long long unsigned int block_size,
@@ -61,7 +62,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = 12487)
+                  uint32_t rpc_port = derecho_rpc_port)
             : max_payload_size(max_payload_size),
               block_size(block_size),
               filename(filename),
@@ -328,7 +329,7 @@ public:
             const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
             const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
             const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
-            std::vector<char> already_failed = {}, uint32_t rpc_port = 12487);
+            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho_rpc_port);
 
     ~MulticastGroup();
 
