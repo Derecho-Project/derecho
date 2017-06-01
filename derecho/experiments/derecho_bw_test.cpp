@@ -129,10 +129,8 @@ int main(int argc, char *argv[]) {
         return subgroup_vector;
     };
 
-    derecho::SubgroupInfo one_raw_group;
-    one_raw_group = {{{std::type_index(typeid(RawObject)), membership_function}}};
-    one_raw_group.membership_function_order = {std::type_index(typeid(RawObject))};
-
+    derecho::SubgroupInfo one_raw_group({{std::type_index(typeid(RawObject)), membership_function}});
+    
     std::unique_ptr<derecho::Group<>> managed_group;
     std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));
     if(node_rank == server_rank) {

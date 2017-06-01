@@ -61,7 +61,7 @@ struct SubgroupInfo {
      * of a given type, indexed by the type of Replicated Object whose subgroups
      * they describe.
      */
-    std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions;
+    const std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions;
     /**
      * This list should contain the same Replicated Object types as the keys of
      * subgroup_membership_functions, listed in the order those membership
@@ -70,7 +70,24 @@ struct SubgroupInfo {
      * result of another membership function, they can be ordered so the
      * dependent function runs second.
      */
-    std::list<std::type_index> membership_function_order;
+    const std::list<std::type_index> membership_function_order;
+
+    SubgroupInfo(std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions,
+                 std::list<std::type_index> membership_function_order)
+            : subgroup_membership_functions(subgroup_membership_functions),
+              membership_function_order(membership_function_order) {
+    }
+    SubgroupInfo(std::map<std::type_index, shard_view_generator_t> subgroup_membership_functions)
+            : subgroup_membership_functions(subgroup_membership_functions),
+              membership_function_order([subgroup_membership_functions]() {
+                  std::list<std::type_index> membership_function_order;
+                  // if no ordering is given, choose the ordering as given by the keys of the subgroup_membership functions map
+                  for(const auto& p : subgroup_membership_functions) {
+                      membership_function_order.push_back(p.first);
+                  }
+                  return membership_function_order;
+              }()) {
+    }
 };
 
 /**

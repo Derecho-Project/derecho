@@ -68,11 +68,14 @@ int main(int argc, char *argv[]) {
             }
         };
 
-        derecho::SubgroupInfo one_raw_group;
+        unique_ptr<derecho::SubgroupInfo> one_raw_group;
+        std::map<std::type_index, derecho::shard_view_generator_t> membership_map;
         if(raw_mode) {
-            one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}}};
+            membership_map = {{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}};
+            one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
         } else {
-            one_raw_group = {{{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}}};
+            membership_map = {{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}};
+            one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
         }
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
@@ -83,14 +86,14 @@ int main(int argc, char *argv[]) {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,
                     callbacks,
-                    one_raw_group,
+                    *one_raw_group,
                     derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,
                     leader_ip,
                     callbacks,
-                    one_raw_group);
+                    *one_raw_group);
         }
 
         while(managed_group->get_members().size() < num_nodes) {
