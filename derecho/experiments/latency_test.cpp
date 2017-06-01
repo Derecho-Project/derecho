@@ -15,11 +15,9 @@ using namespace std;
 
 #include "block_size.h"
 #include "derecho/derecho.h"
+#include "log_results.h"
 
 unique_ptr<rdmc::barrier_group> universal_barrier_group;
-
-vector<uint64_t> start_times;
-vector<uint64_t> end_times[32];
 
 void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, derecho::ip_addr &leader_ip) {
     cout << "Please enter this node's ID: ";
@@ -29,6 +27,23 @@ void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, der
     cout << "Please enter the leader node's IP address: ";
     cin >> leader_ip;
 }
+
+struct exp_result {
+    uint32_t num_nodes;
+    long long unsigned int max_msg_size;
+    unsigned int window_size;
+    int num_messages;
+    int send_medium;
+    int raw_mode;
+    double latency;
+
+    void print(std::ofstream &fout) {
+        fout << num_nodes << " " << max_msg_size
+	     << " " << window_size << " "
+             << num_messages << " " << send_medium << " "
+             << raw_mode << " " << latency << endl;
+    }
+};
 
 int main(int argc, char *argv[]) {
     try {
@@ -48,21 +63,26 @@ int main(int argc, char *argv[]) {
         query_node_info(node_id, my_ip, leader_ip);
 
         const long long unsigned int max_msg_size = msg_size;
-        const long long unsigned int block_size = msg_size * 2;
+        const long long unsigned int block_size = get_block_size(max_msg_size);
         const unsigned int window_size = atoi(argv[3]);
         const int send_medium = atoi(argv[4]);
         const int raw_mode = atoi(argv[5]);
 
         int num_messages = 1000;
+	// only used by node 0
+        vector<uint64_t> start_times(num_messages);
+        vector<uint64_t> end_times(num_messages);
 
         volatile bool done = false;
-        auto stability_callback = [&num_messages, &done, &num_nodes](
+        auto stability_callback = [&num_messages, &done, &num_nodes, &end_times](
                 int32_t subgroup, int sender_id, long long int index, char *buf,
                 long long int msg_size) mutable {
             // cout << buf << endl;
             // cout << "Delivered a message" << endl;
-            DERECHO_LOG(sender_id, index, "complete_send");
-            end_times[sender_id].push_back(get_time());
+            // DERECHO_LOG(sender_id, index, "complete_send");
+            if(sender_id == 0) {
+                end_times[index] = get_time();
+            }
             if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
             }
@@ -137,8 +157,8 @@ int main(int argc, char *argv[]) {
                 buf[j] = 'a' + (i % 26);
             }
             buf[msg_size - 1] = 0;
-            start_times.push_back(get_time());
-            DERECHO_LOG(my_rank, i, "start_send");
+            start_times[i] = get_time();
+            // DERECHO_LOG(my_rank, i, "start_send");
             group_as_subgroup.send();
 
             if(node_id == 0) {
@@ -148,12 +168,19 @@ int main(int argc, char *argv[]) {
         while(!done) {
         }
 
-        managed_group->barrier_sync();
-
-        flush_events();
+        uint64_t total_time = 0;
+        for(int i = 0; i < num_messages; ++i) {
+            total_time += end_times[i] - start_times[i];
+        }
+        if(node_id == 0) {
+	  log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, send_medium, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
+        }
+        // managed_group->barrier_sync();
+        // flush_events();
         // for(int i = 100; i < num_messages - 100; i+= 5){
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }
+	
         managed_group->barrier_sync();
         exit(0);
     } catch(const std::exception &e) {
