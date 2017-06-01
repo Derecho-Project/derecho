@@ -800,6 +800,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
                                          std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
                                          std::map<subgroup_id_t, Mode>& subgroup_to_mode) {
+    std::cout << "In make_subgroup_maps" << std::endl;
     uint32_t num_received_offset = 0;
     bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;

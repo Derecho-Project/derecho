@@ -104,6 +104,7 @@ int main(int argc, char *argv[]) {
     }
 
     auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
+        cout << "Here in the subgroup function" << endl;
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         if(num_members < num_nodes) {
@@ -124,12 +125,13 @@ int main(int argc, char *argv[]) {
             }
             subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
         }
-	next_unassigned_rank = curr_view.members.size();
+        next_unassigned_rank = curr_view.members.size();
         return subgroup_vector;
     };
 
     derecho::SubgroupInfo one_raw_group;
     one_raw_group = {{{std::type_index(typeid(RawObject)), membership_function}}};
+    one_raw_group.membership_function_order = {std::type_index(typeid(RawObject))};
 
     std::unique_ptr<derecho::Group<>> managed_group;
     std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));

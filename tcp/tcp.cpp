@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstring>
+#include <iostream>
 #include <netdb.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -128,10 +129,12 @@ connection_listener::connection_listener(int port) {
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(port);
-    if(bind(listenfd, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    if(bind(listenfd, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         fprintf(stderr,
                 "ERROR on binding to socket in ConnectionListener: %s\n",
                 strerror(errno));
+	std::cout << "Port is: " << port << std::endl;
+    }
     listen(listenfd, 5);
 
     fd = unique_ptr<int, std::function<void(int *)>>(
