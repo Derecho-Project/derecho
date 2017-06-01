@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.1)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAG_RELEASE "-std=c++14 -Wall -O3")
 
 add_subdirectory(experiments)
 
