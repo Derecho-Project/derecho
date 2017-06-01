@@ -319,7 +319,7 @@ void ViewManager::register_predicates() {
                 // push change to gmsSST.suspected[myRank]
                 gmsSST.put(gmsSST.suspected.get_base() - gmsSST.getBaseAddress(), gmsSST.changes.get_base() - gmsSST.suspected.get_base());
                 // push change to gmsSST.wedged[myRank]
-                gmsSST.put(gmsSST.wedged.get_base() - gmsSST.getBaseAddress(), sizeof(bool));
+                gmsSST.put(gmsSST.wedged.get_base() - gmsSST.getBaseAddress(), sizeof(gmsSST.wedged[0]));
                 if(Vc.i_am_leader() && !changes_contains(gmsSST, Vc.members[q]))  // Leader initiated
                 {
                     const int next_change_index = gmsSST.num_changes[myRank] - gmsSST.num_installed[myRank];
@@ -331,8 +331,8 @@ void ViewManager::register_predicates() {
                     gmssst::increment(gmsSST.num_changes[myRank]);
                     logger->debug("Leader proposed a change to remove failed node {}", Vc.members[q]);
                     gmsSST.put((char*)std::addressof(gmsSST.changes[0][next_change_index]) - gmsSST.getBaseAddress(),
-                               sizeof(node_id_t));
-                    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(), sizeof(int));
+                               sizeof(gmsSST.changes[0][next_change_index]));
+                    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(), sizeof(gmsSST.num_changes[0]));
                 }
             }
         }
@@ -361,11 +361,11 @@ void ViewManager::register_predicates() {
         gmssst::set(gmsSST.num_committed[gmsSST.get_local_index()],
                     min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
         logger->debug("Leader committing change proposal #{}", gmsSST.num_committed[gmsSST.get_local_index()]);
-        gmsSST.put(gmsSST.num_committed.get_base() - gmsSST.getBaseAddress(), sizeof(int));
+        gmsSST.put(gmsSST.num_committed.get_base() - gmsSST.getBaseAddress(), sizeof(gmsSST.num_committed[0]));
     };
 
     /* These are mostly intended for non-leaders, and update nAcked to acknowledge
-     * a proposed change when the leader increments nChanges. Only one join can be
+     * a proposed change when the leader increments num_changes. Only one join can be
      * proposed at once, but multiple failures could be proposed and acknowledged. */
     auto leader_proposed_change = [this](const DerechoSST& gmsSST) {
         return gmsSST.num_changes[curr_view->rank_of_leader()]
@@ -411,6 +411,7 @@ void ViewManager::register_predicates() {
         gmsSST.predicates.remove(leader_proposed_handle);
 
         View& Vc = *curr_view;
+
         int myRank = curr_view->my_rank;
         // These fields had better be synchronized.
         assert(gmsSST.get_local_index() == curr_view->my_rank);
@@ -1028,10 +1029,10 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(int) * num_shard_senders);
+                   sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(bool));
+                   sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
 
     deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
     logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
@@ -1049,10 +1050,10 @@ void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t sub
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(int) * num_shard_senders);
+                   sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
-                   sizeof(bool));
+                   sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
     deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
     logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
 }
@@ -1073,7 +1074,7 @@ void ViewManager::report_failure(const node_id_t who) {
     if(cnt >= (curr_view->num_members + 1) / 2) {
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
-    curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(), sizeof(bool));
+    curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(), sizeof(curr_view->gmsSST->suspected[0][r]));
 }
 
 void ViewManager::leave() {
@@ -1082,7 +1083,7 @@ void ViewManager::leave() {
     curr_view->multicast_group->wedge();
     curr_view->gmsSST->predicates.clear();
     curr_view->gmsSST->suspected[curr_view->my_rank][curr_view->my_rank] = true;
-    curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][curr_view->my_rank]) - curr_view->gmsSST->getBaseAddress(), sizeof(bool));
+    curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][curr_view->my_rank]) - curr_view->gmsSST->getBaseAddress(), sizeof(curr_view->gmsSST->suspected[0][curr_view->my_rank]));
     thread_shutdown = true;
 }
 

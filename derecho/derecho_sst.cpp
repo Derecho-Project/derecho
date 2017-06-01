@@ -18,6 +18,8 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
            (old_sst.joiner_ips.size() - num_changes_installed) * sizeof(uint32_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
+    }
+    for(size_t i = 0; i < global_min_ready.size(); ++i) {
         global_min_ready[local_row][i] = false;
     }
     for(size_t i = 0; i < global_min.size(); ++i) {
@@ -37,6 +39,9 @@ void DerechoSST::init_local_change_proposals(const int other_row) {
     memcpy(const_cast<node_id_t*>(changes[local_row]),
            const_cast<const node_id_t*>(changes[other_row]),
            changes.size() * sizeof(node_id_t));
+    memcpy(const_cast<node_id_t*>(joiner_ips[local_row]),
+           const_cast<const node_id_t*>(joiner_ips[other_row]),
+           joiner_ips.size() * sizeof(node_id_t));
     num_changes[local_row] = num_changes[other_row];
     num_committed[local_row] = num_committed[other_row];
     num_acked[local_row] = num_acked[other_row];
@@ -47,25 +52,28 @@ std::string DerechoSST::to_string() const {
     std::stringstream s;
     uint num_rows = get_num_rows();
     for(uint row = 0; row < num_rows; ++row) {
-        s << "Row=" << row << " ";
-        s << "Vid=" << vid[row] << " ";
-        s << "Suspected={ ";
+        s << "row=" << row << " ";
+        s << "vid=" << vid[row] << " ";
+        s << "suspected={ ";
         for(unsigned int n = 0; n < suspected.size(); n++) {
             s << (suspected[row][n] ? "T" : "F") << " ";
         }
 
         s << "}, num_changes=" << num_changes[row] << ", num_committed="
           << num_committed[row] << ", num_installed=" << num_installed[row];
-        s << ", Changes={ ";
+        s << ", changes={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << changes[row][n] << " ";
         }
-        s << "}, num_acked= " << num_acked[row] << ", nReceived={ ";
+        s << "}, num_acked= " << num_acked[row] << ", num_received={ ";
         for(unsigned int n = 0; n < num_received.size(); n++) {
             s << num_received[row][n] << " ";
         }
-        s << "}"
-          << ", seq_num={ ";
+        s << "}, joiner_ips={ ";
+        for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
+            s << joiner_ips[row][n] << " ";
+        }
+        s << "}, seq_num={ ";
         for(unsigned int n = 0; n < seq_num.size(); n++) {
             s << seq_num[row][n] << " ";
         }
@@ -80,12 +88,12 @@ std::string DerechoSST::to_string() const {
             s << delivered_num[row][n] << " ";
         }
         s << "}"
-          << ", Wedged = " << (wedged[row] ? "T" : "F") << ", GlobalMin = { ";
+          << ", wedged = " << (wedged[row] ? "T" : "F") << ", global_min = { ";
         for(unsigned int n = 0; n < global_min.size(); n++) {
             s << global_min[row][n] << " ";
         }
 
-        s << "}, GlobalMinReady= { ";
+        s << "}, global_min_ready= { ";
         for(uint n = 0; n < global_min_ready.size(); n++) {
             s << global_min_ready[row] << " ";
         }

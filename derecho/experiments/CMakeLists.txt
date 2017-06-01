@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3 -O1")
+set(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Wall -ggdb -gdwarf-3")
 
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
@@ -29,6 +29,10 @@ target_link_libraries(multiple_senders_multiple_messages derecho)
 # derecho_bw_test
 add_executable(derecho_bw_test derecho_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
 target_link_libraries(derecho_bw_test derecho)
+
+# latency_test
+add_executable(latency_test latency_test.cpp block_size.cpp)
+target_link_libraries(latency_test derecho)
 
 # derecho_caller_test
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
@@ -87,7 +91,7 @@ add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
 # smart membership function
-add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-target_link_libraries(smart_membership_function_test derecho)
+# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+# target_link_libraries(smart_membership_function_test derecho)
 
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

@@ -26,7 +26,7 @@
 using namespace std;
 using derecho::RawObject;
 
-const int GMS_PORT = 12345;
+const int GMS_PORT = derecho::derecho_gms_port;
 const size_t message_size = 1000;
 const size_t block_size = 1000;
 

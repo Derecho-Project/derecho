@@ -9,7 +9,7 @@
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 
-static const int GMS_PORT = 12345;
+static const int GMS_PORT = derecho::derecho_gms_port;
 
 using std::vector;
 using std::map;

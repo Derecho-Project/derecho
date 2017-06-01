@@ -23,7 +23,9 @@
 #include <unistd.h>
 
 #include "derecho/connection_manager.h"
+#include "derecho/derecho_ports.h"
 #include "poll_utils.h"
+#include "tcp/tcp.h"
 #include "verbs.h"
 
 using std::cout;
@@ -62,7 +64,6 @@ int ib_port = 1;
 /** GID index to use. */
 int gid_idx = 0;
 
-static const int port = 22549;
 tcp::tcp_connections *sst_connections;
 
 //  unsigned int max_time_to_completion = 0;
@@ -341,9 +342,8 @@ int resources::post_remote_send(uint32_t id, long long int offset, long long int
     sr.wr.rdma.remote_addr = remote_props.addr + offset;
     sr.wr.rdma.rkey = remote_props.rkey;
 
-    // there is a receive request in the responder side, so we won't get any
-    // into
-    // RNR flow
+    // there is a receive request in the responder side
+    // , so we won't get any into RNR flow
     int ret_code = ibv_post_send(qp, &sr, &bad_wr);
     return ret_code;
 }
@@ -445,8 +445,8 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     // check the completion status (here we don't care about the completion
     // opcode)
     if(wc.status != IBV_WC_SUCCESS) {
-        cout << "got bad completion with status: 0x%x, vendor syndrome: "
-             << wc.status << ", " << wc.vendor_err;
+        cout << "got bad completion with status: "
+             << wc.status << ", vendor syndrome: " << wc.vendor_err;
         return {wc.wr_id, {wc.qp_num, -1}};
     }
     return {wc.wr_id, {wc.qp_num, 1}};
@@ -478,7 +478,7 @@ void resources_create() {
     for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
-	    fprintf(stdout, "device not specified, using first one found: %s\n",
+            fprintf(stdout, "device not specified, using first one found: %s\n",
                     dev_name);
         }
         if(!strcmp(ibv_get_device_name(dev_list[i]), dev_name)) {
@@ -536,7 +536,7 @@ bool sync(uint32_t r_index) {
  * This must be called before creating or using any SST instance.
  */
 void verbs_initialize(const map<uint32_t, string> &ip_addrs, uint32_t node_rank) {
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, port);
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
 
     // init all of the resources, so cleanup will be easy
     resources_init();

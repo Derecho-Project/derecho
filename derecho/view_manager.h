@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "derecho_ports.h"
 #include "locked_reference.h"
 #include "spdlog/spdlog.h"
 #include "subgroup_info.h"
@@ -229,7 +230,7 @@ public:
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = 12345);
+                const int gms_port = derecho_gms_port);
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -252,7 +253,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = 12345);
+                const int gms_port = derecho_gms_port);
 
     /**
      * Constructor for recovering a failed node by loading its View from log
@@ -277,7 +278,7 @@ public:
                 const SubgroupInfo& subgroup_info,
                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = 12345);
+                const int gms_port = derecho_gms_port);
 
     ~ViewManager();
 

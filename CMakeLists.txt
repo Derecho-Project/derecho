@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8.1)
 
 project(derecho CXX)
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS "-std=c++14 -O3 -Wall -ggdb -gdwarf-3")
 
 add_subdirectory(derecho)
 add_subdirectory(rdmc)
