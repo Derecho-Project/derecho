@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     auto check_failures_loop = [&sst]() {
         pthread_setname_np(pthread_self(), "check_failures");
         while(true) {
-            std::this_thread::sleep_for(chrono::microseconds(100));
+            std::this_thread::sleep_for(chrono::microseconds(1000));
             if(sst) {
                 sst->put_with_completion((char*)std::addressof(sst->heartbeat[0]) - sst->getBaseAddress(), sizeof(bool));
             }
