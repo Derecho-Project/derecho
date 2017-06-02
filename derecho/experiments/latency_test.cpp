@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
                 long long int msg_size) mutable {
             // cout << buf << endl;
             // cout << "Delivered a message" << endl;
-            DERECHO_LOG(sender_id, index, "complete_send");
+            // DERECHO_LOG(sender_id, index, "complete_send");
             end_times[sender_id].push_back(get_time());
             if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                 done = true;
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
             }
             buf[msg_size - 1] = 0;
             start_times.push_back(get_time());
-            DERECHO_LOG(my_rank, i, "start_send");
+            // DERECHO_LOG(my_rank, i, "start_send");
             group_as_subgroup.send();
 
             if(node_id == 0) {

@@ -46,3 +46,5 @@ CMakeFiles
 /derecho/experiments/latency_test
 /tcp/script_copy.sh
 /derecho/subgroup_function_tester
+Debug
+Release

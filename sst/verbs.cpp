@@ -25,7 +25,6 @@
 #include "derecho/connection_manager.h"
 #include "derecho/derecho_ports.h"
 #include "poll_utils.h"
-#include "rdmc/util.h"
 #include "tcp/tcp.h"
 #include "verbs.h"
 
@@ -303,7 +302,7 @@ void resources::connect_qp() {
         cout << "Could not sync in connect_qp after qp transition to RTS state" << endl;
     }
 }
-
+  
 /**
  * This is used for both reads and writes.
  *
@@ -341,8 +340,6 @@ int resources::post_remote_send(const uint32_t id, const long long int offset, c
     // set the remote rkey and virtual address
     sr.wr.rdma.remote_addr = remote_props.addr + offset;
     sr.wr.rdma.rkey = remote_props.rkey;
-
-    // DERECHO_LOG(-1, -1, "Calling ibv_post_send");
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
     auto ret = ibv_post_send(qp, &sr, &bad_wr);
