@@ -70,8 +70,7 @@ int main(int argc, char *argv[]) {
 
         int num_messages = 1000;
 	// only used by node 0
-        vector<uint64_t> start_times(num_messages);
-        vector<uint64_t> end_times(num_messages);
+        vector<uint64_t> start_times(num_messages), end_times(num_messages);
 
         volatile bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes, &end_times](
