@@ -182,6 +182,8 @@ int main(int argc, char *argv[]) {
         // }
 	
         managed_group->barrier_sync();
+	// managed_group->leave();
+	// sst::verbs_destroy();
         exit(0);
     } catch(const std::exception &e) {
         cout << "Main got an exception: " << e.what() << endl;

@@ -209,6 +209,7 @@ int main(int argc, char *argv[]) {
 
     managed_group->barrier_sync();
     // managed_group->leave();
+    // sst::verbs_destroy();
     exit(0);
     cout << "Finished destroying managed_group" << endl;
 }
