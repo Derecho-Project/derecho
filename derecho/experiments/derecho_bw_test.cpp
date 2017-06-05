@@ -49,12 +49,12 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
 
     uint32_t server_rank = 0;
-    uint32_t node_rank;
+    uint32_t node_id;
     uint32_t num_nodes;
 
     map<uint32_t, std::string> node_addresses;
 
-    rdmc::query_addresses(node_addresses, node_rank);
+    rdmc::query_addresses(node_addresses, node_id);
     num_nodes = node_addresses.size();
 
     vector<uint32_t> members(num_nodes);
@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
     }
 
     auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
-        cout << "Here in the subgroup function" << endl;
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         if(num_members < num_nodes) {
@@ -132,16 +131,15 @@ int main(int argc, char *argv[]) {
     derecho::SubgroupInfo one_raw_group({{std::type_index(typeid(RawObject)), membership_function}});
     
     std::unique_ptr<derecho::Group<>> managed_group;
-    std::this_thread::sleep_for(std::chrono::milliseconds(node_rank * 50));
-    if(node_rank == server_rank) {
+    if(node_id == server_rank) {
         managed_group = std::make_unique<derecho::Group<>>(
-                node_rank, node_addresses[node_rank],
+                node_id, node_addresses[node_id],
                 derecho::CallbackSet{stability_callback, nullptr},
                 one_raw_group,
                 derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
     } else {
         managed_group = std::make_unique<derecho::Group<>>(
-                node_rank, node_addresses[node_rank],
+                node_id, node_addresses[node_id],
                 node_addresses[server_rank],
                 derecho::CallbackSet{stability_callback, nullptr},
                 one_raw_group);
@@ -157,6 +155,10 @@ int main(int argc, char *argv[]) {
         cout << id << " ";
     }
     cout << endl;
+    uint32_t my_rank = 0;
+    while(members_order[my_rank] != node_id) {
+        my_rank++;
+    }
 
     auto send_all = [&]() {
         RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
@@ -172,17 +174,18 @@ int main(int argc, char *argv[]) {
         }
     };
 
+    managed_group->barrier_sync();
     struct timespec start_time;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
     if(num_senders_selector == 0) {
         send_all();
     } else if(num_senders_selector == 1) {
-        if(node_rank > (num_nodes - 1) / 2) {
+        if(my_rank > (num_nodes - 1) / 2) {
             send_all();
         }
     } else {
-        if(node_rank == num_nodes - 1) {
+        if(my_rank == num_nodes - 1) {
             send_all();
         }
     }
@@ -199,8 +202,8 @@ int main(int argc, char *argv[]) {
     } else {
         bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
     }
-    double avg_bw = aggregate_bandwidth(members, node_rank, bw);
-    if(node_rank == 0) {
+    double avg_bw = aggregate_bandwidth(members, node_id, bw);
+    if(node_id == 0) {
         log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
                                window_size, num_messages, send_medium,
                                raw_mode, avg_bw},
