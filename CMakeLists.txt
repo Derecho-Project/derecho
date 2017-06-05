@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8.1)
-
+set(CMAKE_DISABLE_SOURCE_CHANGES ON)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++14 -Wall -O3")
