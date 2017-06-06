@@ -343,7 +343,6 @@ int resources::post_remote_send(const uint32_t id, const long long int offset, c
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
     auto ret = ibv_post_send(qp, &sr, &bad_wr);
-    // DERECHO_LOG(-1, -1, "Returning from ibv_post_send");
     return ret;
 }
 
