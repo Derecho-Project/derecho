@@ -38,10 +38,11 @@ namespace ns_persistent {
   */
 
   // function types to be registered for create version
-  // or persist version
+  // , persist version, and trim a version
   using VersionFunc = std::function<void(const __int128 &)>;
   using PersistFunc = std::function<void(void)>;
-  using FuncRegisterCallback = std::function<void(VersionFunc,PersistFunc)>;
+  using TrimFunc = std::function<void(const __int128 &)>;
+  using FuncRegisterCallback = std::function<void(VersionFunc,PersistFunc,TrimFunc)>;
 
   // Persistent represents a variable backed up by persistent storage. The
   // backend is PersistLog class. PersistLog handles only raw bytes and this
@@ -105,7 +106,8 @@ namespace ns_persistent {
         if(func_register_cb != nullptr){
           func_register_cb(
             std::bind(&Persistent<ObjectType,storageType>::version,this,std::placeholders::_1),
-            std::bind(&Persistent<ObjectType,storageType>::persist,this)
+            std::bind(&Persistent<ObjectType,storageType>::persist,this),
+            std::bind(&Persistent<ObjectType,storageType>::trim<const __int128>,this,std::placeholders::_1) //trim by version:(const __int128)
         );
         }
       }
@@ -279,6 +281,7 @@ namespace ns_persistent {
       // make a version
       virtual void version(const __int128 & ver)
         noexcept(false) {
+        //TODO: compare if value has been changed?
         this->set(this->wrapped_obj,ver);
       }
 
@@ -333,7 +336,7 @@ namespace ns_persistent {
         pthread_spinlock_t m_oLck;
       };
 
-  private:
+  protected:
       // wrapped objected
       ObjectType wrapped_obj;
       
@@ -356,15 +359,60 @@ namespace ns_persistent {
   class Volatile: public Persistent<ObjectType,ST_MEM>{
   public:
     // constructor: this will guess the objectname form ObjectType
-    Volatile<ObjectType>() noexcept(false):
-      Persistent<ObjectType,ST_MEM>(){
+    Volatile (
+      FuncRegisterCallback func_register_cb=nullptr,
+      const char * object_name = (*Persistent<ObjectType,ST_MEM>::getNameMaker().make()).c_str())
+      noexcept(false):
+      Persistent<ObjectType,ST_MEM>(func_register_cb,object_name){
     };
     // destructor:
     virtual ~Volatile() noexcept(false){
       // do nothing
     };
   };
-}
 
+  /*
+   * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
+   * variables. Replicated<T> class should maintain such a registry to perform
+   * the following operations:
+   * - makeVersion(const __int128 & ver): create a version 
+   * - persist(): persist the existing versions
+   * - trim(const __int128 & ver): trim all versions earlier than ver
+   */
+  class PersistentRegistry{
+  public:
+    PersistentRegistry() {
+      //
+    };
+    virtual ~PersistentRegistry() {
+      this->_registry.clear();
+    };
+    #define VERSION_FUNC_IDX (0)
+    #define PERSIST_FUNC_IDX (1)
+    #define TRIM_FUNC_IDX (2)
+    void makeVersion(const __int128 & ver) noexcept(false) {
+      callFunc<VERSION_FUNC_IDX>(ver);
+    };
+    void persist() noexcept(false) {
+      callFunc<PERSIST_FUNC_IDX>();
+    };
+    void trim(const __int128 & ver) noexcept(false) {
+      callFunc<TRIM_FUNC_IDX>(ver);
+    };
+    void registerPersist(const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
+      //this->_registry.push_back(std::make_tuple<VersionFunc,PersistFunc,TrimFunc>(
+      this->_registry.push_back(std::make_tuple(vf,pf,tf));
+    };
+  protected:
+    std::vector<std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    template<int funcIdx,typename ... Args >
+    void callFunc(Args ... args) {
+      for (auto itr = this->_registry.begin();
+        itr != this->_registry.end(); ++itr) {
+        std::get<funcIdx>(*itr)(args ...);
+      }
+    };
+  };
+}
 
 #endif//PERSIST_VAR_H
