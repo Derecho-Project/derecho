@@ -39,6 +39,7 @@ struct exp_result {
 };
 
 int main(int argc, char *argv[]) {
+  try {
     if(argc < 7) {
         cout << "Insufficient number of command line arguments" << endl;
         cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, send_medium, raw_mode" << endl;
@@ -206,8 +207,13 @@ int main(int argc, char *argv[]) {
     }
 
     managed_group->barrier_sync();
-    // managed_group->leave();
-    // sst::verbs_destroy();
-    exit(0);
+    managed_group->leave();
+    sst::verbs_destroy();
     cout << "Finished destroying managed_group" << endl;
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+  }
+  catch (const std::exception &e) {
+    cout << "Exception in main: " << e.what() << endl;
+    cout << "main shutting down" << endl;
+  }
 }

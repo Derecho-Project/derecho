@@ -533,6 +533,7 @@ void resources_create() {
 
     // start the polling thread
     polling_thread = std::thread(polling_loop);
+    polling_thread.detach();
 }
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr) {
@@ -568,11 +569,7 @@ void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs, uint32_t 
  * only be called once all SST instances have been destroyed.
  */
 void verbs_destroy() {
-    cout << "Waiting for polling thread to exit" << endl;
     shutdown = true;
-    if(polling_thread.joinable()) {
-        polling_thread.join();
-    }
     // int rc;
     // if(g_res->cq) {
     //     rc = ibv_destroy_cq(g_res->cq);
