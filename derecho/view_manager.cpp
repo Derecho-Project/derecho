@@ -378,12 +378,13 @@ void ViewManager::register_predicates() {
         int leader = curr_view->rank_of_leader();
         logger->debug("Detected that leader proposed change #{}. Acknowledging.", gmsSST.num_changes[leader]);
         if(myRank != leader) {
+            // Echo the count
+            gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
+
             // Echo (copy) the vector including the new changes
             gmssst::set(gmsSST.changes[myRank], gmsSST.changes[leader], gmsSST.changes.size());
             // Echo the new member's IP
             gmssst::set(gmsSST.joiner_ips[myRank], gmsSST.joiner_ips[leader], gmsSST.joiner_ips.size());
-            // Echo the count
-            gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
             gmssst::set(gmsSST.num_committed[myRank], gmsSST.num_committed[leader]);
         }
 

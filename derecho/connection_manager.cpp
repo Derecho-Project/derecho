@@ -65,7 +65,7 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, ip_ad
     conn_listener = std::make_unique<connection_listener>(port);
 
     for(auto it = ip_addrs.begin(); it != ip_addrs.end(); it++) {
-        //Check that there isn't already be a connection to this ID,
+        //Check that there isn't already a connection to this ID,
         //since an earlier add_connection could have connected to it by "mistake"
         if(it->first != my_id && sockets.count(it->first) == 0) {
             if(!add_connection(it->first, it->second)) {
