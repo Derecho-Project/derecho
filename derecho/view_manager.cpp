@@ -389,7 +389,7 @@ void ViewManager::register_predicates() {
         }
 
         // Notice a new request, acknowledge it
-        gmssst::set(gmsSST.num_acked[myRank], gmsSST.num_changes[leader]);
+        gmssst::set(gmsSST.num_acked[myRank], gmsSST.num_changes[myRank]);
         gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
                    gmsSST.num_received.get_base() - gmsSST.changes.get_base());
         logger->debug("Wedging current view.");
