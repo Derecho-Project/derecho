@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
                 }
                 subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
             }
-	    next_unassigned_rank = curr_view.members.size();
+            next_unassigned_rank = curr_view.members.size();
             return subgroup_vector;
         };
 
@@ -208,8 +208,9 @@ int main(int argc, char *argv[]) {
         }
 
         managed_group->barrier_sync();
-        managed_group->leave();
-        sst::verbs_destroy();
+        // managed_group->leave();
+        // sst::verbs_destroy();
+        exit(0);
         cout << "Finished destroying managed_group" << endl;
         std::this_thread::sleep_for(std::chrono::seconds(10));
     } catch(const std::exception &e) {
