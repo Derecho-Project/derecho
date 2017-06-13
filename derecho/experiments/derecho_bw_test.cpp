@@ -203,7 +203,7 @@ int main(int argc, char *argv[]) {
         } else {
             bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
         }
-        double avg_bw = aggregate_bandwidth(members, node_rank, bw);
+        double avg_bw = aggregate_bandwidth(members, node_id, bw);
         if(node_rank == 0) {
             log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
                                    window_size, num_messages, send_medium,
