@@ -50,12 +50,12 @@ int main(int argc, char *argv[]) {
         srand(time(NULL));
 
         uint32_t server_rank = 0;
-        uint32_t node_rank;
+        uint32_t node_id;
         uint32_t num_nodes;
 
         map<uint32_t, std::string> node_addresses;
 
-        rdmc::query_addresses(node_addresses, node_rank);
+        rdmc::query_addresses(node_addresses, node_id);
         num_nodes = node_addresses.size();
 
         vector<uint32_t> members(num_nodes);
@@ -133,15 +133,15 @@ int main(int argc, char *argv[]) {
         derecho::SubgroupInfo one_raw_group(subgroup_map);
 
         std::unique_ptr<derecho::Group<>> managed_group;
-        if(node_rank == server_rank) {
+        if(node_id == server_rank) {
             managed_group = std::make_unique<derecho::Group<>>(
-                    node_rank, node_addresses[node_rank],
+                    node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     one_raw_group,
                     derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
-                    node_rank, node_addresses[node_rank],
+                    node_id, node_addresses[node_id],
                     node_addresses[server_rank],
                     derecho::CallbackSet{stability_callback, nullptr},
                     one_raw_group);
@@ -151,10 +151,14 @@ int main(int argc, char *argv[]) {
 
         while(managed_group->get_members().size() < num_nodes) {
         }
+	uint32_t node_rank = -1;
         auto members_order = managed_group->get_members();
         cout << "The order of members is :" << endl;
-        for(auto id : members_order) {
-            cout << id << " ";
+        for(uint i = 0; i < num_nodes; ++i) {
+            cout << members_order[i] << " ";
+	    if (members_order[i] == node_id) {
+	      node_rank = i;
+	    }
         }
         cout << endl;
 
