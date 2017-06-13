@@ -50,12 +50,12 @@ int main(int argc, char *argv[]) {
         srand(time(NULL));
 
         uint32_t server_rank = 0;
-        uint32_t node_id;
+        uint32_t node_rank;
         uint32_t num_nodes;
 
         map<uint32_t, std::string> node_addresses;
 
-        rdmc::query_addresses(node_addresses, node_id);
+        rdmc::query_addresses(node_addresses, node_rank);
         num_nodes = node_addresses.size();
 
         vector<uint32_t> members(num_nodes);
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
             mode = derecho::Mode::RAW;
         }
 
-        auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view) {
+        auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
             subgroup_shard_layout_t subgroup_vector(1);
             auto num_members = curr_view.members.size();
             if(num_members < num_nodes) {
@@ -125,11 +125,12 @@ int main(int argc, char *argv[]) {
                 }
                 subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
             }
+	    next_unassigned_rank = curr_view.members.size();
             return subgroup_vector;
         };
 
-        derecho::SubgroupInfo one_raw_group;
-        one_raw_group = {{{std::type_index(typeid(RawObject)), membership_function}}};
+        std::map<std::type_index, shard_view_generator_t> subgroup_map = {{std::type_index(typeid(RawObject)), membership_function}};
+        derecho::SubgroupInfo one_raw_group(subgroup_map);
 
         std::unique_ptr<derecho::Group<>> managed_group;
         if(node_rank == server_rank) {
@@ -148,56 +149,6 @@ int main(int argc, char *argv[]) {
 
         cout << "Finished constructing/joining ManagedGroup" << endl;
 
-        auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
-            subgroup_shard_layout_t subgroup_vector(1);
-            auto num_members = curr_view.members.size();
-            if(num_members < num_nodes) {
-                throw derecho::subgroup_provisioning_exception();
-            }
-            auto members_order = managed_group->get_members();
-            cout << "The order of members is :" << endl;
-            for(auto id : members_order) {
-                cout << id << " ";
-            }
-            cout << endl;
-
-            auto send_all = [&]() {
-                RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-                for(int i = 0; i < num_messages; ++i) {
-                    // cout << "Asking for a buffer" << endl;
-                    char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
-                    while(!buf) {
-                        buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
-                    }
-                    buf[0] = '0' + i;
-                    // cout << "Obtained a buffer, sending" << endl;
-                    group_as_subgroup.send();
-                }
-                subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
-            } next_unassigned_rank
-                    = curr_view.members.size();
-            return subgroup_vector;
-        };
-
-        derecho::SubgroupInfo one_raw_group({{std::type_index(typeid(RawObject)), membership_function}});
-
-        std::unique_ptr<derecho::Group<>> managed_group;
-        if(node_id == server_rank) {
-            managed_group = std::make_unique<derecho::Group<>>(
-                    node_id, node_addresses[node_id],
-                    derecho::CallbackSet{stability_callback, nullptr},
-                    one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
-        } else {
-            managed_group = std::make_unique<derecho::Group<>>(
-                    node_id, node_addresses[node_id],
-                    node_addresses[server_rank],
-                    derecho::CallbackSet{stability_callback, nullptr},
-                    one_raw_group);
-        }
-
-        cout << "Finished constructing/joining ManagedGroup" << endl;
-
         while(managed_group->get_members().size() < num_nodes) {
         }
         auto members_order = managed_group->get_members();
@@ -206,10 +157,6 @@ int main(int argc, char *argv[]) {
             cout << id << " ";
         }
         cout << endl;
-        uint32_t my_rank = 0;
-        while(members_order[my_rank] != node_id) {
-            my_rank++;
-        }
 
         auto send_all = [&]() {
             RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
@@ -219,21 +166,23 @@ int main(int argc, char *argv[]) {
                 while(!buf) {
                     buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
                 }
+                buf[0] = '0' + i;
+                // cout << "Obtained a buffer, sending" << endl;
+                group_as_subgroup.send();
             }
         };
 
-        managed_group->barrier_sync();
         struct timespec start_time;
         // start timer
         clock_gettime(CLOCK_REALTIME, &start_time);
         if(num_senders_selector == 0) {
             send_all();
         } else if(num_senders_selector == 1) {
-            if(my_rank > (num_nodes - 1) / 2) {
+            if(node_rank > (num_nodes - 1) / 2) {
                 send_all();
             }
         } else {
-            if(my_rank == num_nodes - 1) {
+            if(node_rank == num_nodes - 1) {
                 send_all();
             }
         }
@@ -250,8 +199,8 @@ int main(int argc, char *argv[]) {
         } else {
             bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
         }
-        double avg_bw = aggregate_bandwidth(members, node_id, bw);
-        if(node_id == 0) {
+        double avg_bw = aggregate_bandwidth(members, node_rank, bw);
+        if(node_rank == 0) {
             log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
                                    window_size, num_messages, send_medium,
                                    raw_mode, avg_bw},
@@ -259,11 +208,10 @@ int main(int argc, char *argv[]) {
         }
 
         managed_group->barrier_sync();
-        // managed_group->leave();
-        // sst::verbs_destroy();
+        managed_group->leave();
+        sst::verbs_destroy();
         cout << "Finished destroying managed_group" << endl;
-        // for now
-        exit(0);
+        std::this_thread::sleep_for(std::chrono::seconds(10));
     } catch(const std::exception &e) {
         cout << "Exception in main: " << e.what() << endl;
         cout << "main shutting down" << endl;
