@@ -1,3 +1,5 @@
+Full source documentation can be found at https://derecho-project.github.io/.
+
 # Derecho
 This is the main repository for the Derecho project. It unifies the RDMC, SST, and Derecho modules under a single, easy-to-use repository. 
 
@@ -11,6 +13,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++14: GCC 5.4+ or Clang 3.5+
 * The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
+* libboost-dev, libboost-system and libboost-system-dev
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
 
 ### Getting Started
@@ -18,7 +21,14 @@ Since this repository uses Git submodules to refer to some bundled dependencies,
 
     git clone --recursive https://github.com/Derecho-Project/derecho-unified.git
 
-Once cloning is complete, `cd` into the `derecho-unified` directory and run `cmake .`. You can now `cd derecho` and type `make` to compile the Derecho library and ensure all the test and experiment files can compile.
+Once cloning is complete, to compile the code, `cd` into the `derecho-unified` directory and run:
+* mkdir Release
+* cd Release
+* `cmake -DCMAKE_BUILD_TYPE=Release ..`
+* `make`
+
+This will place the binaries and libraries in the sub-dierectories of `Release`.
+The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho-unified` will not work.
 
 To add your own executable (that uses Derecho) to the build system, simply add an executable target to CMakeLists.txt with `derecho` as a "linked library." You can do this either in the top-level CMakeLists.txt or in the CMakeLists.txt inside the "derecho" directory. It will look something like this:
 
@@ -30,6 +40,30 @@ To use Derecho in your code, you simply need to include the header `derecho/dere
 ```cpp
 #include "derecho/derecho.h"
 ```
+
+### Testing (and some hidden gotchas)
+There are many experiment files in derecho/experiments that can be run to test the installation. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
+* sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
+sudo apt-get install infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
+* sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw_nes iw_c2 ib_mthca
+Depending on your system, some of the modules might not load which is fine.
+
+RDMA requires memory pinning of memory regions shared with other nodes. There's a limit on the maximum amount of memory a process can pin, typically 64 KB, which Derecho easily exceeds. Therefore, you need to set this to unlimited. To do so, append the following lines to /etc/security/limits.conf:
+* <username> hard memlock unlimited
+* <username> soft memlock unlimited
+where <username> is your linux username. A * in place of <username> will set this limit to unlimited for all users. Log out and back in again for the limits to reapply. You can test this by verifying that `ulimit -l` outputs `unlimited` in bash.
+
+We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
+
+To test if one of the experiments is working correctly, go to two of your machines (nodes), `cd` to `Release/derecho/experiments` and run `./derecho_bw_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
+The input to the first node is:
+* 0 (it's node id)
+* 2 (number of nodes for the experiment)
+* ip-addr of node 1
+* ip-addr of node 2
+Replace the node id 0 by 1 for the input to the second node.
+As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw` something along the lines of `12 0 10000 15 1000 1 0 0.37282
+`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation at the link given earlier.
 
 ## Using Derecho
 The file `typed_subgroup_test.cpp` within derecho/experiments shows a complete working example of a program that sets up and uses a Derecho group with several Replicated Objects. You can read through that file if you prefer to learn by example, or read on for an explanation of how to use various features of Derecho.
