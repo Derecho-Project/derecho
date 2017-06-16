@@ -189,9 +189,9 @@ int main(int argc, char** argv) {
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = []() { return std::make_unique<Foo>(-1); };
-    auto bar_factory = []() { return std::make_unique<Bar>(); };
-    auto cache_factory = []() { return std::make_unique<Cache>(); };
+    auto foo_factory = [](const PersistentCallbackRegisterFunc &pcrf) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](const PersistentCallbackRegisterFunc &pcrf) { return std::make_unique<Bar>(); };
+    auto cache_factory = [](const PersistentCallbackRegisterFunc &pcrf) { return std::make_unique<Cache>(); };
 
     std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
     if(my_ip == leader_ip) {

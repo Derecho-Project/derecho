@@ -14,7 +14,11 @@
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
 
-using namespace mutils;
+//using namespace mutils;
+using mutils::DeserializationManager; 
+using mutils::deserialize_and_run;
+using mutils::from_bytes;
+using mutils::to_bytes;
 
 namespace ns_persistent {
 
@@ -42,7 +46,7 @@ namespace ns_persistent {
   using VersionFunc = std::function<void(const __int128 &)>;
   using PersistFunc = std::function<void(void)>;
   using TrimFunc = std::function<void(const __int128 &)>;
-  using FuncRegisterCallback = std::function<void(VersionFunc,PersistFunc,TrimFunc)>;
+  using PersistentCallbackRegisterFunc = std::function<void(VersionFunc,PersistFunc,TrimFunc)>;
 
   // Persistent represents a variable backed up by persistent storage. The
   // backend is PersistLog class. PersistLog handles only raw bytes and this
@@ -75,7 +79,7 @@ namespace ns_persistent {
        * @param func_register_cb Call this to register myself to Replicated<T>
        * @param object_name This name is used for persistent data in file.
        */
-      Persistent(FuncRegisterCallback func_register_cb=nullptr,
+      Persistent(PersistentCallbackRegisterFunc func_register_cb=nullptr,
         const char * object_name = (*Persistent::getNameMaker().make()).c_str())
         noexcept(false) {
          // Initialize log
@@ -360,7 +364,7 @@ namespace ns_persistent {
   public:
     // constructor: this will guess the objectname form ObjectType
     Volatile (
-      FuncRegisterCallback func_register_cb=nullptr,
+      PersistentCallbackRegisterFunc func_register_cb=nullptr,
       const char * object_name = (*Persistent<ObjectType,ST_MEM>::getNameMaker().make()).c_str())
       noexcept(false):
       Persistent<ObjectType,ST_MEM>(func_register_cb,object_name){
