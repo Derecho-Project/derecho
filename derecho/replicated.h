@@ -15,17 +15,20 @@
 
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "tcp/tcp.h"
+#include "persistent/Persistent.hpp"
 
 #include "derecho_exception.h"
 #include "remote_invocable.h"
 #include "rpc_manager.h"
 #include "rpc_utils.h"
 
+using namespace ns_persistent;
+
 namespace derecho {
 
 template <typename T>
-using Factory = std::function<std::unique_ptr<T>(void)>;
-
+//using Factory = std::function<std::unique_ptr<T>(void)>;
+using Factory = std::function<std::unique_ptr<T>(PersistentCallbackRegisterFunc)>;
 /**
  * Common interface for all types of Replicated<T>, specifying the methods to
  * send and receive object state. This allows the Group to send object state
@@ -39,11 +42,26 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
+   
 };
 
 template <typename T>
 class Replicated : public ReplicatedObject {
+    /**
+     * Syntax sugar to get the register callback. This is used for persistent<T>
+     * initialization.
+     * @param x, a pointer to the Replicated Object.
+     */
+    #define GET_PERSISTENT_CALLBACK_REGISTER_FUNC(x) [x]( \
+      const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf \
+        ){ \
+        (x)->register_persistent_member(vf,pf,tf); \
+      }
+
 private:
+    /** persistent registry for persistent<t>
+     */
+    PersistentRegistry persistent_registry;
     /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
@@ -130,7 +148,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
-            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory())),
+            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(GET_PERSISTENT_CALLBACK_REGISTER_FUNC(this)))),
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
@@ -325,6 +343,40 @@ public:
     std::size_t receive_object(char* buffer) {
         *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
         return mutils::bytes_size(**user_object_ptr);
+    }
+
+    /**
+     * make a version for all the persistent<T> members.
+     * @param ver - the version number to be made
+     */
+    virtual void make_version(const __int128 & ver) noexcept(false) {
+      persistent_registry.makeVersion(ver);
+    };
+
+    /**
+     * persist the data to the latest version
+     */
+    virtual void persist() noexcept(false) {
+      persistent_registry.persist();
+    };
+
+    /**
+     * trim the logs to a version, inclusively.
+     * @param ver - the version number, before which, logs are going to be
+     * trimmed
+     */
+    virtual void trim(const __int128 & ver) noexcept(false) {
+      persistent_registry.trim(ver);
+    };
+
+    /**
+     * Register a persistent member
+     * @param vf - the version function
+     * @param pf - the persistent function
+     * @param tf - the trim function
+     */ 
+    virtual void register_persistent_member(const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf) noexcept(false) {
+      this->persistent_registry.registerPersist(vf,pf,tf);
     }
 };
 
