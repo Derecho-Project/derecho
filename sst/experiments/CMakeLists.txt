@@ -36,7 +36,7 @@ target_link_libraries(multicast_throughput sst)
 # target_link_libraries(cpu_load_experiment sst)
 
 # write_avg_time
-add_executable(write_avg_time write_avg_time.cpp)
+add_executable(write_avg_time write_avg_time.cpp compute_nodes_list.cpp)
 target_link_libraries(write_avg_time sst)
 
 # format experiments
