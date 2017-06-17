@@ -26,7 +26,8 @@ long long int num_reruns = 10000;
 int main() {
     std::vector<int> size_arr = {1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384};
 
-    std::cout << "FOR THIS EXPERIMENT TO WORK, DO NOT START THE POLLING THREAD!!!" << std::endl;
+    // std::cout << "FOR THIS EXPERIMENT TO WORK, DO NOT START THE POLLING THREAD!!!" << std::endl;
+    shutdown_polling_thread();
 
     // input number of nodes and the local node id
     int num_nodes, node_rank;

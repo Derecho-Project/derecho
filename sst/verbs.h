@@ -91,6 +91,7 @@ void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,
                       uint32_t node_rank);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion();
+void shutdown_polling_thread();
 /** Destroys the global verbs resources. */
 void verbs_destroy();
 

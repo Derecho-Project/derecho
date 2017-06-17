@@ -427,7 +427,7 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
 
-    while(true) {
+    while(!shutdown) {
         poll_result = 0;
         for(int i = 0; i < 50; ++i) {
             poll_result = ibv_poll_cq(g_res->cq, 1, &wc);
@@ -561,6 +561,10 @@ void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs, uint32_t 
     resources_create();
 
     cout << "Initialized global RDMA resources" << endl;
+}
+
+void shutdown_polling_thread() {
+    shutdown = true;
 }
 
 /**
