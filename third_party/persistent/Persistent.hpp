@@ -265,6 +265,10 @@ namespace ns_persistent {
         return this->m_pLog->getEarliestIndex();
       }
 
+      virtual const __int128 getLastPersisted() noexcept(false) {
+        return this->m_pLog->getLastPersisted();
+      };
+
       // make a version with version and mhlc clock
       virtual void set(const ObjectType &v, const __int128 & ver, const HLC &mhlc) 
         noexcept(false) {

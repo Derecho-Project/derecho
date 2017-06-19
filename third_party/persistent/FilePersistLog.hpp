@@ -187,6 +187,7 @@ namespace ns_persistent {
       const HLC &mhlc) noexcept(false);
     virtual int64_t getLength() noexcept(false);
     virtual int64_t getEarliestIndex() noexcept(false);
+    virtual const __int128 getLastPersisted() noexcept(false);
     virtual const void* getEntryByIndex(const int64_t &eno) noexcept(false);
     virtual const void* getEntry(const __int128 & ver) noexcept(false);
     virtual const void* getEntry(const HLC &hlc) noexcept(false);
