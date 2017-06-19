@@ -110,8 +110,10 @@ namespace ns_persistent{
     if (bCreate) {
       META_HEADER->fields.head = 0ll;
       META_HEADER->fields.tail = 0ll;
+      META_HEADER->fields.ver = INVALID_VERSION;
       META_HEADER_PERS->fields.head = -1ll; // -1 means uninitialized
       META_HEADER_PERS->fields.tail = -1ll; // -1 means uninitialized
+      META_HEADER_PERS->fields.ver = INVALID_VERSION;
       // persist the header
       FPL_RDLOCK;
       FPL_PERS_LOCK;
@@ -199,8 +201,8 @@ namespace ns_persistent{
         throw PERSIST_EXP_NOSPACE_DATA; \
       } \
       if ((CURR_LOG_IDX != -1) && \
-          (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver >= ver)) { \
-        __int128 cver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver; \
+          (META_HEADER->fields.ver >= ver)) { \
+        __int128 cver = META_HEADER->fields.ver; \
         dbg_trace("{0}-append cur_ver:{1}.{2} new_ver:{3}.{4}", this->m_sName, \
           (int64_t)(cver>>64),(int64_t)cver,(int64_t)(ver>>64),(int64_t)ver); \
         FPL_UNLOCK; \
@@ -237,6 +239,7 @@ namespace ns_persistent{
 
     // update meta header
     META_HEADER->fields.tail ++;
+    META_HEADER->fields.ver = ver;
     dbg_trace("{0} append:log entry and meta data are updated.",this->m_sName);
 /* No sync
     if (msync(this->m_pMeta,sizeof(MetaHeader),MS_SYNC) != 0) {
@@ -249,6 +252,18 @@ namespace ns_persistent{
     FPL_UNLOCK;
   }
 
+  void FilePersistLog::advanceVersion(const __int128 & ver)
+    noexcept(false) {
+    FPL_WRLOCK;
+    if (META_HEADER->fields.ver < ver){
+      META_HEADER->fields.ver = ver;
+    } else {
+      FPL_UNLOCK;
+      throw PERSIST_EXP_INV_VERSION;
+    }
+    FPL_UNLOCK;
+  }
+
   const __int128 FilePersistLog::persist()
     noexcept(false) {
     __int128 ver_ret = INVALID_VERSION;
@@ -257,7 +272,8 @@ namespace ns_persistent{
 
     if(*META_HEADER == *META_HEADER_PERS) {
       if (CURR_LOG_IDX != -1){
-        ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+        //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+        ver_ret = META_HEADER->fields.ver;
       }
       FPL_PERS_UNLOCK;
       FPL_UNLOCK;
@@ -298,7 +314,8 @@ namespace ns_persistent{
 
     //get the latest flushed version
     if (NUM_USED_SLOTS > 0) {
-      ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+      //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+      ver_ret = META_HEADER->fields.ver;
     }
 
     FPL_PERS_UNLOCK;
@@ -326,17 +343,12 @@ namespace ns_persistent{
 
   const __int128 FilePersistLog::getLastPersisted ()
   noexcept(false) {
-    __int128 last_persisted = INVALID_VERSION;
-    FPL_RDLOCK;
+    __int128 last_persisted = INVALID_VERSION;;
     FPL_PERS_LOCK;
 
-    if ((META_HEADER_PERS->fields.tail > META_HEADER_PERS->fields.head) &&
-       (META_HEADER->fields.head < META_HEADER_PERS->fields.tail)) {
-      last_persisted = LOG_ENTRY_AT(META_HEADER_PERS->fields.tail - 1)->fields.ver;
-    }
+    last_persisted = META_HEADER_PERS->fields.ver;
 
     FPL_PERS_UNLOCK;
-    FPL_UNLOCK
     return last_persisted;
   }
 
