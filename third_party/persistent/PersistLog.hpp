@@ -59,6 +59,9 @@ namespace ns_persistent {
     // Get the Earliest Index
     virtual int64_t getEarliestIndex() noexcept(false) = 0;
 
+    // return the last persisted value
+    virtual const __int128 getLastPersisted() noexcept(false) = 0;
+
     // Get a version by entry number
     virtual const void* getEntryByIndex(const int64_t & eno) noexcept(false) = 0;
 

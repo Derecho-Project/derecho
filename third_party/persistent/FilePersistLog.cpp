@@ -324,6 +324,22 @@ namespace ns_persistent{
     return idx;
   }
 
+  const __int128 FilePersistLog::getLastPersisted ()
+  noexcept(false) {
+    __int128 last_persisted = INVALID_VERSION;
+    FPL_RDLOCK;
+    FPL_PERS_LOCK;
+
+    if ((META_HEADER_PERS->fields.tail > META_HEADER_PERS->fields.head) &&
+       (META_HEADER->fields.head < META_HEADER_PERS->fields.tail)) {
+      last_persisted = LOG_ENTRY_AT(META_HEADER_PERS->fields.tail - 1)->fields.ver;
+    }
+
+    FPL_PERS_UNLOCK;
+    FPL_UNLOCK
+    return last_persisted;
+  }
+
   const void * FilePersistLog::getEntryByIndex (const int64_t &eidx)
     noexcept(false) {
 
