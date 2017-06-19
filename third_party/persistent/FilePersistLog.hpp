@@ -20,13 +20,15 @@ namespace ns_persistent {
     struct {
       int64_t head;     // the head index
       int64_t tail;     // the tail index
+      __int128 ver;     // the latest version number.
       // uint64_t d_head;  // the data head offset
       // uint64_t d_tail;  // the data tail offset
     } fields;
     uint8_t bytes[256];
     bool operator == (const union meta_header & other) {
       return (this->fields.head == other.fields.head) && 
-             (this->fields.tail == other.fields.tail);
+             (this->fields.tail == other.fields.tail) &&
+             (this->fields.ver == other.fields.ver);
     };
   } MetaHeader;
 
@@ -185,6 +187,7 @@ namespace ns_persistent {
     virtual void append(const void * pdata,
       const uint64_t & size, const __int128 & ver,
       const HLC &mhlc) noexcept(false);
+    virtual void advanceVersion(const __int128 & ver) noexcept(false);
     virtual int64_t getLength() noexcept(false);
     virtual int64_t getEarliestIndex() noexcept(false);
     virtual const __int128 getLastPersisted() noexcept(false);

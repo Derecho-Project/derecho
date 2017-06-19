@@ -272,7 +272,7 @@ namespace ns_persistent {
       // make a version with version and mhlc clock
       virtual void set(const ObjectType &v, const __int128 & ver, const HLC &mhlc) 
         noexcept(false) {
-        auto size = bytes_size(v);
+        auto size = mutils::bytes_size(v);
         char buf[size];
         bzero(buf,size);
         to_bytes(v,buf);

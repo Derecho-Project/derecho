@@ -53,6 +53,12 @@ namespace ns_persistent {
       const uint64_t & size, const __int128 & ver, 
       const HLC & mhlc) noexcept(false) = 0;
 
+    /**
+     * Advance the version number without appendding a log. This is useful
+     * to create gap between versions.
+     */
+    virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
+
     // Get the length of the log 
     virtual int64_t getLength() noexcept(false) = 0;
 
