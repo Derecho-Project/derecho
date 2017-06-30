@@ -357,7 +357,16 @@ public:
      * persist the data to the latest version
      */
     virtual void persist() noexcept(false) {
-      persistent_registry.persist();
+      uint64_t persisted_ver = persistent_registry.persist();
+      //TODO:ask Sagar to review the code
+      // 1) read lock the view
+      std::shared_lock<std::shared_timed_mutex> read_lock(group_rpc_manager.view_manager.view_mutex);
+      // 2) update the persisted_num in SST
+      View &Vc = *group_rpc_manager.view_manager.curr_view;
+      Vc.gmsSST->persisted_num[node_id][subgroup_id] = persisted_ver;
+      Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
+        (char*)std::addressof(Vc.gmsSST->delivered_num[node_id][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
+        sizeof(long long int));
     };
 
     /**

@@ -112,7 +112,7 @@ static void eval_write (std::size_t osize, int nops) {
   writeMe.data_len = osize;
   struct timespec ts,te;
   int cnt = nops;
-  __int128 ver = (__int128)0l;
+  int64_t ver = 0l;
   clock_gettime(CLOCK_REALTIME,&ts);
   while(cnt -- > 0) {
     pvar.set(writeMe,ver++);
@@ -157,7 +157,7 @@ int main(int argc,char ** argv){
       cout<<"["<<nv<<"]\t"<<npx.getByIndex(nv)->to_string()<<"\t//by copy"<<endl;
     }
     else if (strcmp(argv[1],"getbyver") == 0){
-      __int128 ver = atoi(argv[2]);
+      int64_t ver = atoi(argv[2]);
 /*
       // by lambda
       npx.get(ver,
@@ -166,7 +166,7 @@ int main(int argc,char ** argv){
         });
 */
       // by copy
-      cout<<"["<<(uint64_t)(ver>>64)<<"."<<(uint64_t)ver<<"]\t"<<npx.get(ver)->to_string()<<"\t//by copy"<<endl;
+      cout<<"["<<ver<<"]\t"<<npx.get(ver)->to_string()<<"\t//by copy"<<endl;
     }
     else if (strcmp(argv[1],"getbytime") == 0){
       HLC hlc;
@@ -187,10 +187,10 @@ int main(int argc,char ** argv){
       cout<<"trim till index "<<nv<<" successfully"<<endl;
     }
     else if(strcmp(argv[1],"trimbyver") == 0){
-      __int128 ver = atol(argv[2]);
+      int64_t ver = atol(argv[2]);
       npx.trim(ver);
       npx.persist();
-      cout<<"trim till ver "<<(int64_t)(ver>>64)<<"."<<(int64_t)ver<<" successfully"<<endl;
+      cout<<"trim till ver "<<ver<<" successfully"<<endl;
     }
     else if(strcmp(argv[1],"trimbytime") == 0){
       HLC hlc;
@@ -202,7 +202,7 @@ int main(int argc,char ** argv){
     }
     else if (strcmp(argv[1],"set") == 0) {
       char* v = argv[2];
-      __int128 ver = (__int128)atoi(argv[3]);
+      int64_t ver = (int64_t)atoi(argv[3]);
       sprintf((*npx).buf,"%s",v);
       (*npx).data_len = strlen(v)+1;
       npx.version(ver);
@@ -211,7 +211,7 @@ int main(int argc,char ** argv){
     else if (strcmp(argv[1],"volatile") == 0) {
       cout<<"loading Persistent<X,ST_MEM> px2"<<endl;
       listvar<X,ST_MEM>(px2);
-      __int128 ver = (__int128)0L;
+      int64_t ver = (int64_t)0L;
       X x;
       x.x = 1;
       px2.set(x,ver++);

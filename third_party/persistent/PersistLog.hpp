@@ -23,7 +23,8 @@ namespace ns_persistent {
     ST_3DXP
   };
 
-  #define INVALID_VERSION ((__int128)-1L)
+  //#define INVALID_VERSION ((__int128)-1L)
+  #define INVALID_VERSION ((int64_t)-1L)
   #define INVALID_INDEX INT64_MAX
 
   // Persistent log interfaces
@@ -50,14 +51,15 @@ namespace ns_persistent {
      * is called on that entry. 
      */
     virtual void append(const void * pdata, 
-      const uint64_t & size, const __int128 & ver, 
+      const uint64_t & size, const int64_t & ver, //const __int128 & ver, 
       const HLC & mhlc) noexcept(false) = 0;
 
     /**
      * Advance the version number without appendding a log. This is useful
      * to create gap between versions.
      */
-    virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
+    // virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
+    virtual void advanceVersion(const int64_t & ver) noexcept(false) = 0;
 
     // Get the length of the log 
     virtual int64_t getLength() noexcept(false) = 0;
@@ -66,13 +68,15 @@ namespace ns_persistent {
     virtual int64_t getEarliestIndex() noexcept(false) = 0;
 
     // return the last persisted value
-    virtual const __int128 getLastPersisted() noexcept(false) = 0;
+    // virtual const __int128 getLastPersisted() noexcept(false) = 0;
+    virtual const int64_t getLastPersisted() noexcept(false) = 0;
 
     // Get a version by entry number
     virtual const void* getEntryByIndex(const int64_t & eno) noexcept(false) = 0;
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const __int128 & ver) noexcept(false) = 0;
+    //virtual const void* getEntry(const __int128 & ver) noexcept(false) = 0;
+    virtual const void* getEntry(const int64_t & ver) noexcept(false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() noexcept(false) = 0;
@@ -85,20 +89,21 @@ namespace ns_persistent {
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const __int128 persist() noexcept(false) = 0;
+    //virtual const __int128 persist() noexcept(false) = 0;
+    virtual const int64_t persist() noexcept(false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed
      */
-    virtual void trim(const int64_t &idx) noexcept(false) = 0;
+    virtual void trimByIndex(const int64_t &idx) noexcept(false) = 0;
 
     /**
      * Trim the log till version, inclusively.
      * @param ver - all log entry before ver will be trimmed.
      */
-    virtual void trim(const __int128 &ver) noexcept(false) = 0;
+    virtual void trim(const int64_t &ver) noexcept(false) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
