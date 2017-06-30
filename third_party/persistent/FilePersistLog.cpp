@@ -183,7 +183,7 @@ namespace ns_persistent{
     }
   }
 
-  void FilePersistLog::append(const void *pdat, const uint64_t & size, const __int128 &ver, const HLC & mhlc)
+  void FilePersistLog::append(const void *pdat, const uint64_t & size, const int64_t &ver, const HLC & mhlc)
   noexcept(false) {
     dbg_trace("{0} append event ({1},{2})",this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
@@ -202,9 +202,9 @@ namespace ns_persistent{
       } \
       if ((CURR_LOG_IDX != -1) && \
           (META_HEADER->fields.ver >= ver)) { \
-        __int128 cver = META_HEADER->fields.ver; \
-        dbg_trace("{0}-append cur_ver:{1}.{2} new_ver:{3}.{4}", this->m_sName, \
-          (int64_t)(cver>>64),(int64_t)cver,(int64_t)(ver>>64),(int64_t)ver); \
+        int64_t cver = META_HEADER->fields.ver; \
+        dbg_trace("{0}-append cur_ver:{1} new_ver:{2}", this->m_sName, \
+          (int64_t)cver,(int64_t)ver); \
         FPL_UNLOCK; \
         throw PERSIST_EXP_INV_VERSION; \
       } \
@@ -247,12 +247,12 @@ namespace ns_persistent{
       throw PERSIST_EXP_MSYNC(errno);
     }
 */
-    dbg_trace("{0} append a log ver:{1}.{2} hlc:({3},{4})",this->m_sName, 
-      HIGH__int128(ver), LOW__int128(ver),  mhlc.m_rtc_us, mhlc.m_logic);
+    dbg_trace("{0} append a log ver:{1} hlc:({2},{3})",this->m_sName, 
+      ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
   }
 
-  void FilePersistLog::advanceVersion(const __int128 & ver)
+  void FilePersistLog::advanceVersion(const int64_t & ver)
     noexcept(false) {
     FPL_WRLOCK;
     if (META_HEADER->fields.ver < ver){
@@ -264,9 +264,9 @@ namespace ns_persistent{
     FPL_UNLOCK;
   }
 
-  const __int128 FilePersistLog::persist()
+  const int64_t FilePersistLog::persist()
     noexcept(false) {
-    __int128 ver_ret = INVALID_VERSION;
+    int64_t ver_ret = INVALID_VERSION;
     FPL_RDLOCK;
     FPL_PERS_LOCK;
 
@@ -341,9 +341,9 @@ namespace ns_persistent{
     return idx;
   }
 
-  const __int128 FilePersistLog::getLastPersisted ()
+  const int64_t FilePersistLog::getLastPersisted ()
   noexcept(false) {
-    __int128 last_persisted = INVALID_VERSION;;
+    int64_t last_persisted = INVALID_VERSION;;
     FPL_PERS_LOCK;
 
     last_persisted = META_HEADER_PERS->fields.ver;
@@ -367,10 +367,9 @@ namespace ns_persistent{
     }
     FPL_UNLOCK;
 
-    dbg_trace("{0} getEntryByIndex at idx:{1} ver:{2}.{3} time:({4},{5})",
+    dbg_trace("{0} getEntryByIndex at idx:{1} ver:{2} time:({3},{4})",
      this->m_sName,
        ridx,
-       (int64_t)(LOG_ENTRY_AT(ridx)->fields.ver>>64),
        (int64_t)(LOG_ENTRY_AT(ridx)->fields.ver),
        (LOG_ENTRY_AT(ridx))->fields.hlc_r,
        (LOG_ENTRY_AT(ridx))->fields.hlc_l);
@@ -423,7 +422,7 @@ namespace ns_persistent{
     return pivot;
   }
 
-  const void * FilePersistLog::getEntry(const __int128& ver)
+  const void * FilePersistLog::getEntry(const int64_t& ver)
   noexcept(false) {
 
     LogEntry * ple = nullptr;
@@ -435,7 +434,7 @@ namespace ns_persistent{
     int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
     if (tail < head) tail += MAX_LOG_ENTRY;
     dbg_trace("{0} - begin binary search.",this->m_sName);
-    int64_t l_idx = binarySearch<__int128>(
+    int64_t l_idx = binarySearch<int64_t>(
       [&](int64_t idx){
         return LOG_ENTRY_AT(idx)->fields.ver;
       },
@@ -488,7 +487,7 @@ namespace ns_persistent{
   }
 
   // trim by index
-  void FilePersistLog::trim(const int64_t &idx) noexcept(false) {
+  void FilePersistLog::trimByIndex(const int64_t &idx) noexcept(false) {
     dbg_trace("{0} trim at index: {1}",this->m_sName,idx);
     FPL_RDLOCK;
     // validate check
@@ -509,11 +508,11 @@ namespace ns_persistent{
     dbg_trace("{0} trim at index: {1}...done",this->m_sName,idx);
   }
 
-  void FilePersistLog::trim(const __int128 &ver) noexcept(false) {
-    dbg_trace("{0} trim at version: {1}.{2}",this->m_sName,(int64_t)(ver>>64),(int64_t)ver);
-    this->trim<__int128>(ver,
+  void FilePersistLog::trim(const int64_t &ver) noexcept(false) {
+    dbg_trace("{0} trim at version: {1}",this->m_sName,ver);
+    this->trim<int64_t>(ver,
       [&](int64_t idx){return LOG_ENTRY_AT(idx)->fields.ver;});
-    dbg_trace("{0} trim at version: {1}.{2}...done",this->m_sName,(int64_t)(ver>>64),(int64_t)ver);
+    dbg_trace("{0} trim at version: {1}...done",this->m_sName,ver);
   }
 
   void FilePersistLog::trim(const HLC & hlc) noexcept(false) {

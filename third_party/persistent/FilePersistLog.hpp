@@ -20,7 +20,7 @@ namespace ns_persistent {
     struct {
       int64_t head;     // the head index
       int64_t tail;     // the tail index
-      __int128 ver;     // the latest version number.
+      int64_t ver;      // the latest version number.
       // uint64_t d_head;  // the data head offset
       // uint64_t d_tail;  // the data tail offset
     } fields;
@@ -35,7 +35,7 @@ namespace ns_persistent {
   // log entry format
   typedef union log_entry {
     struct {
-      __int128 ver;      // version of the data
+      int64_t  ver;     // version of the data
       uint64_t dlen;    // length of the data
       uint64_t ofst;    // offset of the data in the memory buffer
       uint64_t hlc_r;   // realtime component of hlc
@@ -185,19 +185,19 @@ namespace ns_persistent {
 
     //Derived from PersistLog
     virtual void append(const void * pdata,
-      const uint64_t & size, const __int128 & ver,
+      const uint64_t & size, const int64_t & ver,
       const HLC &mhlc) noexcept(false);
-    virtual void advanceVersion(const __int128 & ver) noexcept(false);
+    virtual void advanceVersion(const int64_t & ver) noexcept(false);
     virtual int64_t getLength() noexcept(false);
     virtual int64_t getEarliestIndex() noexcept(false);
-    virtual const __int128 getLastPersisted() noexcept(false);
+    virtual const int64_t getLastPersisted() noexcept(false);
     virtual const void* getEntryByIndex(const int64_t &eno) noexcept(false);
-    virtual const void* getEntry(const __int128 & ver) noexcept(false);
+    virtual const void* getEntry(const int64_t & ver) noexcept(false);
     virtual const void* getEntry(const HLC &hlc) noexcept(false);
     //virtual const __int128 persist(const __int128 & ver = -1) noexcept(false);
-    virtual const __int128 persist() noexcept(false);
-    virtual void trim(const int64_t &eno) noexcept(false);
-    virtual void trim(const __int128 &ver) noexcept(false);
+    virtual const int64_t persist() noexcept(false);
+    virtual void trimByIndex(const int64_t &eno) noexcept(false);
+    virtual void trim(const int64_t &ver) noexcept(false);
     virtual void trim(const HLC & hlc) noexcept(false);
 
     template <typename TKey,typename KeyGetter>

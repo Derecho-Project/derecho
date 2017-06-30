@@ -43,9 +43,9 @@ namespace ns_persistent {
 
   // function types to be registered for create version
   // , persist version, and trim a version
-  using VersionFunc = std::function<void(const __int128 &)>;
-  using PersistFunc = std::function<void(void)>;
-  using TrimFunc = std::function<void(const __int128 &)>;
+  using VersionFunc = std::function<void(const int64_t &)>;
+  using PersistFunc = std::function<const int64_t(void)>;
+  using TrimFunc = std::function<void(const int64_t &)>;
   using PersistentCallbackRegisterFunc = std::function<void(VersionFunc,PersistFunc,TrimFunc)>;
 
   // Persistent represents a variable backed up by persistent storage. The
@@ -111,7 +111,7 @@ namespace ns_persistent {
           func_register_cb(
             std::bind(&Persistent<ObjectType,storageType>::version,this,std::placeholders::_1),
             std::bind(&Persistent<ObjectType,storageType>::persist,this),
-            std::bind(&Persistent<ObjectType,storageType>::trim<const __int128>,this,std::placeholders::_1) //trim by version:(const __int128)
+            std::bind(&Persistent<ObjectType,storageType>::trim<const int64_t>,this,std::placeholders::_1) //trim by version:(const int64_t)
         );
         }
       }
@@ -176,7 +176,7 @@ namespace ns_persistent {
       // return value is decided by the user lambda.
       template <typename Func>
       auto get (
-        const __int128 & ver,
+        const int64_t & ver,
         const Func& fun,
         DeserializationManager *dm=nullptr)
         noexcept(false) {
@@ -190,7 +190,7 @@ namespace ns_persistent {
       // get a version of value T. specified version.
       // return a deserialized copy for the variable.
       std::unique_ptr<ObjectType> get(
-        const __int128 & ver,
+        const int64_t & ver,
         DeserializationManager *dm=nullptr)
         noexcept(false) {
         char const * pdat = (char const *)this->m_pLog->getEntry(ver);
@@ -239,13 +239,15 @@ namespace ns_persistent {
       }
 
       // syntax sugar: get a specified version of T without DSM
-      std::unique_ptr<ObjectType> operator [](int64_t idx)
+/*
+      std::unique_ptr<ObjectType> operator [](const int64_t idx)
         noexcept(false) {
         return this->getByIndex(idx);
       }
+*/
 
       // syntax sugar: get a specified version of T without DSM
-      std::unique_ptr<ObjectType> operator [](const __int128 ver)
+      std::unique_ptr<ObjectType> operator [](const int64_t ver)
         noexcept(false) {
         return this->get(ver);
       }
@@ -265,12 +267,12 @@ namespace ns_persistent {
         return this->m_pLog->getEarliestIndex();
       }
 
-      virtual const __int128 getLastPersisted() noexcept(false) {
+      virtual const int64_t getLastPersisted() noexcept(false) {
         return this->m_pLog->getLastPersisted();
       };
 
       // make a version with version and mhlc clock
-      virtual void set(const ObjectType &v, const __int128 & ver, const HLC &mhlc) 
+      virtual void set(const ObjectType &v, const int64_t & ver, const HLC &mhlc) 
         noexcept(false) {
         auto size = mutils::bytes_size(v);
         char buf[size];
@@ -280,14 +282,14 @@ namespace ns_persistent {
       };
 
       // make a version with version
-      virtual void set(const ObjectType &v, const __int128 & ver)
+      virtual void set(const ObjectType &v, const int64_t & ver)
         noexcept(false) {
         HLC mhlc; // generate a default timestamp for it.
         this->set(v,ver,mhlc);
       }
 
       // make a version
-      virtual void version(const __int128 & ver)
+      virtual void version(const int64_t & ver)
         noexcept(false) {
         //TODO: compare if value has been changed?
         this->set(this->wrapped_obj,ver);
@@ -297,7 +299,7 @@ namespace ns_persistent {
        * @param ver version number
        * @return the given version to be persisted.
        */
-      virtual const __int128 persist()
+      virtual const int64_t persist()
         noexcept(false){
         return this->m_pLog->persist();
       }
@@ -383,9 +385,9 @@ namespace ns_persistent {
    * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
    * variables. Replicated<T> class should maintain such a registry to perform
    * the following operations:
-   * - makeVersion(const __int128 & ver): create a version 
+   * - makeVersion(const int64_t & ver): create a version 
    * - persist(): persist the existing versions
-   * - trim(const __int128 & ver): trim all versions earlier than ver
+   * - trim(const int64_t & ver): trim all versions earlier than ver
    */
   class PersistentRegistry{
   public:
@@ -398,13 +400,13 @@ namespace ns_persistent {
     #define VERSION_FUNC_IDX (0)
     #define PERSIST_FUNC_IDX (1)
     #define TRIM_FUNC_IDX (2)
-    void makeVersion(const __int128 & ver) noexcept(false) {
+    void makeVersion(const int64_t & ver) noexcept(false) {
       callFunc<VERSION_FUNC_IDX>(ver);
     };
-    void persist() noexcept(false) {
-      callFunc<PERSIST_FUNC_IDX>();
+    const int64_t persist() noexcept(false) {
+      return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
     };
-    void trim(const __int128 & ver) noexcept(false) {
+    void trim(const int64_t & ver) noexcept(false) {
       callFunc<TRIM_FUNC_IDX>(ver);
     };
     void registerPersist(const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
@@ -420,6 +422,20 @@ namespace ns_persistent {
         std::get<funcIdx>(*itr)(args ...);
       }
     };
+    template<int funcIdx,typename ReturnType,typename ... Args>
+    ReturnType callFuncMin(Args ... args) {
+      ReturnType min_ret;
+      for (auto itr = this->_registry.begin();
+        itr != this->_registry.end(); ++itr) {
+        ReturnType ret = std::get<funcIdx>(*itr)(args ...);
+        if (itr == this->_registry.begin()) {
+          min_ret = ret;
+        } else if (min_ret > ret) {
+          min_ret = ret;
+        }
+      }
+      return min_ret;
+    }
   };
 }
 

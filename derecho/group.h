@@ -23,6 +23,7 @@
 #include "rpc_manager.h"
 #include "subgroup_info.h"
 #include "view_manager.h"
+#include "persistence_manager.h"
 
 #include "mutils-containers/KindMap.hpp"
 #include "mutils-containers/TypeMap2.hpp"
@@ -84,6 +85,9 @@ private:
      * Note that this is a std::map solely so that we can initialize it out-of-order;
      * its keys are continuous integers starting at 0 and it should be a std::vector. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
+    /** Persist the objects. Once persisted, persistence_manager updates the SST
+     * so that the persistent progress is known by group members. */
+    PersistenceManager<ReplicatedTypes...> persistence_manager;
 
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
