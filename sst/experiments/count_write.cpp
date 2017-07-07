@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
@@ -22,9 +23,10 @@ using namespace sst;
 class mySST : public SST<mySST> {
 public:
     mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST<mySST>(this, SSTParams{_members, my_id}) {
-        SSTInit(a);
+        SSTInit(a, heartbeat);
     }
     SSTField<int> a;
+    SSTField<bool> heartbeat;
 };
 
 int main() {
@@ -50,7 +52,17 @@ int main() {
     // create a new shared state table with all the members
     mySST sst(members, node_rank);
     sst.a[node_rank] = 0;
-    sst.put();
+    sst.put((char*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
+
+    auto check_failures_loop = [&sst]() {
+        pthread_setname_np(pthread_self(), "check_failures");
+        while(true) {
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            sst.put_with_completion((char*)std::addressof(sst.heartbeat[0]) - sst.getBaseAddress(), sizeof(bool));
+        }
+    };
+
+    std::thread failures_thread = std::thread(check_failures_loop);
 
     bool if_exit = false;
     // wait till all a's are 0
@@ -85,7 +97,7 @@ int main() {
     // trigger. Increments self value
     auto g = [&start_time](mySST& sst) {
         ++(sst.a[LOCAL]);
-        sst.put();
+        sst.put((char*)std::addressof(sst.a[0]) - sst.getBaseAddress(), sizeof(int));
         if(sst.a[LOCAL] == 1000000) {
             // end timer
             struct timespec end_time;
