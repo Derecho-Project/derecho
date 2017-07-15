@@ -78,7 +78,7 @@ Group<ReplicatedTypes...>::Group(
     construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();
     view_manager.start();
-    persistence_manager.set_objects<ReplicatedTypes...>(std::addressof(replicated_objects));
+    persistence_manager.set_objects (std::addressof(replicated_objects));
     persistence_manager.start();
 }
 
@@ -116,7 +116,7 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     receive_objects(subgroups_and_leaders);
-    persistence_manager.set_objects<ReplicatedTypes...>(std::addressof(replicated_objects));
+    persistence_manager.set_objects(std::addressof(replicated_objects));
     persistence_manager.start();
 }
 

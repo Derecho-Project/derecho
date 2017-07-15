@@ -50,9 +50,9 @@ namespace derecho {
       mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro
       )
       : logger(spdlog::get("debug_log")),
-        replicated_objects(pro),
         thread_shutdown(false),
-        pending_request(false) {
+        pending_request(false),
+        replicated_objects(pro) {
     }
 
     /** default Constructor
@@ -73,7 +73,7 @@ namespace derecho {
 
     template <typename...Types>
     typename std::enable_if<!(0 == sizeof...(Types)),void>::type
-    set_objects(mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro) {
+    set_objects(mutils::KindMap<replicated_index_map, Types...> *pro) {
       this->replicated_objects = pro;
     }
 
@@ -84,11 +84,11 @@ namespace derecho {
       this->persist_thread = std::thread{[this](){
         do{
           bool expected = true;
-          if(this->pending_request.compare_and_exchange_strong(expected,false)) {
+          if(this->pending_request.compare_exchange_strong(expected,false)) {
             // if there is some pending request for persistence:
             // go through the replicated object and perform persistent
-            this->replicated_objects.for_each([&](auto *pkey, replicated_index_map<auto> & map){
-              for(auto it=map.cbegin();it != map.cend(); ++it) {
+            this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
+              for(auto it=map.begin();it != map.end(); ++it) {
                 // iterate through all subgroups
                 // it->first is the subgroup index
                 // it->second is the corresponding Replicated<T>

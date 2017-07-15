@@ -31,6 +31,9 @@
 
 namespace derecho {
 
+//Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
+template <typename T>
+using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 /**
  * The top-level object for creating a Derecho group. This implements the group
  * management service (GMS) features and contains a MulticastGroup instance that
@@ -43,9 +46,6 @@ class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
-    template <typename T>
-    using replicated_index_map = std::map<uint32_t, Replicated<T>>;
     //Same thing for a sparse-vector of ExternalCaller
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
@@ -88,7 +88,7 @@ private:
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
-
+    
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
      * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */
