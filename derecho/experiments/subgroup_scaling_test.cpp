@@ -101,15 +101,27 @@ int main(int argc, char *argv[]) {
             if(num_members < num_nodes) {
                 throw derecho::subgroup_provisioning_exception();
             }
-            subgroup_shard_layout_t subgroup_vector(num_members);
+            subgroup_shard_layout_t subgroup_vector(1);
             for(uint i = 0; i < num_members; ++i) {
                 vector<uint32_t> members(member_sizes[i]);
                 for(uint j = 0; j < member_sizes[i]; ++j) {
                     members[j] = (i + j) % num_members;
                 }
-                subgroup_vector[i].emplace_back(curr_view.make_subview(members));
+                subgroup_vector[0].emplace_back(curr_view.make_subview(members));
             }
             next_unassigned_rank = curr_view.members.size();
+
+	    cout << "Printing subgroup vector:" << endl;
+	    for (uint i = 0; i < subgroup_vector.size(); ++i) {
+	      cout << "Subgroups of type 0:" << endl;
+	      for (uint j = 0; j < subgroup_vector[i].size(); ++j) {
+		auto members = subgroup_vector[i][j].members;
+		for (auto m : members) {
+		  cout << m << " ";
+		}
+		cout << endl;
+	      }
+	    }
             return subgroup_vector;
         };
 
@@ -147,16 +159,31 @@ int main(int argc, char *argv[]) {
         cout << endl;
 
         auto send_all = [&]() {
-            RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-            for(uint i = 0; i < num_messages; ++i) {
-                // cout << "Asking for a buffer" << endl;
-                char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
-                while(!buf) {
-                    buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
+            cout << "Subgroups I belong in: " << node_rank << " " << (node_rank - 1 + num_nodes) % num_nodes << endl;
+            RawSubgroup &subgroup1 = managed_group->get_subgroup<RawObject>(node_rank);
+            RawSubgroup &subgroup2 = managed_group->get_subgroup<RawObject>((node_rank - 1 + num_nodes) % num_nodes);
+	    cout << "Obtained the subgroups, sending messages" << endl;
+            for(uint i = 0; i < subgroup_size * num_messages; ++i) {
+                if(i % 2 == 0) {
+                    // cout << "Asking for a buffer" << endl;
+                    char *buf = subgroup1.get_sendbuffer_ptr(max_msg_size, send_medium);
+                    while(!buf) {
+                        buf = subgroup1.get_sendbuffer_ptr(max_msg_size, send_medium);
+                    }
+                    buf[0] = '0' + i;
+                    // cout << "Obtained a buffer, sending" << endl;
+                    subgroup1.send();
                 }
-                buf[0] = '0' + i;
-                // cout << "Obtained a buffer, sending" << endl;
-                group_as_subgroup.send();
+		else {
+                    // cout << "Asking for a buffer" << endl;
+                    char *buf = subgroup2.get_sendbuffer_ptr(max_msg_size, send_medium);
+                    while(!buf) {
+                        buf = subgroup2.get_sendbuffer_ptr(max_msg_size, send_medium);
+                    }
+                    buf[0] = '0' + i;
+                    // cout << "Obtained a buffer, sending" << endl;
+                    subgroup2.send();
+                }
             }
         };
 
