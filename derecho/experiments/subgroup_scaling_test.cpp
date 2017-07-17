@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
             cout << "Thank you" << endl;
             exit(1);
         }
-        pthread_setname_np(pthread_self(), "subgroup_scaling");
+        pthread_setname_np(pthread_self(), "sbgrp_scaling");
         srand(time(NULL));
 
         uint32_t server_rank = 0;
@@ -63,9 +63,7 @@ int main(int argc, char *argv[]) {
         const long long unsigned int max_msg_size = atoll(argv[1]);
         const long long unsigned int block_size = get_block_size(max_msg_size);
         const unsigned int window_size = ((max_msg_size < 20000) ? 15 : 3);
-        cout << "Window size is: " << window_size << endl;
         const int send_medium = ((max_msg_size < 20000) ? 0 : 1);
-        cout << "send_medium is: " << send_medium << endl;
         uint32_t num_messages = 1000;
 
         // will resize is as and when convenient
@@ -101,27 +99,16 @@ int main(int argc, char *argv[]) {
             if(num_members < num_nodes) {
                 throw derecho::subgroup_provisioning_exception();
             }
-            subgroup_shard_layout_t subgroup_vector(1);
+            subgroup_shard_layout_t subgroup_vector(num_members);
             for(uint i = 0; i < num_members; ++i) {
                 vector<uint32_t> members(member_sizes[i]);
                 for(uint j = 0; j < member_sizes[i]; ++j) {
                     members[j] = (i + j) % num_members;
                 }
-                subgroup_vector[0].emplace_back(curr_view.make_subview(members));
+                subgroup_vector[i].emplace_back(curr_view.make_subview(members));
             }
             next_unassigned_rank = curr_view.members.size();
-
-	    cout << "Printing subgroup vector:" << endl;
-	    for (uint i = 0; i < subgroup_vector.size(); ++i) {
-	      cout << "Subgroups of type 0:" << endl;
-	      for (uint j = 0; j < subgroup_vector[i].size(); ++j) {
-		auto members = subgroup_vector[i][j].members;
-		for (auto m : members) {
-		  cout << m << " ";
-		}
-		cout << endl;
-	      }
-	    }
+	    
             return subgroup_vector;
         };
 
@@ -159,10 +146,9 @@ int main(int argc, char *argv[]) {
         cout << endl;
 
         auto send_all = [&]() {
-            cout << "Subgroups I belong in: " << node_rank << " " << (node_rank - 1 + num_nodes) % num_nodes << endl;
-            RawSubgroup &subgroup1 = managed_group->get_subgroup<RawObject>(node_rank);
-            RawSubgroup &subgroup2 = managed_group->get_subgroup<RawObject>((node_rank - 1 + num_nodes) % num_nodes);
-	    cout << "Obtained the subgroups, sending messages" << endl;
+            RawSubgroup &subgroup1 = managed_group->get_subgroup<RawObject>(node_id);
+            RawSubgroup &subgroup2 = managed_group->get_subgroup<RawObject>((node_id - 1 + num_nodes) % num_nodes);
+            cout << "Obtained the subgroups, sending messages" << endl;
             for(uint i = 0; i < subgroup_size * num_messages; ++i) {
                 if(i % 2 == 0) {
                     // cout << "Asking for a buffer" << endl;
