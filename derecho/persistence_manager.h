@@ -23,6 +23,8 @@ namespace derecho {
   template <typename T>
   using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
+  using post_persistence_request_func_t = std::function<void(subgroup_id_t,message_id_t)>;
+
   /**
    * PersistenceManager is responsible for persisting all the data in a group.
    */
@@ -105,8 +107,17 @@ namespace derecho {
     }
 
     /** post a persistence request */
-    void post_request() {
-      pending_request = true;
+    void post_request(subgroup_id_t subgroup_id, message_id_t message_id) {
+      // find the corresponding Replicated<T> in replicated_objects
+      this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
+        // make a version
+        auto search = map.find(subgroup_id);
+        if (search != map.end()) {
+          search->second.make_version(message_id);
+          // post a request by setting the flag
+          pending_request = true;
+        }
+      });
     }
 
     /** shutdown the thread 

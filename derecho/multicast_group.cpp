@@ -57,6 +57,7 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         const DerechoParams derecho_params,
+        const post_persistence_request_func_t & post_persistence_request,
         std::vector<char> already_failed)
         : logger(spdlog::get("debug_log")),
           members(_members),
@@ -79,7 +80,8 @@ MulticastGroup::MulticastGroup(
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
           sender_timeout(derecho_params.timeout_ms),
-          sst(_sst) {
+          sst(_sst),
+          post_persistence_request_func(post_persistence_request) {
     assert(window_size >= 1);
 
     if(!derecho_params.filename.empty()) {
@@ -126,6 +128,7 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
+        const post_persistence_request_func_t & post_persistence_request,
         std::vector<char> already_failed, uint32_t rpc_port)
         : logger(old_group.logger),
           members(_members),
@@ -149,7 +152,8 @@ MulticastGroup::MulticastGroup(
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
           sender_timeout(old_group.sender_timeout),
-          sst(_sst) {
+          sst(_sst),
+          post_persistence_request_func(post_persistence_request) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -563,6 +567,8 @@ void MulticastGroup::register_predicates() {
                             (char*)std::addressof(sst.delivered_num[0][subgroup_num]) - sst.getBaseAddress(),
                             sizeof(long long int));
                     locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
+                    //make a version and post persistence request.
+                    post_persistence_request_func(subgroup_num,msg.index);
                 }
             }
         };
