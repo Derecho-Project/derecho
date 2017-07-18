@@ -348,7 +348,7 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const __int128 & ver) noexcept(false) {
+    virtual void make_version(const int64_t & ver) noexcept(false) {
       persistent_registry.makeVersion(ver);
     };
 
@@ -373,7 +373,7 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const __int128 & ver) noexcept(false) {
+    virtual void trim(const int64_t & ver) noexcept(false) {
       persistent_registry.trim(ver);
     };
 
