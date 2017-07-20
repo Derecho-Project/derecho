@@ -23,6 +23,15 @@ using std::endl;
 
 using namespace derecho;
 
+template <typename T>
+struct volatile_wrapper {
+    volatile T t;
+    volatile_wrapper(T t) : t(t) {}
+    bool operator<(const T t1) {
+        return t < t1;
+    }
+};
+
 struct exp_result {
     uint32_t num_nodes;
     long long unsigned int max_msg_size;
@@ -32,12 +41,12 @@ struct exp_result {
     void print(std::ofstream &fout) {
         fout << num_nodes << " "
              << max_msg_size << " "
-	     << subgroup_size << " "
+             << subgroup_size << " "
              << bw << endl;
     }
 };
 
-int __attribute__((optimize("O0"))) main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
     try {
         if(argc < 3) {
             cout << "Insufficient number of command line arguments" << endl;
@@ -70,11 +79,17 @@ int __attribute__((optimize("O0"))) main(int argc, char *argv[]) {
 
         // will resize is as and when convenient
         uint32_t subgroup_size = atoi(argv[2]);
+        auto num_subgroups = num_nodes;
+        vector<uint32_t> send_subgroup_indices;
         map<uint32_t, uint32_t> subgroup_to_local_index;
         for(uint i = 0; i < subgroup_size; ++i) {
-            subgroup_to_local_index[((int32_t)(node_id + num_nodes) - (int32_t)i) % num_nodes] = i;
+            auto j = ((int32_t)(node_id + num_nodes) - (int32_t)i) % num_nodes;
+            subgroup_to_local_index[j] = i;
+            if(j < num_subgroups) {
+                send_subgroup_indices.push_back(j);
+            }
         }
-        vector<vector<long long int>> received_message_indices(subgroup_size);
+        vector<vector<volatile_wrapper<long long int>>> received_message_indices(subgroup_size);
         for(uint i = 0; i < subgroup_size; ++i) {
             received_message_indices[i].resize(subgroup_size, -1);
         }
@@ -148,19 +163,19 @@ int __attribute__((optimize("O0"))) main(int argc, char *argv[]) {
         }
         // RawSubgroup &subgroup1 = managed_group->get_subgroup<RawObject>(node_id);
         // RawSubgroup &subgroup2 = managed_group->get_subgroup<RawObject>((node_id - 1 + num_nodes) % num_nodes);
-        auto send_all = [&]() {
-            for(uint i = 0; i < subgroup_size * num_messages; ++i) {
-                uint j = i % subgroup_size;
-                // cout << "Asking for a buffer" << endl;
-                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
-                while(!buf) {
-                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
-                }
-                buf[0] = '0' + i;
-                // cout << "Obtained a buffer, sending" << endl;
-                subgroups[j].send();
-            }
-        };
+        // auto send_all = [&]() {
+        //     for(uint i = 0; i < subgroup_size * num_messages; ++i) {
+        //         uint j = i % subgroup_size;
+        //         // cout << "Asking for a buffer" << endl;
+        //         char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+        //         while(!buf) {
+        //             buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+        //         }
+        //         buf[0] = '0' + i;
+        //         // cout << "Obtained a buffer, sending" << endl;
+        //         subgroups[j].send();
+        //     }
+        // };
         // auto send_one = [&](uint32_t subgroup_num) {
         //     if(subgroup_num == 1) {
         //         for(uint i = 0; i < subgroup_size; ++i) {
@@ -187,30 +202,49 @@ int __attribute__((optimize("O0"))) main(int argc, char *argv[]) {
         //     }
         // }
 
-        struct timespec start_time;
-        // start timer
-        clock_gettime(CLOCK_REALTIME, &start_time);
-        send_all();
-        while(true) {
-            bool all_done = true;
-            for(uint i = 0; i < subgroup_size; ++i) {
+        auto send_some = [&](uint32_t num_subgroups) {
+	  const auto num_subgroups_to_send = send_subgroup_indices.size();
+            for(uint i = 0; i < num_subgroups * num_messages; ++i) {
+	      uint j = i % num_subgroups_to_send;
+                // cout << "Asking for a buffer" << endl;
+                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+                while(!buf) {
+                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+                }
+                buf[0] = '0' + i;
+                // cout << "Obtained a buffer, sending" << endl;
+                subgroups[j].send();
+            }
+        };
+
+        auto if_complete = [&](uint32_t num_subgroups) {
+            for(auto p : subgroup_to_local_index) {
+                auto subgroup_num = p.first;
+                if(subgroup_num >= num_subgroups) {
+                    continue;
+                }
+                auto i = p.second;
                 for(uint j = 0; j < subgroup_size; ++j) {
                     if(received_message_indices[i][j] < num_messages - 1) {
-                        all_done = false;
+                        return false;
                     }
                 }
             }
-            if(all_done) {
-                break;
-            }
-        }
+            return true;
+        };
 
-        struct timespec end_time;
+        struct timespec start_time, end_time;
+        long long int nanoseconds_elapsed;
+        double bw, avg_bw;
+        // start timer
+        clock_gettime(CLOCK_REALTIME, &start_time);
+        send_some(num_subgroups);
+        while(!if_complete(num_subgroups)) {
+        }
         clock_gettime(CLOCK_REALTIME, &end_time);
-        long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
-        double bw;
-        bw = (max_msg_size * num_messages * num_nodes * subgroup_size + 0.0) / nanoseconds_elapsed;
-        double avg_bw = aggregate_bandwidth(members, node_id, bw);
+        nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+        bw = (max_msg_size * num_messages * num_nodes * send_subgroup_indices.size() + 0.0) / nanoseconds_elapsed;
+        avg_bw = aggregate_bandwidth(members, node_id, bw);
         if(node_rank == 0) {
             log_results(exp_result{num_nodes, max_msg_size, subgroup_size, avg_bw},
                         "data_subgroup_scaling");
