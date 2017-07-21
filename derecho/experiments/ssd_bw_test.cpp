@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
     long long unsigned int block_size = 1000000ull;
     int num_messages = 100;
 
-    bool done = false;
+    volatile bool done = false;
     auto stability_callback = [
         &num_messages,
         &done,
