@@ -336,7 +336,15 @@ namespace ns_persistent{
   int64_t FilePersistLog::getEarliestIndex ()
   noexcept(false) {
     FPL_RDLOCK;
-    int64_t idx = (NUM_FREE_SLOTS == 0)? INVALID_INDEX:META_HEADER->fields.head;
+    int64_t idx = (NUM_USED_SLOTS == 0)? INVALID_INDEX:META_HEADER->fields.head;
+    FPL_UNLOCK;
+    return idx;
+  }
+
+  int64_t FilePersistLog::getLatestIndex ()
+  noexcept(false) {
+    FPL_RDLOCK;
+    int64_t idx = CURR_LOG_IDX;
     FPL_UNLOCK;
     return idx;
   }

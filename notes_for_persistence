@@ -4,3 +4,4 @@ TODO LIST:
    requests for persistence.
 2) Use semaphore driven persistence thread.
 3) Add temoperal feature to SST.
+4) Add initialization interface for Persistent<T>.

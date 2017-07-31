@@ -98,4 +98,8 @@ target_link_libraries(local_filewriter_test derecho)
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
+# persistent_typed_subgroup_test
+add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)
+target_link_libraries(persistent_typed_subgroup_test derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

@@ -39,7 +39,9 @@ class RPCManager {
      * Note that a FunctionID is (class ID, subgroup ID, Function Tag). */
     std::unique_ptr<std::map<Opcode, receive_fun_t>> receivers;
     /** An emtpy DeserializationManager, in case we need it later. */
-    mutils::DeserializationManager dsm{{}};
+    // mutils::DeserializationManager dsm{{}};
+    // Weijia: I prefer the deserialization context vector.
+    mutils::RemoteDeserialization_v rdv{};
 
     std::shared_ptr<spdlog::logger> logger;
 

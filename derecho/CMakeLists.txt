@@ -8,13 +8,15 @@ include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+include_directories(${derecho_SROUCE_DIR}/third_party/persistent)
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+link_directories(${derecho_SOURCE_DIR}/third_party/persistence)
 
 add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager.cpp multicast_group.cpp raw_subgroup.cpp subgroup_functions.cpp filewriter.cpp connection_manager.cpp)
-target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization)
+target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization persistent)
 add_dependencies(derecho mutils_serialization_target mutils_target)
 
 add_executable(parse_state_file parse_state_file.cpp)

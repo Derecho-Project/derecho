@@ -28,7 +28,7 @@ namespace derecho {
 
 template <typename T>
 //using Factory = std::function<std::unique_ptr<T>(void)>;
-using Factory = std::function<std::unique_ptr<T>(PersistentCallbackRegisterFunc)>;
+using Factory = std::function<std::unique_ptr<T>(PersistentRegistry*)>;
 /**
  * Common interface for all types of Replicated<T>, specifying the methods to
  * send and receive object state. This allows the Group to send object state
@@ -47,17 +47,6 @@ public:
 
 template <typename T>
 class Replicated : public ReplicatedObject {
-    /**
-     * Syntax sugar to get the register callback. This is used for persistent<T>
-     * initialization.
-     * @param x, a pointer to the Replicated Object.
-     */
-    #define GET_PERSISTENT_CALLBACK_REGISTER_FUNC(x) [x]( \
-      const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf \
-        ){ \
-        (x)->register_persistent_member(vf,pf,tf); \
-      }
-
 private:
     /** persistent registry for persistent<t>
      */
@@ -148,7 +137,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
-            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(GET_PERSISTENT_CALLBACK_REGISTER_FUNC(this)))),
+            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(&this->persistent_registry))),
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
@@ -341,7 +330,11 @@ public:
      * @return The number of bytes read from the buffer.
      */
     std::size_t receive_object(char* buffer) {
-        *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
+        // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
+        mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
+        rdv.insert(rdv.begin(),&persistent_registry);
+        mutils::DeserializationManager dsm{rdv};
+        *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm,buffer));
         return mutils::bytes_size(**user_object_ptr);
     }
 
@@ -384,8 +377,8 @@ public:
      * @param pf - the persistent function
      * @param tf - the trim function
      */ 
-    virtual void register_persistent_member(const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf) noexcept(false) {
-      this->persistent_registry.registerPersist(vf,pf,tf);
+    virtual void register_persistent_member(const char* object_name, const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf) noexcept(false) {
+      this->persistent_registry.registerPersist(object_name,vf,pf,tf);
     }
 };
 

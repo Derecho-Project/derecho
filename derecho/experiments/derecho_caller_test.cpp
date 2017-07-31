@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, {stability_callback, {}}, subgroup_info,
                 derecho_params, {new_view_callback}, 12345,
-                [](PersistentCallbackRegisterFunc pcrf) { return std::make_unique<test1_str>(); });
+                [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 
     else {
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
                 my_id, my_ip, leader_ip,
                 {stability_callback, {}}, subgroup_info,
                 {new_view_callback}, 12345,
-                [](PersistentCallbackRegisterFunc pcrf) { return std::make_unique<test1_str>(); });
+                [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 
     cout << "Finished constructing/joining Group" << endl;
