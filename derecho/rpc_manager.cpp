@@ -34,7 +34,7 @@ std::exception_ptr RPCManager::handle_receive(
     //TODO: Check that the given Opcode is actually in our receivers map,
     //and reply with a "no such method error" if it is not
     recv_ret reply_return = receivers->at(indx)(
-            &dsm, received_from, buf,
+            &rdv, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             });
@@ -55,7 +55,7 @@ std::exception_ptr RPCManager::handle_receive(
     std::size_t payload_size = size;
     Opcode indx;
     node_id_t received_from;
-    retrieve_header(&dsm, buf, payload_size, indx, received_from);
+    retrieve_header(&rdv, buf, payload_size, indx, received_from);
     return handle_receive(indx, received_from, buf + header_space(),
                           payload_size, out_alloc);
 }

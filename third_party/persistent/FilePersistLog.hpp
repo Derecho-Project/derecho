@@ -190,6 +190,7 @@ namespace ns_persistent {
     virtual void advanceVersion(const int64_t & ver) noexcept(false);
     virtual int64_t getLength() noexcept(false);
     virtual int64_t getEarliestIndex() noexcept(false);
+    virtual int64_t getLatestIndex() noexcept(false);
     virtual const int64_t getLastPersisted() noexcept(false);
     virtual const void* getEntryByIndex(const int64_t &eno) noexcept(false);
     virtual const void* getEntry(const int64_t & ver) noexcept(false);

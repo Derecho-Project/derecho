@@ -1,3 +1,4 @@
+#pragma once
 #ifndef PERSISTENT_HPP
 #define PERSISTENT_HPP
 
@@ -8,17 +9,12 @@
 #include <memory>
 #include <functional>
 #include <pthread.h>
+#include <map>
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "PersistLog.hpp"
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
-
-//using namespace mutils;
-using mutils::DeserializationManager; 
-using mutils::deserialize_and_run;
-using mutils::from_bytes;
-using mutils::to_bytes;
 
 namespace ns_persistent {
 
@@ -46,7 +42,76 @@ namespace ns_persistent {
   using VersionFunc = std::function<void(const int64_t &)>;
   using PersistFunc = std::function<const int64_t(void)>;
   using TrimFunc = std::function<void(const int64_t &)>;
-  using PersistentCallbackRegisterFunc = std::function<void(VersionFunc,PersistFunc,TrimFunc)>;
+  // this function is obsolete, now we use a shared pointer to persistence registry
+  // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
+
+  /*
+   * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
+   * variables. Replicated<T> class should maintain such a registry to perform
+   * the following operations:
+   * - makeVersion(const int64_t & ver): create a version 
+   * - persist(): persist the existing versions
+   * - trim(const int64_t & ver): trim all versions earlier than ver
+   */
+  class PersistentRegistry:public mutils::RemoteDeserializationContext{
+  public:
+    PersistentRegistry() {
+      //
+    };
+    virtual ~PersistentRegistry() {
+      this->_registry.clear();
+    };
+    #define VERSION_FUNC_IDX (0)
+    #define PERSIST_FUNC_IDX (1)
+    #define TRIM_FUNC_IDX (2)
+    void makeVersion(const int64_t & ver) noexcept(false) {
+      callFunc<VERSION_FUNC_IDX>(ver);
+    };
+    const int64_t persist() noexcept(false) {
+      return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
+    };
+    void trim(const int64_t & ver) noexcept(false) {
+      callFunc<TRIM_FUNC_IDX>(ver);
+    };
+    void registerPersist(const char* obj_name, const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
+      //this->_registry.push_back(std::make_tuple(vf,pf,tf));
+      auto tuple_val = std::make_tuple(vf,pf,tf);
+      std::size_t key = std::hash<std::string>{}(obj_name);
+      auto res = this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>>(key,tuple_val));
+      if (res.second==false) {
+        //override the previous value:
+        this->_registry.erase(res.first);
+        this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>>(key,tuple_val));
+      }
+    };
+    PersistentRegistry(PersistentRegistry &&) = default;
+    PersistentRegistry(const PersistentRegistry &) = delete;
+
+  protected:
+    //std::vector<std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    template<int funcIdx,typename ... Args >
+    void callFunc(Args ... args) {
+      for (auto itr = this->_registry.begin();
+        itr != this->_registry.end(); ++itr) {
+        std::get<funcIdx>(itr->second)(args ...);
+      }
+    };
+    template<int funcIdx,typename ReturnType,typename ... Args>
+    ReturnType callFuncMin(Args ... args) {
+      ReturnType min_ret;
+      for (auto itr = this->_registry.begin();
+        itr != this->_registry.end(); ++itr) {
+        ReturnType ret = std::get<funcIdx>(itr->second)(args ...);
+        if (itr == this->_registry.begin()) {
+          min_ret = ret;
+        } else if (min_ret > ret) {
+          min_ret = ret;
+        }
+      }
+      return min_ret;
+    }
+  };
 
   // Persistent represents a variable backed up by persistent storage. The
   // backend is PersistLog class. PersistLog handles only raw bytes and this
@@ -71,24 +136,23 @@ namespace ns_persistent {
   //   ST_FILE/ST_MEM/ST_3DXP ... I will start with ST_FILE and extend it to
   //   other persistent Storage.
   // TODO:comments
+  //TODO: Persistent<T> has to be serializable, extending from mutils::ByteRepresentable 
   template <typename ObjectType,
     StorageType storageType=ST_FILE>
-  class Persistent{
-  public:
-      /** The constructor
-       * @param func_register_cb Call this to register myself to Replicated<T>
-       * @param object_name This name is used for persistent data in file.
+  class Persistent: public mutils::ByteRepresentable{
+  protected:
+      /** initialize from local state.
+       *  @param object_name Object name
        */
-      Persistent(PersistentCallbackRegisterFunc func_register_cb=nullptr,
-        const char * object_name = (*Persistent::getNameMaker().make()).c_str())
-        noexcept(false) {
-         // Initialize log
-        this->m_pLog = NULL;
+      inline void initialize_log(const char * object_name)
+        noexcept(false){
+        // STEP 1: initialize log
+        this->m_pLog = nullptr;
         switch(storageType){
         // file system
         case ST_FILE:
-          this->m_pLog = new FilePersistLog(object_name);
-          if(this->m_pLog == NULL){
+          this->m_pLog = std::make_unique<FilePersistLog>(object_name);
+          if(this->m_pLog == nullptr){
             throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
           }
           break;
@@ -96,8 +160,8 @@ namespace ns_persistent {
         case ST_MEM:
         {
           const string tmpfsPath = "/dev/shm/volatile_t";
-          this->m_pLog = new FilePersistLog(object_name, tmpfsPath);
-          if(this->m_pLog == NULL){
+          this->m_pLog = std::make_unique<FilePersistLog>(object_name, tmpfsPath);
+          if(this->m_pLog == nullptr){
             throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
           }
           break;
@@ -106,21 +170,105 @@ namespace ns_persistent {
         default:
           throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
         }
-        //register the version creator and persist callback
-        if(func_register_cb != nullptr){
-          func_register_cb(
+      }
+      /** initialize the object from log
+       */
+      inline void initialize_object_from_log() {
+        if (this->getNumOfVersions()>0) {
+          // load the object from log.
+          this->m_pWrappedObject = std::move(this->getByIndex(this->getLatestIndex()));
+        } else { // create a new one;
+          this->m_pWrappedObject = std::make_unique<ObjectType>();
+        }
+      }
+      /** register the callbacks.
+       */
+      inline void register_callbacks() 
+        noexcept(false) {
+        if(this->m_pRegistry != nullptr){
+          this->m_pRegistry->registerPersist(
+            this->m_pLog->m_sName.c_str(),
             std::bind(&Persistent<ObjectType,storageType>::version,this,std::placeholders::_1),
             std::bind(&Persistent<ObjectType,storageType>::persist,this),
             std::bind(&Persistent<ObjectType,storageType>::trim<const int64_t>,this,std::placeholders::_1) //trim by version:(const int64_t)
-        );
+          );
         }
       }
-      // destructor: release the resources
-      virtual ~Persistent() noexcept(false){
-        // destroy the in-memory log
-        if(this->m_pLog != NULL){
-          delete this->m_pLog;
+  public:
+      /** constructor 1 is for building a persistent<T> locally, load/create a
+       * log and register itself to a persistent registry.
+       * @param object_name This name is used for persistent data in file.
+       * @param persistent_registry A normal pointer to the registry.
+       */
+      Persistent(
+        const char * object_name = nullptr,
+        PersistentRegistry * persistent_registry = nullptr)
+        noexcept(false)
+        : m_pRegistry(persistent_registry) {
+        // Initialize log
+        initialize_log((object_name==nullptr)?
+          (*Persistent::getNameMaker().make()).c_str() : object_name);
+        // Initialize object
+        initialize_object_from_log();
+        // Register Callbacks
+        register_callbacks();
+      }
+
+      /** constructor 2 is move constructor. It "steals" the resource from
+       * another object.
+       * @param other The other object.
+       */
+      Persistent(Persistent && other) noexcept(false) {
+        this->m_pWrappedObject = std::move(other.m_pWrappedObject);
+        this->m_pLog = std::move(other.m_pLog);
+        this->m_pRegistry = other.m_pRegistry;
+        register_callbacks(); // this callback will override the previous registry entry.
+      }
+
+      /** constructor 3 is for deserialization. It builds a Persistent<T> from
+       * the object name, a unique_ptr to the wrapped object, a unique_ptr to
+       * the log.
+       * @param object_name The name is used for persistent data in file.
+       * @param wrapped_obj_ptr A unique pointer to the wrapped object.
+       * @param log_ptr A unique pointer to the log.
+       * @param persistent_registry A normal pointer to the registry.
+       */
+      Persistent(
+        const char * object_name,
+        std::unique_ptr<ObjectType> & wrapped_obj_ptr,
+        std::unique_ptr<PersistLog> & log_ptr = nullptr,
+        PersistentRegistry * persistent_registry = nullptr)
+        noexcept(false)
+        : m_pRegistry(persistent_registry) {
+        // Initialize log
+        if ( log_ptr == nullptr ) {
+          initialize_log((object_name==nullptr)?
+            (*Persistent::getNameMaker().make()).c_str() : object_name);
+        } else {
+          this->m_pLog = std::move(log_ptr);
         }
+        // Initialize Warpped Object
+        if ( wrapped_obj_ptr == nullptr ) {
+          initialize_object_from_log();
+        } else {
+          this->m_pWrappedObject = std::move(wrapped_obj_ptr);
+        }
+        // Register callbacks
+        register_callbacks();
+      }
+
+      /** constructor 4, the default copy constructor, is disabled
+       */
+      Persistent(const Persistent &) = delete;
+
+      // destructor: release the resources
+      virtual ~Persistent() noexcept(true){
+        // destroy the in-memory log:
+        // We don't need this anymore. m_pLog is managed by smart pointer
+        // automatically.
+        // if(this->m_pLog != NULL){
+        //   delete this->m_pLog;
+        // }
         //TODO:unregister the version creator and persist callback,
         // if the Persistent<T> is added to the pool dynamically.
       };
@@ -130,7 +278,7 @@ namespace ns_persistent {
        * @return ObjectType&
        */
       ObjectType& operator * (){
-        return this->wrapped_obj;
+        return *this->m_pWrappedObject;
       }
 
       // get the latest Value of T. The user lambda will be fed with the latest object
@@ -139,13 +287,13 @@ namespace ns_persistent {
       template <typename Func>
       auto get (
         const Func& fun, 
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         return this->getByIndex(-1L,fun,dm);
       };
 
       // get the latest Value of T, returns a unique pointer to the object
-      std::unique_ptr<ObjectType> get ( DeserializationManager *dm=nullptr)
+      std::unique_ptr<ObjectType> get ( mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         return this->getByIndex(-1L,dm);
       };
@@ -157,17 +305,17 @@ namespace ns_persistent {
       auto getByIndex (
         int64_t idx, 
         const Func& fun, 
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
-        return deserialize_and_run<ObjectType>(dm,(char *)this->m_pLog->getEntryByIndex(idx),fun);
+        return mutils::deserialize_and_run<ObjectType>(dm,(char *)this->m_pLog->getEntryByIndex(idx),fun);
       };
 
       // get a version of value T. returns a unique pointer to the object
       std::unique_ptr<ObjectType> getByIndex(
         int64_t idx, 
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
-        return from_bytes<ObjectType>(dm,(char const *)this->m_pLog->getEntryByIndex(idx));      
+        return mutils::from_bytes<ObjectType>(dm,(char const *)this->m_pLog->getEntryByIndex(idx));      
       };
 
       // get a version of Value T, specified by version. the user lambda will be fed with
@@ -178,27 +326,27 @@ namespace ns_persistent {
       auto get (
         const int64_t & ver,
         const Func& fun,
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         char * pdat = (char*)this->m_pLog->getEntry(ver);
         if (pdat == nullptr) {
           throw PERSIST_EXP_INV_VERSION;
         }
-        return deserialize_and_run<ObjectType>(dm,pdat,fun);
+        return mutils::deserialize_and_run<ObjectType>(dm,pdat,fun);
       };
 
       // get a version of value T. specified version.
       // return a deserialized copy for the variable.
       std::unique_ptr<ObjectType> get(
         const int64_t & ver,
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         char const * pdat = (char const *)this->m_pLog->getEntry(ver);
         if (pdat == nullptr) {
           throw PERSIST_EXP_INV_VERSION;
         }
 
-        return from_bytes<ObjectType>(dm,pdat);
+        return mutils::from_bytes<ObjectType>(dm,pdat);
       }
 
       template <typename TKey>
@@ -216,26 +364,26 @@ namespace ns_persistent {
       auto get (
         const HLC& hlc,
         const Func& fun,
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         char * pdat = (char*)this->m_pLog->getEntry(hlc);
         if (pdat == nullptr) {
           throw PERSIST_EXP_INV_HLC;
         }
-        return deserialize_and_run<ObjectType>(dm,pdat,fun);
+        return mutils::deserialize_and_run<ObjectType>(dm,pdat,fun);
       };
 
       // get a version of value T. specified by HLC clock.
       std::unique_ptr<ObjectType> get(
         const HLC& hlc,
-        DeserializationManager *dm=nullptr)
+        mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         char const * pdat = (char const *)this->m_pLog->getEntry(hlc);
         if (pdat == nullptr) {
           throw PERSIST_EXP_INV_HLC;
         }
 
-        return from_bytes<ObjectType>(dm,pdat);
+        return mutils::from_bytes<ObjectType>(dm,pdat);
       }
 
       // syntax sugar: get a specified version of T without DSM
@@ -267,6 +415,10 @@ namespace ns_persistent {
         return this->m_pLog->getEarliestIndex();
       }
 
+      virtual int64_t getLatestIndex() noexcept(false) {
+        return this->m_pLog->getLatestIndex();
+      }
+
       virtual const int64_t getLastPersisted() noexcept(false) {
         return this->m_pLog->getLastPersisted();
       };
@@ -277,7 +429,7 @@ namespace ns_persistent {
         auto size = mutils::bytes_size(v);
         char buf[size];
         bzero(buf,size);
-        to_bytes(v,buf);
+        mutils::to_bytes(v,buf);
         this->m_pLog->append((void*)buf,size,ver,mhlc);
       };
 
@@ -292,7 +444,7 @@ namespace ns_persistent {
       virtual void version(const int64_t & ver)
         noexcept(false) {
         //TODO: compare if value has been changed?
-        this->set(this->wrapped_obj,ver);
+        this->set(*this->m_pWrappedObject,ver);
       }
 
       /** persist till version
@@ -346,15 +498,53 @@ namespace ns_persistent {
         pthread_spinlock_t m_oLck;
       };
 
-  protected:
+  public:
       // wrapped objected
-      ObjectType wrapped_obj;
+      std::unique_ptr<ObjectType> m_pWrappedObject;
       
+  protected:
       // PersistLog
-      PersistLog * m_pLog;
+      std::unique_ptr<PersistLog> m_pLog;
+      // Persistence Registry
+      PersistentRegistry* m_pRegistry;
 
       // get the static name maker.
       static _NameMaker & getNameMaker();
+
+  //serialization supports
+  public:
+      std::size_t to_bytes(char* ret) const {
+          std::size_t sz = 0; 
+          // variable name
+          sz = mutils::to_bytes(this->m_pLog->m_sName.c_str(),ret+sz);
+          // wrapped object
+          sz = mutils::to_bytes(*this->m_pWrappedObject,ret+sz);
+          // TODO:the persistent log is missing for now. 
+          // we should add the log later... a more sophisticated but practical
+          // scenario is send a log delta here for a crashed node to catch up.
+          return sz;
+      }
+      std::size_t bytes_size() const {
+          return mutils::bytes_size(this->m_pLog->m_sName.c_str()) +
+              mutils::bytes_size(*this->m_pWrappedObject);
+      }
+      void post_object(const std::function<void (char const * const, std::size_t)> &f)
+      const {
+          mutils::post_object(f,this->m_pLog->m_sName.c_str());
+          mutils::post_object(f,*this->m_pWrappedObject);
+      }
+      // NOTE: we do not set up the registry here. This will only happen in the
+      // construction of Replicated<T>
+      static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* p, char const *v){
+          auto name = mutils::from_bytes<char*>(p,v);
+          auto sz_name = mutils::bytes_size(*name);
+          auto wrapped_obj = mutils::from_bytes<ObjectType>(p, v + sz_name);
+          std::unique_ptr<PersistLog> null_log = nullptr;//TODO: deserialization
+          PersistentRegistry & pr = p->template mgr<PersistentRegistry> ();
+          return std::make_unique<Persistent>(*name,wrapped_obj,null_log,&pr);
+      }
+      // derived from ByteRepresentable
+      virtual void ensure_registered(mutils::DeserializationManager&){}
   };
 
   // How many times the constructor was called.
@@ -368,75 +558,50 @@ namespace ns_persistent {
   template <typename ObjectType>
   class Volatile: public Persistent<ObjectType,ST_MEM>{
   public:
-    // constructor: this will guess the objectname form ObjectType
-    Volatile (
-      PersistentCallbackRegisterFunc func_register_cb=nullptr,
-      const char * object_name = (*Persistent<ObjectType,ST_MEM>::getNameMaker().make()).c_str())
-      noexcept(false):
-      Persistent<ObjectType,ST_MEM>(func_register_cb,object_name){
-    };
+    /** constructor 1 is for building a persistent<T> locally, load/create a
+     * log and register itself to a persistent registry.
+     * @param object_name This name is used for persistent data in file.
+     * @param persistent_registry A normal pointer to the registry.
+     */
+    Volatile(
+      const char * object_name = nullptr,
+      PersistentRegistry * persistent_registry = nullptr) noexcept(false)
+      : Persistent<ObjectType,ST_MEM>(object_name,persistent_registry) {}
+
+    /** constructor 2 is move constructor. It "steals" the resource from
+     * another object.
+     * @param other The other object.
+     */
+    Volatile(Volatile && other)
+      noexcept(false)
+      : Persistent<ObjectType,ST_MEM>(other) {}
+
+    /** constructor 3 is for deserialization. It builds a Persistent<T> from
+     * the object name, a unique_ptr to the wrapped object, a unique_ptr to
+     * the log.
+     * @param object_name The name is used for persistent data in file.
+     * @param wrapped_obj_ptr A unique pointer to the wrapped object.
+     * @param log_ptr A unique pointer to the log.
+     * @param persistent_registry A normal pointer to the registry.
+     */
+    Volatile(
+      const char * object_name,
+      std::unique_ptr<ObjectType> & wrapped_obj_ptr,
+      std::unique_ptr<PersistLog> & log_ptr = nullptr,
+      PersistentRegistry * persistent_registry = nullptr)
+      noexcept(false)
+      : Persistent<ObjectType,ST_MEM>(object_name,wrapped_obj_ptr,log_ptr,persistent_registry) {}
+
+    /** constructor 4, the default copy constructor, is disabled
+     */
+    Volatile(const Volatile &) = delete;
+
     // destructor:
-    virtual ~Volatile() noexcept(false){
+    virtual ~Volatile() noexcept(true){
       // do nothing
     };
   };
 
-  /*
-   * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
-   * variables. Replicated<T> class should maintain such a registry to perform
-   * the following operations:
-   * - makeVersion(const int64_t & ver): create a version 
-   * - persist(): persist the existing versions
-   * - trim(const int64_t & ver): trim all versions earlier than ver
-   */
-  class PersistentRegistry{
-  public:
-    PersistentRegistry() {
-      //
-    };
-    virtual ~PersistentRegistry() {
-      this->_registry.clear();
-    };
-    #define VERSION_FUNC_IDX (0)
-    #define PERSIST_FUNC_IDX (1)
-    #define TRIM_FUNC_IDX (2)
-    void makeVersion(const int64_t & ver) noexcept(false) {
-      callFunc<VERSION_FUNC_IDX>(ver);
-    };
-    const int64_t persist() noexcept(false) {
-      return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
-    };
-    void trim(const int64_t & ver) noexcept(false) {
-      callFunc<TRIM_FUNC_IDX>(ver);
-    };
-    void registerPersist(const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
-      //this->_registry.push_back(std::make_tuple<VersionFunc,PersistFunc,TrimFunc>(
-      this->_registry.push_back(std::make_tuple(vf,pf,tf));
-    };
-  protected:
-    std::vector<std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
-    template<int funcIdx,typename ... Args >
-    void callFunc(Args ... args) {
-      for (auto itr = this->_registry.begin();
-        itr != this->_registry.end(); ++itr) {
-        std::get<funcIdx>(*itr)(args ...);
-      }
-    };
-    template<int funcIdx,typename ReturnType,typename ... Args>
-    ReturnType callFuncMin(Args ... args) {
-      ReturnType min_ret;
-      for (auto itr = this->_registry.begin();
-        itr != this->_registry.end(); ++itr) {
-        ReturnType ret = std::get<funcIdx>(*itr)(args ...);
-        if (itr == this->_registry.begin()) {
-          min_ret = ret;
-        } else if (min_ret > ret) {
-          min_ret = ret;
-        }
-      }
-      return min_ret;
-    }
-  };
 }
 
 #endif//PERSIST_VAR_H

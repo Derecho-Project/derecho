@@ -29,10 +29,9 @@ namespace ns_persistent {
 
   // Persistent log interfaces
   class PersistLog{
-  protected:
+  public:
     // LogName
     const string m_sName;
-  public:
     // Constructor:
     // Remark: the constructor will check the persistent storage
     // to make sure if this named log(by "name" in the template 
@@ -66,6 +65,9 @@ namespace ns_persistent {
 
     // Get the Earliest Index
     virtual int64_t getEarliestIndex() noexcept(false) = 0;
+
+    // Get the Latest Index
+    virtual int64_t getLatestIndex() noexcept(false) = 0;
 
     // return the last persisted value
     // virtual const __int128 getLastPersisted() noexcept(false) = 0;

@@ -2,6 +2,7 @@
  * @file typed_subgroup_test.cpp
  *
  * @date Mar 1, 2017
+ * @author edward
  */
 
 #include <chrono>
@@ -15,6 +16,41 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <persistent/Persistent.hpp>
+
+/**
+ * Example for replicated object with Persistent<T>
+ */
+class PFoo : public mutils::ByteRepresentable {
+  Persistent<int> pint;
+public:
+  virtual ~PFoo() noexcept (true) {
+  }
+  int read_state() {
+    return *pint;
+  }
+  bool change_state(int new_int) {
+    if(new_int == *pint) {
+      return false;
+    }
+    *pint = new_int;
+    return true;
+  }
+
+  enum Functions { READ_STATE, 
+                   CHANGE_STATE };
+
+  static auto register_functions() {
+    return std::make_tuple(derecho::rpc::tag<READ_STATE>(&PFoo::read_state),
+                           derecho::rpc::tag<CHANGE_STATE>(&PFoo::change_state));
+  }
+
+  // constructor for PersistentRegistry
+  PFoo(PersistentRegistry * pr):pint(nullptr,pr) {}
+  PFoo(Persistent<int> & init_pint):pint(std::move(init_pint)) {}
+  DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
+};
+
 
 /**
  * Example replicated object, containing some serializable state and providing
@@ -152,9 +188,9 @@ int main(int argc, char** argv) {
     derecho::CallbackSet callback_set{stability_callback, {}};
 
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
-    //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+    //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5, PFoo to a subgroup have all 6 nodes.
+    derecho::SubgroupInfo subgroup_info{{
+             {std::type_index(typeid(Foo)), [](const derecho::View& curr_view) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -162,48 +198,57 @@ int main(int argc, char** argv) {
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
                   subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-                  next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2}));
-                  next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view) {
                   if(curr_view.num_members < 6) {
                       std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   subgroup_vector[0].emplace_back(curr_view.make_subview({3, 4, 5}));
-                  next_unassigned_rank = std::max(next_unassigned_rank, 6);
                   return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache))}};
+              }},
+             {std::type_index(typeid(PFoo)), [](const derecho::View& curr_view) {
+                  if(curr_view.num_members < 6) {
+                      std::cout << "PFoo function throwing subgroup_provisioning_exception" << std::endl;
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+                  //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
+                  subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1, 2, 3, 4, 5}));
+                  return subgroup_vector;
+              }},
+    }};
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry *) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry *) { return std::make_unique<Bar>(); };
-    auto cache_factory = [](PersistentRegistry *) { return std::make_unique<Cache>(); };
+    auto foo_factory = [](PersistentRegistry *pr) { return std::make_unique<Foo>(-1); };
+    auto pfoo_factory = [](PersistentRegistry *pr) { return std::make_unique<PFoo>(pr); };
+    auto bar_factory = [](PersistentRegistry *pr) { return std::make_unique<Bar>(); };
+    auto cache_factory = [](PersistentRegistry *pr) { return std::make_unique<Cache>(); };
+    
 
-    std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
+    std::unique_ptr<derecho::Group<Foo, Bar, Cache, PFoo>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
+        group = std::make_unique<derecho::Group<Foo, Bar, Cache, PFoo>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
-                foo_factory, bar_factory, cache_factory);
+                std::vector<derecho::view_upcall_t>{}, 12345,
+                foo_factory, bar_factory, cache_factory, pfoo_factory);
     } else {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
+        group = std::make_unique<derecho::Group<Foo, Bar, Cache, PFoo>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
-                foo_factory, bar_factory, cache_factory);
+                std::vector<derecho::view_upcall_t>{}, 12345,
+                foo_factory, bar_factory, cache_factory, pfoo_factory);
     }
 
     cout << "Finished constructing/joining Group" << endl;
@@ -228,14 +273,19 @@ int main(int argc, char** argv) {
     if(node_id == 0) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+        Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
+
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_query<Foo::READ_STATE>();
+        cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
+        pfoo_rpc_handle.ordered_query<PFoo::READ_STATE>();
     }
     if(node_id == 1) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+        Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
         derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
@@ -246,6 +296,15 @@ int main(int argc, char** argv) {
         }
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 1...");
+
+        cout << "Changing PFoo's state to " << new_value << endl;
+        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
+        decltype(results)::ReplyMap& repliex = resultx.get();
+        cout << "Got a reply map!" << endl;
+        for(auto& reply_pair : repliex) {
+            cout << "Replyx from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
+        }
+ 
     }
     if(node_id == 2) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
@@ -300,6 +359,7 @@ int main(int argc, char** argv) {
         derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<Foo::READ_STATE>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
+
     }
     if(node_id == 5) {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();

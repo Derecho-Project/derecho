@@ -123,7 +123,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     template <typename definitely_char>
     inline recv_ret receive_response(
-            std::false_type*, mutils::DeserializationManager* dsm,
+            std::false_type*, 
+            mutils::DeserializationManager* dsm,
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
@@ -160,11 +161,14 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * @param f
      * @return A recv_ret containing nothing of value.
      */
-    inline recv_ret receive_response(mutils::DeserializationManager* dsm,
+    inline recv_ret receive_response(//mutils::DeserializationManager* dsm,
+                                     mutils::RemoteDeserialization_v* rdv,
                                      const node_id_t& nid, const char* response,
                                      const std::function<char*(int)>& f) {
         constexpr std::is_same<void, Ret>* choice{nullptr};
-        return receive_response(choice, dsm, nid, response, f);
+//        return receive_response(choice, dsm, nid, response, f);
+        mutils::DeserializationManager dsm{*rdv};
+        return receive_response(choice, &dsm, nid, response, f);
     }
 
     /**
@@ -296,7 +300,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         auto recv_buf = _recv_buf + sizeof(long int);
         mutils::callFunc([&](const auto&... args) { remote_invocable_function(*args...); },
                          deserialize(dsm, recv_buf));
-        // remote_invocable_function(*deserialize<Args>(dsm, recv_buf)...);
+        //remote_invocable_function(*deserialize<Args>(dsm, recv_buf)...);
         return recv_ret{reply_opcode, 0, nullptr};
     }
 
@@ -310,11 +314,14 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * @param out_alloc A function that can allocate a buffer for the response message
      * @return
      */
-    inline recv_ret receive_call(mutils::DeserializationManager* dsm,
+    inline recv_ret receive_call(//mutils::DeserializationManager* dsm,
+                                 mutils::RemoteDeserialization_v* rdv,
                                  const node_id_t& who, const char* recv_buf,
                                  const std::function<char*(int)>& out_alloc) {
         constexpr std::is_same<Ret, void>* choice{nullptr};
-        return this->receive_call(choice, dsm, who, recv_buf, out_alloc);
+//      return this->receive_call(choice, dsm, who, recv_buf, out_alloc);
+        mutils::DeserializationManager dsm{*rdv};
+        return this->receive_call(choice, &dsm, who, recv_buf, out_alloc);
     }
 
     /**

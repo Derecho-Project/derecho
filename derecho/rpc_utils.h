@@ -106,7 +106,8 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        mutils::DeserializationManager* dsm, const node_id_t&, const char* recv_buf,
+//        mutils::DeserializationManager* dsm, 
+        mutils::RemoteDeserialization_v *rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
 /**
@@ -323,7 +324,8 @@ inline void populate_header(char* reply_buf,
     ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
 }
 
-inline void retrieve_header(mutils::DeserializationManager* dsm,
+//inline void retrieve_header(mutils::DeserializationManager* dsm,
+inline void retrieve_header(mutils::RemoteDeserialization_v *rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {
