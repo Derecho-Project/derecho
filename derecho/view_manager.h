@@ -200,8 +200,12 @@ private:
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
+<<<<<<< HEAD
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
                                 std::map<subgroup_id_t, Mode>& subgroup_to_mode);
+=======
+                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
+>>>>>>> 8e1e785f31384133c86fdebdee2ea0c3daeecba1
 
     /** The persistence request func is from persistent manager*/
     post_persistence_request_func_t post_persistence_request_func;
