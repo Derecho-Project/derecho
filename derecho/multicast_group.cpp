@@ -844,7 +844,9 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
-                        std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_rdmc_seq_num);
+                        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_rdmc_seq_num);
+                        }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
@@ -855,7 +857,9 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
-                        std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_sst_seq_num);
+                        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+                          std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_sst_seq_num);
+                        }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -870,8 +874,10 @@ void MulticastGroup::register_predicates() {
                             (char*)std::addressof(sst.delivered_num[0][subgroup_num]) - sst.getBaseAddress(),
                             sizeof(long long int));
                     // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
-                    //make a version and post persistence request.
-                    std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[0][subgroup_num]);
+                    //make post persistence request for ordered mode.
+                    if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+                        std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[0][subgroup_num]);
+                    }
                 }
             };
 
