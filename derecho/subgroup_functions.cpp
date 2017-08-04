@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "subgroup_functions.h"
 #include "view.h"

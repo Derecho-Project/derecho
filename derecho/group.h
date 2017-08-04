@@ -17,6 +17,7 @@
 
 #include "tcp/tcp.h"
 
+#include "derecho_internal.h"
 #include "derecho_exception.h"
 #include "raw_subgroup.h"
 #include "replicated.h"
@@ -30,10 +31,10 @@
 #include "spdlog/spdlog.h"
 
 namespace derecho {
-
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
-using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+  using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+
 /**
  * The top-level object for creating a Derecho group. This implements the group
  * management service (GMS) features and contains a MulticastGroup instance that

@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "derecho_sst.h"
 #include "multicast_group.h"

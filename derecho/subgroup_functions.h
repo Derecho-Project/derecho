@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "subgroup_info.h"
 

@@ -23,7 +23,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
-                         const post_persistence_request_func_t & post_persistence_request,
+                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
@@ -35,7 +35,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
-          post_persistence_request_func(post_persistence_request) {
+          persistence_manager_callbacks(_persistence_manager_callbacks) {
     initialize_rdmc_sst();
     //Wait for the first client (second group member) to join
     await_second_member(my_id);
@@ -55,7 +55,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          tcp::socket& leader_connection,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
-                         const post_persistence_request_func_t & post_persistence_request,
+                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
@@ -65,7 +65,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(0, 0),
-          post_persistence_request_func(post_persistence_request) {
+          persistence_manager_callbacks(_persistence_manager_callbacks) {
     //First, receive the view and parameters over the given socket
     receive_configuration(my_id, leader_connection);
 
@@ -92,7 +92,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                          const ip_addr my_ip,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
-                         const post_persistence_request_func_t & post_persistence_request,
+                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                          std::experimental::optional<DerechoParams> _derecho_params,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
@@ -104,7 +104,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(0, 0),
-          post_persistence_request_func(post_persistence_request) {
+          persistence_manager_callbacks(_persistence_manager_callbacks) {
     auto last_view = load_view(view_file_name);
 
     if(my_id != last_view->members[last_view->rank_of_leader()]) {
@@ -729,7 +729,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             subgroup_to_num_received_offset, subgroup_to_membership,
             subgroup_to_mode,
             derecho_params, 
-            post_persistence_request_func,
+            persistence_manager_callbacks,
             curr_view->failed);
 }
 
@@ -756,7 +756,7 @@ void ViewManager::transition_multicast_group() {
             subgroup_to_shard_and_rank, subgroup_to_senders_and_sender_rank,
             subgroup_to_num_received_offset, subgroup_to_membership,
             subgroup_to_mode,
-            post_persistence_request_func,
+            persistence_manager_callbacks,
             next_view->failed);
 
     curr_view->multicast_group.reset();

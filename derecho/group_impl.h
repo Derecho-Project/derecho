@@ -6,6 +6,7 @@
 
 #include <mutils-serialization/SerializationSupport.hpp>
 
+#include "derecho_internal.h"
 #include "group.h"
 
 namespace derecho {
@@ -70,9 +71,8 @@ Group<ReplicatedTypes...>::Group(
           my_id(my_id),
           persistence_manager(nullptr),
           view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params, 
-            [&](subgroup_id_t subgroup_id,message_id_t message_id){
-              persistence_manager.post_request(subgroup_id,message_id);
-            }, _view_upcalls, gms_port),
+            persistence_manager.get_callbacks(),
+            _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())){
@@ -108,10 +108,9 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
         : logger(create_logger()),
           my_id(my_id),
           persistence_manager(nullptr),
-          view_manager(my_id, leader_connection, callbacks, subgroup_info, 
-            [&](subgroup_id_t subgroup_id,message_id_t message_id){
-              persistence_manager.post_request(subgroup_id,message_id);
-            }, _view_upcalls, gms_port),
+          view_manager(my_id, leader_connection, callbacks, subgroup_info,
+            persistence_manager.get_callbacks(),
+            _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {

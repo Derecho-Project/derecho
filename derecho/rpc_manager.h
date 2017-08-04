@@ -13,6 +13,7 @@
 #include <mutex>
 #include <vector>
 
+#include "derecho_internal.h"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "remote_invocable.h"
 #include "rpc_utils.h"

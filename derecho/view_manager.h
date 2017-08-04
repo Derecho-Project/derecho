@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "derecho_internal.h"
 #include "derecho_ports.h"
 #include "locked_reference.h"
 #include "spdlog/spdlog.h"
@@ -200,15 +201,11 @@ private:
                                 std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
                                 std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
                                 std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-<<<<<<< HEAD
                                 std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
                                 std::map<subgroup_id_t, Mode>& subgroup_to_mode);
-=======
-                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership);
->>>>>>> 8e1e785f31384133c86fdebdee2ea0c3daeecba1
 
-    /** The persistence request func is from persistent manager*/
-    post_persistence_request_func_t post_persistence_request_func;
+    /** The persistence request func is from persistence manager*/
+    persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
@@ -229,7 +226,7 @@ public:
      * for this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
-     * @param post_persistence_request The persistence lambda for typed subgroups.
+     * @param _persistence_manager_callbacks The persistence manager callbacks.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      * @param gms_port The port to contact other group members on when sending
@@ -240,7 +237,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
-                const post_persistence_request_func_t & post_persistence_request,
+                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -255,7 +252,7 @@ public:
      * @param subgroup_info The set of functions defining subgroup membership
      * in this group. Must be the same as the SubgroupInfo used to set up the
      * leader.
-     * @param post_persistence_request The persistence lambda for typed subgroups.
+     * @param _persistence_manager_callbacks The persistence manager callbacks
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      * @param gms_port The port to contact other group members on when sending
@@ -265,7 +262,7 @@ public:
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const post_persistence_request_func_t & post_persistence_request,
+                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -278,7 +275,7 @@ public:
      * @param my_ip The IP address of the node executing this code
      * @param callbacks The set of callback functions to use for message
      * delivery events once the group has been re-joined
-     * @param post_persistence_request The persistence lambda for typed subgroups.
+     * @param _persistence_manager_callbacks
      * @param derecho_params (Optional) If set, and this node is the leader of
      * the restarting group, a new set of Derecho parameters to configure the
      * group with. Otherwise, these parameters will be read from the logfile or
@@ -291,7 +288,7 @@ public:
                 const ip_addr my_ip,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const post_persistence_request_func_t & post_persistence_request,
+                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);

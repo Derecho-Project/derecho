@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 
+#include "derecho_internal.h"
 #include "subgroup_function_tester.h"
 
 std::string ip_generator() {

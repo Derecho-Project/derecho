@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "derecho_internal.h"
 #include "derecho_exception.h"
 #include "view_manager.h"
 

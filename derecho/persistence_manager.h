@@ -9,21 +9,22 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <queue>
+#include <semaphore.h>
+#include <errno.h>
 
+#include "derecho_internal.h"
 #include "replicated.h"
 
 #include "spdlog/spdlog.h"
 #include "mutils-containers/KindMap.hpp"
 #include "persistent/Persistent.hpp"
 
-#define PERSISTENCE_INTERVAL_MILLISECONDS (500)
-
 namespace derecho {
 
   template <typename T>
   using replicated_index_map = std::map<uint32_t, Replicated<T>>;
-
-  using post_persistence_request_func_t = std::function<void(subgroup_id_t,message_id_t)>;
+  using persistence_request_t = std::tuple<subgroup_id_t,persistent_version_t>;
 
   /**
    * PersistenceManager is responsible for persisting all the data in a group.
@@ -38,8 +39,10 @@ namespace derecho {
     std::thread persist_thread;
     /** A flag to singal the persistent thread to shutdown; set to true when the group is destroyed. */
     std::atomic<bool> thread_shutdown;
-    /** A flag to singal the persistent thread to do persistent work; */
-    std::atomic<bool> pending_request;
+    /** The semaphore for persistence request the persistent thread */
+    sem_t persistence_request_sem;
+    /** a queue for the requests */
+    std::queue<persistence_request_t> persistence_request_queue;
 
     /** Replicated Objects handle: TODO:make it safer */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> *replicated_objects;
@@ -53,13 +56,22 @@ namespace derecho {
       )
       : logger(spdlog::get("debug_log")),
         thread_shutdown(false),
-        pending_request(false),
         replicated_objects(pro) {
+      // initialize semaphore
+      if ( sem_init(&persistence_request_sem,1,0) != 0 ) {
+        throw derecho_exception("Cannot initialize persistent_request_sem:errno="+std::to_string(errno));
+      }
     }
 
     /** default Constructor
      */
     PersistenceManager():PersistenceManager(nullptr){
+    }
+
+    /** default Destructor
+     */
+    virtual ~PersistenceManager() {
+      sem_destroy(&persistence_request_sem);
     }
 
     /**
@@ -84,38 +96,43 @@ namespace derecho {
       if (replicated_objects == nullptr) return; //skip for raw subgroups
 
       this->persist_thread = std::thread{[this](){
+
         do{
-          bool expected = true;
-          if(this->pending_request.compare_exchange_strong(expected,false)) {
-            // if there is some pending request for persistence:
-            // go through the replicated object and perform persistent
-            this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
-              for(auto it=map.begin();it != map.end(); ++it) {
-                // iterate through all subgroups
-                // it->first is the subgroup index
-                // it->second is the corresponding Replicated<T>
-                // T = decltype(*pkey)
-                it->second.persist();
-              } 
-            });
-          } else {
-            // sleep for PERSISTENCE_INTERVAL_MILLISECONDS milliseconds.
-            std::this_thread::sleep_for(std::chrono::milliseconds(PERSISTENCE_INTERVAL_MILLISECONDS));
-          }
-        } while(!this->thread_shutdown || this->pending_request);
+
+          // wait for semaphore
+          sem_wait(&persistence_request_sem);
+          subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
+          persistent_version_t version = std::get<1>(persistence_request_queue.front());
+          persistence_request_queue.pop();
+
+          // persist
+          this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
+            auto search = map.find(subgroup_id);
+            if (search != map.end()) {
+              search->second.persist(version);
+            }
+          });
+          
+        } while(!this->thread_shutdown || !this->persistence_request_queue.empty());
       }};
     }
 
     /** post a persistence request */
-    void post_request(subgroup_id_t subgroup_id, message_id_t message_id) {
+    void post_persist_request(subgroup_id_t subgroup_id, persistent_version_t version) {
+      // request enqueue
+      persistence_request_queue.push(std::make_tuple(subgroup_id,version));
+      // post semaphore
+      sem_post(&persistence_request_sem);
+    }
+
+    /** make a version */
+    void make_version(subgroup_id_t subgroup_id, persistent_version_t version) {
       // find the corresponding Replicated<T> in replicated_objects
       this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
         // make a version
         auto search = map.find(subgroup_id);
         if (search != map.end()) {
-          search->second.make_version(message_id);
-          // post a request by setting the flag
-          pending_request = true;
+          search->second.make_version(version);
         }
       });
     }
@@ -130,6 +147,19 @@ namespace derecho {
       if (wait) {
         this->persist_thread.join();
       }
+    }
+
+    /** get the persistence callbacks. The multicast_group object will use this to notify
+     *  the persistence thread about it.
+     */
+    persistence_manager_callbacks_t get_callbacks() {
+      return std::make_tuple(
+        [this](subgroup_id_t subgroup_id,uint64_t ver){
+          this->make_version(subgroup_id,ver);
+        },
+        [this](subgroup_id_t subgroup_id,uint64_t ver){
+          this->post_persist_request(subgroup_id,ver);
+        });
     }
   };
 }

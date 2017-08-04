@@ -4,6 +4,7 @@
 #include <limits>
 #include <thread>
 
+#include "derecho_internal.h"
 #include "multicast_group.h"
 #include "rdmc/util.h"
 
@@ -59,7 +60,7 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
         const DerechoParams derecho_params,
-        const post_persistence_request_func_t & post_persistence_request,
+        const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<char> already_failed)
         : logger(spdlog::get("debug_log")),
           members(_members),
@@ -87,7 +88,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          post_persistence_request_func(post_persistence_request) {
+          persistence_manager_callbacks(_persistence_manager_callbacks) {
     assert(window_size >= 1);
 
     if(!derecho_params.filename.empty()) {
@@ -135,7 +136,7 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
         const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
         const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
-        const post_persistence_request_func_t & post_persistence_request,
+        const persistence_manager_callbacks_t & _persistence_manager_callbacks,
         std::vector<char> already_failed, uint32_t rpc_port)
         : logger(old_group.logger),
           members(_members),
@@ -164,7 +165,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          post_persistence_request_func(post_persistence_request) {
+          persistence_manager_callbacks(_persistence_manager_callbacks) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -843,6 +844,7 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
+                        std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_rdmc_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
@@ -853,6 +855,7 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
+                        std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_sst_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -866,9 +869,9 @@ void MulticastGroup::register_predicates() {
                     sst.put(get_shard_sst_indices(subgroup_num),
                             (char*)std::addressof(sst.delivered_num[0][subgroup_num]) - sst.getBaseAddress(),
                             sizeof(long long int));
-                    locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
+                    // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
                     //make a version and post persistence request.
-                    post_persistence_request_func(subgroup_num,msg.index);
+                    std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[0][subgroup_num]);
                 }
             };
 
