@@ -99,7 +99,7 @@ namespace ns_persistent {
     };
     template<int funcIdx,typename ReturnType,typename ... Args>
     ReturnType callFuncMin(Args ... args) {
-      ReturnType min_ret;
+      ReturnType min_ret = -1; // -1 means invalid value.
       for (auto itr = this->_registry.begin();
         itr != this->_registry.end(); ++itr) {
         ReturnType ret = std::get<funcIdx>(itr->second)(args ...);

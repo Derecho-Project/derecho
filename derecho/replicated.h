@@ -342,26 +342,33 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const int64_t & ver) noexcept(false) {
+    virtual void make_version(const persistent_version_t & ver) noexcept(false) {
       persistent_registry.makeVersion(ver);
     };
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(persistent_version_t version) noexcept(false) {
+    virtual void persist(const persistent_version_t version) noexcept(false) {
       persistent_version_t persisted_ver;
+
+      // persist variables
       do{
         persisted_ver = persistent_registry.persist();
+        if(persisted_ver == -1) {
+          // for replicated<T> without Persistent fields,
+          // tell the persistent thread that we are done.
+          persisted_ver = version;
+         }
       } while(persisted_ver < version);
-      //TODO:ask Sagar to review the code
-      // 1) read lock the view
+
+      // read lock the view
       std::shared_lock<std::shared_timed_mutex> read_lock(group_rpc_manager.view_manager.view_mutex);
-      // 2) update the persisted_num in SST
+      // update the persisted_num in SST
       View &Vc = *group_rpc_manager.view_manager.curr_view;
       Vc.gmsSST->persisted_num[node_id][subgroup_id] = version;
       Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
-        (char*)std::addressof(Vc.gmsSST->delivered_num[node_id][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
+        (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
         sizeof(long long int));
     };
 
@@ -370,7 +377,7 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const int64_t & ver) noexcept(false) {
+    virtual void trim(const persistent_version_t & ver) noexcept(false) {
       persistent_registry.trim(ver);
     };
 

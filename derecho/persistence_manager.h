@@ -154,10 +154,10 @@ namespace derecho {
      */
     persistence_manager_callbacks_t get_callbacks() {
       return std::make_tuple(
-        [this](subgroup_id_t subgroup_id,uint64_t ver){
+        [this](subgroup_id_t subgroup_id,persistent_version_t ver){
           this->make_version(subgroup_id,ver);
         },
-        [this](subgroup_id_t subgroup_id,uint64_t ver){
+        [this](subgroup_id_t subgroup_id,persistent_version_t ver){
           this->post_persist_request(subgroup_id,ver);
         });
     }

@@ -876,7 +876,7 @@ void MulticastGroup::register_predicates() {
                     // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
                     //make post persistence request for ordered mode.
                     if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                        std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[0][subgroup_num]);
+                        std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[member_index][subgroup_num]);
                     }
                 }
             };
