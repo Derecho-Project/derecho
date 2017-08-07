@@ -366,7 +366,7 @@ public:
       std::shared_lock<std::shared_timed_mutex> read_lock(group_rpc_manager.view_manager.view_mutex);
       // update the persisted_num in SST
       View &Vc = *group_rpc_manager.view_manager.curr_view;
-      Vc.gmsSST->persisted_num[node_id][subgroup_id] = version;
+      Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id] = version;
       Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
         (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
         sizeof(long long int));

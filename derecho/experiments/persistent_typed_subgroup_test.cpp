@@ -52,120 +52,6 @@ public:
 };
 
 
-/**
- * Example replicated object, containing some serializable state and providing
- * two RPC methods. In order to be serialized it must extend ByteRepresentable.
- */
-class Foo : public mutils::ByteRepresentable {
-    int state;
-
-public:
-    int read_state() {
-        return state;
-    }
-    bool change_state(int new_state) {
-        if(new_state == state) {
-            return false;
-        }
-        state = new_state;
-        return true;
-    }
-
-    /** Named integers that will be used to tag the RPC methods */
-    enum Functions { READ_STATE,
-                     CHANGE_STATE };
-
-    /**
-     * All replicated objects must provide this static method, which should
-     * return a tuple containing all the methods that can be invoked by RPC.
-     * Each method should be "tagged" with derecho::rpc::tag(), whose template
-     * parameter indicates which numeric constant will identify the method.
-     * @return A tuple of "tagged" function pointers.
-     */
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&Foo::read_state),
-                               derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
-    }
-
-    /**
-     * Constructs a Foo with an initial value.
-     * @param initial_state
-     */
-    Foo(int initial_state = 0) : state(initial_state) {}
-    DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
-};
-
-class Bar : public mutils::ByteRepresentable {
-    std::string log;
-
-public:
-    void append(const std::string& words) {
-        log += words;
-    }
-    void clear() {
-        log.clear();
-    }
-    std::string print() {
-        return log;
-    }
-    enum Functions { APPEND,
-                     CLEAR,
-                     PRINT };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<APPEND>(&Bar::append),
-                               derecho::rpc::tag<CLEAR>(&Bar::clear),
-                               derecho::rpc::tag<PRINT>(&Bar::print));
-    }
-
-    DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
-    Bar(const std::string& s = "") : log(s) {}
-};
-
-class Cache : public mutils::ByteRepresentable {
-    std::map<std::string, std::string> cache_map;
-
-public:
-    void put(const std::string& key, const std::string& value) {
-        cache_map[key] = value;
-    }
-    std::string get(const std::string& key) {
-        return cache_map[key];
-    }
-    bool contains(const std::string& key) {
-        return cache_map.find(key) != cache_map.end();
-    }
-    bool invalidate(const std::string& key) {
-        auto key_pos = cache_map.find(key);
-        if(key_pos == cache_map.end()) {
-            return false;
-        }
-        cache_map.erase(key_pos);
-        return true;
-    }
-    enum Functions { PUT,
-                     GET,
-                     CONTAINS,
-                     INVALIDATE };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<PUT>(&Cache::put),
-                               derecho::rpc::tag<GET>(&Cache::get),
-                               derecho::rpc::tag<CONTAINS>(&Cache::contains),
-                               derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
-    }
-
-    Cache() : cache_map() {}
-    /**
-     * This constructor is required by default serialization support, in order
-     * to reconstruct an object after deserialization.
-     * @param cache_map The state of the cache.
-     */
-    Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
-
-    DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
-};
-
 using std::cout;
 using std::endl;
 using derecho::Replicated;
@@ -190,6 +76,7 @@ int main(int argc, char** argv) {
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
     //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5, PFoo to a subgroup have all 6 nodes.
     derecho::SubgroupInfo subgroup_info{{
+/*
              {std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
@@ -221,6 +108,7 @@ int main(int argc, char** argv) {
                   next_unassigned_rank = std::max(next_unassigned_rank, 6);
                   return subgroup_vector;
               }},
+*/
              {std::type_index(typeid(PFoo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < 6) {
                       std::cout << "PFoo function throwing subgroup_provisioning_exception" << std::endl;
@@ -232,27 +120,24 @@ int main(int argc, char** argv) {
                   next_unassigned_rank = std::max(next_unassigned_rank, 6);
                   return subgroup_vector;
               }}},
-            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache)), std::type_index(typeid(PFoo))}};
+            {std::type_index(typeid(PFoo))}};
+//            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache)), std::type_index(typeid(PFoo))}};
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry *pr) { return std::make_unique<Foo>(-1); };
     auto pfoo_factory = [](PersistentRegistry *pr) { return std::make_unique<PFoo>(pr); };
-    auto bar_factory = [](PersistentRegistry *pr) { return std::make_unique<Bar>(); };
-    auto cache_factory = [](PersistentRegistry *pr) { return std::make_unique<Cache>(); };
     
-
-    std::unique_ptr<derecho::Group<Foo, Bar, Cache, PFoo>> group;
+    std::unique_ptr<derecho::Group<PFoo>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache, PFoo>>(
+        group = std::make_unique<derecho::Group<PFoo>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                foo_factory, bar_factory, cache_factory, pfoo_factory);
+                pfoo_factory);
     } else {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache, PFoo>>(
+        group = std::make_unique<derecho::Group<PFoo>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                foo_factory, bar_factory, cache_factory, pfoo_factory);
+                pfoo_factory);
     }
 
     cout << "Finished constructing/joining Group" << endl;
@@ -261,11 +146,7 @@ int main(int argc, char** argv) {
     bool inadequately_provisioned = true;
     while(inadequately_provisioned) {
         try {
-            if(node_id < 3) {
-                group->get_subgroup<Foo>();
-            } else {
-                group->get_subgroup<Cache>();
-            }
+            group->get_subgroup<PFoo>();
             inadequately_provisioned = false;
         } catch(derecho::subgroup_provisioning_exception& e) {
             inadequately_provisioned = true;
@@ -275,22 +156,25 @@ int main(int argc, char** argv) {
     cout << "All members have joined, subgroups are provisioned" << endl;
 
     if(node_id == 0) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+//        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
+//        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
 
+/*
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_query<Foo::READ_STATE>();
+*/
         cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
         pfoo_rpc_handle.ordered_query<PFoo::READ_STATE>();
     }
     if(node_id == 1) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+//        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
+//        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
         int new_value = 3;
+/*
         cout << "Changing Foo's state to " << new_value << endl;
         derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
         decltype(results)::ReplyMap& replies = results.get();
@@ -300,10 +184,10 @@ int main(int argc, char** argv) {
         }
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 1...");
-
+*/
         cout << "Changing PFoo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
-        decltype(results)::ReplyMap& repliex = resultx.get();
+        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<PFoo::CHANGE_STATE>(new_value);
+        decltype(resultx)::ReplyMap& repliex = resultx.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : repliex) {
             cout << "Replyx from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
@@ -311,6 +195,7 @@ int main(int argc, char** argv) {
  
     }
     if(node_id == 2) {
+/*
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -327,9 +212,10 @@ int main(int argc, char** argv) {
         }
         cout << "Clearing Bar's log" << endl;
         bar_rpc_handle.ordered_send<Bar::CLEAR>();
-    }
+*/    }
 
     if(node_id == 3) {
+/*
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
@@ -350,8 +236,10 @@ int main(int argc, char** argv) {
         for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }
+*/
     }
     if(node_id == 4) {
+/*
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
@@ -363,13 +251,15 @@ int main(int argc, char** argv) {
         derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<Foo::READ_STATE>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
-
+*/
     }
     if(node_id == 5) {
+/*
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
         cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
+*/
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
