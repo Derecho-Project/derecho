@@ -307,8 +307,8 @@ MulticastGroup::MulticastGroup(
 
 std::function<void(persistence::message)> MulticastGroup::make_file_written_callback() {
     return [this](persistence::message m) {
-        callbacks.local_persistence_callback(m.subgroup_num, m.sender, m.index, m.data,
-                                             m.length);
+        // callbacks.local_persistence_callback(m.subgroup_num, m.sender, m.index, m.data,
+        //                                     m.length);
         //m.sender is an ID, not a rank
         uint sender_rank;
         for(sender_rank = 0; sender_rank < num_members; ++sender_rank) {
@@ -317,6 +317,9 @@ std::function<void(persistence::message)> MulticastGroup::make_file_written_call
         // m.data points to the char[] buffer in a MessageBuffer, so we need to find
         // the msg corresponding to m and put its MessageBuffer on free_message_buffers
         auto sequence_number = m.index * num_members + sender_rank;
+
+        // notify the use about the callback.
+        callbacks.local_persistence_callback(m.subgroup_num, sequence_number);
         {
             std::lock_guard<std::mutex> lock(msg_state_mtx);
             auto find_result = non_persistent_messages[m.subgroup_num].find(sequence_number);
@@ -845,7 +848,7 @@ void MulticastGroup::register_predicates() {
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
                         if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                            std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_rdmc_seq_num);
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistence_version_t)least_undelivered_rdmc_seq_num);
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
@@ -858,7 +861,7 @@ void MulticastGroup::register_predicates() {
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
                         if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                          std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)least_undelivered_sst_seq_num);
+                          std::get<0>(persistence_manager_callbacks)(subgroup_num,(persistence_version_t)least_undelivered_sst_seq_num);
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
@@ -876,7 +879,7 @@ void MulticastGroup::register_predicates() {
                     // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
                     //make post persistence request for ordered mode.
                     if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                        std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistent_version_t)sst.delivered_num[member_index][subgroup_num]);
+                        std::get<1>(persistence_manager_callbacks)(subgroup_num,(persistence_version_t)sst.delivered_num[member_index][subgroup_num]);
                     }
                 }
             };

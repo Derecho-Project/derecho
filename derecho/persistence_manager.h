@@ -24,7 +24,7 @@ namespace derecho {
 
   template <typename T>
   using replicated_index_map = std::map<uint32_t, Replicated<T>>;
-  using persistence_request_t = std::tuple<subgroup_id_t,persistent_version_t>;
+  using persistence_request_t = std::tuple<subgroup_id_t,persistence_version_t>;
 
   /**
    * PersistenceManager is responsible for persisting all the data in a group.
@@ -44,6 +44,8 @@ namespace derecho {
     /** a queue for the requests */
     std::queue<persistence_request_t> persistence_request_queue;
 
+    /** persistence callback */
+    persistence_callback_t persistence_callback;
     /** Replicated Objects handle: TODO:make it safer */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> *replicated_objects;
  
@@ -52,10 +54,11 @@ namespace derecho {
      * @param pro pointer to the replicated_objects.
      */
     PersistenceManager(
-      mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro
-      )
+      mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro,
+      const persistence_callback_t & _persistence_callback)
       : logger(spdlog::get("debug_log")),
         thread_shutdown(false),
+        persistence_callback(_persistence_callback),
         replicated_objects(pro) {
       // initialize semaphore
       if ( sem_init(&persistence_request_sem,1,0) != 0 ) {
@@ -65,7 +68,8 @@ namespace derecho {
 
     /** default Constructor
      */
-    PersistenceManager():PersistenceManager(nullptr){
+    PersistenceManager(const persistence_callback_t & _persistence_callback):
+      PersistenceManager(nullptr,_persistence_callback){
     }
 
     /** default Destructor
@@ -102,7 +106,7 @@ namespace derecho {
           // wait for semaphore
           sem_wait(&persistence_request_sem);
           subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
-          persistent_version_t version = std::get<1>(persistence_request_queue.front());
+          persistence_version_t version = std::get<1>(persistence_request_queue.front());
           persistence_request_queue.pop();
 
           // persist
@@ -112,13 +116,18 @@ namespace derecho {
               search->second.persist(version);
             }
           });
+
+          // callback
+          if (this->persistence_callback != nullptr) {
+            this->persistence_callback(subgroup_id,version);
+          }
           
         } while(!this->thread_shutdown || !this->persistence_request_queue.empty());
       }};
     }
 
     /** post a persistence request */
-    void post_persist_request(subgroup_id_t subgroup_id, persistent_version_t version) {
+    void post_persist_request(subgroup_id_t subgroup_id, persistence_version_t version) {
       // request enqueue
       persistence_request_queue.push(std::make_tuple(subgroup_id,version));
       // post semaphore
@@ -126,7 +135,7 @@ namespace derecho {
     }
 
     /** make a version */
-    void make_version(subgroup_id_t subgroup_id, persistent_version_t version) {
+    void make_version(subgroup_id_t subgroup_id, persistence_version_t version) {
       // find the corresponding Replicated<T> in replicated_objects
       this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
         // make a version
@@ -154,10 +163,10 @@ namespace derecho {
      */
     persistence_manager_callbacks_t get_callbacks() {
       return std::make_tuple(
-        [this](subgroup_id_t subgroup_id,persistent_version_t ver){
+        [this](subgroup_id_t subgroup_id,persistence_version_t ver){
           this->make_version(subgroup_id,ver);
         },
-        [this](subgroup_id_t subgroup_id,persistent_version_t ver){
+        [this](subgroup_id_t subgroup_id,persistence_version_t ver){
           this->post_persist_request(subgroup_id,ver);
         });
     }

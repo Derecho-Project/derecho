@@ -36,8 +36,8 @@ namespace derecho {
 // using message_id_t = int64_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
-using message_callback = std::function<void(subgroup_id_t, node_id_t, long long int, char*, long long int)>;
-
+using message_callback_t = std::function<void(subgroup_id_t, node_id_t, long long int, char*, long long int)>;
+using persistence_callback_t = std::function<void(subgroup_id_t, persistence_version_t)>;
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
 
 /**
@@ -46,8 +46,8 @@ using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32
  * when it needs to handle message delivery.
  */
 struct CallbackSet {
-    message_callback global_stability_callback;
-    message_callback local_persistence_callback = nullptr;
+    message_callback_t global_stability_callback;
+    persistence_callback_t local_persistence_callback = nullptr;
 };
 
 struct DerechoParams : public mutils::ByteRepresentable {

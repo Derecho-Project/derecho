@@ -342,15 +342,15 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent_version_t & ver) noexcept(false) {
+    virtual void make_version(const persistence_version_t & ver) noexcept(false) {
       persistent_registry.makeVersion(ver);
     };
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(const persistent_version_t version) noexcept(false) {
-      persistent_version_t persisted_ver;
+    virtual void persist(const persistence_version_t version) noexcept(false) {
+      persistence_version_t persisted_ver;
 
       // persist variables
       do{
@@ -377,7 +377,7 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const persistent_version_t & ver) noexcept(false) {
+    virtual void trim(const persistence_version_t & ver) noexcept(false) {
       persistent_registry.trim(ver);
     };
 

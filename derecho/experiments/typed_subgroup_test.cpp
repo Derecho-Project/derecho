@@ -148,7 +148,7 @@ int main(int argc, char** argv) {
     long long unsigned int block_size = 100000;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
-    derecho::message_callback stability_callback{};
+    derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
 
     //Since this is just a test, assume there will always be 6 members with IDs 0-5

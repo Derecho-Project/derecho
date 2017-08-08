@@ -44,12 +44,12 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
     managed_group->log_event(string_formatter.str());
 }
 
-void persistence_callback(uint32_t subgroup, int sender_id, long long int index, char* data, long long int size) {
+void persistence_callback(uint32_t subgroup, derecho::persistence_version_t ver) {
     using namespace derecho;
     stringstream string_formatter;
-    string_formatter << "Persistence complete for message " << index << " from sender " << sender_id;
+    string_formatter << "Persistence complete for version " << ver;
     managed_group->log_event(string_formatter.str());
-    if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
+    if(ver == num_messages*num_nodes - 1) {
         cout << "Done" << endl;
         done = true;
     }

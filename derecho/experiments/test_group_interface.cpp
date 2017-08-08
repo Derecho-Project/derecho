@@ -26,8 +26,11 @@ int main() {
                                  long long int msg_size) {
         cout << "Some message is stable" << endl;
     };
+    auto persist_callback = [](uint32_t subgroup, derecho::persistence_version_t ver) {
+        cout << "version " << ver << " is persisted locally." << endl;
+    };
     derecho::CallbackSet callbacks{stability_callback,
-                                   derecho::message_callback{}};
+                                   persist_callback};
     derecho::DerechoParams parameters{max_msg_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
