@@ -69,7 +69,7 @@ Group<ReplicatedTypes...>::Group(
         Factory<ReplicatedTypes>... factories)
         : logger(create_logger()),
           my_id(my_id),
-          persistence_manager(nullptr),
+          persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params, 
             persistence_manager.get_callbacks(),
             _view_upcalls, gms_port),
@@ -107,7 +107,7 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  Factory<ReplicatedTypes>... factories)
         : logger(create_logger()),
           my_id(my_id),
-          persistence_manager(nullptr),
+          persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
             persistence_manager.get_callbacks(),
             _view_upcalls, gms_port),

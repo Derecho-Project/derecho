@@ -70,8 +70,14 @@ int main(int argc, char** argv) {
     long long unsigned int block_size = 100000;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
-    derecho::message_callback_t stability_callback{};
-    derecho::CallbackSet callback_set{stability_callback, {}};
+    // derecho::message_callback_t stability_callback{};
+    // derecho::CallbackSet callback_set{stability_callback, {}};
+    derecho::CallbackSet callback_set{
+      nullptr,
+      [](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
+        std::cout<<"Subgroup "<<subgroup<<", version "<<ver<<"is persisted."<<std::endl;
+      }
+    };
 
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
     //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5, PFoo to a subgroup have all 6 nodes.
