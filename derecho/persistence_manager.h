@@ -110,12 +110,18 @@ namespace derecho {
           persistence_request_queue.pop();
 
           // persist
+
+          try{
           this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> & map){
             auto search = map.find(subgroup_id);
             if (search != map.end()) {
               search->second.persist(version);
             }
           });
+          } catch (uint64_t exp) {
+            logger->debug("exception on persist():subgroup={},ver={},exp={}.",subgroup_id,version,exp);
+            std::cout<<"exception on persistent:subgroup="<<subgroup_id<<",ver="<<version<<"exception=0x"<<std::hex<<exp<<std::endl;
+          }
 
           // callback
           if (this->persistence_callback != nullptr) {

@@ -80,7 +80,7 @@ private:
             int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
                                                                            buffer, max_payload_size);
             buffer += buffer_offset;
-            std::cout << "Replicated: doing ordered send/query for function tagged " << tag << " in subgroup " << subgroup_id << std::endl;
+            // std::cout << "Replicated: doing ordered send/query for function tagged " << tag << " in subgroup " << subgroup_id << std::endl;
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
@@ -365,11 +365,13 @@ public:
       // read lock the view
       std::shared_lock<std::shared_timed_mutex> read_lock(group_rpc_manager.view_manager.view_mutex);
       // update the persisted_num in SST
+
       View &Vc = *group_rpc_manager.view_manager.curr_view;
       Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id] = version;
       Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
         (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
         sizeof(long long int));
+
     };
 
     /**

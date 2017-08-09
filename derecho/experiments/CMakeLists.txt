@@ -96,6 +96,14 @@ target_link_libraries(local_filewriter_test derecho)
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
+# typed_subgroup_bw_test
+add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp initialize.cpp)
+target_link_libraries(typed_subgroup_bw_test derecho)
+
+# persistent_typed_subgroup_bw_test
+add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp initialize.cpp)
+target_link_libraries(persistent_typed_subgroup_bw_test derecho)
+
 # smart membership function
 # add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
 # target_link_libraries(smart_membership_function_test derecho)
