@@ -72,7 +72,7 @@ private:
                                Args&&... args) {
         if(is_valid()) {
             char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, 0, true, 0, true))) {
+            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
             };
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
 
@@ -272,9 +272,9 @@ public:
      * @param pause_sending_turns
      * @return
      */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size, bool transfer_medium = true, int pause_sending_turns = 0, bool null_send = false) {
+    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns = 0, bool null_send = false) {
         return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id,
-                                                                 payload_size, transfer_medium, pause_sending_turns, false, null_send);
+                                                                 payload_size, pause_sending_turns, false, null_send);
     }
 
     /**

@@ -536,6 +536,17 @@ public:
             : RemoteInvocablePairs<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs, fs.fun...),
               nid(nid) {}
 
+    template <FunctionTag Tag, typename... Args>
+    std::size_t get_size(Args&&... a) {
+        auto invocation_id = mutils::long_rand();
+        std::size_t size = mutils::bytes_size(invocation_id);
+        {
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            size += std::accumulate(t.begin(), t.end(), 0);
+        }
+        return size;
+    }
+
     /**
      * Constructs a message that will remotely invoke a method of this class,
      * supplying the specified arguments, using RPC.
