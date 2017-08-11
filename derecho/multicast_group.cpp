@@ -1083,7 +1083,7 @@ void MulticastGroup::check_failures_loop() {
 
 char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
                                          long long unsigned int payload_size,
-                                         bool transfer_medium, int pause_sending_turns,
+					 int pause_sending_turns,
                                          bool cooked_send, bool null_send) {
     // if rdmc groups were not created because of failures, return NULL
     if(!rdmc_sst_groups_created) {
@@ -1135,7 +1135,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         return nullptr;
     }
 
-    if(transfer_medium) {
+    if(msg_size > sst::max_msg_size) {
         std::unique_lock<std::mutex> lock(msg_state_mtx);
         if(free_message_buffers[subgroup_num].empty()) return nullptr;
 
@@ -1157,7 +1157,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         next_sends[subgroup_num] = std::move(msg);
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
 
-        last_transfer_medium[subgroup_num] = transfer_medium;
+        last_transfer_medium[subgroup_num] = true;
         // DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     } else {
@@ -1171,7 +1171,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         ((header*)buf)->cooked_send = cooked_send;
         future_message_indices[subgroup_num] += pause_sending_turns + 1;
 
-        last_transfer_medium[subgroup_num] = transfer_medium;
+        last_transfer_medium[subgroup_num] = false;
         // DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     }

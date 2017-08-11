@@ -97,7 +97,7 @@ add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
 # typed_subgroup_bw_test
-add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp initialize.cpp)
+add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_bw_test derecho)
 
 # persistent_typed_subgroup_bw_test
