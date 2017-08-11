@@ -73,12 +73,17 @@ public:
     void bytes_fun(const Bytes& bytes) {
     }
 
+    bool finishing_call(int x) {
+        return true;
+    }
+
     /** Named integers that will be used to tag the RPC methods */
-    enum Functions { FUN, BYTES_FUN };
+    enum Functions { FUN, BYTES_FUN, FINISHING_CALL };
 
     static auto register_functions() {
         return std::make_tuple(derecho::rpc::tag<FUN>(&TestObject::fun),
-            derecho::rpc::tag<BYTES_FUN>(&TestObject::bytes_fun));
+            derecho::rpc::tag<BYTES_FUN>(&TestObject::bytes_fun),
+            derecho::rpc::tag<FINISHING_CALL>(&TestObject::finishing_call));
     }
 };
 
@@ -163,6 +168,8 @@ int main(int argc, char* argv[]) {
         //handle.ordered_send<TestObject::FUN>(str_1k);
         handle.ordered_send<TestObject::BYTES_FUN>(bytes);
     }
+    derecho::rpc::QueryResults<bool> results = handle.ordered_query<TestObject::FINISHING_CALL>(0);
+    decltype(results)::ReplyMap& replies = results.get();
     clock_gettime(CLOCK_REALTIME, &t2);
     free(bbuf);
 
