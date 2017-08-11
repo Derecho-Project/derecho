@@ -427,10 +427,11 @@ namespace ns_persistent {
       virtual void set(const ObjectType &v, const int64_t & ver, const HLC &mhlc) 
         noexcept(false) {
         auto size = mutils::bytes_size(v);
-        char buf[size];
+        char *buf = new char[size];
         bzero(buf,size);
         mutils::to_bytes(v,buf);
         this->m_pLog->append((void*)buf,size,ver,mhlc);
+        delete buf;
       };
 
       // make a version with version

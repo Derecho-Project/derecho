@@ -9,7 +9,58 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <mutils-serialization/context_ptr.hpp>
 #include <persistent/Persistent.hpp>
+
+using mutils::context_ptr;
+
+//This class is modified from Matt's implementation
+struct Bytes : public mutils::ByteRepresentable{
+
+        char *bytes;
+        const std::size_t size;
+
+        Bytes(const char * b, decltype(size) s)
+                :size(s){
+            bytes = nullptr;
+            if(s>0) {
+                bytes = new char[s];
+                memcpy(bytes,b,s);
+            }
+        }
+        virtual ~Bytes(){
+            if(bytes!=nullptr) {
+                delete bytes;
+            }
+        }
+
+        std::size_t to_bytes(char* v) const{
+                ((std::size_t*)(v))[0] = size;
+                memcpy(v + sizeof(size),bytes,size);
+                return size + sizeof(size);
+        }
+
+        std::size_t bytes_size() const {
+                return size + sizeof(size);
+        }
+
+        void post_object(const std::function<void (char const * const,std::size_t)>& f) const{
+                f((char*)&size,sizeof(size));
+                f(bytes,size);
+        }
+
+        void ensure_registered(mutils::DeserializationManager&){}
+
+        static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager *, const  char * const v){
+            return std::make_unique<Bytes>(v + sizeof(std::size_t),((std::size_t*)(v))[0]);
+        }
+
+        static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager *, const char * const v)  {
+                return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t),((std::size_t*)(v))[0])};
+        }
+
+};
+
 
 /**
  * RPC Object with a single function that accepts a string
@@ -19,11 +70,15 @@ public:
     void fun(const std::string& words) {
     }
 
+    void bytes_fun(const Bytes& bytes) {
+    }
+
     /** Named integers that will be used to tag the RPC methods */
-    enum Functions { FUN };
+    enum Functions { FUN, BYTES_FUN };
 
     static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<FUN>(&TestObject::fun));
+        return std::make_tuple(derecho::rpc::tag<FUN>(&TestObject::fun),
+            derecho::rpc::tag<BYTES_FUN>(&TestObject::bytes_fun));
     }
 };
 
@@ -96,15 +151,21 @@ int main(int argc, char* argv[]) {
 
     std::cout << "All members have joined, subgroups are provisioned." << std::endl;
     derecho::Replicated<TestObject>& handle = group->get_subgroup<TestObject>();
-    std::string str_1k(max_msg_size, 'x');
+    //std::string str_1k(max_msg_size, 'x');
+    char * bbuf = (char*)malloc(max_msg_size);
+    bzero(bbuf,max_msg_size);
+    Bytes bytes(bbuf,max_msg_size);
 
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
 
     for(int i = 0; i < count; i++) {
-        handle.ordered_send<TestObject::FUN>(str_1k);
+        //handle.ordered_send<TestObject::FUN>(str_1k);
+        handle.ordered_send<TestObject::BYTES_FUN>(bytes);
     }
     clock_gettime(CLOCK_REALTIME, &t2);
+    free(bbuf);
+
     int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
     double msec = (double)nsec / 1000000;
     double thp_gbps = ((double)count * max_msg_size * 8) / nsec;

@@ -10,48 +10,114 @@
 #include "initialize.h"
 #include <persistent/Persistent.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <mutils-serialization/context_ptr.hpp>
+
+using mutils::context_ptr;
+
+//This class is modified from Matt's implementation
+struct Bytes : public mutils::ByteRepresentable{
+
+        char *bytes;
+        std::size_t size;
+
+        Bytes(const char * b, decltype(size) s)
+                :size(s){
+            bytes = nullptr;
+            if(s>0) {
+                bytes = new char[s];
+                memcpy(bytes,b,s);
+            }
+        }
+        Bytes() {
+          bytes = nullptr;
+          size = 0;
+        }
+        virtual ~Bytes(){
+            if(bytes!=nullptr) {
+                delete bytes;
+            }
+        }
+
+        Bytes & operator = (Bytes && other) {
+            char *swp_bytes = other.bytes;
+            std::size_t swp_size = other.size;
+            other.bytes = bytes;
+            other.size = size;
+            bytes = swp_bytes;
+            size = swp_size;
+            return *this;
+        }
+
+        Bytes & operator = (const Bytes & other) {
+            if(bytes!=nullptr) {
+                delete bytes;
+            }
+            size = other.size;
+            if(size > 0) {
+                bytes = new char[size];
+                memcpy(bytes,other.bytes,size);
+            } else {
+                bytes = nullptr;
+            }
+            return *this;
+        }
+
+        std::size_t to_bytes(char* v) const{
+                ((std::size_t*)(v))[0] = size;
+                if(size > 0) {
+                    memcpy(v + sizeof(size),bytes,size);
+                }
+                return size + sizeof(size);
+        }
+
+        std::size_t bytes_size() const {
+                return size + sizeof(size);
+        }
+
+        void post_object(const std::function<void (char const * const,std::size_t)>& f) const{
+                f((char*)&size,sizeof(size));
+                f(bytes,size);
+        }
+
+        void ensure_registered(mutils::DeserializationManager&){}
+
+        static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager *, const  char * const v){
+            return std::make_unique<Bytes>(v + sizeof(std::size_t),((std::size_t*)(v))[0]);
+        }
+
+        static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager *, const char * const v)  {
+                return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t),((std::size_t*)(v))[0])};
+        }
+
+};
+
 
 /**
  * Non-Persitent Object with vairable sizes
  */
-template<unsigned object_size>
 class ByteArrayObject: public mutils::ByteRepresentable {
 public:
-  char pArr[object_size];
-  std::string log;
-  Persistent<std::string> pStr;
+  Persistent<Bytes> pers_bytes;
 
-  bool change_state(char new_state[object_size]){
-    std::cout<<"copy from:"<<(long long int)new_state<<"."<<std::endl;
-    // memcpy(pArr,new_state,object_size);
-    std::cout<<"copied"<<std::endl;
-    return true;
-  }
-
-  void append(const std::string& words) {
-    log = words;
-  }
-
-  void change_pstr(const std::string& pwords) {
-    *pStr = pwords;
+  void change_bytes(const Bytes& bytes) {
+    *pers_bytes = bytes;
   }
 
   /** Named integers that will be used to tag the RPC methods */
-  enum Functions { CHANGE_STATE, APPEND, CHANGE_PSTR };
+  enum Functions { CHANGE_BYTES };
 
   static auto register_functions() {
-    return std::make_tuple(derecho::rpc::tag<CHANGE_STATE>(&ByteArrayObject::change_state),
-      derecho::rpc::tag<APPEND>(&ByteArrayObject::append),
-      derecho::rpc::tag<CHANGE_PSTR>(&ByteArrayObject::change_pstr));
+    return std::make_tuple(
+      derecho::rpc::tag<CHANGE_BYTES>(&ByteArrayObject::change_bytes));
   }
 
-  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pArr,log,pStr);
+  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes);
   // constructor
-  ByteArrayObject(const char * _pArr,std::string _log,Persistent<std::string> & _pStr):log(_log),pStr(std::move(_pStr)) {
-    memcpy(pArr,_pArr,object_size);
+  ByteArrayObject(Persistent<Bytes> & _bytes):
+    pers_bytes(std::move(_bytes)) {
   }
-  ByteArrayObject(PersistentRegistry *pr):pStr(nullptr,pr) {
-    // the default constructor
+  ByteArrayObject(PersistentRegistry *pr):pers_bytes(nullptr,pr) {
+  // the default constructor
   }
 };
 
@@ -71,13 +137,13 @@ int main(int argc, char *argv[]) {
   derecho::ip_addr my_ip;
   derecho::ip_addr leader_ip;
   query_node_info(node_id,my_ip,leader_ip);
-  long long unsigned int max_msg_size = msg_size+100;//how to decide on the size?
-  long long unsigned int block_size = (max_msg_size>1048576)?1048576:max_msg_size;
+  long long unsigned int max_msg_size = msg_size;
+  long long unsigned int block_size = get_block_size(msg_size);
   derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
-    //nullptr//we don't need the persistence_callback either
+    // the persistence_callback either
     [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
       if(ver == num_of_nodes * count - 1){
         clock_gettime(CLOCK_REALTIME,&t3);
@@ -94,7 +160,7 @@ int main(int argc, char *argv[]) {
   };
 
   derecho::SubgroupInfo subgroup_info{
-    {{std::type_index(typeid(ByteArrayObject<1024>)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+    {{std::type_index(typeid(ByteArrayObject)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
       if(curr_view.num_members < num_of_nodes) {
         std::cout << "not enough members yet:"<<curr_view.num_members<<" < "<<num_of_nodes<<std::endl;
         throw derecho::subgroup_provisioning_exception();
@@ -110,19 +176,19 @@ int main(int argc, char *argv[]) {
       next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes);
       return subgroup_vector;
     }}},
-    {std::type_index(typeid(ByteArrayObject<1024>))}
+    {std::type_index(typeid(ByteArrayObject))}
   };
 
-  auto ba_factory = [](PersistentRegistry * pr) {return std::make_unique<ByteArrayObject<1024>>(pr);};
+  auto ba_factory = [](PersistentRegistry * pr) {return std::make_unique<ByteArrayObject>(pr);};
 
-  std::unique_ptr<derecho::Group<ByteArrayObject<1024>>> group;
+  std::unique_ptr<derecho::Group<ByteArrayObject>> group;
   if(my_ip == leader_ip) {
-    group = std::make_unique<derecho::Group<ByteArrayObject<1024>>>(
+    group = std::make_unique<derecho::Group<ByteArrayObject>>(
             node_id, my_ip, callback_set, subgroup_info, derecho_params,
             std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
             ba_factory);
   } else {
-    group = std::make_unique<derecho::Group<ByteArrayObject<1024>>>(
+    group = std::make_unique<derecho::Group<ByteArrayObject>>(
             node_id, my_ip, leader_ip, callback_set, subgroup_info,
             std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
             ba_factory);
@@ -133,7 +199,7 @@ int main(int argc, char *argv[]) {
   bool inadequately_provisioned = true;
   while(inadequately_provisioned) {
     try {
-      group->get_subgroup<ByteArrayObject<1024>>();
+      group->get_subgroup<ByteArrayObject>();
       inadequately_provisioned = false;
     } catch(derecho::subgroup_provisioning_exception& e) {
       inadequately_provisioned = true;
@@ -154,9 +220,10 @@ int main(int argc, char *argv[]) {
   }
 */
   // if (node_id == 0) {
-      derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
-      std::string str_1k(msg_size,'x');
-
+      derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
+      char *bbuf = new char[msg_size];
+      bzero(bbuf,msg_size);
+      Bytes bs(bbuf,msg_size);
 
       try{
 
@@ -165,7 +232,7 @@ int main(int argc, char *argv[]) {
           if(i > 0){
             i = i; // for breakpoint
           }
-          handle.ordered_send<ByteArrayObject<1024>::CHANGE_PSTR>(str_1k);
+          handle.ordered_send<ByteArrayObject::CHANGE_BYTES>(bs);
         }
         clock_gettime(CLOCK_REALTIME,&t2);
 
