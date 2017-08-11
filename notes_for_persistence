@@ -2,6 +2,6 @@ TODO LIST:
 1) Allow the user to tag if an operation will change the state of any
    Persistent<T>/Volatile<T> variable, which allows skipping unnecessary
    requests for persistence.
-2) Use semaphore driven persistence thread.
-3) Add temoperal feature to SST.
-4) Add initialization interface for Persistent<T>.
+2) Add temoperal feature to SST.
+3) Add initialization interface for Persistent<T>.
+4) check if vm.overcommit_memory=1 in sysctl.conf to allow the initialization of persistent<T> memory map.

@@ -92,16 +92,16 @@ namespace ns_persistent{
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     //// data ringbuffer
-    this->m_pData = mmap(NULL,MAX_DATA_SIZE<<1,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    this->m_pData = mmap(NULL,(size_t)(MAX_DATA_SIZE<<1),PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if (this->m_pData == MAP_FAILED) {
       dbg_trace("{0}:reserve map space for data failed.", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap(this->m_pData,MAX_DATA_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
+    if(mmap(this->m_pData,(size_t)(MAX_DATA_SIZE),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
       dbg_trace("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap((void*)((uint64_t)this->m_pData + MAX_DATA_SIZE),MAX_DATA_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
+    if(mmap((void*)((uint64_t)this->m_pData + MAX_DATA_SIZE),(size_t)MAX_DATA_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
       dbg_trace("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
@@ -168,7 +168,7 @@ namespace ns_persistent{
     pthread_rwlock_destroy(&this->m_rwlock);
     pthread_mutex_destroy(&this->m_perslock);
     if (this->m_pData != MAP_FAILED){
-      munmap(m_pData,MAX_DATA_SIZE<<1);
+      munmap(m_pData,(size_t)(MAX_DATA_SIZE<<1));
     }
     this->m_pData = nullptr; // prevent ~MemLog() destructor to release it again.
     if (this->m_pLog != MAP_FAILED){

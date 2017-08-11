@@ -45,13 +45,13 @@ namespace ns_persistent {
   } LogEntry;
 
   // TODO: make this hard-wired number configurable.
-  // Currently, we allow 16383(2^14-1) log entries and
-  // 16M data size.
-  // #define MAX_LOG_ENTRY         (1UL<<14)
-  #define MAX_LOG_ENTRY         (1UL<<6)
+  // Currently, we allow 1M(2^20-1) log entries and
+  // 512GB data size.
+  #define MAX_LOG_ENTRY         ((uint64_t)(1UL<<20))
+  // #define MAX_LOG_ENTRY         (1UL<<6)
   #define MAX_LOG_SIZE          (sizeof(LogEntry)*MAX_LOG_ENTRY)
-  // #define MAX_DATA_SIZE         (1UL<<26)
-  #define MAX_DATA_SIZE         (1UL<<12)
+  #define MAX_DATA_SIZE         ((uint64_t)(1UL<<39))
+  // #define MAX_DATA_SIZE         (1UL<<12)
   #define META_SIZE             (sizeof(MetaHeader))
 
   // helpers:

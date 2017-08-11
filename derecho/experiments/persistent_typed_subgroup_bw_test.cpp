@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
   int num_of_nodes = atoi(argv[1]);
   int msg_size = atoi(argv[2]);
   int count = atoi(argv[3]);
+  struct timespec t1,t2,t3;
 
   derecho::node_id_t node_id;
   derecho::ip_addr my_ip;
@@ -78,9 +79,16 @@ int main(int argc, char *argv[]) {
     nullptr,//we don't need the stability_callback here
     //nullptr//we don't need the persistence_callback either
     [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
-      std::cout<<"persist_captured:"<<ver<<std::endl;
       if(ver == num_of_nodes * count - 1){
-        std::cout<<"all message is persisted!!!"<<std::endl;
+        clock_gettime(CLOCK_REALTIME,&t3);
+        int64_t nsec = ((int64_t)t3.tv_sec - t1.tv_sec)*1000000000 + 
+          t3.tv_nsec - t1.tv_nsec;
+        double msec = (double)nsec/1000000;
+        double thp_gbps = ((double)count*msg_size*8)/nsec;
+        double thp_ops = ((double)count*1000000000)/nsec;
+        std::cout<<"(pers)timespan:"<<msec<<" millisecond."<<std::endl;
+        std::cout<<"(pers)throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
+        std::cout<<"(pers)throughput:"<<thp_ops<<"ops."<<std::endl;  
       }
     }
   };
@@ -145,35 +153,35 @@ int main(int argc, char *argv[]) {
     }
   }
 */
-//  if (node_id == 1) {
-    derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
-    std::string str_1k(msg_size,'x');
+  // if (node_id == 0) {
+      derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
+      std::string str_1k(msg_size,'x');
 
-    struct timespec t1,t2;
 
-    try{
+      try{
 
-    clock_gettime(CLOCK_REALTIME,&t1);
-    for(int i=0;i<count;i++) {
-      //std::cout<<"ordered send:"<<i<<std::endl;
-      //handle.ordered_send<ByteArrayObject<1024>::APPEND>(str_1k);
-      handle.ordered_send<ByteArrayObject<1024>::CHANGE_PSTR>(str_1k);
-      clock_gettime(CLOCK_REALTIME,&t2);
-    }
+        clock_gettime(CLOCK_REALTIME,&t1);
+        for(int i=0;i<count;i++) {
+          if(i > 0){
+            i = i; // for breakpoint
+          }
+          handle.ordered_send<ByteArrayObject<1024>::CHANGE_PSTR>(str_1k);
+        }
+        clock_gettime(CLOCK_REALTIME,&t2);
 
-    } catch (uint64_t exp){
-      std::cout<<"Exception caught:0x"<<std::hex<<exp<<std::endl;
-      return -1;
-    }
-    int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec)*1000000000 + 
-      t2.tv_nsec - t1.tv_nsec;
-    double msec = (double)nsec/1000000;
-    double thp_gbps = ((double)count*msg_size*8)/nsec;
-    double thp_ops = ((double)count*1000000000)/nsec;
-    std::cout<<"timespan:"<<msec<<" millisecond."<<std::endl;
-    std::cout<<"throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
-    std::cout<<"throughput:"<<thp_ops<<"ops."<<std::endl;
-//  }
+      } catch (uint64_t exp){
+        std::cout<<"Exception caught:0x"<<std::hex<<exp<<std::endl;
+        return -1;
+      }
+      int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec)*1000000000 + 
+        t2.tv_nsec - t1.tv_nsec;
+      double msec = (double)nsec/1000000;
+      double thp_gbps = ((double)count*msg_size*8)/nsec;
+      double thp_ops = ((double)count*1000000000)/nsec;
+      std::cout<<"(send)timespan:"<<msec<<" millisecond."<<std::endl;
+      std::cout<<"(send)throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
+      std::cout<<"(send)throughput:"<<thp_ops<<"ops."<<std::endl;
+  // }
 
   std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
   while(true){}

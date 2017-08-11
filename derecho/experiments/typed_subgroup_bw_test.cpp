@@ -65,7 +65,6 @@ int main(int argc, char *argv[]) {
   derecho::ip_addr leader_ip;
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size+100;//how to decide on the size?
-  int order_of_block_size = 0;
   long long unsigned int block_size = (max_msg_size>1048576)?1048576:max_msg_size;
   derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
