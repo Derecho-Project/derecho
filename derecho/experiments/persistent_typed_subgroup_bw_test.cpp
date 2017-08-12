@@ -98,39 +98,48 @@ struct Bytes : public mutils::ByteRepresentable{
 class ByteArrayObject: public mutils::ByteRepresentable {
 public:
   Persistent<Bytes> pers_bytes;
+  Persistent<Bytes,ST_MEM> vola_bytes;
 
-  void change_bytes(const Bytes& bytes) {
+  void change_pers_bytes(const Bytes& bytes) {
     *pers_bytes = bytes;
   }
 
+  void change_vola_bytes(const Bytes& bytes) {
+    *vola_bytes = bytes;
+  }
+
   /** Named integers that will be used to tag the RPC methods */
-  enum Functions { CHANGE_BYTES };
+  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
 
   static auto register_functions() {
     return std::make_tuple(
-      derecho::rpc::tag<CHANGE_BYTES>(&ByteArrayObject::change_bytes));
+      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes),
+      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
   }
 
-  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes);
+  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
   // constructor
-  ByteArrayObject(Persistent<Bytes> & _bytes):
-    pers_bytes(std::move(_bytes)) {
+  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
+    pers_bytes(std::move(_p_bytes)),
+    vola_bytes(std::move(_v_bytes)) {
   }
-  ByteArrayObject(PersistentRegistry *pr):pers_bytes(nullptr,pr) {
   // the default constructor
+  ByteArrayObject(PersistentRegistry *pr):
+    pers_bytes(nullptr,pr),
+    vola_bytes(nullptr,pr) {
   }
 };
 
-
 int main(int argc, char *argv[]) {
 
-  if(argc != 4) {
-    std::cout<<"usage:"<<argv[0]<<" <num_of_nodes> <msg_size> <count>"<<std::endl;
+  if(argc != 5) {
+    std::cout<<"usage:"<<argv[0]<<" <pers|vola> <num_of_nodes> <msg_size> <count>"<<std::endl;
     return -1;
   }
-  int num_of_nodes = atoi(argv[1]);
-  int msg_size = atoi(argv[2]);
-  int count = atoi(argv[3]);
+  bool is_pers = (strcmp(argv[1],"pers") == 0);
+  int num_of_nodes = atoi(argv[2]);
+  int msg_size = atoi(argv[3]);
+  int count = atoi(argv[4]);
   struct timespec t1,t2,t3;
 
   derecho::node_id_t node_id;
@@ -229,10 +238,11 @@ int main(int argc, char *argv[]) {
 
         clock_gettime(CLOCK_REALTIME,&t1);
         for(int i=0;i<count;i++) {
-          if(i > 0){
-            i = i; // for breakpoint
+          if (is_pers) {
+            handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
+          } else {
+            handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
           }
-          handle.ordered_send<ByteArrayObject::CHANGE_BYTES>(bs);
         }
         clock_gettime(CLOCK_REALTIME,&t2);
 
