@@ -349,6 +349,25 @@ namespace ns_persistent{
     return idx;
   }
 
+  int64_t FilePersistLog::getEarliestVersion ()
+  noexcept(false) {
+    FPL_RDLOCK;
+    int64_t idx = (NUM_USED_SLOTS == 0)? INVALID_INDEX:META_HEADER->fields.head;
+    int64_t ver = (idx == INVALID_INDEX)? INVALID_VERSION:(LOG_ENTRY_AT(idx)->fields.ver);
+    FPL_UNLOCK;
+    return ver;
+  }
+
+  int64_t FilePersistLog::getLatestVersion ()
+  noexcept(false) {
+    FPL_RDLOCK;
+    int64_t idx = CURR_LOG_IDX;
+    int64_t ver = (idx == INVALID_INDEX)? INVALID_VERSION:(LOG_ENTRY_AT(idx)->fields.ver);
+    FPL_UNLOCK;
+    return ver;
+  }
+
+
   const int64_t FilePersistLog::getLastPersisted ()
   noexcept(false) {
     int64_t last_persisted = INVALID_VERSION;;

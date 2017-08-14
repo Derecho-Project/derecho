@@ -415,8 +415,16 @@ namespace ns_persistent {
         return this->m_pLog->getEarliestIndex();
       }
 
+      virtual int64_t getEarliestVersion() noexcept(false) {
+        return this->m_pLog->getEarliestVersion();
+      }
+
       virtual int64_t getLatestIndex() noexcept(false) {
         return this->m_pLog->getLatestIndex();
+      }
+
+      virtual int64_t getLatestVersion() noexcept(false) {
+        return this->m_pLog->getLatestVersion();
       }
 
       virtual const int64_t getLastPersisted() noexcept(false) {

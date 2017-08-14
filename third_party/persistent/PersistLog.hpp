@@ -69,6 +69,12 @@ namespace ns_persistent {
     // Get the Latest Index
     virtual int64_t getLatestIndex() noexcept(false) = 0;
 
+    // Get the Earlist version
+    virtual int64_t getEarliestVersion() noexcept(false) = 0;
+
+    // Get the Latest version
+    virtual int64_t getLatestVersion() noexcept(false) = 0;
+
     // return the last persisted value
     // virtual const __int128 getLastPersisted() noexcept(false) = 0;
     virtual const int64_t getLastPersisted() noexcept(false) = 0;

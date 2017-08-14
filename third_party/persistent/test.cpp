@@ -72,7 +72,7 @@ static void printhelp(){
   cout << "\tlist" << endl;
   cout << "\tvolatile" << endl;
   cout << "\thlc" << endl;
-  cout << "\teval <file|mem> <datasize> <num>" << endl;
+  cout << "\teval <file|mem> <datasize> <num> [batch]" << endl;
   cout << "NOTICE: test can crash if <datasize> is too large(>8MB).\n"
        << "This is probably due to the stack size is limited. Try \n"
        << "  \"ulimit -s unlimited\"\n"
@@ -106,18 +106,22 @@ void listvar(Persistent<OT,st> &var){
 
 static void test_hlc();
 template <StorageType st=ST_FILE>
-static void eval_write (std::size_t osize, int nops) {
+static void eval_write (std::size_t osize, int nops, bool batch) {
   VariableBytes writeMe;
   Persistent<VariableBytes,st> pvar;
   writeMe.data_len = osize;
   struct timespec ts,te;
   int cnt = nops;
-  int64_t ver = 0l;
+  int64_t ver = pvar.getLatestVersion();
+  ver = (ver==INVALID_VERSION)?0:ver+1;
   clock_gettime(CLOCK_REALTIME,&ts);
   while(cnt -- > 0) {
     pvar.set(writeMe,ver++);
+    if(!batch)pvar.persist();
   }
-  pvar.persist();
+  if (batch) {
+    pvar.persist();
+  }
   clock_gettime(CLOCK_REALTIME,&te);
   long sec = (te.tv_sec - ts.tv_sec);
   long nsec = sec*1000000000 + te.tv_nsec - ts.tv_nsec;
@@ -236,11 +240,16 @@ int main(int argc,char ** argv){
       // eval file|mem osize nops
       int osize = atoi(argv[3]);
       int nops = atoi(argv[4]);
+      bool batch = false;
+
+      if(argc >= 6) {
+        batch = (strcmp(argv[5],"batch") == 0);
+      }
 
       if(strcmp(argv[2],"file") == 0) {
-        eval_write<ST_FILE>(osize,nops);
+        eval_write<ST_FILE>(osize,nops,batch);
       } else if(strcmp(argv[2],"mem") == 0) {
-        eval_write<ST_MEM>(osize,nops);
+        eval_write<ST_MEM>(osize,nops,batch);
       } else {
         cout << "unknown storage type:" << argv[2] << endl;
       }
