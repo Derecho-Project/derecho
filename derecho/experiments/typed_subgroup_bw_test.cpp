@@ -168,8 +168,13 @@ int main(int argc, char* argv[]) {
         //handle.ordered_send<TestObject::FUN>(str_1k);
         handle.ordered_send<TestObject::BYTES_FUN>(bytes);
     }
-    derecho::rpc::QueryResults<bool> results = handle.ordered_query<TestObject::FINISHING_CALL>(0);
-    decltype(results)::ReplyMap& replies = results.get();
+
+    if(node_id == 0) {
+      derecho::rpc::QueryResults<bool> results = handle.ordered_query<TestObject::FINISHING_CALL>(0);
+      std::cout<<"waiting for response..."<<std::endl;
+      decltype(results)::ReplyMap& replies = results.get();
+    }
+  
     clock_gettime(CLOCK_REALTIME, &t2);
     free(bbuf);
 
