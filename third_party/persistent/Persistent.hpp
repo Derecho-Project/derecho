@@ -16,6 +16,15 @@
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
 
+#ifdef _PERFORMANCE_DEBUG
+#include "time.h"
+#endif//_PERFORMANCE_DEBUG
+
+/**
+ * Compilation Macros:
+ * _PERFORMANCE_DEBUG
+ */
+
 namespace ns_persistent {
 
   // #define DEFINE_PERSIST_VAR(_t,_n) DEFINE_PERSIST_VAR(_t,_n,ST_FILE)
@@ -446,7 +455,17 @@ namespace ns_persistent {
       virtual void set(const ObjectType &v, const int64_t & ver)
         noexcept(false) {
         HLC mhlc; // generate a default timestamp for it.
+#ifdef _PERFORMANCE_DEBUG
+        struct timespec t1,t2;
+        clock_gettime(CLOCK_REALTIME,&t1);
+#endif
         this->set(v,ver,mhlc);
+
+#ifdef _PERFORMANCE_DEBUG
+        clock_gettime(CLOCK_REALTIME,&t2);
+        cnt_in_set ++;
+        ns_in_set += ((t2.tv_sec-t1.tv_sec)*1000000000ul + t2.tv_nsec - t1.tv_nsec);
+#endif
       }
 
       // make a version
@@ -462,7 +481,17 @@ namespace ns_persistent {
        */
       virtual const int64_t persist()
         noexcept(false){
+#ifdef _PERFORMANCE_DEBUG
+        struct timespec t1,t2;
+        clock_gettime(CLOCK_REALTIME,&t1);
+        const int64_t ret = this->m_pLog->persist();
+        clock_gettime(CLOCK_REALTIME,&t2);
+        cnt_in_persist ++;
+        ns_in_persist += ((t2.tv_sec-t1.tv_sec)*1000000000ul + t2.tv_nsec - t1.tv_nsec);
+        return ret;
+#else
         return this->m_pLog->persist();
+#endif//_PERFORMANCE_DEBUG
       }
 
       // internal _NameMaker class
@@ -554,6 +583,23 @@ namespace ns_persistent {
       }
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}
+
+#ifdef _PERFORMANCE_DEBUG
+      uint64_t ns_in_persist = 0ul;
+      uint64_t ns_in_set = 0ul;
+      uint64_t cnt_in_persist = 0ul;
+      uint64_t cnt_in_set = 0ul;
+      virtual void print_performance_stat() {
+        std::cout << "Performance Statistic of Persistent<"
+          << typeid(ObjectType).name() <<">,var_name="
+          << this->m_pLog->m_sName <<":" <<std::endl;
+        std::cout << "\tpersist:\t" << ns_in_persist << " ns/" 
+          << cnt_in_persist << " ops" << std::endl;;
+        std::cout << "\tset:\t" << ns_in_set << " ns/" 
+          << cnt_in_set << " ops" << std::endl;;
+      }
+#endif//_PERFORMANCE_DEBUG
+
   };
 
   // How many times the constructor was called.
