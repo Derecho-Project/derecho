@@ -210,13 +210,17 @@ namespace ns_persistent{
       } \
     } while (0)
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
     __DO_VALIDATION;
+#pragma GCC diagnostic pop
     FPL_UNLOCK;
     dbg_trace("{0} append:validate check1 Finished.",this->m_sName);
 
     FPL_WRLOCK;
     //check
+#pragma GCC diagnostic ignored "-Wunused-variable"
     __DO_VALIDATION;
+#pragma GCC diagnostic pop
     dbg_trace("{0} append:validate check2 Finished.",this->m_sName);
 
     // copy data

@@ -4,6 +4,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 PROJECT(verbs-mcast CXX)
 set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++14 -Wall -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++14 -Wall -O3 -ggdb -gdwarf-3")
 
 include_directories(${derecho_SOURCE_DIR})
 

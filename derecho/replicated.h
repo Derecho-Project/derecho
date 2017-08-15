@@ -54,7 +54,13 @@ private:
     /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
+#ifdef _PERFORMANCE_DEBUG
+public:
+#endif
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
+#ifdef _PERFORMANCE_DEBUG
+private:
+#endif
     /** The ID of this node */
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that replicates this object. */

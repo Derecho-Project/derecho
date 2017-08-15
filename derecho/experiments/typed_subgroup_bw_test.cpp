@@ -168,11 +168,12 @@ int main(int argc, char* argv[]) {
         //handle.ordered_send<TestObject::FUN>(str_1k);
         handle.ordered_send<TestObject::BYTES_FUN>(bytes);
     }
-
     if(node_id == 0) {
       derecho::rpc::QueryResults<bool> results = handle.ordered_query<TestObject::FINISHING_CALL>(0);
       std::cout<<"waiting for response..."<<std::endl;
+#pragma GCC diagnostic ignored "-Wunused-variable"
       decltype(results)::ReplyMap& replies = results.get();
+#pragma GCC diagnostic pop
     }
   
     clock_gettime(CLOCK_REALTIME, &t2);

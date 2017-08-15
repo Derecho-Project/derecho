@@ -524,7 +524,7 @@ namespace ns_persistent {
           std::unique_ptr<std::string> ret = std::make_unique<std::string>();
           //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
           char buf[256];
-          sprintf(buf,"%s-%d",this->m_sObjectTypeName,cnt);
+          sprintf(buf,"%d-%s-%d",storageType,this->m_sObjectTypeName,cnt);
          // return std::make_shared<const char *>((const char*)buf);
          *ret = buf;
          return ret;
