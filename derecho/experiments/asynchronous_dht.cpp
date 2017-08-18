@@ -8,14 +8,14 @@
 template <class T>
 class HashTable : public mutils::ByteRepresentable {
 private:
-  std::map<std::string, T> table;
+  std::map<uint64_t, T> table;
 
 public:
-  void put(std::string key, T value) {
+  void put(uint64_t key, T value) {
         table[key] = value;
     }
 
-  T get(std::string key) {
+  T get(uint64_t key) {
         // for now, create the entry if it doesn't exist
         return table[key];
     }
@@ -32,7 +32,7 @@ public:
 
     HashTable() : table() {}
 
-    HashTable(const std::map<std::string, T>& table) : table(table) {}
+    HashTable(const std::map<uint64_t, T>& table) : table(table) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(HashTable, table);
 };
