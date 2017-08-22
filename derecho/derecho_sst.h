@@ -101,7 +101,7 @@ public:
     SSTFieldVector<long long int> num_received_sst;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
-    SSTField<bool> heartbeat;
+    SSTFieldVector<uint64_t> local_stability_frontier;
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
      * (0, false, etc.). Initializing the MulticastGroup fields is left to MulticastGroup.
@@ -121,12 +121,13 @@ public:
               global_min(num_received_size),
               global_min_ready(num_subgroups),
               slots(window_size * num_subgroups),
-              num_received_sst(num_received_size) {
+              num_received_sst(num_received_size),
+              local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-                slots, num_received_sst, heartbeat);
+                slots, num_received_sst, local_stability_frontier);
         //Once superclass constructor has finished, table entries can be initialized
         for(int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
@@ -148,7 +149,13 @@ public:
             num_installed[row] = 0;
             num_acked[row] = 0;
             wedged[row] = false;
-            heartbeat[row] = true;
+            // start off local_stability_frontier with the current time
+            struct timespec start_time;
+            clock_gettime(CLOCK_REALTIME, &start_time);
+	    auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
+	    for (size_t i = 0; i < local_stability_frontier.size(); ++i) {
+	      local_stability_frontier[row][i] = current_time;
+	    }
         }
     }
 

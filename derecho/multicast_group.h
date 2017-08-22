@@ -82,6 +82,7 @@ struct __attribute__((__packed__)) header {
     uint32_t header_size;
     uint32_t pause_sending_turns;
     uint32_t index;
+    uint64_t timestamp;
     bool cooked_send;
 };
 
@@ -208,6 +209,7 @@ private:
     std::map<uint32_t, std::map<long long int, RDMCMessage>> locally_stable_rdmc_messages;
     /** Parallel map for SST messages */
     std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
+    std::map<uint32_t, std::set<uint64_t>> pending_message_timestamps;
     /** Messages that are currently being written to persistent storage */
     std::map<uint32_t, std::map<long long int, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
@@ -249,6 +251,8 @@ private:
     /** Continuously waits for a new pending send, then sends it. This function
      * implements the sender thread. */
     void send_loop();
+
+    uint64_t get_time();
 
     /** Checks for failures when a sender reaches its timeout. This function
      * implements the timeout thread. */
@@ -357,6 +361,8 @@ public:
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
     bool send(subgroup_id_t subgroup_num);
+
+    uint64_t compute_global_stability_frontier(uint32_t subgroup_num);
 
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
     void wedge();

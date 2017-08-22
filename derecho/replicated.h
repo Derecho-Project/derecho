@@ -283,6 +283,10 @@ public:
                                                                  payload_size, pause_sending_turns, false, null_send);
     }
 
+    uint64_t compute_global_stability_frontier() {
+      return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
+    }
+
     /**
      * Submits the contents of the send buffer to be multicast to the subgroup,
      * assuming it has been previously filled with a call to get_sendbuffer_ptr().

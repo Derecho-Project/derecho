@@ -313,6 +313,8 @@ public:
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send(subgroup_id_t subgroup_num);
 
+    uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
+
     /**
      * @return a reference to the current View, wrapped in a container that
      * holds a read-lock on it. This is mostly here to make it easier for
