@@ -105,6 +105,10 @@ target_link_libraries(typed_subgroup_bw_test derecho)
 add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(persistent_typed_subgroup_bw_test derecho)
 
+# volatile_typed_subgroup_bw_test
+add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(volatile_typed_subgroup_bw_test derecho)
+
 # smart membership function
 # add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
 # target_link_libraries(smart_membership_function_test derecho)

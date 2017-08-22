@@ -97,40 +97,40 @@ struct Bytes : public mutils::ByteRepresentable{
  */
 class ByteArrayObject: public mutils::ByteRepresentable {
 public:
-  Persistent<Bytes> pers_bytes;
-//  Persistent<Bytes,ST_MEM> vola_bytes;
+  //Persistent<Bytes> pers_bytes;
+  Persistent<Bytes,ST_MEM> vola_bytes;
 
-  void change_pers_bytes(const Bytes& bytes) {
-    *pers_bytes = bytes;
+  //void change_pers_bytes(const Bytes& bytes) {
+  //  *pers_bytes = bytes;
+  //}
+
+  void change_vola_bytes(const Bytes& bytes) {
+    *vola_bytes = bytes;
   }
-
-//  void change_vola_bytes(const Bytes& bytes) {
-//    *vola_bytes = bytes;
-//  }
 
   /** Named integers that will be used to tag the RPC methods */
 //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-  enum Functions { CHANGE_PERS_BYTES };
+  enum Functions { CHANGE_VOLA_BYTES };
 
   static auto register_functions() {
     return std::make_tuple(
-      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-//      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
+//      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
+      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
   }
 
 //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
-  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes);
+  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,vola_bytes);
   // constructor
 //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-//  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
-  ByteArrayObject(Persistent<Bytes> & _p_bytes):
-    pers_bytes(std::move(_p_bytes)) {
-//    vola_bytes(std::move(_v_bytes)) {
+  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
+//  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+//    pers_bytes(std::move(_p_bytes)) {
+    vola_bytes(std::move(_v_bytes)) {
   }
   // the default constructor
   ByteArrayObject(PersistentRegistry *pr):
-    pers_bytes(nullptr,pr) {
-//    vola_bytes(nullptr,pr) {
+//    pers_bytes(nullptr,pr) {
+    vola_bytes(nullptr,pr) {
   }
 };
 
@@ -290,9 +290,9 @@ int main(int argc, char *argv[]) {
         clock_gettime(CLOCK_REALTIME,&t1);
         for(int i=0;i<count;i++) {
 //          if (is_pers) {
-            handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
+//            handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
 //          } else {
-//            handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
+            handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
 //          }
         }
         clock_gettime(CLOCK_REALTIME,&t2);
