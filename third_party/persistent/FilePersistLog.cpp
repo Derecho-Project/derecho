@@ -143,6 +143,14 @@ namespace ns_persistent{
         }
         close(fd);
         *META_HEADER = *META_HEADER_PERS;
+        // update mhlc index
+        for(int64_t idx = META_HEADER->fields.head;idx < META_HEADER->fields.tail;idx++) {
+          struct hlc_index_entry _ent;
+          _ent.hlc.m_rtc_us = LOG_ENTRY_AT(idx)->fields.hlc_r;
+          _ent.hlc.m_logic = LOG_ENTRY_AT(idx)->fields.hlc_l;
+          _ent.log_idx = idx;
+          this->hidx.insert(_ent);
+        }
       } catch (uint64_t e) {
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;
@@ -242,6 +250,7 @@ namespace ns_persistent{
 */
 
     // update meta header
+    this->hidx.insert(hlc_index_entry{mhlc,META_HEADER->fields.tail});
     META_HEADER->fields.tail ++;
     META_HEADER->fields.ver = ver;
     dbg_trace("{0} append:log entry and meta data are updated.",this->m_sName);
@@ -489,23 +498,38 @@ namespace ns_persistent{
   noexcept(false) {
 
     LogEntry * ple = nullptr;
-    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
+//    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
 
     FPL_RDLOCK;
 
-    //binary search
-    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
-    if (tail < head) tail += MAX_LOG_ENTRY; //because we mapped it twice
-    dbg_trace("{0} - begin binary search.",this->m_sName);
-    int64_t l_idx = binarySearch<unsigned __int128>(
-      [&](int64_t idx){
-        return ((((unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | LOG_ENTRY_AT(idx)->fields.hlc_l);
-      },
-      key,head,tail);
-    dbg_trace("{0} - end binary search.",this->m_sName);
-    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+//  We do not user binary search any more.
+//    //binary search
+//    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
+//    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
+//    if (tail < head) tail += MAX_LOG_ENTRY; //because we mapped it twice
+//    dbg_trace("{0} - begin binary search.",this->m_sName);
+//    int64_t l_idx = binarySearch<unsigned __int128>(
+//      [&](int64_t idx){
+//        return ((((unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | LOG_ENTRY_AT(idx)->fields.hlc_l);
+//      },
+//      key,head,tail);
+//    dbg_trace("{0} - end binary search.",this->m_sName);
+//    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+#ifdef _DEBUG
+    dbg_trace("getEntry for hlc({0},{1})",rhlc.m_rtc_us,rhlc.m_logic);
+    dump_hidx();
+#endif//_DEBUG
+    struct hlc_index_entry skey(rhlc,0);
+    auto key = this->hidx.upper_bound(skey);
     FPL_UNLOCK;
+ 
+    if (key != this->hidx.begin() && this->hidx.size()>0) {
+      key--;
+      ple = LOG_ENTRY_AT(key->log_idx);
+#ifdef _DEBUG
+    dbg_trace("getEntry returns: hlc:({0},{1}),idx:{2}",key->hlc.m_rtc_us,key->hlc.m_logic,key->log_idx);
+#endif//_DEBUG
+    }
 
     // no object exists before the requested timestamp.
     if (ple == nullptr){
@@ -535,6 +559,9 @@ namespace ns_persistent{
       return;
     }
     META_HEADER->fields.head = idx + 1;
+    //TODO: remove entry from index...this is tricky because HLC 
+    // order does not agree with index order.
+    throw PERSIST_EXP_UNIMPLEMENTED;
     FPL_UNLOCK;
     dbg_trace("{0} trim at index: {1}...done",this->m_sName,idx);
   }
@@ -548,12 +575,14 @@ namespace ns_persistent{
 
   void FilePersistLog::trim(const HLC & hlc) noexcept(false) {
     dbg_trace("{0} trim at time: {1}.{2}",this->m_sName,hlc.m_rtc_us,hlc.m_logic);
-    this->trim<unsigned __int128>(
-      ((((const unsigned __int128)hlc.m_rtc_us)<<64) | hlc.m_logic),
-      [&](int64_t idx) {
-        return ((((const unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | 
-          LOG_ENTRY_AT(idx)->fields.hlc_l);
-      });
+//    this->trim<unsigned __int128>(
+//      ((((const unsigned __int128)hlc.m_rtc_us)<<64) | hlc.m_logic),
+//      [&](int64_t idx) {
+//        return ((((const unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | 
+//          LOG_ENTRY_AT(idx)->fields.hlc_l);
+//      });
+    //TODO: This is hard because HLC order does not agree with index order.
+    throw PERSIST_EXP_UNIMPLEMENTED;
     dbg_trace("{0} trim at time: {1}.{2}...done",this->m_sName,hlc.m_rtc_us,hlc.m_logic);
   }
 

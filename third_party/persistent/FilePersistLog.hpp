@@ -228,6 +228,9 @@ namespace ns_persistent {
       idx = binarySearch<TKey>(keyGetter,key,head,tail);
       if (idx != -1) {
         META_HEADER->fields.head += (idx-head+1);
+        //TODO:remove delete entries from the index. This is tricky because
+        // HLC order and idex order does not agree with each other.
+        throw PERSIST_EXP_UNIMPLEMENTED;
       } else {
         FPL_UNLOCK;
         return;

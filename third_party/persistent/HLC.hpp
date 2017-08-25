@@ -12,8 +12,13 @@ private:
 public:
   uint64_t m_rtc_us; // real-time clock in microseconds
   uint64_t m_logic;  // logic clock
+
   // constructors
   HLC () noexcept(false);
+
+  HLC (uint64_t _r,uint64_t _l):
+    m_rtc_us(_r),m_logic(_l){
+  }
 
   // destructors
   virtual ~HLC() noexcept(false);

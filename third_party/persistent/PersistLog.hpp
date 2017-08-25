@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <map>
+#include <set>
 #include <string>
 #include "PersistException.hpp"
 #include "HLC.hpp"
@@ -27,11 +28,44 @@ namespace ns_persistent {
   #define INVALID_VERSION ((int64_t)-1L)
   #define INVALID_INDEX INT64_MAX
 
+  // index entry for the hlc index
+  struct hlc_index_entry {
+    HLC hlc;
+    int64_t log_idx;
+    //default constructor
+    hlc_index_entry():log_idx(-1){
+    }
+    // constructor with hlc and index.
+    hlc_index_entry(const HLC & _hlc, const int64_t &_log_idx):
+      hlc(_hlc),log_idx(_log_idx) {
+    }
+    // constructor with time stamp and index.
+    hlc_index_entry(const uint64_t &r, const uint64_t &l, const int64_t &_log_idx):
+      hlc(r,l),log_idx(_log_idx) {
+    }
+    //copy constructor
+    hlc_index_entry(const struct hlc_index_entry &_entry):
+      hlc(_entry.hlc),log_idx(_entry.log_idx){
+    }
+  };
+  // comparator for the hlc index
+  struct hlc_index_entry_comp {
+    bool operator () (const struct hlc_index_entry & e1, 
+      const struct hlc_index_entry & e2) const {
+      return e1.hlc < e2.hlc;
+    }
+  };
+
   // Persistent log interfaces
   class PersistLog{
   public:
     // LogName
     const string m_sName;
+    // HLCIndex
+    std::set<hlc_index_entry,hlc_index_entry_comp> hidx;
+#ifdef _DEBUG
+    void dump_hidx();
+#endif//_DEBUG
     // Constructor:
     // Remark: the constructor will check the persistent storage
     // to make sure if this named log(by "name" in the template 
@@ -47,11 +81,11 @@ namespace ns_persistent {
      * @param mhlc - the hlc clock of the data, the implementation is 
      *               responsible for making sure it grows monotonically.
      * Note that the entry appended can only become persistent till the persist()
-     * is called on that entry. 
+     * is called on that entry.
      */
     virtual void append(const void * pdata, 
       const uint64_t & size, const int64_t & ver, //const __int128 & ver, 
-      const HLC & mhlc) noexcept(false) = 0;
+      const HLC & mhlc) noexcept(false)=0;
 
     /**
      * Advance the version number without appendding a log. This is useful
