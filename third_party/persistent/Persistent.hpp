@@ -66,7 +66,9 @@ namespace ns_persistent {
    */
   class PersistentRegistry:public mutils::RemoteDeserializationContext{
   public:
-    PersistentRegistry() {
+    const GetGlobalStabilityFrontierFunc gsf;
+    PersistentRegistry(const GetGlobalStabilityFrontierFunc & _gsf):
+      gsf(_gsf){
       //
     };
     virtual ~PersistentRegistry() {
@@ -210,14 +212,12 @@ namespace ns_persistent {
        * log and register itself to a persistent registry.
        * @param object_name This name is used for persistent data in file.
        * @param persistent_registry A normal pointer to the registry.
-       * @param _gsf A function for getting the stability frontier.
        */
       Persistent(
         const char * object_name = nullptr,
-        PersistentRegistry * persistent_registry = nullptr,
-        GetGlobalStabilityFrontierFunc _gsf = nullptr)
+        PersistentRegistry * persistent_registry = nullptr)
         noexcept(false)
-        : m_pRegistry(persistent_registry),gsf(_gsf) {
+        : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log((object_name==nullptr)?
           (*Persistent::getNameMaker().make()).c_str() : object_name);
@@ -379,8 +379,8 @@ namespace ns_persistent {
         const Func& fun,
         mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
-        // gsf test
-        if (gsf != nullptr && gsf() <= hlc) {
+        // global stability frontier test
+        if (m_pRegistry != nullptr && m_pRegistry->gsf() <= hlc) {
           throw PERSIST_EXP_BEYOND_GSF;
         }
         char * pdat = (char*)this->m_pLog->getEntry(hlc);
@@ -395,8 +395,8 @@ namespace ns_persistent {
         const HLC& hlc,
         mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
-        // gsf test
-        if (gsf != nullptr && gsf() <= hlc) {
+        // global stability frontier test
+        if (m_pRegistry != nullptr && m_pRegistry->gsf() <= hlc) {
           throw PERSIST_EXP_BEYOND_GSF;
         }
         char const * pdat = (char const *)this->m_pLog->getEntry(hlc);
@@ -557,9 +557,6 @@ namespace ns_persistent {
       std::unique_ptr<PersistLog> m_pLog;
       // Persistence Registry
       PersistentRegistry* m_pRegistry;
-      // GlobalStabilityFrontier
-      GetGlobalStabilityFrontierFunc gsf;
-
       // get the static name maker.
       static _NameMaker & getNameMaker();
 

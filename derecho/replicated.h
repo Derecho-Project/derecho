@@ -143,7 +143,11 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
-            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(&this->persistent_registry))),
+            : persistent_registry([&](){
+                HLC hlc(this->compute_global_stability_frontier(),0);
+                return hlc;
+              }),
+              user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(&this->persistent_registry))),
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
@@ -163,7 +167,11 @@ public:
      * that owns this Replicated<T>
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
-            : user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
+            : persistent_registry([&](){
+                HLC hlc(this->compute_global_stability_frontier(),0);
+                return hlc;
+              }),
+              user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),

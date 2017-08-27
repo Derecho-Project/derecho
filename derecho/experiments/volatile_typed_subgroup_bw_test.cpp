@@ -262,8 +262,8 @@ int main(int argc, char *argv[]) {
       }
   }
   cout << endl;
-  if((sender_selector == 1) && (node_rank <= (num_of_nodes-1)/2)) is_sending = false;
-  if((sender_selector == 2) && (node_rank != num_of_nodes-1)) is_sending = false;
+  if((sender_selector == 1) && (node_rank <= (uint32_t)(num_of_nodes-1)/2)) is_sending = false;
+  if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes-1)) is_sending = false;
 
   std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
 /*

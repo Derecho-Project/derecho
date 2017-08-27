@@ -3,6 +3,8 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <errno.h>
 #include <string>
 #include "PersistException.hpp"
