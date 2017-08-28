@@ -579,9 +579,6 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         } else {
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
         }
-        if(msg.sender_id == members[member_index]) {
-            pending_message_timestamps[subgroup_num].erase(h->timestamp);
-        }
     }
 }
 
@@ -622,9 +619,6 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
             auto sequence_number = msg.index * num_shard_senders + sender_rank;
             non_persistent_sst_messages[subgroup_num].emplace(sequence_number, std::move(msg));
             file_writer->write_message(msg_for_filewriter);
-        }
-        if(msg.sender_id == members[member_index]) {
-            pending_message_timestamps[subgroup_num].erase(h->timestamp);
         }
     }
 }
@@ -865,9 +859,15 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
-                        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num);
+                        if(msg.sender_id == members[member_index]) {
+                            if(msg.size > 0) {
+                                char* buf = msg.message_buffer.buffer.get();
+                                header* h = (header*)(buf);
+                                pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first]
+                                        = h->timestamp;
+                            }
                         }
+                        std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
@@ -878,9 +878,15 @@ void MulticastGroup::register_predicates() {
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         deliver_message(msg, subgroup_num);
-                        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
-                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num);
+                        if(msg.sender_id == members[member_index]) {
+                            if(msg.size > 0) {
+                                char* buf = const_cast<char*>(msg.buf);
+                                header* h = (header*)(buf);
+                                pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first]
+                                        = h->timestamp;
+                            }
                         }
+                        std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -1109,11 +1115,26 @@ void MulticastGroup::check_failures_loop() {
         if(sst) {
             std::unique_lock<std::mutex> lock(msg_state_mtx);
             auto current_time = get_time();
-            for(uint32_t i = 0; i < total_num_subgroups; ++i) {
-                if(pending_message_timestamps[i].empty()) {
-                    sst->local_stability_frontier[member_index][i] = current_time;
+            for(auto p : subgroup_to_membership) {
+                auto subgroup_num = p.first;
+                auto members = p.second;
+                auto sst_indices = get_shard_sst_indices(subgroup_num);
+                // clean up timestamps of persisted messages
+                auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
+                for(auto i : sst_indices) {
+                    if(min_persisted_num < sst->persisted_num[i][subgroup_num]) {
+                        min_persisted_num = sst->persisted_num[i][subgroup_num];
+                    }
+                }
+                while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
+                    auto timestamp = pending_persistence[subgroup_num].begin()->second;
+                    pending_persistence[subgroup_num].erase(pending_persistence[subgroup_num].begin());
+                    pending_message_timestamps[subgroup_num].erase(timestamp);
+                }
+                if(pending_message_timestamps[subgroup_num].empty()) {
+                    sst->local_stability_frontier[member_index][subgroup_num] = current_time;
                 } else {
-                    sst->local_stability_frontier[member_index][i] = std::min(current_time, *pending_message_timestamps[i].begin());
+                    sst->local_stability_frontier[member_index][subgroup_num] = std::min(current_time, *pending_message_timestamps[subgroup_num].begin());
                 }
             }
             sst->put_with_completion((char*)std::addressof(sst->local_stability_frontier[0][0]) - sst->getBaseAddress(), sizeof(sst->local_stability_frontier[0][0]) * sst->local_stability_frontier.size());
@@ -1189,7 +1210,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
         free_message_buffers[subgroup_num].pop_back();
 
-	auto current_time = get_time();
+        auto current_time = get_time();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         // Fill header
@@ -1212,7 +1233,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         if(!buf) {
             return nullptr;
         }
-	auto current_time = get_time();
+        auto current_time = get_time();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         ((header*)buf)->header_size = sizeof(header);
