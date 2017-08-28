@@ -70,16 +70,17 @@ Group<ReplicatedTypes...>::Group(
         : logger(create_logger()),
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
-          view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params, 
-            persistence_manager.get_callbacks(),
-            _view_upcalls, gms_port),
+          view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
+                       persistence_manager.get_callbacks(),
+                       _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())){
+          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     //In this case there will be no subgroups to receive objects for
     construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();
-    persistence_manager.set_objects (std::addressof(replicated_objects));
+    persistence_manager.set_objects(std::addressof(replicated_objects));
+    persistence_manager.set_view_manager(std::addressof(view_manager));
     view_manager.start();
     persistence_manager.start();
 }
@@ -109,14 +110,15 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
-            persistence_manager.get_callbacks(),
-            _view_upcalls, gms_port),
+                       persistence_manager.get_callbacks(),
+                       _view_upcalls, gms_port),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
     persistence_manager.set_objects(std::addressof(replicated_objects));
+    persistence_manager.set_view_manager(std::addressof(view_manager));
     view_manager.start();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
