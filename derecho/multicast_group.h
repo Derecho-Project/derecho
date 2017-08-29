@@ -210,6 +210,7 @@ private:
     /** Parallel map for SST messages */
     std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
     std::map<uint32_t, std::set<uint64_t>> pending_message_timestamps;
+    std::map<uint32_t, std::map<int64_t, uint64_t>> pending_persistence;
     /** Messages that are currently being written to persistent storage */
     std::map<uint32_t, std::map<long long int, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
