@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3 -D_DEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++14 -Wall -O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++14 -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
@@ -108,6 +108,10 @@ target_link_libraries(persistent_typed_subgroup_bw_test derecho)
 # volatile_typed_subgroup_bw_test
 add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(volatile_typed_subgroup_bw_test derecho)
+
+# volatile_temporal_query_test
+add_executable(volatile_temporal_query_test volatile_temporal_query_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(volatile_temporal_query_test derecho)
 
 # smart membership function
 # add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)

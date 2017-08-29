@@ -1093,7 +1093,7 @@ uint64_t MulticastGroup::get_time() {
     return start_time.tv_sec * 1e9 + start_time.tv_nsec;
 }
 
-uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
+const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
     auto global_stability_frontier = sst->local_stability_frontier[member_index][subgroup_num];
     auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
     for(auto index : shard_sst_indices) {

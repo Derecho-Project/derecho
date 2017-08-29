@@ -9,10 +9,19 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include <persistent/Persistent.hpp>
+#include <persistent/util.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils-serialization/context_ptr.hpp>
 
 using mutils::context_ptr;
+
+//the payload is used to identify the user timestamp
+typedef struct _payload {
+  uint32_t node_rank; // rank of the sender
+  uint32_t msg_seqno; // sequence of the message sent by the same sender
+  uint64_t tv_sec;    // second
+  uint64_t tv_nsec;   // nano second
+} PayLoad;
 
 //This class is modified from Matt's implementation
 struct Bytes : public mutils::ByteRepresentable{
@@ -97,47 +106,50 @@ struct Bytes : public mutils::ByteRepresentable{
  */
 class ByteArrayObject: public mutils::ByteRepresentable {
 public:
-  Persistent<Bytes> pers_bytes;
-//  Persistent<Bytes,ST_MEM> vola_bytes;
+  //Persistent<Bytes> pers_bytes;
+  Persistent<Bytes,ST_MEM> vola_bytes;
 
-  void change_pers_bytes(const Bytes& bytes) {
-    *pers_bytes = bytes;
+  //void change_pers_bytes(const Bytes& bytes) {
+  //  *pers_bytes = bytes;
+  //}
+
+  void change_vola_bytes(const Bytes& bytes) {
+    *vola_bytes = bytes;
   }
-
-//  void change_vola_bytes(const Bytes& bytes) {
-//    *vola_bytes = bytes;
-//  }
 
   /** Named integers that will be used to tag the RPC methods */
 //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-  enum Functions { CHANGE_PERS_BYTES };
+  enum Functions { CHANGE_VOLA_BYTES };
 
   static auto register_functions() {
     return std::make_tuple(
-      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-//      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
+//      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
+      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
   }
 
 //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
-  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes);
+  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,vola_bytes);
   // constructor
 //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-//  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
-  ByteArrayObject(Persistent<Bytes> & _p_bytes):
-    pers_bytes(std::move(_p_bytes)) {
-//    vola_bytes(std::move(_v_bytes)) {
+  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
+//  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+//    pers_bytes(std::move(_p_bytes)) {
+    vola_bytes(std::move(_v_bytes)) {
   }
   // the default constructor
   ByteArrayObject(PersistentRegistry *pr):
-    pers_bytes(nullptr,pr) {
-//    vola_bytes(nullptr,pr) {
+//    pers_bytes(nullptr,pr) {
+    vola_bytes(nullptr,pr) {
   }
 };
 
 int main(int argc, char *argv[]) {
 
-  if(argc != 5) {
-    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count>"<<std::endl;
+#ifdef _DEBUG
+   spdlog::set_level(spdlog::level::trace);  
+#endif
+  if(argc != 7) {
+    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> <query_interval in us>"<<std::endl;
     return -1;
   }
   int sender_selector = 0; // 0 for all sender
@@ -146,7 +158,9 @@ int main(int argc, char *argv[]) {
   int num_of_nodes = atoi(argv[2]);
   int msg_size = atoi(argv[3]);
   int count = atoi(argv[4]);
-  struct timespec t1,t2,t3;
+  int max_ops = atoi(argv[5]);
+  uint64_t si_us = (1000000l/max_ops);
+  // int qi_us = atoi(argv[6]);
 
   derecho::node_id_t node_id;
   derecho::ip_addr my_ip;
@@ -174,21 +188,7 @@ int main(int argc, char *argv[]) {
     nullptr,//we don't need the stability_callback here
     // the persistence_callback either
     [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
-      if(ver == (total_num_messages - 1)){
-        if(is_sending) {
-          clock_gettime(CLOCK_REALTIME,&t3);
-          int64_t nsec = ((int64_t)t3.tv_sec - t1.tv_sec)*1000000000 + 
-            t3.tv_nsec - t1.tv_nsec;
-          double msec = (double)nsec/1000000;
-          double thp_gbps = ((double)count*msg_size*8)/nsec;
-          double thp_ops = ((double)count*1000000000)/nsec;
-          std::cout<<"(pers)timespan:"<<msec<<" millisecond."<<std::endl;
-          std::cout<<"(pers)throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
-          std::cout<<"(pers)throughput:"<<thp_ops<<"ops."<<std::endl;  
-          std::cout<<std::flush;
-        }
-        exit(0);
-      }
+      // TODO: can be used to test the time from send to persistence.
     }
   };
 
@@ -266,50 +266,102 @@ int main(int argc, char *argv[]) {
   if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes-1)) is_sending = false;
 
   std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
-/*
-  if (node_id == 0) {
-    derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
-    char my_array[1024];
-    derecho::rpc::QueryResults<bool> results = handle.ordered_query<ByteArrayObject<1024>::CHANGE_STATE>(my_array);
-    decltype(results)::ReplyMap& replies = results.get();
-    std::cout<<"Got a reply map!"<<std::endl;
-    for(auto& ritr:replies) {
-      std::cout<<"Reply from node "<< ritr.first <<" was " << std::boolalpha << ritr.second.get()<<std::endl;
+
+  // spawn the query thread
+  derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
+  std::unique_ptr<std::thread> pqt = nullptr;
+  uint64_t *query_time_us; // time used for temporal query
+  uint64_t *appear_time_us; // when the temporal query appears
+  uint64_t *message_time_us; // the latest timestamp
+  int num_datapoints = 0; // number of data points
+  query_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);
+  appear_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);
+  message_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);
+  if(query_time_us == NULL ||
+     appear_time_us == NULL ||
+     message_time_us == NULL) {
+    std::cerr<<"allocate memory error!"<<std::endl;
+  }
+  dbg_debug("about to start the querying thread.");
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+  pqt = std::make_unique<std::thread>([&](){
+      struct timespec tqt;
+      HLC tqhlc;
+      tqhlc.m_logic = 0;
+      uint64_t num_of_versions_seen = 0;
+      dbg_debug("query thread is running.");
+      while(true){
+        clock_gettime(CLOCK_REALTIME,&tqt);
+        tqhlc.m_rtc_us = tqt.tv_sec*1e6 + tqt.tv_nsec/1e3;
+        while(true){
+          try {
+            struct timespec at;
+            dbg_debug("query vola_bytes with tqhlc({},{})...",tqhlc.m_rtc_us,tqhlc.m_logic);
+            std::unique_ptr<Bytes> bs = (*handle.user_object_ptr)->vola_bytes.get(tqhlc);
+            dbg_debug("query returned from vola_bytes");
+            clock_gettime(CLOCK_REALTIME,&at);
+            PayLoad *pl = (PayLoad*)(bs->bytes);
+            uint64_t num_of_versions = (*handle.user_object_ptr)->vola_bytes.getNumOfVersions();
+            dbg_debug("query returned from vola_bytes:num_of_versions={}.",num_of_versions);
+            if(num_of_versions > num_of_versions_seen){
+              query_time_us[num_datapoints] = tqhlc.m_rtc_us;
+              appear_time_us[num_datapoints] = (uint64_t)(at.tv_sec*1e6+at.tv_nsec/1e3);
+              message_time_us[num_datapoints] = (uint64_t)(pl->tv_sec*1e6+pl->tv_nsec/1e3);
+              num_datapoints++;
+              num_of_versions_seen = num_of_versions;
+            }
+            
+            if (num_of_versions_seen == (uint64_t)total_num_messages) {
+              for(int i=0;i<num_datapoints;i++){
+                std::cout<<"query(us)\tappear(us)\tmessage(us)"<<std::endl;
+                std::cout<<query_time_us[i]<<"\t"<<appear_time_us[i]<<"\t"<<message_time_us[i]<<std::endl;
+                exit(0);
+              }
+            }
+            break;
+          } catch(unsigned long long exp) {
+            dbg_debug("query thread exp:{0}",exp);
+            if (exp == PERSIST_EXP_BEYOND_GSF)continue;
+          }
+      }
+    }
+  });
+#endif//_PERFORMANCE_DEBUG || _DEBUG
+  dbg_debug("querying thread started.");
+
+  if(is_sending) {
+    char *bbuf = new char[msg_size];
+    bzero(bbuf,msg_size);
+    Bytes bs(bbuf,msg_size);
+
+    try{
+
+      struct timespec start,cur;
+      clock_gettime(CLOCK_REALTIME,&start);
+
+#define DELTA_T_US(t1,t2) ((double)(((t2).tv_sec-(t1).tv_sec)*1e6+((t2).tv_nsec-(t1).tv_nsec)*1e-3))  
+
+      for(int i=0;i<count;i++) {
+          clock_gettime(CLOCK_REALTIME,&cur);
+          if ( DELTA_T_US(cur,start) > i*(double)si_us ){
+              ((PayLoad*)bs.bytes)->node_rank = (uint32_t)node_id;
+              ((PayLoad*)bs.bytes)->msg_seqno = (uint32_t)i;
+              ((PayLoad*)bs.bytes)->tv_sec    = (uint64_t)cur.tv_sec;
+              ((PayLoad*)bs.bytes)->tv_nsec   = (uint64_t)cur.tv_nsec;
+              handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
+          }
+      }
+
+    } catch (uint64_t exp){
+      std::cout<<"Exception caught:0x"<<std::hex<<exp<<std::endl;
+      return -1;
     }
   }
-*/
-  // if (node_id == 0) {
-    if(is_sending) {
-      derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
-      char *bbuf = new char[msg_size];
-      bzero(bbuf,msg_size);
-      Bytes bs(bbuf,msg_size);
 
-      try{
 
-        clock_gettime(CLOCK_REALTIME,&t1);
-        for(int i=0;i<count;i++) {
-            handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
-        }
-        clock_gettime(CLOCK_REALTIME,&t2);
-
-      } catch (uint64_t exp){
-        std::cout<<"Exception caught:0x"<<std::hex<<exp<<std::endl;
-        return -1;
-      }
-      int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec)*1000000000 + 
-        t2.tv_nsec - t1.tv_nsec;
-      double msec = (double)nsec/1000000;
-      double thp_gbps = ((double)count*msg_size*8)/nsec;
-      double thp_ops = ((double)count*1000000000)/nsec;
-      std::cout<<"(send)timespan:"<<msec<<" millisecond."<<std::endl;
-      std::cout<<"(send)throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
-      std::cout<<"(send)throughput:"<<thp_ops<<"ops."<<std::endl;
-      #ifdef _PERFORMANCE_DEBUG
-        (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
-      #endif//_PERFORMANCE_DEBUG
-    }
-
+#if defined(_PERFORMANCE_DEBUG) || (_DEBUG)
+//      (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
+#endif//_PERFORMANCE_DEBUG
 
   std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
   while(true){}

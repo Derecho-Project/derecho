@@ -24,8 +24,8 @@ function(output_directory TGT DIR)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/${DIR}")
 endfunction(output_directory TGT DIR)
 
-include_directories(../mutils ../mutils-serialization ../spdlog/include)
-link_directories(../mutils ../mutils-serialization)
+include_directories(../third_party/mutils ../third_party/mutils-serialization ../third_party/spdlog/include)
+link_directories(../third_party/mutils ../third_party/mutils-serialization)
 
 # add_library(persistent Persistent.hpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp MemLog.cpp MemLog.hpp)
 add_library(persistent SHARED Persistent.hpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp HLC.cpp HLC.hpp)

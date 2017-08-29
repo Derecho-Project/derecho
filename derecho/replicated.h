@@ -46,19 +46,19 @@ public:
 };
 
 template <typename T>
-class Replicated : public ReplicatedObject {
+class Replicated : public ReplicatedObject,public ITemporalQueryFrontierProvider {
 private:
     /** persistent registry for persistent<t>
      */
-    PersistentRegistry persistent_registry;
+    std::unique_ptr<PersistentRegistry> persistent_registry_ptr;
     /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
 public:
 #endif
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
 private:
 #endif
     /** The ID of this node */
@@ -143,16 +143,17 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
-            : persistent_registry([&](){
-                HLC hlc(this->compute_global_stability_frontier(),0);
-                return hlc;
-              }),
-              user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(&this->persistent_registry))),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
+              user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
+#ifdef _DEBUG
+              std::cout<<"address of Replicated<T>="<<(void*)this<<std::endl;
+#endif//_DEBUG
+    }
 
     /**
      * Constructs a Replicated<T> for an object without actually constructing an
@@ -167,10 +168,7 @@ public:
      * that owns this Replicated<T>
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
-            : persistent_registry([&](){
-                HLC hlc(this->compute_global_stability_frontier(),0);
-                return hlc;
-              }),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -178,7 +176,17 @@ public:
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
-    Replicated(Replicated&&) = default;
+    // Replicated(Replicated&&) = default;
+    Replicated(Replicated && rhs):
+      persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
+      user_object_ptr(std::move(rhs.user_object_ptr)),
+      node_id(rhs.node_id),
+      subgroup_id(rhs.subgroup_id),
+      group_rpc_manager(rhs.group_rpc_manager),
+      wrapped_this(std::move(rhs.wrapped_this)),
+      p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
+      persistent_registry_ptr->updateTemporalFrontierProvider(this);
+    }
     Replicated(const Replicated&) = delete;
     virtual ~Replicated() = default;
 
@@ -291,8 +299,14 @@ public:
                                                                  payload_size, pause_sending_turns, false, null_send);
     }
 
-    uint64_t compute_global_stability_frontier() {
+    const uint64_t compute_global_stability_frontier () {
       return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
+    }
+
+    inline const HLC getFrontier() {
+      // transform from ns to us:
+      HLC hlc(this->compute_global_stability_frontier()/1e3,0);
+      return hlc;
     }
 
     /**
@@ -350,7 +364,7 @@ public:
     std::size_t receive_object(char* buffer) {
         // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
-        rdv.insert(rdv.begin(),&persistent_registry);
+        rdv.insert(rdv.begin(),persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm,buffer));
         return mutils::bytes_size(**user_object_ptr);
@@ -361,7 +375,7 @@ public:
      * @param ver - the version number to be made
      */
     virtual void make_version(const persistence_version_t & ver) noexcept(false) {
-      persistent_registry.makeVersion(ver);
+      persistent_registry_ptr->makeVersion(ver);
     };
 
     /**
@@ -372,7 +386,7 @@ public:
 
       // persist variables
       do{
-        persisted_ver = persistent_registry.persist();
+        persisted_ver = persistent_registry_ptr->persist();
         if(persisted_ver == -1) {
           // for replicated<T> without Persistent fields,
           // tell the persistent thread that we are done.
@@ -398,7 +412,7 @@ public:
      * trimmed
      */
     virtual void trim(const persistence_version_t & ver) noexcept(false) {
-      persistent_registry.trim(ver);
+      persistent_registry_ptr->trim(ver);
     };
 
     /**
@@ -408,7 +422,7 @@ public:
      * @param tf - the trim function
      */ 
     virtual void register_persistent_member(const char* object_name, const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf) noexcept(false) {
-      this->persistent_registry.registerPersist(object_name,vf,pf,tf);
+      this->persistent_registry_ptr->registerPersist(object_name,vf,pf,tf);
     }
 };
 

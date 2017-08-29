@@ -1113,7 +1113,7 @@ void ViewManager::send(subgroup_id_t subgroup_num) {
     }
 }
 
-uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
+const uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
     shared_lock_t lock(view_mutex);
     return curr_view->multicast_group->compute_global_stability_frontier(subgroup_num);
 }

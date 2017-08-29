@@ -309,19 +309,12 @@ int main(int argc, char *argv[]) {
       std::cout<<"(send)timespan:"<<msec<<" millisecond."<<std::endl;
       std::cout<<"(send)throughput:"<<thp_gbps<<"Gbit/s."<<std::endl;
       std::cout<<"(send)throughput:"<<thp_ops<<"ops."<<std::endl;
+#ifdef _PERFORMANCE_DEBUG
+        (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
+#endif//_PERFORMANCE_DEBUG
     }
 
 
-//      usleep(2000000);
-#ifdef _PERFORMANCE_DEBUG
-//      if(is_pers){
-//        (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
-//      } else {
-        (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
-//      }
-#endif//_PERFORMANCE_DEBUG
-//      usleep(500000);
-//      exit(0);
 
   std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
   while(true){}

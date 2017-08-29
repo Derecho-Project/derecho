@@ -362,7 +362,7 @@ public:
      * there is only one message per sender in the RDMC pipeline */
     bool send(subgroup_id_t subgroup_num);
 
-    uint64_t compute_global_stability_frontier(uint32_t subgroup_num);
+    const uint64_t compute_global_stability_frontier(uint32_t subgroup_num);
 
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
     void wedge();

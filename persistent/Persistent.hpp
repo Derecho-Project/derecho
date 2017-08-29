@@ -10,13 +10,14 @@
 #include <functional>
 #include <pthread.h>
 #include <map>
+#include <time.h>
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "PersistLog.hpp"
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
 
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
 #include "time.h"
 #endif//_PERFORMANCE_DEBUG
 
@@ -46,7 +47,10 @@ namespace ns_persistent {
   #define GET_CACHED_OBJ_PTR(v) (this->m_aCache[VERSION_HASH(v)].obj)
   */
 
-  using GetGlobalStabilityFrontierFunc = std::function<HLC(void)>;
+  class ITemporalQueryFrontierProvider {
+  public:
+    virtual const HLC getFrontier() = 0;
+  };
 
   // function types to be registered for create version
   // , persist version, and trim a version
@@ -66,26 +70,29 @@ namespace ns_persistent {
    */
   class PersistentRegistry:public mutils::RemoteDeserializationContext{
   public:
-    const GetGlobalStabilityFrontierFunc gsf;
-    PersistentRegistry(const GetGlobalStabilityFrontierFunc & _gsf):
-      gsf(_gsf){
-      //
+    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp):
+      _temporal_query_frontier_provider(tqfp){
     };
     virtual ~PersistentRegistry() {
+      dbg_warn("PersistentRegistry@{} has been deallocated!",(void*)this);
       this->_registry.clear();
     };
     #define VERSION_FUNC_IDX (0)
     #define PERSIST_FUNC_IDX (1)
     #define TRIM_FUNC_IDX (2)
+    // make a version
     void makeVersion(const int64_t & ver) noexcept(false) {
       callFunc<VERSION_FUNC_IDX>(ver);
     };
+    // persist data
     const int64_t persist() noexcept(false) {
       return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
     };
+    // trim the log
     void trim(const int64_t & ver) noexcept(false) {
       callFunc<TRIM_FUNC_IDX>(ver);
     };
+    // register a Persistent<T> along with its lambda
     void registerPersist(const char* obj_name, const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
       //this->_registry.push_back(std::make_tuple(vf,pf,tf));
       auto tuple_val = std::make_tuple(vf,pf,tf);
@@ -97,11 +104,36 @@ namespace ns_persistent {
         this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>>(key,tuple_val));
       }
     };
+    // get temporal query frontier
+    inline const HLC getFrontier(){
+      if (_temporal_query_frontier_provider != nullptr) {
+#ifdef _DEBUG
+        const HLC r = _temporal_query_frontier_provider->getFrontier();
+        dbg_warn("temporal_query_frontier=HLC({},{})",r.m_rtc_us,r.m_logic);
+        return r;
+#else
+        return _temporal_query_frontier_provider->getFrontier();
+#endif//_DEBUG
+      } else {
+        struct timespec t;
+        clock_gettime(CLOCK_REALTIME,&t);
+        return HLC((uint64_t)(t.tv_sec*1e6+t.tv_nsec/1e3),(uint64_t)0);
+      }
+    }
+
+    // update temporal query frontier
+    // we didn't use a lock on this becuase we assume this is only updated
+    // object construction. please use this when you are sure there is no
+    // concurrent threads relying on it.
+    void updateTemporalFrontierProvider(ITemporalQueryFrontierProvider* tqfp) {
+      this->_temporal_query_frontier_provider = tqfp;
+    }
     PersistentRegistry(PersistentRegistry &&) = default;
     PersistentRegistry(const PersistentRegistry &) = delete;
 
   protected:
     //std::vector<std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    ITemporalQueryFrontierProvider * _temporal_query_frontier_provider;
     std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
     template<int funcIdx,typename ... Args >
     void callFunc(Args ... args) {
@@ -380,7 +412,7 @@ namespace ns_persistent {
         mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         // global stability frontier test
-        if (m_pRegistry != nullptr && m_pRegistry->gsf() <= hlc) {
+        if (m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
           throw PERSIST_EXP_BEYOND_GSF;
         }
         char * pdat = (char*)this->m_pLog->getEntry(hlc);
@@ -396,7 +428,7 @@ namespace ns_persistent {
         mutils::DeserializationManager *dm=nullptr)
         noexcept(false) {
         // global stability frontier test
-        if (m_pRegistry != nullptr && m_pRegistry->gsf() <= hlc) {
+        if (m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
           throw PERSIST_EXP_BEYOND_GSF;
         }
         char const * pdat = (char const *)this->m_pLog->getEntry(hlc);
@@ -467,13 +499,13 @@ namespace ns_persistent {
       virtual void set(const ObjectType &v, const int64_t & ver)
         noexcept(false) {
         HLC mhlc; // generate a default timestamp for it.
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
         struct timespec t1,t2;
         clock_gettime(CLOCK_REALTIME,&t1);
 #endif
         this->set(v,ver,mhlc);
 
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
         clock_gettime(CLOCK_REALTIME,&t2);
         cnt_in_set ++;
         ns_in_set += ((t2.tv_sec-t1.tv_sec)*1000000000ul + t2.tv_nsec - t1.tv_nsec);
@@ -493,7 +525,7 @@ namespace ns_persistent {
        */
       virtual const int64_t persist()
         noexcept(false){
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
         struct timespec t1,t2;
         clock_gettime(CLOCK_REALTIME,&t1);
         const int64_t ret = this->m_pLog->persist();
@@ -595,7 +627,7 @@ namespace ns_persistent {
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}
 
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
       uint64_t ns_in_persist = 0ul;
       uint64_t ns_in_set = 0ul;
       uint64_t cnt_in_persist = 0ul;

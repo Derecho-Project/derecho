@@ -123,7 +123,7 @@ static void eval_write (std::size_t osize, int nops, bool batch) {
     pvar.persist();
   }
 
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
   pvar.print_performance_stat();
 #endif//_PERFORMANCE_DEBUG
 

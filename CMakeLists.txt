@@ -10,7 +10,7 @@ add_subdirectory(derecho)
 add_subdirectory(rdmc)
 add_subdirectory(sst)
 add_subdirectory(tcp)
-add_subdirectory(third_party/persistent)
+add_subdirectory(persistent)
 
 add_custom_target(
 	mutils_target
