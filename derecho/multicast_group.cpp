@@ -855,38 +855,54 @@ void MulticastGroup::register_predicates() {
                     }
                     if(least_undelivered_rdmc_seq_num < least_undelivered_sst_seq_num && least_undelivered_rdmc_seq_num <= min_stable_num) {
                         update_sst = true;
-                        logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}",
+                        logger->debug("Subgroup {}, can deliver a locally stable RDMC message: min_stable_num={} and least_undelivered_seq_num={}",
                                       subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
-                        deliver_message(msg, subgroup_num);
-                        if(msg.sender_id == members[member_index]) {
-                            if(msg.size > 0) {
-                                char* buf = msg.message_buffer.buffer.get();
-                                header* h = (header*)(buf);
-                                pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first]
-                                        = h->timestamp;
-                            }
+                        uint64_t msg_ts = 0;
+                        if(msg.size > 0) {
+                          char* buf = msg.message_buffer.buffer.get();
+                          header* h = (header*)(buf);
+                          msg_ts = h->timestamp;
+                          deliver_message(msg, subgroup_num);
+                          if (msg.sender_id == members[member_index]) {
+                            pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_ts;
+                          }
+                          // make a version for persistent<t>/volatile<t>
+                          uint64_t msg_ts_us = msg_ts/1e3;
+                          if(msg_ts_us == 0) {
+                            struct timespec now;
+                            clock_gettime(CLOCK_REALTIME,&now);
+                            msg_ts_us = (uint64_t)now.tv_sec*1e6 + now.tv_nsec/1e3;
+                          }
+                          std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num, HLC{msg_ts_us,0});
                         }
-                        std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
                         locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
                         // DERECHO_LOG(-1, -1, "message_erase_done");
                     } else if(least_undelivered_sst_seq_num < least_undelivered_rdmc_seq_num && least_undelivered_sst_seq_num <= min_stable_num) {
                         update_sst = true;
-                        logger->debug("Subgroup {}, can deliver a locally stable message: min_stable_num={} and least_undelivered_seq_num={}",
+                        logger->debug("Subgroup {}, can deliver a locally stable SST message: min_stable_num={} and least_undelivered_seq_num={}",
                                       subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
-                        deliver_message(msg, subgroup_num);
-                        if(msg.sender_id == members[member_index]) {
-                            if(msg.size > 0) {
-                                char* buf = const_cast<char*>(msg.buf);
-                                header* h = (header*)(buf);
-                                pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first]
-                                        = h->timestamp;
-                            }
+                        uint64_t msg_ts = 0;
+                        if(msg.size > 0) {
+                          char* buf = const_cast<char*>(msg.buf);
+                          header* h = (header*)(buf);
+                          msg_ts = h->timestamp;
+                          deliver_message(msg, subgroup_num);
+                          if(msg.sender_id == members[member_index]) {
+                            pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_ts;
+                          }
+                          // make a version for persistent<t>/volatile<t>
+                          uint64_t msg_ts_us = msg_ts/1e3;
+                          if(msg_ts_us == 0) {
+                            struct timespec now;
+                            clock_gettime(CLOCK_REALTIME,&now);
+                            msg_ts_us = (uint64_t)now.tv_sec*1e6 + now.tv_nsec/1e3;
+                          }
+                          std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num, HLC{msg_ts_us,0});
                         }
-                        std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num);
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
                         locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());

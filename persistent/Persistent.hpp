@@ -54,7 +54,7 @@ namespace ns_persistent {
 
   // function types to be registered for create version
   // , persist version, and trim a version
-  using VersionFunc = std::function<void(const int64_t &)>;
+  using VersionFunc = std::function<void(const int64_t &,const HLC &)>;
   using PersistFunc = std::function<const int64_t(void)>;
   using TrimFunc = std::function<void(const int64_t &)>;
   // this function is obsolete, now we use a shared pointer to persistence registry
@@ -81,8 +81,8 @@ namespace ns_persistent {
     #define PERSIST_FUNC_IDX (1)
     #define TRIM_FUNC_IDX (2)
     // make a version
-    void makeVersion(const int64_t & ver) noexcept(false) {
-      callFunc<VERSION_FUNC_IDX>(ver);
+    void makeVersion(const int64_t & ver, const HLC & mhlc) noexcept(false) {
+      callFunc<VERSION_FUNC_IDX>(ver,mhlc);
     };
     // persist data
     const int64_t persist() noexcept(false) {
@@ -487,6 +487,7 @@ namespace ns_persistent {
       // make a version with version and mhlc clock
       virtual void set(const ObjectType &v, const int64_t & ver, const HLC &mhlc) 
         noexcept(false) {
+        dbg_trace("append to log with ver({}),hlc({},{})",ver,mhlc.m_rtc_us,mhlc.m_logic);
         auto size = mutils::bytes_size(v);
         char *buf = new char[size];
         bzero(buf,size);
@@ -516,6 +517,7 @@ namespace ns_persistent {
       virtual void version(const int64_t & ver)
         noexcept(false) {
         //TODO: compare if value has been changed?
+        dbg_trace("In Persistent<T>: make version {}.",ver);
         this->set(*this->m_pWrappedObject,ver);
       }
 

@@ -515,20 +515,23 @@ namespace ns_persistent{
 //      key,head,tail);
 //    dbg_trace("{0} - end binary search.",this->m_sName);
 //    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
-#ifdef _DEBUG
     dbg_trace("getEntry for hlc({0},{1})",rhlc.m_rtc_us,rhlc.m_logic);
-    dump_hidx();
-#endif//_DEBUG
     struct hlc_index_entry skey(rhlc,0);
     auto key = this->hidx.upper_bound(skey);
     FPL_UNLOCK;
- 
+
+#ifdef _DEBUG
+    dbg_trace("hidx.size = {}",this->hidx.size());
+    if(key == this->hidx.end())
+      dbg_trace("found upper bound = hidx.end()");
+    else
+      dbg_trace("found upper bound = hlc({},{}),idx{}",key->hlc.m_rtc_us,key->hlc.m_logic,key->log_idx);
+#endif//_DEBUG
+
     if (key != this->hidx.begin() && this->hidx.size()>0) {
       key--;
       ple = LOG_ENTRY_AT(key->log_idx);
-#ifdef _DEBUG
-    dbg_trace("getEntry returns: hlc:({0},{1}),idx:{2}",key->hlc.m_rtc_us,key->hlc.m_logic,key->log_idx);
-#endif//_DEBUG
+      dbg_trace("getEntry returns: hlc:({0},{1}),idx:{2}",key->hlc.m_rtc_us,key->hlc.m_logic,key->log_idx);
     }
 
     // no object exists before the requested timestamp.

@@ -107,40 +107,29 @@ struct Bytes : public mutils::ByteRepresentable{
  */
 class ByteArrayObject: public mutils::ByteRepresentable {
 public:
-  //Persistent<Bytes> pers_bytes;
-  Persistent<Bytes,ST_MEM> vola_bytes;
+  Persistent<Bytes> pers_bytes;
 
-  //void change_pers_bytes(const Bytes& bytes) {
-  //  *pers_bytes = bytes;
-  //}
-
-  void change_vola_bytes(const Bytes& bytes) {
-    *vola_bytes = bytes;
+  void change_pers_bytes(const Bytes& bytes) {
+    *pers_bytes = bytes;
   }
 
   /** Named integers that will be used to tag the RPC methods */
 //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-  enum Functions { CHANGE_VOLA_BYTES };
+  enum Functions { CHANGE_PERS_BYTES };
 
   static auto register_functions() {
     return std::make_tuple(
-//      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
+      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
   }
 
-//  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
-  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,vola_bytes);
+  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes);
   // constructor
-//  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
-//  ByteArrayObject(Persistent<Bytes> & _p_bytes):
-//    pers_bytes(std::move(_p_bytes)) {
-    vola_bytes(std::move(_v_bytes)) {
+  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+    pers_bytes(std::move(_p_bytes)) {
   }
   // the default constructor
   ByteArrayObject(PersistentRegistry *pr):
-//    pers_bytes(nullptr,pr) {
-    vola_bytes(nullptr,pr) {
+    pers_bytes(nullptr,pr) {
   }
 };
 
@@ -286,9 +275,7 @@ int main(int argc, char *argv[]) {
         while(true){
           try {
             struct timespec at;
-            dbg_debug("query vola_bytes with tqhlc({},{})...",tqhlc.m_rtc_us,tqhlc.m_logic);
-            std::unique_ptr<Bytes> bs = (*handle.user_object_ptr)->vola_bytes.get(tqhlc);
-            dbg_debug("query returned from vola_bytes");
+            std::unique_ptr<Bytes> bs = (*handle.user_object_ptr)->pers_bytes.get(tqhlc);
             clock_gettime(CLOCK_REALTIME,&at);
             PayLoad *pl = (PayLoad*)(bs->bytes);
 
@@ -325,10 +312,8 @@ int main(int argc, char *argv[]) {
               dbg_warn("unexpected exception({:x})",exp);
             }
           }
-        }
       }
-      std::cout<<std::flush;
-      exit(0);
+    }
   });
 #endif//_PERFORMANCE_DEBUG || _DEBUG
   dbg_debug("querying thread started.");
@@ -356,7 +341,7 @@ int main(int argc, char *argv[]) {
               ((PayLoad*)bs.bytes)->tv_sec    = (uint64_t)cur.tv_sec;
               ((PayLoad*)bs.bytes)->tv_nsec   = (uint64_t)cur.tv_nsec;
               
-              handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
+              handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
           }
       }
 

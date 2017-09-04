@@ -113,6 +113,10 @@ target_link_libraries(volatile_typed_subgroup_bw_test derecho)
 add_executable(volatile_temporal_query_test volatile_temporal_query_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(volatile_temporal_query_test derecho)
 
+# persistent_temporal_query_test
+add_executable(persistent_temporal_query_test persistent_temporal_query_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(persistent_temporal_query_test derecho)
+
 # smart membership function
 # add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
 # target_link_libraries(smart_membership_function_test derecho)

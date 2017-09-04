@@ -11,6 +11,8 @@
 #include <functional>
 #include <map>
 
+#include "persistent/HLC.hpp"
+
 namespace derecho{
   // for messages
   using subgroup_id_t = uint32_t;
@@ -19,8 +21,13 @@ namespace derecho{
   using persistence_version_t = int64_t;
 
   // for persistence manager
-  using persistence_manager_make_version_func_t = std::function<void(subgroup_id_t,persistence_version_t)>;
-  using persistence_manager_post_persist_func_t = std::function<void(subgroup_id_t,persistence_version_t)>;
+  using persistence_manager_make_version_func_t = std::function<void(
+    const subgroup_id_t &,
+    const persistence_version_t &,
+    const HLC &)>;
+  using persistence_manager_post_persist_func_t = std::function<void(
+    const subgroup_id_t &,
+    const persistence_version_t &)>;
   using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t, persistence_manager_post_persist_func_t>;
 
 }

@@ -148,7 +148,7 @@ public:
     }
 
     /** post a persistence request */
-    void post_persist_request(subgroup_id_t subgroup_id, persistence_version_t version) {
+    void post_persist_request(const subgroup_id_t & subgroup_id, const persistence_version_t & version) {
         // request enqueue
         persistence_request_queue.push(std::make_tuple(subgroup_id, version));
         // post semaphore
@@ -156,13 +156,14 @@ public:
     }
 
     /** make a version */
-    void make_version(subgroup_id_t subgroup_id, persistence_version_t version) {
+    void make_version(const subgroup_id_t & subgroup_id, 
+        const persistence_version_t & version, const HLC & mhlc) {
         // find the corresponding Replicated<T> in replicated_objects
         this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> &map) {
             // make a version
             auto search = map.find(subgroup_id);
             if(search != map.end()) {
-                search->second.make_version(version);
+                search->second.make_version(version,mhlc);
             }
         });
     }
@@ -184,10 +185,13 @@ public:
      */
     persistence_manager_callbacks_t get_callbacks() {
         return std::make_tuple(
-                [this](subgroup_id_t subgroup_id, persistence_version_t ver) {
-                    this->make_version(subgroup_id, ver);
+                [this](const subgroup_id_t & subgroup_id, 
+                    const persistence_version_t & ver, 
+                    const HLC &mhlc) {
+                    this->make_version(subgroup_id, ver, mhlc);
                 },
-                [this](subgroup_id_t subgroup_id, persistence_version_t ver) {
+                [this](const subgroup_id_t & subgroup_id,
+                    const persistence_version_t & ver) {
                     this->post_persist_request(subgroup_id, ver);
                 });
     }

@@ -374,8 +374,8 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistence_version_t & ver) noexcept(false) {
-      persistent_registry_ptr->makeVersion(ver);
+    virtual void make_version(const persistence_version_t & ver,const HLC & hlc) noexcept(false) {
+      persistent_registry_ptr->makeVersion(ver,hlc);
     };
 
     /**
