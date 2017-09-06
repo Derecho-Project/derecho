@@ -314,6 +314,8 @@ int main(int argc, char *argv[]) {
           }
       }
     }
+    std::cout<<std::flush;
+    exit(0);
   });
 #endif//_PERFORMANCE_DEBUG || _DEBUG
   dbg_debug("querying thread started.");
