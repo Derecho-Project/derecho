@@ -321,6 +321,9 @@ public:
     template <typename SubgroupType>
     ExternalCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 
+    template <typename SubgroupType>
+    ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);
+
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
     /** Creates and returns a vector listing the nodes that are currently members of the group. */

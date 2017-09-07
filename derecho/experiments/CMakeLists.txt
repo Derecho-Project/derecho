@@ -125,4 +125,8 @@ target_link_libraries(persistent_temporal_query_test derecho)
 add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(persistent_typed_subgroup_test derecho)
 
+#shard_iterator_p2p_test
+add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
+target_link_libraries(shard_iterator_p2p_test derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

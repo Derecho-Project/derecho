@@ -13,11 +13,11 @@
 #include <utility>
 
 #include "mutils-serialization/SerializationSupport.hpp"
-#include "tcp/tcp.h"
 #include "persistent/Persistent.hpp"
+#include "tcp/tcp.h"
 
-#include "derecho_internal.h"
 #include "derecho_exception.h"
+#include "derecho_internal.h"
 #include "remote_invocable.h"
 #include "rpc_manager.h"
 #include "rpc_utils.h"
@@ -42,16 +42,15 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
-   
 };
 
 template <typename T>
-class Replicated : public ReplicatedObject,public ITemporalQueryFrontierProvider {
+class Replicated : public ReplicatedObject, public ITemporalQueryFrontierProvider {
 private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<PersistentRegistry> persistent_registry_ptr;
-    /** The user-provided state object with some RPC methods. Stored by
+/** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
@@ -151,8 +150,8 @@ public:
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
 #ifdef _DEBUG
-              std::cout<<"address of Replicated<T>="<<(void*)this<<std::endl;
-#endif//_DEBUG
+        std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
+#endif  //_DEBUG
     }
 
     /**
@@ -177,15 +176,14 @@ public:
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
 
     // Replicated(Replicated&&) = default;
-    Replicated(Replicated && rhs):
-      persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
-      user_object_ptr(std::move(rhs.user_object_ptr)),
-      node_id(rhs.node_id),
-      subgroup_id(rhs.subgroup_id),
-      group_rpc_manager(rhs.group_rpc_manager),
-      wrapped_this(std::move(rhs.wrapped_this)),
-      p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
-      persistent_registry_ptr->updateTemporalFrontierProvider(this);
+    Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
+                                   user_object_ptr(std::move(rhs.user_object_ptr)),
+                                   node_id(rhs.node_id),
+                                   subgroup_id(rhs.subgroup_id),
+                                   group_rpc_manager(rhs.group_rpc_manager),
+                                   wrapped_this(std::move(rhs.wrapped_this)),
+                                   p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
+        persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
     virtual ~Replicated() = default;
@@ -299,14 +297,14 @@ public:
                                                                  payload_size, pause_sending_turns, false, null_send);
     }
 
-    const uint64_t compute_global_stability_frontier () {
-      return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
+    const uint64_t compute_global_stability_frontier() {
+        return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
     }
 
     inline const HLC getFrontier() {
-      // transform from ns to us:
-      HLC hlc(this->compute_global_stability_frontier()/1e3,0);
-      return hlc;
+        // transform from ns to us:
+        HLC hlc(this->compute_global_stability_frontier() / 1e3, 0);
+        return hlc;
     }
 
     /**
@@ -364,9 +362,9 @@ public:
     std::size_t receive_object(char* buffer) {
         // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
-        rdv.insert(rdv.begin(),persistent_registry_ptr.get());
+        rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
-        *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm,buffer));
+        *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
         return mutils::bytes_size(**user_object_ptr);
     }
 
@@ -374,25 +372,25 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistence_version_t & ver,const HLC & hlc) noexcept(false) {
-      persistent_registry_ptr->makeVersion(ver,hlc);
+    virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) {
+        persistent_registry_ptr->makeVersion(ver, hlc);
     };
 
     /**
      * persist the data to the latest version
      */
     virtual void persist(const persistence_version_t version) noexcept(false) {
-      persistence_version_t persisted_ver;
+        persistence_version_t persisted_ver;
 
-      // persist variables
-      do{
-        persisted_ver = persistent_registry_ptr->persist();
-        if(persisted_ver == -1) {
-          // for replicated<T> without Persistent fields,
-          // tell the persistent thread that we are done.
-          persisted_ver = version;
-         }
-      } while(persisted_ver < version);
+        // persist variables
+        do {
+            persisted_ver = persistent_registry_ptr->persist();
+            if(persisted_ver == -1) {
+                // for replicated<T> without Persistent fields,
+                // tell the persistent thread that we are done.
+                persisted_ver = version;
+            }
+        } while(persisted_ver < version);
     };
 
     /**
@@ -400,8 +398,8 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const persistence_version_t & ver) noexcept(false) {
-      persistent_registry_ptr->trim(ver);
+    virtual void trim(const persistence_version_t& ver) noexcept(false) {
+        persistent_registry_ptr->trim(ver);
     };
 
     /**
@@ -409,9 +407,9 @@ public:
      * @param vf - the version function
      * @param pf - the persistent function
      * @param tf - the trim function
-     */ 
-    virtual void register_persistent_member(const char* object_name, const VersionFunc &vf, const PersistFunc &pf, const TrimFunc &tf) noexcept(false) {
-      this->persistent_registry_ptr->registerPersist(object_name,vf,pf,tf);
+     */
+    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf) noexcept(false) {
+        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf);
     }
 };
 
@@ -498,6 +496,37 @@ public:
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
         return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+    }
+};
+
+template <typename T>
+class ShardIterator {
+private:
+    ExternalCaller<T>& EC;
+    const std::vector<node_id_t> shard_reps;
+
+public:
+    ShardIterator(ExternalCaller<T>& EC, std::vector<node_id_t> shard_reps)
+            : EC(EC),
+              shard_reps(shard_reps) {
+    }
+    template <rpc::FunctionTag tag, typename... Args>
+    void p2p_send(Args&&... args) {
+        for(auto nid : shard_reps) {
+            EC.template p2p_send<tag>(nid, std::forward<Args>(args)...);
+        }
+    }
+
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_query(Args&&... args) {
+        // shard_reps should have at least one member
+        auto query_result = EC.template p2p_query<tag>(shard_reps.at(0), std::forward<Args>(args)...);
+        std::vector<decltype(query_result)> query_result_vec;
+        query_result_vec.emplace_back(std::move(query_result));
+        for(uint i = 1; i < shard_reps.size(); ++i) {
+            query_result_vec.emplace_back(EC.template p2p_query<tag>(shard_reps[i], std::forward<Args>(args)...));
+        }
+	return query_result_vec;
     }
 };
 }
