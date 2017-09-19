@@ -136,8 +136,8 @@ public:
 
 int main(int argc, char *argv[]) {
 
-  if(argc != 5) {
-    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count>"<<std::endl;
+  if(argc < 5) {
+    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> [window_size=3]"<<std::endl;
     return -1;
   }
   int sender_selector = 0; // 0 for all sender
@@ -154,7 +154,11 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  derecho::DerechoParams derecho_params{max_msg_size, block_size};
+  unsigned int window_size = 3;
+  if (argc >= 6) {
+    window_size = (unsigned int )atoi(argv[5]);
+  }
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
   bool is_sending = true;
 
   long total_num_messages;
