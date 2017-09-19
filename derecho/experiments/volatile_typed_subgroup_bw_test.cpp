@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  unsigned int windows_size = 3;
+  unsigned int window_size = 3;
   if (argc >= 6) {
     window_size = (unsigned int)atoi(argv[5]);
   }
