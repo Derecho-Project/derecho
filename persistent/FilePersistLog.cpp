@@ -119,7 +119,7 @@ namespace ns_persistent{
       FPL_PERS_LOCK;
 
       try {
-        persistMetaHeaderAtomically();
+        persistMetaHeaderAtomically(META_HEADER);
       } catch (uint64_t e) {
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;
@@ -280,59 +280,64 @@ namespace ns_persistent{
   const int64_t FilePersistLog::persist()
     noexcept(false) {
     int64_t ver_ret = INVALID_VERSION;
-    FPL_RDLOCK;
     FPL_PERS_LOCK;
+    FPL_RDLOCK;
 
     if(*META_HEADER == *META_HEADER_PERS) {
       if (CURR_LOG_IDX != -1){
         //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
         ver_ret = META_HEADER->fields.ver;
       }
-      FPL_PERS_UNLOCK;
       FPL_UNLOCK;
+      FPL_PERS_UNLOCK;
       return ver_ret;
     }
 
     //flush data
     dbg_trace("{0} flush data,log,and meta.", this->m_sName);
     try {
+      // shadow the current state
+      void * flush_dstart, * flush_lstart;
+      size_t flush_dlen = 0, flush_llen = 0;
+      MetaHeader shadow_header = *META_HEADER;
       if ((NUM_USED_SLOTS > 0) && 
           (NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS)){
-        size_t flush_len = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst +
+        size_t flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst +
           LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - 
           NEXT_LOG_ENTRY_PERS->fields.ofst);
         // flush data
-        void * flush_start;
-        flush_start = ALIGN_TO_PAGE(NEXT_DATA_PERS);
-        flush_len += ((int64_t)NEXT_DATA_PERS)%PAGE_SIZE;
-        if (msync(flush_start,flush_len,MS_SYNC) != 0) {
+        flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
+        flush_dlen += ((int64_t)NEXT_DATA_PERS)%PAGE_SIZE;
+        // flush log
+        flush_lstart = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
+        flush_llen = ((size_t)NEXT_LOG_ENTRY-(size_t)NEXT_LOG_ENTRY_PERS) + 
+          ((int64_t)NEXT_LOG_ENTRY_PERS)%PAGE_SIZE;
+      }
+      if (NUM_USED_SLOTS > 0) {
+        //get the latest flushed version
+        //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+        ver_ret = META_HEADER->fields.ver;
+      }
+      FPL_UNLOCK;
+      if (flush_dlen > 0) {
+        if (msync(flush_dstart,flush_dlen,MS_SYNC) != 0) {
           throw PERSIST_EXP_MSYNC(errno);
         }
-        // flush log
-        flush_start = ALIGN_TO_PAGE(NEXT_LOG_ENTRY_PERS);
-        flush_len = ((size_t)NEXT_LOG_ENTRY-(size_t)NEXT_LOG_ENTRY_PERS) + 
-          ((int64_t)NEXT_LOG_ENTRY_PERS)%PAGE_SIZE;
-        if (msync(flush_start,flush_len,MS_SYNC) != 0) {
+      }
+      if (flush_llen > 0) {
+        if (msync(flush_lstart,flush_llen,MS_SYNC) != 0) {
           throw PERSIST_EXP_MSYNC(errno);
         }
       }
       // flush meta data
-      this->persistMetaHeaderAtomically();
+      this->persistMetaHeaderAtomically(&shadow_header);
     } catch (uint64_t e) {
       FPL_PERS_UNLOCK;
-      FPL_UNLOCK;
       throw e;
     }
     dbg_trace("{0} flush data,log,and meta...done.", this->m_sName);
 
-    //get the latest flushed version
-    if (NUM_USED_SLOTS > 0) {
-      //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-      ver_ret = META_HEADER->fields.ver;
-    }
-
     FPL_PERS_UNLOCK;
-    FPL_UNLOCK;
     return ver_ret;
   }
 
@@ -555,17 +560,20 @@ namespace ns_persistent{
     }
     FPL_UNLOCK;
 
+    FPL_PERS_LOCK;
     FPL_WRLOCK;
     //validate check again
     if (idx < META_HEADER->fields.head || idx >= META_HEADER->fields.tail){
       FPL_UNLOCK;
+      FPL_PERS_UNLOCK;
       return;
     }
     META_HEADER->fields.head = idx + 1;
     //TODO: remove entry from index...this is tricky because HLC 
     // order does not agree with index order.
-    throw PERSIST_EXP_UNIMPLEMENTED;
     FPL_UNLOCK;
+    FPL_PERS_UNLOCK;
+    throw PERSIST_EXP_UNIMPLEMENTED;
     dbg_trace("{0} trim at index: {1}...done",this->m_sName,idx);
   }
 
@@ -589,7 +597,7 @@ namespace ns_persistent{
     dbg_trace("{0} trim at time: {1}.{2}...done",this->m_sName,hlc.m_rtc_us,hlc.m_logic);
   }
 
-  void FilePersistLog::persistMetaHeaderAtomically() noexcept(false) {
+  void FilePersistLog::persistMetaHeaderAtomically(MetaHeader *pShadowHeader) noexcept(false) {
     // STEP 1: get file name
     const string swpFile = this->m_sMetaFile + "." + SWAP_FILE_SUFFIX;
    
@@ -598,7 +606,7 @@ namespace ns_persistent{
     if (fd == -1) {
       throw PERSIST_EXP_OPEN_FILE(errno);
     }
-    ssize_t nWrite = write(fd,META_HEADER,sizeof(MetaHeader));
+    ssize_t nWrite = write(fd,pShadowHeader,sizeof(MetaHeader));
     if (nWrite != sizeof(MetaHeader)) {
       throw PERSIST_EXP_WRITE_FILE(errno);
     }
@@ -610,7 +618,7 @@ namespace ns_persistent{
     }
 
     // STEP 4: update the persisted header in memory
-    *META_HEADER_PERS = *META_HEADER;
+    *META_HEADER_PERS = *pShadowHeader;
   }
 
   //////////////////////////

@@ -169,9 +169,8 @@ namespace ns_persistent {
     virtual void load() noexcept(false);
 
     // Persistent the Metadata header, we assume 
-    // 1) FPL_RDLOCK or FPL_WRLOCK is acquired.
-    // 2) FPL_PERS_LOCK is acquired.
-    virtual void persistMetaHeaderAtomically() noexcept(false);
+    // FPL_PERS_LOCK is acquired.
+    virtual void persistMetaHeaderAtomically(MetaHeader *) noexcept(false);
 
   public:
 
