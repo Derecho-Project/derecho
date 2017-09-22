@@ -68,7 +68,7 @@ namespace ns_persistent {
   #define LOG_ENTRY_AT(idx)     (LOG_ENTRY_ARRAY + (int)((idx)%MAX_LOG_ENTRY))
   #define NEXT_LOG_ENTRY        LOG_ENTRY_AT(META_HEADER->fields.tail)
   #define NEXT_LOG_ENTRY_PERS   LOG_ENTRY_AT( \
-    MIN(META_HEADER_PERS->fields.tail,META_HEADER->fields.head))
+    MAX(META_HEADER_PERS->fields.tail,META_HEADER->fields.head))
   #define CURR_LOG_IDX        ((NUM_USED_SLOTS == 0)? -1 : META_HEADER->fields.tail - 1)
   #define LOG_ENTRY_DATA(e)     ((void *)((uint8_t *)this->m_pData + \
     (e)->fields.ofst%MAX_DATA_SIZE))
@@ -169,9 +169,8 @@ namespace ns_persistent {
     virtual void load() noexcept(false);
 
     // Persistent the Metadata header, we assume 
-    // 1) FPL_RDLOCK or FPL_WRLOCK is acquired.
-    // 2) FPL_PERS_LOCK is acquired.
-    virtual void persistMetaHeaderAtomically() noexcept(false);
+    // FPL_PERS_LOCK is acquired.
+    virtual void persistMetaHeaderAtomically(MetaHeader *) noexcept(false);
 
   public:
 
