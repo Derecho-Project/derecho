@@ -138,8 +138,8 @@ int main(int argc, char *argv[]) {
 #ifdef _DEBUG
    spdlog::set_level(spdlog::level::trace);  
 #endif
-  if(argc != 7) {
-    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> <query_interval in us>"<<std::endl;
+  if(argc < 6) {
+    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> [window_size=3]"<<std::endl;
     return -1;
   }
   int sender_selector = 0; // 0 for all sender
@@ -150,7 +150,10 @@ int main(int argc, char *argv[]) {
   int count = atoi(argv[4]);
   int max_ops = atoi(argv[5]);
   uint64_t si_us = (1000000l/max_ops);
-  // int qi_us = atoi(argv[6]);
+  unsigned int window_size = 3;
+  if (argc >= 7) {
+    window_size = atoi(argv[6]);
+  }
 
   derecho::node_id_t node_id;
   derecho::ip_addr my_ip;
@@ -158,7 +161,7 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  derecho::DerechoParams derecho_params{max_msg_size, block_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
   bool is_sending = true;
 
   derecho::CallbackSet callback_set{
@@ -244,6 +247,13 @@ int main(int argc, char *argv[]) {
 
   std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
 
+  // Local Message Timestamp Array
+  uint64_t *local_message_time_us = (uint64_t*)malloc(sizeof(uint64_t)*count);
+  if(local_message_time_us == NULL) {
+    std::cerr<<"allocate memory error!"<<std::endl;
+    return -1;
+  }
+
   // spawn the query thread
   derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
   std::unique_ptr<std::thread> pqt = nullptr;
@@ -258,6 +268,7 @@ int main(int argc, char *argv[]) {
      appear_time_us == NULL ||
      message_time_us == NULL) {
     std::cerr<<"allocate memory error!"<<std::endl;
+    return -1;
   }
   dbg_debug("about to start the querying thread.");
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
@@ -265,8 +276,8 @@ int main(int argc, char *argv[]) {
       struct timespec tqt;
       HLC tqhlc;
       tqhlc.m_logic = 0;
-      uint32_t node_rank_seen = 0xffffffff;
       uint32_t msg_seqno_seen = 0xffffffff;
+      uint32_t node_rank_seen = 0xffffffff;
       dbg_debug("query thread is running.");
       bool bQuit = false;
       while(!bQuit){
@@ -279,13 +290,16 @@ int main(int argc, char *argv[]) {
             clock_gettime(CLOCK_REALTIME,&at);
             PayLoad *pl = (PayLoad*)(bs->bytes);
 
+            // uint32_t next_seqno = (pl->node_rank < node_rank)?(pl->msg_seqno-1):pl->msg_seqno; // roundrobin
+            // if(msg_seqno_seen != next_seqno){
             if(node_rank_seen != pl->node_rank || msg_seqno_seen != pl->msg_seqno){
               query_time_us[num_datapoints] = tqhlc.m_rtc_us;
               appear_time_us[num_datapoints] = (uint64_t)(at.tv_sec*1e6+at.tv_nsec/1e3);
+              // message_time_us[num_datapoints] = local_message_time_us[next_seqno];
               message_time_us[num_datapoints] = (uint64_t)(pl->tv_sec*1e6+pl->tv_nsec/1e3);
               num_datapoints++;
+              msg_seqno_seen = pl->msg_seqno; 
               node_rank_seen = pl->node_rank;
-              msg_seqno_seen = pl->msg_seqno;
             }
             
             dbg_trace("msg_seqno_seen={},count={},num_datapoints={}",msg_seqno_seen,count,num_datapoints);
@@ -342,7 +356,7 @@ int main(int argc, char *argv[]) {
               ((PayLoad*)bs.bytes)->msg_seqno = (uint32_t)i;
               ((PayLoad*)bs.bytes)->tv_sec    = (uint64_t)cur.tv_sec;
               ((PayLoad*)bs.bytes)->tv_nsec   = (uint64_t)cur.tv_nsec;
-              
+              local_message_time_us[i] = ((cur.tv_sec)*1e6 + cur.tv_nsec/1e3);
               handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
           }
       }
