@@ -126,8 +126,8 @@ add_executable(persistent_temporal_stability_test persistent_temporal_stability_
 target_link_libraries(persistent_temporal_stability_test derecho)
 
 # smart membership function
-# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-# target_link_libraries(smart_membership_function_test derecho)
+add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+target_link_libraries(smart_membership_function_test derecho)
 
 # persistent_typed_subgroup_test
 add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)

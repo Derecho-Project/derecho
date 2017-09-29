@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <mutils/macro_utils.hpp>
 
 namespace derecho {
 
@@ -29,6 +30,25 @@ namespace derecho {
 using node_id_t = uint32_t;
 
 namespace rpc {
+
+/**
+ * This "compile-time String" puts a short sequence of characters into a type's
+ * template parameter, allowing it to be accessed at compile-time in a constexpr
+ * hash function. This allows us to generate FunctionTags at compile time from
+ * the literal names of functions.
+ */
+template<char... str>
+struct String {
+    static constexpr uint64_t hash() {
+        char string[] = {str...};
+        uint64_t hash_code = 0;
+        for(const int c : string) {
+            if (c == 0) break; //NUL character terminates the string
+            hash_code = hash_code * 31 + c;
+        }
+        return hash_code;
+    }
+};
 
 using FunctionTag = unsigned long long;
 
@@ -337,3 +357,5 @@ inline void retrieve_header(mutils::RemoteDeserialization_v *rdv,
 
 }  // namespace rpc
 }  // namespace derecho
+
+#define CT_STRING(...) derecho::rpc::String<MACRO_GET_STR(#__VA_ARGS__)>

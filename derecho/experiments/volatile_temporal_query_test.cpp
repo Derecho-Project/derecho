@@ -141,18 +141,7 @@ public:
     return Bytes();
   }
 
-  /** Named integers that will be used to tag the RPC methods */
-//  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-  enum Functions { CHANGE_VOLA_BYTES, QUERY_VOLA_BYTES, QUERY_CONST_INT, QUERY_CONST_BYTES };
-
-  static auto register_functions() {
-    return std::make_tuple(
-//      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-      derecho::rpc::tag<QUERY_VOLA_BYTES>(&ByteArrayObject::query_vola_bytes),
-      derecho::rpc::tag<QUERY_CONST_INT>(&ByteArrayObject::query_const_int),
-      derecho::rpc::tag<QUERY_CONST_BYTES>(&ByteArrayObject::query_const_bytes),
-      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
-  }
+  REGISTER_RPC_FUNCTIONS(ByteArrayObject, query_vola_bytes, query_const_int, query_const_bytes, change_vola_bytes);
 
 //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
   DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,vola_bytes);
@@ -293,7 +282,7 @@ int main(int argc, char *argv[]) {
               ((PayLoad*)bs.bytes)->tv_sec    = (uint64_t)cur.tv_sec;
               ((PayLoad*)bs.bytes)->tv_nsec   = (uint64_t)cur.tv_nsec;
               
-              handle.ordered_send<ByteArrayObject::CHANGE_VOLA_BYTES>(bs);
+              handle.ordered_send<RPC_NAME(change_vola_bytes)>(bs);
           }
           last = cur;
       };
@@ -319,7 +308,7 @@ int main(int argc, char *argv[]) {
       auto shard_iterator = group->get_shard_iterator<ByteArrayObject>();
       // auto query_results_vec = shard_iterator.p2p_query<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
       clock_gettime(CLOCK_REALTIME,&tqm1);
-      auto query_results_vec = shard_iterator.p2p_query<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
+      auto query_results_vec = shard_iterator.p2p_query<RPC_NAME(query_vola_bytes)>(query_ts_us);
       clock_gettime(CLOCK_REALTIME,&tqm);
       for(auto& query_result:query_results_vec) {
         auto& reply_map = query_result.get();
