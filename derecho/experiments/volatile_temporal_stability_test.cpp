@@ -141,8 +141,8 @@ int main(int argc, char *argv[]) {
 #ifdef _DEBUG
    spdlog::set_level(spdlog::level::trace);  
 #endif
-  if(argc != 7) {
-    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> <query_interval in us>"<<std::endl;
+  if(argc < 6) {
+    std::cout<<"usage:"<<argv[0]<<" <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> [window_size=3]"<<std::endl;
     return -1;
   }
   int sender_selector = 0; // 0 for all sender
@@ -154,6 +154,10 @@ int main(int argc, char *argv[]) {
   int max_ops = atoi(argv[5]);
   uint64_t si_us = (1000000l/max_ops);
   // int qi_us = atoi(argv[6]);
+  unsigned int window_size = 3;
+  if(argc >= 7) {
+    window_size = atoi(argv[6]);
+  }
 
   derecho::node_id_t node_id;
   derecho::ip_addr my_ip;
@@ -161,7 +165,7 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  derecho::DerechoParams derecho_params{max_msg_size, block_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
   bool is_sending = true;
 
   derecho::CallbackSet callback_set{
