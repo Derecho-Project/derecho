@@ -130,8 +130,8 @@ add_executable(persistent_latency_test persistent_latency_test.cpp block_size.cp
 target_link_libraries(persistent_latency_test derecho)
 
 # smart membership function
-# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-# target_link_libraries(smart_membership_function_test derecho)
+add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+target_link_libraries(smart_membership_function_test derecho)
 
 # persistent_typed_subgroup_test
 add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)

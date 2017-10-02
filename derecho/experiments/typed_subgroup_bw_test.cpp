@@ -77,14 +77,7 @@ public:
         return true;
     }
 
-    /** Named integers that will be used to tag the RPC methods */
-    enum Functions { FUN, BYTES_FUN, FINISHING_CALL };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<FUN>(&TestObject::fun),
-            derecho::rpc::tag<BYTES_FUN>(&TestObject::bytes_fun),
-            derecho::rpc::tag<FINISHING_CALL>(&TestObject::finishing_call));
-    }
+    REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
 };
 
 int main(int argc, char* argv[]) {
@@ -165,11 +158,11 @@ int main(int argc, char* argv[]) {
     clock_gettime(CLOCK_REALTIME, &t1);
 
     for(int i = 0; i < count; i++) {
-        //handle.ordered_send<TestObject::FUN>(str_1k);
-        handle.ordered_send<TestObject::BYTES_FUN>(bytes);
+        //handle.ordered_send<RPC_NAME(fun)>(str_1k);
+        handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
     if(node_id == 0) {
-      derecho::rpc::QueryResults<bool> results = handle.ordered_query<TestObject::FINISHING_CALL>(0);
+      derecho::rpc::QueryResults<bool> results = handle.ordered_query<RPC_NAME(finishing_call)>(0);
       std::cout<<"waiting for response..."<<std::endl;
 #pragma GCC diagnostic ignored "-Wunused-variable"
       decltype(results)::ReplyMap& replies = results.get();

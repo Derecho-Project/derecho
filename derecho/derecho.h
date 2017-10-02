@@ -15,3 +15,4 @@
 #include "subgroup_info.h"
 #include "derecho_internal.h"
 #include <mutils-serialization/SerializationSupport.hpp>
+#include "register_rpc_functions.h"

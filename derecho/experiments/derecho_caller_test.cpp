@@ -35,13 +35,7 @@ struct test1_str {
         return true;
     }
 
-    enum Functions { READ_STATE,
-                     CHANGE_STATE };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&test1_str::read_state),
-                               derecho::rpc::tag<CHANGE_STATE>(&test1_str::change_state));
-    }
+    REGISTER_RPC_FUNCTIONS(test1_str, read_state, change_state);
 };
 
 template <typename T>
@@ -123,7 +117,7 @@ int main(int argc, char* argv[]) {
     if(my_id != 2) {
         cout << "Changing each other's state to 35" << endl;
         derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.ordered_query<test1_str::CHANGE_STATE>({1 - my_id},
+        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id},
                                                                               36 - my_id)
                                     .get());
     }
@@ -134,7 +128,7 @@ int main(int argc, char* argv[]) {
     // all members verify every node's state
     cout << "Reading everyone's state" << endl;
     derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-    output_result<int>(rpc_handle.ordered_query<test1_str::READ_STATE>({}).get());
+    output_result<int>(rpc_handle.ordered_query<RPC_NAME(read_state)>({}).get());
 
     cout << "Done" << endl;
     cout << "Reached here" << endl;

@@ -35,21 +35,7 @@ public:
         return true;
     }
 
-    /** Named integers that will be used to tag the RPC methods */
-    enum Functions { READ_STATE,
-                     CHANGE_STATE };
-
-    /**
-     * All replicated objects must provide this static method, which should
-     * return a tuple containing all the methods that can be invoked by RPC.
-     * Each method should be "tagged" with derecho::rpc::tag(), whose template
-     * parameter indicates which numeric constant will identify the method.
-     * @return A tuple of "tagged" function pointers.
-     */
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&Foo::read_state),
-                               derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
-    }
+    REGISTER_RPC_FUNCTIONS(Foo, read_state, change_state);
 
     /**
      * Constructs a Foo with an initial value.
@@ -72,15 +58,8 @@ public:
     std::string print() {
         return log;
     }
-    enum Functions { APPEND,
-                     CLEAR,
-                     PRINT };
 
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<APPEND>(&Bar::append),
-                               derecho::rpc::tag<CLEAR>(&Bar::clear),
-                               derecho::rpc::tag<PRINT>(&Bar::print));
-    }
+    REGISTER_RPC_FUNCTIONS(Bar, append, clear, print);
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
     Bar(const std::string& s = "") : log(s) {}
@@ -107,17 +86,8 @@ public:
         cache_map.erase(key_pos);
         return true;
     }
-    enum Functions { PUT,
-                     GET,
-                     CONTAINS,
-                     INVALIDATE };
 
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<PUT>(&Cache::put),
-                               derecho::rpc::tag<GET>(&Cache::get),
-                               derecho::rpc::tag<CONTAINS>(&Cache::contains),
-                               derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
-    }
+    REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
 
     Cache() : cache_map() {}
     /**
@@ -229,41 +199,41 @@ int main(int argc, char** argv) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         cout << "Appending to Bar" << endl;
-        bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 0...");
+        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
-        foo_rpc_handle.ordered_query<Foo::READ_STATE>();
+        foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
     }
     if(node_id == 1) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<Foo::CHANGE_STATE>(new_value);
+        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
         decltype(results)::ReplyMap& replies = results.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : replies) {
             cout << "Reply from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
         }
         cout << "Appending to Bar" << endl;
-        bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 1...");
+        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
     }
     if(node_id == 2) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<Foo::READ_STATE>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
-        bar_rpc_handle.ordered_send<Bar::APPEND>("Write from 2...");
+        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 2...");
         cout << "Printing log from Bar" << endl;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<Bar::PRINT>();
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
         for(auto& reply_pair : bar_results.get()) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }
         cout << "Clearing Bar's log" << endl;
-        bar_rpc_handle.ordered_send<Bar::CLEAR>();
+        bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
     }
 
     if(node_id == 3) {
@@ -271,7 +241,7 @@ int main(int argc, char** argv) {
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
-            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<Cache::CONTAINS>("Ken");
+            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Ken");
             derecho::rpc::QueryResults<bool>::ReplyMap& replies = results.get();
             //Fold "&&" over the results to see if they're all true
             bool contains_accum = true;
@@ -283,7 +253,7 @@ int main(int argc, char** argv) {
             found = contains_accum;
         }
         cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<Cache::GET>("Ken");
+        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<RPC_NAME(get)>("Ken");
         for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }
@@ -292,20 +262,20 @@ int main(int argc, char** argv) {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
-        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
-        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Birman");
+        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
+        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
         derecho::node_id_t p2p_target = 2;
         cout << "Reading Foo's state from node " << p2p_target << endl;
         ExternalCaller<Foo>& p2p_foo_handle = group->get_nonmember_subgroup<Foo>();
-        derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<Foo::READ_STATE>(p2p_target);
+        derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<RPC_NAME(read_state)>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
     }
     if(node_id == 5) {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
-        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
-        cache_rpc_handle.ordered_send<Cache::PUT>("Ken", "Woodberry");
+        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
+        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
