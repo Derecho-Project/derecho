@@ -926,6 +926,23 @@ void MulticastGroup::register_predicates() {
 
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig, sst::PredicateType::RECURRENT));
 
+            auto persistence_pred = [this]( const DerechoSST& sst) {return true;};
+            auto persistence_trig = [this, subgroup_num, shard_members, num_shard_members] (DerechoSST& sst) mutable {
+                std::lock_guard<std::mutex> lock(msg_state_mtx);
+                // compute the min of the persisted_num
+                long long int min_persisted_num
+                    = sst.persisted_num[node_id_to_sst_index.at(shard_members[0])][subgroup_num];
+                for(uint i = 0; i < num_shard_members; ++i) {
+                    if(sst.persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < min_persisted_num) {
+                        min_persisted_num = sst.persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num];
+                    }
+                }
+                // callbacks
+                callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+            };
+
+            persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
+
             int shard_sender_index;
             std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
             num_shard_senders = get_num_senders(shard_senders);
@@ -1011,6 +1028,10 @@ void MulticastGroup::wedge() {
     for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = delivery_pred_handles.erase(handle_iter);
+    }
+    for(auto handle_iter = persistence_pred_handles.begin(); handle_iter != persistence_pred_handles.end();) {
+        sst->predicates.remove(*handle_iter);
+        handle_iter = persistence_pred_handles.erase(handle_iter);
     }
 
     for(uint i = 0; i < num_members; ++i) {
