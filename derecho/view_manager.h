@@ -159,19 +159,43 @@ private:
     /** Helper for joining an existing group; receives the View and parameters from the leader. */
     void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
-    // Ken's helper methods
-    void deliver_in_order(const View& Vc, const int shard_leader_rank,
+    // View-management triggers
+    /** Called when there is a new failure suspicion. Updates the suspected[]
+     * array and, for the leader, proposes new views to exclude failed members. */
+    void new_suspicion(DerechoSST& gmsSST);
+    /** Runs only on the group leader; proposes new views to include new members. */
+    void leader_start_join(DerechoSST& gmsSST);
+    /** Runs only on the group leader and updates num_committed when all non-failed
+     * members have acked a proposed view change. */
+    void leader_commit_change(DerechoSST& gmsSST);
+    /** Updates num_acked to acknowledge a proposed change when the leader increments
+     * num_changes. Mostly intended for non-leaders, but also runs on the leader. */
+    void acknowledge_proposed_change(DerechoSST& gmsSST);
+    /** Runs when at least one view change has been committed by the leader, and
+     * starts the process of changing to a new view. Ends by awaiting the
+     * "meta-wedged" state and registers finish_view_change() to trigger when
+     * meta-wedged is true. */
+    void start_view_change(DerechoSST& gmsSST);
+    /** Runs when all live nodes have reported they have wedged the current view
+     * (meta-wedged), and finishes installing the new view. */
+    void finish_view_change(DerechoSST& gmsSST);
+
+    // Static helper methods that implement chunks of view-management functionality
+    static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                           const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                          const std::vector<node_id_t>& shard_members, uint num_shard_senders);
-    void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+                          const std::vector<node_id_t>& shard_members, uint num_shard_senders,
+                          std::shared_ptr<spdlog::logger> logger);
+    static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                     const uint32_t num_received_offset,
                                     const std::vector<node_id_t>& shard_members,
-                                    uint num_shard_senders);
-    void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+                                    uint num_shard_senders,
+                                    std::shared_ptr<spdlog::logger> logger);
+    static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                       uint shard_leader_rank,
                                       const uint32_t num_received_offset,
                                       const std::vector<node_id_t>& shard_members,
-                                      uint num_shard_senders);
+                                      uint num_shard_senders,
+                                      std::shared_ptr<spdlog::logger> logger);
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -211,8 +235,16 @@ private:
 
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
-
+    /**
+     * Constructs a map from subgroup type -> index -> shard -> node ID of that shard's leader.
+     * If a shard has no leader in the current view (because it has no members), the vector will
+     * contain -1 instead of a node ID
+     */
     static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
+    /**
+     * Translates the old shard leaders' indices from (type, index) pairs to new subgroup IDs.
+     * An entry in this vector will have value -1 if there was no old leader for that shard.
+     */
     static std::vector<std::vector<int64_t>> translate_types_to_ids(
             const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
             const View& new_view);
@@ -333,10 +365,22 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
 
+    /**
+     * Registers a function that will send serializable object state from this node
+     * to a new node in a specified subgroup and shard. ViewManager will call it when
+     * it has installed a new view that adds a member to a shard for which this node
+     * is the leader.
+     */
     void register_send_object_upcall(send_object_upcall_t upcall) {
         send_subgroup_object = std::move(upcall);
     }
 
+    /**
+     * Registers a function that will initialize all the RPC objects at this node,
+     * given a new view and a list of the shard leaders in the previous view (needed
+     * to download object state). ViewManger will call it after it has installed a new
+     * view.
+     */
     void register_initialize_objects_upcall(initialize_rpc_objects_t upcall) {
         initialize_subgroup_objects = std::move(upcall);
     }
