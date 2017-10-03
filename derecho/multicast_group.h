@@ -48,6 +48,7 @@ using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32
 struct CallbackSet {
     message_callback_t global_stability_callback;
     persistence_callback_t local_persistence_callback = nullptr;
+    persistence_callback_t global_persistence_callback = nullptr;
 };
 
 struct DerechoParams : public mutils::ByteRepresentable {
@@ -255,6 +256,7 @@ private:
     std::list<pred_handle> receiver_pred_handles;
     std::list<pred_handle> stability_pred_handles;
     std::list<pred_handle> delivery_pred_handles;
+    std::list<pred_handle> persistence_pred_handles;
     std::list<pred_handle> sender_pred_handles;
 
     std::vector<bool> last_transfer_medium;
