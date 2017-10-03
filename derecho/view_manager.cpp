@@ -23,7 +23,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
-                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
@@ -55,7 +55,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          tcp::socket& leader_connection,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
-                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
@@ -92,7 +92,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                          const ip_addr my_ip,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
-                         const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::experimental::optional<DerechoParams> _derecho_params,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
@@ -443,7 +443,7 @@ void ViewManager::start_view_change(DerechoSST& gmsSST) {
     std::vector<int> join_indexes;
     //Look through pending changes up to num_committed and filter the joins and leaves
     const int committed_count = gmsSST.num_committed[Vc.rank_of_leader()]
-                                                     - gmsSST.num_installed[Vc.rank_of_leader()];
+                                - gmsSST.num_installed[Vc.rank_of_leader()];
     for(int change_index = 0; change_index < committed_count; change_index++) {
         node_id_t change_id = gmsSST.changes[Vc.my_rank][change_index];
         int change_rank = Vc.rank_of(change_id);
@@ -456,7 +456,7 @@ void ViewManager::start_view_change(DerechoSST& gmsSST) {
     }
 
     int next_num_members = Vc.num_members - leave_ranks.size()
-                                       + join_indexes.size();
+                           + join_indexes.size();
     //Initialize the next view
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
@@ -538,9 +538,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     //First, for subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader
     auto follower_subgroups_and_shards = std::make_shared<std::map<subgroup_id_t, uint32_t>>();
-    for(const auto& shard_rank_pair : curr_view->multicast_group->get_subgroup_to_shard_and_rank()) {
-        const subgroup_id_t subgroup_id = shard_rank_pair.first;
-        const uint32_t shard_num = shard_rank_pair.second.first;
+    for(const auto& shard_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {
+        const subgroup_id_t subgroup_id = shard_settings_pair.first;
+        const uint32_t shard_num = shard_settings_pair.second.shard_num;
         SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num);
         uint num_shard_senders = 0;
         for(auto v : shard_view.is_sender) {
@@ -549,8 +549,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         if(num_shard_senders) {
             if(shard_view.my_rank == curr_view->subview_rank_of_shard_leader(subgroup_id, shard_num)) {
                 leader_ragged_edge_cleanup(*curr_view, subgroup_id,
-                                           curr_view->multicast_group->get_subgroup_to_num_received_offset()
-                                           .at(subgroup_id),
+                                           shard_settings_pair.second.num_received_offset,
                                            shard_view.members, num_shard_senders, logger);
             } else {
                 //Keep track of which subgroups I'm a non-leader in, and what my corresponding shard ID is
@@ -563,7 +562,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     auto leader_global_mins_are_ready = [this, follower_subgroups_and_shards](const DerechoSST& gmsSST) {
         for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
             SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
-                                                          .at(subgroup_shard_pair.second);
+                                          .at(subgroup_shard_pair.second);
             node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
                     subgroup_shard_pair.first, subgroup_shard_pair.second)];
             if(!gmsSST.global_min_ready[curr_view->rank_of(shard_leader)][subgroup_shard_pair.first])
@@ -580,7 +579,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
         for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
             SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
-                                                          .at(subgroup_shard_pair.second);
+                                          .at(subgroup_shard_pair.second);
             uint num_shard_senders = 0;
             for(auto v : shard_view.is_sender) {
                 if(v) num_shard_senders++;
@@ -589,8 +588,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
                     subgroup_shard_pair.first, subgroup_shard_pair.second)];
             follower_ragged_edge_cleanup(*curr_view, subgroup_shard_pair.first,
                                          curr_view->rank_of(shard_leader),
-                                         curr_view->multicast_group->get_subgroup_to_num_received_offset()
-                                         .at(subgroup_shard_pair.first),
+                                         curr_view->multicast_group->get_subgroup_settings()
+                                                 .at(subgroup_shard_pair.first)
+                                                 .num_received_offset,
                                          shard_view.members,
                                          num_shard_senders,
                                          logger);
@@ -598,7 +598,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Calculate and save the IDs of shard leaders for the old view
         //If the old view was inadequately provisioned, this will be empty
         std::map<std::type_index, std::vector<std::vector<int64_t>>> old_shard_leaders_by_type
-        = make_shard_leaders_map(*curr_view);
+                = make_shard_leaders_map(*curr_view);
 
         std::list<tcp::socket> joiner_sockets;
         if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
@@ -629,6 +629,11 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             int joiner_rank = next_view->num_members - next_view->joined.size() + i;
             sst::add_node(next_view->members[joiner_rank], next_view->member_ips[joiner_rank]);
         }
+        /*
+         * EDWARD'S NOTE: We don't find out if the next view will be adequate until here, when this
+         * function calls make_subgroup_maps. But we've already started setting up the next view, so we can't
+         * stop here to wait for an adequate view (can we?).
+         */
         // This will block until everyone responds to SST/RDMC initial handshakes
         transition_multicast_group();
 
@@ -643,7 +648,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
                 mutils::post_object([&joiner_sockets](const char* bytes, std::size_t size) {
                     joiner_sockets.front().write(bytes, size);
                 },
-                old_shard_leaders_by_id);
+                                    old_shard_leaders_by_id);
                 joiner_sockets.pop_front();
             }
         }
@@ -705,25 +710,15 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     //Last statement in finish_view_change: register global_min_ready_continuation
     gmsSST.predicates.insert(leader_global_mins_are_ready, global_min_ready_continuation, sst::PredicateType::ONE_TIME);
-
 }
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
 void ViewManager::construct_multicast_group(CallbackSet callbacks,
                                             const DerechoParams& derecho_params) {
-    std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_and_rank;
-    std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
-    std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
-    std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
-    std::map<subgroup_id_t, Mode> subgroup_to_mode;
-
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
     uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view,
-                                                    subgroup_to_shard_and_rank,
-                                                    subgroup_to_senders_and_sender_rank,
-                                                    subgroup_to_num_received_offset,
-                                                    subgroup_to_membership,
-                                                    subgroup_to_mode);
+                                                    subgroup_settings);
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
@@ -732,26 +727,16 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
-            curr_view->gmsSST, callbacks, num_subgroups, subgroup_to_shard_and_rank,
-            subgroup_to_senders_and_sender_rank,
-            subgroup_to_num_received_offset, subgroup_to_membership,
-            subgroup_to_mode,
-            derecho_params, 
+            curr_view->gmsSST, callbacks, num_subgroups,
+            subgroup_settings,
+            derecho_params,
             persistence_manager_callbacks,
             curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group() {
-    std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_and_rank;
-    std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
-    std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
-    std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
-    std::map<subgroup_id_t, Mode> subgroup_to_mode;
-    uint32_t num_received_size = make_subgroup_maps(curr_view, *next_view, subgroup_to_shard_and_rank,
-                                                    subgroup_to_senders_and_sender_rank,
-                                                    subgroup_to_num_received_offset,
-                                                    subgroup_to_membership,
-                                                    subgroup_to_mode);
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
+    uint32_t num_received_size = make_subgroup_maps(curr_view, *next_view, subgroup_settings);
     const auto num_subgroups = next_view->subgroup_shard_views.size();
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
@@ -761,9 +746,7 @@ void ViewManager::transition_multicast_group() {
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank], next_view->gmsSST,
             std::move(*curr_view->multicast_group), num_subgroups,
-            subgroup_to_shard_and_rank, subgroup_to_senders_and_sender_rank,
-            subgroup_to_num_received_offset, subgroup_to_membership,
-            subgroup_to_mode,
+            subgroup_settings,
             persistence_manager_callbacks,
             next_view->failed);
 
@@ -814,11 +797,7 @@ void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) 
 
 uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                          View& curr_view,
-                                         std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
-                                         std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
-                                         std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-                                         std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-                                         std::map<subgroup_id_t, Mode>& subgroup_to_mode) {
+                                         std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
     bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
@@ -836,12 +815,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             curr_view.subgroup_shard_views.clear();
             curr_view.subgroup_ids_by_type.clear();
 
-            subgroup_to_shard_and_rank.clear();
-            subgroup_to_senders_and_sender_rank.clear();
-            subgroup_to_num_received_offset.clear();
-            subgroup_to_membership.clear();
-            subgroup_to_mode.clear();
-
+            subgroup_settings.clear();
             return 0;
         }
         std::size_t num_subgroups = subgroup_shard_views.size();
@@ -861,12 +835,16 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                 }
                 //Initialize my_rank in the SubView for this node's ID
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
+                //Save the settings for MulticastGroup
                 if(shard_view.my_rank != -1) {
-                    subgroup_to_shard_and_rank[next_subgroup_number] = {shard_num, shard_view.my_rank};
-                    subgroup_to_senders_and_sender_rank[next_subgroup_number] = {shard_view.is_sender, shard_view.sender_rank_of(shard_view.my_rank)};
-                    subgroup_to_num_received_offset[next_subgroup_number] = num_received_offset;
-                    subgroup_to_membership[next_subgroup_number] = shard_view.members;
-                    subgroup_to_mode[next_subgroup_number] = shard_view.mode;
+                    subgroup_settings[next_subgroup_number] = {
+                            shard_num,
+                            (uint32_t)shard_view.my_rank,
+                            shard_view.members,
+                            shard_view.is_sender,
+                            shard_view.sender_rank_of(shard_view.my_rank),
+                            num_received_offset,
+                            shard_view.mode};
                 }
                 if(prev_view && prev_view->is_adequately_provisioned) {
                     //Initialize this shard's SubView.joined and SubView.departed
@@ -917,7 +895,6 @@ std::map<std::type_index, std::vector<std::vector<int64_t>>> ViewManager::make_s
     }
     return shard_leaders_by_type;
 }
-
 
 std::vector<std::vector<int64_t>> ViewManager::translate_types_to_ids(
         const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,

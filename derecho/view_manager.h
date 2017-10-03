@@ -15,11 +15,11 @@
 #include "derecho_internal.h"
 #include "derecho_ports.h"
 #include "locked_reference.h"
+#include "multicast_group.h"
 #include "spdlog/spdlog.h"
 #include "subgroup_info.h"
 #include "tcp/tcp.h"
 #include "view.h"
-#include "multicast_group.h"
 
 #include "mutils-serialization/SerializationSupport.hpp"
 
@@ -182,20 +182,20 @@ private:
 
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
-                          const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                          const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                          std::shared_ptr<spdlog::logger> logger);
+                                 const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
+                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders,
+                                 std::shared_ptr<spdlog::logger> logger);
     static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
-                                    const uint32_t num_received_offset,
-                                    const std::vector<node_id_t>& shard_members,
-                                    uint num_shard_senders,
-                                    std::shared_ptr<spdlog::logger> logger);
+                                           const uint32_t num_received_offset,
+                                           const std::vector<node_id_t>& shard_members,
+                                           uint num_shard_senders,
+                                           std::shared_ptr<spdlog::logger> logger);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
-                                      uint shard_leader_rank,
-                                      const uint32_t num_received_offset,
-                                      const std::vector<node_id_t>& shard_members,
-                                      uint num_shard_senders,
-                                      std::shared_ptr<spdlog::logger> logger);
+                                             uint shard_leader_rank,
+                                             const uint32_t num_received_offset,
+                                             const std::vector<node_id_t>& shard_members,
+                                             uint num_shard_senders,
+                                             std::shared_ptr<spdlog::logger> logger);
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -224,11 +224,7 @@ private:
      * this information. */
     uint32_t make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                 View& curr_view,
-                                std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_n_index,
-                                std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_n_sender_index,
-                                std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-                                std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-                                std::map<subgroup_id_t, Mode>& subgroup_to_mode);
+                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
@@ -248,7 +244,6 @@ private:
     static std::vector<std::vector<int64_t>> translate_types_to_ids(
             const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
             const View& new_view);
-
 
 public:
     /**
@@ -271,7 +266,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
-                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -296,7 +291,7 @@ public:
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -322,7 +317,7 @@ public:
                 const ip_addr my_ip,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
@@ -341,8 +336,8 @@ public:
      * buffer. The returned pointer can be used to write a message into the
      * buffer. */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-			     int pause_sending_turns = 0, bool cooked_send = false,
-			     bool null_send = false);
+                             int pause_sending_turns = 0, bool cooked_send = false,
+                             bool null_send = false);
     /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send(subgroup_id_t subgroup_num);

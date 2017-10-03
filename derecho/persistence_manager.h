@@ -96,17 +96,17 @@ public:
         this->replicated_objects = pro;
     }
 
-  void set_view_manager (ViewManager* view_manager) {
-    this->view_manager = view_manager;
-  }
-  
+    void set_view_manager(ViewManager *view_manager) {
+        this->view_manager = view_manager;
+    }
+
     /** Start the persistent thread. */
     void start() {
         //skip for raw subgroups -- NO, DON'T
         // if(replicated_objects == nullptr) return;
 
         this->persist_thread = std::thread{[this]() {
-	    std::cout << "The persist thread started" << std::endl;
+            std::cout << "The persist thread started" << std::endl;
             do {
                 // wait for semaphore
                 sem_wait(&persistence_request_sem);
@@ -143,12 +143,12 @@ public:
                 }
 
             } while(!this->thread_shutdown || !this->persistence_request_queue.empty());
-	    std::cout << "The persist thread is exiting" << std::endl;
+            std::cout << "The persist thread is exiting" << std::endl;
         }};
     }
 
     /** post a persistence request */
-    void post_persist_request(const subgroup_id_t & subgroup_id, const persistence_version_t & version) {
+    void post_persist_request(const subgroup_id_t &subgroup_id, const persistence_version_t &version) {
         // request enqueue
         persistence_request_queue.push(std::make_tuple(subgroup_id, version));
         // post semaphore
@@ -156,14 +156,14 @@ public:
     }
 
     /** make a version */
-    void make_version(const subgroup_id_t & subgroup_id, 
-        const persistence_version_t & version, const HLC & mhlc) {
+    void make_version(const subgroup_id_t &subgroup_id,
+                      const persistence_version_t &version, const HLC &mhlc) {
         // find the corresponding Replicated<T> in replicated_objects
         this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> &map) {
             // make a version
             auto search = map.find(subgroup_id);
             if(search != map.end()) {
-                search->second.make_version(version,mhlc);
+                search->second.make_version(version, mhlc);
             }
         });
     }
@@ -185,13 +185,13 @@ public:
      */
     persistence_manager_callbacks_t get_callbacks() {
         return std::make_tuple(
-                [this](const subgroup_id_t & subgroup_id, 
-                    const persistence_version_t & ver, 
-                    const HLC &mhlc) {
+                [this](const subgroup_id_t &subgroup_id,
+                       const persistence_version_t &ver,
+                       const HLC &mhlc) {
                     this->make_version(subgroup_id, ver, mhlc);
                 },
-                [this](const subgroup_id_t & subgroup_id,
-                    const persistence_version_t & ver) {
+                [this](const subgroup_id_t &subgroup_id,
+                       const persistence_version_t &ver) {
                     this->post_persist_request(subgroup_id, ver);
                 });
     }

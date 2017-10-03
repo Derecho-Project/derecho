@@ -17,14 +17,14 @@
 
 #include "tcp/tcp.h"
 
-#include "derecho_internal.h"
 #include "derecho_exception.h"
+#include "derecho_internal.h"
+#include "persistence_manager.h"
 #include "raw_subgroup.h"
 #include "replicated.h"
 #include "rpc_manager.h"
 #include "subgroup_info.h"
 #include "view_manager.h"
-#include "persistence_manager.h"
 
 #include "mutils-containers/KindMap.hpp"
 #include "mutils-containers/TypeMap2.hpp"
@@ -33,7 +33,7 @@
 namespace derecho {
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
-  using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
 /**
  * The top-level object for creating a Derecho group. This implements the group
@@ -89,7 +89,7 @@ private:
      * Note that this is a std::map solely so that we can initialize it out-of-order;
      * its keys are continuous integers starting at 0 and it should be a std::vector. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
-    
+
     /* get_subgroup is actually implemented in these two methods. This is an
      * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
      * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */

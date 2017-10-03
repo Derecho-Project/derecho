@@ -37,13 +37,13 @@ namespace rpc {
  * hash function. This allows us to generate FunctionTags at compile time from
  * the literal names of functions.
  */
-template<char... str>
+template <char... str>
 struct String {
     static constexpr uint64_t hash() {
         char string[] = {str...};
         uint64_t hash_code = 0;
         for(const int c : string) {
-            if (c == 0) break; //NUL character terminates the string
+            if(c == 0) break;  //NUL character terminates the string
             hash_code = hash_code * 31 + c;
         }
         return hash_code;
@@ -126,8 +126,8 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-//        mutils::DeserializationManager* dsm, 
-        mutils::RemoteDeserialization_v *rdv, const node_id_t&, const char* recv_buf,
+        //        mutils::DeserializationManager* dsm,
+        mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
 /**
@@ -345,7 +345,7 @@ inline void populate_header(char* reply_buf,
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
-inline void retrieve_header(mutils::RemoteDeserialization_v *rdv,
+inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {

@@ -37,4 +37,7 @@ target_link_libraries(latest_logged_message derecho)
 add_executable(log_tail_length log_tail_length.cpp)
 target_link_libraries(log_tail_length derecho)
 
-add_custom_target(format_derecho clang-format-3.8 -i *.cpp *.h)
+add_custom_target(format_derecho 
+	COMMAND clang-format-3.8 -i *.cpp *.h
+	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/derecho
+)

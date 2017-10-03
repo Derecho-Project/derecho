@@ -14,8 +14,8 @@
 #include <tuple>
 #include <vector>
 
-#include "derecho_internal.h"
 #include "connection_manager.h"
+#include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "derecho_ports.h"
 #include "derecho_sst.h"
@@ -132,6 +132,28 @@ struct SSTMessage {
     volatile char* buf;
 };
 
+/**
+ * A collection of settings for a single subgroup that this node is a member of.
+ * Mostly extracted from SubView, but tailored specifically to what MulticastGroup
+ * needs to know about subgroups and shards.
+ */
+struct SubgroupSettings {
+    /** This node's shard number within the subgroup */
+    uint32_t shard_num;
+    /** This node's rank within its shard of the subgroup */
+    uint32_t shard_rank;
+    /** The members of the subgroup */
+    std::vector<node_id_t> members;
+    /** The "is_sender" flags for members of the subgroup */
+    std::vector<int> senders;
+    /** This node's sender rank within the subgroup (as defined by SubView::sender_rank_of) */
+    int sender_rank;
+    /** The offset of this node's num_received counter within the subgroup's SST section */
+    uint32_t num_received_offset;
+    /** The operation mode of the subgroup */
+    Mode mode;
+};
+
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
  * using RDMC to deliver messages and SST to track their arrival and stability.
  * This class should only be used as part of a Group, since it does not know how
@@ -163,20 +185,13 @@ private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
     uint32_t total_num_subgroups;
-    /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
-     * (this node's shard number, this node's shard rank)*/
-    const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>> subgroup_to_shard_and_rank;
-    const std::map<subgroup_id_t, std::pair<std::vector<int>, int>> subgroup_to_senders_and_sender_rank;
-    /** Maps subgroup IDs (for subgroups this node is a member of) to the offset
-     * of this node's num_received counter within that subgroup's SST section */
-    const std::map<subgroup_id_t, uint32_t> subgroup_to_num_received_offset;
+    /** Maps subgroup IDs (for subgroups this node is a member of) to an immutable
+     * set of configuration options for that subgroup. */
+    const std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
     /** Used for synchronizing receives by RDMC and SST */
     std::vector<std::list<long long int>> received_intervals;
-    /** Maps subgroup IDs (for subgroups this node is a member of) to the members
-     * of this node's shard of that subgroup */
-    const std::map<subgroup_id_t, std::vector<node_id_t>> subgroup_to_membership;
-    /** Maps subgroup IDs to operation mode */
-    const std::map<subgroup_id_t, Mode> subgroup_to_mode;
+    /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
+     * Constructed incrementally in create_rdmc_sst_groups(), so it can't be const.  */
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
     /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
     rpc_handler_t rpc_callback;
@@ -322,13 +337,9 @@ public:
             std::shared_ptr<DerechoSST> _sst,
             CallbackSet callbacks,
             uint32_t total_num_subgroups,
-            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
-            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
-            const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-            const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-            const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
+            const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const DerechoParams derecho_params,
-            const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+            const persistence_manager_callbacks_t& _persistence_manager_callbacks,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
@@ -337,12 +348,8 @@ public:
             std::shared_ptr<DerechoSST> _sst,
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
-            const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
-            const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
-            const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-            const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-            const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
-            const persistence_manager_callbacks_t & _persistence_manager_callbacks,
+            const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
+            const persistence_manager_callbacks_t& _persistence_manager_callbacks,
             std::vector<char> already_failed = {}, uint32_t rpc_port = derecho_rpc_port);
 
     ~MulticastGroup();
@@ -356,7 +363,7 @@ public:
     void deliver_messages_upto(const std::vector<long long int>& max_indices_for_senders, uint32_t subgroup_num, uint32_t num_shard_senders);
     /** Get a pointer into the current buffer, to write data into it before sending */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-			     int pause_sending_turns = 0,
+                             int pause_sending_turns = 0,
                              bool cooked_send = false, bool null_send = false);
     /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
@@ -372,13 +379,9 @@ public:
     static long long unsigned int compute_max_msg_size(
             const long long unsigned int max_payload_size,
             const long long unsigned int block_size);
-    /** Maps subgroup IDs (for subgroups this node is a member of) to the pair
-     * (this node's shard number, this node's shard rank)*/
-    const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& get_subgroup_to_shard_and_rank() {
-        return subgroup_to_shard_and_rank;
-    }
-    const std::map<subgroup_id_t, uint32_t>& get_subgroup_to_num_received_offset() {
-        return subgroup_to_num_received_offset;
+
+    const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
+        return subgroup_settings;
     }
     std::vector<uint32_t> get_shard_sst_indices(uint32_t subgroup_num);
 };

@@ -93,7 +93,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                         [](size_t size) -> char* { assert(false); });
                 if(dest_size == 0) {
                     //Destination was "all nodes in my shard of the subgroup"
-                    int my_shard = view_manager.curr_view->multicast_group->get_subgroup_to_shard_and_rank().at(subgroup_id).first;
+                    int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
                     toFulfillQueue.front().get().fulfill_map(
                             view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);

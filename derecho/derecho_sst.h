@@ -152,10 +152,10 @@ public:
             // start off local_stability_frontier with the current time
             struct timespec start_time;
             clock_gettime(CLOCK_REALTIME, &start_time);
-	    auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
-	    for (size_t i = 0; i < local_stability_frontier.size(); ++i) {
-	      local_stability_frontier[row][i] = current_time;
-	    }
+            auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
+            for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
+                local_stability_frontier[row][i] = current_time;
+            }
         }
     }
 

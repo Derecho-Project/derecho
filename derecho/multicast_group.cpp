@@ -30,23 +30,8 @@ size_t index_of(T container, U elem) {
  * @param my_node_id The rank (ID) of this node in the group
  * @param sst The SST this group will use; created by the GMS (membership
  * service) for this group.
- * @param _free_message_buffers RDMCMessage buffers to use for RDMC sending/receiving
- * (there must be one for each sender in the group)
- * @param _max_payload_size The size of the largest possible message that will
- * be sent in this group, in bytes
  * @param _callbacks A set of functions to call when messages have reached
  * various levels of stability
- * @param _block_size The block size to use for RDMC
- * @param _window_size The window size (number of outstanding messages that can
- * be in progress at once before blocking sends) to use when sending a stream
- * of messages to the group; default is 3
- * @param timeout_ms The time that this node will wait for a sender in the group
- * to send its message before concluding that the sender has failed; default is 1ms
- * @param _type The type of RDMC algorithm to use; default is BINOMIAL_SEND
- * @param filename If provided, the name of the file in which to save persistent
- * copies of all messages received. If an empty filename is given (the default),
- * the node runs in non-persistent mode and no persistence callbacks will be
- * issued.
  */
 
 MulticastGroup::MulticastGroup(
@@ -54,11 +39,7 @@ MulticastGroup::MulticastGroup(
         std::shared_ptr<DerechoSST> sst,
         CallbackSet callbacks,
         uint32_t total_num_subgroups,
-        const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
-        const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
-        const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-        const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-        const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
+        const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const DerechoParams derecho_params,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<char> already_failed)
@@ -72,12 +53,8 @@ MulticastGroup::MulticastGroup(
           window_size(derecho_params.window_size),
           callbacks(callbacks),
           total_num_subgroups(total_num_subgroups),
-          subgroup_to_shard_and_rank(subgroup_to_shard_and_rank),
-          subgroup_to_senders_and_sender_rank(subgroup_to_senders_and_sender_rank),
-          subgroup_to_num_received_offset(subgroup_to_num_received_offset),
+          subgroup_settings(subgroup_settings_by_id),
           received_intervals(sst->num_received.size(), {-1, -1}),
-          subgroup_to_membership(subgroup_to_membership),
-          subgroup_to_mode(subgroup_to_mode),
           rdmc_group_num_offset(0),
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
@@ -100,8 +77,8 @@ MulticastGroup::MulticastGroup(
         node_id_to_sst_index[members[i]] = i;
     }
 
-    for(const auto p : subgroup_to_shard_and_rank) {
-        auto num_shard_members = subgroup_to_membership.at(p.first).size();
+    for(const auto p : subgroup_settings_by_id) {
+        auto num_shard_members = p.second.members.size();
         while(free_message_buffers[p.first].size() < window_size * num_shard_members) {
             free_message_buffers[p.first].emplace_back(max_msg_size);
         }
@@ -131,11 +108,7 @@ MulticastGroup::MulticastGroup(
         std::shared_ptr<DerechoSST> sst,
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
-        const std::map<subgroup_id_t, std::pair<uint32_t, uint32_t>>& subgroup_to_shard_and_rank,
-        const std::map<subgroup_id_t, std::pair<std::vector<int>, int>>& subgroup_to_senders_and_sender_rank,
-        const std::map<subgroup_id_t, uint32_t>& subgroup_to_num_received_offset,
-        const std::map<subgroup_id_t, std::vector<node_id_t>>& subgroup_to_membership,
-        const std::map<subgroup_id_t, Mode>& subgroup_to_mode,
+        const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<char> already_failed, uint32_t rpc_port)
         : logger(old_group.logger),
@@ -148,12 +121,8 @@ MulticastGroup::MulticastGroup(
           window_size(old_group.window_size),
           callbacks(old_group.callbacks),
           total_num_subgroups(total_num_subgroups),
-          subgroup_to_shard_and_rank(subgroup_to_shard_and_rank),
-          subgroup_to_senders_and_sender_rank(subgroup_to_senders_and_sender_rank),
-          subgroup_to_num_received_offset(subgroup_to_num_received_offset),
+          subgroup_settings(subgroup_settings_by_id),
           received_intervals(sst->num_received.size(), {-1, -1}),
-          subgroup_to_membership(subgroup_to_membership),
-          subgroup_to_mode(subgroup_to_mode),
           rpc_callback(old_group.rpc_callback),
           rdmc_group_num_offset(old_group.rdmc_group_num_offset + old_group.num_members),
           future_message_indices(total_num_subgroups, 0),
@@ -200,8 +169,8 @@ MulticastGroup::MulticastGroup(
         return std::move(msg);
     };
 
-    for(const auto p : subgroup_to_shard_and_rank) {
-        auto num_shard_members = subgroup_to_membership.at(p.first).size();
+    for(const auto p : subgroup_settings_by_id) {
+        auto num_shard_members = p.second.members.size();
         while(free_message_buffers[p.first].size() < window_size * num_shard_members) {
             free_message_buffers[p.first].emplace_back(max_msg_size);
         }
@@ -210,9 +179,9 @@ MulticastGroup::MulticastGroup(
     // Reclaim RDMCMessageBuffers from the old group, and supplement them with
     // additional if the group has grown.
     std::lock_guard<std::mutex> lock(old_group.msg_state_mtx);
-    for(const auto p : subgroup_to_shard_and_rank) {
+    for(const auto p : subgroup_settings_by_id) {
         const auto subgroup_num = p.first;
-        auto num_shard_members = subgroup_to_membership.at(p.first).size();
+        auto num_shard_members = p.second.members.size();
         // for later: don't move extra message buffers
         free_message_buffers[subgroup_num].swap(old_group.free_message_buffers[subgroup_num]);
         while(free_message_buffers[subgroup_num].size() < old_group.window_size * num_shard_members) {
@@ -251,7 +220,7 @@ MulticastGroup::MulticastGroup(
     old_group.locally_stable_sst_messages.clear();
 
     // Any messages that were being sent should be re-attempted.
-    for(auto p : subgroup_to_shard_and_rank) {
+    for(const auto& p : subgroup_settings_by_id) {
         auto subgroup_num = p.first;
         if(old_group.current_sends.size() > subgroup_num && old_group.current_sends[subgroup_num]) {
             pending_sends[subgroup_num].push(convert_msg(*old_group.current_sends[subgroup_num], subgroup_num));
@@ -337,16 +306,17 @@ std::function<void(persistence::message)> MulticastGroup::make_file_written_call
 }
 
 bool MulticastGroup::create_rdmc_sst_groups() {
-    for(const auto& p : subgroup_to_membership) {
+    for(const auto& p : subgroup_settings) {
         uint32_t subgroup_num = p.first;
-        const std::vector<node_id_t>& shard_members = p.second;
+        const SubgroupSettings& curr_subgroup_settings = p.second;
+        const std::vector<node_id_t>& shard_members = curr_subgroup_settings.members;
         std::size_t num_shard_members = shard_members.size();
-        uint32_t num_shard_senders;
-        std::vector<int> shard_senders;
-        shard_senders = subgroup_to_senders_and_sender_rank.at(subgroup_num).first;
-        num_shard_senders = get_num_senders(shard_senders);
+        std::vector<int> shard_senders = curr_subgroup_settings.senders;
+        uint32_t num_shard_senders = get_num_senders(shard_senders);
         auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
-        sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(sst, shard_sst_indices, window_size, shard_senders, subgroup_to_num_received_offset.at(subgroup_num), window_size * subgroup_num);
+        sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(
+                sst, shard_sst_indices, window_size, curr_subgroup_settings.senders,
+                curr_subgroup_settings.num_received_offset, window_size * subgroup_num);
         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
             // don't create RDMC group if the shard member is never going to send
             if(!shard_senders[shard_rank]) {
@@ -358,10 +328,10 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             // locally_stable_rdmc_messages and update the received count
             rdmc::completion_callback_t rdmc_receive_handler;
             rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank,
-                                    node_id, num_shard_members, num_shard_senders,
+                                    curr_subgroup_settings, node_id,
+                                    num_shard_members, num_shard_senders,
                                     shard_sst_indices](char* data, size_t size) {
                 assert(this->sst);
-                uint32_t num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 header* h = (header*)data;
                 long long int index = h->index;
@@ -389,11 +359,13 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                     locally_stable_rdmc_messages[subgroup_num][sequence_number] = {node_id, index, 0, 0};
                 }
 
-                auto new_num_received = resolve_num_received(beg_index, index, num_received_offset + sender_rank);
+                auto new_num_received = resolve_num_received(beg_index, index,
+                                                             curr_subgroup_settings.num_received_offset + sender_rank);
                 // deliver immediately if in raw mode
-                if(subgroup_to_mode.at(subgroup_num) == Mode::RAW) {
+                if(curr_subgroup_settings.mode == Mode::RAW) {
                     // issue stability upcalls for the recently sequenced messages
-                    for(uint i = sst->num_received[member_index][num_received_offset + sender_rank] + 1; i <= new_num_received; ++i) {
+                    for(uint i = sst->num_received[member_index][curr_subgroup_settings.num_received_offset + sender_rank] + 1;
+                        i <= new_num_received; ++i) {
                         auto seq_num = i * num_shard_senders + sender_rank;
                         if(!locally_stable_sst_messages[subgroup_num].empty()
                            && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
@@ -429,12 +401,12 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         }
                     }
                 }
-                if(new_num_received > sst->num_received[member_index][num_received_offset + sender_rank]) {
-                    sst->num_received[member_index][num_received_offset + sender_rank] = new_num_received;
+                if(new_num_received > sst->num_received[member_index][curr_subgroup_settings.num_received_offset + sender_rank]) {
+                    sst->num_received[member_index][curr_subgroup_settings.num_received_offset + sender_rank] = new_num_received;
                     // std::atomic_signal_fence(std::memory_order_acq_rel);
-                    auto* min_ptr = std::min_element(&sst->num_received[member_index][num_received_offset],
-                                                     &sst->num_received[member_index][num_received_offset + num_shard_senders]);
-                    uint min_index = std::distance(&sst->num_received[member_index][num_received_offset], min_ptr);
+                    auto* min_ptr = std::min_element(&sst->num_received[member_index][curr_subgroup_settings.num_received_offset],
+                                                     &sst->num_received[member_index][curr_subgroup_settings.num_received_offset + num_shard_senders]);
+                    uint min_index = std::distance(&sst->num_received[member_index][curr_subgroup_settings.num_received_offset], min_ptr);
                     auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
                     if((long long int)new_seq_num > sst->seq_num[member_index][subgroup_num]) {
                         logger->debug("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
@@ -450,7 +422,8 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                     }
                     // DERECHO_LOG(-1, -1, "num_received_put_start");
                     sst->put(shard_sst_indices,
-                             (char*)std::addressof(sst->num_received[0][num_received_offset + sender_rank]) - sst->getBaseAddress(),
+                             (char*)std::addressof(sst->num_received[0][curr_subgroup_settings.num_received_offset + sender_rank])
+                                     - sst->getBaseAddress(),
                              sizeof(long long int));
                     // DERECHO_LOG(-1, -1, "num_received_put_end");
                 }
@@ -497,7 +470,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                //Create a Message struct to receive the data into.
                                RDMCMessage msg;
                                msg.sender_id = node_id;
-                               msg.index = sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + sender_rank] + 1;
+                               msg.index = sst->num_received[member_index][subgroup_settings.at(subgroup_num).num_received_offset + sender_rank] + 1;
                                msg.size = length;
                                msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
                                free_message_buffers[subgroup_num].pop_back();
@@ -563,8 +536,8 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
                                                     msg.sender_id, (uint64_t)msg.index,
                                                     h->cooked_send};
             //the sequence number needs to use the sender's within-shard rank, not its ID
-            auto& shard_members = subgroup_to_membership.at(subgroup_num);
-            std::vector<int> shard_senders = subgroup_to_senders_and_sender_rank.at(subgroup_num).first;
+            auto& shard_members = subgroup_settings.at(subgroup_num).members;
+            std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
             auto num_shard_senders = get_num_senders(shard_senders);
             uint shard_rank;
             uint sender_rank = 0;
@@ -606,8 +579,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
                                                     msg.sender_id, (uint64_t)msg.index,
                                                     h->cooked_send};
             //the sequence number needs to use the sender's within-shard rank, not its ID
-            auto& shard_members = subgroup_to_membership.at(subgroup_num);
-            std::vector<int> shard_senders = subgroup_to_senders_and_sender_rank.at(subgroup_num).first;
+            auto& shard_members = subgroup_settings.at(subgroup_num).members;
+            std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
             auto num_shard_senders = get_num_senders(shard_senders);
             uint shard_rank;
             uint sender_rank = 0;
@@ -656,14 +629,11 @@ void MulticastGroup::deliver_messages_upto(
 }
 
 void MulticastGroup::register_predicates() {
-    for(const auto& p : subgroup_to_shard_and_rank) {
+    for(const auto& p : subgroup_settings) {
         subgroup_id_t subgroup_num = p.first;
-        uint32_t shard_num, shard_index;
-        std::tie(shard_num, shard_index) = p.second;
-        std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
-        auto num_shard_members = shard_members.size();
-        auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
-        std::vector<int> shard_senders = subgroup_to_senders_and_sender_rank.at(subgroup_num).first;
+        const SubgroupSettings& curr_subgroup_settings = p.second;
+        auto num_shard_members = curr_subgroup_settings.members.size();
+        std::vector<int> shard_senders = curr_subgroup_settings.senders;
         auto num_shard_senders = get_num_senders(shard_senders);
         std::map<uint32_t, uint32_t> shard_ranks_by_sender_rank;
         for(uint j = 0, l = 0; j < num_shard_members; ++j) {
@@ -673,13 +643,12 @@ void MulticastGroup::register_predicates() {
             }
         }
 
-        auto receiver_pred = [this, subgroup_num, shard_members, num_shard_members,
-                              shard_ranks_by_sender_rank, num_shard_senders,
-                              num_received_offset](const DerechoSST& sst) {
+        auto receiver_pred = [this, subgroup_num, curr_subgroup_settings,
+                              shard_ranks_by_sender_rank, num_shard_senders](const DerechoSST& sst) {
             for(uint j = 0; j < num_shard_senders; ++j) {
-                auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
+                auto num_received = sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + j] + 1;
                 uint32_t slot = num_received % window_size;
-                if((long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])]
+                if((long long int)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(j)])]
                                            [subgroup_num * window_size + slot]
                                                    .next_seq
                    == num_received / window_size + 1) {
@@ -692,17 +661,16 @@ void MulticastGroup::register_predicates() {
         if(!num_times) {
             num_times = 1;
         }
-        auto sst_receive_handler = [this, subgroup_num, shard_members, num_shard_members,
-                                    shard_ranks_by_sender_rank, num_shard_senders,
-                                    num_received_offset](uint32_t sender_rank, uint64_t index_ignored,
-                                                         volatile char* data, uint32_t size) {
+        auto sst_receive_handler = [this, subgroup_num, curr_subgroup_settings,
+                                    shard_ranks_by_sender_rank, num_shard_senders](uint32_t sender_rank, uint64_t index_ignored,
+                                                                                   volatile char* data, uint32_t size) {
             header* h = (header*)data;
             long long int index = h->index;
             auto beg_index = index;
             long long int sequence_number = index * num_shard_senders + sender_rank;
             logger->debug("Locally received message in subgroup {}, sender rank {}, index {}", subgroup_num, sender_rank, index);
 
-            auto node_id = shard_members[shard_ranks_by_sender_rank.at(sender_rank)];
+            auto node_id = curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
             // DERECHO_LOG(node_id, index, "received_message");
             locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
@@ -714,10 +682,10 @@ void MulticastGroup::register_predicates() {
                 locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, 0, 0};
             }
 
-            auto new_num_received = resolve_num_received(beg_index, index, num_received_offset + sender_rank);
-            if(subgroup_to_mode.at(subgroup_num) == Mode::RAW) {
+            auto new_num_received = resolve_num_received(beg_index, index, curr_subgroup_settings.num_received_offset + sender_rank);
+            if(curr_subgroup_settings.mode == Mode::RAW) {
                 // issue stability upcalls for the recently sequenced messages
-                for(uint i = sst->num_received[member_index][num_received_offset + sender_rank] + 1; i <= new_num_received; ++i) {
+                for(uint i = sst->num_received[member_index][curr_subgroup_settings.num_received_offset + sender_rank] + 1; i <= new_num_received; ++i) {
                     auto seq_num = i * num_shard_senders + sender_rank;
                     if(!locally_stable_sst_messages[subgroup_num].empty()
                        && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
@@ -753,34 +721,34 @@ void MulticastGroup::register_predicates() {
                     }
                 }
             }
-            sst->num_received[member_index][num_received_offset + sender_rank] = new_num_received;
+            sst->num_received[member_index][curr_subgroup_settings.num_received_offset + sender_rank] = new_num_received;
         };
         uint64_t receiver_cnt = 0;
-        auto receiver_trig = [this, num_times, sst_receive_handler, subgroup_num, shard_members,
+        auto receiver_trig = [this, num_times, sst_receive_handler, subgroup_num, curr_subgroup_settings,
                               num_shard_members, shard_ranks_by_sender_rank,
-                              num_shard_senders, num_received_offset, receiver_cnt](DerechoSST& sst) mutable {
+                              num_shard_senders, receiver_cnt](DerechoSST& sst) mutable {
             receiver_cnt++;
             // DERECHO_LOG(receiver_cnt, -1, "in receiver_trig");
             std::lock_guard<std::mutex> lock(msg_state_mtx);
             for(uint i = 0; i < num_times; ++i) {
                 for(uint j = 0; j < num_shard_senders; ++j) {
-                    auto num_received = sst.num_received_sst[member_index][num_received_offset + j] + 1;
+                    auto num_received = sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + j] + 1;
                     uint32_t slot = num_received % window_size;
-                    long long int next_seq = (long long int)sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq;
+                    long long int next_seq = (long long int)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].next_seq;
                     if(next_seq == num_received / window_size + 1) {
                         sst_receive_handler(j, num_received,
-                                            sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].buf,
-                                            sst.slots[node_id_to_sst_index.at(shard_members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].size);
-                        sst.num_received_sst[member_index][num_received_offset + j] = num_received;
+                                            sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].buf,
+                                            sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(j)])][subgroup_num * window_size + slot].size);
+                        sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + j] = num_received;
                     }
                 }
             }
-            sst.put((char*)std::addressof(sst.num_received_sst[0][num_received_offset]) - sst.getBaseAddress(),
+            sst.put((char*)std::addressof(sst.num_received_sst[0][curr_subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
                     sizeof(sst.num_received_sst[0][0]) * num_shard_senders);
             // std::atomic_signal_fence(std::memory_order_acq_rel);
-            auto* min_ptr = std::min_element(&sst.num_received[member_index][num_received_offset],
-                                             &sst.num_received[member_index][num_received_offset + num_shard_senders]);
-            int min_index = std::distance(&sst.num_received[member_index][num_received_offset], min_ptr);
+            auto* min_ptr = std::min_element(&sst.num_received[member_index][curr_subgroup_settings.num_received_offset],
+                                             &sst.num_received[member_index][curr_subgroup_settings.num_received_offset + num_shard_senders]);
+            int min_index = std::distance(&sst.num_received[member_index][curr_subgroup_settings.num_received_offset], min_ptr);
             auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
             if(new_seq_num > sst.seq_num[member_index][subgroup_num]) {
                 logger->debug("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
@@ -788,26 +756,26 @@ void MulticastGroup::register_predicates() {
                 sst.put((char*)std::addressof(sst.seq_num[0][subgroup_num]) - sst.getBaseAddress(),
                         sizeof(long long int));
             }
-            sst.put((char*)std::addressof(sst.num_received[0][num_received_offset]) - sst.getBaseAddress(),
+            sst.put((char*)std::addressof(sst.num_received[0][curr_subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
                     sizeof(long long int) * num_shard_senders);
         };
         receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
                                                                   sst::PredicateType::RECURRENT));
 
-        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+        if(curr_subgroup_settings.mode != Mode::RAW) {
             auto stability_pred = [this](
                     const DerechoSST& sst) { return true; };
             auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
             auto stability_trig =
-                    [this, subgroup_num, shard_members, num_shard_members, shard_sst_indices](DerechoSST& sst) mutable {
+                    [this, subgroup_num, curr_subgroup_settings, num_shard_members, shard_sst_indices](DerechoSST& sst) mutable {
                         // DERECHO_LOG(stability_cnt, -1, "in stability_trig");
                         // compute the min of the seq_num
                         long long int min_seq_num
-                                = sst.seq_num[node_id_to_sst_index.at(shard_members[0])][subgroup_num];
+                                = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
                         for(uint i = 0; i < num_shard_members; ++i) {
-                            if(sst.seq_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < min_seq_num) {
+                            if(sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_seq_num) {
                                 min_seq_num
-                                        = sst.seq_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num];
+                                        = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
                             }
                         }
                         if(min_seq_num > sst.stable_num[member_index][subgroup_num]) {
@@ -827,16 +795,16 @@ void MulticastGroup::register_predicates() {
 
             auto delivery_pred = [this](
                     const DerechoSST& sst) { return true; };
-            auto delivery_trig = [this, subgroup_num, shard_members, num_shard_members](
+            auto delivery_trig = [this, subgroup_num, curr_subgroup_settings, num_shard_members](
                     DerechoSST& sst) mutable {
                 // DERECHO_LOG(delivery_cnt, -1, "in delivery_trig");
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the stable_num
                 long long int min_stable_num
-                        = sst.stable_num[node_id_to_sst_index.at(shard_members[0])][subgroup_num];
+                        = sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
                 for(uint i = 0; i < num_shard_members; ++i) {
-                    if(sst.stable_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < min_stable_num) {
-                        min_stable_num = sst.stable_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num];
+                    if(sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_stable_num) {
+                        min_stable_num = sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
                     }
                 }
 
@@ -860,21 +828,21 @@ void MulticastGroup::register_predicates() {
                         RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
                         uint64_t msg_ts = 0;
                         if(msg.size > 0) {
-                          char* buf = msg.message_buffer.buffer.get();
-                          header* h = (header*)(buf);
-                          msg_ts = h->timestamp;
-                          deliver_message(msg, subgroup_num);
-                          if (msg.sender_id == members[member_index]) {
-                            pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_ts;
-                          }
-                          // make a version for persistent<t>/volatile<t>
-                          uint64_t msg_ts_us = msg_ts/1e3;
-                          if(msg_ts_us == 0) {
-                            struct timespec now;
-                            clock_gettime(CLOCK_REALTIME,&now);
-                            msg_ts_us = (uint64_t)now.tv_sec*1e6 + now.tv_nsec/1e3;
-                          }
-                          std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num, HLC{msg_ts_us,0});
+                            char* buf = msg.message_buffer.buffer.get();
+                            header* h = (header*)(buf);
+                            msg_ts = h->timestamp;
+                            deliver_message(msg, subgroup_num);
+                            if(msg.sender_id == members[member_index]) {
+                                pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_ts;
+                            }
+                            // make a version for persistent<t>/volatile<t>
+                            uint64_t msg_ts_us = msg_ts / 1e3;
+                            if(msg_ts_us == 0) {
+                                struct timespec now;
+                                clock_gettime(CLOCK_REALTIME, &now);
+                                msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
+                            }
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num, HLC{msg_ts_us, 0});
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
@@ -887,21 +855,21 @@ void MulticastGroup::register_predicates() {
                         SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                         uint64_t msg_ts = 0;
                         if(msg.size > 0) {
-                          char* buf = const_cast<char*>(msg.buf);
-                          header* h = (header*)(buf);
-                          msg_ts = h->timestamp;
-                          deliver_message(msg, subgroup_num);
-                          if(msg.sender_id == members[member_index]) {
-                            pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_ts;
-                          }
-                          // make a version for persistent<t>/volatile<t>
-                          uint64_t msg_ts_us = msg_ts/1e3;
-                          if(msg_ts_us == 0) {
-                            struct timespec now;
-                            clock_gettime(CLOCK_REALTIME,&now);
-                            msg_ts_us = (uint64_t)now.tv_sec*1e6 + now.tv_nsec/1e3;
-                          }
-                          std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num, HLC{msg_ts_us,0});
+                            char* buf = const_cast<char*>(msg.buf);
+                            header* h = (header*)(buf);
+                            msg_ts = h->timestamp;
+                            deliver_message(msg, subgroup_num);
+                            if(msg.sender_id == members[member_index]) {
+                                pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_ts;
+                            }
+                            // make a version for persistent<t>/volatile<t>
+                            uint64_t msg_ts_us = msg_ts / 1e3;
+                            if(msg_ts_us == 0) {
+                                struct timespec now;
+                                clock_gettime(CLOCK_REALTIME, &now);
+                                msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
+                            }
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num, HLC{msg_ts_us, 0});
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
@@ -918,7 +886,7 @@ void MulticastGroup::register_predicates() {
                             sizeof(long long int));
                     // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
                     //make post persistence request for ordered mode.
-                    if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+                    if(curr_subgroup_settings.mode != Mode::RAW) {
                         std::get<1>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)sst.delivered_num[member_index][subgroup_num]);
                     }
                 }
@@ -926,15 +894,12 @@ void MulticastGroup::register_predicates() {
 
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig, sst::PredicateType::RECURRENT));
 
-            int shard_sender_index;
-            std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
-            num_shard_senders = get_num_senders(shard_senders);
-            if(shard_sender_index >= 0) {
-                auto sender_pred = [this, subgroup_num, shard_members, num_shard_members, shard_sender_index, num_shard_senders](const DerechoSST& sst) {
-                    long long int seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + shard_sender_index;
+            if(curr_subgroup_settings.sender_rank >= 0) {
+                auto sender_pred = [this, subgroup_num, curr_subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
+                    long long int seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + curr_subgroup_settings.sender_rank;
                     for(uint i = 0; i < num_shard_members; ++i) {
-                        if(sst.delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < seq_num
-                           || (file_writer && sst.persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < seq_num)) {
+                        if(sst.delivered_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < seq_num
+                           || (file_writer && sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < seq_num)) {
                             return false;
                         }
                     }
@@ -948,14 +913,11 @@ void MulticastGroup::register_predicates() {
                                                                         sst::PredicateType::RECURRENT));
             }
         } else {
-            int shard_sender_index;
-            std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
-            num_shard_senders = get_num_senders(shard_senders);
-            if(shard_sender_index >= 0) {
-                auto sender_pred = [this, subgroup_num, shard_members, num_shard_members, shard_sender_index, num_shard_senders](const DerechoSST& sst) {
+            if(curr_subgroup_settings.sender_rank >= 0) {
+                auto sender_pred = [this, subgroup_num, curr_subgroup_settings, num_shard_members](const DerechoSST& sst) {
                     for(uint i = 0; i < num_shard_members; ++i) {
-                        auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
-                        if(sst.num_received[node_id_to_sst_index.at(shard_members[i])][num_received_offset + shard_sender_index]
+                        auto num_received_offset = subgroup_settings.at(subgroup_num).num_received_offset;
+                        if(sst.num_received[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][num_received_offset + curr_subgroup_settings.sender_rank]
                            < (long long int)(future_message_indices[subgroup_num] - 1 - window_size)) {
                             return false;
                         }
@@ -1034,28 +996,23 @@ void MulticastGroup::send_loop() {
             return false;
         }
         RDMCMessage& msg = pending_sends[subgroup_num].front();
-        uint32_t shard_num;
-        uint32_t shard_index;
 
-        std::tie(shard_num, shard_index) = subgroup_to_shard_and_rank.at(subgroup_num);
-        uint32_t num_shard_senders;
-        int shard_sender_index;
-        std::vector<int> shard_senders;
-        std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
-        num_shard_senders = get_num_senders(shard_senders);
+        int shard_sender_index = subgroup_settings.at(subgroup_num).sender_rank;
+        std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
+        uint32_t num_shard_senders = get_num_senders(shard_senders);
         assert(shard_sender_index >= 0);
 
         // std::cout << "num_received offset = " << subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index <<
         //         ", num_received entry " <<  sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index] <<
         //         ", message index = " << msg.index << std::endl;
-        if(sst->num_received[member_index][subgroup_to_num_received_offset.at(subgroup_num) + shard_sender_index] < msg.index - 1) {
+        if(sst->num_received[member_index][subgroup_settings.at(subgroup_num).num_received_offset + shard_sender_index] < msg.index - 1) {
             return false;
         }
 
-        std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
+        std::vector<node_id_t> shard_members = subgroup_settings.at(subgroup_num).members;
         auto num_shard_members = shard_members.size();
         assert(num_shard_members >= 1);
-        if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+        if(subgroup_settings.at(subgroup_num).mode != Mode::RAW) {
             for(uint i = 0; i < num_shard_members; ++i) {
                 if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((msg.index - window_size) * num_shard_senders + shard_sender_index)
                    || (file_writer && sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((msg.index - window_size) * num_shard_senders + shard_sender_index))) {
@@ -1064,7 +1021,7 @@ void MulticastGroup::send_loop() {
             }
         } else {
             for(uint i = 0; i < num_shard_members; ++i) {
-                auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
+                auto num_received_offset = subgroup_settings.at(subgroup_num).num_received_offset;
                 if(sst->num_received[node_id_to_sst_index.at(shard_members[i])][num_received_offset + shard_sender_index] < (long long int)(future_message_indices[subgroup_num] - 1 - window_size)) {
                     return false;
                 }
@@ -1131,9 +1088,9 @@ void MulticastGroup::check_failures_loop() {
         if(sst) {
             std::unique_lock<std::mutex> lock(msg_state_mtx);
             auto current_time = get_time();
-            for(auto p : subgroup_to_membership) {
+            for(auto p : subgroup_settings) {
                 auto subgroup_num = p.first;
-                auto members = p.second;
+                auto members = p.second.members;
                 auto sst_indices = get_shard_sst_indices(subgroup_num);
                 // clean up timestamps of persisted messages
                 auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
@@ -1183,19 +1140,16 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         return nullptr;
     }
 
-    uint32_t shard_num, shard_index;
-    std::tie(shard_num, shard_index) = subgroup_to_shard_and_rank.at(subgroup_num);
-    std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
+    std::vector<node_id_t> shard_members = subgroup_settings.at(subgroup_num).members;
     auto num_shard_members = shard_members.size();
     // if the current node is not a sender, shard_sender_index will be -1
     uint32_t num_shard_senders;
-    int shard_sender_index;
-    std::vector<int> shard_senders;
-    std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
+    std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
+    int shard_sender_index = subgroup_settings.at(subgroup_num).sender_rank;
     num_shard_senders = get_num_senders(shard_senders);
     assert(shard_sender_index >= 0);
 
-    if(subgroup_to_mode.at(subgroup_num) != Mode::RAW) {
+    if(subgroup_settings.at(subgroup_num).mode != Mode::RAW) {
         for(uint i = 0; i < num_shard_members; ++i) {
             if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((future_message_indices[subgroup_num] - window_size) * num_shard_senders + shard_sender_index)) {
                 return nullptr;
@@ -1203,7 +1157,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         }
     } else {
         for(uint i = 0; i < num_shard_members; ++i) {
-            auto num_received_offset = subgroup_to_num_received_offset.at(subgroup_num);
+            auto num_received_offset = subgroup_settings.at(subgroup_num).num_received_offset;
             if(sst->num_received[node_id_to_sst_index.at(shard_members[i])][num_received_offset + shard_sender_index] < (long long int)(future_message_indices[subgroup_num] - window_size)) {
                 return nullptr;
             }
@@ -1285,7 +1239,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
 }
 
 std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) {
-    std::vector<node_id_t> shard_members = subgroup_to_membership.at(subgroup_num);
+    std::vector<node_id_t> shard_members = subgroup_settings.at(subgroup_num).members;
 
     std::vector<uint32_t> shard_sst_indices;
     for(auto m : shard_members) {
@@ -1310,9 +1264,8 @@ void MulticastGroup::debug_print() {
         cout << endl;
 
         uint32_t num_shard_senders;
-        int shard_sender_index;
-        std::vector<int> shard_senders;
-        std::tie(shard_senders, shard_sender_index) = subgroup_to_senders_and_sender_rank.at(subgroup_num);
+        std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
+        int shard_sender_index = subgroup_settings.at(subgroup_num).sender_rank;
         num_shard_senders = get_num_senders(shard_senders);
         cout << "Printing last_received_messages" << endl;
         for(uint k = 0; k < num_members; ++k) {

@@ -322,17 +322,17 @@ ExternalCaller<SubgroupType>& Group<ReplicatedTypes...>::get_nonmember_subgroup(
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32_t subgroup_index) {
-  try {
+    try {
         auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
-	View& curr_view = view_manager.get_current_view().get();
-	auto subgroup_id = curr_view.subgroup_ids_by_type.at(typeid(SubgroupType)).at(subgroup_index);
-	const auto& shard_subviews = curr_view.subgroup_shard_views.at(subgroup_id);
-	std::vector<node_id_t> shard_reps(shard_subviews.size());
-	for (uint i = 0; i < shard_subviews.size(); ++i) {
-	  // for shard iteration to be possible, each shard must contain at least one member
-	  shard_reps[i] = shard_subviews[i].members.at(0);
-	}
-	return ShardIterator<SubgroupType>(EC, shard_reps);
+        View& curr_view = view_manager.get_current_view().get();
+        auto subgroup_id = curr_view.subgroup_ids_by_type.at(typeid(SubgroupType)).at(subgroup_index);
+        const auto& shard_subviews = curr_view.subgroup_shard_views.at(subgroup_id);
+        std::vector<node_id_t> shard_reps(shard_subviews.size());
+        for(uint i = 0; i < shard_subviews.size(); ++i) {
+            // for shard iteration to be possible, each shard must contain at least one member
+            shard_reps[i] = shard_subviews[i].members.at(0);
+        }
+        return ShardIterator<SubgroupType>(EC, shard_reps);
     } catch(std::out_of_range& ex) {
         throw invalid_subgroup_exception("No ExternalCaller exists for the requested subgroup; this node may be a member of the subgroup");
     }

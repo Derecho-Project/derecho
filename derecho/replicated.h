@@ -526,7 +526,7 @@ public:
         for(uint i = 1; i < shard_reps.size(); ++i) {
             query_result_vec.emplace_back(EC.template p2p_query<tag>(shard_reps[i], std::forward<Args>(args)...));
         }
-	return query_result_vec;
+        return query_result_vec;
     }
 };
 }

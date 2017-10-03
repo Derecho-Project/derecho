@@ -26,7 +26,7 @@ SubView::SubView(Mode mode,
                  const std::vector<ip_addr>& member_ips)
         : mode(mode),
           members(members),
-	  is_sender(members.size(), 1),
+          is_sender(members.size(), 1),
           member_ips(member_ips),
           my_rank(-1) {
     // if the sender information is not provided, assume that all members are senders
