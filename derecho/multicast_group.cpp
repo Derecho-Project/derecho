@@ -1286,7 +1286,6 @@ void MulticastGroup::debug_print() {
 
         uint32_t num_shard_senders;
         std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
-        int shard_sender_index = subgroup_settings.at(subgroup_num).sender_rank;
         num_shard_senders = get_num_senders(shard_senders);
         cout << "Printing last_received_messages" << endl;
         for(uint k = 0; k < num_members; ++k) {

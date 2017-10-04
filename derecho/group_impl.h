@@ -166,7 +166,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
     }
-    assert(replicated_objects.template get<FirstType>().empty());
+//    assert(replicated_objects.template get<FirstType>().empty());
     const auto& subgroup_ids = curr_view.subgroup_ids_by_type.at(std::type_index(typeid(FirstType)));
     for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids.size(); ++subgroup_index) {
         subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
@@ -178,25 +178,39 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             //"If this node is in subview->members for this shard"
             if(std::find(members.begin(), members.end(), my_id) != members.end()) {
                 in_subgroup = true;
-                if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
-                   && (*old_shard_leaders)[subgroup_id].size() > shard_num
-                   && (*old_shard_leaders)[subgroup_id][shard_num] > -1
-                   && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
-                    //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
-                    replicated_objects.template get<FirstType>().emplace(
-                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager));
-                    subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
-                } else {
-                    replicated_objects.template get<FirstType>().emplace(
-                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, rpc_manager,
-                                                                  factories.template get<FirstType>()));
+                //This node may have been re-assigned from a different shard, in which case we should delete the old shard's object state
+                auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
+                if(old_object != replicated_objects.template get<FirstType>().end()
+                        && old_object->second.get_shard_num() != shard_num) {
+                    replicated_objects.template get<FirstType>().erase(old_object);
                 }
-                //Store a reference to the Replicated<T> just constructed
-                objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
-                break;  //This node can be in at most one shard, so stop here
+                //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
+                if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
+                    if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
+                            && (*old_shard_leaders)[subgroup_id].size() > shard_num
+                            && (*old_shard_leaders)[subgroup_id][shard_num] > -1
+                            && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
+                        //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
+                        replicated_objects.template get<FirstType>().emplace(
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager));
+                        subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
+                    } else {
+                        replicated_objects.template get<FirstType>().emplace(
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager,
+                                                                      factories.template get<FirstType>()));
+                    }
+                    //Store a reference to the Replicated<T> just constructed
+                    objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
+                    break;  //This node can be in at most one shard, so stop here
+                }
             }
         }
         if(!in_subgroup) {
+            //If we have a Replicated<T> for the subgroup, but we're no longer a member, delete it
+            auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
+            if(old_object != replicated_objects.template get<FirstType>().end()){
+                replicated_objects.template get<FirstType>().erase(old_object);
+            }
             external_callers.template get<FirstType>().emplace(subgroup_index,
                                                                ExternalCaller<FirstType>(my_id, subgroup_id, rpc_manager));
         }

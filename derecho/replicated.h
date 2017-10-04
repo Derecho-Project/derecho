@@ -63,7 +63,11 @@ private:
     /** The ID of this node */
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that replicates this object. */
-    subgroup_id_t subgroup_id;
+    const subgroup_id_t subgroup_id;
+    /** The index, within the subgroup, of the shard that replicates this object.
+     * This needs to be stored in order to detect if a node has moved to a different
+     * shard within the same subgroup (and hence its Replicated state is obsolete). */
+    const uint32_t shard_num;
     /** Reference to the RPCManager for the Group this Replicated is in */
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
@@ -140,12 +144,13 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager,
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
+              shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
@@ -166,11 +171,12 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
+              shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
@@ -180,6 +186,7 @@ public:
                                    user_object_ptr(std::move(rhs.user_object_ptr)),
                                    node_id(rhs.node_id),
                                    subgroup_id(rhs.subgroup_id),
+                                   shard_num(rhs.shard_num),
                                    group_rpc_manager(rhs.group_rpc_manager),
                                    wrapped_this(std::move(rhs.wrapped_this)),
                                    p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
@@ -195,6 +202,10 @@ public:
      */
     bool is_valid() const {
         return *user_object_ptr && true;
+    }
+
+    uint32_t get_shard_num() const {
+        return shard_num;
     }
 
     /**

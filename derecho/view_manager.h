@@ -171,14 +171,20 @@ private:
     /** Updates num_acked to acknowledge a proposed change when the leader increments
      * num_changes. Mostly intended for non-leaders, but also runs on the leader. */
     void acknowledge_proposed_change(DerechoSST& gmsSST);
-    /** Runs when at least one view change has been committed by the leader, and
-     * starts the process of changing to a new view. Ends by awaiting the
-     * "meta-wedged" state and registers finish_view_change() to trigger when
-     * meta-wedged is true. */
-    void start_view_change(DerechoSST& gmsSST);
+    /** Runs when at least one membership change has been committed by the leader, and
+     * wedges the current view in preparation for a new view. Ends by awaiting the
+     * "meta-wedged" state and registers start_view_change() to trigger when meta-wedged
+     * is true. */
+    void start_meta_wedge(DerechoSST& gmsSST);
     /** Runs when all live nodes have reported they have wedged the current view
-     * (meta-wedged), and finishes installing the new view. */
-    void finish_view_change(DerechoSST& gmsSST);
+     * (meta-wedged), and does ragged edge cleanup to finalize the terminated epoch.
+     * Determines if the next view will be adequate, and only proceeds to start a view change if it will be. */
+    void terminate_epoch(DerechoSST& gmsSST);
+    /**  and finishes installing the new view. */
+    void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
+                            std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
+                            uint32_t next_num_received_size,
+                            DerechoSST& gmsSST);
 
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
@@ -202,6 +208,10 @@ private:
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
+    static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
+                                                const DerechoSST& gmsSST,
+                                                std::shared_ptr<spdlog::logger> logger);
+
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
@@ -218,7 +228,8 @@ private:
                                    const DerechoParams& derecho_params);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
      * (and copying over the SST data from the current view). */
-    void transition_multicast_group();
+    void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
+                                    const uint32_t new_num_received_size);
     /** Initializes the current View with subgroup information, and creates the
      * subgroup-related maps that MulticastGroup's constructor needs based on
      * this information. */
