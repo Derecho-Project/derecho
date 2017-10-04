@@ -216,23 +216,40 @@ private:
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
     void register_predicates();
-    /** Constructor helper called when creating a new group; waits for a new
-     * member to join, then sends it the view. */
-    void await_second_member(const node_id_t my_id);
+    /** Constructor helper for the leader when it first starts; waits for enough
+     * new nodes to join to make the first view adequately provisioned. */
+    void await_first_view(const node_id_t my_id,
+                          std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                          uint32_t& num_received_size);
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
 
-    /** Creates the SST and MulticastGroup for the current view, using the current view's member list.
-     * The parameters are all the possible parameters for constructing MulticastGroup. */
+    /**
+     * Creates the SST and MulticastGroup for the first time, using the current view's member list.
+     * @param callbacks The custom callbacks to supply to the MulticastGroup
+     * @param derecho_params The initial DerechoParams to supply to the MulticastGroup
+     * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
+     * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
+     */
     void construct_multicast_group(CallbackSet callbacks,
-                                   const DerechoParams& derecho_params);
-    /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view
-     * (and copying over the SST data from the current view). */
+                                   const DerechoParams& derecho_params,
+                                   const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                                   const uint32_t num_received_size);
+    /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
+     * and copies over the SST data from the current view. */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size);
-    /** Initializes the current View with subgroup information, and creates the
-     * subgroup-related maps that MulticastGroup's constructor needs based on
-     * this information. */
+    /**
+     * Initializes the current View with subgroup information, and creates the
+     * subgroup-settings map that MulticastGroup's constructor needs based on
+     * this information. If the current View is inadequate based on the subgroup
+     * allocation functions, it will be marked as inadequate and no subgroup
+     * settings will be provided.
+     * @param prev_view The previous View, which may be null if the current view is the first one
+     * @param curr_view A mutable reference to the current View, which will have its SubViews initialized
+     * @param subgroup_settings A mutable reference to the subgroup settings map, which will be filled out
+     * @return num_received_size for the SST based on the computed subgroup membership
+     */
     uint32_t make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                 View& curr_view,
                                 std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
@@ -393,5 +410,32 @@ public:
 
     void debug_print_status() const;
 };
+
+/**
+ * Base case for functional_append, with one argument.
+ */
+template<typename T>
+std::vector<T> functional_append(const std::vector<T>& original, const T& item) {
+    std::vector<T> appended_vec(original);
+    appended_vec.emplace_back(item);
+    return appended_vec;
+}
+
+/**
+ * Returns a new std::vector value that is equal to the parameter std::vector
+ * with the rest of the arguments appended. Adds some missing functionality to
+ * std::vector: the ability to append to a const vector without taking a
+ * several-line detour to call the void emplace_back() method.
+ * @param original The vector that should be the prefix of the new vector
+ * @param first_item The first element to append to the original vector
+ * @param rest_items The rest of the elements to append to the original vector
+ * @return A new vector (by value), containing a copy of original plus all the
+ * elements given as arguments.
+ */
+template<typename T, typename...RestArgs>
+std::vector<T> functional_append(const std::vector<T>& original, const T& first_item, RestArgs... rest_items) {
+    std::vector<T> appended_vec = functional_append(original, first_item);
+    return functional_append(appended_vec, rest_items...);
+}
 
 } /* namespace derecho */

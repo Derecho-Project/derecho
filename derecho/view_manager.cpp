@@ -28,8 +28,8 @@ ViewManager::ViewManager(const node_id_t my_id,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
           gms_port(gms_port),
-          curr_view(std::make_unique<View>(0, std::vector<node_id_t>{0}, std::vector<ip_addr>{my_ip}, std::vector<char>{0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 1, 0)),
-          last_suspected(2),  //The initial view always has 2 members
+          curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr>{my_ip},
+                                           std::vector<char>{0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 1, 0)),
           server_socket(gms_port),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -37,8 +37,9 @@ ViewManager::ViewManager(const node_id_t my_id,
           derecho_params(derecho_params),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     initialize_rdmc_sst();
-    //Wait for the first client (second group member) to join
-    await_second_member(my_id);
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
+    uint32_t num_received_size = 0;
+    await_first_view(my_id, subgroup_settings_map, num_received_size);
 
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
@@ -48,7 +49,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     }
 
     logger->debug("Initializing SST and RDMC for the first time.");
-    construct_multicast_group(callbacks, derecho_params);
+    construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
 }
 
 ViewManager::ViewManager(const node_id_t my_id,
@@ -81,9 +82,11 @@ ViewManager::ViewManager(const node_id_t my_id,
         persist_object(*curr_view, view_file_name);
         persist_object(derecho_params, params_file_name);
     }
-    logger->debug("Initializing SST and RDMC for the first time.");
 
-    construct_multicast_group(callbacks, derecho_params);
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
+    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
+    logger->debug("Initializing SST and RDMC for the first time.");
+    construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -106,11 +109,16 @@ ViewManager::ViewManager(const std::string& recovery_filename,
           derecho_params(0, 0),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     auto last_view = load_view(view_file_name);
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
+    uint32_t num_received_size = 0;
 
     if(my_id != last_view->members[last_view->rank_of_leader()]) {
         tcp::socket leader_socket(last_view->member_ips[last_view->rank_of_leader()], gms_port);
         receive_configuration(my_id, leader_socket);
         //derecho_params will be initialized by the existing view's leader
+        num_received_size = make_subgroup_maps(last_view, *curr_view, subgroup_settings_map);
+        curr_view->my_rank = curr_view->rank_of(my_id);
+        initialize_rdmc_sst();
     } else {
         /* This should only happen if an entire group failed and the leader is restarting;
          * otherwise the view obtained from the recovery script will have a leader that is
@@ -128,7 +136,8 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                     std::string(recovery_filename + persistence::PARAMATERS_EXTENSION)));
         }
 
-        await_second_member(my_id);
+
+        await_first_view(my_id, subgroup_settings_map, num_received_size);
     }
     curr_view->my_rank = curr_view->rank_of(my_id);
     last_suspected = std::vector<bool>(curr_view->members.size());
@@ -140,7 +149,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     persist_object(derecho_params, params_file_name);
 
     logger->debug("Initializing SST and RDMC for the first time.");
-    construct_multicast_group(callbacks, derecho_params);
+    construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -206,32 +215,72 @@ void ViewManager::start() {
     }
 }
 
-void ViewManager::await_second_member(const node_id_t my_id) {
-    tcp::socket client_socket = server_socket.accept();
-    node_id_t joiner_id = 0;
-    client_socket.exchange(my_id, joiner_id);
-    ip_addr& joiner_ip = client_socket.remote_ip;
-    ip_addr my_ip = client_socket.get_self_ip();
-    curr_view = std::make_unique<View>(0,
-                                       std::vector<node_id_t>{my_id, joiner_id},
-                                       std::vector<ip_addr>{my_ip, joiner_ip},
-                                       std::vector<char>{0, 0},
-                                       std::vector<node_id_t>{joiner_id});
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
-        bool success = client_socket.write(bytes, size);
-        assert(success);
-    };
-
-    std::size_t size_of_view = mutils::bytes_size(*curr_view);
-    client_socket.write((char*)&size_of_view, sizeof(size_of_view));
-    mutils::post_object(bind_socket_write, *curr_view);
-    std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
-    client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
-    mutils::post_object(bind_socket_write, derecho_params);
-    //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
-    mutils::post_object(bind_socket_write, std::size_t{0});
-    rdma::impl::verbs_add_connection(joiner_id, joiner_ip, my_id);
-    sst::add_node(joiner_id, joiner_ip);
+void ViewManager::await_first_view(const node_id_t my_id,
+                                   std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                                   uint32_t& num_received_size) {
+    std::list<tcp::socket> waiting_join_sockets;
+    curr_view->is_adequately_provisioned = false;
+    bool joiner_failed;
+    do {
+        while(!curr_view->is_adequately_provisioned) {
+            tcp::socket client_socket = server_socket.accept();
+            node_id_t joiner_id = 0;
+            client_socket.exchange(my_id, joiner_id);
+            ip_addr& joiner_ip = client_socket.remote_ip;
+            ip_addr my_ip = client_socket.get_self_ip();
+            //Construct a new view by appending this joiner to the previous view
+            //None of these views are ever installed, so we don't use curr_view/next_view like normal
+            curr_view = std::make_unique<View>(curr_view->vid,
+                                               functional_append(curr_view->members, joiner_id),
+                                               functional_append(curr_view->member_ips, joiner_ip),
+                                               std::vector<char>(curr_view->num_members + 1, 0),
+                                               functional_append(curr_view->joined, joiner_id));
+            num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);
+            waiting_join_sockets.emplace_back(std::move(client_socket));
+        }
+        /* Now that enough joiners are queued up to make an adequate view,
+         * send it to all of them.  */
+        joiner_failed = false;
+        while(!waiting_join_sockets.empty()) {
+            ip_addr& joiner_ip = waiting_join_sockets.front().remote_ip;
+            node_id_t joiner_id = curr_view->members[curr_view->rank_of(joiner_ip)];
+            auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
+                bool success = waiting_join_sockets.front().write(bytes, size);
+                assert(success);
+            };
+            std::size_t size_of_view = mutils::bytes_size(*curr_view);
+            bool write_success = waiting_join_sockets.front().write((char*)&size_of_view, sizeof(size_of_view));
+            if(!write_success) {
+                //The client crashed while waiting to join, so we must remove it from the view and try again
+                waiting_join_sockets.pop_front();
+                std::vector<node_id_t> filtered_members(curr_view->members.size()-1);
+                std::vector<ip_addr> filtered_ips(curr_view->member_ips.size()-1);
+                std::vector<node_id_t> filtered_joiners(curr_view->joined.size()-1);
+                std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
+                                 filtered_members.begin(), joiner_id);
+                std::remove_copy(curr_view->member_ips.begin(), curr_view->member_ips.end(),
+                                 filtered_ips.begin(), joiner_ip);
+                std::remove_copy(curr_view->joined.begin(), curr_view->joined.end(),
+                                 filtered_joiners.begin(), joiner_id);
+                curr_view = std::make_unique<View>(0, filtered_members, filtered_ips,
+                                                   std::vector<char>(curr_view->num_members-1, 0), filtered_joiners);
+                /* This will update curr_view->is_adequately_provisioned, so now we must
+                 * start over from the beginning and test if we need to wait for more joiners. */
+                num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);
+                joiner_failed = true;
+                break;
+            }
+            mutils::post_object(bind_socket_write, *curr_view);
+            std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
+            waiting_join_sockets.front().write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
+            mutils::post_object(bind_socket_write, derecho_params);
+            //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
+            mutils::post_object(bind_socket_write, std::size_t{0});
+            rdma::impl::verbs_add_connection(joiner_id, joiner_ip, my_id);
+            sst::add_node(joiner_id, joiner_ip);
+            waiting_join_sockets.pop_front();
+        }
+    } while(joiner_failed);
 }
 
 void ViewManager::initialize_rdmc_sst() {
@@ -708,10 +757,9 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
 void ViewManager::construct_multicast_group(CallbackSet callbacks,
-                                            const DerechoParams& derecho_params) {
-    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
-    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view,
-                                                    subgroup_settings);
+                                            const DerechoParams& derecho_params,
+                                            const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                                            const uint32_t num_received_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
