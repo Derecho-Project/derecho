@@ -906,7 +906,9 @@ void MulticastGroup::register_predicates() {
                     }
                 }
                 // callbacks
-                callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+                if(callbacks.global_persistence_callback) {
+                    callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+                }
             };
 
             persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));

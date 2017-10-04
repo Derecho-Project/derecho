@@ -36,10 +36,13 @@ ViewManager::ViewManager(const node_id_t my_id,
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
-    initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
     await_first_view(my_id, subgroup_settings_map, num_received_size);
+
+    curr_view->my_rank = curr_view->rank_of(my_id);
+    last_suspected = std::vector<bool>(curr_view->members.size());
+    initialize_rdmc_sst();
 
     if(!derecho_params.filename.empty()) {
         view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
@@ -276,8 +279,6 @@ void ViewManager::await_first_view(const node_id_t my_id,
             mutils::post_object(bind_socket_write, derecho_params);
             //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
             mutils::post_object(bind_socket_write, std::size_t{0});
-            rdma::impl::verbs_add_connection(joiner_id, joiner_ip, my_id);
-            sst::add_node(joiner_id, joiner_ip);
             waiting_join_sockets.pop_front();
         }
     } while(joiner_failed);
