@@ -1,20 +1,16 @@
 /**
- * @file typed_subgroup_test.cpp
+ * @file long_subgroup_test.cpp
  *
- * @date Mar 1, 2017
+ * @date Oct 5, 2017
+ * @author edward
  */
-
-#include <chrono>
 #include <iostream>
-#include <map>
-#include <memory>
-#include <string>
-#include <thread>
-#include <vector>
+#include <sstream>
 
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include "test_objects.h"
+
 
 using std::cout;
 using std::endl;
@@ -35,10 +31,8 @@ int main(int argc, char** argv) {
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
-    derecho::CallbackSet callback_set{stability_callback, {}};
+    derecho::CallbackSet callback_set{stability_callback};
 
-    //Since this is just a test, assume there will always be 6 members with IDs 0-5
-    //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < 3) {
@@ -50,6 +44,7 @@ int main(int argc, char** argv) {
                   //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
                   subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
+                  cout << "Foo function setting next_unassigned_rank to " << next_unassigned_rank << endl;
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
@@ -61,6 +56,7 @@ int main(int argc, char** argv) {
                   std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
                   subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
+                  cout << "Bar function setting next_unassigned_rank to " << next_unassigned_rank << endl;
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
@@ -71,7 +67,8 @@ int main(int argc, char** argv) {
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   std::vector<derecho::node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
                   subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes));
-                  next_unassigned_rank += 3;
+                  next_unassigned_rank = std::max(next_unassigned_rank, 5);
+                  cout << "Cache function setting next_unassigned_rank to " << next_unassigned_rank << endl;
                   return subgroup_vector;
               }}},
             {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache))}};
@@ -97,87 +94,54 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
-    if(node_id == 0) {
+    if(node_id < 3) {
         Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
-        cout << "Appending to Bar" << endl;
-        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
-        cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
-        foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
-    }
-    if(node_id == 1) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
-        int new_value = 3;
-        cout << "Changing Foo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
-        decltype(results)::ReplyMap& replies = results.get();
-        cout << "Got a reply map!" << endl;
-        for(auto& reply_pair : replies) {
-            cout << "Reply from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
-        }
-        cout << "Appending to Bar" << endl;
-        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
-    }
-    if(node_id == 2) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
-        for(auto& reply_pair : foo_results.get()) {
-            cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
-        }
-        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 2...");
-        cout << "Printing log from Bar" << endl;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
-        for(auto& reply_pair : bar_results.get()) {
-            cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
-        }
-        cout << "Clearing Bar's log" << endl;
-        bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
-    }
-
-    if(node_id == 3) {
-        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
-        cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
-        bool found = false;
-        while(!found) {
-            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Ken");
-            derecho::rpc::QueryResults<bool>::ReplyMap& replies = results.get();
-            //Fold "&&" over the results to see if they're all true
-            bool contains_accum = true;
-            for(auto& reply_pair : replies) {
-                bool contains_result = reply_pair.second.get();
-                cout << std::boolalpha << "  Reply from node " << reply_pair.first << ": " << contains_result << endl;
-                contains_accum = contains_accum && contains_result;
+        int trials = 1000;
+        cout << "Changing Foo's state " << trials << " times" << endl;
+        for(int count = 0; count < trials; ++count) {
+            derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(count);
+            bool results_total = true;
+            for(auto& reply_pair : results.get()) {
+                results_total = results_total && reply_pair.second.get();
             }
-            found = contains_accum;
         }
-        cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<RPC_NAME(get)>("Ken");
-        for(auto& reply_pair : results.get()) {
-            cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        cout << "Changing Bar's state " << trials << " times" << endl;
+        for(int count = 0; count < trials; ++count) {
+            std::stringstream string_builder;
+            string_builder << "Update " << count << "  ";
+            bar_rpc_handle.ordered_send<RPC_NAME(append)>(string_builder.str());
         }
+        ExternalCaller<Cache>& cache_p2p_handle = group->get_nonmember_subgroup<Cache>();
+        int p2p_target = 4;
+        derecho::rpc::QueryResults<std::string> result = cache_p2p_handle.p2p_query<RPC_NAME(get)>(p2p_target, "Stuff");
+        std::string response = result.get().get(p2p_target);
+        cout << "Node " << p2p_target << " had cache entry Stuff = " << response << endl;
     }
-    if(node_id == 4) {
+    else {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
-        cout << "Putting Ken = Birman in the cache" << endl;
-        //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-        derecho::node_id_t p2p_target = 2;
-        cout << "Reading Foo's state from node " << p2p_target << endl;
-        ExternalCaller<Foo>& p2p_foo_handle = group->get_nonmember_subgroup<Foo>();
-        derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<RPC_NAME(read_state)>(p2p_target);
-        int response = foo_results.get().get(p2p_target);
-        cout << "  Response: " << response << endl;
-    }
-    if(node_id == 5) {
-        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
-        cout << "Putting Ken = Woodberry in the cache" << endl;
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
+        int trials = 1000;
+        cout << "Changing Cache's state " << trials << " times" << endl;
+        for(int count = 0; count < trials; ++count) {
+            std::stringstream string_builder;
+            string_builder << "Node " << node_id << " update " << count;
+            cache_rpc_handle.ordered_send<RPC_NAME(put)>("Stuff", string_builder.str());
+            if(node_id == 5 && count == 100) {
+                //I want to test this node crashing and re-joining with a different ID
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                return 0;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        ExternalCaller<Foo>& foo_p2p_handle = group->get_nonmember_subgroup<Foo>();
+        int foo_p2p_target = 1;
+        derecho::rpc::QueryResults<int> foo_result = foo_p2p_handle.p2p_query<RPC_NAME(read_state)>(foo_p2p_target);
+        cout << "Node " << foo_p2p_target << " returned Foo state = " << foo_result.get().get(foo_p2p_target) << endl;
+        ExternalCaller<Bar>& bar_p2p_handle = group->get_nonmember_subgroup<Bar>();
+        int bar_p2p_target = 0;
+        derecho::rpc::QueryResults<std::string> bar_result = bar_p2p_handle.p2p_query<RPC_NAME(print)>(bar_p2p_target);
+        cout << "Node " << bar_p2p_target << " has Bar log = " << bar_result.get().get(bar_p2p_target) << endl;
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

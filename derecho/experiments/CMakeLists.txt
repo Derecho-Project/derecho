@@ -93,9 +93,17 @@ target_link_libraries(log_recovery_crash derecho)
 add_executable(local_filewriter_test local_filewriter_test.cpp)
 target_link_libraries(local_filewriter_test derecho)
 
+# p2p_query_test
+add_executable(p2p_query_test p2p_query_test.cpp initialize.cpp)
+target_link_libraries(p2p_query_test derecho)
+
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
+
+# long_subgroup_test
+add_executable(long_subgroup_test long_subgroup_test.cpp initialize.cpp)
+target_link_libraries(long_subgroup_test derecho)
 
 # typed_subgroup_bw_test
 add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)

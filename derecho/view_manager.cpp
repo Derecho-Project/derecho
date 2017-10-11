@@ -29,7 +29,7 @@ ViewManager::ViewManager(const node_id_t my_id,
         : logger(spdlog::get("debug_log")),
           gms_port(gms_port),
           curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr>{my_ip},
-                                           std::vector<char>{0}, 0, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 1, 0)),
+                                           std::vector<char>{0}, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 0)),
           server_socket(gms_port),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -194,7 +194,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     derecho_params = *params_ptr;
 }
 
-void ViewManager::start() {
+void ViewManager::finish_setup() {
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     logger->debug("Done setting up initial SST and RDMC");
@@ -209,13 +209,16 @@ void ViewManager::start() {
 
     create_threads();
     register_predicates();
-    curr_view->gmsSST->start_predicate_evaluation();
-    logger->debug("Starting predicate evaluation");
 
     shared_lock_t lock(view_mutex);
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
     }
+}
+
+void ViewManager::start() {
+    logger->debug("Starting predicate evaluation");
+    curr_view->gmsSST->start_predicate_evaluation();
 }
 
 void ViewManager::await_first_view(const node_id_t my_id,
@@ -535,8 +538,8 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
             SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
                                           .at(subgroup_shard_pair.second);
-            node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
-                    subgroup_shard_pair.first, subgroup_shard_pair.second)];
+            node_id_t shard_leader = shard_view.members.at(curr_view->subview_rank_of_shard_leader(
+                    subgroup_shard_pair.first, subgroup_shard_pair.second));
             if(!gmsSST.global_min_ready[curr_view->rank_of(shard_leader)][subgroup_shard_pair.first])
                 return false;
         }
@@ -571,6 +574,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         uint32_t next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
         //If make_subgroup_maps find that the next view would be inadequate, it will mark next_view
         if(!next_view->is_adequately_provisioned) {
+            logger->debug("Next view would not be adequately provisioned, waiting for more joins.");
             //Re-register the predicates for accepting and acknowledging joins
             register_predicates();
             //But remove the one for start_meta_wedged
@@ -609,6 +613,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
                                      uint32_t next_num_received_size,
                                      DerechoSST& gmsSST) {
     assert(next_view);
+    logger->debug("Attempting to finish view change to view {}", next_view->vid);
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
     //If this was triggered as a retry, next_view will be inadequately provisioned from last time
     if(!next_view->is_adequately_provisioned) {
@@ -619,6 +624,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     }
     //If next_view is still inadequate after re-running make_next_view, back out and wait again
     if(!next_view->is_adequately_provisioned) {
+        logger->debug("Next view would still be inadequate, going back to waiting.");
         int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
         auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
             if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
@@ -721,7 +727,6 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 
     // Register predicates in the new view
     register_predicates();
-    curr_view->gmsSST->start_predicate_evaluation();
 
     // First task with my new view...
     if(curr_view->i_am_new_leader())  // I'm the new leader and everyone who hasn't failed agrees
@@ -742,6 +747,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
                 //send its object state to the new members
                 for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
+                        logger->debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, shard_joiner);
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }
                 }
@@ -751,7 +757,10 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
+    logger->debug("Initializing local Replicated Objects");
     initialize_subgroup_objects(my_id, *curr_view, old_shard_leaders_by_id);
+    // It's only safe to start evaluating predicates once all RPC objects exist
+    curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
 }
 

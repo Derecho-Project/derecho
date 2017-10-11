@@ -81,6 +81,8 @@ Group<ReplicatedTypes...>::Group(
     set_up_components();
     persistence_manager.set_objects(std::addressof(replicated_objects));
     persistence_manager.set_view_manager(std::addressof(view_manager));
+    view_manager.finish_setup();
+    rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
 }
@@ -119,10 +121,12 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
     set_up_components();
     persistence_manager.set_objects(std::addressof(replicated_objects));
     persistence_manager.set_view_manager(std::addressof(view_manager));
-    view_manager.start();
+    view_manager.finish_setup();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     receive_objects(subgroups_and_leaders);
+    rpc_manager.start_listening();
+    view_manager.start();
     persistence_manager.start();
 }
 
@@ -145,6 +149,8 @@ Group<ReplicatedTypes...>::Group(const std::string& recovery_filename,
     //TODO: This is the recover-from-saved-file constructor; I don't know how it will work
     construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     set_up_components();
+    view_manager.finish_setup();
+    rpc_manager.start_listening();
     view_manager.start();
 }
 
@@ -182,6 +188,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
                 if(old_object != replicated_objects.template get<FirstType>().end()
                         && old_object->second.get_shard_num() != shard_num) {
+                    logger->debug("Deleting old Replicated Object state for type {}; I was reassigned from shard {} to shard {}", typeid(FirstType).name(), old_object->second.get_shard_num(), shard_num);
                     replicated_objects.template get<FirstType>().erase(old_object);
                 }
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
@@ -195,6 +202,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                                 subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager));
                         subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
                     } else {
+                        logger->debug("Constructing new Replicated Object state for type {}", typeid(FirstType).name());
                         replicated_objects.template get<FirstType>().emplace(
                                 subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager,
                                                                       factories.template get<FirstType>()));
@@ -209,6 +217,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             //If we have a Replicated<T> for the subgroup, but we're no longer a member, delete it
             auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
             if(old_object != replicated_objects.template get<FirstType>().end()){
+                logger->debug("Deleting old Replicated Object state (of type {}) for subgroup {} because this node is no longer a member", typeid(FirstType).name(), subgroup_index);
                 replicated_objects.template get<FirstType>().erase(old_object);
             }
             external_callers.template get<FirstType>().emplace(subgroup_index,
@@ -274,11 +283,11 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>("derecho_debug_log", 1024 * 1024 * 5, 3));
     // Uncomment this to get debugging output printed to the terminal
-    // log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
+    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
     std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [%l] %v");
-    //log->set_level(spdlog::level::debug);
-    log->set_level(spdlog::level::off);
+    log->set_level(spdlog::level::trace);
+//    log->set_level(spdlog::level::off);
     auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
     log->debug("Program start time (microseconds): {}", start_ms.count());
@@ -358,12 +367,14 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = rpc_manager.get_socket(subgroup_and_leader.second);
+        logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read((char*)&buffer_size, sizeof(buffer_size));
         assert(success);
         char buffer[buffer_size];
         objects_by_subgroup_id.at(subgroup_and_leader.first).get().receive_object(buffer);
     }
+    logger->debug("Done receiving all Replicated Objects from subgroup leaders");
 }
 
 template <typename... ReplicatedTypes>

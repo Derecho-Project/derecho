@@ -21,6 +21,12 @@ RPCManager::~RPCManager() {
     connections.destroy();
 }
 
+void RPCManager::start_listening() {
+    std::lock_guard<std::mutex> lock(thread_start_mutex);
+    thread_start = true;
+    thread_start_cv.notify_all();
+}
+
 LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
     return connections.get_socket(node);
 }
@@ -202,6 +208,11 @@ void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
     auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
     std::unique_ptr<char[]> rpcBuffer = std::unique_ptr<char[]>(new char[max_payload_size]);
+    while(!thread_start) {
+        std::unique_lock<std::mutex> lock(thread_start_mutex);
+        thread_start_cv.wait(lock, [this]() { return thread_start; });
+    }
+    logger->debug("P2P listening thread started");
     while(!thread_shutdown) {
         auto other_id = connections.probe_all();
         if(other_id < 0) {

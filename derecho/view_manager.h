@@ -352,7 +352,14 @@ public:
 
     ~ViewManager();
 
-    /** Finishes initializing the ViewManager and starts the GMS (i.e. starts evaluating predicates). */
+    /** Completes first-time setup of the ViewManager, including synchronizing
+     * the initial SST and delivering the first new-view upcalls. This must be
+     * separate from the constructor to resolve the circular dependency of SST
+     * synchronization. */
+    void finish_setup();
+
+    /** Starts predicate evaluation in the current view's SST. Call this only
+     * when all other setup has been done for the managed Derecho group. */
     void start();
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */

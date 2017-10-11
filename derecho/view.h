@@ -146,12 +146,12 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, next_unassigned_rank);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-         const std::vector<node_id_t>& departed, const int32_t num_members, const int32_t next_unassigned_rank);
+         const std::vector<node_id_t>& departed, const int32_t num_members);
 
     /** Standard constructor for making a new View */
     View(const int32_t vid,

@@ -58,10 +58,15 @@ class RPCManager {
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;
 
-    /** This is not accessed outside invocations of cooked_send_callback,
+    /** This is not accessed outside invocations of rpc_message_handler,
      * it's just a member so it won't be newly allocated every time. */
     std::unique_ptr<char[]> replySendBuffer;
 
+    bool thread_start = false;
+    /** Mutex for thread_start_cv. */
+    std::mutex thread_start_mutex;
+    /** Notified when the P2P listening thread should start. */
+    std::condition_variable thread_start_cv;
     std::atomic<bool> thread_shutdown{false};
     std::thread rpc_thread;
 
@@ -91,6 +96,14 @@ public:
     }
 
     ~RPCManager();
+
+    /**
+     * Starts the thread that listens for incoming P2P RPC requests over the TCP
+     * connections. This should only be called after Group's constructor has
+     * finished receiving Replicated Object state, since that process uses the
+     * same TCP sockets that this thread will use for RPC requests.
+     */
+    void start_listening();
     /**
      * Given a pointer to an object and a list of its methods, constructs a
      * RemoteInvocableClass for that object with its receive functions

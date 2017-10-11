@@ -12,7 +12,6 @@
 #include "derecho/derecho.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
-
 /**
  * Example replicated object, containing some serializable state and providing
  * two RPC methods. In order to be serialized it must extend ByteRepresentable.
