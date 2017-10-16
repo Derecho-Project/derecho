@@ -97,6 +97,9 @@ target_link_libraries(local_filewriter_test derecho)
 add_executable(p2p_query_test p2p_query_test.cpp initialize.cpp)
 target_link_libraries(p2p_query_test derecho)
 
+add_executable(repeated_rpc_test repeated_rpc_test.cpp initialize.cpp)
+target_link_libraries(repeated_rpc_test derecho)
+
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)

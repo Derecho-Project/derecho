@@ -89,7 +89,7 @@ private:
             int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
                                                                            buffer, max_payload_size);
             buffer += buffer_offset;
-            // std::cout << "Replicated: doing ordered send/query for function tagged " << tag << " in subgroup " << subgroup_id << std::endl;
+
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {

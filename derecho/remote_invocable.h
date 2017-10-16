@@ -9,6 +9,7 @@
 #include <functional>
 #include <numeric>
 
+#include <spdlog/spdlog.h>
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
 #include "mutils/tuple_extras.hpp"
@@ -178,6 +179,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * @param who The list of nodes that will service this RPC call
      */
     inline void fulfill_pending_results_map(long int invocation_id, const node_list_t& who) {
+        // I think this function is never called
+        assert(false);
         results_map.at(invocation_id).fulfill_map(who);
     }
 
@@ -528,12 +531,14 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
+    std::shared_ptr<spdlog::logger> logger;
 public:
     const node_id_t nid;
 
     RemoteInvocableClass(node_id_t nid, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
             : RemoteInvocablePairs<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs, fs.fun...),
+              logger(spdlog::get("debug_log")),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
@@ -573,6 +578,9 @@ public:
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
         populate_header(buf, payload_size, invoker.invoke_opcode, nid);
+        long invocation_id = ((long*)(buf))[0];
+        logger->trace("Preparing to send RPC invoke message with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
+                      invoker.invoke_opcode.class_id.name(), invoker.invoke_opcode.subgroup_id, invoker.invoke_opcode.function_id, invoker.invoke_opcode.is_reply, invocation_id);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*

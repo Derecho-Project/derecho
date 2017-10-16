@@ -36,6 +36,10 @@ std::exception_ptr RPCManager::handle_receive(
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
+    int offset = indx.is_reply ? 1 : 0;
+    long int invocation_id = ((long int*)(buf + offset))[0];
+    logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
+                  received_from, indx.class_id.name(), indx.subgroup_id, indx.function_id, indx.is_reply, invocation_id);
     auto reply_header_size = header_space();
     //TODO: Check that the given Opcode is actually in our receivers map,
     //and reply with a "no such method error" if it is not
@@ -83,6 +87,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     }
     if(in_dest || dest_size == 0) {
         auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+        //Use the reply-buffer allocation lambda to detect whether handle_receive generated a reply
         size_t reply_size = 0;
         handle_receive(msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
             reply_size = size;
@@ -94,9 +99,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         });
         if(reply_size > 0) {
             if(sender_id == nid) {
-                handle_receive(
-                        replySendBuffer.get(), reply_size,
-                        [](size_t size) -> char* { assert(false); });
+                //The RPC message expects replies, and I was the sender, so I might have a reply-map that needs fulfilling
                 if(dest_size == 0) {
                     //Destination was "all nodes in my shard of the subgroup"
                     int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
@@ -106,6 +109,10 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
                     toFulfillQueue.pop();
                 }
+                //Immediately handle the reply to myself
+                handle_receive(
+                        replySendBuffer.get(), reply_size,
+                        [](size_t size) -> char* { assert(false); });
             } else {
                 connections.write(sender_id, replySendBuffer.get(), reply_size);
             }

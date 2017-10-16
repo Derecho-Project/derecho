@@ -264,25 +264,39 @@ public:
  */
 template <typename Ret>
 struct PendingResults : public PendingBase {
-    std::promise<std::unique_ptr<reply_map<Ret>>> pending_map;
-    std::map<node_id_t, std::promise<Ret>> populated_promises;
+private:
+    /** A promise for a map containing one future for each reply to the RPC function
+     * call. The future end of this promise lives in QueryResults, and is fulfilled
+     * when the RPC function call is actually sent and the set of repliers is known. */
+    std::promise<std::unique_ptr<reply_map<Ret>>> promise_for_pending_map;
+
+    std::promise<std::map<node_id_t, std::promise<Ret>>> promise_for_reply_promises;
+    /** A future for a map containing one promise for each reply to the RPC function
+     * call. It will be fulfilled when fulfill_map is called, which means the RPC
+     * function call was actually sent and the set of destination nodes is known. */
+    std::future<std::map<node_id_t, std::promise<Ret>>> reply_promises_are_ready;
+    std::map<node_id_t, std::promise<Ret>> reply_promises;
 
     bool map_fulfilled = false;
     std::set<node_id_t> dest_nodes, responded_nodes;
 
+public:
+    PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
     /**
-     * Fill the result map with an entry for each node that will be contacted
-     * in this RPC call
-     * @param who A list of nodes that will be contacted
+     * Fill pending_map and reply_promises with one promise/future pair for
+     * each node that was contacted in this RPC call
+     * @param who A list of nodes from which to expect responses.
      */
     void fulfill_map(const node_list_t& who) {
         map_fulfilled = true;
-        std::unique_ptr<reply_map<Ret>> to_add = std::make_unique<reply_map<Ret>>();
+        std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
+        std::map<node_id_t, std::promise<Ret>> promises_map;
         for(const auto& e : who) {
-            to_add->emplace(e, populated_promises[e].get_future());
+            futures_map->emplace(e, promises_map[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
-        pending_map.set_value(std::move(to_add));
+        promise_for_reply_promises.set_value(std::move(promises_map));
+        promise_for_pending_map.set_value(std::move(futures_map));
     }
 
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
@@ -297,16 +311,22 @@ struct PendingResults : public PendingBase {
 
     void set_value(const node_id_t& nid, const Ret& v) {
         responded_nodes.insert(nid);
-        populated_promises[nid].set_value(v);
+        if(reply_promises.size() == 0){
+            reply_promises = std::move(reply_promises_are_ready.get());
+         }
+        reply_promises.at(nid).set_value(v);
     }
 
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
         responded_nodes.insert(nid);
-        populated_promises[nid].set_exception(e);
+        if(reply_promises.size() == 0){
+            reply_promises = std::move(reply_promises_are_ready.get());
+        }
+        reply_promises.at(nid).set_exception(e);
     }
 
     QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{pending_map.get_future()};
+        return QueryResults<Ret>{promise_for_pending_map.get_future()};
     }
 };
 
