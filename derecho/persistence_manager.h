@@ -110,6 +110,10 @@ public:
             do {
                 // wait for semaphore
                 sem_wait(&persistence_request_sem);
+                if (this->persistence_request_queue.empty()) {
+                  continue;
+                }
+
                 subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
                 persistence_version_t version = std::get<1>(persistence_request_queue.front());
                 persistence_request_queue.pop();
@@ -175,6 +179,8 @@ public:
         if(replicated_objects == nullptr) return;  //skip for raw subgroups
 
         thread_shutdown = true;
+        sem_post(&persistence_request_sem); // kick the persistence thread in case it is sleeping
+
         if(wait) {
             this->persist_thread.join();
         }
