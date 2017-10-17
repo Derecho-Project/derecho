@@ -192,8 +192,9 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     return header_size;
 }
 
-void RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
-    while(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
+bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+    if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
+        return false;
     }
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(dest_nodes.size()) {
@@ -202,6 +203,7 @@ void RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
     } else {
         toFulfillQueue.push(pending_results_handle);
     }
+    return true;
 }
 
 void RPCManager::finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle) {

@@ -100,7 +100,9 @@ private:
                     },
                     std::forward<Args>(args)...);
 
-            group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
+            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
+                return group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
+            });
             return std::move(send_return_struct.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};

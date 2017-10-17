@@ -243,8 +243,9 @@ public:
      * @param dest_nodes The list of node IDs the message is being sent to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
+     * @return True if the send was successful, false if the current view is wedged
      */
-    void finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
+    bool finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
 
     /**
      * Sends the message in msg_buf to the node identified by dest_node over a

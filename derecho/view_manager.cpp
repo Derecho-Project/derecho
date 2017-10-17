@@ -1219,10 +1219,9 @@ char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num, unsigned long 
 
 void ViewManager::send(subgroup_id_t subgroup_num) {
     shared_lock_t lock(view_mutex);
-    while(true) {
-        if(curr_view->multicast_group->send(subgroup_num)) break;
-        view_change_cv.wait(lock);
-    }
+    view_change_cv.wait(lock, [&]() {
+        return curr_view->multicast_group->send(subgroup_num);
+    });
 }
 
 const uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
