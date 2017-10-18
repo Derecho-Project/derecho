@@ -199,9 +199,9 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true} {
-        receivers[reply_opcode] = [this](auto... a) {
+        receivers.emplace(reply_opcode, [this](auto... a) {
             return this->receive_response(a...);
-        };
+        });
     }
 };
 
@@ -342,9 +342,9 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             : remote_invocable_function(f),
               invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true} {
-        receivers[invoke_opcode] = [this](auto... a) {
+        receivers.emplace(invoke_opcode, [this](auto... a) {
             return this->receive_call(a...);
-        };
+        });
     }
 };
 
