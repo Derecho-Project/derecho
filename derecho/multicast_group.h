@@ -294,44 +294,21 @@ private:
         return num;
     };
 
-    long long int resolve_num_received(long long beg_index, long long end_index, uint32_t num_received_entry) {
-        // std::cout << "num_received_entry = " << num_received_entry << std::endl;
-        // std::cout << "beg_index = " << beg_index << std::endl;
-        // std::cout << "end_index = " << end_index << std::endl;
-        auto it = received_intervals[num_received_entry].end();
-        it--;
-        while(*it > beg_index) {
-            it--;
-        }
-        if(std::next(it) == received_intervals[num_received_entry].end()) {
-            if(*it == beg_index - 1) {
-                *it = end_index;
-            } else {
-                received_intervals[num_received_entry].push_back(beg_index);
-                received_intervals[num_received_entry].push_back(end_index);
-            }
-        } else {
-            auto next_it = std::next(it);
-            if(*it != beg_index - 1) {
-                received_intervals[num_received_entry].insert(next_it, beg_index);
-                if(*next_it != end_index + 1) {
-                    received_intervals[num_received_entry].insert(next_it, end_index);
-                } else {
-                    received_intervals[num_received_entry].erase(next_it);
-                }
-            } else {
-                if(*next_it != end_index + 1) {
-                    received_intervals[num_received_entry].insert(next_it, end_index);
-                } else {
-                    received_intervals[num_received_entry].erase(next_it);
-                }
-                received_intervals[num_received_entry].erase(it);
-            }
-        }
-        // std::cout << "Returned value: "
-        //           << *std::next(received_intervals[num_received_entry].begin()) << std::endl;
-        return *std::next(received_intervals[num_received_entry].begin());
-    }
+    long long int resolve_num_received(long long beg_index, long long end_index, uint32_t num_received_entry);
+
+    void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
+                             uint32_t num_shard_senders, uint32_t sender_rank, uint64_t index_ignored,
+                             volatile char* data, uint32_t size);
+
+    bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
+                             uint32_t num_shard_senders, const DerechoSST& sst);
+
+    void receiver_function(unsigned int num_times, const std::function<void(uint32_t, uint64_t, volatile char*, uint32_t)>& sst_receive_handler_lambda,
+                           subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
+                             uint32_t num_shard_senders, DerechoSST& sst);
 
 public:
     MulticastGroup(

@@ -110,7 +110,8 @@ int main(int argc, char** argv) {
         cout << "Changing Bar's state " << trials << " times" << endl;
         for(int count = 0; count < trials; ++count) {
             std::stringstream string_builder;
-            string_builder << "Update " << count << "  ";
+            string_builder << "Node " << node_id << " Update " << count << "  ";
+            cout <<  "Sending " << string_builder.str() << endl;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(string_builder.str());
         }
         ExternalCaller<Cache>& cache_p2p_handle = group->get_nonmember_subgroup<Cache>();
@@ -122,10 +123,14 @@ int main(int argc, char** argv) {
     else {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         int trials = 1000;
+        if(node_id == 7) {
+            trials -= 100;
+        }
         cout << "Changing Cache's state " << trials << " times" << endl;
         for(int count = 0; count < trials; ++count) {
             std::stringstream string_builder;
             string_builder << "Node " << node_id << " update " << count;
+            cout << "Sending " << string_builder.str() << endl;
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Stuff", string_builder.str());
             if(node_id == 5 && count == 100) {
                 //I want to test this node crashing and re-joining with a different ID

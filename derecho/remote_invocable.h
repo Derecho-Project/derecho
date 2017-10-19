@@ -88,23 +88,23 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
     /**
      * Called to construct an RPC message to send that will invoke the remote-
-     * invocable function managed by this RemoteInvocable.
+     * invocable function targeted by this RemoteInvoker.
      * @param out_alloc A function that can allocate buffers, which will be
      * used to store the constructed message
      * @param a The arguments to be used when calling the remote-invocable function
      */
     send_return send(const std::function<char*(int)>& out_alloc,
-                     const std::decay_t<Args>&... a) {
+                     const std::decay_t<Args>&... remote_args) {
         auto invocation_id = mutils::long_rand();
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(remote_args)...};
             size += std::accumulate(t.begin(), t.end(), 0);
         }
         char* serialized_args = out_alloc(size);
         {
             auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
-            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, a...);
+            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, remote_args...);
             assert(check_size == size);
         }
 
@@ -578,7 +578,7 @@ public:
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
         populate_header(buf, payload_size, invoker.invoke_opcode, nid);
-        long invocation_id = ((long*)(buf))[0];
+        long invocation_id = ((long*)(buf + header_size))[0];
         logger->trace("Preparing to send RPC invoke message with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
                       invoker.invoke_opcode.class_id.name(), invoker.invoke_opcode.subgroup_id, invoker.invoke_opcode.function_id, invoker.invoke_opcode.is_reply, invocation_id);
 
