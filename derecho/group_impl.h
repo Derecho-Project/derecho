@@ -284,7 +284,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>("derecho_debug_log", 1024 * 1024 * 5, 3));
     // Uncomment this to get debugging output printed to the terminal
-    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
+    // log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
     std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [%l] %v");
     log->set_level(spdlog::level::debug);
