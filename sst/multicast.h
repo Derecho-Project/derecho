@@ -148,6 +148,8 @@ public:
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + slot]) - sst->getBaseAddress(),
                 sizeof(Message));
+	std::cout << "Finished send()" << std::endl;
+	debug_print();
     }
 
     void debug_print() {

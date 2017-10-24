@@ -689,6 +689,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                              volatile char* data, uint32_t size) {
     header* h = (header*)data;
     long long int index = h->index;
+    std::cout << "subgroup_num=" << subgroup_num << ", sender_rank=" << sender_rank << ", index=" << index << std::endl;
     auto beg_index = index;
     long long int sequence_number = index * num_shard_senders + sender_rank;
     logger->trace("Locally received message in subgroup {}, sender rank {}, index {}. Header fields: header_size={}, pause_sending_turns={}, index={}, timestamp={}", subgroup_num, sender_rank, index, h->header_size, h->pause_sending_turns, h->index, h->timestamp);

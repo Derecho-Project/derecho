@@ -511,6 +511,38 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     logger->debug("MetaWedged is true; continuing epoch termination");
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
 
+    // go through all subgroups first and acknowledge all messages received through SST
+    for(const auto& shard_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {
+        const subgroup_id_t subgroup_id = shard_settings_pair.first;
+        const auto& curr_subgroup_settings = shard_settings_pair.second;
+        auto num_shard_members = curr_subgroup_settings.members.size();
+        std::vector<int> shard_senders = curr_subgroup_settings.senders;
+        auto num_shard_senders = curr_view->multicast_group->get_num_senders(shard_senders);
+        std::map<uint32_t, uint32_t> shard_ranks_by_sender_rank;
+        for(uint j = 0, l = 0; j < num_shard_members; ++j) {
+            if(shard_senders[j]) {
+                shard_ranks_by_sender_rank[l] = j;
+                l++;
+            }
+        }
+        while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
+            auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
+                                               shard_ranks_by_sender_rank,
+                                               num_shard_senders](uint32_t sender_rank, uint64_t index_ignored,
+                                                                  volatile char* data, uint32_t size) {
+                curr_view->multicast_group->sst_receive_handler(subgroup_id, curr_subgroup_settings,
+                                                                shard_ranks_by_sender_rank, num_shard_senders,
+                                                                sender_rank, index_ignored, data, size);
+            };
+            curr_view->multicast_group->receiver_function(curr_view->multicast_group->window_size, sst_receive_handler_lambda,
+                              subgroup_id, curr_subgroup_settings,
+                              shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST);
+        }
+    }
+
+    curr_view->gmsSST->put_with_completion();
+    curr_view->gmsSST->sync_with_members();
+    
     //First, for subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader
     auto follower_subgroups_and_shards = std::make_shared<std::map<subgroup_id_t, uint32_t>>();
     for(const auto& shard_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {

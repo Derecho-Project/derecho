@@ -160,6 +160,7 @@ struct SubgroupSettings {
  * This class should only be used as part of a Group, since it does not know how
  * to handle failures. */
 class MulticastGroup {
+  friend class ViewManager;
 private:
     std::shared_ptr<spdlog::logger> logger;
     /** vector of member id's */

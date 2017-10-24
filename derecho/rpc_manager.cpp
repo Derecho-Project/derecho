@@ -104,6 +104,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     //Destination was "all nodes in my shard of the subgroup"
                     int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
+		    assert(!toFulfillQueue.empty());
                     toFulfillQueue.front().get().fulfill_map(
                             view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
@@ -193,10 +194,10 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
 }
 
 bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(dest_nodes.size()) {
         pending_results_handle.fulfill_map(dest_nodes);
         fulfilledList.push_back(pending_results_handle);

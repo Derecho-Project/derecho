@@ -79,33 +79,42 @@ private:
     template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send_or_query(const std::vector<node_id_t>& destination_nodes,
                                Args&&... args) {
-        if(is_valid()) {
-            char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
-            };
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+        while(true) {
+            if(is_valid()) {
+                std::cout << "In ordered_send_or_query: T=" << typeid(T).name() << std::endl;
+                char* buffer;
+                while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
+                };
+                std::cout << "Obtained a buffer" << std::endl;
+                std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
 
-            std::size_t max_payload_size;
-            int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
-                                                                           buffer, max_payload_size);
-            buffer += buffer_offset;
+                std::size_t max_payload_size;
+                int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
+                                                                               buffer, max_payload_size);
+                buffer += buffer_offset;
 
-            auto send_return_struct = wrapped_this->template send<tag>(
-                    [&buffer, &max_payload_size](size_t size) -> char* {
-                        if(size <= max_payload_size) {
-                            return buffer;
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
+                auto send_return_struct = wrapped_this->template send<tag>(
+                        [&buffer, &max_payload_size](size_t size) -> char* {
+                            if(size <= max_payload_size) {
+                                return buffer;
+                            } else {
+                                return nullptr;
+                            }
+                        },
+                        std::forward<Args>(args)...);
 
-            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
-                return group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
-            });
-            return std::move(send_return_struct.results);
-        } else {
-            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+                std::cout << "Done with serialization" << std::endl;
+		if (!group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending)) {
+		  continue;
+		}
+                // group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
+                //     return group_rpc_manager.finish_rpc_send(subgroup_id, destination_nodes, send_return_struct.pending);
+                // });
+                std::cout << "Done with send" << std::endl;
+                return std::move(send_return_struct.results);
+            } else {
+                throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+            }
         }
     }
 
