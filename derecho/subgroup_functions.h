@@ -85,7 +85,7 @@ ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard);
  */
 ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard);
 /**
- * Returnsa ShardAllocationPolicy for a subgroup that has a different number of
+ * Returns a ShardAllocationPolicy for a subgroup that has a different number of
  * members in each shard, and possibly has each shard in a different delivery mode.
  * Note that the two parameter vectors must be the same length.
  * @param num_nodes_by_shard A vector specifying how many nodes should be in each
