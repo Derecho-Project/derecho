@@ -213,6 +213,7 @@ private:
     /** next_message is the message that will be sent when send is called the next time.
      * It is boost::none when there is no message to send. */
     std::vector<std::experimental::optional<RDMCMessage>> next_sends;
+    std::map<uint32_t, bool> pending_sst_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
@@ -349,6 +350,7 @@ public:
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
     bool send(subgroup_id_t subgroup_num);
+    bool check_pending_sst_sends(subgroup_id_t subgroup_num);
 
     const uint64_t compute_global_stability_frontier(uint32_t subgroup_num);
 

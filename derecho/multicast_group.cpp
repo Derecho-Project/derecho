@@ -1251,11 +1251,11 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         }
     }
 
-    if(thread_shutdown) {
-        return nullptr;
-    }
-
     if(msg_size > sst::max_msg_size) {
+        if(thread_shutdown) {
+            return nullptr;
+        }
+
         std::unique_lock<std::mutex> lock(msg_state_mtx);
         if(free_message_buffers[subgroup_num].empty()) return nullptr;
 
@@ -1286,8 +1286,14 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         return buf + sizeof(header);
     } else {
         std::unique_lock<std::mutex> lock(msg_state_mtx);
+        pending_sst_sends[subgroup_num] = true;
+        if(thread_shutdown) {
+            pending_sst_sends[subgroup_num] = false;
+            return nullptr;
+        }
         char* buf = (char*)sst_multicast_group_ptrs[subgroup_num]->get_buffer(msg_size);
         if(!buf) {
+            pending_sst_sends[subgroup_num] = false;
             return nullptr;
         }
         auto current_time = get_time();
@@ -1324,10 +1330,17 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
         // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     } else {
+        std::lock_guard<std::mutex> lock(msg_state_mtx);
         sst_multicast_group_ptrs[subgroup_num]->send();
+	pending_sst_sends[subgroup_num] = false;
         // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     }
+}
+
+bool MulticastGroup::check_pending_sst_sends(subgroup_id_t subgroup_num) {
+    std::lock_guard<std::mutex> lock(msg_state_mtx);
+    return pending_sst_sends[subgroup_num];
 }
 
 std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgroup_num) {
