@@ -139,7 +139,8 @@ int main(int argc, char** argv) {
             }
         }
         //Tell the group this node is not sending for 10 rounds, to allow other nodes to finish sending their messages.
-        cache_rpc_handle.get_sendbuffer_ptr(0, 10);
+	std::cout << "Sending Raw message with pause_sending_turns = 10" << std::endl;
+        cache_rpc_handle.get_sendbuffer_ptr(1, 10);
         cache_rpc_handle.raw_send();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExternalCaller<Foo>& foo_p2p_handle = group->get_nonmember_subgroup<Foo>();
