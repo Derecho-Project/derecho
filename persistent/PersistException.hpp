@@ -42,6 +42,7 @@ namespace ns_persistent{
   #define PERSIST_EXP_NOSPACE_LOG                       PERSIST_EXP_NOSPACE(1)
   #define PERSIST_EXP_NOSPACE_DATA                      PERSIST_EXP_NOSPACE(2)
   #define PERSIST_EXP_BEYOND_GSF                        PERSIST_EXP(31,0)
+  #define PERSIST_EXP_OOM(x)                            PERSIST_EXP(32,(x))
 }
 
 #endif//PERSISTENT_EXCEPTION_HPP

@@ -14,6 +14,7 @@
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "PersistLog.hpp"
+#include "PersistNoLog.hpp"
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
 
@@ -702,6 +703,53 @@ namespace ns_persistent {
     };
   };
 
+  /* Utilities for manage a single "ByteRepresentable" persistent object. */
+  /**
+   * saveObject() saves a serializable object
+   * @param obj The object to be persisted.
+   * @param object_name Optional object name. If not given, the object_name
+   *        is <storage type>-<object type name>-nolog. NOTE: please provide
+   *        an object name if you trying to persist two objects of the same
+   *        type. NOTE: the object has to be ByteRepresentable.
+   * @return 
+   */
+  template <typename ObjectType, StorageType storageType=ST_FILE>
+  void saveObject(ObjectType &obj,const char *object_name=nullptr) noexcept(false){
+    switch(storageType){
+    // file system
+    case ST_FILE:
+    {
+      saveNoLogObjectInFile(obj,object_name);
+      break;
+    }
+    // volatile
+    case ST_MEM:
+    {
+      saveNoLogObjectInMem(obj,object_name);
+      break;
+    }
+    default:
+      throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
+    }
+  }
+  /**
+    * loadObject() loads a serializable object from a persistent store
+    * @return If there is no such object in the persistent store, just
+    *         return a nullptr.
+    */
+  template <typename ObjectType, StorageType storageType=ST_FILE>
+  std::unique_ptr<ObjectType> loadObject(const char *object_name=nullptr) noexcept(false){
+    switch(storageType){
+    // file system
+    case ST_FILE:
+      return loadNoLogObjectFromFile<ObjectType>(object_name);
+    // volatile
+    case ST_MEM:
+      return loadNoLogObjectFromMem<ObjectType>(object_name);
+    default:
+      throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
+    }
+  }
 }
 
 #endif//PERSIST_VAR_H

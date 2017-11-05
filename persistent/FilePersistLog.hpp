@@ -9,7 +9,7 @@
 namespace ns_persistent {
 
   // TODO:hardwired definitions need go to configuration file
-  #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH (".plog")
+  #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH DEFAULT_FILE_PERSIST_PATH
   #define META_FILE_SUFFIX ("meta")
   #define LOG_FILE_SUFFIX  ("log")
   #define DATA_FILE_SUFFIX ("data")

@@ -65,13 +65,15 @@ static void printhelp(){
   cout << "\tgetbyidx <index>" << endl;
   cout << "\tgetbyver <version>" << endl;
   cout << "\tgetbytime <timestamp>" << endl;
-  cout << "\tset value version" << endl;
+  cout << "\tset <value> <version>" << endl;
   cout << "\ttrimbyidx <index>" << endl;
   cout << "\ttrimbyver <version>" << endl;
   cout << "\ttrimbytime <time>" << endl;
   cout << "\tlist" << endl;
   cout << "\tvolatile" << endl;
   cout << "\thlc" << endl;
+  cout << "\tnologsave <int-value>" << endl;
+  cout << "\tnologload" << endl;
   cout << "\teval <file|mem> <datasize> <num> [batch]" << endl;
   cout << "NOTICE: test can crash if <datasize> is too large(>8MB).\n"
        << "This is probably due to the stack size is limited. Try \n"
@@ -102,6 +104,16 @@ void listvar(Persistent<OT,st> &var){
     cout<<"["<<idx<<"]\t"<<var.getByIndex(idx)->to_string()<<"\t//by copy"<<endl;
     idx++;
   }
+}
+
+static void nologsave(int value) {
+  saveObject(value);
+  saveObject<int,ST_MEM>(value);
+}
+
+static void nologload() {
+  cout<<"in file:"<<*loadObject<int>()<<endl;
+  cout<<"in memory:"<<*loadObject<int,ST_MEM>()<<endl;
 }
 
 static void test_hlc();
@@ -240,6 +252,12 @@ int main(int argc,char ** argv){
     }
     else if (strcmp(argv[1],"hlc") == 0) {
       test_hlc();
+    }
+    else if (strcmp(argv[1],"nologsave") == 0) {
+      nologsave(atoi(argv[2]));
+    }
+    else if (strcmp(argv[1],"nologload") == 0) {
+      nologload();
     }
     else if (strcmp(argv[1],"eval") == 0) {
       // eval file|mem osize nops
