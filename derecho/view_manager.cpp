@@ -7,10 +7,8 @@
 #include <arpa/inet.h>
 
 #include "derecho_exception.h"
-#include "persistence.h"
+#include <persistent/Persistent.hpp>
 #include "view_manager.h"
-
-using namespace derecho::persistence;
 
 namespace derecho {
 
@@ -44,12 +42,8 @@ ViewManager::ViewManager(const node_id_t my_id,
     last_suspected = std::vector<bool>(curr_view->members.size());
     initialize_rdmc_sst();
 
-    if(!derecho_params.filename.empty()) {
-        view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
-        std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
-        persist_object(*curr_view, view_file_name);
-        persist_object(derecho_params, params_file_name);
-    }
+    ns_persistent::saveObject(*curr_view);
+    ns_persistent::saveObject(derecho_params);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -79,12 +73,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     last_suspected = std::vector<bool>(curr_view->members.size());
 
     initialize_rdmc_sst();
-    if(!derecho_params.filename.empty()) {
-        view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
-        std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
-        persist_object(*curr_view, view_file_name);
-        persist_object(derecho_params, params_file_name);
-    }
+    ns_persistent::saveObject(*curr_view);
 
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
@@ -106,12 +95,11 @@ ViewManager::ViewManager(const std::string& recovery_filename,
           gms_port(gms_port),
           server_socket(gms_port),
           thread_shutdown(false),
-          view_file_name(recovery_filename + persistence::PAXOS_STATE_EXTENSION),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(0, 0),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
-    auto last_view = load_view(view_file_name);
+    auto last_view = ns_persistent::loadObject<View>();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
 
@@ -135,8 +123,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
         if(_derecho_params) {
             derecho_params = _derecho_params.value();
         } else {
-            derecho_params = *(load_object<DerechoParams>(
-                    std::string(recovery_filename + persistence::PARAMATERS_EXTENSION)));
+            derecho_params = *(ns_persistent::loadObject<DerechoParams>());
         }
 
 
@@ -146,10 +133,8 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     last_suspected = std::vector<bool>(curr_view->members.size());
 
     //since the View just changed, and we're definitely in persistent mode, persist it again
-    view_file_name = std::string(derecho_params.filename + persistence::PAXOS_STATE_EXTENSION);
-    std::string params_file_name(derecho_params.filename + persistence::PARAMATERS_EXTENSION);
-    persist_object(*curr_view, view_file_name);
-    persist_object(derecho_params, params_file_name);
+    ns_persistent::saveObject(*curr_view);
+    ns_persistent::saveObject(derecho_params);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -526,20 +511,20 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             }
         }
         // wait for all pending sst sends to finish
-	while (curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
-	}
+        while (curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
+        }
         while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
                                                shard_ranks_by_sender_rank,
                                                num_shard_senders](uint32_t sender_rank, uint64_t index_ignored,
-                                                                  volatile char* data, uint32_t size) {
+                                                       volatile char* data, uint32_t size) {
                 curr_view->multicast_group->sst_receive_handler(subgroup_id, curr_subgroup_settings,
                                                                 shard_ranks_by_sender_rank, num_shard_senders,
                                                                 sender_rank, index_ignored, data, size);
             };
             curr_view->multicast_group->receiver_function(curr_view->multicast_group->window_size, sst_receive_handler_lambda,
-                              subgroup_id, curr_subgroup_settings,
-                              shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST);
+                                                          subgroup_id, curr_subgroup_settings,
+                                                          shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST);
         }
     }
 
@@ -604,39 +589,26 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
                                          logger);
         }
 
-        next_view = make_next_view(curr_view, gmsSST, logger);
-        auto next_subgroup_settings = std::make_shared<std::map<subgroup_id_t, SubgroupSettings>>();
-        uint32_t next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
-        //If make_subgroup_maps find that the next view would be inadequate, it will mark next_view
-        if(!next_view->is_adequately_provisioned) {
-            logger->debug("Next view would not be adequately provisioned, waiting for more joins.");
-            //Re-register the predicates for accepting and acknowledging joins
-            register_predicates();
-            //But remove the one for start_meta_wedged
-            gmsSST.predicates.remove(leader_committed_handle);
-            // Construct a predicate that watches for any new committed change that is a join
-            int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
-            auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
-                if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
-                    const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()]
-                                                - gmsSST.num_installed[curr_view->rank_of_leader()];
-                    for(int change_index = curr_num_committed; change_index < committed_count; change_index++) {
-                        node_id_t change_id = gmsSST.changes[curr_view->my_rank][change_index];
-                        if(curr_view->rank_of(change_id) == -1) {
-                            return true;
-                        }
-                    }
+        //Wait for persistence to finish for messages delivered in RaggedEdgeCleanup
+        //(persisted_num should be equal to delivered_num for every node)
+        auto persistence_finished_pred = [this](const DerechoSST& gmsSST) {
+            for(node_id_t row = 0; row < gmsSST.get_num_rows(); ++row) {
+                for(int subgroup_id = 0; subgroup_id < curr_view->subgroup_shard_views.size(); ++subgroup_id) {
+                    if(gmsSST.persisted_num[row][subgroup_id] < gmsSST.delivered_num[row][subgroup_id])
+                        return false;
                 }
-                return false;
-            };
-            auto retry_next_view = [this, follower_subgroups_and_shards, next_subgroup_settings,
-                                    next_num_received_size](DerechoSST& gmsSST) {
-                finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, gmsSST);
-            };
-            gmsSST.predicates.insert(more_members_joined, retry_next_view, sst::PredicateType::ONE_TIME);
-        } else {
-            finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, gmsSST);
-        }
+            }
+            return true;
+        };
+
+        auto finish_view_change_trig = [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
+            //Before the first call to finish_view_change(), heap-allocate this map
+            auto next_subgroup_settings = std::make_shared<std::map<subgroup_id_t, SubgroupSettings>>();
+            finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, 0, gmsSST);
+        };
+
+        //Last statment in global_min_ready_continuation: register finish_view_change_trig
+        gmsSST.predicates.insert(persistence_finished_pred, finish_view_change_trig, sst::PredicateType::ONE_TIME);
     };
 
     //Last statement in finish_view_change: register global_min_ready_continuation
@@ -647,19 +619,25 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
                                      std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                                      uint32_t next_num_received_size,
                                      DerechoSST& gmsSST) {
-    assert(next_view);
-    logger->debug("Attempting to finish view change to view {}", next_view->vid);
-    std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
-    //If this was triggered as a retry, next_view will be inadequately provisioned from last time
-    if(!next_view->is_adequately_provisioned) {
-        //Re-run make_next_view with new proposed changes in the SST
-        next_view = make_next_view(curr_view, gmsSST, logger);
-        next_subgroup_settings->clear();
-        next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
+    //If this is the first time finish_view_change() was called, next_view will still be null
+    bool first_call = false;
+    if(!next_view) {
+        first_call = true;
     }
-    //If next_view is still inadequate after re-running make_next_view, back out and wait again
+    std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
+    next_view = make_next_view(curr_view, gmsSST, logger);
+    next_subgroup_settings->clear();
+    next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
+    logger->debug("Attempting to finish view change to view {}", next_view->vid);
     if(!next_view->is_adequately_provisioned) {
-        logger->debug("Next view would still be inadequate, going back to waiting.");
+        logger->debug("Next view would not be adequately provisioned, waiting for more joins.");
+        if(first_call) {
+            //Re-register the predicates for accepting and acknowledging joins
+            register_predicates();
+            //But remove the one for start_meta_wedged
+            gmsSST.predicates.remove(leader_committed_handle);
+        }
+        //Construct a predicate that watches for any new committed change that is a join
         int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
         auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
             if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
@@ -674,6 +652,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
             }
             return false;
         };
+        //Construct a trigger that will re-call finish_view_change() with the same parameters
         auto retry_next_view = [this, follower_subgroups_and_shards, next_subgroup_settings,
                                 next_num_received_size](DerechoSST& sst) {
             finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, sst);
@@ -691,7 +670,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     //Calculate and save the IDs of shard leaders for the old view
     //If the old view was inadequately provisioned, this will be empty
     std::map<std::type_index, std::vector<std::vector<int64_t>>> old_shard_leaders_by_type
-    = make_shard_leaders_map(*curr_view);
+        = make_shard_leaders_map(*curr_view);
 
     std::list<tcp::socket> joiner_sockets;
     if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
@@ -752,10 +731,8 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     }
     curr_view = std::move(next_view);
 
-    //If in persistent mode, write the new view to disk before using it
-    if(!view_file_name.empty()) {
-        persist_object(*curr_view, view_file_name);
-    }
+    //Write the new view to disk before using it
+    ns_persistent::saveObject(*curr_view);
 
     //Resize last_suspected to match the new size of suspected[]
     last_suspected.resize(curr_view->members.size());

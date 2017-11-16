@@ -19,7 +19,6 @@
 #include "derecho_modes.h"
 #include "derecho_ports.h"
 #include "derecho_sst.h"
-#include "filewriter.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "rdmc/rdmc.h"
@@ -54,7 +53,6 @@ struct CallbackSet {
 struct DerechoParams : public mutils::ByteRepresentable {
     long long unsigned int max_payload_size;
     long long unsigned int block_size;
-    std::string filename = std::string();
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
@@ -62,21 +60,19 @@ struct DerechoParams : public mutils::ByteRepresentable {
 
     DerechoParams(long long unsigned int max_payload_size,
                   long long unsigned int block_size,
-                  std::string filename = std::string(),
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
                   uint32_t rpc_port = derecho_rpc_port)
             : max_payload_size(max_payload_size),
               block_size(block_size),
-              filename(filename),
               window_size(window_size),
               timeout_ms(timeout_ms),
               type(type),
               rpc_port(rpc_port) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, block_size, filename, window_size, timeout_ms, type, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
 };
 
 struct __attribute__((__packed__)) header {
@@ -223,9 +219,10 @@ private:
     /** Messages that are currently being received. */
     std::map<std::pair<uint32_t, long long int>, RDMCMessage> current_receives;
 
-    /** Messages that have finished sending/receiving but aren't yet globally stable */
+    /** Messages that have finished sending/receiving but aren't yet globally stable.
+     * Organized by [subgroup number] -> [sequence number] -> [message] */
     std::map<uint32_t, std::map<long long int, RDMCMessage>> locally_stable_rdmc_messages;
-    /** Parallel map for SST messages */
+    /** Same map as locally_stable_rdmc_messages, but for SST messages */
     std::map<uint32_t, std::map<long long int, SSTMessage>> locally_stable_sst_messages;
     std::map<uint32_t, std::set<uint64_t>> pending_message_timestamps;
     std::map<uint32_t, std::map<int64_t, uint64_t>> pending_persistence;
@@ -263,8 +260,6 @@ private:
 
     std::vector<bool> last_transfer_medium;
 
-    std::unique_ptr<FileWriter> file_writer;
-
     /** persistence manager callbacks */
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
@@ -278,7 +273,6 @@ private:
      * implements the timeout thread. */
     void check_failures_loop();
 
-    std::function<void(persistence::message)> make_file_written_callback();
     bool create_rdmc_sst_groups();
     void initialize_sst_row();
     void register_predicates();

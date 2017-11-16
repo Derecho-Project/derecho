@@ -18,7 +18,6 @@ size_t index_of(T container, U elem) {
     size_t n = 0;
     for(auto it = begin(container); it != end(container); ++it) {
         if(*it == elem) return n;
-
         n++;
     }
     return container.size();
@@ -67,11 +66,6 @@ MulticastGroup::MulticastGroup(
           last_transfer_medium(total_num_subgroups),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     assert(window_size >= 1);
-
-    if(!derecho_params.filename.empty()) {
-        file_writer = std::make_unique<FileWriter>(make_file_written_callback(),
-                                                   derecho_params.filename);
-    }
 
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
@@ -249,12 +243,6 @@ MulticastGroup::MulticastGroup(
         old_group.non_persistent_sst_messages.clear();
     }
 
-    // If the old group was using persistence, we should transfer its state to the new group
-    file_writer = std::move(old_group.file_writer);
-    if(file_writer) {
-        file_writer->set_message_written_upcall(make_file_written_callback());
-    }
-
     initialize_sst_row();
     bool no_member_failed = true;
     if(already_failed.size()) {
@@ -272,37 +260,6 @@ MulticastGroup::MulticastGroup(
     register_predicates();
     sender_thread = std::thread(&MulticastGroup::send_loop, this);
     timeout_thread = std::thread(&MulticastGroup::check_failures_loop, this);
-}
-
-std::function<void(persistence::message)> MulticastGroup::make_file_written_callback() {
-    return [this](persistence::message m) {
-        // callbacks.local_persistence_callback(m.subgroup_num, m.sender, m.index, m.data,
-        //                                     m.length);
-        //m.sender is an ID, not a rank
-        uint sender_rank;
-        for(sender_rank = 0; sender_rank < num_members; ++sender_rank) {
-            if(members[sender_rank] == m.sender) break;
-        }
-        // m.data points to the char[] buffer in a MessageBuffer, so we need to find
-        // the msg corresponding to m and put its MessageBuffer on free_message_buffers
-        auto sequence_number = m.index * num_members + sender_rank;
-
-        // notify the use about the callback.
-        callbacks.local_persistence_callback(m.subgroup_num, sequence_number);
-        {
-            std::lock_guard<std::mutex> lock(msg_state_mtx);
-            auto find_result = non_persistent_messages[m.subgroup_num].find(sequence_number);
-            assert(find_result != non_persistent_messages[m.subgroup_num].end());
-            RDMCMessage& m_msg = find_result->second;
-            free_message_buffers[m.subgroup_num].push_back(std::move(m_msg.message_buffer));
-            non_persistent_messages[m.subgroup_num].erase(find_result);
-            sst->persisted_num[member_index][m.subgroup_num] = sequence_number;
-            sst->put(get_shard_sst_indices(m.subgroup_num),
-                     (char*)std::addressof(sst->persisted_num[0][m.subgroup_num]) - sst->getBaseAddress(),
-                     sizeof(long long int));
-        }
-
-    };
 }
 
 bool MulticastGroup::create_rdmc_sst_groups() {
@@ -536,28 +493,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
                                                     buf + h->header_size, msg.size - h->header_size);
             }
         }
-        if(file_writer) {
-            persistence::message msg_for_filewriter{buf + h->header_size,
-                                                    msg.size, (uint32_t)sst->vid[member_index],
-                                                    msg.sender_id, (uint64_t)msg.index,
-                                                    h->cooked_send};
-            //the sequence number needs to use the sender's within-shard rank, not its ID
-            auto& shard_members = subgroup_settings.at(subgroup_num).members;
-            std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
-            auto num_shard_senders = get_num_senders(shard_senders);
-            uint shard_rank;
-            uint sender_rank = 0;
-            for(shard_rank = 0; shard_rank < shard_members.size(); ++shard_rank) {
-                if(shard_members[shard_rank] == msg.sender_id) break;
-                if(shard_senders[shard_rank])
-                    sender_rank++;
-            }
-            auto sequence_number = msg.index * num_shard_senders + sender_rank;
-            non_persistent_messages[subgroup_num].emplace(sequence_number, std::move(msg));
-            file_writer->write_message(msg_for_filewriter);
-        } else {
-            free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
-        }
+        free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
     }
 }
 
@@ -580,26 +516,6 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
                                                     buf + h->header_size, msg.size - h->header_size);
             }
             // DERECHO_LOG(-1, -1, "end_stability_callback");
-        }
-        if(file_writer) {
-            persistence::message msg_for_filewriter{buf + h->header_size,
-                                                    msg.size, (uint32_t)sst->vid[member_index],
-                                                    msg.sender_id, (uint64_t)msg.index,
-                                                    h->cooked_send};
-            //the sequence number needs to use the sender's within-shard rank, not its ID
-            auto& shard_members = subgroup_settings.at(subgroup_num).members;
-            std::vector<int> shard_senders = subgroup_settings.at(subgroup_num).senders;
-            auto num_shard_senders = get_num_senders(shard_senders);
-            uint shard_rank;
-            uint sender_rank = 0;
-            for(shard_rank = 0; shard_rank < shard_members.size(); ++shard_rank) {
-                if(shard_members[shard_rank] == msg.sender_id) break;
-                if(shard_senders[shard_rank])
-                    sender_rank++;
-            }
-            auto sequence_number = msg.index * num_shard_senders + sender_rank;
-            non_persistent_sst_messages[subgroup_num].emplace(sequence_number, std::move(msg));
-            file_writer->write_message(msg_for_filewriter);
         }
     }
 }
@@ -993,7 +909,7 @@ void MulticastGroup::register_predicates() {
                     long long int seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + curr_subgroup_settings.sender_rank;
                     for(uint i = 0; i < num_shard_members; ++i) {
                         if(sst.delivered_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < seq_num
-                           || (file_writer && sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < seq_num)) {
+                           || (sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < seq_num)) {
                             return false;
                         }
                     }
@@ -1113,7 +1029,7 @@ void MulticastGroup::send_loop() {
         if(subgroup_settings.at(subgroup_num).mode != Mode::RAW) {
             for(uint i = 0; i < num_shard_members; ++i) {
                 if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((msg.index - window_size) * num_shard_senders + shard_sender_index)
-                   || (file_writer && sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((msg.index - window_size) * num_shard_senders + shard_sender_index))) {
+                   || (sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < (long long int)((msg.index - window_size) * num_shard_senders + shard_sender_index))) {
                     return false;
                 }
             }

@@ -42,6 +42,8 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
+    virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) = 0;
+    virtual void persist(const persistence_version_t version) noexcept(false) = 0;
 };
 
 template <typename T>

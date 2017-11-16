@@ -128,9 +128,6 @@ private:
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
 
-    /** Name of the file to use to persist the current view to disk. */
-    std::string view_file_name;
-
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;

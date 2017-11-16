@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -254,7 +255,7 @@ std::string View::debug_string() const {
 
 std::unique_ptr<View> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
-    std::ifstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);
+    std::ifstream view_file_swap(view_file_name + ".swp");
     std::unique_ptr<View> view;
     std::unique_ptr<View> swap_view;
     //The expected view file might not exist, in which case we'll fall back to the swap file

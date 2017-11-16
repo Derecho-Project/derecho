@@ -219,6 +219,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             if(old_object != replicated_objects.template get<FirstType>().end()){
                 logger->debug("Deleting old Replicated Object state (of type {}) for subgroup {} because this node is no longer a member", typeid(FirstType).name(), subgroup_index);
                 replicated_objects.template get<FirstType>().erase(old_object);
+                objects_by_subgroup_id.erase(subgroup_id);
             }
             //Create an ExternalCaller for the subgroup if we don't already have one
             external_callers.template get<FirstType>().emplace(subgroup_index,
