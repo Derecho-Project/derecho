@@ -47,7 +47,7 @@ namespace ns_persistent {
     }
     ssize_t nWrite = write(fd,buf,size);
     delete buf;
-    if (nWrite != size) {
+    if (nWrite != (ssize_t) size) {
       throw PERSIST_EXP_WRITE_FILE(errno);
     }
     close(fd);

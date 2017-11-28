@@ -176,7 +176,9 @@ private:
     /** Runs when all live nodes have reported they have wedged the current view
      * (meta-wedged), and does ragged edge cleanup to finalize the terminated epoch.
      * Determines if the next view will be adequate, and only proceeds to start a view change if it will be. */
-    void terminate_epoch(DerechoSST& gmsSST);
+    void terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
+                         uint32_t next_num_received_size,
+                         DerechoSST& gmsSST);
     /**  and finishes installing the new view. */
     void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
                             std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
@@ -343,7 +345,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
+                const DerechoParams& derecho_params = DerechoParams(0,0),
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 

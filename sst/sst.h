@@ -300,10 +300,10 @@ public:
     void freeze(int row_index);
 
     /** Returns the total number of rows in the table. */
-    int get_num_rows() const { return num_members; }
+    unsigned int get_num_rows() const { return num_members; }
 
     /** Gets the index of the local row in the table. */
-    int get_local_index() const { return my_index; }
+    unsigned int get_local_index() const { return my_index; }
 
     const char* getBaseAddress() {
         return const_cast<char*>(rows);

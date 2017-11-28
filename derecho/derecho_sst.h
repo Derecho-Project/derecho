@@ -129,7 +129,7 @@ public:
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier);
         //Once superclass constructor has finished, table entries can be initialized
-        for(int row = 0; row < get_num_rows(); ++row) {
+        for(unsigned int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
             for(size_t i = 0; i < suspected.size(); ++i) {
                 suspected[row][i] = false;

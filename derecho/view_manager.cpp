@@ -43,7 +43,6 @@ ViewManager::ViewManager(const node_id_t my_id,
     initialize_rdmc_sst();
 
     ns_persistent::saveObject(*curr_view);
-    ns_persistent::saveObject(derecho_params);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -88,7 +87,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                         std::experimental::optional<DerechoParams> _derecho_params,
+                         const DerechoParams& derecho_params,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
         : logger(spdlog::get("debug_log")),
@@ -97,7 +96,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
-          derecho_params(0, 0),
+          derecho_params(derecho_params),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     auto last_view = ns_persistent::loadObject<View>();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
@@ -120,12 +119,6 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                                            std::vector<ip_addr>{my_ip},
                                            std::vector<char>{0});
         initialize_rdmc_sst();
-        if(_derecho_params) {
-            derecho_params = _derecho_params.value();
-        } else {
-            derecho_params = *(ns_persistent::loadObject<DerechoParams>());
-        }
-
 
         await_first_view(my_id, subgroup_settings_map, num_received_size);
     }
@@ -134,7 +127,6 @@ ViewManager::ViewManager(const std::string& recovery_filename,
 
     //since the View just changed, and we're definitely in persistent mode, persist it again
     ns_persistent::saveObject(*curr_view);
-    ns_persistent::saveObject(derecho_params);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -352,16 +344,26 @@ void ViewManager::register_predicates() {
     };
     auto view_change_trig = [this](DerechoSST& sst) { start_meta_wedge(sst); };
 
-    suspected_changed_handle = curr_view->gmsSST->predicates.insert(suspected_changed, suspected_changed_trig,
-                                                                    sst::PredicateType::RECURRENT);
-    start_join_handle = curr_view->gmsSST->predicates.insert(start_join_pred, start_join_trig,
-                                                             sst::PredicateType::RECURRENT);
-    change_commit_ready_handle = curr_view->gmsSST->predicates.insert(change_commit_ready, commit_change,
+    if(!suspected_changed_handle.is_valid()) {
+        suspected_changed_handle = curr_view->gmsSST->predicates.insert(suspected_changed, suspected_changed_trig,
+                                                                        sst::PredicateType::RECURRENT);
+    }
+    if(!start_join_handle.is_valid()) {
+        start_join_handle = curr_view->gmsSST->predicates.insert(start_join_pred, start_join_trig,
+                                                                 sst::PredicateType::RECURRENT);
+    }
+    if(!change_commit_ready_handle.is_valid()) {
+        change_commit_ready_handle = curr_view->gmsSST->predicates.insert(change_commit_ready, commit_change,
+                                                                          sst::PredicateType::RECURRENT);
+    }
+    if(!leader_proposed_handle.is_valid()) {
+        leader_proposed_handle = curr_view->gmsSST->predicates.insert(leader_proposed_change, ack_proposed_change,
                                                                       sst::PredicateType::RECURRENT);
-    leader_proposed_handle = curr_view->gmsSST->predicates.insert(leader_proposed_change, ack_proposed_change,
-                                                                  sst::PredicateType::RECURRENT);
-    leader_committed_handle = curr_view->gmsSST->predicates.insert(leader_committed_changes, view_change_trig,
-                                                                   sst::PredicateType::ONE_TIME);
+    }
+    if(!leader_committed_handle.is_valid()) {
+        leader_committed_handle = curr_view->gmsSST->predicates.insert(leader_committed_changes, view_change_trig,
+                                                                       sst::PredicateType::ONE_TIME);
+    }
 }
 
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
@@ -370,8 +372,6 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     logger->debug("Suspected[] changed");
     View& Vc = *curr_view;
     int myRank = curr_view->my_rank;
-    // These fields had better be synchronized.
-    assert(gmsSST.get_local_index() == curr_view->my_rank);
     // Aggregate suspicions into gmsSST[myRank].Suspected;
     for(int r = 0; r < Vc.num_members; r++) {
         for(int who = 0; who < Vc.num_members; who++) {
@@ -382,14 +382,14 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     for(int q = 0; q < Vc.num_members; q++) {
         //If this is a new suspicion
         if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+            logger->debug("New suspicion: node {}", Vc.members[q]);
             //This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[q] = gmsSST.suspected[myRank][q];
-            logger->debug("Marking {} failed", Vc.members[q]);
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
                 throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
             }
 
-            logger->debug("GMS telling SST to freeze row {} which is node {}", q, Vc.members[q]);
+            logger->debug("GMS telling SST to freeze row {}", q);
             gmsSST.freeze(q);  // Cease to accept new updates from q
             Vc.multicast_group->wedge();
             gmssst::set(gmsSST.wedged[myRank], true);  // RDMC has halted new sends and receives in theView
@@ -438,8 +438,6 @@ void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
 }
 
 void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
-    // These fields had better be synchronized.
-    assert(gmsSST.get_local_index() == curr_view->my_rank);
     int myRank = gmsSST.get_local_index();
     int leader = curr_view->rank_of_leader();
     logger->debug("Detected that leader proposed change #{}. Acknowledging.", gmsSST.num_changes[leader]);
@@ -470,9 +468,6 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
-    // These fields had better be synchronized.
-    assert(gmsSST.get_local_index() == curr_view->my_rank);
-
     curr_view->wedge();
 
     /* We now need to wait for all other nodes to wedge the current view,
@@ -481,20 +476,66 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
      * registers the next epoch termination method as its trigger.
      */
     auto is_meta_wedged = [this](const DerechoSST& gmsSST) {
-        for(int n = 0; n < gmsSST.get_num_rows(); ++n) {
+        for(unsigned int n = 0; n < gmsSST.get_num_rows(); ++n) {
             if(!curr_view->failed[n] && !gmsSST.wedged[n]) {
                 return false;
             }
         }
         return true;
     };
-    auto meta_wedged_continuation = [this](DerechoSST& gmsSST) { terminate_epoch(gmsSST); };
+    auto meta_wedged_continuation = [this](DerechoSST& gmsSST) {
+        //Before the first call to terminate_epoch(), heap-allocate this map
+        auto next_subgroup_settings = std::make_shared<std::map<subgroup_id_t, SubgroupSettings>>();
+        terminate_epoch(next_subgroup_settings, 0, gmsSST);
+    };
     gmsSST.predicates.insert(is_meta_wedged, meta_wedged_continuation, sst::PredicateType::ONE_TIME);
 }
 
-void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
+void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
+                                  uint32_t next_num_received_size,
+                                  DerechoSST& gmsSST) {
     logger->debug("MetaWedged is true; continuing epoch termination");
+    //If this is the first time terminate_epoch() was called, next_view will still be null
+    bool first_call = false;
+    if(!next_view) {
+        first_call = true;
+    }
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
+    next_view = make_next_view(curr_view, gmsSST, logger);
+    logger->debug("Checking provisioning of view {}", next_view->vid);
+    next_subgroup_settings->clear();
+    next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
+    if(!next_view->is_adequately_provisioned) {
+        logger->debug("Next view would not be adequately provisioned, waiting for more joins.");
+        if(first_call) {
+            //Re-register the predicates for accepting and acknowledging joins
+            register_predicates();
+            //But remove the one for start_meta_wedge
+            gmsSST.predicates.remove(leader_committed_handle);
+        }
+        //Construct a predicate that watches for any new committed change that is a join
+        int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
+        auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
+            if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
+                const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()]
+                                                                 - gmsSST.num_installed[curr_view->rank_of_leader()];
+                for(int change_index = curr_num_committed; change_index < committed_count; change_index++) {
+                    node_id_t change_id = gmsSST.changes[curr_view->my_rank][change_index];
+                    if(curr_view->rank_of(change_id) == -1) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+        //Construct a trigger that will re-call finish_view_change() with the same parameters
+        auto retry_next_view = [this, next_subgroup_settings, next_num_received_size](DerechoSST& sst) {
+            terminate_epoch(next_subgroup_settings, next_num_received_size, sst);
+        };
+        gmsSST.predicates.insert(more_members_joined, retry_next_view, sst::PredicateType::ONE_TIME);
+        return;
+    }
+    //If execution reached here, we have a valid next view
 
     // go through all subgroups first and acknowledge all messages received through SST
     for(const auto& shard_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {
@@ -566,7 +607,8 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         return true;
     };
 
-    auto global_min_ready_continuation = [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
+    auto global_min_ready_continuation = [this, follower_subgroups_and_shards,
+                                          next_subgroup_settings, next_num_received_size](DerechoSST& gmsSST) {
 
         logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
         //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
@@ -593,7 +635,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         //(persisted_num should be equal to delivered_num for every node)
         auto persistence_finished_pred = [this](const DerechoSST& gmsSST) {
             for(node_id_t row = 0; row < gmsSST.get_num_rows(); ++row) {
-                for(int subgroup_id = 0; subgroup_id < curr_view->subgroup_shard_views.size(); ++subgroup_id) {
+                for(subgroup_id_t subgroup_id = 0; subgroup_id < curr_view->subgroup_shard_views.size(); ++subgroup_id) {
                     if(gmsSST.persisted_num[row][subgroup_id] < gmsSST.delivered_num[row][subgroup_id])
                         return false;
                 }
@@ -601,10 +643,9 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             return true;
         };
 
-        auto finish_view_change_trig = [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
-            //Before the first call to finish_view_change(), heap-allocate this map
-            auto next_subgroup_settings = std::make_shared<std::map<subgroup_id_t, SubgroupSettings>>();
-            finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, 0, gmsSST);
+        auto finish_view_change_trig = [this, follower_subgroups_and_shards,
+                                        next_subgroup_settings, next_num_received_size](DerechoSST& gmsSST) {
+            finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, gmsSST);
         };
 
         //Last statment in global_min_ready_continuation: register finish_view_change_trig
@@ -619,48 +660,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
                                      std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                                      uint32_t next_num_received_size,
                                      DerechoSST& gmsSST) {
-    //If this is the first time finish_view_change() was called, next_view will still be null
-    bool first_call = false;
-    if(!next_view) {
-        first_call = true;
-    }
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
-    next_view = make_next_view(curr_view, gmsSST, logger);
-    next_subgroup_settings->clear();
-    next_num_received_size = make_subgroup_maps(curr_view, *next_view, *next_subgroup_settings);
-    logger->debug("Attempting to finish view change to view {}", next_view->vid);
-    if(!next_view->is_adequately_provisioned) {
-        logger->debug("Next view would not be adequately provisioned, waiting for more joins.");
-        if(first_call) {
-            //Re-register the predicates for accepting and acknowledging joins
-            register_predicates();
-            //But remove the one for start_meta_wedged
-            gmsSST.predicates.remove(leader_committed_handle);
-        }
-        //Construct a predicate that watches for any new committed change that is a join
-        int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
-        auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
-            if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
-                const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()]
-                                                                 - gmsSST.num_installed[curr_view->rank_of_leader()];
-                for(int change_index = curr_num_committed; change_index < committed_count; change_index++) {
-                    node_id_t change_id = gmsSST.changes[curr_view->my_rank][change_index];
-                    if(curr_view->rank_of(change_id) == -1) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-        //Construct a trigger that will re-call finish_view_change() with the same parameters
-        auto retry_next_view = [this, follower_subgroups_and_shards, next_subgroup_settings,
-                                next_num_received_size](DerechoSST& sst) {
-            finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, sst);
-        };
-        gmsSST.predicates.insert(more_members_joined, retry_next_view, sst::PredicateType::ONE_TIME);
-        return;
-    }
-    //If execution reached here, we have a valid next view
 
     // Disable all the other SST predicates, except suspected_changed
     gmsSST.predicates.remove(start_join_handle);
@@ -734,8 +734,8 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     //Write the new view to disk before using it
     ns_persistent::saveObject(*curr_view);
 
-    //Resize last_suspected to match the new size of suspected[]
-    last_suspected.resize(curr_view->members.size());
+    //Re-initialize last_suspected (suspected[] has been reset to all false in the new view)
+    last_suspected.assign(curr_view->members.size(), false);
 
     // Register predicates in the new view
     register_predicates();
@@ -1068,7 +1068,7 @@ std::vector<std::vector<int64_t>> ViewManager::translate_types_to_ids(
 }
 
 bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old) {
-    for(int r = 0; r < gmsSST.get_num_rows(); r++) {
+    for(unsigned int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
                 return true;
