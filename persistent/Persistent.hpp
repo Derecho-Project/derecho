@@ -10,6 +10,7 @@
 #include <functional>
 #include <pthread.h>
 #include <map>
+#include <typeindex>
 #include <time.h>
 #include "HLC.hpp"
 #include "PersistException.hpp"
@@ -71,8 +72,8 @@ namespace ns_persistent {
    */
   class PersistentRegistry:public mutils::RemoteDeserializationContext{
   public:
-    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp):
-      _temporal_query_frontier_provider(tqfp){
+    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp, const std::type_index& subgroup_type, uint32_t subgroup_index):
+      _temporal_query_frontier_provider(tqfp){ //TODO: Store the type and index
     };
     virtual ~PersistentRegistry() {
       dbg_warn("PersistentRegistry@{} has been deallocated!",(void*)this);

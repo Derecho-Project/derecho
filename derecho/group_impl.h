@@ -199,12 +199,12 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                             && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
                         //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager));
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager));
                         subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
                     } else {
                         logger->debug("Constructing new Replicated Object state for type {}", typeid(FirstType).name());
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, shard_num, rpc_manager,
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
                                                                       factories.template get<FirstType>()));
                     }
                     //Store a reference to the Replicated<T> just constructed
@@ -285,7 +285,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>("derecho_debug_log", 1024 * 1024 * 5, 3));
     // Uncomment this to get debugging output printed to the terminal
-    // log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
+    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
     std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [%l] %v");
     log->set_level(spdlog::level::debug);
