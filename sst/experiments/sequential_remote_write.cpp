@@ -68,14 +68,14 @@ int main() {
         // only the 0 rank node writes remote data from each of the other processes
         if(node_rank == 0) {
             // create an array of resources
-            resources *res[num_nodes];
+            resources_one_sided *res[num_nodes];
             // create buffer for write and read
             char *write_buf[num_nodes], *read_buf[num_nodes];
             for(int r_index = 1; r_index < num_nodes; ++r_index) {
                 write_buf[r_index] = (char *)malloc(size);
                 read_buf[r_index] = (char *)malloc(size);
 
-                res[r_index] = new resources(r_index, read_buf[r_index],
+                res[r_index] = new resources_one_sided(r_index, read_buf[r_index],
                                              write_buf[r_index], size, size);
             }
 
@@ -136,7 +136,7 @@ int main() {
             }
             write_buf[size - 1] = 0;
 
-            resources *res = new resources(0, read_buf, write_buf, size, size);
+            resources_one_sided *res = new resources_one_sided(0, read_buf, write_buf, size, size);
             char temp_char;
             char tQ[2] = {'Q', 0};
             // wait for node 0 to finish write

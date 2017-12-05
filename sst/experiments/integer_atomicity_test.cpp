@@ -56,7 +56,7 @@ int main() {
         read_buf = (char *)malloc(4);
 
         int r_index = num_nodes - 1 - node_rank;
-        resources *res = new resources(r_index, write_buf, read_buf, size, 4);
+        resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, size, 4);
 
         while(true) {
             a = b - a;
@@ -76,7 +76,7 @@ int main() {
         ;
 
         int r_index = num_nodes - 1 - node_rank;
-        resources *res = new resources(r_index, write_buf, read_buf, 4, size);
+        resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, 4, size);
 
         for(int i = 0; i < num_reruns; ++i) {
             // index is 0, meaning that we start from the beginning and read the entire buffer

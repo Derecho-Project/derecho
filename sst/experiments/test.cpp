@@ -41,7 +41,7 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
-    resources *res = new resources(r_index, write_buf, read_buf, 10, 10);
+    resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, 10, 10);
 
     // remotely read data into the read_buf
     res->post_remote_read(10);

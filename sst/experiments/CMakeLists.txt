@@ -40,5 +40,9 @@ target_link_libraries(multicast_throughput sst)
 add_executable(write_avg_time write_avg_time.cpp compute_nodes_list.cpp)
 target_link_libraries(write_avg_time sst)
 
+# rdma_two_sided
+add_executable(rdma_two_sided rdma_two_sided.cpp)
+target_link_libraries(rdma_two_sided sst)
+
 # format experiments
 add_custom_target(format_sst_experiments clang-format-3.8 -i *.cpp *.h)

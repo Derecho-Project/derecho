@@ -37,7 +37,7 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
-    resources *res = new resources(r_index, read_buf, write_buf, 10, 10);
+    resources_one_sided *res = new resources_one_sided(r_index, read_buf, write_buf, 10, 10);
 
     const auto tid = std::this_thread::get_id();
     // get id first

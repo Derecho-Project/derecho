@@ -24,7 +24,7 @@ int num_reads = 10;
 long long int size = 1024 * 1024 * 1024;
 
 // resources class
-resources *res;
+resources_one_sided *res;
 
 void *post_reads(void *nothing) {
     for(int i = 0; i < num_reads; ++i) {
@@ -74,7 +74,7 @@ int main() {
         write_buf[i] = ch;
     }
     cout << "Done initializing buffer for remote read" << endl;
-    res = new resources(num_nodes - node_rank - 1, write_buf, read_buf, size, 50);
+    res = new resources_one_sided(num_nodes - node_rank - 1, write_buf, read_buf, size, 50);
 
     pthread_t post_thread, poll_thread;
     pthread_attr_t attr;

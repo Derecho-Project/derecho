@@ -56,7 +56,7 @@ void *run(void *tid) {
         read_buf = (char *)malloc(size);
 
         // create connections
-        resources *res = new resources(thread_id, write_buf, read_buf, size, size);
+        resources_one_sided *res = new resources_one_sided(thread_id, write_buf, read_buf, size, size);
 
         cout << "Connection established to remote node " << thread_id << endl;
 
@@ -208,7 +208,7 @@ int main() {
             }
             write_buf[size - 1] = 0;
 
-            resources *res = new resources(0, write_buf, read_buf, size, size);
+            resources_one_sided *res = new resources_one_sided(0, write_buf, read_buf, size, size);
             char temp_char;
             char tQ[2] = {'Q', 0};
             // wait for node 0 to finish read

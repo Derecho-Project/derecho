@@ -57,7 +57,7 @@ int main() {
         read_buf = (char *)malloc(size);
 
         int r_index = num_nodes - 1 - node_rank;
-        resources *res = new resources(r_index, read_buf, write_buf, size, size);
+        resources_one_sided *res = new resources_one_sided(r_index, read_buf, write_buf, size, size);
 
         // write to the write buffer
         for(int i = 0; i < size - 1; ++i) {

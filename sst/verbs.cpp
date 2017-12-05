@@ -331,25 +331,33 @@ int resources::post_remote_send(const uint32_t id, const long long int offset, c
     // set opcode depending on op parameter
     if(op == 0) {
         sr.opcode = IBV_WR_RDMA_READ;
-    } else {
+    } else if (op == 1) {
         sr.opcode = IBV_WR_RDMA_WRITE;
+    } else {
+        sr.opcode = IBV_WR_SEND;
     }
     if(completion) {
         sr.send_flags = IBV_SEND_SIGNALED;
     }
-    // set the remote rkey and virtual address
-    sr.wr.rdma.remote_addr = remote_props.addr + offset;
-    sr.wr.rdma.rkey = remote_props.rkey;
+    if(op == 0 || op == 1) {
+        // set the remote rkey and virtual address
+        sr.wr.rdma.remote_addr = remote_props.addr + offset;
+        sr.wr.rdma.rkey = remote_props.rkey;
+    }
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
     auto ret = ibv_post_send(qp, &sr, &bad_wr);
     return ret;
 }
 
+resources_one_sided::resources_one_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+                                         int size_r) : resources(r_index, write_addr, read_addr, size_w, size_r) {
+}
+
 /**
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int size) {
+void resources_one_sided::post_remote_read(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -360,7 +368,7 @@ void resources::post_remote_read(const uint32_t id, const long long int size) {
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
+void resources_one_sided::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -370,7 +378,7 @@ void resources::post_remote_read(const uint32_t id, const long long int offset, 
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int size) {
+void resources_one_sided::post_remote_write(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -383,24 +391,102 @@ void resources::post_remote_write(const uint32_t id, const long long int size) {
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
+void resources_one_sided::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int size) {
+void resources_one_sided::post_remote_write_with_completion(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
+void resources_one_sided::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
+}
+
+resources_two_sided::resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+                                         int size_r) : resources(r_index, write_addr, read_addr, size_w, size_r) {
+}
+
+/**
+ * @param size The number of bytes to write from the local buffer to remote
+ * memory.
+ */
+void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int size) {
+    int rc = post_remote_send(id, 0, size, 2, false);
+    if(rc) {
+        cout << "Could not post RDMA two sided send (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
+}
+
+/**
+ * @param offset The offset, in bytes, of the remote memory buffer at which to
+ * start writing.
+ * @param size The number of bytes to write from the local buffer into remote
+ * memory.
+ */
+void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int offset, const long long int size) {
+    int rc = post_remote_send(id, offset, size, 2, false);
+    if(rc) {
+      cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
+}
+
+void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int size) {
+    int rc = post_remote_send(id, 0, size, 2, true);
+    if(rc) {
+      cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
+}
+
+void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size) {
+    int rc = post_remote_send(id, offset, size, 2, true);
+    if(rc) {
+      cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
+}
+
+int resources_two_sided::post_receive(const uint32_t id, const long long int offset, const long long int size) {
+    struct ibv_recv_wr rr;
+    struct ibv_sge sge;
+    struct ibv_recv_wr *bad_wr;
+
+    /* prepare the scatter/gather entry */
+    memset(&sge, 0, sizeof(sge));
+    sge.addr = (uintptr_t)(write_buf + offset);
+    sge.length = size;
+    sge.lkey = write_mr->lkey;
+    /* prepare the receive work request */
+    memset(&rr, 0, sizeof(rr));
+    rr.next = NULL;
+    rr.wr_id = id;
+    rr.sg_list = &sge;
+    rr.num_sge = 1;
+
+    /* post the Receive Request to the RQ */
+    auto ret = ibv_post_recv(qp, &rr, &bad_wr);
+    return ret;
+}
+
+void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int size) {
+  int rc = post_receive(id, 0, size);
+  if(rc) {
+    cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+  }
+}
+
+void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size) {
+    int rc = post_receive(id, offset, size);
+    if(rc) {
+        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 

@@ -41,6 +41,8 @@ private:
     void set_qp_ready_to_send();
     /** Connect the queue pairs. */
     void connect_qp();
+
+protected:
     /** Post a remote RDMA operation. */
     int post_remote_send(const uint32_t id, const long long int offset, const long long int size, const int op, const bool completion);
 
@@ -67,6 +69,12 @@ public:
               int size_r);
     /** Destroys the resources. */
     virtual ~resources();
+};
+
+class resources_one_sided : public resources {
+public:
+    resources_one_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+                        int size_r);
     /*
       wrapper functions that make up the user interface
       all call post_remote_send with different parameters
@@ -84,7 +92,24 @@ public:
     void post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size);
 };
 
-bool add_node(uint32_t new_id, const std::string new_ip_addr);
+class resources_two_sided : public resources {
+    int post_receive(const uint32_t id, const long long int offset, const long long int size);
+
+public:
+    resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+                        int size_r);
+    void post_two_sided_send(const uint32_t id, const long long int size);
+    /** Post an RDMA write at an offset into remote memory. */
+    void post_two_sided_send(const uint32_t id, const long long int offset, long long int size);
+    void post_two_sided_send_with_completion(const uint32_t id, const long long int size);
+    /** Post an RDMA write at an offset into remote memory. */
+    void post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size);
+    void post_two_sided_receive(const uint32_t id, const long long int size);
+    void post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size);
+};
+
+bool
+add_node(uint32_t new_id, const std::string new_ip_addr);
 bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,
