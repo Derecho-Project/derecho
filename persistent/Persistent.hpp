@@ -73,7 +73,8 @@ namespace ns_persistent {
   class PersistentRegistry:public mutils::RemoteDeserializationContext{
   public:
     PersistentRegistry(ITemporalQueryFrontierProvider * tqfp, const std::type_index& subgroup_type, uint32_t subgroup_index):
-      _temporal_query_frontier_provider(tqfp){ //TODO: Store the type and index
+      _subgroup_prefix(std::string(subgroup_type.name())+std::to_string(subgroup_index)),
+      _temporal_query_frontier_provider(tqfp){
     };
     virtual ~PersistentRegistry() {
       dbg_warn("PersistentRegistry@{} has been deallocated!",(void*)this);
@@ -133,8 +134,13 @@ namespace ns_persistent {
     PersistentRegistry(PersistentRegistry &&) = default;
     PersistentRegistry(const PersistentRegistry &) = delete;
 
+    // get prefix for subgroup, this will appear in the file name of Persistent<T>
+    const char * get_subgroup_prefix() {
+      return this->_subgroup_prefix.c_str();
+    }
+
   protected:
-    //std::vector<std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    const std::string _subgroup_prefix; // this appears in the first part of storage file for persistent<T>
     ITemporalQueryFrontierProvider * _temporal_query_frontier_provider;
     std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
     template<int funcIdx,typename ... Args >
@@ -254,7 +260,7 @@ namespace ns_persistent {
         : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log((object_name==nullptr)?
-          (*Persistent::getNameMaker().make()).c_str() : object_name);
+          (*Persistent::getNameMaker().make(persistent_registry?persistent_registry->get_subgroup_prefix():nullptr)).c_str() : object_name);
         // Initialize object
         initialize_object_from_log();
         // Register Callbacks
@@ -290,7 +296,7 @@ namespace ns_persistent {
         // Initialize log
         if ( log_ptr == nullptr ) {
           initialize_log((object_name==nullptr)?
-            (*Persistent::getNameMaker().make()).c_str() : object_name);
+            (*Persistent::getNameMaker().make(persistent_registry?persistent_registry->get_subgroup_prefix():nullptr)).c_str() : object_name);
         } else {
           this->m_pLog = std::move(log_ptr);
         }
@@ -560,7 +566,7 @@ namespace ns_persistent {
         }
 
         // guess a name
-        std::unique_ptr<std::string> make() noexcept(false) {
+        std::unique_ptr<std::string> make(const char *prefix) noexcept(false) {
           int cnt;
           if (pthread_spin_lock(&this->m_oLck) != 0) {
             throw PERSIST_EXP_SPIN_LOCK(errno);
@@ -572,7 +578,7 @@ namespace ns_persistent {
           std::unique_ptr<std::string> ret = std::make_unique<std::string>();
           //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
           char buf[256];
-          sprintf(buf,"%d-%s-%d",storageType,this->m_sObjectTypeName,cnt);
+          sprintf(buf,"%s-%d-%s-%d",(prefix)?prefix:"none",storageType,this->m_sObjectTypeName,cnt);
          // return std::make_shared<const char *>((const char*)buf);
          *ret = buf;
          return ret;
