@@ -8,8 +8,8 @@ P2PConnections::P2PConnections(const P2PParams& params)
           my_node_id(params.my_node_id),
           window_size(params.window_size),
           max_msg_size(params.max_p2p_size + sizeof(uint64_t)),
-          outgoing_p2p_buffers(num_members),
           incoming_p2p_buffers(num_members),
+          outgoing_p2p_buffers(num_members),
           res_vec(num_members),
           incoming_request_seq_nums(num_members),
           incoming_reply_seq_nums(num_members),
@@ -30,8 +30,8 @@ P2PConnections::P2PConnections(const P2PParams& params)
         if(i == my_index) {
             continue;
         }
-        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
         incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
+        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
         res_vec[i] = std::make_unique<resources_one_sided>(i, incoming_p2p_buffers[i].get(), outgoing_p2p_buffers[i].get(), 2 * max_msg_size * window_size + sizeof(bool), 2 * max_msg_size * window_size + sizeof(bool));
     }
 }
@@ -42,8 +42,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const P2PParams
           my_node_id(params.my_node_id),
           window_size(params.window_size),
           max_msg_size(params.max_p2p_size + sizeof(uint64_t)),
-          outgoing_p2p_buffers(num_members),
           incoming_p2p_buffers(num_members),
+          outgoing_p2p_buffers(num_members),
           res_vec(num_members),
           incoming_request_seq_nums(num_members),
           incoming_reply_seq_nums(num_members),
@@ -70,15 +70,19 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const P2PParams
             continue;
         }
         if(node_id_to_rank.find(members[i]) == node_id_to_rank.end()) {
-	  outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
             incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
+            outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
             res_vec[i] = std::make_unique<resources_one_sided>(i, incoming_p2p_buffers[i].get(), outgoing_p2p_buffers[i].get(),
                                                                2 * max_msg_size * window_size + sizeof(bool), 2 * max_msg_size * window_size + sizeof(bool));
         } else {
             auto old_rank = node_id_to_rank[members[i]];
-            outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers(old_rank));
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers(old_rank));
+            outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers(old_rank));
             res_vec[i] = std::move(old_connections.res_vec[old_rank]);
+	    incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];
+	    incoming_reply_seq_nums[i] = old_connections.incoming_reply_seq_nums[old_rank];
+	    outgoing_request_seq_nums[i] = old_connections.outgoing_request_seq_nums[old_rank];
+	    outgoing_reply_seq_nums[i] = old_connections.outgoing_reply_seq_nums[old_rank];
         }
     }
 }
