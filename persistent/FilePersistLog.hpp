@@ -201,16 +201,18 @@ namespace ns_persistent {
     virtual void trimByIndex(const int64_t &eno) noexcept(false);
     virtual void trim(const int64_t &ver) noexcept(false);
     virtual void trim(const HLC & hlc) noexcept(false);
+    virtual size_t bytes_size(const int64_t &ver) noexcept(false);
+    virtual size_t to_bytes(char* buf, const int64_t &ver) noexcept(false);
+    virtual void post_object(const std::function<void (char const *const, std::size_t)> &f,
+                             const int64_t &ver) noexcept(false);
+    virtual void applyDelta(char const *v) noexcept(false);
 
     template <typename TKey,typename KeyGetter>
     void trim(const TKey &key,const KeyGetter &keyGetter) noexcept(false) {
-      int64_t head,tail,idx;
+      int64_t idx;
       // RDLOCK for validation
       FPL_RDLOCK;
-      head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-      tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
-      if (tail < head) tail += MAX_LOG_ENTRY;
-      idx = binarySearch<TKey>(keyGetter,key,head,tail);
+      idx = binarySearch<TKey>(keyGetter,key,META_HEADER->fields.head,META_HEADER->fields.tail);
       if (idx == -1) {
         FPL_UNLOCK;
         return;
@@ -221,12 +223,9 @@ namespace ns_persistent {
       // search?
       // WRLOCK for trim
       FPL_WRLOCK;
-      head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-      tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
-      if (tail < head) tail += MAX_LOG_ENTRY;
-      idx = binarySearch<TKey>(keyGetter,key,head,tail);
+      idx = binarySearch<TKey>(keyGetter,key,META_HEADER->fields.head,META_HEADER->fields.tail);
       if (idx != -1) {
-        META_HEADER->fields.head += (idx-head+1);
+        META_HEADER->fields.head = (idx+1);
         //TODO:remove delete entries from the index. This is tricky because
         // HLC order and idex order does not agree with each other.
         throw PERSIST_EXP_UNIMPLEMENTED;
@@ -238,6 +237,90 @@ namespace ns_persistent {
     }
 
   private:
+    /**
+     * Get the minimum index since a given version
+     * Note: no lock protected, use FPL_RDLOCK
+     * @PARAM ver the given version. INVALID_VERSION means to return the earliest index.
+     * @RETURN the minimum index since the given version. INVALID_INDEX means 
+     *         that no log entry is available for the requested version.
+     */
+    int64_t getMinimumIndexSinceVersion(const int64_t & ver) noexcept(false);
+    /**
+     * get the byte size of log entry
+     * Note: no lock protected, use FPL_RDLOCK
+     * @PARAM ple - pointer to the log entry
+     * @RETURN the number of bytes required for the serialized data.
+     */
+    size_t byteSizeOfLogEntry(const LogEntry *ple) noexcept(false);
+    /**
+     * serialize the log entry to a byte array
+     * Note: no lock protected, use FPL_RDLOCK
+     * @PARAM ple - the pointer to the log entry
+     * @RETURN the number of bytes written to the byte array
+     */
+    size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba) noexcept(false);
+    /**
+     * post the log entry to a serialization function accepting a byte array
+     * Note: no lock protected, use FPL_RDLOCK
+     * @PARAM f - funciton
+     * @PARAM ple - pointer to the log entry
+     * @RETURN the number of bytes posted.
+     */
+    size_t postLogEntry(const std::function<void (char const *const, std::size_t)> &f, const LogEntry *ple) noexcept(false);
+    /**
+     * merge the log entry to current state.
+     * Note: no lock protected, use FPL_WRLOCK
+     * @PARAM ba - serialize form of the entry
+     * @RETURN - number of size read from the entry.
+     */
+    size_t mergeLogEntryFromByteArray(const char *ba) noexcept(false);
+
+    /**
+     * binary search through the log, return the maximum index of the entries
+     * whose key <= @param key. Note that indexes used here is 'virtual'.
+     *
+     * [ ][ ][ ][ ][X][X][X][X][ ][ ][ ]
+     *              ^logHead   ^logTail
+     * @param keyGetter: function which get the key from LogEntry
+     * @param key: the key to be search
+     * @param logArr: log array
+     * @param len: log length
+     * @return index of the log entry found or -1 if not found.
+     */
+    template<typename TKey,typename KeyGetter>
+    int64_t binarySearch(const KeyGetter & keyGetter, const TKey & key,
+      const int64_t & logHead, const int64_t & logTail) noexcept(false) {
+      if (logTail <= logHead) {
+        dbg_trace("binary Search failed...EMPTY LOG");
+        return (int64_t)-1L;
+      }
+      int64_t head = logHead, tail = logTail - 1;
+      int64_t pivot = 0;
+      while (head <= tail) {
+        pivot = (head + tail)/2;
+        dbg_trace("Search range: {0}->[{1},{2}]",pivot,head,tail);
+        const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
+        if (p_key == key) {
+          break; // found
+        } else if (p_key < key) {
+          if (pivot + 1 >= logTail) {
+            break; // found - the last element
+          } else if (keyGetter(LOG_ENTRY_AT(pivot+1)) > key) {
+            break; // found - the next one is greater than key
+          } else { // search right
+            head = pivot + 1;
+          }
+        } else { // search left
+          tail = pivot - 1;
+          if (head > tail) {
+            dbg_trace("binary Search failed...Object does not exist.");
+            return (int64_t)-1L;
+          }
+        }
+      }
+      return pivot;
+    }
+
 #ifdef _DEBUG
     //dbg functions
     void dbgDumpMeta() {

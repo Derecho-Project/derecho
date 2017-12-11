@@ -59,6 +59,7 @@ namespace ns_persistent {
   using VersionFunc = std::function<void(const int64_t &,const HLC &)>;
   using PersistFunc = std::function<const int64_t(void)>;
   using TrimFunc = std::function<void(const int64_t &)>;
+  using LatestPersistedGetterFunc = std::function<const int64_t(void)>;
   // this function is obsolete, now we use a shared pointer to persistence registry
   // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
 
@@ -83,28 +84,59 @@ namespace ns_persistent {
     #define VERSION_FUNC_IDX (0)
     #define PERSIST_FUNC_IDX (1)
     #define TRIM_FUNC_IDX (2)
+    #define GET_ML_PERSISTED_VER (3)
     // make a version
     void makeVersion(const int64_t & ver, const HLC & mhlc) noexcept(false) {
       callFunc<VERSION_FUNC_IDX>(ver,mhlc);
     };
+
     // persist data
     const int64_t persist() noexcept(false) {
       return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
     };
+
     // trim the log
     void trim(const int64_t & ver) noexcept(false) {
       callFunc<TRIM_FUNC_IDX>(ver);
     };
+
+    // get the minimum latest version persisted
+    const int64_t getMinimumLatestPersistedBersion() noexcept(false) {
+      return callFuncMin<GET_ML_PERSISTED_VER,int64_t>();
+    }
+
+    // set the earlist version for serialization, this version will be stored
+    // in a thread-local variable. When to_bytes() are called on Persistent<T>,
+    // it will serialize the logs since that version. 
+    static void setEarliestVersionToSerialize(const int64_t& ver) noexcept(true) {
+      PersistentRegistry::earliest_version_to_serialize = ver;
+    }
+
+    // reset the earliest version for serialization.
+    static void resetEarliestVersionToSerialize() noexcept(true) {
+      PersistentRegistry::earliest_version_to_serialize = INVALID_VERSION;
+    }
+
+    // get the earliest version for serialization.
+    static int64_t getEarliestVersionToSerialize() noexcept(true) {
+      return PersistentRegistry::earliest_version_to_serialize;
+    }
+
+    // set the latest version for serialization
     // register a Persistent<T> along with its lambda
-    void registerPersist(const char* obj_name, const VersionFunc &vf,const PersistFunc &pf,const TrimFunc &tf) noexcept(false) {
+    void registerPersist(const char* obj_name,
+      const VersionFunc &vf,
+      const PersistFunc &pf,
+      const TrimFunc &tf,
+      const LatestPersistedGetterFunc &lpgf) noexcept(false) {
       //this->_registry.push_back(std::make_tuple(vf,pf,tf));
-      auto tuple_val = std::make_tuple(vf,pf,tf);
+      auto tuple_val = std::make_tuple(vf,pf,tf,lpgf);
       std::size_t key = std::hash<std::string>{}(obj_name);
-      auto res = this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>>(key,tuple_val));
+      auto res = this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>>(key,tuple_val));
       if (res.second==false) {
         //override the previous value:
         this->_registry.erase(res.first);
-        this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>>(key,tuple_val));
+        this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>>(key,tuple_val));
       }
     };
     // get temporal query frontier
@@ -142,7 +174,7 @@ namespace ns_persistent {
   protected:
     const std::string _subgroup_prefix; // this appears in the first part of storage file for persistent<T>
     ITemporalQueryFrontierProvider * _temporal_query_frontier_provider;
-    std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc>> _registry;
+    std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>> _registry;
     template<int funcIdx,typename ... Args >
     void callFunc(Args ... args) {
       for (auto itr = this->_registry.begin();
@@ -164,7 +196,10 @@ namespace ns_persistent {
       }
       return min_ret;
     }
+    static thread_local int64_t earliest_version_to_serialize;
   };
+  #define DEFINE_PERSISTENT_REGISTRY_STATIC_MEMBERS \
+    thread_local int64_t PersistentRegistry::earliest_version_to_serialize = INVALID_VERSION;
 
   // Persistent represents a variable backed up by persistent storage. The
   // backend is PersistLog class. PersistLog handles only raw bytes and this
@@ -243,7 +278,8 @@ namespace ns_persistent {
             this->m_pLog->m_sName.c_str(),
             std::bind(&Persistent<ObjectType,storageType>::version,this,std::placeholders::_1),
             std::bind(&Persistent<ObjectType,storageType>::persist,this),
-            std::bind(&Persistent<ObjectType,storageType>::trim<const int64_t>,this,std::placeholders::_1) //trim by version:(const int64_t)
+            std::bind(&Persistent<ObjectType,storageType>::trim<const int64_t>,this,std::placeholders::_1), //trim by version:(const int64_t)
+            std::bind(&Persistent<ObjectType,storageType>::getLatestVersion,this) //get the latest persisted versions
           );
         }
       }
@@ -604,38 +640,60 @@ namespace ns_persistent {
 
   //serialization supports
   public:
+      ///////////////////////////////////////////////////////////////////////
+      // Serialization and Deserialization of Persistent<T>
+      // Serialization of the persistent<T> is packed in the following order
+      // 1) the log name
+      // 2) current state of the object
+      // 3) number of log entries
+      // 4) the log entries from the earliest to the latest
+      // TODO.
+      //Note: this rely on PersistentRegistry::earliest_version_to_serialize
       std::size_t to_bytes(char* ret) const {
           std::size_t sz = 0; 
-          // variable name
-          sz = mutils::to_bytes(this->m_pLog->m_sName.c_str(),ret+sz);
           // wrapped object
           sz = mutils::to_bytes(*this->m_pWrappedObject,ret+sz);
-          // TODO:the persistent log is missing for now. 
-          // we should add the log later... a more sophisticated but practical
-          // scenario is send a log delta here for a crashed node to catch up.
+          // and the log
+          sz += this->m_pLog->to_bytes(ret+sz,PersistentRegistry::getEarliestVersionToSerialize());
           return sz;
       }
       std::size_t bytes_size() const {
-          return mutils::bytes_size(this->m_pLog->m_sName.c_str()) +
-              mutils::bytes_size(*this->m_pWrappedObject);
+          return mutils::bytes_size(*this->m_pWrappedObject) + 
+              this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
       }
       void post_object(const std::function<void (char const * const, std::size_t)> &f)
       const {
-          mutils::post_object(f,this->m_pLog->m_sName.c_str());
           mutils::post_object(f,*this->m_pWrappedObject);
+          this->m_pLog->post_object(f,PersistentRegistry::getEarliestVersionToSerialize());
       }
       // NOTE: we do not set up the registry here. This will only happen in the
       // construction of Replicated<T>
       static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* p, char const *v){
-          auto name = mutils::from_bytes<char*>(p,v);
-          auto sz_name = mutils::bytes_size(*name);
-          auto wrapped_obj = mutils::from_bytes<ObjectType>(p, v + sz_name);
-          std::unique_ptr<PersistLog> null_log = nullptr;//TODO: deserialization
+          // TODO: we do not allow constructing from a byte_array for now.
+          // please construct Persistent<T> from persisted states and apply the
+          // delta (tail logs).
+          // TODO: discuss this with Edward AGAIN.
+          /*
+          auto wrapped_obj = mutils::from_bytes<ObjectType>(p, v);
+          std::unique_ptr<PersistLog> null_log = nullptr;//TODO: deserialize the logs.
           PersistentRegistry & pr = p->template mgr<PersistentRegistry> ();
           return std::make_unique<Persistent>(*name,wrapped_obj,null_log,&pr);
+          */
+          dbg_warn("We do not allow constructiong Persistent<T> from a byte array. Please construct it by calling the normal constructors and apply the delta(tail logs) if there is any. Discuss this with Edward.");
+          throw PERSIST_EXP_UNIMPLEMENTED;
       }
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}
+      // apply the serialized delta to existing log
+      // @dsm - deserialization manager
+      // @v - bytes representation of the delta (tail log)
+      void applyDelta(mutils::DeserializationManager* dsm, char const *v) {
+        // Step 1: update the current state
+        this->m_pWrappedObject = std::move(mutils::from_bytes<ObjectType>(dsm,v));
+        auto sz_wrappedObject = mutils::bytes_size(*this->m_pWrappedObject);
+        // Step 2: apply delta
+        this->m_pLog->applyDelta(v + sz_wrappedObject);
+      }
 
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
       uint64_t ns_in_persist = 0ul;

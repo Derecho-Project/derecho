@@ -10,6 +10,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <functional>
 #include "PersistException.hpp"
 #include "HLC.hpp"
 
@@ -152,6 +153,37 @@ namespace ns_persistent {
      * @param hlc - all log entry before hlc will be trimmed.
      */
     virtual void trim(const HLC & hlc) noexcept(false) = 0;
+
+    /**
+     * Calculate the byte size required for serialization
+     * @PARAM ver - from which version the detal begins(tail log) 
+     *   INVALID_VERSION means to include all of the tail logs
+     */
+    virtual size_t bytes_size(const int64_t &ver) = 0;
+
+    /**
+     * Write the serialized log bytes to the given buffer
+     * @PARAM buf - the buffer to receive serialized bytes
+     * @PARAM ver - from which version the detal begins(tail log)
+     *   INVALID_VERSION means to include all of the tail logs
+     */
+    virtual size_t to_bytes(char* buf, const int64_t &ver) = 0;
+
+    /**
+     * Post the serialized log bytes to a function
+     * @PARAM f - the function to handle the serialzied bytes
+     * @PARAM ver - from which version the detal begins(tail log)
+     *   INVALID_VERSION means to include all of the tail logs
+     */
+    virtual void post_object(const std::function<void (char const *const, std::size_t)> &f,
+                             const int64_t &ver) = 0;
+
+    /**
+     * Check/Merge the delta(tail logs) to the existing log.
+     * @PARAM dsm - deserialization manager
+     * @PARAM v - serialized log bytes to be apllied
+     */
+    virtual void applyDelta(char const *v) = 0;
   };
 }
 

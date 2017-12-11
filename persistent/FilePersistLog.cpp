@@ -297,7 +297,7 @@ namespace ns_persistent{
     dbg_trace("{0} flush data,log,and meta.", this->m_sName);
     try {
       // shadow the current state
-      void * flush_dstart, * flush_lstart;
+      void * flush_dstart = nullptr, * flush_lstart = nullptr;
       size_t flush_dlen = 0, flush_llen = 0;
       MetaHeader shadow_header = *META_HEADER;
       if ((NUM_USED_SLOTS > 0) && 
@@ -422,9 +422,10 @@ namespace ns_persistent{
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
   }
 
-  // binary search through the log
-  /**
-   * binary search through the log
+  /** MOVED TO .hpp
+   * binary search through the log, return the maximum index of the entries
+   * whose key <= @param key. Note that indexes used here is 'virtual'.
+   *
    * [ ][ ][ ][ ][X][X][X][X][ ][ ][ ]
    *              ^logHead   ^logTail
    * @param keyGetter: function which get the key from LogEntry
@@ -433,8 +434,9 @@ namespace ns_persistent{
    * @param len: log length
    * @return index of the log entry found or -1 if not found.
    */
+/*
   template<typename TKey,typename KeyGetter>
-  static int64_t binarySearch(const KeyGetter & keyGetter, const TKey & key,
+  int64_t FilePersistLog::binarySearch(const KeyGetter & keyGetter, const TKey & key,
     const int64_t & logHead, const int64_t & logTail) noexcept(false) {
     if (logTail <= logHead) {
       dbg_trace("binary Search failed...EMPTY LOG");
@@ -445,7 +447,7 @@ namespace ns_persistent{
     while (head <= tail) {
       pivot = (head + tail)/2;
       dbg_trace("Search range: {0}->[{1},{2}]",pivot,head,tail);
-      const TKey p_key = keyGetter(pivot);
+      const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
       if (p_key == key) {
         break; // found
       } else if (p_key < key) {
@@ -466,6 +468,7 @@ namespace ns_persistent{
     }
     return pivot;
   }
+*/
 
   const void * FilePersistLog::getEntry(const int64_t& ver)
   noexcept(false) {
@@ -475,15 +478,14 @@ namespace ns_persistent{
     FPL_RDLOCK;
 
     //binary search
-    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
-    if (tail < head) tail += MAX_LOG_ENTRY;
     dbg_trace("{0} - begin binary search.",this->m_sName);
     int64_t l_idx = binarySearch<int64_t>(
-      [&](int64_t idx){
-        return LOG_ENTRY_AT(idx)->fields.ver;
+      [&](const LogEntry *ple){
+        return ple->fields.ver;
       },
-      ver,head,tail);
+      ver,
+      META_HEADER->fields.head,
+      META_HEADER->fields.tail);
     ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_trace("{0} - end binary search.",this->m_sName);
 
@@ -580,7 +582,7 @@ namespace ns_persistent{
   void FilePersistLog::trim(const int64_t &ver) noexcept(false) {
     dbg_trace("{0} trim at version: {1}",this->m_sName,ver);
     this->trim<int64_t>(ver,
-      [&](int64_t idx){return LOG_ENTRY_AT(idx)->fields.ver;});
+      [&](const LogEntry * ple){return ple->fields.ver;});
     dbg_trace("{0} trim at version: {1}...done",this->m_sName,ver);
   }
 
@@ -621,6 +623,177 @@ namespace ns_persistent{
     *META_HEADER_PERS = *pShadowHeader;
   }
 
+  int64_t FilePersistLog::getMinimumIndexSinceVersion(const int64_t & ver) noexcept(false) {
+    int64_t rIndex = INVALID_INDEX;
+
+    dbg_trace("{0}[{1}] - request version {2}",this->m_sName, __func__, ver);
+
+    if (NUM_USED_SLOTS == 0) {
+      dbg_trace("{0}[{1}] - request on an empty log, return INVALID_INDEX.", this->m_sName, __func__);
+      return rIndex;
+    }
+
+    if (ver == INVALID_VERSION) {
+      dbg_trace("{0}[{1}] - request all logs", this->m_sName, __func__);
+      // return the earliest log we have.
+      return META_HEADER->fields.head;
+    }
+
+    // binary search
+    dbg_trace("{0}[{1}] - begin binary search.",this->m_sName, __func__);
+    int64_t l_idx = binarySearch<int64_t>(
+      [&](const LogEntry * ple){
+        return ple->fields.ver;
+      },
+      ver,
+      META_HEADER->fields.head,
+      META_HEADER->fields.tail);
+
+    if (l_idx == -1) {
+      // if binary search failed, it means the requested version is earlier
+      // than the earliest available log so we return the earliest log entry
+      // we have.
+      rIndex = META_HEADER->fields.head;
+      dbg_trace("{0}[{1}] - binary search failed, return the earliest version {2}", this->m_sName, __func__, ver);
+    } else if ((l_idx + 1) == META_HEADER->fields.tail) {
+      // if binary search found the last one, it means ver is in the future return INVALID_INDEX.
+      // use the default rIndex value (INVALID_INDEX)
+      dbg_trace("{0}[{1}] - binary search returns the last entry in the log. return INVALID_INDEX.", this->m_sName, __func__);
+    } else {
+      // binary search found some entry earlier than the last one. return l_idx+1:
+      dbg_trace("{0}[{1}] - binary search returns an entry earlier than the last one, return ldx+1 {2}", this->m_sName, __func__);
+      rIndex = l_idx + 1;
+    }
+
+    return rIndex;
+  }
+
+  // format for the logs:
+  // [latest_version(int64_t)][nr_log_entry(int64_t)][log_enty1][log_entry2]...
+  // the log entry is from the earliest to the latest.
+  // two functions for serialization/deserialization for log entries:
+  // 1) size_t byteSizeOfLogEntry(const LogEntry * ple);
+  // 2) size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba);
+  // 3) size_t postLogEntry(const std::function<void (char const *const, std::size_t)> f, const LogEntry *ple);
+  // 4) size_t mergeLogEntryFromByteArray(const char * ba);
+  size_t FilePersistLog::bytes_size(const int64_t &ver) noexcept(false) {
+    size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
+    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    if(idx != INVALID_INDEX) {
+      while(idx < META_HEADER->fields.tail) {
+        bsize += byteSizeOfLogEntry(LOG_ENTRY_AT(idx));
+        idx ++;
+      }
+    }
+    return bsize;
+  }
+
+  size_t FilePersistLog::to_bytes(char *buf, const int64_t &ver) noexcept(false) {
+    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    size_t ofst = 0;
+    // latest_version
+    int64_t latest_version = this->getLatestVersion();
+    *(int64_t*)(buf+ofst) = latest_version;
+    ofst += sizeof(int64_t);
+    // nr_log_entry
+    *(int64_t*)(buf+ofst) = (idx == INVALID_INDEX)?0:(META_HEADER->fields.tail - idx);
+    ofst += sizeof(int64_t);
+    // log_entries
+    if(idx != INVALID_INDEX) {
+      while(idx < META_HEADER->fields.tail) {
+        ofst += writeLogEntryToByteArray(LOG_ENTRY_AT(idx),buf+ofst);
+        idx ++;
+      }
+    }
+    return ofst;
+  }
+
+  void FilePersistLog::post_object(const std::function<void (char const *const, std::size_t)> &f,
+    const int64_t &ver) noexcept(false) {
+    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    // latest_version
+    int64_t latest_version = this->getLatestVersion();
+    f((char *)&latest_version,sizeof(int64_t));
+    // nr_log_entry
+    int64_t nr_log_entry = (idx == INVALID_INDEX)?0:(META_HEADER->fields.tail - idx);
+    f((char *)&nr_log_entry,sizeof(int64_t));
+    // log_entries
+    if(idx != INVALID_INDEX) {
+      while(idx < META_HEADER->fields.tail) {
+        postLogEntry(f,LOG_ENTRY_AT(idx));
+        idx ++;
+      }
+    }
+  }
+
+  void FilePersistLog::applyDelta(char const *v) noexcept(false) {
+    size_t ofst = 0;
+    // latest_version
+    int64_t latest_version = *(const int64_t*)(v+ofst);
+    ofst += sizeof(int64_t);
+    // nr_log_entry
+    int64_t nr_log_entry = *(const int64_t*)(v+ofst);
+    ofst += sizeof(int64_t);
+    // log_entries
+    while(nr_log_entry--) {
+      ofst += mergeLogEntryFromByteArray(v+ofst);
+    }
+    // update the latest version.
+    META_HEADER->fields.ver = latest_version;
+  }
+
+  size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry *ple) noexcept(false) {
+    return sizeof(LogEntry) + ple->fields.dlen;
+  }
+
+  size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry *ple, char *ba) noexcept(false) {
+    size_t nr_written = 0;
+    memcpy(ba,ple,sizeof(LogEntry));
+    nr_written += sizeof(LogEntry);
+    if(ple->fields.dlen > 0) {
+      memcpy((void *)(ba+nr_written),(void *)LOG_ENTRY_DATA(ple),ple->fields.dlen);
+      nr_written += ple->fields.dlen;
+    }
+    return nr_written;
+  }
+
+  size_t FilePersistLog::postLogEntry(const std::function<void (char const * const, std::size_t)> &f, const LogEntry *ple) noexcept(false) {
+    size_t nr_written = 0;
+    f((const char *)ple,sizeof(LogEntry));
+    nr_written += sizeof(LogEntry);
+    if(ple->fields.dlen > 0) {
+      f((const char *)LOG_ENTRY_DATA(ple),ple->fields.dlen);
+      nr_written += ple->fields.dlen;
+    }
+    return nr_written;
+  }
+
+  size_t FilePersistLog::mergeLogEntryFromByteArray(const char *ba) noexcept(false) {
+    const LogEntry *cple = (const LogEntry *)ba;
+    // valid check
+    // 0) version grows monotonically.
+    if (cple->fields.ver <= META_HEADER->fields.ver) {
+      dbg_trace("{0} skip log entry version {1}, we are at {2}.", __func__, cple->fields.ver, META_HEADER->fields.ver);
+      return cple->fields.dlen + sizeof(LogEntry);
+    }
+    // 1) do we have space to merge it?
+    if (NUM_FREE_SLOTS == 0) {
+      dbg_trace("{0} failed to merge log entry, we don't empty log entry.", __func__);
+      throw PERSIST_EXP_NOSPACE_LOG;
+    }
+    if (NUM_FREE_BYTES < cple->fields.dlen) {
+      dbg_trace("{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.dlen, NUM_FREE_BYTES);
+      throw PERSIST_EXP_NOSPACE_DATA;
+    }
+    // 2) merge it!
+    memcpy(NEXT_DATA,(const void *)(ba+sizeof(LogEntry)),cple->fields.dlen);
+    memcpy(NEXT_LOG_ENTRY,cple,sizeof(LogEntry));
+    this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r,cple->fields.hlc_l},META_HEADER->fields.tail});
+    META_HEADER->fields.tail ++;
+    META_HEADER->fields.ver = cple->fields.ver;
+    dbg_trace("{0} merge log:log entry and meta data are updated.", __func__);
+    return cple->fields.dlen + sizeof(LogEntry);
+  }
   //////////////////////////
   // invisible to outside //
   //////////////////////////
