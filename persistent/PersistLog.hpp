@@ -179,11 +179,11 @@ namespace ns_persistent {
                              const int64_t &ver) = 0;
 
     /**
-     * Check/Merge the delta(tail logs) to the existing log.
+     * Check/Merge the LogTail to the existing log.
      * @PARAM dsm - deserialization manager
      * @PARAM v - serialized log bytes to be apllied
      */
-    virtual void applyDelta(char const *v) = 0;
+    virtual void applyLogTail(char const *v) = 0;
   };
 }
 

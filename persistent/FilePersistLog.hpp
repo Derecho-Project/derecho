@@ -205,7 +205,7 @@ namespace ns_persistent {
     virtual size_t to_bytes(char* buf, const int64_t &ver) noexcept(false);
     virtual void post_object(const std::function<void (char const *const, std::size_t)> &f,
                              const int64_t &ver) noexcept(false);
-    virtual void applyDelta(char const *v) noexcept(false);
+    virtual void applyLogTail(char const *v) noexcept(false);
 
     template <typename TKey,typename KeyGetter>
     void trim(const TKey &key,const KeyGetter &keyGetter) noexcept(false) {

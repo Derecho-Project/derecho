@@ -726,7 +726,7 @@ namespace ns_persistent{
     }
   }
 
-  void FilePersistLog::applyDelta(char const *v) noexcept(false) {
+  void FilePersistLog::applyLogTail(char const *v) noexcept(false) {
     size_t ofst = 0;
     // latest_version
     int64_t latest_version = *(const int64_t*)(v+ofst);

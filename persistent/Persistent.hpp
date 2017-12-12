@@ -139,6 +139,11 @@ namespace ns_persistent {
         this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>>(key,tuple_val));
       }
     };
+    // deregister
+    void unregisterPersist(const char* obj_name) noexcept(false) {
+      // The upcoming regsiterPersist() call will override this automatically.
+      // this->_registry.erase(std::hash<std::string>{}(obj_name));
+    }
     // get temporal query frontier
     inline const HLC getFrontier(){
       if (_temporal_query_frontier_provider != nullptr) {
@@ -283,6 +288,12 @@ namespace ns_persistent {
           );
         }
       }
+      inline void unregister_callbacks()
+        noexcept(false) {
+        if(this->m_pRegistry != nullptr){
+          this->m_pRegistry->unregisterPersist(this->m_pLog->m_sName.c_str());
+        }
+      }
   public:
       /** constructor 1 is for building a persistent<T> locally, load/create a
        * log and register itself to a persistent registry.
@@ -322,6 +333,7 @@ namespace ns_persistent {
        * @param log_ptr A unique pointer to the log.
        * @param persistent_registry A normal pointer to the registry.
        */
+/*
       Persistent(
         const char * object_name,
         std::unique_ptr<ObjectType> & wrapped_obj_ptr,
@@ -345,6 +357,29 @@ namespace ns_persistent {
         // Register callbacks
         register_callbacks();
       }
+*/
+      Persistent(
+        const char * object_name,
+        std::unique_ptr<ObjectType> & wrapped_obj_ptr,
+        const char * log_tail = nullptr,
+        PersistentRegistry * persistent_registry = nullptr)
+        noexcept(false)
+        : m_pRegistry(persistent_registry) {
+        // Initialize log
+        initialize_log(object_name);
+        // patch it
+        if(log_tail != nullptr) {
+          this->m_pLog->applyLogTail(log_tail);
+        }
+        // Initialize Wrapped Object
+        if ( wrapped_obj_ptr == nullptr ) {
+          initialize_object_from_log();
+        } else {
+          this->m_pWrappedObject = std::move(wrapped_obj_ptr);
+        }
+        // Register callbacks
+        register_callbacks();
+      }
 
       /** constructor 4, the default copy constructor, is disabled
        */
@@ -358,8 +393,9 @@ namespace ns_persistent {
         // if(this->m_pLog != NULL){
         //   delete this->m_pLog;
         // }
-        //TODO:unregister the version creator and persist callback,
+        // unregister the version creator and persist callback,
         // if the Persistent<T> is added to the pool dynamically.
+        unregister_callbacks();
       };
 
       /**
@@ -651,6 +687,8 @@ namespace ns_persistent {
       //Note: this rely on PersistentRegistry::earliest_version_to_serialize
       std::size_t to_bytes(char* ret) const {
           std::size_t sz = 0; 
+          // object name
+          sz = mutils::to_bytes(this->m_pLog->m_sName,ret+sz);
           // wrapped object
           sz = mutils::to_bytes(*this->m_pWrappedObject,ret+sz);
           // and the log
@@ -658,7 +696,7 @@ namespace ns_persistent {
           return sz;
       }
       std::size_t bytes_size() const {
-          return mutils::bytes_size(*this->m_pWrappedObject) + 
+          return mutils::bytes_size(this->m_pLog->m_sName) + mutils::bytes_size(*this->m_pWrappedObject) + 
               this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
       }
       void post_object(const std::function<void (char const * const, std::size_t)> &f)
@@ -668,31 +706,27 @@ namespace ns_persistent {
       }
       // NOTE: we do not set up the registry here. This will only happen in the
       // construction of Replicated<T>
-      static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* p, char const *v){
-          // TODO: we do not allow constructing from a byte_array for now.
-          // please construct Persistent<T> from persisted states and apply the
-          // delta (tail logs).
-          // TODO: discuss this with Edward AGAIN.
-          /*
-          auto wrapped_obj = mutils::from_bytes<ObjectType>(p, v);
-          std::unique_ptr<PersistLog> null_log = nullptr;//TODO: deserialize the logs.
-          PersistentRegistry & pr = p->template mgr<PersistentRegistry> ();
-          return std::make_unique<Persistent>(*name,wrapped_obj,null_log,&pr);
-          */
-          dbg_warn("We do not allow constructiong Persistent<T> from a byte array. Please construct it by calling the normal constructors and apply the delta(tail logs) if there is any. Discuss this with Edward.");
-          throw PERSIST_EXP_UNIMPLEMENTED;
+      static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, char const *v){
+          size_t ofst = 0;
+          auto obj_name = mutils::from_bytes<std::string>(dsm,v);
+          ofst += mutils::bytes_size(*obj_name);
+          auto wrapped_obj = mutils::from_bytes<ObjectType>(dsm, v+ofst);
+          ofst += mutils::bytes_size(*wrapped_obj);
+          PersistentRegistry * pr = dsm->mgr<PersistentRegistry>();
+          dbg_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__ );
+          return std::make_unique<Persistent>(*obj_name,wrapped_obj,v+ofst,&pr);
       }
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}
-      // apply the serialized delta to existing log
+      // apply the serialized log tail to existing log
       // @dsm - deserialization manager
-      // @v - bytes representation of the delta (tail log)
-      void applyDelta(mutils::DeserializationManager* dsm, char const *v) {
+      // @v - bytes representation of the log tail)
+      void applyLogTail(mutils::DeserializationManager* dsm, char const *v) {
         // Step 1: update the current state
         this->m_pWrappedObject = std::move(mutils::from_bytes<ObjectType>(dsm,v));
         auto sz_wrappedObject = mutils::bytes_size(*this->m_pWrappedObject);
-        // Step 2: apply delta
-        this->m_pLog->applyDelta(v + sz_wrappedObject);
+        // Step 2: apply log tail 
+        this->m_pLog->applyLogTail(v + sz_wrappedObject);
       }
 
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
