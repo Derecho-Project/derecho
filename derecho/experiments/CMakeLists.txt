@@ -152,4 +152,8 @@ target_link_libraries(persistent_typed_subgroup_test derecho)
 add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
 target_link_libraries(shard_iterator_p2p_test derecho)
 
+# scaling_subgroup_test
+add_executable(scaling_subgroup_test scaling_subgroup_test.cpp initialize.cpp)
+target_link_libraries(scaling_subgroup_test derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)
