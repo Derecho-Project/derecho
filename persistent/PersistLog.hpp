@@ -133,7 +133,7 @@ namespace ns_persistent {
      * is lower than the log that has been actually persisted.
      */
     //virtual const __int128 persist() noexcept(false) = 0;
-    virtual const int64_t persist() noexcept(false) = 0;
+    virtual const int64_t persist(const bool preLocked=false) noexcept(false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.

@@ -277,19 +277,23 @@ namespace ns_persistent{
     FPL_UNLOCK;
   }
 
-  const int64_t FilePersistLog::persist()
+  const int64_t FilePersistLog::persist(const bool preLocked)
     noexcept(false) {
     int64_t ver_ret = INVALID_VERSION;
-    FPL_PERS_LOCK;
-    FPL_RDLOCK;
+    if(!preLocked) {
+      FPL_PERS_LOCK;
+      FPL_RDLOCK;
+    }
 
     if(*META_HEADER == *META_HEADER_PERS) {
       if (CURR_LOG_IDX != -1){
         //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
         ver_ret = META_HEADER->fields.ver;
       }
-      FPL_UNLOCK;
-      FPL_PERS_UNLOCK;
+      if(!preLocked) {
+        FPL_UNLOCK;
+        FPL_PERS_UNLOCK;
+      }
       return ver_ret;
     }
 
@@ -318,7 +322,9 @@ namespace ns_persistent{
         //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
         ver_ret = META_HEADER->fields.ver;
       }
-      FPL_UNLOCK;
+      if (!preLocked) {
+        FPL_UNLOCK;
+      }
       if (flush_dlen > 0) {
         if (msync(flush_dstart,flush_dlen,MS_SYNC) != 0) {
           throw PERSIST_EXP_MSYNC(errno);
@@ -332,12 +338,16 @@ namespace ns_persistent{
       // flush meta data
       this->persistMetaHeaderAtomically(&shadow_header);
     } catch (uint64_t e) {
-      FPL_PERS_UNLOCK;
+      if (!preLocked) {
+        FPL_PERS_UNLOCK;
+      }
       throw e;
     }
     dbg_trace("{0} flush data,log,and meta...done.", this->m_sName);
 
-    FPL_PERS_UNLOCK;
+    if (!preLocked) {
+      FPL_PERS_UNLOCK;
+    }
     return ver_ret;
   }
 
@@ -571,11 +581,18 @@ namespace ns_persistent{
       return;
     }
     META_HEADER->fields.head = idx + 1;
+    try {
+      persist(true);
+    } catch (uint64_t e) {
+      FPL_UNLOCK;
+      FPL_PERS_UNLOCK;
+      throw e;
+    }
     //TODO: remove entry from index...this is tricky because HLC 
     // order does not agree with index order.
     FPL_UNLOCK;
     FPL_PERS_UNLOCK;
-    throw PERSIST_EXP_UNIMPLEMENTED;
+    // throw PERSIST_EXP_UNIMPLEMENTED;
     dbg_trace("{0} trim at index: {1}...done",this->m_sName,idx);
   }
 
@@ -623,7 +640,7 @@ namespace ns_persistent{
     *META_HEADER_PERS = *pShadowHeader;
   }
 
-  int64_t FilePersistLog::getMinimumIndexSinceVersion(const int64_t & ver) noexcept(false) {
+  int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t & ver) noexcept(false) {
     int64_t rIndex = INVALID_INDEX;
 
     dbg_trace("{0}[{1}] - request version {2}",this->m_sName, __func__, ver);
@@ -661,7 +678,7 @@ namespace ns_persistent{
       dbg_trace("{0}[{1}] - binary search returns the last entry in the log. return INVALID_INDEX.", this->m_sName, __func__);
     } else {
       // binary search found some entry earlier than the last one. return l_idx+1:
-      dbg_trace("{0}[{1}] - binary search returns an entry earlier than the last one, return ldx+1 {2}", this->m_sName, __func__);
+      dbg_trace("{0}[{1}] - binary search returns an entry earlier than the last one, return ldx+1:{2}", this->m_sName, __func__, l_idx+1);
       rIndex = l_idx + 1;
     }
 
@@ -678,7 +695,7 @@ namespace ns_persistent{
   // 4) size_t mergeLogEntryFromByteArray(const char * ba);
   size_t FilePersistLog::bytes_size(const int64_t &ver) noexcept(false) {
     size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
-    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     if(idx != INVALID_INDEX) {
       while(idx < META_HEADER->fields.tail) {
         bsize += byteSizeOfLogEntry(LOG_ENTRY_AT(idx));
@@ -689,7 +706,7 @@ namespace ns_persistent{
   }
 
   size_t FilePersistLog::to_bytes(char *buf, const int64_t &ver) noexcept(false) {
-    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest_version
     int64_t latest_version = this->getLatestVersion();
@@ -710,7 +727,7 @@ namespace ns_persistent{
 
   void FilePersistLog::post_object(const std::function<void (char const *const, std::size_t)> &f,
     const int64_t &ver) noexcept(false) {
-    int64_t idx = this->getMinimumIndexSinceVersion(ver);
+    int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     // latest_version
     int64_t latest_version = this->getLatestVersion();
     f((char *)&latest_version,sizeof(int64_t));
@@ -788,6 +805,7 @@ namespace ns_persistent{
     // 2) merge it!
     memcpy(NEXT_DATA,(const void *)(ba+sizeof(LogEntry)),cple->fields.dlen);
     memcpy(NEXT_LOG_ENTRY,cple,sizeof(LogEntry));
+    NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r,cple->fields.hlc_l},META_HEADER->fields.tail});
     META_HEADER->fields.tail ++;
     META_HEADER->fields.ver = cple->fields.ver;

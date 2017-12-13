@@ -197,7 +197,7 @@ namespace ns_persistent {
     virtual const void* getEntry(const int64_t & ver) noexcept(false);
     virtual const void* getEntry(const HLC &hlc) noexcept(false);
     //virtual const __int128 persist(const __int128 & ver = -1) noexcept(false);
-    virtual const int64_t persist() noexcept(false);
+    virtual const int64_t persist(const bool preLocked=false) noexcept(false);
     virtual void trimByIndex(const int64_t &eno) noexcept(false);
     virtual void trim(const int64_t &ver) noexcept(false);
     virtual void trim(const HLC & hlc) noexcept(false);
@@ -226,9 +226,18 @@ namespace ns_persistent {
       idx = binarySearch<TKey>(keyGetter,key,META_HEADER->fields.head,META_HEADER->fields.tail);
       if (idx != -1) {
         META_HEADER->fields.head = (idx+1);
+        FPL_PERS_LOCK;
+        try {
+          persist(true);
+        } catch (uint64_t e) {
+          FPL_UNLOCK;
+          FPL_PERS_UNLOCK;
+          throw e;
+        }
+        FPL_PERS_UNLOCK;
         //TODO:remove delete entries from the index. This is tricky because
         // HLC order and idex order does not agree with each other.
-        throw PERSIST_EXP_UNIMPLEMENTED;
+        // throw PERSIST_EXP_UNIMPLEMENTED;
       } else {
         FPL_UNLOCK;
         return;
@@ -238,13 +247,13 @@ namespace ns_persistent {
 
   private:
     /**
-     * Get the minimum index since a given version
+     * Get the minimum index greater than a given version
      * Note: no lock protected, use FPL_RDLOCK
      * @PARAM ver the given version. INVALID_VERSION means to return the earliest index.
      * @RETURN the minimum index since the given version. INVALID_INDEX means 
      *         that no log entry is available for the requested version.
      */
-    int64_t getMinimumIndexSinceVersion(const int64_t & ver) noexcept(false);
+    int64_t getMinimumIndexBeyondVersion(const int64_t & ver) noexcept(false);
     /**
      * get the byte size of log entry
      * Note: no lock protected, use FPL_RDLOCK

@@ -406,6 +406,13 @@ namespace ns_persistent {
         return *this->m_pWrappedObject;
       }
 
+      /*
+       * get object name
+       */
+      const std::string & getObjectName() {
+        return this->m_pLog->m_sName;
+      }
+
       // get the latest Value of T. The user lambda will be fed with the latest object
       // zerocopy:this object will not live once it returns.
       // return value is decided by user lambda
@@ -688,10 +695,13 @@ namespace ns_persistent {
       std::size_t to_bytes(char* ret) const {
           std::size_t sz = 0; 
           // object name
-          sz = mutils::to_bytes(this->m_pLog->m_sName,ret+sz);
+          dbg_trace("{0}[{1}] object_name starts at {2}",this->m_pLog->m_sName,__func__,sz);
+          sz += mutils::to_bytes(this->m_pLog->m_sName,ret+sz);
           // wrapped object
-          sz = mutils::to_bytes(*this->m_pWrappedObject,ret+sz);
+          dbg_trace("{0}[{1}] wrapped_object starts at {2}",this->m_pLog->m_sName,__func__,sz);
+          sz += mutils::to_bytes(*this->m_pWrappedObject,ret+sz);
           // and the log
+          dbg_trace("{0}[{1}] log starts at {2}",this->m_pLog->m_sName,__func__,sz);
           sz += this->m_pLog->to_bytes(ret+sz,PersistentRegistry::getEarliestVersionToSerialize());
           return sz;
       }
@@ -708,11 +718,19 @@ namespace ns_persistent {
       // construction of Replicated<T>
       static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, char const *v){
           size_t ofst = 0;
+          dbg_trace("{0} object_name is loaded at {1}", __func__, ofst);
           auto obj_name = mutils::from_bytes<std::string>(dsm,v);
           ofst += mutils::bytes_size(*obj_name);
+
+          dbg_trace("{0} wrapped_obj is loaded at {1}", __func__, ofst);
           auto wrapped_obj = mutils::from_bytes<ObjectType>(dsm, v+ofst);
           ofst += mutils::bytes_size(*wrapped_obj);
-          PersistentRegistry * pr = dsm->mgr<PersistentRegistry>();
+
+          dbg_trace("{0} log is loaded at {1}", __func__, ofst);
+          PersistentRegistry * pr = nullptr;
+          if (dsm != nullptr) {
+            pr = dsm->mgr<PersistentRegistry>();
+          }
           dbg_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__ );
           return std::make_unique<Persistent>(*obj_name,wrapped_obj,v+ofst,&pr);
       }
@@ -722,11 +740,21 @@ namespace ns_persistent {
       // @dsm - deserialization manager
       // @v - bytes representation of the log tail)
       void applyLogTail(mutils::DeserializationManager* dsm, char const *v) {
+      /*
+        size_t ofst = 0;
+        // STEP 1: get object_name
+        auto obj_name = mutils::from_bytes<std::string>(dsm,v);
+        ofst += mutils::bytes_size(*obj_name);
+        if (obj_name->compare(this->m_pLog->m_sName)!=0) {
+          dbg_warn("{0}: trying to merge local object {1} with tail log from {2}.", __func__, *obj_name, this->m_pLog->m_sName);
+          throw PERSIST_EXP_INV_OBJNAME;
+        }
         // Step 1: update the current state
         this->m_pWrappedObject = std::move(mutils::from_bytes<ObjectType>(dsm,v));
-        auto sz_wrappedObject = mutils::bytes_size(*this->m_pWrappedObject);
+        ofst += mutils::bytes_size(*this->m_pWrappedObject);
+       */
         // Step 2: apply log tail 
-        this->m_pLog->applyLogTail(v + sz_wrappedObject);
+        this->m_pLog->applyLogTail(v);
       }
 
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
