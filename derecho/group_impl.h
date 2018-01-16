@@ -172,7 +172,6 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
     }
-//    assert(replicated_objects.template get<FirstType>().empty());
     const auto& subgroup_ids = curr_view.subgroup_ids_by_type.at(std::type_index(typeid(FirstType)));
     for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids.size(); ++subgroup_index) {
         subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
@@ -193,19 +192,19 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 }
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
+                    /* Note: This constructs a new object of type FirstType as well as a Replicated<FirstType>,
+                     * even though the object may get overwritten by one sent from the shard's leader. We do
+                     * this because if FirstType contains Persistent<T> fields, they need to be constructed
+                     * in order to read their logs from disk before receiving the rest of the logs from the leader. */
+                    replicated_objects.template get<FirstType>().emplace(
+                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
+                                                                  factories.template get<FirstType>()));
+                    //Determine if there is existing state for this shard that will need to be received
                     if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
                             && (*old_shard_leaders)[subgroup_id].size() > shard_num
                             && (*old_shard_leaders)[subgroup_id][shard_num] > -1
                             && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
-                        //Construct an empty Replicated because we'll receive object state from an old leader (who is not me)
-                        replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager));
                         subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
-                    } else {
-                        logger->debug("Constructing new Replicated Object state for type {}", typeid(FirstType).name());
-                        replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
-                                                                      factories.template get<FirstType>()));
                     }
                     //Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
@@ -267,7 +266,12 @@ void Group<ReplicatedTypes...>::set_up_components() {
         rpc_manager.new_view_callback(new_view);
     });
     view_manager.register_send_object_upcall([this](subgroup_id_t subgroup_id, node_id_t new_node_id) {
-        objects_by_subgroup_id.at(subgroup_id).get().send_object(rpc_manager.get_socket(new_node_id).get());
+        LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = rpc_manager.get_socket(new_node_id);
+        //First, read the log tail length sent by the joining node
+        int64_t persistent_log_length = 0;
+        joiner_socket.get().read((char*) persistent_log_length, sizeof(persistent_log_length));
+        PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
+        objects_by_subgroup_id.at(subgroup_id).get().send_object(joiner_socket.get());
     });
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
                                                            const vector_int64_2d& old_shard_leaders) {
@@ -369,6 +373,9 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = rpc_manager.get_socket(subgroup_and_leader.second);
+        logger->debug("Sending log tail length for subgroup {} to node {}", subgroup_and_leader.first, subgroup_and_leader.second);
+        int64_t log_tail_length = objects_by_subgroup_id.at(subgroup_and_leader.first).get().get_minimum_latest_persisted_version();
+        leader_socket.get().write((char*)&log_tail_length, sizeof(log_tail_length));
         logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read((char*)&buffer_size, sizeof(buffer_size));

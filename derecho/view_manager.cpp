@@ -648,7 +648,7 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
             finish_view_change(follower_subgroups_and_shards, next_subgroup_settings, next_num_received_size, gmsSST);
         };
 
-        //Last statment in global_min_ready_continuation: register finish_view_change_trig
+        //Last statement in global_min_ready_continuation: register finish_view_change_trig
         gmsSST.predicates.insert(persistence_finished_pred, finish_view_change_trig, sst::PredicateType::ONE_TIME);
     };
 
@@ -669,6 +669,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 
     //Calculate and save the IDs of shard leaders for the old view
     //If the old view was inadequately provisioned, this will be empty
+    //(Note: This shouldn't happen any more, as we don't allow inadequate views to be installed)
     std::map<std::type_index, std::vector<std::vector<int64_t>>> old_shard_leaders_by_type
         = make_shard_leaders_map(*curr_view);
 

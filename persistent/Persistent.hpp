@@ -101,13 +101,16 @@ namespace ns_persistent {
     };
 
     // get the minimum latest version persisted
-    const int64_t getMinimumLatestPersistedBersion() noexcept(false) {
+    const int64_t getMinimumLatestPersistedVersion() noexcept(false) {
       return callFuncMin<GET_ML_PERSISTED_VER,int64_t>();
     }
 
-    // set the earlist version for serialization, this version will be stored
-    // in a thread-local variable. When to_bytes() are called on Persistent<T>,
-    // it will serialize the logs since that version. 
+    /** Set the earliest version for serialization, exclusive. This version will
+     * be stored in a thread-local variable. When to_bytes() is next called on
+     * Persistent<T>, it will serialize the logs starting after that version
+     * (so the serialized logs exclude version ver).
+     * @param ver The version after which to begin serializing logs
+     */
     static void setEarliestVersionToSerialize(const int64_t& ver) noexcept(true) {
       PersistentRegistry::earliest_version_to_serialize = ver;
     }
@@ -729,10 +732,10 @@ namespace ns_persistent {
           dbg_trace("{0} log is loaded at {1}", __func__, ofst);
           PersistentRegistry * pr = nullptr;
           if (dsm != nullptr) {
-            pr = dsm->mgr<PersistentRegistry>();
+            pr = &dsm->mgr<PersistentRegistry>();
           }
           dbg_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__ );
-          return std::make_unique<Persistent>(*obj_name,wrapped_obj,v+ofst,&pr);
+          return std::make_unique<Persistent>(obj_name->data(),wrapped_obj,v+ofst,pr);
       }
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}

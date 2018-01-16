@@ -43,6 +43,7 @@ public:
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
     virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) = 0;
+    virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistence_version_t version) noexcept(false) = 0;
 };
 
@@ -327,6 +328,15 @@ public:
     }
 
     /**
+     * Returns the minimum among the "latest version" numbers of all Persistent
+     * fields of this object, i.e. the longest consistent cut of all the logs.
+     * @return A version number
+     */
+    const int64_t get_minimum_latest_persisted_version() noexcept(false) {
+        return persistent_registry_ptr->getMinimumLatestPersistedVersion();
+    }
+
+    /**
      * Submits the contents of the send buffer to be multicast to the subgroup,
      * assuming it has been previously filled with a call to get_sendbuffer_ptr().
      */
@@ -427,8 +437,8 @@ public:
      * @param pf - the persistent function
      * @param tf - the trim function
      */
-    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf) noexcept(false) {
-        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf);
+    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf, const LatestPersistedGetterFunc& gf) noexcept(false) {
+        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf);
     }
 };
 
