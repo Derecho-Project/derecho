@@ -108,8 +108,7 @@ public:
     void post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size);
 };
 
-bool
-add_node(uint32_t new_id, const std::string new_ip_addr);
+bool add_node(uint32_t new_id, const std::string new_ip_addr);
 bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,

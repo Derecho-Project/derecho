@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -8,6 +9,12 @@
 #include "sst/verbs.h"
 
 namespace sst {
+struct P2PParams {
+    uint32_t my_node_id;
+    std::vector<uint32_t> members;
+    uint32_t window_size;
+    uint64_t max_p2p_size;
+};
 class P2PConnections {
     const std::vector<uint32_t>& members;
     const std::uint32_t num_members;
@@ -15,6 +22,7 @@ class P2PConnections {
     uint32_t my_index;
     const uint32_t window_size;
     const uint32_t max_msg_size;
+    std::map<uint32_t, uint32_t> node_id_to_rank;
     // one element per member for P2P
     std::vector<std::unique_ptr<volatile char*>> incoming_p2p_buffers;
     std::vector<std::unique_ptr<volatile char*>> outgoing_p2p_buffers;
@@ -24,7 +32,9 @@ class P2PConnections {
     uint32_t num_puts = 0;
 public:
   P2PConnections(const P2PParams& params);
-  P2PConnections(P2PConnections&& old_connections, const P2PParams& params);
+  P2PConnections(const P2PConnections&& old_connections, const std::vector<uint32_t> new_members);
+  uint32_t get_node_rank(uint32_t node_id);
+  uint64_t get_max_p2p_size();
   volatile char* P2PConnections::probe(uint32_t rank);
   pair<uint32_t, volatile char*> P2PConnections::probe_all();
   volatile char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, bool reply = false);

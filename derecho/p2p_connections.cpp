@@ -2,6 +2,7 @@
 
 #include "p2p_connections.h"
 
+namespace sst {
 P2PConnections::P2PConnections(const P2PParams& params)
         : members(params.members),
           num_members(members.size()),
@@ -20,28 +21,28 @@ P2PConnections::P2PConnections(const P2PParams& params)
     my_index = -1;
     for(uint32_t i = 0; i < num_members; ++i) {
         if(members[i] == my_node_id) {
-            my_index = i;
-            break;
+            my_index = i; 
         }
+	node_id_to_rank[members[i]] = i;
     }
     assert(my_index != -1);
 
     for(uint i = 0; i < num_members; ++i) {
+        incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
+        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
         if(i == my_index) {
             continue;
         }
-        incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
-        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(2 * max_msg_size * window_size, 0);
         res_vec[i] = std::make_unique<resources_one_sided>(i, incoming_p2p_buffers[i].get(), outgoing_p2p_buffers[i].get(), 2 * max_msg_size * window_size + sizeof(bool), 2 * max_msg_size * window_size + sizeof(bool));
     }
 }
 
-P2PConnections::P2PConnections(P2PConnections&& old_connections, const P2PParams& params)
-        : members(params.members),
+P2PConnections::P2PConnections(const P2PConnections&& old_connections, const std::vector<uint32_t> new_members)
+        : members(new_members),
           num_members(members.size()),
-          my_node_id(params.my_node_id),
-          window_size(params.window_size),
-          max_msg_size(params.max_p2p_size + sizeof(uint64_t)),
+          my_node_id(old_connections.my_node_id),
+          window_size(old_connections.window_size),
+          max_msg_size(old_connections.max_msg_size),
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
@@ -54,9 +55,9 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const P2PParams
     my_index = -1;
     for(uint32_t i = 0; i < num_members; ++i) {
         if(members[i] == my_node_id) {
-            my_index = i;
-            break;
+            my_index = i; 
         }
+	node_id_to_rank[members[i]] = i;
     }
     assert(my_index != -1);
 
@@ -79,12 +80,20 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const P2PParams
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers(old_rank));
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers(old_rank));
             res_vec[i] = std::move(old_connections.res_vec[old_rank]);
-	    incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];
-	    incoming_reply_seq_nums[i] = old_connections.incoming_reply_seq_nums[old_rank];
-	    outgoing_request_seq_nums[i] = old_connections.outgoing_request_seq_nums[old_rank];
-	    outgoing_reply_seq_nums[i] = old_connections.outgoing_reply_seq_nums[old_rank];
+            incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];
+            incoming_reply_seq_nums[i] = old_connections.incoming_reply_seq_nums[old_rank];
+            outgoing_request_seq_nums[i] = old_connections.outgoing_request_seq_nums[old_rank];
+            outgoing_reply_seq_nums[i] = old_connections.outgoing_reply_seq_nums[old_rank];
         }
     }
+}
+
+uint32_t P2PConnections::get_node_rank(uint32_t node_id) {
+  return node_id_to_rank.at(node_id);
+}
+
+uint64_t P2PConnections::get_max_p2p_size() {
+    return max_msg_size - sizeof(uint64_t);
 }
 
 // check if there's a new request from some node
@@ -100,7 +109,7 @@ volatile char* P2PConnections::probe(uint32_t rank) {
 }
 
 // check if there's a new request from any node
-pair<uint32_t, volatile char*> P2PConnections::probe_all() {
+std::optional<pair<uint32_t, volatile char*>> P2PConnections::probe_all() {
     for(uint rank = 0; rank < num_members; ++rank) {
         if(rank == my_index) {
             continue;
@@ -110,6 +119,7 @@ pair<uint32_t, volatile char*> P2PConnections::probe_all() {
             return pair<uint32_t, volatile char*>(rank, buf);
         }
     }
+    return {};
 }
 
 volatile char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, bool reply = false) {
@@ -194,4 +204,5 @@ void P2PConnections::send(uint32_t rank) {
             outgoing_request_seq_nums[rank]++;
         }
     }
+}
 }
