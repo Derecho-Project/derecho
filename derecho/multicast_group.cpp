@@ -521,16 +521,16 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
 }
 
 void MulticastGroup::deliver_messages_upto(
-        const std::vector<long long int>& max_indices_for_senders,
+        const std::vector<int32_t>& max_indices_for_senders,
         subgroup_id_t subgroup_num, uint32_t num_shard_senders) {
     // DERECHO_LOG(-1, -1, "deliver_messages_upto");
     assert(max_indices_for_senders.size() == (size_t)num_shard_senders);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
-    auto curr_seq_num = sst->delivered_num[member_index][subgroup_num];
-    auto max_seq_num = curr_seq_num;
+    int32_t curr_seq_num = sst->delivered_num[member_index][subgroup_num];
+    int32_t max_seq_num = curr_seq_num;
     for(uint sender = 0; sender < num_shard_senders; sender++) {
         max_seq_num = std::max(max_seq_num,
-                               max_indices_for_senders[sender] * num_shard_senders + sender);
+                               static_cast<int32_t>(max_indices_for_senders[sender] * num_shard_senders + sender));
     }
     // DERECHO_LOG(-1, -1, "deliver_messages_upto_loop");
     for(auto seq_num = curr_seq_num; seq_num <= max_seq_num; seq_num++) {
@@ -552,7 +552,7 @@ void MulticastGroup::deliver_messages_upto(
     }
 }
 
-long long int MulticastGroup::resolve_num_received(long long beg_index, long long end_index, uint32_t num_received_entry) {
+int32_t MulticastGroup::resolve_num_received(int32_t beg_index, int32_t end_index, uint32_t num_received_entry) {
     // std::cout << "num_received_entry = " << num_received_entry << std::endl;
     // std::cout << "beg_index = " << beg_index << std::endl;
     // std::cout << "end_index = " << end_index << std::endl;
@@ -804,8 +804,8 @@ void MulticastGroup::register_predicates() {
                     if(locally_stable_rdmc_messages[subgroup_num].empty() && locally_stable_sst_messages[subgroup_num].empty()) {
                         break;
                     }
-                    long long int least_undelivered_rdmc_seq_num, least_undelivered_sst_seq_num;
-                    least_undelivered_rdmc_seq_num = least_undelivered_sst_seq_num = std::numeric_limits<long long int>::max();
+                    int32_t least_undelivered_rdmc_seq_num, least_undelivered_sst_seq_num;
+                    least_undelivered_rdmc_seq_num = least_undelivered_sst_seq_num = std::numeric_limits<int32_t>::max();
                     if(!locally_stable_rdmc_messages[subgroup_num].empty()) {
                         least_undelivered_rdmc_seq_num = locally_stable_rdmc_messages[subgroup_num].begin()->first;
                     }
@@ -833,7 +833,7 @@ void MulticastGroup::register_predicates() {
                                 clock_gettime(CLOCK_REALTIME, &now);
                                 msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
                             }
-                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_rdmc_seq_num, HLC{msg_ts_us, 0});
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num, ns_persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num), HLC{msg_ts_us, 0});
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
@@ -860,7 +860,7 @@ void MulticastGroup::register_predicates() {
                                 clock_gettime(CLOCK_REALTIME, &now);
                                 msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
                             }
-                            std::get<0>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)least_undelivered_sst_seq_num, HLC{msg_ts_us, 0});
+                            std::get<0>(persistence_manager_callbacks)(subgroup_num, ns_persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num), HLC{msg_ts_us, 0});
                         }
                         // DERECHO_LOG(-1, -1, "deliver_message() done");
                         sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
@@ -878,7 +878,7 @@ void MulticastGroup::register_predicates() {
                     // locally_stable_messages[subgroup_num].erase(locally_stable_messages[subgroup_num].begin());
                     //make post persistence request for ordered mode.
                     if(curr_subgroup_settings.mode != Mode::RAW) {
-                        std::get<1>(persistence_manager_callbacks)(subgroup_num, (persistence_version_t)sst.delivered_num[member_index][subgroup_num]);
+                        std::get<1>(persistence_manager_callbacks)(subgroup_num, (ns_persistent::version_t)sst.delivered_num[member_index][subgroup_num]);
                     }
                 }
             };
@@ -1260,7 +1260,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
     } else {
         std::lock_guard<std::mutex> lock(msg_state_mtx);
         sst_multicast_group_ptrs[subgroup_num]->send();
-	pending_sst_sends[subgroup_num] = false;
+        pending_sst_sends[subgroup_num] = false;
         // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     }

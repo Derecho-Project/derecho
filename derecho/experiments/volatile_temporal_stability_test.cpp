@@ -165,13 +165,13 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
   bool is_sending = true;
 
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     // the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
+    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
       // TODO: can be used to test the time from send to persistence.
     }
   };

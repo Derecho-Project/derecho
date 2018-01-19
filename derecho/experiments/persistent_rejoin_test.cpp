@@ -52,8 +52,8 @@ int main(int argc, char** argv) {
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
     derecho::CallbackSet callback_set{
         nullptr,
-        [](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
-            std::cout<<"Subgroup "<<subgroup<<", version "<<ver<<"is persisted."<<std::endl;
+        [](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+            std::cout<<"Subgroup "<<subgroup<<", version "<<ver<<" is persisted."<<std::endl;
         }
     };
     derecho::SubgroupInfo subgroup_info{{

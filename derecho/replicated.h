@@ -42,9 +42,9 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
-    virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) = 0;
+    virtual void make_version(const ns_persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
     virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
-    virtual void persist(const persistence_version_t version) noexcept(false) = 0;
+    virtual void persist(const ns_persistent::version_t version) noexcept(false) = 0;
 };
 
 template <typename T>
@@ -401,15 +401,15 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) {
+    virtual void make_version(const ns_persistent::version_t& ver, const HLC& hlc) noexcept(false) {
         persistent_registry_ptr->makeVersion(ver, hlc);
     };
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(const persistence_version_t version) noexcept(false) {
-        persistence_version_t persisted_ver;
+    virtual void persist(const ns_persistent::version_t version) noexcept(false) {
+        ns_persistent::version_t persisted_ver;
 
         // persist variables
         do {
@@ -427,7 +427,7 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const persistence_version_t& ver) noexcept(false) {
+    virtual void trim(const ns_persistent::version_t& ver) noexcept(false) {
         persistent_registry_ptr->trim(ver);
     };
 

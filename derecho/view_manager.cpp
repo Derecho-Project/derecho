@@ -1113,7 +1113,7 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
                                    const std::vector<node_id_t>& shard_members, uint num_shard_senders,
                                    std::shared_ptr<spdlog::logger> logger) {
     // Ragged cleanup is finished, deliver in the implied order
-    std::vector<long long int> max_received_indices(num_shard_senders);
+    std::vector<int32_t> max_received_indices(num_shard_senders);
     std::string deliveryOrder(" ");
     for(uint n = 0; n < num_shard_senders; n++) {
         deliveryOrder += "Subgroup " + std::to_string(subgroup_num)

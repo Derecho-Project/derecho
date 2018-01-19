@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
         g = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, derecho::CallbackSet{stability_callback, nullptr},
                 one_raw_group,
-                derecho::DerechoParams{msg_size, block_size, "", window_size});
+                derecho::DerechoParams{msg_size, block_size, window_size});
     } else {
         g = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, leader_ip,

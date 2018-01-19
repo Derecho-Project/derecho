@@ -38,24 +38,24 @@ public:
      * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
-    SSTFieldVector<long long int> seq_num;
+    SSTFieldVector<int32_t> seq_num;
     /** This represents the highest sequence number that has been received
      * by every node, as observed by this node. If a node updates stable_num,
      * then it believes that all messages up to stable_num in the global
      * round-robin order have been received by every node. */
-    SSTFieldVector<long long int> stable_num;
+    SSTFieldVector<int32_t> stable_num;
     /** This represents the highest sequence number that has been delivered
      * at this node. Messages are only delievered once stable, so it must be
      * at least stable_num. */
-    SSTFieldVector<long long int> delivered_num;
+    SSTFieldVector<int32_t> delivered_num;
     /** This represents the highest sequence number that has been persisted
      * to disk at this node, if persistence is enabled. Messages are only
      * persisted to disk once delivered to the application. */
-    SSTFieldVector<long long int> persisted_num;
+    SSTFieldVector<int32_t> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
-    SSTField<int> vid;
+    SSTField<int32_t> vid;
     /** Array of same length as View::members, where each bool represents
      * whether the corresponding member is suspected to have failed */
     SSTFieldVector<bool> suspected;
@@ -87,7 +87,7 @@ public:
     /** Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
-    SSTFieldVector<long long int> num_received;
+    SSTFieldVector<int32_t> num_received;
     /** Set after calling rdmc::wedged(), reports that this member is wedged.
      * Must be after num_received!*/
     SSTField<bool> wedged;
@@ -98,7 +98,7 @@ public:
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
     SSTFieldVector<sst::Message> slots;
-    SSTFieldVector<long long int> num_received_sst;
+    SSTFieldVector<int32_t> num_received_sst;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;

@@ -199,20 +199,25 @@ namespace ns_persistent{
 #define __DO_VALIDATION \
     do { \
       if (NUM_FREE_SLOTS < 1 ) { \
+          dbg_trace("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}", \
+                    this->m_sName, NUM_FREE_SLOTS); \
+          dbg_flush(); \
         FPL_UNLOCK; \
         throw PERSIST_EXP_NOSPACE_LOG; \
       } \
       if (NUM_FREE_BYTES < size) { \
         dbg_trace("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}", \
           this->m_sName, NUM_FREE_BYTES, size); \
+        dbg_flush(); \
         FPL_UNLOCK; \
         throw PERSIST_EXP_NOSPACE_DATA; \
       } \
       if ((CURR_LOG_IDX != -1) && \
           (META_HEADER->fields.ver >= ver)) { \
         int64_t cver = META_HEADER->fields.ver; \
-        dbg_trace("{0}-append cur_ver:{1} new_ver:{2}", this->m_sName, \
+        dbg_trace("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
           (int64_t)cver,(int64_t)ver); \
+        dbg_flush(); \
         FPL_UNLOCK; \
         throw PERSIST_EXP_INV_VERSION; \
       } \

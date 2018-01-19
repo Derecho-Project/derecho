@@ -7,6 +7,7 @@
 #include <memory>
 #include <time.h>
 #include <vector>
+#include <typeindex>
 
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
@@ -133,7 +134,7 @@ int main(int argc, char *argv[]) {
                     node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     raw_groups,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
+                    derecho::DerechoParams{max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, node_addresses[node_id],

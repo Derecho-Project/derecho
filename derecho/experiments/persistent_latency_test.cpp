@@ -165,7 +165,7 @@ int main(int argc, char *argv[]) {
   query_node_info(node_id,my_ip,leader_ip);
   long long unsigned int max_msg_size = msg_size;
   long long unsigned int block_size = get_block_size(msg_size);
-  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
   bool is_sending = true;
   uint32_t node_rank = -1;
   // message_pers_ts_us[] is the time when a message with version 'ver' is persisted.
@@ -196,9 +196,9 @@ int main(int argc, char *argv[]) {
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     nullptr,// the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
+    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
       struct timespec ts;
-      static derecho::persistence_version_t pers_ver = 0;
+      static ns_persistent::version_t pers_ver = 0;
       if (pers_ver > ver) return;
 
       clock_gettime(CLOCK_REALTIME, &ts);

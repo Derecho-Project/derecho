@@ -30,6 +30,7 @@
 
 namespace ns_persistent {
 
+using version_t = int64_t;
   // #define DEFINE_PERSIST_VAR(_t,_n) DEFINE_PERSIST_VAR(_t,_n,ST_FILE)
   #define DEFINE_PERSIST_VAR(_t,_n,_s) \
     Persistent<_t, _s> _n(# _n)
@@ -56,12 +57,17 @@ namespace ns_persistent {
 
   // function types to be registered for create version
   // , persist version, and trim a version
-  using VersionFunc = std::function<void(const int64_t &,const HLC &)>;
-  using PersistFunc = std::function<const int64_t(void)>;
-  using TrimFunc = std::function<void(const int64_t &)>;
-  using LatestPersistedGetterFunc = std::function<const int64_t(void)>;
+  using VersionFunc = std::function<void(const version_t &,const HLC &)>;
+  using PersistFunc = std::function<const version_t(void)>;
+  using TrimFunc = std::function<void(const version_t &)>;
+  using LatestPersistedGetterFunc = std::function<const version_t(void)>;
   // this function is obsolete, now we use a shared pointer to persistence registry
   // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
+
+  template<typename int_type>
+  version_t combine_int32s(const int_type high_bits, const int_type low_bits) {
+      return static_cast<version_t>((static_cast<uint64_t>(high_bits) << 32) | (0xffffffffll & low_bits));
+  }
 
   /*
    * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>

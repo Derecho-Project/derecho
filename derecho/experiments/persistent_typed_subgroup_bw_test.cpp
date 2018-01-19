@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
   if (argc >= 6) {
     window_size = (unsigned int )atoi(argv[5]);
   }
-  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
   bool is_sending = true;
 
   long total_num_messages;
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     // the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
+    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
       if(ver == (total_num_messages - 1)){
         if(is_sending) {
           clock_gettime(CLOCK_REALTIME,&t3);

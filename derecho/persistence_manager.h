@@ -24,7 +24,7 @@ namespace derecho {
 
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
-using persistence_request_t = std::tuple<subgroup_id_t, persistence_version_t>;
+using persistence_request_t = std::tuple<subgroup_id_t, ns_persistent::version_t>;
 
 /**
    * PersistenceManager is responsible for persisting all the data in a group.
@@ -115,7 +115,7 @@ public:
                 }
 
                 subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
-                persistence_version_t version = std::get<1>(persistence_request_queue.front());
+                ns_persistent::version_t version = std::get<1>(persistence_request_queue.front());
                 persistence_request_queue.pop();
 
                 // persist
@@ -152,7 +152,7 @@ public:
     }
 
     /** post a persistence request */
-    void post_persist_request(const subgroup_id_t &subgroup_id, const persistence_version_t &version) {
+    void post_persist_request(const subgroup_id_t &subgroup_id, const ns_persistent::version_t &version) {
         // request enqueue
         persistence_request_queue.push(std::make_tuple(subgroup_id, version));
         // post semaphore
@@ -161,7 +161,7 @@ public:
 
     /** make a version */
     void make_version(const subgroup_id_t &subgroup_id,
-                      const persistence_version_t &version, const HLC &mhlc) {
+                      const ns_persistent::version_t &version, const HLC &mhlc) {
         // find the corresponding Replicated<T> in replicated_objects
         this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> &map) {
             // make a version
@@ -192,12 +192,12 @@ public:
     persistence_manager_callbacks_t get_callbacks() {
         return std::make_tuple(
                 [this](const subgroup_id_t &subgroup_id,
-                       const persistence_version_t &ver,
+                       const ns_persistent::version_t &ver,
                        const HLC &mhlc) {
                     this->make_version(subgroup_id, ver, mhlc);
                 },
                 [this](const subgroup_id_t &subgroup_id,
-                       const persistence_version_t &ver) {
+                       const ns_persistent::version_t &ver) {
                     this->post_persist_request(subgroup_id, ver);
                 });
     }
