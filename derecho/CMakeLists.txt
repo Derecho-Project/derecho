@@ -25,18 +25,6 @@ add_dependencies(derecho mutils_serialization_target mutils_target)
 add_executable(subgroup_function_tester subgroup_function_tester.cpp)
 target_link_libraries(subgroup_function_tester derecho)
 
-add_executable(parse_state_file parse_state_file.cpp)
-target_link_libraries(parse_state_file derecho)
-
-add_executable(create_state_file create_state_file.cpp)
-target_link_libraries(create_state_file derecho)
-
-add_executable(latest_logged_message latest_logged_message.cpp)
-target_link_libraries(latest_logged_message derecho)
-
-add_executable(log_tail_length log_tail_length.cpp)
-target_link_libraries(log_tail_length derecho)
-
 add_custom_target(format_derecho 
 	COMMAND clang-format-3.8 -i *.cpp *.h
 	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/derecho

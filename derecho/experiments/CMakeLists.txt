@@ -84,15 +84,6 @@ target_link_libraries(timeline_test derecho)
 add_executable(viewchange_timeline viewchange_timeline.cpp initialize.cpp)
 target_link_libraries(viewchange_timeline derecho)
 
-add_executable(basic_persistence_test basic_persistence_test.cpp initialize.cpp)
-target_link_libraries(basic_persistence_test derecho)
-
-add_executable(log_recovery_crash log_recovery_crash.cpp initialize.cpp)
-target_link_libraries(log_recovery_crash derecho)
-
-add_executable(local_filewriter_test local_filewriter_test.cpp)
-target_link_libraries(local_filewriter_test derecho)
-
 # p2p_query_test
 add_executable(p2p_query_test p2p_query_test.cpp initialize.cpp)
 target_link_libraries(p2p_query_test derecho)
