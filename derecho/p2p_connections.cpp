@@ -1,9 +1,10 @@
 #include <map>
 
 #include "p2p_connections.h"
+#include "sst/poll_utils.h"
 
 namespace sst {
-P2PConnections::P2PConnections(const P2PParams& params)
+P2PConnections::P2PConnections(const P2PParams params)
         : members(params.members),
           num_members(members.size()),
           my_node_id(params.my_node_id),
@@ -109,7 +110,7 @@ volatile char* P2PConnections::probe(uint32_t rank) {
 }
 
 // check if there's a new request from any node
-std::optional<pair<uint32_t, volatile char*>> P2PConnections::probe_all() {
+std::experimental::optional<pair<uint32_t, volatile char*>> P2PConnections::probe_all() {
     for(uint rank = 0; rank < num_members; ++rank) {
         if(rank == my_index) {
             continue;

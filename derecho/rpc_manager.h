@@ -15,6 +15,7 @@
 
 #include "derecho_internal.h"
 #include "mutils-serialization/SerializationSupport.hpp"
+#include "p2p_connections.h"
 #include "remote_invocable.h"
 #include "rpc_utils.h"
 #include "view.h"
@@ -52,7 +53,7 @@ class RPCManager {
     ViewManager& view_manager;
 
     /** Contains an RDMA connection to each member of the group. */
-    sst::P2PConnections connections;
+    std::unique_ptr<sst::P2PConnections> connections;
 
     std::mutex pending_results_mutex;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
@@ -89,7 +90,7 @@ public:
               logger(spdlog::get("debug_log")),
               view_manager(group_view_manager),
               //Connections initially only contains the local node. Other nodes are added in the new view callback
-              connections({node_id, {node_id}, group_view_manager.drecho_params.window_size, group_view_manager.derecho_params.max_payload_size}),
+              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
@@ -261,7 +262,7 @@ public:
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle);
+  void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

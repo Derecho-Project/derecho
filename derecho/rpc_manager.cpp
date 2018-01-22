@@ -92,11 +92,11 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         //Use the reply-buffer allocation lambda to detect whether handle_receive generated a reply
         size_t reply_size = 0;
 	char* reply_buf;
-        handle_receive(msg_buf, payload_size, [this, &reply_size](size_t size) -> char* {
+        handle_receive(msg_buf, payload_size, [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
             reply_size = size;
-            if(reply_size <= connections.get_max_p2p_size()) {
-                reply_buf = connections.get_sendbuffer_ptr(
-                        connections.get_node_rank(sender_id), true);
+            if(reply_size <= connections->get_max_p2p_size()) {
+                reply_buf = connections->get_sendbuffer_ptr(
+                        connections->get_node_rank(sender_id), true);
                 return reply_buf;
             } else {
 	      // the reply size is too large - not part of the design to handle it
@@ -121,7 +121,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                         reply_buf, reply_size,
                         [](size_t size) -> char* { assert(false); });
             } else {
-	      connections.send(connections.get_node_rank(sender_id););
+	      connections->send(connections->get_node_rank(sender_id));
             }
         }
     }
@@ -136,23 +136,22 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from);
     size_t reply_size = 0;
     handle_receive(indx, received_from, msg_buf + header_size, payload_size,
-                   [&msg_buf, &buffer_size, &reply_size, &connections](size_t _size) -> char* {
+                   [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
                        reply_size = _size;
                        if(reply_size <= buffer_size) {
-                           auto sender_rank = return connections.get_sendbuffer_ptr(
-                                   connections.get_node_rank(sender_id), true);
-                       } else {
-                           return nullptr;
+                           return connections->get_sendbuffer_ptr(
+                                   connections->get_node_rank(sender_id), true);
                        }
+                       return nullptr; 
                    });
     if(reply_size > 0) {
-      connections.send(connections.get_node_rank(sender_id));
+      connections->send(connections->get_node_rank(sender_id));
     }
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
   
-  connections = sst::P2PConnections(connections, new_view.members);
+  connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
   logger->debug("Created new connections among the new view members");
 
   std::lock_guard<std::mutex> lock(pending_results_mutex);
@@ -196,17 +195,17 @@ bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
 }
 
 volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id) {
-    auto dest_rank = connections.get_node_rank(dest_id);
+    auto dest_rank = connections->get_node_rank(dest_id);
     volatile char* buf;
     do {
-        buf = connections.get_sendbuffer_ptr(dest_rank);
+        buf = connections->get_sendbuffer_ptr(dest_rank);
     } while(!buf);
     return buf;
 }
 
-void RPCManager::finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle) {
-    connections.send(connections.get_sendbuffer_ptr(dest_node));
-    pending_results_handle.fulfill_map({dest_node});
+void RPCManager::finish_p2p_send(node_id_t dest_id, PendingBase& pending_results_handle) {
+    connections->send(connections->get_node_rank(dest_id));
+    pending_results_handle.fulfill_map({dest_id});
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     fulfilledList.push_back(pending_results_handle);
 }
@@ -220,9 +219,10 @@ void RPCManager::p2p_receive_loop() {
     }
     logger->debug("P2P listening thread started");
     while(!thread_shutdown) {
-      auto optional_reply_pair = connections.probe_all();
+      auto optional_reply_pair = connections->probe_all();
       if(optional_reply_pair) {
-	p2p_message_handler(optional_reply_pair.first, optional_reply_pair.second, max_payload_size);
+	auto reply_pair = optional_reply_pair.value();
+	p2p_message_handler(reply_pair.first, reply_pair.second, max_payload_size);
       }
     }
 }

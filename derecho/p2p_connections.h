@@ -3,9 +3,9 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <experimental/optional>
 #include <vector>
 
-#include "poll_utils.h"
 #include "sst/verbs.h"
 
 namespace sst {
@@ -31,14 +31,14 @@ class P2PConnections {
     std::vector<bool> prev_mode;
     uint32_t num_puts = 0;
 public:
-  P2PConnections(const P2PParams& params);
+  P2PConnections(const P2PParams params);
   P2PConnections(const P2PConnections&& old_connections, const std::vector<uint32_t> new_members);
   uint32_t get_node_rank(uint32_t node_id);
   uint64_t get_max_p2p_size();
-  volatile char* P2PConnections::probe(uint32_t rank);
-  pair<uint32_t, volatile char*> P2PConnections::probe_all();
-  volatile char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, bool reply = false);
-  void P2PConnections::send(uint32_t rank);
+  volatile char* probe(uint32_t rank);
+  std::experimental::optional<std::pair<uint32_t, volatile char*>> probe_all();
+  volatile char* get_sendbuffer_ptr(uint32_t rank, bool reply = false);
+  void send(uint32_t rank);
   
-}
+};
 }
