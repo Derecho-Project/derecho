@@ -9,6 +9,7 @@
 
 #include "sst/multicast_msg.h"
 #include "sst/sst.h"
+#include "derecho_internal.h"
 
 namespace derecho {
 
@@ -38,20 +39,20 @@ public:
      * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
-    SSTFieldVector<int32_t> seq_num;
+    SSTFieldVector<message_id_t> seq_num;
     /** This represents the highest sequence number that has been received
      * by every node, as observed by this node. If a node updates stable_num,
      * then it believes that all messages up to stable_num in the global
      * round-robin order have been received by every node. */
-    SSTFieldVector<int32_t> stable_num;
+    SSTFieldVector<message_id_t> stable_num;
     /** This represents the highest sequence number that has been delivered
      * at this node. Messages are only delievered once stable, so it must be
      * at least stable_num. */
-    SSTFieldVector<int32_t> delivered_num;
-    /** This represents the highest sequence number that has been persisted
-     * to disk at this node, if persistence is enabled. Messages are only
-     * persisted to disk once delivered to the application. */
-    SSTFieldVector<int32_t> persisted_num;
+    SSTFieldVector<message_id_t> delivered_num;
+    /** This represents the highest persistent version number that has been
+     * persisted to disk at this node, if persistence is enabled. This is
+     * updated by the PersistenceManager. */
+    SSTFieldVector<ns_persistent::version_t> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */

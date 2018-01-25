@@ -35,7 +35,7 @@ namespace derecho {
 // using message_id_t = int64_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
-using message_callback_t = std::function<void(subgroup_id_t, node_id_t, long long int, char*, long long int)>;
+using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int)>;
 using persistence_callback_t = std::function<void(subgroup_id_t, ns_persistent::version_t)>;
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
 
@@ -78,7 +78,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
 struct __attribute__((__packed__)) header {
     uint32_t header_size;
     uint32_t pause_sending_turns;
-    uint32_t index;
+    int32_t index;
     uint64_t timestamp;
     bool cooked_send;
 };
@@ -204,7 +204,7 @@ private:
 
     /** Index to be used the next time get_sendbuffer_ptr is called.
      * When next_message is not none, then next_message.index = future_message_index-1 */
-    std::vector<int32_t> future_message_indices;
+    std::vector<message_id_t> future_message_indices;
 
     /** next_message is the message that will be sent when send is called the next time.
      * It is boost::none when there is no message to send. */
@@ -217,21 +217,21 @@ private:
     std::vector<std::experimental::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<std::pair<uint32_t, int32_t>, RDMCMessage> current_receives;
+    std::map<std::pair<subgroup_id_t, message_id_t>, RDMCMessage> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable.
      * Organized by [subgroup number] -> [sequence number] -> [message] */
-    std::map<uint32_t, std::map<int32_t, RDMCMessage>> locally_stable_rdmc_messages;
+    std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> locally_stable_rdmc_messages;
     /** Same map as locally_stable_rdmc_messages, but for SST messages */
-    std::map<uint32_t, std::map<int32_t, SSTMessage>> locally_stable_sst_messages;
-    std::map<uint32_t, std::set<uint64_t>> pending_message_timestamps;
-    std::map<uint32_t, std::map<int64_t, uint64_t>> pending_persistence;
+    std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> locally_stable_sst_messages;
+    std::map<subgroup_id_t, std::set<uint64_t>> pending_message_timestamps;
+    std::map<subgroup_id_t, std::map<message_id_t, uint64_t>> pending_persistence;
     /** Messages that are currently being written to persistent storage */
-    std::map<uint32_t, std::map<int32_t, RDMCMessage>> non_persistent_messages;
+    std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
-    std::map<uint32_t, std::map<int32_t, SSTMessage>> non_persistent_sst_messages;
+    std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> non_persistent_sst_messages;
 
-    std::vector<int32_t> next_message_to_deliver;
+    std::vector<message_id_t> next_message_to_deliver;
     std::mutex msg_state_mtx;
     std::condition_variable sender_cv;
 
@@ -335,7 +335,7 @@ public:
      */
     void register_rpc_callback(rpc_handler_t handler) { rpc_callback = std::move(handler); }
 
-    void deliver_messages_upto(const std::vector<int32_t>& max_indices_for_senders, uint32_t subgroup_num, uint32_t num_shard_senders);
+    void deliver_messages_upto(const std::vector<int32_t>& max_indices_for_senders, subgroup_id_t subgroup_num, uint32_t num_shard_senders);
     /** Get a pointer into the current buffer, to write data into it before sending */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                              int pause_sending_turns = 0,
@@ -346,7 +346,7 @@ public:
     bool send(subgroup_id_t subgroup_num);
     bool check_pending_sst_sends(subgroup_id_t subgroup_num);
 
-    const uint64_t compute_global_stability_frontier(uint32_t subgroup_num);
+    const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 
     /** Stops all sending and receiving in this group, in preparation for shutting it down. */
     void wedge();
@@ -359,6 +359,6 @@ public:
     const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
         return subgroup_settings;
     }
-    std::vector<uint32_t> get_shard_sst_indices(uint32_t subgroup_num);
+    std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num);
 };
 }  // namespace derecho

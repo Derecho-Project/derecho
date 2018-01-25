@@ -96,6 +96,7 @@ public:
     using _SSTField::base;
     using _SSTField::rowLen;
     using _SSTField::field_len;
+    using value_type = T;
 
     SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
     }
