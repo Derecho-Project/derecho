@@ -292,19 +292,25 @@ private:
 
     int32_t resolve_num_received(int32_t beg_index, int32_t end_index, uint32_t num_received_entry);
 
+    /* Predicate functions for receiving and delivering messages, parameterized by subgroup.
+     * register_predicates will create and bind one of these for each subgroup. */
+
+    void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+                          const uint32_t num_shard_members, DerechoSST& sst);
+
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                             uint32_t num_shard_senders, uint32_t sender_rank, uint64_t index_ignored,
+                             uint32_t num_shard_senders, uint32_t sender_rank,
                              volatile char* data, uint32_t size);
 
     bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
-                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                             uint32_t num_shard_senders, const DerechoSST& sst);
+                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
+                            uint32_t num_shard_senders, const DerechoSST& sst);
 
-    void receiver_function(unsigned int num_times, const std::function<void(uint32_t, uint64_t, volatile char*, uint32_t)>& sst_receive_handler_lambda,
-                           subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
-                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                             uint32_t num_shard_senders, DerechoSST& sst);
+    void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+                           const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
+                           uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
+                           const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
 
 public:
     MulticastGroup(

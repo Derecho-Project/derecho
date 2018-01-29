@@ -16,9 +16,6 @@ namespace derecho {
 using ip_addr = std::string;
 using node_id_t = uint32_t;
 
-const int MAX_STRING_LEN = 50;
-using cstring = char[MAX_STRING_LEN];
-
 using sst::SSTField;
 using sst::SSTFieldVector;
 /**
@@ -277,11 +274,7 @@ void set(volatile Arr (&dst)[L1], const volatile Arr (&src)[L2], const size_t& n
 
 void set(volatile char* string_array, const std::string& value);
 
-void set(volatile cstring& element, const std::string& value);
-
 void increment(volatile int& member);
-
-bool equals(const volatile cstring& element, const std::string& value);
 
 bool equals(const volatile char& string_array, const std::string& value);
 

@@ -557,15 +557,15 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
         while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
                                                shard_ranks_by_sender_rank,
-                                               num_shard_senders](uint32_t sender_rank, uint64_t index_ignored,
+                                               num_shard_senders](uint32_t sender_rank,
                                                        volatile char* data, uint32_t size) {
                 curr_view->multicast_group->sst_receive_handler(subgroup_id, curr_subgroup_settings,
                                                                 shard_ranks_by_sender_rank, num_shard_senders,
-                                                                sender_rank, index_ignored, data, size);
+                                                                sender_rank, data, size);
             };
-            curr_view->multicast_group->receiver_function(curr_view->multicast_group->window_size, sst_receive_handler_lambda,
-                                                          subgroup_id, curr_subgroup_settings,
-                                                          shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST);
+            curr_view->multicast_group->receiver_function(subgroup_id, curr_subgroup_settings,
+                                                          shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST,
+                                                          curr_view->multicast_group->window_size, sst_receive_handler_lambda);
         }
     }
 
