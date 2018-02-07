@@ -7,9 +7,9 @@
 #include <sstream>
 #include <string>
 
+#include "derecho_internal.h"
 #include "sst/multicast_msg.h"
 #include "sst/sst.h"
-#include "derecho_internal.h"
 
 namespace derecho {
 

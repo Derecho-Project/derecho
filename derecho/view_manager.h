@@ -345,7 +345,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                const DerechoParams& derecho_params = DerechoParams(0,0),
+                const DerechoParams& derecho_params = DerechoParams(0, 0),
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -420,7 +420,7 @@ public:
 /**
  * Base case for functional_append, with one argument.
  */
-template<typename T>
+template <typename T>
 std::vector<T> functional_append(const std::vector<T>& original, const T& item) {
     std::vector<T> appended_vec(original);
     appended_vec.emplace_back(item);
@@ -438,7 +438,7 @@ std::vector<T> functional_append(const std::vector<T>& original, const T& item) 
  * @return A new vector (by value), containing a copy of original plus all the
  * elements given as arguments.
  */
-template<typename T, typename...RestArgs>
+template <typename T, typename... RestArgs>
 std::vector<T> functional_append(const std::vector<T>& original, const T& first_item, RestArgs... rest_items) {
     std::vector<T> appended_vec = functional_append(original, first_item);
     return functional_append(appended_vec, rest_items...);

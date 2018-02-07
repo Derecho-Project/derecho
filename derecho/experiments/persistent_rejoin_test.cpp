@@ -38,6 +38,22 @@ public:
 };
 
 
+class TestThing : public mutils::ByteRepresentable {
+    int state;
+public:
+    TestThing(const int init_state) : state(init_state) {}
+    int read_state() {
+        return state;
+    }
+    void change_state(int new_int) {
+        state = new_int;
+    }
+
+    DEFAULT_SERIALIZATION_SUPPORT(TestThing, state);
+    REGISTER_RPC_FUNCTIONS(TestThing, read_state, change_state);
+};
+
+
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
@@ -57,30 +73,32 @@ int main(int argc, char** argv) {
         }
     };
     derecho::SubgroupInfo subgroup_info{{
-        {std::type_index(typeid(PersistentThing)), &derecho::one_subgroup_entire_view}},
-        {std::type_index(typeid(PersistentThing))}
+        {std::type_index(typeid(TestThing)), &derecho::one_subgroup_entire_view}},
+        {std::type_index(typeid(TestThing))}
     };
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
+    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
-    std::unique_ptr<derecho::Group<PersistentThing>> group;
+    std::unique_ptr<derecho::Group<TestThing>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
+        group = std::make_unique<derecho::Group<TestThing>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                thing_factory);
+                test_factory);
     } else {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
+        group = std::make_unique<derecho::Group<TestThing>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                thing_factory);
+                test_factory);
     }
     std::cout << "Successfully joined group" << std::endl;
-    Replicated<PersistentThing>& persistent_thing_handle = group->get_subgroup<PersistentThing>();
-    if(node_id == 3) {
-        std::cout << "Printing initial Persistent log" << std::endl;
-        persistent_thing_handle.ordered_send<RPC_NAME(print_log)>();
-    }
+    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
+//    Replicated<PersistentThing>& persistent_thing_handle = group->get_subgroup<PersistentThing>();
+//    if(node_id == 3) {
+//        std::cout << "Printing initial Persistent log" << std::endl;
+//        persistent_thing_handle.ordered_send<RPC_NAME(print_log)>();
+//    }
     int num_updates;
     if(node_id == 3) {
         num_updates = 300;
@@ -90,12 +108,16 @@ int main(int argc, char** argv) {
     for(int counter = 0; counter < num_updates; ++counter) {
         int new_value = counter * 10 + node_id;
         std::cout << "Updating state to " << new_value << std::endl;
-        persistent_thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
-        derecho::rpc::QueryResults<int> results = persistent_thing_handle.ordered_query<RPC_NAME(read_state)>();
+        thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
+        derecho::rpc::QueryResults<int> results = thing_handle.ordered_query<RPC_NAME(read_state)>();
         derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
         int curr_state = 0;
         for(auto& reply_pair : replies) {
-            curr_state = reply_pair.second.get();
+            try {
+                curr_state = reply_pair.second.get();
+            } catch (derecho::rpc::node_removed_from_group_exception& ex) {
+                std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+            }
         }
         std::cout << "Current state according to ordered_query: " << curr_state << std::endl;
     }

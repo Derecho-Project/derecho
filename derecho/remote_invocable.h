@@ -9,10 +9,10 @@
 #include <functional>
 #include <numeric>
 
-#include <spdlog/spdlog.h>
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
 #include "mutils/tuple_extras.hpp"
+#include <spdlog/spdlog.h>
 
 #include "rpc_utils.h"
 
@@ -532,6 +532,7 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
     std::shared_ptr<spdlog::logger> logger;
+
 public:
     const node_id_t nid;
 

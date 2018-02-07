@@ -200,5 +200,6 @@
  *
  * thing_handle.ordered_send<RPC_NAME(foo)>(foo_args);
  */
-#define RPC_NAME(...) CT_STRING(__VA_ARGS__) \
-::hash()
+#define RPC_NAME(...)      \
+    CT_STRING(__VA_ARGS__) \
+    ::hash()

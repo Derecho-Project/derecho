@@ -16,7 +16,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
             return false;
         }
 
-        uint32_t remote_id = 0;
+        node_id_t remote_id = 0;
         if(!sockets[other_id].exchange(my_id, remote_id)) {
             std::cerr << "WARNING: failed to exchange rank with node "
                       << other_id << " at " << other_ip << ":" << port
@@ -37,7 +37,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
             try {
                 socket s = conn_listener->accept();
 
-                uint32_t remote_id = 0;
+                node_id_t remote_id = 0;
                 if(!s.exchange(my_id, remote_id)) {
                     std::cerr << "WARNING: failed to exchange id with node"
                               << std::endl;

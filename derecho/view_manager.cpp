@@ -7,8 +7,8 @@
 #include <arpa/inet.h>
 
 #include "derecho_exception.h"
-#include <persistent/Persistent.hpp>
 #include "view_manager.h"
+#include <persistent/Persistent.hpp>
 
 namespace derecho {
 
@@ -236,9 +236,9 @@ void ViewManager::await_first_view(const node_id_t my_id,
             if(!write_success) {
                 //The client crashed while waiting to join, so we must remove it from the view and try again
                 waiting_join_sockets.pop_front();
-                std::vector<node_id_t> filtered_members(curr_view->members.size()-1);
-                std::vector<ip_addr> filtered_ips(curr_view->member_ips.size()-1);
-                std::vector<node_id_t> filtered_joiners(curr_view->joined.size()-1);
+                std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
+                std::vector<ip_addr> filtered_ips(curr_view->member_ips.size() - 1);
+                std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
                 std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
                                  filtered_members.begin(), joiner_id);
                 std::remove_copy(curr_view->member_ips.begin(), curr_view->member_ips.end(),
@@ -246,7 +246,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 std::remove_copy(curr_view->joined.begin(), curr_view->joined.end(),
                                  filtered_joiners.begin(), joiner_id);
                 curr_view = std::make_unique<View>(0, filtered_members, filtered_ips,
-                                                   std::vector<char>(curr_view->num_members-1, 0), filtered_joiners);
+                                                   std::vector<char>(curr_view->num_members - 1, 0), filtered_joiners);
                 /* This will update curr_view->is_adequately_provisioned, so now we must
                  * start over from the beginning and test if we need to wait for more joiners. */
                 num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);
@@ -516,9 +516,9 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
         //Construct a predicate that watches for any new committed change that is a join
         int curr_num_committed = gmsSST.num_committed[curr_view->rank_of_leader()];
         auto more_members_joined = [this, curr_num_committed](const DerechoSST& gmsSST) {
-            if (gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
+            if(gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed) {
                 const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()]
-                                                                 - gmsSST.num_installed[curr_view->rank_of_leader()];
+                                            - gmsSST.num_installed[curr_view->rank_of_leader()];
                 for(int change_index = curr_num_committed; change_index < committed_count; change_index++) {
                     node_id_t change_id = gmsSST.changes[curr_view->my_rank][change_index];
                     if(curr_view->rank_of(change_id) == -1) {
@@ -552,13 +552,13 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
             }
         }
         // wait for all pending sst sends to finish
-        while (curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
+        while(curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
         }
         while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
                                                shard_ranks_by_sender_rank,
                                                num_shard_senders](uint32_t sender_rank,
-                                                       volatile char* data, uint32_t size) {
+                                                                  volatile char* data, uint32_t size) {
                 curr_view->multicast_group->sst_receive_handler(subgroup_id, curr_subgroup_settings,
                                                                 shard_ranks_by_sender_rank, num_shard_senders,
                                                                 sender_rank, data, size);
@@ -571,7 +571,7 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
 
     curr_view->gmsSST->put_with_completion();
     curr_view->gmsSST->sync_with_members();
-    
+
     //First, for subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader
     auto follower_subgroups_and_shards = std::make_shared<std::map<subgroup_id_t, uint32_t>>();
     for(const auto& shard_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {
@@ -671,7 +671,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     //If the old view was inadequately provisioned, this will be empty
     //(Note: This shouldn't happen any more, as we don't allow inadequate views to be installed)
     std::map<std::type_index, std::vector<std::vector<int64_t>>> old_shard_leaders_by_type
-        = make_shard_leaders_map(*curr_view);
+            = make_shard_leaders_map(*curr_view);
 
     std::list<tcp::socket> joiner_sockets;
     if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
@@ -716,7 +716,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
             mutils::post_object([&joiner_sockets](const char* bytes, std::size_t size) {
                 joiner_sockets.front().write(bytes, size);
             },
-            old_shard_leaders_by_id);
+                                old_shard_leaders_by_id);
             joiner_sockets.pop_front();
         }
     }
@@ -760,7 +760,6 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
                 //send its object state to the new members
                 for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
-                        logger->debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, shard_joiner);
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }
                 }
@@ -936,8 +935,8 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
 }
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
-                                     const DerechoSST& gmsSST,
-                                     std::shared_ptr<spdlog::logger> logger) {
+                                                  const DerechoSST& gmsSST,
+                                                  std::shared_ptr<spdlog::logger> logger) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;

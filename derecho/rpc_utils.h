@@ -279,15 +279,21 @@ private:
 
     bool map_fulfilled = false;
     std::set<node_id_t> dest_nodes, responded_nodes;
+    std::shared_ptr<spdlog::logger> logger;
 
 public:
-    PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
+    PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()),
+                       logger(spdlog::get("debug_log")) {
+        logger->trace("Created a PendingResults<{}>", typeid(Ret).name());
+    }
     /**
      * Fill pending_map and reply_promises with one promise/future pair for
      * each node that was contacted in this RPC call
      * @param who A list of nodes from which to expect responses.
      */
     void fulfill_map(const node_list_t& who) {
+        logger->trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
+        logger->flush();
         map_fulfilled = true;
         std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises_map;
@@ -295,6 +301,7 @@ public:
             futures_map->emplace(e, promises_map[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
+        logger->trace("Setting a value for reply_promises_are_ready");
         promise_for_reply_promises.set_value(std::move(promises_map));
         promise_for_pending_map.set_value(std::move(futures_map));
     }
@@ -311,15 +318,17 @@ public:
 
     void set_value(const node_id_t& nid, const Ret& v) {
         responded_nodes.insert(nid);
-        if(reply_promises.size() == 0){
+        if(reply_promises.size() == 0) {
+            logger->trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
+            logger->flush();
             reply_promises = std::move(reply_promises_are_ready.get());
-         }
+        }
         reply_promises.at(nid).set_value(v);
     }
 
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
         responded_nodes.insert(nid);
-        if(reply_promises.size() == 0){
+        if(reply_promises.size() == 0) {
             reply_promises = std::move(reply_promises_are_ready.get());
         }
         reply_promises.at(nid).set_exception(e);
@@ -336,7 +345,9 @@ struct PendingResults<void> : public PendingBase {
        we might want to have in both this and the non-void variant.
     */
 
-    void fulfill_map(const node_list_t&) {}
+    void fulfill_map(const node_list_t&) {
+        spdlog::get("debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");
+    }
     void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }
 };

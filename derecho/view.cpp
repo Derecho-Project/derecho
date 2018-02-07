@@ -79,8 +79,8 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0),  //This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(0) {    /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
+          my_rank(0),               //This will always get overwritten by the receiver after deserializing
+          next_unassigned_rank(0) { /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
