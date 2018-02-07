@@ -31,7 +31,7 @@ LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socke
     return connections.get_socket(node);
 }
 
-std::exception_ptr RPCManager::handle_receive(
+std::exception_ptr RPCManager::receive_message(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
@@ -58,16 +58,15 @@ std::exception_ptr RPCManager::handle_receive(
     return reply_return.possible_exception;
 }
 
-std::exception_ptr RPCManager::handle_receive(
-        char* buf, std::size_t size,
-        const std::function<char*(int)>& out_alloc) {
+std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
+                                                 const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     std::size_t payload_size = size;
     Opcode indx;
     node_id_t received_from;
     retrieve_header(&rdv, buf, payload_size, indx, received_from);
-    return handle_receive(indx, received_from, buf + header_space(),
-                          payload_size, out_alloc);
+    return receive_message(indx, received_from, buf + header_space(),
+                           payload_size, out_alloc);
 }
 
 void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size) {
@@ -89,7 +88,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
         //Use the reply-buffer allocation lambda to detect whether handle_receive generated a reply
         size_t reply_size = 0;
-        handle_receive(msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
+        parse_and_receive(msg_buf, payload_size, [this, &reply_size, &max_payload_size](size_t size) -> char* {
             reply_size = size;
             if(reply_size <= max_payload_size) {
                 return replySendBuffer.get();
@@ -104,18 +103,30 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     //Destination was "all nodes in my shard of the subgroup"
                     int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
-		    assert(!toFulfillQueue.empty());
+                    assert(!toFulfillQueue.empty());
+                    logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());
                     toFulfillQueue.front().get().fulfill_map(
                             view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
                     toFulfillQueue.pop();
+                    logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
+                    logger->flush();
                 }
                 //Immediately handle the reply to myself
-                handle_receive(
+                parse_and_receive(
                         replySendBuffer.get(), reply_size,
                         [](size_t size) -> char* { assert(false); });
             } else {
                 connections.write(sender_id, replySendBuffer.get(), reply_size);
+            }
+        } else {
+            logger->trace("RPC message handled, no reply necessary.");
+            if(sender_id == nid && dest_size == 0) {
+                std::lock_guard<std::mutex> lock(pending_results_mutex);
+                assert(!toFulfillQueue.empty());
+                toFulfillQueue.pop();
+                logger->trace("Deleted a useless PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
+                logger->flush();
             }
         }
     }
@@ -131,15 +142,15 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from);
     connections.read(sender_id, msg_buf + header_size, payload_size);
     size_t reply_size = 0;
-    handle_receive(indx, received_from, msg_buf + header_size, payload_size,
-                   [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
-                       reply_size = _size;
-                       if(reply_size <= buffer_size) {
-                           return msg_buf;
-                       } else {
-                           return nullptr;
-                       }
-                   });
+    receive_message(indx, received_from, msg_buf + header_size, payload_size,
+                    [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
+                        reply_size = _size;
+                        if(reply_size <= buffer_size) {
+                            return msg_buf;
+                        } else {
+                            return nullptr;
+                        }
+                    });
     if(reply_size > 0) {
         connections.write(received_from, msg_buf, reply_size);
     }
@@ -194,15 +205,16 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
 }
 
 bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }
-    if(dest_nodes.size()) {
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    if(dest_nodes.size() != 0) {
         pending_results_handle.fulfill_map(dest_nodes);
         fulfilledList.push_back(pending_results_handle);
     } else {
         toFulfillQueue.push(pending_results_handle);
+        logger->trace("finish_rpc_send pushed a PendingResults onto toFulfillQueue, size is now {}", toFulfillQueue.size());
     }
     return true;
 }
@@ -228,6 +240,8 @@ void RPCManager::p2p_receive_loop() {
         if(other_id < 0) {
             continue;
         }
+        logger->trace("Detected an incoming P2P message from {}", other_id);
+        logger->flush();
         p2p_message_handler(other_id, rpcBuffer.get(), max_payload_size);
     }
 }
