@@ -270,7 +270,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
         //First, read the log tail length sent by the joining node
         int64_t persistent_log_length = 0;
         logger->trace("Reading log tail length for subgroup {} from node {}...", subgroup_id, new_node_id);
-        joiner_socket.get().read((char*)&persistent_log_length, sizeof(persistent_log_length));
+        joiner_socket.get().read(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         logger->trace("...got length {}", persistent_log_length);
         logger->debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
@@ -307,7 +307,7 @@ template <typename... ReplicatedTypes>
 std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
         tcp::socket& leader_socket) {
     std::size_t buffer_size;
-    leader_socket.read((char*)&buffer_size, sizeof(buffer_size));
+    leader_socket.read(buffer_size);
     if(buffer_size == 0) {
         return std::make_unique<vector_int64_2d>();
     }
@@ -378,13 +378,13 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
                 = rpc_manager.get_socket(subgroup_and_leader.second);
         int64_t log_tail_length = objects_by_subgroup_id.at(subgroup_and_leader.first).get().get_minimum_latest_persisted_version();
         logger->debug("Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
-        leader_socket.get().write((char*)&log_tail_length, sizeof(log_tail_length));
+        leader_socket.get().write(log_tail_length);
         logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
-        bool success = leader_socket.get().read((char*)&buffer_size, sizeof(buffer_size));
+        bool success = leader_socket.get().read(buffer_size);
         assert(success);
         char buffer[buffer_size];
-        success = leader_socket.get().read((char*)&buffer, buffer_size);
+        success = leader_socket.get().read(buffer, buffer_size);
         assert(success);
         objects_by_subgroup_id.at(subgroup_and_leader.first).get().receive_object(buffer);
     }

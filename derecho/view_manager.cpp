@@ -155,7 +155,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
 
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
-    bool success = leader_connection.read((char*)&size_of_view, sizeof(size_of_view));
+    bool success = leader_connection.read(size_of_view);
     assert(success);
     char buffer[size_of_view];
     success = leader_connection.read(buffer, size_of_view);
@@ -163,7 +163,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     curr_view = mutils::from_bytes<View>(nullptr, buffer);
     //The leader will first send the size of the necessary buffer, then the serialized DerechoParams
     std::size_t size_of_derecho_params;
-    success = leader_connection.read((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
+    success = leader_connection.read(size_of_derecho_params);
     char buffer2[size_of_derecho_params];
     success = leader_connection.read(buffer2, size_of_derecho_params);
     assert(success);
@@ -232,7 +232,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 assert(success);
             };
             std::size_t size_of_view = mutils::bytes_size(*curr_view);
-            bool write_success = waiting_join_sockets.front().write((char*)&size_of_view, sizeof(size_of_view));
+            bool write_success = waiting_join_sockets.front().write(size_of_view);
             if(!write_success) {
                 //The client crashed while waiting to join, so we must remove it from the view and try again
                 waiting_join_sockets.pop_front();
@@ -255,7 +255,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
             }
             mutils::post_object(bind_socket_write, *curr_view);
             std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
-            waiting_join_sockets.front().write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
+            waiting_join_sockets.front().write(size_of_derecho_params);
             mutils::post_object(bind_socket_write, derecho_params);
             //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
             mutils::post_object(bind_socket_write, std::size_t{0});
@@ -712,7 +712,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
         while(!joiner_sockets.empty()) {
             //Send the array of old shard leaders, so the new member knows who to receive from
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            joiner_sockets.front().write((char*)&size_of_vector, sizeof(std::size_t));
+            joiner_sockets.front().write(size_of_vector);
             mutils::post_object([&joiner_sockets](const char* bytes, std::size_t size) {
                 joiner_sockets.front().write(bytes, size);
             },
@@ -850,10 +850,10 @@ void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) 
     logger->debug("Sending client the new view");
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
-    client_socket.write((char*)&size_of_view, sizeof(size_of_view));
+    client_socket.write(size_of_view);
     mutils::post_object(bind_socket_write, new_view);
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
-    client_socket.write((char*)&size_of_derecho_params, sizeof(size_of_derecho_params));
+    client_socket.write(size_of_derecho_params);
     mutils::post_object(bind_socket_write, derecho_params);
 }
 
