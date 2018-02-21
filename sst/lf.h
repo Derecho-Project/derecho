@@ -71,7 +71,7 @@ bool sync(uint32_t r_index);
 void lf_initialize(const std::map<uint32_t, std::string> &ip_addrs,
                       uint32_t node_rank);
 /** Polls for completion of a single posted remote write. */
-std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion();
+std::pair<uint32_t, std::pair<int, int>> lf_poll_completion();
 void shutdown_polling_thread();
 /** Destroys the global libfabric resources. */
 void lf_destroy();
