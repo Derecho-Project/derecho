@@ -365,6 +365,7 @@ public:
      */
     void send_object(tcp::socket& receiver_socket) const {
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
+        group_rpc_manager.logger->trace("In send_object for Replicated<{}>, sending buffer size = {}", typeid(T).name(), object_size());
         mutils::post_object(bind_socket_write, object_size());
         send_object_raw(receiver_socket);
     }
@@ -378,7 +379,10 @@ public:
      * @param receiver_socket
      */
     void send_object_raw(tcp::socket& receiver_socket) const {
-        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
+        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
+            spdlog::get("debug_log")->trace("send_object_raw: Wrote {} bytes to joining client", size);
+            receiver_socket.write(bytes, size);
+        };
         mutils::post_object(bind_socket_write, **user_object_ptr);
     }
 
@@ -397,7 +401,9 @@ public:
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
+        group_rpc_manager.logger->trace("In receive_object for Replicated<{}>", typeid(T).name());
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
+        group_rpc_manager.logger->trace("Finished from_bytes for Replicated<{}>", typeid(T).name());
         return mutils::bytes_size(**user_object_ptr);
     }
 
