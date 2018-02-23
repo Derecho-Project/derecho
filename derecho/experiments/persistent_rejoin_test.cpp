@@ -69,36 +69,37 @@ int main(int argc, char** argv) {
     derecho::CallbackSet callback_set{
         nullptr,
         [](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
-            std::cout<<"Subgroup "<<subgroup<<", version "<<ver<<" is persisted."<<std::endl;
+            std::cout<<"Subgroup "<<subgroup << ", version "<<ver<<" is persisted."<<std::endl;
         }
     };
     derecho::SubgroupInfo subgroup_info{{
-        {std::type_index(typeid(TestThing)), &derecho::one_subgroup_entire_view}},
-        {std::type_index(typeid(TestThing))}
+        {std::type_index(typeid(PersistentThing)), &derecho::one_subgroup_entire_view}},
+        {std::type_index(typeid(PersistentThing))}
     };
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
     auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
-    std::unique_ptr<derecho::Group<TestThing>> group;
+    std::unique_ptr<derecho::Group<PersistentThing>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<TestThing>>(
+        group = std::make_unique<derecho::Group<PersistentThing>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                test_factory);
+                thing_factory);
     } else {
-        group = std::make_unique<derecho::Group<TestThing>>(
+        group = std::make_unique<derecho::Group<PersistentThing>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{}, 12345,
-                test_factory);
+                thing_factory);
     }
     std::cout << "Successfully joined group" << std::endl;
-    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
-//    Replicated<PersistentThing>& persistent_thing_handle = group->get_subgroup<PersistentThing>();
-//    if(node_id == 3) {
-//        std::cout << "Printing initial Persistent log" << std::endl;
-//        persistent_thing_handle.ordered_send<RPC_NAME(print_log)>();
-//    }
+//    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
+    Replicated<PersistentThing>& thing_handle = group->get_subgroup<PersistentThing>();
+    //Node 3 will rejoin as node 4
+    if(node_id == 4) {
+        std::cout << "Printing initial Persistent log" << std::endl;
+        thing_handle.ordered_send<RPC_NAME(print_log)>();
+    }
     int num_updates;
     if(node_id == 3) {
         num_updates = 300;

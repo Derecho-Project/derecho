@@ -299,7 +299,7 @@ using version_t = int64_t;
       }
       inline void unregister_callbacks()
         noexcept(false) {
-        if(this->m_pRegistry != nullptr){
+        if(this->m_pRegistry != nullptr && this->m_pLog != nullptr){
           this->m_pRegistry->unregisterPersist(this->m_pLog->m_sName.c_str());
         }
       }
@@ -720,6 +720,7 @@ using version_t = int64_t;
       }
       void post_object(const std::function<void (char const * const, std::size_t)> &f)
       const {
+          mutils::post_object(f, this->m_pLog->m_sName);
           mutils::post_object(f,*this->m_pWrappedObject);
           this->m_pLog->post_object(f,PersistentRegistry::getEarliestVersionToSerialize());
       }
