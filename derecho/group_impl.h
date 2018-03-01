@@ -272,7 +272,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
         logger->trace("Reading log tail length for subgroup {} from node {}...", subgroup_id, new_node_id);
         joiner_socket.get().read(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-        logger->trace("...got length {}", persistent_log_length);
+        logger->debug("Got log tail length {}", persistent_log_length);
         logger->debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
         objects_by_subgroup_id.at(subgroup_id).get().send_object(joiner_socket.get());
     });
@@ -295,7 +295,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
     std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%l] %v");
-    log->set_level(spdlog::level::trace);
+    log->set_level(spdlog::level::debug);
     //    log->set_level(spdlog::level::off);
     auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());

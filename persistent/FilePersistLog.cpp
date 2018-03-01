@@ -41,7 +41,7 @@ namespace ns_persistent{
     m_pLog(MAP_FAILED),
     m_pData(MAP_FAILED) {
 #ifdef _DEBUG
-    spdlog::set_level(spdlog::level::trace);
+    dbgConsole()->set_level(spdlog::level::trace);
 #endif
     if (pthread_rwlock_init(&this->m_rwlock,NULL) != 0) {
       throw PERSIST_EXP_RWLOCK_INIT(errno);
