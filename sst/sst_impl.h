@@ -152,7 +152,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long 
             continue;
         }
         // perform a remote RDMA write on the owner of the row
-        res_vec[index]->post_remote_write(0, offset, size);
+        res_vec[index]->post_remote_write(offset, size);
     }
     return;
 }
@@ -164,17 +164,23 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 
     const auto tid = std::this_thread::get_id();
     // get id first
-    uint32_t id = util::polling_data.get_index(tid);
+    uint32_t ce_idx = util::polling_data.get_index(tid);
 
     util::polling_data.set_waiting(tid);
-
+#ifdef USE_VERBS_API
+    struct verbs_sender_ctxt sctxt[receiver_ranks.size()];
+#else
+    struct lf_sender_ctxt sctxt[receiver_ranks.size()];
+#endif
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
             continue;
         }
         // perform a remote RDMA write on the owner of the row
-        res_vec[index]->post_remote_write_with_completion(id, offset, size);
+        sctxt[index].remote_id = index;
+        sctxt[index].ce_idx = ce_idx;
+        res_vec[index]->post_remote_write_with_completion(&sctxt[index], offset, size);
         posted_write_to[index] = true;
         num_writes_posted++;
     }
@@ -226,17 +232,15 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
         }
 
         auto ce_v = ce.value();
-        int qp_num = ce_v.first;
+        int remote_id = ce_v.first;
         int result = ce_v.second;
         if(result == 1) {
-            int index = qp_num_to_index[qp_num];
-            polled_successfully_from[index] = true;
+            polled_successfully_from[remote_id] = true;
         } else if(result == -1) {
-            int index = qp_num_to_index[qp_num];
             if(!row_is_frozen[index]) {
-                std::cerr << "Poll completion error in QP " << qp_num
-                          << ". Freezing row " << index << std::endl;
-                failed_node_indexes.push_back(index);
+                std::cerr << "Poll completion error with node (id=" << remote_id
+                          << "). Freezing row " << remote_id << std::endl;
+                failed_node_indexes.push_back(remote_id);
             }
         }
     }

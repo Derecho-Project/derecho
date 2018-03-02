@@ -294,7 +294,11 @@ void ViewManager::initialize_rdmc_sst() {
         std::cout << "Global setup failed" << std::endl;
         exit(0);
     }
+#ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
+#else
+    sst::lf_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
+#endif
 }
 
 std::map<node_id_t, ip_addr> ViewManager::make_member_ips_map(const View& view) {

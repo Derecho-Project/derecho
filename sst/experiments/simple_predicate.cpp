@@ -3,7 +3,11 @@
 #include <stdlib.h>
 
 #include "../sst.h"
+#ifdef USE_VERBS_API
 #include "../verbs.h"
+#else
+#include "../lf.h"
+#endif
 
 using std::cin;
 using std::cout;
@@ -33,7 +37,11 @@ int main() {
     }
 
     // initialize the rdma resources
+#ifdef USE_VERBS_API
     sst::verbs_initialize(ip_addrs, my_id);
+#else
+    sst::lf_initialize(ip_addrs,my_id);
+#endif
 
     vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {

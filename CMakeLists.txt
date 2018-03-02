@@ -31,4 +31,12 @@ include_directories(${derecho_SOURCE_DIR}/third_party/mutils-containers)
 
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 
+add_custom_target(
+	libfabric_target
+	COMMAND ./autogen.sh && ./configure --prefix=/ && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
+	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/libfabric
+)
+include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
+link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
+
 include_directories(${derecho_SOURCE_DIR}/third_party)

@@ -3,7 +3,11 @@
 #include <thread>
 
 #include "sst/poll_utils.h"
+#ifdef USE_VERBS_API
 #include "sst/verbs.h"
+#else
+#include "sst/lf.h"
+#endif
 
 using namespace std;
 using namespace sst;
@@ -21,7 +25,11 @@ int main() {
     }
 
     // create all tcp connections and initialize global rdma resources
+#ifdef USE_VERBS_API
     verbs_initialize(ip_addrs, node_rank);
+#else
+    lf_initialize(ip_addrs, node_rank);
+#endif
     // create read and write buffers
     char *write_buf = (char *)malloc(10);
     char *read_buf = (char *)malloc(10);
@@ -37,7 +45,7 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
-    resources *res = new resources(r_index, read_buf, write_buf, 10, 10);
+    resources *res = new resources(r_index, read_buf, write_buf, 10, 10, node_rank < r_index);
 
     const auto tid = std::this_thread::get_id();
     // get id first

@@ -17,7 +17,12 @@
 #include <vector>
 
 #include "predicates.h"
-#include "verbs.h"
+
+#ifdef USE_VERBS_API
+  #include "verbs.h"
+#else//LIBFABRIC
+  #include "lf.h"
+#endif
 
 using sst::resources;
 
@@ -195,7 +200,7 @@ private:
     /** ID of this node in the system. */
     uint32_t my_node_id;
     /** Map of queue pair number to row. Useful for detecting failures. */
-    std::map<int, int> qp_num_to_index;
+    // std::map<int, int> qp_num_to_index;
 
     /** Array with one entry for each row index, tracking whether the row is
      *  marked frozen (meaning its corresponding remote node has crashed). */
@@ -271,10 +276,15 @@ public:
                 if(row_is_frozen[sst_index]) {
                     continue;
                 }
+#ifdef USE_VERBS_API
                 res_vec[sst_index] = std::make_unique<resources>(
                         node_rank, write_addr, read_addr, rowLen, rowLen);
+#else // use libfabric api by default
+                res_vec[sst_index] = std::make_unique<resources>(
+                        node_rank, write_addr, read_addr, rowLen, rowLen, (my_node_id<node_rank));
+#endif
                 // update qp_num_to_index
-                qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
+                // qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
             }
         }
 

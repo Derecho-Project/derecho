@@ -27,6 +27,11 @@ struct cm_con_data_t {
     uint8_t gid[16];
 } __attribute__((packed));
 
+struct verbs_sender_ctxt {
+  uint32_t      remote_id; // id of the remote node
+  uint32_t      ce_idx; // index into the completion entry list
+};
+
 /**
  * Represents the set of RDMA resources needed to maintain a two-way connection
  * to a single remote node.
