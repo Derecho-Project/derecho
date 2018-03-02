@@ -297,7 +297,7 @@ namespace ns_persistent{
     dbg_trace("{0} flush data,log,and meta.", this->m_sName);
     try {
       // shadow the current state
-      void * flush_dstart, * flush_lstart;
+      void * flush_dstart, * flush_lstart=NULL;
       size_t flush_dlen = 0, flush_llen = 0;
       MetaHeader shadow_header = *META_HEADER;
       if ((NUM_USED_SLOTS > 0) && 

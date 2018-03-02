@@ -352,7 +352,7 @@ namespace sst{
     const long long int size,
     const int op,
     const bool completion) {
-    dbg_trace("resources::post_remote_send(ctxt={{},{}},offset={},size={},op={},completion={}).",ctxt?0:ctxt->thread_id,ctxt?0:ctxt->remote_id,offset,size,op,completion);
+    dbg_trace("resources::post_remote_send(ctxt={{},{}},offset={},size={},op={},completion={}).",ctxt?0:ctxt->ce_idx,ctxt?0:ctxt->remote_id,offset,size,op,completion);
 
     int ret = 0;
     struct iovec msg_iov;
@@ -466,7 +466,8 @@ namespace sst{
       if (eentry.op_context == NULL) {
         dbg_error("\top_context:NULL");
       } else {
-        dbg_error("\top_context:ce_idx={},remote_id={}",eentry.op_context->ce_idx,eentry.op_context->remote_id);
+        struct lf_sender_ctxt *sctxt = (struct lf_sender_ctxt *)eentry.op_context;
+        dbg_error("\top_context:ce_idx={},remote_id={}",sctxt->ce_idx,sctxt->remote_id);
       }
       dbg_error("\tflags={}",eentry.flags);
       dbg_error("\tlen={}",eentry.len);
@@ -502,7 +503,8 @@ namespace sst{
     // STEP 1: initialize with configuration.
     default_context(); // default the context
     load_configuration(); // load configuration
-    
+
+    dbg_trace("%s",fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
     FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
