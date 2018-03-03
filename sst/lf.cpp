@@ -120,9 +120,22 @@ namespace sst{
     REPORT_ON_FAILURE = 0,
     CRASH_ON_FAILURE = 1
   };
+  #define FAIL_IF_NONZERO(x,desc,next) \
+    do { \
+      int64_t _int64_r_ = (int64_t)(x); \
+      if (_int64_r_ != 0) { \
+        dbg_error("{}:{},ret={},{}",__FILE__,__LINE__,_int64_r_,desc); \
+        fprintf(stderr,"%s:%d,ret=%ld,%s\n",__FILE__,__LINE__,_int64_r_,desc); \
+        if (next == CRASH_ON_FAILURE) { \
+          fflush(stderr); \
+          exit(-1); \
+        } \
+      } \
+    } while (0)
   #define FAIL_IF_ZERO(x,desc,next) \
     do { \
-      if ((x) == 0) { \
+      int64_t _int64_r_ = (int64_t)(x); \
+      if (_int64_r_ == 0) { \
         dbg_error("{}:{},{}",__FILE__,__LINE__,desc); \
         fprintf(stderr,"%s:%d,%s\n",__FILE__,__LINE__,desc); \
         if (next == CRASH_ON_FAILURE) { \
@@ -131,8 +144,6 @@ namespace sst{
         } \
       } \
     } while (0)
-  #define FAIL_IF_NONZERO(x,desc,next) \
-    FAIL_IF_ZERO(!(x),desc,next)
 
   /** initialize the context with default value */
   static void default_context() {
@@ -162,7 +173,7 @@ namespace sst{
     // possible providers: verbs|psm|sockets|usnic
     #define DEFAULT_PROVIDER    NULL
     // possible domain is decided by the system
-    #define DEFAULT_DOMAIN      "eth0"
+    #define DEFAULT_DOMAIN      "mlx5_0"
 
     if (false) {
       // TODO:load configuration from file...
@@ -176,6 +187,7 @@ namespace sst{
       // domain:
       FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(DEFAULT_DOMAIN),
         "strdup domain name.", CRASH_ON_FAILURE);
+      g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
       // scatter/gather batch size
       g_ctxt.sge_bat_size = DEFAULT_SGE_BATCH_SIZE;
       // send pipeline depth
@@ -504,7 +516,7 @@ namespace sst{
     default_context(); // default the context
     load_configuration(); // load configuration
 
-    dbg_trace("%s",fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
+    dbg_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
     FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
