@@ -394,7 +394,7 @@ namespace sst{
         "fi_readmsg failed.",
         REPORT_ON_FAILURE);
     }
-    dbg_trace("post_remote_send return with ret=%d",ret);
+    dbg_trace("post_remote_send return with ret={}",ret);
     return ret;
   }
 
