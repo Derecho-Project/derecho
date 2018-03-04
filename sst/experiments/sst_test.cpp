@@ -4,6 +4,7 @@
 #else
 #include "../lf.h"
 #endif
+#include <spdlog/spdlog.h>
 
 using std::cin;
 using std::cout;
@@ -20,6 +21,7 @@ public:
 };
 
 int main() {
+    spdlog::set_level(spdlog::level::trace);
     // input number of nodes and the local node id
     uint32_t num_nodes, my_id;
     cin >> my_id >> num_nodes;

@@ -213,9 +213,7 @@ namespace sst{
     // 3 - bind them and global event queue together
     FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
     if(ret) return ret;
-    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_TRANSMIT | FI_SELECTIVE_COMPLETION), "bind endpoint and tx completion queue", REPORT_ON_FAILURE);
-    if(ret) return ret;
-    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_RECV | FI_SELECTIVE_COMPLETION), "bind endpoint and rx completion queue", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION), "bind endpoint and tx completion queue", REPORT_ON_FAILURE);
     if(ret) return ret;
     FAIL_IF_NONZERO(ret = fi_enable(this->ep), "enable endpoint", REPORT_ON_FAILURE);
     return ret;
@@ -275,6 +273,7 @@ namespace sst{
 
       FAIL_IF_ZERO(client_hints->dest_addr = malloc(remote_cm_data.pep_addr_len),"failed to malloc address space for server pep.",CRASH_ON_FAILURE);
       memcpy((void*)client_hints->dest_addr,(void*)remote_cm_data.pep_addr,(size_t)remote_cm_data.pep_addr_len);
+      client_hints->dest_addrlen = remote_cm_data.pep_addr_len;
       FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,client_hints,&client_info),"fi_getinfo() failed.",CRASH_ON_FAILURE);
       if(init_endpoint(client_info)){
         fi_freeinfo(client_hints);
@@ -314,11 +313,11 @@ namespace sst{
     // set write and read buffer
     this->write_buf = write_addr;
     if (!write_addr) {
-      dbg_warn("%{}:%{} called with NULL write_addr!",__FILE__,__func__);
+      dbg_warn("{}:{} called with NULL write_addr!",__FILE__,__func__);
     }
     this->read_buf = read_addr;
     if (!write_addr) {
-      dbg_warn("%{}:%{} called with NULL read_addr!",__FILE__,__func__);
+      dbg_warn("{}:{} called with NULL read_addr!",__FILE__,__func__);
     }
 
 #define LF_RMR_KEY(rid) (((uint64_t)0xf0000000)<<32 | (uint64_t)(rid))
@@ -364,7 +363,7 @@ namespace sst{
     const long long int size,
     const int op,
     const bool completion) {
-    dbg_trace("resources::post_remote_send(ctxt={{},{}},offset={},size={},op={},completion={}).",ctxt?0:ctxt->ce_idx,ctxt?0:ctxt->remote_id,offset,size,op,completion);
+    dbg_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={}).",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
 
     int ret = 0;
     struct iovec msg_iov;
@@ -526,12 +525,11 @@ namespace sst{
 
     // STEP 3: prepare local PEP
     FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.peq,NULL),"open the event queue for passive endpoint",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_passive_ep(g_ctxt.fabric,g_ctxt.hints,&g_ctxt.pep,NULL),"open a local passive endpoint",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO(fi_passive_ep(g_ctxt.fabric,g_ctxt.fi,&g_ctxt.pep,NULL),"open a local passive endpoint",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_pep_bind(g_ctxt.pep,&g_ctxt.peq->fid,0),"binding event queue to passive endpoint",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_listen(g_ctxt.pep),"preparing passive endpoint for incoming connections",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),"get the local PEP address",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),"local name is too big to fit in local buffer",CRASH_ON_FAILURE);
-
     FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
     
     // STEP 4: start polling thread.
