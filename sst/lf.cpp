@@ -388,6 +388,7 @@ namespace sst{
     msg.iov_count = 1;
     msg.addr = 0; // not used for a connection endpoint
     msg.rma_iov = &rma_iov;
+    msg.rma_iov_count = 1;
     msg.context = (void*)ctxt;
     msg.data = 0l; // not used
 
@@ -524,6 +525,7 @@ namespace sst{
     dbg_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
     FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
+    dbg_trace("going to use virtual address?{}",LF_USE_VADDR);
     FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),"fi_domain()",CRASH_ON_FAILURE);
     g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
