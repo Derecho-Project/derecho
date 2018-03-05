@@ -28,7 +28,8 @@ include_directories(
   ${derecho_SOURCE_DIR}/third_party/mutils
   ${derecho_SOURCE_DIR}/third_party/mutils-serialization
   ${derecho_SOURCE_DIR}/third_party/libfabric/build/include
-  ${derecho_SOURCE_DIR}/third_party/spdlog/include)
+  ${derecho_SOURCE_DIR}/third_party/spdlog/include
+  ${derecho_SOURCE_DIR}/third_party/getpot)
 link_directories(
   ${derecho_SOURCE_DIR}/third_party/mutils 
   ${derecho_SOURCE_DIR}/third_party/mutils-serialization)

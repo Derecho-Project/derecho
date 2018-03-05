@@ -15,6 +15,7 @@
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
+#include <GetPot>
 
 #ifdef _DEBUG
 #include <spdlog/spdlog.h>
@@ -73,13 +74,14 @@ namespace sst{
     // configuration resources
     struct fi_eq_attr  eq_attr;           // event queue attributes
     struct fi_cq_attr  cq_attr;           // completion queue attributes
-    #define DEFAULT_TX_DEPTH            (4096)
-    uint32_t           tx_depth;          // transfer depth
-    #define DEFAULT_RX_DEPTH            (4096)
-    uint32_t           rx_depth;          // transfer depth
-    #define DEFAULT_SGE_BATCH_SIZE      (8)
-    uint32_t           sge_bat_size;      // maximum scatter/gather batch size
+    // #define DEFAULT_TX_DEPTH            (4096)
+    // uint32_t           tx_depth;          // transfer depth
+    // #define DEFAULT_RX_DEPTH            (4096)
+    // uint32_t           rx_depth;          // transfer depth
+    // #define DEFAULT_SGE_BATCH_SIZE      (8)
+    // uint32_t           sge_bat_size;      // maximum scatter/gather batch size
   };
+  #define LF_CONFIG_FILE "rdma.cfg"
   // singlton: global states
   struct lf_ctxt g_ctxt;
   #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & FI_MR_VIRT_ADDR)
@@ -154,9 +156,9 @@ namespace sst{
     g_ctxt.hints->ep_attr->type = FI_EP_MSG; // use connection based endpoint by default.
     g_ctxt.hints->mode = ~0; // all modes
 
-    g_ctxt.hints->tx_attr->rma_iov_limit = DEFAULT_SGE_BATCH_SIZE; // 
-    g_ctxt.hints->tx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
-    g_ctxt.hints->rx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
+    // g_ctxt.hints->tx_attr->rma_iov_limit = DEFAULT_SGE_BATCH_SIZE; // 
+    // g_ctxt.hints->tx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
+    // g_ctxt.hints->rx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
 
     if (g_ctxt.cq_attr.format == FI_CQ_FORMAT_UNSPEC) {
       g_ctxt.cq_attr.format = FI_CQ_FORMAT_CONTEXT;
@@ -171,30 +173,34 @@ namespace sst{
     FAIL_IF_ZERO(g_ctxt.hints,"hints is not initialized.", CRASH_ON_FAILURE);
 
     // possible providers: verbs|psm|sockets|usnic
-    #define DEFAULT_PROVIDER    NULL
+    #define DEFAULT_PROVIDER    "sockets"
     // possible domain is decided by the system
-    #define DEFAULT_DOMAIN      "mlx5_0"
+    #define DEFAULT_DOMAIN      "eth0"
+    // tx_depth
+    #define DEFAULT_TX_DEPTH    (4096)
+    // rx_depth
+    #define DEFAULT_RX_DEPTH     (4096)
+    // load configuration file:
+    GetPot cfg(LF_CONFIG_FILE);
 
-    if (false) {
-      // TODO:load configuration from file...
-    } else { // use default values
-      dbg_info("No RDMA conf file, use the default values.");
-      // provider:
-      if(DEFAULT_PROVIDER) {
-        FAIL_IF_ZERO(g_ctxt.hints->fabric_attr->prov_name = strdup(DEFAULT_PROVIDER?DEFAULT_PROVIDER:""),
+    dbg_info("No RDMA conf file, use the default values.");
+    // provider:
+    FAIL_IF_ZERO(g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider",DEFAULT_PROVIDER)),
           "strdup provider name.", CRASH_ON_FAILURE);
-      }
-      // domain:
-      FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(DEFAULT_DOMAIN),
+    // domain:
+    FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(cfg("domain",DEFAULT_DOMAIN)),
         "strdup domain name.", CRASH_ON_FAILURE);
-      g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
-      // scatter/gather batch size
-      g_ctxt.sge_bat_size = DEFAULT_SGE_BATCH_SIZE;
-      // send pipeline depth
-      g_ctxt.tx_depth = DEFAULT_TX_DEPTH;
-      // recv pipeline depth
-      g_ctxt.rx_depth = DEFAULT_RX_DEPTH;
-    }
+    g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+    // scatter/gather batch size
+    // g_ctxt.sge_bat_size = DEFAULT_SGE_BATCH_SIZE;
+    // send pipeline depth
+    // g_ctxt.tx_depth = DEFAULT_TX_DEPTH;
+    // recv pipeline depth
+    // g_ctxt.rx_depth = DEFAULT_RX_DEPTH;
+
+    // tx_depth
+    g_ctxt.hints->tx_attr->size = cfg("tx_depth",DEFAULT_TX_DEPTH);
+    g_ctxt.hints->tx_attr->size = cfg("rx_depth",DEFAULT_RX_DEPTH);
   }
 
   int resources::init_endpoint(struct fi_info *fi) {

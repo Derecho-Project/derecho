@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++14 -Wall -O3 -ggdb -gdwarf-3")
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+include_directories(${derecho_SOURCE_DIR}/third_party/getpot)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 
 
