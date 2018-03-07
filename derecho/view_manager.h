@@ -194,7 +194,8 @@ private:
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
                                            uint num_shard_senders,
-                                           std::shared_ptr<spdlog::logger> logger);
+                                           std::shared_ptr<spdlog::logger> logger,
+                                           const std::vector<node_id_t>& next_view_members);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,

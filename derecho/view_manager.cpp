@@ -554,6 +554,8 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
         // wait for all pending sst sends to finish
         while(curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
         }
+        curr_view->gmsSST->put_with_completion();
+        curr_view->gmsSST->sync_with_members();
         while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
                                                shard_ranks_by_sender_rank,
@@ -586,7 +588,7 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
             if(shard_view.my_rank == curr_view->subview_rank_of_shard_leader(subgroup_id, shard_num)) {
                 leader_ragged_edge_cleanup(*curr_view, subgroup_id,
                                            shard_settings_pair.second.num_received_offset,
-                                           shard_view.members, num_shard_senders, logger);
+                                           shard_view.members, num_shard_senders, logger, next_view->members);
             } else {
                 //Keep track of which subgroups I'm a non-leader in, and what my corresponding shard ID is
                 follower_subgroups_and_shards->emplace(subgroup_id, shard_num);
@@ -1149,6 +1151,9 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
             int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
                 const auto node_id = shard_members[r];
+                if(find(next_view_members.begin(), next_view_members.end(), node_id) == next_view_members.end()) {
+                    continue;
+                }
                 const auto node_rank = Vc.rank_of(node_id);
                 if(/*!Vc.failed[r] && */ min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
                     min = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
