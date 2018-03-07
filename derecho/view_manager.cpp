@@ -1131,7 +1131,7 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
 void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                                             std::shared_ptr<spdlog::logger> logger) {
+                                             std::shared_ptr<spdlog::logger> logger, const std::vector<node_id_t>& next_view_members) {
     logger->debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num);
     int myRank = Vc.my_rank;
     // int Leader = Vc.rank_of_leader();  // We don't want this to change under our feet
