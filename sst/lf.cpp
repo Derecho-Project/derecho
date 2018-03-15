@@ -200,7 +200,7 @@ namespace sst{
 
     // tx_depth
     g_ctxt.hints->tx_attr->size = cfg("tx_depth",DEFAULT_TX_DEPTH);
-    g_ctxt.hints->tx_attr->size = cfg("rx_depth",DEFAULT_RX_DEPTH);
+    g_ctxt.hints->rx_attr->size = cfg("rx_depth",DEFAULT_RX_DEPTH);
   }
 
   int resources::init_endpoint(struct fi_info *fi) {
