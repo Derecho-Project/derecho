@@ -4,7 +4,7 @@
 #include "message.h"
 #include "schedule.h"
 #include "util.h"
-#include "verbs_helper.h"
+#include "lf_helper.h"
 
 #include <atomic>
 #include <cmath>
@@ -33,7 +33,7 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     if(shutdown_flag) return false;
 
     node_rank = _node_rank;
-    if(!::rdma::impl::verbs_initialize(addresses, node_rank)) {
+    if(!::rdma::impl::lf_initialize(addresses, node_rank)) {
         return false;
     }
 
@@ -41,7 +41,7 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     return true;
 }
 void add_address(uint32_t index, const string& address) {
-    ::rdma::impl::verbs_add_connection(index, address, node_rank);
+    ::rdma::impl::lf_add_connection(index, address, node_rank);
 }
 
 bool create_group(uint16_t group_number, std::vector<uint32_t> members,
@@ -114,8 +114,10 @@ barrier_group::barrier_group(vector<uint32_t> members) {
     for(unsigned int m = 0; m < total_steps; m++) steps[m] = -1;
 
     steps_mr = make_unique<memory_region>((char*)&steps[0],
-                                          total_steps * sizeof(int64_t));
-    number_mr = make_unique<memory_region>((char*)&number, sizeof(number));
+                                          total_steps * sizeof(int64_t),
+                                          node_rank);
+    number_mr = make_unique<memory_region>((char*)&number, sizeof(number),
+                                           node_rank);
 
     set<uint32_t> targets;
     for(unsigned int m = 0; m < total_steps; m++) {
@@ -125,26 +127,26 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         targets.insert(target2);
     }
 
-    map<uint32_t, queue_pair> qps;
+    map<uint32_t, endpoint> eps;
     for(auto target : targets) {
-        qps.emplace(target, queue_pair(members[target]));
+        eps.emplace(target, endpoint(members[target]));
     }
 
-    auto remote_mrs = ::rdma::impl::verbs_exchange_memory_regions(
+    auto remote_mrs = ::rdma::impl::lf_exchange_memory_regions(
             members, node_rank, *steps_mr.get());
     for(unsigned int m = 0; m < total_steps; m++) {
         auto target = (member_index + (1 << m)) % group_size;
 
         remote_memory_regions.push_back(remote_mrs.find(target)->second);
 
-        auto qp_it = qps.find(target);
-        queue_pairs.push_back(std::move(qp_it->second));
-        qps.erase(qp_it);
+        auto ep_it = eps.find(target);
+        endpoints.push_back(std::move(ep_it->second));
+        eps.erase(ep_it);
     }
 
-    for(auto it = qps.begin(); it != qps.end(); it++) {
-        extra_queue_pairs.push_back(std::move(it->second));
-        qps.erase(it);
+    for(auto it = eps.begin(); it != eps.end(); it++) {
+        extra_endpoints.push_back(std::move(it->second));
+        eps.erase(it);
     }
 }
 void barrier_group::barrier_wait() {
@@ -156,7 +158,7 @@ void barrier_group::barrier_wait() {
     number++;
 
     for(unsigned int m = 0; m < total_steps; m++) {
-        if(!queue_pairs[m].post_write(
+        if(!endpoints[m].post_write(
                    *number_mr.get(), 0, 8,
                    form_tag(0, (node_rank + (1 << m)) % group_size),
                    remote_memory_regions[m], m * 8, message_type::ignored(),
