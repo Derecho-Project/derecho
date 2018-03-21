@@ -4,7 +4,7 @@
 
 #include "rdmc.h"
 #include "schedule.h"
-#include "verbs_helper.h"
+#include "lf_helper.h"
 
 #include <experimental/optional>
 #include <map>
@@ -80,8 +80,8 @@ private:
     vector<bool> received_blocks;
 
     // maps from member_indices to the queue pairs
-    map<size_t, rdma::queue_pair> queue_pairs;
-    map<size_t, rdma::queue_pair> rfb_queue_pairs;
+    map<size_t, rdma::endpoint> endpoints;
+    map<size_t, rdma::endpoint> rfb_endpoints;
 
     static struct {
         rdma::message_type data_block;
