@@ -23,8 +23,8 @@ struct fid_cq;
  */
 namespace rdma {
 class exception {};
-class exception {};
 class invalid_args : public exception {};
+class configuration_failure : public exception {};
 class connection_broken : public exception {};
 class creation_failure : public exception {};
 class mr_creation_failure : public creation_failure {};
@@ -33,21 +33,56 @@ class cq_creation_failure : public creation_failure {};
 class message_types_exhausted : public exception {};
 class unsupported_feature : public exception {};
 
+
+/**
+ * A wrapper for fi_close. The previous way this was done used a lambda and
+ * std::function, but that incurs the overhead of type-erasure
+ */
+//template<typename fi_struct_type>
+//struct close { 
+//  void operator() (fi_struct_type* fi_struct) const {fi_close(fi_struct->fid);} 
+//};
+
 /**
  * A C++ wrapper for the libfabric fid_mr struct. Registers a memory region for 
  * the provided buffer on construction, and deregisters it on destruction.
  */
 class memory_region {
-    std::unique_ptr<fid_mr, std::function<void(fid_mr*)>> mr;
-    std::unique_ptr<char[]> allocated_buffer;
+    /** Smart pointer for managing the registered memory region */
+    //std::unique_ptr<fid_mr, close<fid_mr>> mr;
+    /** Smart pointer for managing the buffer the mr uses */
+    //std::unique_ptr<char[]> allocated_buffer;
+    /** A raw pointer to the memory region */
+    fid_mr* mr;
 
-    memory_region(size_t size, bool contiguous);
     friend class endpoint;
-    friend class task
+    friend class task;
 
 public:
-    memory_region(size_t size);
-    memory_region(char* buffer, size_t size);
+    /**
+     * Constructor
+     * Creates a buffer of the specified size and then calls the second 
+     * constructor with the new buffer as an argument
+     *
+     * @param size The size in bytes of the buffer to be associated with
+     *     the memory region.
+     * @param node_rank The id of the remote node the region is being 
+     *     created on or for. TODO: Is this right?
+     */ 
+    memory_region(size_t size, uint32_t node_rank);
+    /**
+     * Constructor
+     * Registers a memory region using the specified buffer and suggests
+     * a key to libfabric using the node_rank argument.
+     *
+     * @param buffer The allocated memory that will be registered.
+     * @param size The size in bytes of the buffer to be associated with
+     *      the memory region.
+     * @param node_rank The id of the remote node the region is being 
+     *      created on or for. TODO: Is this right?
+     */ 
+    memory_region(char* buffer, size_t size, uint32_t node_rank);
+    /** Return the remote key of the registered memory region */
     uint32_t get_rkey() const;
 
     char* const buffer;
@@ -56,8 +91,17 @@ public:
 
 class remote_memory_region {
 public:
-  remote_memory_region(uint64_t remote_address, size_t length,
-                       uint32_t remote_key)
+    /**
+     * Constructor
+     * Takes in parameters representing a remote memory region
+     *
+     * @param remote_address The address of the remote buffer.
+     * @param length The size of the remote buffer in bytes.
+     * @param remote_key The key used to refer to the buffer
+     *     for remote accesses
+     */
+    remote_memory_region(uint64_t remote_address, size_t length,
+                         uint32_t remote_key)
         : buffer(remote_address), size(length), rkey(remote_key) {}
 
     const uint64_t buffer;
@@ -69,18 +113,22 @@ public:
  * A C++ wrapper for the libfabric fid_cq struct and its associated functions.
  */
 class completion_queue {
-    std::unique_ptr<fid_cq, std::function<void(fid_cq*)>> cq;
+    /** Smart pointer for managing the completion queue */
+    // std::unique_ptr<fid_cq, close<fid_cq>> cq;
+    /** A raw pointer to the cq, used for interacting with the fi api */
+    fid_cq* cq;
+
     friend class managed_endpoint;
     friend class task;
 
 public:
-    explicit completion_queue(bool cross_channel);
+    explicit completion_queue();
 };
 
-tyepdef std::function<void(uint64_t tag, uint32_t immediate, size_t length)>
+typedef std::function<void(uint64_t tag, uint32_t immediate, size_t length)> 
         completion_handler;
 
-ass message_type {
+class message_type {
 public:
     typedef uint8_t tag_type;
     static constexpr unsigned int shift_bits = 64 - 8 * sizeof(tag_type);
@@ -107,44 +155,78 @@ public:
 
 class endpoint {
 protected:
-    std::unique_ptr<fid_ep, std::function<void(fid_ep*)>> ep;
-    explicit queue_pair() {}
+    /** Smart pointer for managing the completion queue */
+    // std::unique_ptr<fid_ep, close<fid_ep>> ep;
+    /** A raw pointer to the endpoint used for interacting with the fi api */
+    fid_ep* ep;
+
+    explicit endpoint() {}
 
     friend class task;
 public:
     ~endpoint();
-    explicit endpoint(size_t remond_index);
-    endpoint(size_t remote_index,
+    
+    /**
+     * Constructor
+     * Calls the second constructor with an empty lambda as the second argument.
+     *
+     * @param remote_index The id of the remote node.
+     */ 
+    explicit endpoint(size_t remote_index);
+     /**
+     * Constructor
+     * Initializes members and then calls endpoint::connect
+     *
+     * @param remote_index The id of the remote node.
+     * @param is_lf_server This parameter decide local role in connection.
+     *     If is_lf_server is true, it waits on PEP for connection from remote
+     *     side. Otherwise, it initiate a connection to remote side.
+     * @param post_recvs A lambda that is called at the end of initializing the
+     *     endpoints on the client and remote sides to avoid race conditions 
+     *     between post_send() and post_recv()
+     */    
+    endpoint(size_t remote_index, bool is_lf_server,
              std::function<void(endpoint*)> post_recvs);
+    /**
+     * Constructor 
+     * Default move constructor
+     */ 
     endpoint(endpoint&&) = default;
 
-    bool post_send(const memory_region& mr, size_t offset, size_t length,
+    int init(struct fi_info *fi);
+    void connect(size_t remote_index, bool is_lf_server,
+                 std::function<void(endpoint *)> post_recvs);
+
+    bool post_send(const memory_region& mr, size_t offset, size_t size,
                    uint64_t wr_id, uint32_t immediate,
                    const message_type& type);
-    bool post_recv(const memory_region& mr, size_t offset, size_t length,
+    bool post_recv(const memory_region& mr, size_t offset, size_t size,
                    uint64_t wr_id, const message_type& type);
 
     bool post_empty_send(uint64_t wr_id, uint32_t immediate,
                          const message_type& type);
     bool post_empty_recv(uint64_t wr_id, const message_type& type);
 
-    bool post_write(const memory_region& mr, size_t offset, size_t length,
+    bool post_write(const memory_region& mr, size_t offset, size_t size,
                     uint64_t wr_id, remote_memory_region remote_mr,
                     size_t remote_offset, const message_type& type,
                     bool signaled = false, bool send_inline = false);
 
+    fi_addr_t remote_fi_addr;
 };
 
 class managed_endpoint : public endpoint {
 public:
     completion_queue scq, rcq;
+    /** TODO Implement the constructor */
     managed_endpoint(size_t remote_index,
-                       std::function<void(managed_endpoint*)> post_recvs);
+                       std::function<void(managed_endpoint*)> post_recvs) {}
 };
 
 class manager_endpoint : public endpoint {
 public:
-    explicit manager_endpoint();
+    /** TODO: Implement the constructor */
+    explicit manager_endpoint() {}
 };
 
 class task {
@@ -167,12 +249,6 @@ public:
     bool post() __attribute__((warn_unused_result));
 };
 
-struct feature_set {
-    bool contiguous memory;
-    bool cross_channel;
-};
-feature_set get_supported_features();
-
 namespace impl {
 bool lf_initialize(const std::map<uint32_t, std::string>& node_addresses,
                    uint32_t node_rank);
@@ -185,7 +261,6 @@ std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
          const memory_region& mr);
 
 bool set_interrupt_mode(bool enabled);
-bool set_contiguous_memory_mode(bool enabled);
 } /* namespace impl */
 } /* namespace rdma */
 
