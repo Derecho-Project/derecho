@@ -129,7 +129,9 @@ barrier_group::barrier_group(vector<uint32_t> members) {
 
     map<uint32_t, endpoint> eps;
     for(auto target : targets) {
-        eps.emplace(target, endpoint(members[target]));
+        // Decide whether the endpoint will act as server in the connection
+        bool is_lf_server = members[member_index] > members[target];
+        eps.emplace(target, endpoint(members[target], ));
     }
 
     auto remote_mrs = ::rdma::impl::lf_exchange_memory_regions(

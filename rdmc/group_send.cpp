@@ -419,7 +419,9 @@ void polling_group::post_recv(schedule::block_transfer transfer) {
               "posted_receive_buffer");
 }
 void polling_group::connect(uint32_t neighbor) {
-    endpoints.emplace(neighbor, endpoint(members[neighbor]));
+    // Decide whether the endpoint will act as a server in the connection
+    bool is_lf_server = members[member_index] > members[neighbor];
+    endpoints.emplace(neighbor, endpoint(members[neighbor], is_lf_server));
 
     auto post_recv = [this, neighbor](rdma::endpoint* ep) {
         ep->post_empty_recv(form_tag(group_number, neighbor),
