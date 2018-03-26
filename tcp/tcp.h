@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 
+
 namespace tcp {
 
 struct exception {};
@@ -44,6 +45,18 @@ public:
      * before size bytes could be read.
      */
     bool read(char* buffer, size_t size);
+
+    /**
+     * Attempts to read up to max_size bytes from socket and write them to the
+     * given buffer, but returns immediately even if fewer than max_size bytes
+     * are available to be read. A very thin wrapper around a single read()
+     * system call.
+     * @param buffer A pointer to a byte buffer that should be used to store
+     * the result of the read
+     * @param max_size The number of bytes to attempt to read
+     * @return The number of bytes actually read, or -1 if there was an error
+     */
+    ssize_t read_partial(char* buffer, size_t max_size) ;
 
     /** Returns true if there is any data available to be read from the socket. */
     bool probe();

@@ -73,6 +73,15 @@ bool socket::read(char *buffer, size_t size) {
     return true;
 }
 
+ssize_t socket::read_partial(char* buffer, size_t max_size) {
+    if(sock < 0) {
+        fprintf(stderr, "WARNING: Attempted to read from closed socket\n");
+        return -1;
+    }
+
+    ssize_t bytes_read = ::read(sock, buffer, max_size);
+    return bytes_read;
+}
 bool socket::probe() {
     int count;
     ioctl(sock, FIONREAD, &count);
@@ -91,6 +100,7 @@ bool socket::write(const char *buffer, size_t size) {
         if(bytes_written >= 0) {
             total_bytes += bytes_written;
         } else if(bytes_written == -1 && errno != EINTR) {
+            std::cerr << "socket::write: Error in the socket! Errno " << errno << std::endl;
             return false;
         }
     }
