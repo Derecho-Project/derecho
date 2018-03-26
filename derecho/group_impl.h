@@ -269,7 +269,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = rpc_manager.get_socket(new_node_id);
         //First, read the log tail length sent by the joining node
         int64_t persistent_log_length = 0;
-        logger->trace("Reading log tail length for subgroup {} from node {}...", subgroup_id, new_node_id);
         joiner_socket.get().read(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         logger->debug("Got log tail length {}", persistent_log_length);

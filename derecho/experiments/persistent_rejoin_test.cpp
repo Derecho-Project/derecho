@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
     };
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
-    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
+//    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
     std::unique_ptr<derecho::Group<PersistentThing>> group;
     if(my_ip == leader_ip) {
@@ -122,7 +122,9 @@ int main(int argc, char** argv) {
         }
         std::cout << "Current state according to ordered_query: " << curr_state << std::endl;
     }
-    cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
-    while(true) {
+    if(node_id != 3) {
+        cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+        while(true) {
+        }
     }
 }

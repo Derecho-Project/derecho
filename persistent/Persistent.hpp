@@ -64,9 +64,34 @@ using version_t = int64_t;
   // this function is obsolete, now we use a shared pointer to persistence registry
   // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
 
+  /**
+   * Helper function for creating Persistent version numbers out of MulticastGroup
+   * sequence numbers and View IDs. Packs two 32-bit integer types into an
+   * unsigned 64-bit int; the template allows them to be signed or unsigned.
+   * @param high_bits The integer that should become the high order bits of the
+   * version number.
+   * @param low_bits The integer that should become the low order bits of the
+   * version number
+   * @return The concatenation of the two integers as a 64-bit version number.
+   */
   template<typename int_type>
   version_t combine_int32s(const int_type high_bits, const int_type low_bits) {
       return static_cast<version_t>((static_cast<uint64_t>(high_bits) << 32) | (0xffffffffll & low_bits));
+  }
+
+  /**
+   * Helper function for unpacking a Persistent version number into two signed
+   * or unsigned int32 values. The template parameter determines whether each
+   * 32-bit half of the version number will be intepreted as a signed int or an
+   * unsigned int.
+   * @param packed_int The version number to unpack
+   * @return A std::pair in which the first element is the high-order bits of
+   * the version number, and the second element is the low-order bits of the
+   * version number.
+   */
+  template<typename int_type>
+  std::pair<int_type, int_type> unpack_version(const version_t packed_int) {
+      return std::make_pair(static_cast<int_type>(packed_int >> 32), static_cast<int_type>(0xffffffffll & packed_int));
   }
 
   /*

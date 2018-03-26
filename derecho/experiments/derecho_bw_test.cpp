@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
         derecho::Mode mode = derecho::Mode::ORDERED;
         if(raw_mode) {
-            mode = derecho::Mode::RAW;
+            mode = derecho::Mode::UNORDERED;
         }
 
         auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {

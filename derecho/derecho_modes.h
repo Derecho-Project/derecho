@@ -3,6 +3,6 @@
 namespace derecho {
 enum class Mode {
     ORDERED,
-    RAW
+    UNORDERED
 };
 }

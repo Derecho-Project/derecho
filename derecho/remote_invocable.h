@@ -547,9 +547,6 @@ public:
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
         populate_header(buf, payload_size, invoker.invoke_opcode, nid);
-//        long invocation_id = ((long*)(buf + header_size))[0];
-//        logger->trace("Preparing to send RPC invoke message with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
-//                      invoker.invoke_opcode.class_id.name(), invoker.invoke_opcode.subgroup_id, invoker.invoke_opcode.function_id, invoker.invoke_opcode.is_reply, invocation_id);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*

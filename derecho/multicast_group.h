@@ -278,8 +278,38 @@ private:
     void initialize_sst_row();
     void register_predicates();
 
-    void deliver_message(RDMCMessage& msg, uint32_t subgroup_num);
-    void deliver_message(SSTMessage& msg, uint32_t subgroup_num);
+    /**
+     * Delivers a single message to the application layer, either by invoking
+     * an RPC function or by calling a global stability callback.
+     * @param msg A reference to the message
+     * @param subgroup_num The ID of the subgroup this message is in
+     */
+    void deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num);
+    /**
+     * Same as the other deliver_message, but for the SSTMessage type
+     * @param msg A reference to the message to deliver
+     * @param subgroup_num The ID of the subgroup this message is in
+     */
+    void deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num);
+
+    /**
+     * Enqueues a single message for persistence with the persistence manager.
+     * Note that this does not actually wait for the message to be persisted;
+     * you must still post a persistence request with the persistence manager.
+     * @param msg The message that should cause a new version to be registered
+     * with PersistenceManager
+     * @param subgroup_num The ID of the subgroup this message is in
+     * @param seq_num The sequence number of the message
+     */
+    void version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num);
+    /**
+     * Same as the other version_message, but for the SSTMessage type.
+     * @param msg The message that should cause a new version to be registered
+     * with PersistenceManager
+     * @param subgroup_num The ID of the subgroup this message is in
+     * @param seq_num The sequence number of the message
+     */
+    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
@@ -363,6 +393,10 @@ public:
             const long long unsigned int max_payload_size,
             const long long unsigned int block_size);
 
+    /**
+     * @return a map from subgroup ID to SubgroupSettings for only those subgroups
+     * that this node belongs to.
+     */
     const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
         return subgroup_settings;
     }

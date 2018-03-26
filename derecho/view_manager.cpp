@@ -634,12 +634,22 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
         }
 
         //Wait for persistence to finish for messages delivered in RaggedEdgeCleanup
-        //(persisted_num should be equal to delivered_num for every node)
         auto persistence_finished_pred = [this](const DerechoSST& gmsSST) {
-            for(node_id_t row = 0; row < gmsSST.get_num_rows(); ++row) {
-                for(subgroup_id_t subgroup_id = 0; subgroup_id < curr_view->subgroup_shard_views.size(); ++subgroup_id) {
-                    if(gmsSST.persisted_num[row][subgroup_id] < gmsSST.delivered_num[row][subgroup_id])
+            //For each subgroup/shard that this node is a member of...
+            for(auto subgroup_settings_pair : curr_view->multicast_group->get_subgroup_settings()) {
+                subgroup_id_t subgroup_id = subgroup_settings_pair.first;
+                if(subgroup_settings_pair.second.mode == Mode::UNORDERED) {
+                    //Skip non-ordered subgroups, they never do persistence
+                    continue;
+                }
+                message_id_t last_delivered_seq_num = gmsSST.delivered_num[curr_view->my_rank][subgroup_id];
+                //For each member of that shard...
+                for(const node_id_t& shard_member : subgroup_settings_pair.second.members) {
+                    uint member_row = curr_view->rank_of(shard_member);
+                    //Check to see if the member persisted up to the ragged edge trim
+                    if(!curr_view->failed[member_row] && ns_persistent::unpack_version<int32_t>(gmsSST.persisted_num[member_row][subgroup_id]).second < last_delivered_seq_num) {
                         return false;
+                    }
                 }
             }
             return true;
@@ -1151,11 +1161,8 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
             int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
                 const auto node_id = shard_members[r];
-                if(find(next_view_members.begin(), next_view_members.end(), node_id) == next_view_members.end()) {
-                    continue;
-                }
                 const auto node_rank = Vc.rank_of(node_id);
-                if(/*!Vc.failed[r] && */ min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
+                if(!Vc.failed[node_rank] && min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
                     min = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
                 }
             }
