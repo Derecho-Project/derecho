@@ -102,6 +102,10 @@ struct Bytes : public mutils::ByteRepresentable{
         static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager *, const char * const v)  {
                 return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t),((std::size_t*)(v))[0])};
         }
+
+        static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager *, const char * const v)  {
+                return context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t),((std::size_t*)(v))[0])};
+        }
 };
 
 
