@@ -25,6 +25,7 @@
   #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
   #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
   #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
+  #define dbg_flush() dbgConsole()->flush()
 #else
   #define dbg_trace(...)
   #define dbg_debug(...)
@@ -32,6 +33,7 @@
   #define dbg_warn(...)
   #define dbg_error(...)
   #define dbg_crit(...)
+  #define dbg_flush()
 #endif//_DEBUG
 
 #define MAX(a,b) \
@@ -46,6 +48,12 @@
 
 #define HIGH__int128(x) (*((uint64_t*)((uint64_t)(&(x))+8)))
 #define LOW__int128(x)  (*((uint64_t*)&(x)))
+
+
+//Persistent folder:
+#define DEFAULT_FILE_PERSIST_PATH (".plog")
+#define DEFAULT_RAMDISK_PATH ("/dev/shm/volatile_t")
+
 // verify the existence of a folder
 // Check if directory exists or not. Create it on absence.
 // return error if creating failed
@@ -64,23 +72,31 @@ noexcept(false) {
   }
 }
 
-// verify the existence of a sparse file
-// Check if directory exists or not. Create it on absence.
-// return error if creating failed
-inline bool checkOrCreateFileWithSize(const std::string & file, uint64_t size)
+// verify the existence of a regular file
+inline bool checkRegularFile(const std::string & file)
 noexcept(false) {
-  bool bCreate = false;
   struct stat sb;
-  int fd;
+  bool bRet = true;
 
   if (stat(file.c_str(),&sb) == 0) {
     if(! S_ISREG(sb.st_mode)) {
       throw PERSIST_EXP_INV_FILE;
     }
   } else {
-    // create it
-    bCreate = true;
+    bRet = false;
   }
+  return bRet;
+}
+
+// verify the existence of a sparse file
+// Check if directory exists or not. Create it on absence.
+// return error if creating failed
+inline bool checkOrCreateFileWithSize(const std::string & file, uint64_t size)
+noexcept(false) {
+  bool bCreate = false;
+  int fd;
+
+  bCreate = !checkRegularFile(file);
 
   fd = open(file.c_str(), O_RDWR|O_CREAT,S_IWUSR|S_IRUSR|S_IRGRP|S_IWGRP|S_IROTH);
   if (fd < 0) {
@@ -93,6 +109,5 @@ noexcept(false) {
   close(fd);
   return bCreate;
 }
-
 
 #endif//UTIL_HPP

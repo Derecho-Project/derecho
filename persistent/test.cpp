@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 #include <spdlog/spdlog.h>
 #include <SerializationSupport.hpp>
@@ -65,14 +66,21 @@ static void printhelp(){
   cout << "\tgetbyidx <index>" << endl;
   cout << "\tgetbyver <version>" << endl;
   cout << "\tgetbytime <timestamp>" << endl;
-  cout << "\tset value version" << endl;
+  cout << "\tset <value> <version>" << endl;
   cout << "\ttrimbyidx <index>" << endl;
   cout << "\ttrimbyver <version>" << endl;
   cout << "\ttrimbytime <time>" << endl;
   cout << "\tlist" << endl;
   cout << "\tvolatile" << endl;
   cout << "\thlc" << endl;
+  cout << "\tnologsave <int-value>" << endl;
+  cout << "\tnologload" << endl;
   cout << "\teval <file|mem> <datasize> <num> [batch]" << endl;
+  cout << "\tlogtail-set <value> <version>" << endl;
+  cout << "\tlogtail-list" << endl;
+  cout << "\tlogtail-serialize [since-ver]" << endl;
+  cout << "\tlogtail-trim <version>" << endl;
+  cout << "\tlogtail-apply" << endl;
   cout << "NOTICE: test can crash if <datasize> is too large(>8MB).\n"
        << "This is probably due to the stack size is limited. Try \n"
        << "  \"ulimit -s unlimited\"\n"
@@ -80,7 +88,7 @@ static void printhelp(){
 }
 
 Persistent<X> px1;
-Persistent<VariableBytes> npx;
+Persistent<VariableBytes> npx,npx_logtail;
 //Persistent<X,ST_MEM> px2; 
 Volatile<X> px2; 
 Persistent<X> pxarr[3]; //unused
@@ -102,6 +110,16 @@ void listvar(Persistent<OT,st> &var){
     cout<<"["<<idx<<"]\t"<<var.getByIndex(idx)->to_string()<<"\t//by copy"<<endl;
     idx++;
   }
+}
+
+static void nologsave(int value) {
+  saveObject(value);
+  saveObject<int,ST_MEM>(value);
+}
+
+static void nologload() {
+  cout<<"in file:"<<*loadObject<int>()<<endl;
+  cout<<"in memory:"<<*loadObject<int,ST_MEM>()<<endl;
 }
 
 static void test_hlc();
@@ -153,6 +171,10 @@ int main(int argc,char ** argv){
       //cout<<"Persistent<X,ST_MEM> px2:"<<endl;
       //listvar<X,ST_MEM>(px2);
     } 
+    if (strcmp(argv[1],"logtail-list") == 0) {
+      cout<<"Persistent<VariableBytes> npx:"<<endl;
+      listvar<VariableBytes>(npx_logtail);
+    }
     else if (strcmp(argv[1],"getbyidx") == 0){
       int64_t nv = atol(argv[2]);
       // by lambda
@@ -217,6 +239,74 @@ int main(int argc,char ** argv){
       npx.version(ver);
       npx.persist();
     }
+    else if (strcmp(argv[1],"logtail-set") == 0) {
+      char* v = argv[2];
+      int64_t ver = (int64_t)atoi(argv[3]);
+      sprintf((*npx_logtail).buf,"%s",v);
+      (*npx_logtail).data_len = strlen(v)+1;
+      npx_logtail.version(ver);
+      npx_logtail.persist();
+    }
+#define LOGTAIL_FILE "logtail.ser"
+    else if (strcmp(argv[1],"logtail-serialize") == 0) {
+      int64_t ver = INVALID_VERSION;
+      if(argc >= 3) {
+        ver = (int64_t)atoi(argv[2]);
+      }
+      PersistentRegistry::setEarliestVersionToSerialize(ver);
+      ssize_t ds1 = npx_logtail.bytes_size();
+      ssize_t prefix = mutils::bytes_size(npx_logtail.getObjectName()) + mutils::bytes_size(*npx_logtail);
+      char * buf = (char *)malloc(ds1);
+      if (buf == NULL) {
+        cerr<<"faile to allocate "<<ds1<<" bytes for serialized data. prefix="<<prefix << " bytes"<<endl;
+        return -1;
+      }
+      ssize_t ds2 = npx_logtail.to_bytes(buf);
+      cout<<"serialization requested "<<(ds1-prefix)<<" bytes, used "<<(ds2-prefix)<<" bytes"<<endl;
+      int fd = open(LOGTAIL_FILE,O_CREAT|O_WRONLY,S_IWUSR|S_IRUSR);
+      if (fd == -1) {
+        cerr<<"failed to open file "<<LOGTAIL_FILE<<endl;
+        return -1;
+      }
+      ssize_t ds3 = write(fd,(void*)((uint64_t)buf+prefix),ds2-prefix);
+      if (ds3 == -1) {
+        cerr<<"failed to write the buffer to file "<<LOGTAIL_FILE<<endl;
+        free(buf);
+        return -1;
+      }
+      free(buf);
+      close(fd);
+    }
+    else if (strcmp(argv[1],"logtail-trim") == 0) {
+      int64_t ver = atol(argv[2]);
+      npx_logtail.trim(ver);
+      npx_logtail.persist();
+      cout<<"logtail-trim till ver "<<ver<<" successfully"<<endl;
+    }
+    else if (strcmp(argv[1],"logtail-apply") == 0) {
+      //load the serialized logtail.
+      int fd = open(LOGTAIL_FILE,O_RDONLY);
+      if (fd == -1) {
+        cerr<<"failed to open file "<<LOGTAIL_FILE<<endl;
+        return -1;
+      }
+
+      off_t fsize = lseek(fd,0,SEEK_END);
+      lseek(fd,0,SEEK_CUR);
+      
+      void *buf = mmap(NULL,(size_t)fsize,PROT_READ,MAP_SHARED,fd,0);
+      if (buf == MAP_FAILED) {
+        cerr<<"failed to map buffer."<<endl;
+        return -1;
+      }
+
+      cout<<"before applyLogTail."<<endl;
+      npx_logtail.applyLogTail(nullptr,(char *)buf);
+      cout<<"after applyLogTail."<<endl;
+
+      munmap(buf,(size_t)fsize);
+      close(fd);
+    }
     else if (strcmp(argv[1],"volatile") == 0) {
       cout<<"loading Persistent<X,ST_MEM> px2"<<endl;
       listvar<X,ST_MEM>(px2);
@@ -240,6 +330,12 @@ int main(int argc,char ** argv){
     }
     else if (strcmp(argv[1],"hlc") == 0) {
       test_hlc();
+    }
+    else if (strcmp(argv[1],"nologsave") == 0) {
+      nologsave(atoi(argv[2]));
+    }
+    else if (strcmp(argv[1],"nologload") == 0) {
+      nologload();
     }
     else if (strcmp(argv[1],"eval") == 0) {
       // eval file|mem osize nops

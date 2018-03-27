@@ -21,7 +21,7 @@ subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& nex
 }
 subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
     subgroup_shard_layout_t subgroup_vector(1);
-    subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, Mode::RAW));
+    subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, Mode::UNORDERED));
     next_unassigned_rank = curr_view.members.size();
     return subgroup_vector;
 }
@@ -31,7 +31,7 @@ ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard) 
 }
 
 ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard) {
-    return ShardAllocationPolicy{num_shards, true, nodes_per_shard, Mode::RAW, {}, {}};
+    return ShardAllocationPolicy{num_shards, true, nodes_per_shard, Mode::UNORDERED, {}, {}};
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& num_nodes_by_shard,

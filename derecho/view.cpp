@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -78,8 +79,8 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0),  //This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(0) {    /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
+          my_rank(0),               //This will always get overwritten by the receiver after deserializing
+          next_unassigned_rank(0) { /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
@@ -254,7 +255,7 @@ std::string View::debug_string() const {
 
 std::unique_ptr<View> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
-    std::ifstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);
+    std::ifstream view_file_swap(view_file_name + ".swp");
     std::unique_ptr<View> view;
     std::unique_ptr<View> swap_view;
     //The expected view file might not exist, in which case we'll fall back to the swap file

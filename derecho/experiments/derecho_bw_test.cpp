@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
         derecho::Mode mode = derecho::Mode::ORDERED;
         if(raw_mode) {
-            mode = derecho::Mode::RAW;
+            mode = derecho::Mode::UNORDERED;
         }
 
         auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
@@ -136,7 +136,7 @@ int main(int argc, char *argv[]) {
                     node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
+                    derecho::DerechoParams{max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, node_addresses[node_id],

@@ -42,6 +42,9 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
+    virtual void make_version(const ns_persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
+    virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
+    virtual void persist(const ns_persistent::version_t version) noexcept(false) = 0;
 };
 
 template <typename T>
@@ -150,9 +153,9 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
                Factory<T> client_object_factory)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -177,8 +180,8 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this)),
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -325,6 +328,15 @@ public:
     }
 
     /**
+     * Returns the minimum among the "latest version" numbers of all Persistent
+     * fields of this object, i.e. the longest consistent cut of all the logs.
+     * @return A version number
+     */
+    const int64_t get_minimum_latest_persisted_version() noexcept(false) {
+        return persistent_registry_ptr->getMinimumLatestPersistedVersion();
+    }
+
+    /**
      * Submits the contents of the send buffer to be multicast to the subgroup,
      * assuming it has been previously filled with a call to get_sendbuffer_ptr().
      */
@@ -362,7 +374,9 @@ public:
      * @param receiver_socket
      */
     void send_object_raw(tcp::socket& receiver_socket) const {
-        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
+        auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) {
+            receiver_socket.write(bytes, size);
+        };
         mutils::post_object(bind_socket_write, **user_object_ptr);
     }
 
@@ -389,15 +403,15 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistence_version_t& ver, const HLC& hlc) noexcept(false) {
+    virtual void make_version(const ns_persistent::version_t& ver, const HLC& hlc) noexcept(false) {
         persistent_registry_ptr->makeVersion(ver, hlc);
     };
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(const persistence_version_t version) noexcept(false) {
-        persistence_version_t persisted_ver;
+    virtual void persist(const ns_persistent::version_t version) noexcept(false) {
+        ns_persistent::version_t persisted_ver;
 
         // persist variables
         do {
@@ -415,7 +429,7 @@ public:
      * @param ver - the version number, before which, logs are going to be
      * trimmed
      */
-    virtual void trim(const persistence_version_t& ver) noexcept(false) {
+    virtual void trim(const ns_persistent::version_t& ver) noexcept(false) {
         persistent_registry_ptr->trim(ver);
     };
 
@@ -425,8 +439,8 @@ public:
      * @param pf - the persistent function
      * @param tf - the trim function
      */
-    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf) noexcept(false) {
-        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf);
+    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf, const LatestPersistedGetterFunc& gf) noexcept(false) {
+        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf);
     }
 };
 

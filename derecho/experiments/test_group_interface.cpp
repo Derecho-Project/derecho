@@ -26,7 +26,7 @@ int main() {
                                  long long int msg_size) {
         cout << "Some message is stable" << endl;
     };
-    auto persist_callback = [](uint32_t subgroup, derecho::persistence_version_t ver) {
+    auto persist_callback = [](uint32_t subgroup, ns_persistent::version_t ver) {
         cout << "version " << ver << " is persisted locally." << endl;
     };
     derecho::CallbackSet callbacks{stability_callback,

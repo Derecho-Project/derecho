@@ -8,88 +8,9 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "initialize.h"
+#include "bytes_object.h"
 #include <persistent/Persistent.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
-#include <mutils-serialization/context_ptr.hpp>
-
-using mutils::context_ptr;
-
-//This class is modified from Matt's implementation
-struct Bytes : public mutils::ByteRepresentable{
-
-        char *bytes;
-        std::size_t size;
-
-        Bytes(const char * b, decltype(size) s)
-                :size(s){
-            bytes = nullptr;
-            if(s>0) {
-                bytes = new char[s];
-                memcpy(bytes,b,s);
-            }
-        }
-        Bytes() {
-          bytes = nullptr;
-          size = 0;
-        }
-        virtual ~Bytes(){
-            if(bytes!=nullptr) {
-                delete bytes;
-            }
-        }
-
-        Bytes & operator = (Bytes && other) {
-            char *swp_bytes = other.bytes;
-            std::size_t swp_size = other.size;
-            other.bytes = bytes;
-            other.size = size;
-            bytes = swp_bytes;
-            size = swp_size;
-            return *this;
-        }
-
-        Bytes & operator = (const Bytes & other) {
-            if(bytes!=nullptr) {
-                delete bytes;
-            }
-            size = other.size;
-            if(size > 0) {
-                bytes = new char[size];
-                memcpy(bytes,other.bytes,size);
-            } else {
-                bytes = nullptr;
-            }
-            return *this;
-        }
-
-        std::size_t to_bytes(char* v) const{
-                ((std::size_t*)(v))[0] = size;
-                if(size > 0) {
-                    memcpy(v + sizeof(size),bytes,size);
-                }
-                return size + sizeof(size);
-        }
-
-        std::size_t bytes_size() const {
-                return size + sizeof(size);
-        }
-
-        void post_object(const std::function<void (char const * const,std::size_t)>& f) const{
-                f((char*)&size,sizeof(size));
-                f(bytes,size);
-        }
-
-        void ensure_registered(mutils::DeserializationManager&){}
-
-        static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager *, const  char * const v){
-            return std::make_unique<Bytes>(v + sizeof(std::size_t),((std::size_t*)(v))[0]);
-        }
-
-        static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager *, const char * const v)  {
-                return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t),((std::size_t*)(v))[0])};
-        }
-
-};
 
 
 /**
@@ -158,7 +79,7 @@ int main(int argc, char *argv[]) {
   if (argc >= 6) {
     window_size = (unsigned int )atoi(argv[5]);
   }
-  derecho::DerechoParams derecho_params{max_msg_size, block_size, std::string(), window_size};
+  derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
   bool is_sending = true;
 
   long total_num_messages;
@@ -177,7 +98,7 @@ int main(int argc, char *argv[]) {
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     // the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,derecho::persistence_version_t ver){
+    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
       if(ver == (total_num_messages - 1)){
         if(is_sending) {
           clock_gettime(CLOCK_REALTIME,&t3);

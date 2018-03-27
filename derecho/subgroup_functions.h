@@ -121,6 +121,7 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
  * allocation algorithm, parameterized based on a SubgroupAllocationPolicy.
  */
 class DefaultSubgroupAllocator {
+protected:
     std::unique_ptr<subgroup_shard_layout_t> previous_assignment;
     std::unique_ptr<subgroup_shard_layout_t> last_good_assignment;
     const SubgroupAllocationPolicy policy;

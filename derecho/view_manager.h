@@ -128,9 +128,6 @@ private:
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
 
-    /** Name of the file to use to persist the current view to disk. */
-    std::string view_file_name;
-
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
@@ -179,7 +176,9 @@ private:
     /** Runs when all live nodes have reported they have wedged the current view
      * (meta-wedged), and does ragged edge cleanup to finalize the terminated epoch.
      * Determines if the next view will be adequate, and only proceeds to start a view change if it will be. */
-    void terminate_epoch(DerechoSST& gmsSST);
+    void terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
+                         uint32_t next_num_received_size,
+                         DerechoSST& gmsSST);
     /**  and finishes installing the new view. */
     void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
                             std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
@@ -195,7 +194,8 @@ private:
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
                                            uint num_shard_senders,
-                                           std::shared_ptr<spdlog::logger> logger);
+                                           std::shared_ptr<spdlog::logger> logger,
+                                           const std::vector<node_id_t>& next_view_members);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,
@@ -346,7 +346,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
+                const DerechoParams& derecho_params = DerechoParams(0, 0),
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
@@ -421,7 +421,7 @@ public:
 /**
  * Base case for functional_append, with one argument.
  */
-template<typename T>
+template <typename T>
 std::vector<T> functional_append(const std::vector<T>& original, const T& item) {
     std::vector<T> appended_vec(original);
     appended_vec.emplace_back(item);
@@ -439,7 +439,7 @@ std::vector<T> functional_append(const std::vector<T>& original, const T& item) 
  * @return A new vector (by value), containing a copy of original plus all the
  * elements given as arguments.
  */
-template<typename T, typename...RestArgs>
+template <typename T, typename... RestArgs>
 std::vector<T> functional_append(const std::vector<T>& original, const T& first_item, RestArgs... rest_items) {
     std::vector<T> appended_vec = functional_append(original, first_item);
     return functional_append(appended_vec, rest_items...);

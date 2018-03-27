@@ -54,6 +54,7 @@ class RPCManager {
     /** Contains a TCP connection to each member of the group. */
     tcp::tcp_connections connections;
 
+    /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;
@@ -81,6 +82,37 @@ class RPCManager {
      * @param buffer_size The size of the buffer, in bytes
      */
     void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
+
+    /**
+     * Processes an RPC message for any of the functions managed by this RPCManager,
+     * using the opcode to forward it to the correct function for execution.
+     * @param indx The function opcode for this RPC message, which should
+     * correspond to either a "call" or "response" function of some RemoteInvocable
+     * @param received_from The ID of the node that sent the message
+     * @param buf The buffer containing the message
+     * @param payload_size The size of the message in bytes
+     * @param out_alloc A function that can allocate a buffer for the response
+     * to this message.
+     * @return A pointer to the exception caused by invoking this RPC function,
+     * if the message was an RPC function call and the function threw an exception.
+     */
+    std::exception_ptr receive_message(const Opcode& indx, const node_id_t& received_from,
+                                       char const* const buf, std::size_t payload_size,
+                                       const std::function<char*(int)>& out_alloc);
+
+    /**
+     * Entry point for receiving a single RPC message for a function managed by
+     * this RPCManager. Parses the header of the message to retrieve the opcode
+     * and message size, then calls receive_message().
+     * @param buf The buffer containing the message
+     * @param size The size of the buffer
+     * @param out_alloc A function that can allocate a buffer for the response
+     * to this message
+     * @return A pointer to the exception caused by invoking this RPC function,
+     * if the message was an RPC function call and the function threw an exception.
+     */
+    std::exception_ptr parse_and_receive(char* buf, std::size_t size,
+                                         const std::function<char*(int)>& out_alloc);
 
 public:
     RPCManager(node_id_t node_id, ViewManager& group_view_manager)
@@ -156,8 +188,8 @@ public:
             return build_remote_invoker_for_class<UserProvidedClass,
                                                   decltype(bind_to_instance(
                                                           std::declval<std::unique_ptr<UserProvidedClass>*>(),
-                                                          unpacked_functions))...>(
-                    nid, instance_id, *receivers);
+                                                          unpacked_functions))...>(nid,
+                                                                                   instance_id, *receivers);
         },
                                 funs);
     }
@@ -172,41 +204,10 @@ public:
     void new_view_callback(const View& new_view);
 
     /**
-     * Handles an RPC message for any of the functions managed by this RPCManager,
-     * using the opcode to forward it to the correct function.
-     * @param indx The function opcode for this RPC message, which should
-     * correspond to either a "call" or "response" function of some RemoteInvocable
-     * @param received_from The ID of the node that sent the message
-     * @param buf The buffer containing the message
-     * @param payload_size The size of the message in bytes
-     * @param out_alloc A function that can allocate a buffer for the response
-     * to this message.
-     * @return A pointer to the exception caused by invoking this RPC function,
-     * if the message was an RPC function call and the function threw an exception.
-     */
-    std::exception_ptr handle_receive(
-            const Opcode& indx, const node_id_t& received_from, char const* const buf,
-            std::size_t payload_size, const std::function<char*(int)>& out_alloc);
-
-    /**
-     * Alternative handler for RPC messages received for functions managed by
-     * this RPCManager. Parses the header of the message to retrieve the opcode
-     * and message size before forwarding the call to the other handle_receive().
-     * @param buf The buffer containing the message
-     * @param size The size of the buffer
-     * @param out_alloc A function that can allocate a buffer for the response
-     * to this message
-     * @return A pointer to the exception caused by invoking this RPC function,
-     * if the message was an RPC function call and the function threw an exception.
-     */
-    std::exception_ptr handle_receive(
-            char* buf, std::size_t size,
-            const std::function<char*(int)>& out_alloc);
-
-    /**
      * Handler to be called by MulticastGroup when it receives a message that
      * appears to be a "cooked send" RPC message. Parses the message and
-     * delivers it to the appropriate RPC function registered with this RPCManager.
+     * delivers it to the appropriate RPC function registered with this RPCManager,
+     * then sends a reply to the sender if one is needed.
      * @param subgroup_id The internal subgroup number of the subgroup this
      * message was received in
      * @param sender_id The ID of the node that sent the message

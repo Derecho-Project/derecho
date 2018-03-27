@@ -45,27 +45,30 @@ class Predicates {
 
 public:
     class pred_handle {
-        bool is_valid;
+        bool valid;
         typename pred_list::iterator iter;
         PredicateType type;
         friend class Predicates;
 
     public:
-        pred_handle() : is_valid(false), type(PredicateType::ONE_TIME) {}
+        pred_handle() : valid(false), type(PredicateType::ONE_TIME) {}
         pred_handle(typename pred_list::iterator iter, PredicateType type)
-                : is_valid{true}, iter{iter}, type{type} {}
+                : valid{true}, iter{iter}, type{type} {}
         pred_handle(pred_handle&) = delete;
         pred_handle(pred_handle&& other)
                 : pred_handle(std::move(other.iter), other.type) {
-            other.is_valid = false;
+            other.valid = false;
         }
         pred_handle& operator=(pred_handle&) = delete;
         pred_handle& operator=(pred_handle&& other) {
             iter = std::move(other.iter);
             type = other.type;
-            is_valid = true;
-            other.is_valid = false;
+            valid = true;
+            other.valid = false;
             return *this;
+        }
+        bool is_valid() const  {
+            return valid && (*iter);
         }
     };
 
@@ -123,11 +126,11 @@ auto Predicates<DerivedSST>::insert(pred predicate, trig trigger, PredicateType 
 template <class DerivedSST>
 void Predicates<DerivedSST>::remove(pred_handle& handle) {
     std::lock_guard<std::mutex> lock(predicate_mutex);
-    if(!handle.is_valid) {
+    if(!handle.is_valid()) {
         return;
     }
     handle.iter->reset();
-    handle.is_valid = false;
+    handle.valid = false;
 }
 
 template <class DerivedSST>

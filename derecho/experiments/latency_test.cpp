@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
         }
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
-        derecho::DerechoParams param_object{max_msg_size, block_size, std::string(), window_size};
+        derecho::DerechoParams param_object{max_msg_size, block_size, window_size};
         std::unique_ptr<derecho::Group<>> managed_group;
 
         if(node_id == leader_id) {
@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
                     node_id, my_ip,
                     callbacks,
                     *one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
+                    derecho::DerechoParams{max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,

@@ -14,14 +14,14 @@ add_subdirectory(persistent)
 
 add_custom_target(
 	mutils_target
-	COMMAND make
+	COMMAND $(MAKE)
 	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/mutils
 )
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 add_custom_target(
 	mutils_serialization_target
-	COMMAND CPLUS_INCLUDE_PATH=${derecho_SOURCE_DIR}/third_party/mutils make
+	COMMAND CPLUS_INCLUDE_PATH=${derecho_SOURCE_DIR}/third_party/mutils $(MAKE)
 	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/mutils-serialization
 )
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)

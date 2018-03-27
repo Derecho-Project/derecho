@@ -3,12 +3,12 @@ project (Persistent)
 
 # C FLAGS
 set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64")
-set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS} -Wall -O2 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_DEBUG -DSPDLOG_TRACE_ON")
+set(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS} -Wall -O0 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_DEBUG -DSPDLOG_TRACE_ON")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 # CXX FLAGS
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64")
-set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS} -Wall -O2 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS} -Wall -O0 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 # set(CMAKE_CXX_STANDARD 11)
@@ -28,7 +28,7 @@ include_directories(../third_party/mutils ../third_party/mutils-serialization ..
 link_directories(../third_party/mutils ../third_party/mutils-serialization)
 
 # add_library(persistent Persistent.hpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp MemLog.cpp MemLog.hpp)
-add_library(persistent SHARED Persistent.hpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp HLC.cpp HLC.hpp)
+add_library(persistent SHARED Persistent.hpp Persistent.cpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp HLC.cpp HLC.hpp PersistNoLog.hpp)
 output_directory(persistent target/usr/local/lib)
 
 add_executable(ptst test.cpp)

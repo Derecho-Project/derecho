@@ -2,7 +2,6 @@
  * @file long_subgroup_test.cpp
  *
  * @date Oct 5, 2017
- * @author edward
  */
 #include <iostream>
 #include <sstream>
