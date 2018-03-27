@@ -9,8 +9,11 @@
 #include "HLC.hpp"
 #include "util.hpp"
 
-using namespace ns_persistent;
+using namespace persistent;
 using namespace mutils;
+using std::cout;
+using std::endl;
+using std::cerr;
 
 // A test class
 class X {

@@ -10,6 +10,7 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 
+using namespace persistent;
 using derecho::Replicated;
 
 class PersistentThing : public mutils::ByteRepresentable {
@@ -68,7 +69,7 @@ int main(int argc, char** argv) {
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
     derecho::CallbackSet callback_set{
         nullptr,
-        [](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+        [](derecho::subgroup_id_t subgroup, persistent::version_t ver){
             std::cout<<"Subgroup "<<subgroup << ", version "<<ver<<" is persisted."<<std::endl;
         }
     };
@@ -123,7 +124,7 @@ int main(int argc, char** argv) {
         std::cout << "Current state according to ordered_query: " << curr_state << std::endl;
     }
     if(node_id != 3) {
-        cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+        std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
         while(true) {
         }
     }

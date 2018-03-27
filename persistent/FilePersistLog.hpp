@@ -6,7 +6,7 @@
 #include "util.hpp"
 #include "PersistLog.hpp"
 
-namespace ns_persistent {
+namespace persistent {
 
   // TODO:hardwired definitions need go to configuration file
   #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH DEFAULT_FILE_PERSIST_PATH
@@ -101,13 +101,13 @@ namespace ns_persistent {
     // the persisted meta header
     MetaHeader m_persMetaHeader;
    // path of the data files
-    const string m_sDataPath;
+    const std::string m_sDataPath;
     // full meta file name
-    const string m_sMetaFile;
+    const std::string m_sMetaFile;
     // full log file name
-    const string m_sLogFile;
+    const std::string m_sLogFile;
     // full data file name
-    const string m_sDataFile;
+    const std::string m_sDataFile;
 
     // the log file descriptor
     int m_iLogFileDesc;
@@ -175,8 +175,8 @@ namespace ns_persistent {
   public:
 
     //Constructor
-    FilePersistLog(const string &name,const string &dataPath) noexcept(false);
-    FilePersistLog(const string &name) noexcept(false):
+    FilePersistLog(const std::string &name,const std::string &dataPath) noexcept(false);
+    FilePersistLog(const std::string &name) noexcept(false):
       FilePersistLog(name,DEFAULT_FILE_PERSIST_LOG_DATA_PATH){
     };
     //Destructor

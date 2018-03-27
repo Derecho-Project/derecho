@@ -11,7 +11,7 @@
 
 using namespace std;
 
-namespace ns_persistent{
+namespace persistent{
 
   /////////////////////////
   // internal structures //

@@ -1,6 +1,9 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 
+using std::cout;
+using std::endl;
+
 class Foo : public mutils::ByteRepresentable {
     int state;
 

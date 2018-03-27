@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     // derecho::CallbackSet callback_set{stability_callback, {}};
     derecho::CallbackSet callback_set{
       nullptr,
-      [](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+      [](derecho::subgroup_id_t subgroup,persistent::version_t ver){
         std::cout<<"Subgroup "<<subgroup<<", version "<<ver<<"is persisted."<<std::endl;
       }
     };

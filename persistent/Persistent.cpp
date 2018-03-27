@@ -1,5 +1,5 @@
 #include "Persistent.hpp"
 
-namespace ns_persistent{
+namespace persistent{
   DEFINE_PERSISTENT_REGISTRY_STATIC_MEMBERS;
 }

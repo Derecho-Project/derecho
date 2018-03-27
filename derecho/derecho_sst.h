@@ -49,7 +49,7 @@ public:
     /** This represents the highest persistent version number that has been
      * persisted to disk at this node, if persistence is enabled. This is
      * updated by the PersistenceManager. */
-    SSTFieldVector<ns_persistent::version_t> persisted_num;
+    SSTFieldVector<persistent::version_t> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */

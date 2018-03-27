@@ -3,7 +3,7 @@
 
 #include <inttypes.h>
 
-namespace ns_persistent{
+namespace persistent{
   // Exceptions definition
   #define PERSIST_EXP(errcode,usercode) \
     ((((errcode)&0xffffffffull)<<32)|((usercode)&0xffffffffull))

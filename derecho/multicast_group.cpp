@@ -535,7 +535,7 @@ void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
     std::get<0>(persistence_manager_callbacks)(subgroup_num,
-                                               ns_persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
+                                               persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
 }
 
 void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num) {
@@ -553,7 +553,7 @@ void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
     std::get<0>(persistence_manager_callbacks)(subgroup_num,
-                                               ns_persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
+                                               persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
 }
 
 void MulticastGroup::deliver_messages_upto(
@@ -596,7 +596,7 @@ void MulticastGroup::deliver_messages_upto(
     if(subgroup_settings.at(subgroup_num).mode != Mode::UNORDERED) {
         //Call the persistence_manager_post_persist_func
         std::get<1>(persistence_manager_callbacks)(subgroup_num,
-                                                   ns_persistent::combine_int32s(sst->vid[member_index], sst->delivered_num[member_index][subgroup_num]));
+                                                   persistent::combine_int32s(sst->vid[member_index], sst->delivered_num[member_index][subgroup_num]));
     }
 }
 
@@ -827,7 +827,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
         //post persistence request for ordered mode.
         if(curr_subgroup_settings.mode != Mode::UNORDERED) {
             std::get<1>(persistence_manager_callbacks)(subgroup_num,
-                                                       ns_persistent::combine_int32s(sst.vid[member_index], sst.delivered_num[member_index][subgroup_num]));
+                                                       persistent::combine_int32s(sst.vid[member_index], sst.delivered_num[member_index][subgroup_num]));
         }
     }
 }
@@ -907,7 +907,7 @@ void MulticastGroup::register_predicates() {
             auto persistence_trig = [this, subgroup_num, curr_subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
-                ns_persistent::version_t min_persisted_num
+                persistent::version_t min_persisted_num
                         = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
                 for(uint i = 0; i < num_shard_members; ++i) {
                     if(sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_persisted_num) {

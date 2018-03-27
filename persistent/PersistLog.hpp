@@ -14,9 +14,7 @@
 #include "PersistException.hpp"
 #include "HLC.hpp"
 
-using namespace std;
-
-namespace ns_persistent {
+namespace persistent {
 
   // Storage type:
   enum StorageType{
@@ -61,7 +59,7 @@ namespace ns_persistent {
   class PersistLog{
   public:
     // LogName
-    const string m_sName;
+    const std::string m_sName;
     // HLCIndex
     std::set<hlc_index_entry,hlc_index_entry_comp> hidx;
 #ifdef _DEBUG
@@ -72,7 +70,7 @@ namespace ns_persistent {
     // to make sure if this named log(by "name" in the template 
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
-    PersistLog(const string &name) noexcept(true);
+    PersistLog(const std::string &name) noexcept(true);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append

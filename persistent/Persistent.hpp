@@ -28,7 +28,7 @@
  * _PERFORMANCE_DEBUG
  */
 
-namespace ns_persistent {
+namespace persistent {
 
 using version_t = int64_t;
   // #define DEFINE_PERSIST_VAR(_t,_n) DEFINE_PERSIST_VAR(_t,_n,ST_FILE)
@@ -286,7 +286,7 @@ using version_t = int64_t;
         // volatile
         case ST_MEM:
         {
-          const string tmpfsPath = "/dev/shm/volatile_t";
+          const std::string tmpfsPath = "/dev/shm/volatile_t";
           this->m_pLog = std::make_unique<FilePersistLog>(object_name, tmpfsPath);
           if(this->m_pLog == nullptr){
             throw PERSIST_EXP_NEW_FAILED_UNKNOWN;

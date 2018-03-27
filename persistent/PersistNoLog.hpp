@@ -13,9 +13,7 @@
 #include "SerializationSupport.hpp"
 #include "util.hpp"
 
-using namespace std;
-
-namespace ns_persistent {
+namespace persistent {
 
 #define _NOLOG_OBJECT_DIR_ ((storageType==ST_MEM)?DEFAULT_RAMDISK_PATH:DEFAULT_FILE_PERSIST_PATH)
 #define _NOLOG_OBJECT_NAME_ ((object_name==nullptr)?typeid(ObjectType).name():object_name)

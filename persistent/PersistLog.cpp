@@ -1,9 +1,9 @@
 #include "PersistLog.hpp"
 #include "util.hpp"
 
-namespace ns_persistent {
+namespace persistent {
 
-  PersistLog::PersistLog(const string &name)
+  PersistLog::PersistLog(const std::string &name)
   noexcept(true): m_sName(name) {
   }
 

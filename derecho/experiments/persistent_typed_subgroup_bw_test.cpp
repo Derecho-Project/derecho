@@ -12,6 +12,9 @@
 #include <persistent/Persistent.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
 
+using std::cout;
+using std::endl;
+using namespace persistent;
 
 /**
  * Non-Persitent Object with vairable sizes
@@ -98,7 +101,7 @@ int main(int argc, char *argv[]) {
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     // the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+    [&](derecho::subgroup_id_t subgroup,persistent::version_t ver){
       if(ver == (total_num_messages - 1)){
         if(is_sending) {
           clock_gettime(CLOCK_REALTIME,&t3);

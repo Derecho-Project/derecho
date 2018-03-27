@@ -14,6 +14,9 @@
 #include <persistent/util.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
 
+using std::cout;
+using std::endl;
+
 #define DELTA_T_US(t1,t2) ((double)(((t2).tv_sec-(t1).tv_sec)*1e6+((t2).tv_nsec-(t1).tv_nsec)*1e-3))  
 
 //the payload is used to identify the user timestamp
@@ -116,9 +119,9 @@ int main(int argc, char *argv[]) {
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
     nullptr,// the persistence_callback either
-    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+    [&](derecho::subgroup_id_t subgroup,persistent::version_t ver){
       struct timespec ts;
-      static ns_persistent::version_t pers_ver = 0;
+      static persistent::version_t pers_ver = 0;
       if (pers_ver > ver) return;
 
       clock_gettime(CLOCK_REALTIME, &ts);

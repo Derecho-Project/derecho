@@ -42,7 +42,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     last_suspected = std::vector<bool>(curr_view->members.size());
     initialize_rdmc_sst();
 
-    ns_persistent::saveObject(*curr_view);
+    persistent::saveObject(*curr_view);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -72,7 +72,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     last_suspected = std::vector<bool>(curr_view->members.size());
 
     initialize_rdmc_sst();
-    ns_persistent::saveObject(*curr_view);
+    persistent::saveObject(*curr_view);
 
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
@@ -98,7 +98,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
-    auto last_view = ns_persistent::loadObject<View>();
+    auto last_view = persistent::loadObject<View>();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
 
@@ -126,7 +126,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     last_suspected = std::vector<bool>(curr_view->members.size());
 
     //since the View just changed, and we're definitely in persistent mode, persist it again
-    ns_persistent::saveObject(*curr_view);
+    persistent::saveObject(*curr_view);
 
     logger->debug("Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
@@ -647,7 +647,7 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
                 for(const node_id_t& shard_member : subgroup_settings_pair.second.members) {
                     uint member_row = curr_view->rank_of(shard_member);
                     //Check to see if the member persisted up to the ragged edge trim
-                    if(!curr_view->failed[member_row] && ns_persistent::unpack_version<int32_t>(gmsSST.persisted_num[member_row][subgroup_id]).second < last_delivered_seq_num) {
+                    if(!curr_view->failed[member_row] && persistent::unpack_version<int32_t>(gmsSST.persisted_num[member_row][subgroup_id]).second < last_delivered_seq_num) {
                         return false;
                     }
                 }
@@ -745,7 +745,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     curr_view = std::move(next_view);
 
     //Write the new view to disk before using it
-    ns_persistent::saveObject(*curr_view);
+    persistent::saveObject(*curr_view);
 
     //Re-initialize last_suspected (suspected[] has been reset to all false in the new view)
     last_suspected.assign(curr_view->members.size(), false);

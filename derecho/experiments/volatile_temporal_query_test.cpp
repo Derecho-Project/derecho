@@ -192,7 +192,7 @@ int main(int argc, char *argv[]) {
 
   derecho::CallbackSet callback_set{
     nullptr,//we don't need the stability_callback here
-    [&](derecho::subgroup_id_t subgroup,ns_persistent::version_t ver){
+    [&](derecho::subgroup_id_t subgroup, persistent::version_t ver){
     }
   };
 

@@ -16,6 +16,7 @@ using std::cout;
 using std::endl;
 using derecho::Replicated;
 using derecho::ExternalCaller;
+using namespace persistent;
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
