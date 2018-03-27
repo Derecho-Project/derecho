@@ -39,7 +39,7 @@ struct exp_result {
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 7) {
+        if(argc < 6) {
             cout << "Insufficient number of command line arguments" << endl;
             cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, raw_mode" << endl;
             cout << "Thank you" << endl;
