@@ -16,12 +16,12 @@
 #include "derecho_ports.h"
 #include "locked_reference.h"
 #include "multicast_group.h"
-#include "spdlog/spdlog.h"
 #include "subgroup_info.h"
 #include "tcp/tcp.h"
 #include "view.h"
 
-#include "mutils-serialization/SerializationSupport.hpp"
+#include <spdlog/spdlog.h>
+#include <mutils-serialization/SerializationSupport.hpp>
 
 namespace derecho {
 

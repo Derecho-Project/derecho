@@ -247,38 +247,6 @@ public:
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = derecho_gms_port,
           Factory<ReplicatedTypes>... factories);
-    /**
-     * Constructor that re-starts a failed group member from log files.
-     * It assumes the local ".paxosstate" file already contains the last known
-     * view, obtained from a quorum of members, and that any messages missing
-     * from the local log have already been appended from the longest log of a
-     * member of the last known view. (This can be accomplished by running the
-     * script log_recovery_helper.sh). Does NOT currently attempt to replay
-     * completion events for missing messages that were transferred over from
-     * another member's log.
-     *
-     * @param recovery_filename The base name of the set of recovery files to
-     * use (extensions will be added automatically)
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
-     * @param callbacks The set of callback functions to use for message
-     * delivery events once the group has been re-joined
-     * @param derecho_params (Optional) If set, and this node is the leader of
-     * the restarting group, a new set of Derecho parameters to configure the
-     * group with. Otherwise, these parameters will be read from the logfile or
-     * copied from the existing group leader.
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
-     */
-    Group(const std::string& recovery_filename,
-          const node_id_t my_id,
-          const ip_addr my_ip,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
-          std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
-          Factory<ReplicatedTypes>... factories);
 
     ~Group();
 

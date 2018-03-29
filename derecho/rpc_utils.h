@@ -21,13 +21,11 @@
 #include <utility>
 #include <vector>
 
+#include "derecho_internal.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils/macro_utils.hpp>
 
 namespace derecho {
-
-//Copied-and-pasted from derecho_sst.h to avoid creating another header just for this type.
-using node_id_t = uint32_t;
 
 namespace rpc {
 
@@ -60,7 +58,7 @@ using FunctionTag = unsigned long long;
  */
 struct Opcode {
     std::type_index class_id = std::type_index(typeid(void));
-    uint32_t subgroup_id;
+    subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
 };

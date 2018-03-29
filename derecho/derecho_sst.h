@@ -13,9 +13,6 @@
 
 namespace derecho {
 
-using ip_addr = std::string;
-using node_id_t = uint32_t;
-
 using sst::SSTField;
 using sst::SSTFieldVector;
 /**

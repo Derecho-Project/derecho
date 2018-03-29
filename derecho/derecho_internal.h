@@ -21,6 +21,10 @@ using subgroup_id_t = uint32_t;
 /** Type alias for a message's unique "sequence number" or index.
  * This allows us to change exactly which numeric type we use to store it.*/
 using message_id_t = int32_t;
+/** Type alias for IP addresses, currently stored as strings. */
+using ip_addr = std::string;
+/** Type alias for Node IDs in a Derecho group. */
+using node_id_t = uint32_t;
 
 // for persistence manager
 using persistence_manager_make_version_func_t = std::function<void(

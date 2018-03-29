@@ -131,30 +131,6 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
 }
 
 template <typename... ReplicatedTypes>
-Group<ReplicatedTypes...>::Group(const std::string& recovery_filename,
-                                 const node_id_t my_id,
-                                 const ip_addr my_ip,
-                                 const CallbackSet& callbacks,
-                                 const SubgroupInfo& subgroup_info,
-                                 std::experimental::optional<DerechoParams> _derecho_params,
-                                 std::vector<view_upcall_t> _view_upcalls,
-                                 const int gms_port,
-                                 Factory<ReplicatedTypes>... factories)
-        : logger(create_logger()),
-          my_id(my_id),
-          view_manager(recovery_filename, my_id, my_ip, callbacks, subgroup_info, _derecho_params, _view_upcalls, gms_port),
-          rpc_manager(my_id, view_manager),
-          factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
-    //TODO: This is the recover-from-saved-file constructor; I don't know how it will work
-    construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
-    set_up_components();
-    view_manager.finish_setup();
-    rpc_manager.start_listening();
-    view_manager.start();
-}
-
-template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
     // shutdown the persistence manager
     // TODO-discussion:
