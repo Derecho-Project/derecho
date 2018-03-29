@@ -137,7 +137,7 @@ public:
                                    (char *)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
                                    sizeof(long long int));
                 } catch(uint64_t exp) {
-                    logger->debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
+                    SPDLOG_DEBUG(logger, "exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
                     std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
                 }
 

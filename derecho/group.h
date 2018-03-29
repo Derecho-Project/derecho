@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include "tcp/tcp.h"
+#include <tcp/tcp.h>
 
 #include "derecho_exception.h"
 #include "derecho_internal.h"
@@ -26,9 +26,9 @@
 #include "subgroup_info.h"
 #include "view_manager.h"
 
-#include "mutils-containers/KindMap.hpp"
-#include "mutils-containers/TypeMap2.hpp"
-#include "spdlog/spdlog.h"
+#include <mutils-containers/KindMap.hpp>
+#include <mutils-containers/TypeMap2.hpp>
+#include <spdlog/spdlog.h>
 
 namespace derecho {
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
@@ -304,7 +304,7 @@ public:
     void debug_print_status() const;
 
     void log_event(const std::string& event_text) {
-        logger->debug(event_text);
+        SPDLOG_DEBUG(logger, event_text);
     }
 };
 

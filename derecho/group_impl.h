@@ -163,7 +163,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
                 if(old_object != replicated_objects.template get<FirstType>().end()
                    && old_object->second.get_shard_num() != shard_num) {
-                    logger->debug("Deleting old Replicated Object state for type {}; I was reassigned from shard {} to shard {}", typeid(FirstType).name(), old_object->second.get_shard_num(), shard_num);
+                    SPDLOG_DEBUG(logger, "Deleting old Replicated Object state for type {}; I was reassigned from shard {} to shard {}", typeid(FirstType).name(), old_object->second.get_shard_num(), shard_num);
                     replicated_objects.template get<FirstType>().erase(old_object);
                 }
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
@@ -192,7 +192,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             //If we have a Replicated<T> for the subgroup, but we're no longer a member, delete it
             auto old_object = replicated_objects.template get<FirstType>().find(subgroup_index);
             if(old_object != replicated_objects.template get<FirstType>().end()) {
-                logger->debug("Deleting old Replicated Object state (of type {}) for subgroup {} because this node is no longer a member", typeid(FirstType).name(), subgroup_index);
+                SPDLOG_DEBUG(logger, "Deleting old Replicated Object state (of type {}) for subgroup {} because this node is no longer a member", typeid(FirstType).name(), subgroup_index);
                 replicated_objects.template get<FirstType>().erase(old_object);
                 objects_by_subgroup_id.erase(subgroup_id);
             }
@@ -247,8 +247,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
         int64_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-        logger->debug("Got log tail length {}", persistent_log_length);
-        logger->debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
+        SPDLOG_DEBUG(logger, "Got log tail length {}", persistent_log_length);
+        SPDLOG_DEBUG(logger, "Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
         objects_by_subgroup_id.at(subgroup_id).get().send_object(joiner_socket.get());
     });
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
@@ -270,7 +270,9 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
     std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%l] %v");
-    log->set_level(spdlog::level::debug);
+    // Despite this setting, debug- and trace-level logging won't actually be
+    //enabled if the SPDLOG_DEBUG_ON and SPDLOG_TRACE_ON macros are not defined
+    log->set_level(spdlog::level::trace);
     //    log->set_level(spdlog::level::off);
     auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
@@ -352,9 +354,9 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = rpc_manager.get_socket(subgroup_and_leader.second);
         int64_t log_tail_length = objects_by_subgroup_id.at(subgroup_and_leader.first).get().get_minimum_latest_persisted_version();
-        logger->debug("Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
+        SPDLOG_DEBUG(logger, "Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
         leader_socket.get().write(log_tail_length);
-        logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
+        SPDLOG_DEBUG(logger, "Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read(buffer_size);
         assert(success);
@@ -363,7 +365,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         assert(success);
         objects_by_subgroup_id.at(subgroup_and_leader.first).get().receive_object(buffer);
     }
-    logger->debug("Done receiving all Replicated Objects from subgroup leaders");
+    SPDLOG_DEBUG(logger, "Done receiving all Replicated Objects from subgroup leaders");
 }
 
 template <typename... ReplicatedTypes>
