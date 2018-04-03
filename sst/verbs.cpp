@@ -593,8 +593,8 @@ void verbs_destroy() {
     //         cout << "Could not close RDMA device" << endl;
     //     }
     // }
-
-    cout << "Shutting down" << endl;
+    delete sst_connections;
+    cout << "SST Verbs shutting down" << endl;
 }
 
 }  // namespace sst
