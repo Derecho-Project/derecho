@@ -101,7 +101,11 @@ struct MessageBuffer {
     MessageBuffer(size_t size) {
         if(size != 0) {
             buffer = std::unique_ptr<char[]>(new char[size]);
+#ifdef USE_VERBS_API
             mr = std::make_shared<rdma::memory_region>(buffer.get(), size);
+#else
+            mr = std::make_shared<rdma::memory_region>(buffer.get(), size, 0);
+#endif
         }
     }
     MessageBuffer(const MessageBuffer&) = delete;

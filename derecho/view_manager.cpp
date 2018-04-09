@@ -719,8 +719,13 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         //The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        rdma::impl::verbs_add_connection(next_view->members[joiner_rank], next_view->member_ips[joiner_rank],
-                                         my_id);
+#ifdef USE_VERBS_API
+        rdma::impl::verbs_add_connection(next_view->members[joiner_rank], 
+                                         next_view->member_ips[joiner_rank], my_id);
+#else
+       rdma::impl::lf_add_connection(next_view->members[joiner_rank], 
+                                     next_view->member_ips[joiner_rank]);
+#endif
     }
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
