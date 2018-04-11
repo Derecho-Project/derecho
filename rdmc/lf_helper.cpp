@@ -8,8 +8,11 @@
 #include <thread>
 #include <vector>
 #include <GetPot>
+#include <arpa/inet.h>
+#include <byteswap.h>
 #include <rdma/fabric.h>
 #include <rdma/fi_cm.h>
+#include <rdma/fi_rma.h>
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_domain.h>
 
@@ -99,12 +102,10 @@ enum NextOnFailure{
 /** 
  * Passive endpoint info to be exchange
  */
+#define MAX_LF_ADDR_SIZE    ((128)-sizeof(uint32_t)-2*sizeof(uint64_t))
 struct cm_con_data_t {
-  #define MAX_LF_ADDR_SIZE    ((128)-sizeof(uint32_t)-2*sizeof(uint64_t))
-  uint32_t           pep_addr_len;               /** local endpoint address length */
-  char               pep_addr[MAX_LF_ADDR_SIZE]; /** local endpoint address */
-  uint64_t           mr_key;                     /** local memory key */
-  uint64_t           vaddr;                      /** virtual addr */
+    uint32_t  pep_addr_len;               /** local endpoint address length */
+    char      pep_addr[MAX_LF_ADDR_SIZE]; /** local endpoint address */
 } __attribute__((packed));
 
 /** 
@@ -120,6 +121,12 @@ static unique_ptr<tcp::connection_listener> connection_listener;
 /**
  * Vector of completion handlers and a mutex for accessing it
  */
+struct completion_handler_set {
+    completion_handler send;
+    completion_handler recv;
+    completion_handler write;
+    string name;
+};
 static vector<completion_handler_set> completion_handlers;
 static std::mutex completion_handlers_mutex;
 
@@ -144,7 +151,7 @@ struct lf_ctxt {
 struct lf_ctxt g_ctxt;
 
 #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & FI_MR_VIRT_ADDR)
-#define LF_CONFIG_FILE "rdma.cfg";
+#define LF_CONFIG_FILE "rdma.cfg"
 
 namespace impl {
 
@@ -175,107 +182,114 @@ static void default_context() {
  * Load the global context from a configuration file
  */
 static void load_configuration() {
-    #define DEFAULT_PROVIDER "sockets"; /** Can be one of verbs|psm|sockets|usnic */
-    #define DEFAULT_DOMAIN   "eth0";    /** Default domain depends on system */
-    #define DEFAULT_TX_DEPTH  4096;     /** Tx queue depth */
-    #define DEFAULT_RX_DEPTH  4096;     /** Rx queue depth */
+    #define DEFAULT_PROVIDER "sockets"  /** Can be one of verbs|psm|sockets|usnic */
+    #define DEFAULT_DOMAIN   "eth0"     /** Default domain depends on system */
+    #define DEFAULT_TX_DEPTH  4096      /** Tx queue depth */
+    #define DEFAULT_RX_DEPTH  4096      /** Rx queue depth */
     GetPot cfg(LF_CONFIG_FILE);         /** Load the configuration file */
     
     FAIL_IF_ZERO(g_ctxt.hints, "FI hints not allocated",  CRASH_ON_FAILURE);
-    THROW_IF_ZERO(                      /** Load the provider from config */
+    FAIL_IF_ZERO(                       /** Load the provider from config */
         g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider", DEFAULT_PROVIDER)),
         "Failed to load the provider from config file", CRASH_ON_FAILURE
     );
-    THROW_IF_ZERO(                      /** Load the domain from config */
-        g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN));
+    FAIL_IF_ZERO(                       /** Load the domain from config */
+        g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN)),
         "Failed to load the domain from config file", CRASH_ON_FAILURE
     );
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
     g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | 
-                                         FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+                                         FI_MR_VIRT_ADDR;
     /** Set the tx and rx queue sizes, see fi_endpoint(3) for details */
     g_ctxt.hints->tx_attr->size = cfg("tx_depth", DEFAULT_TX_DEPTH);
     g_ctxt.hints->rx_attr->size = cfg("rx_depth", DEFAULT_RX_DEPTH);
 }
 }
-static void polling_loop() {
 
-}
 
 /**
  * Memory region constructors and member functions
  */
 
-memory_region::memory_region(size_t s, uint32_t node_rank) 
-    : memory_region(new char[s], s, node_rank) {}
-
-memory_region::memory_region(char *buf, size_t s, uint32_t node_rank) 
-    : buffer(buf), size(s), node_rank(node_rank) { register_mr(); }
-
-#define LF_RMR_KEY(rid) (((uint64_t)0xf0000000)<<32 | (uint64_t)(rid))
-#define LF_WMR_KEY(rid) (((uint64_t)0xf8000000)<<32 | (uint64_t)(rid))
-void memory_region::register_mr() {
-    //if (!buffer || size <= 0) throw rdma::invalidargs();
-
-    const int mr_access = FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
-  
-    /** Register the memory, then manage it w/ our smart pointer */  
-    FAIL_IF_NONZERO(
-        fi_mr_reg(g_ctxt.domain, (void *)buffer, size, mr_access, 0,
-                  LF_RMR_KEY(node_rank), 0, &mr, nullptr),
-        "Failed to register memory", CRASH_ON_FAILURE
-    );
-    FAIL_IF_ZERO(mr, "Pointer to memory region is null", CRASH_ON_FAILURE);
+memory_region::memory_region(size_t s) : memory_region(new char[s], s) {
+    allocated_buffer.reset(buffer);
 }
 
-/** TODO: Check if mr->key is right, or if the correct key is in fi_mr_attr */
-uint32_t memory_region::get_rkey() const { return mr->key; }
+memory_region::memory_region(char *buf, size_t s) : buffer(buf), size(s) {
+    if (!buffer || size <= 0) throw rdma::invalid_args();
 
-//fid_mr* memory_region::get_mr() const {return mr.get(); }
+    const int mr_access = FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE;
+ 
+    /** Register the memory, use it to construct a smart pointer */  
+    fid_mr* raw_mr;
+    FAIL_IF_NONZERO(
+        fi_mr_reg(g_ctxt.domain, (void *)buffer, size, mr_access, 
+                  0, 0, 0, &raw_mr, nullptr),
+        "Failed to register memory", CRASH_ON_FAILURE
+    );
+    FAIL_IF_ZERO(raw_mr, "Pointer to memory region is null", CRASH_ON_FAILURE);
+
+    mr = unique_ptr<fid_mr, std::function<void(fid_mr *)>>(
+        raw_mr, [](fid_mr *mr) { fi_close(&mr->fid); }
+    ); 
+}
+
+uint64_t memory_region::get_key() const { return mr->key; }
 
 /** 
  * Completion queue constructor
  */
 completion_queue::completion_queue() {
     g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
+    fid_cq* raw_cq;
     FAIL_IF_NONZERO(
-        fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &cq, NULL),
+        fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &raw_cq, NULL),
         "failed to initialize tx completion queue", CRASH_ON_FAILURE
     );
-
-    FAIL_IF_ZERO(cq, "Pointer to completion queue is null", CRASH_ON_FAILURE);
+    FAIL_IF_ZERO(raw_cq, "Pointer to completion queue is null", CRASH_ON_FAILURE);
+    
+    cq = unique_ptr<fid_cq, std::function<void(fid_cq *)>>(
+        raw_cq, [](fid_cq *cq) { fi_close(&cq->fid); }
+    ); 
 }
 
 endpoint::~endpoint() {}
-endpoint::endpoint(size_t remote_index)
-    : endpoint(remote_index, [](endpoint*){}) {}
+endpoint::endpoint(size_t remote_index, bool is_lf_server)
+    : endpoint(remote_index, is_lf_server, [](endpoint *){}) {}
 endpoint::endpoint(size_t remote_index, bool is_lf_server,
                    std::function<void(endpoint *)> post_recvs) { 
     connect(remote_index, is_lf_server, post_recvs); 
 }
 
 int endpoint::init(struct fi_info *fi) {
+    int ret;
     /** Open an endpoint */
+    fid_ep* raw_ep;
     FAIL_IF_NONZERO(
-        ret = fi_endpoint(g_ctxt.domain, fi, &ep, NULL), 
+        ret = fi_endpoint(g_ctxt.domain, fi, &raw_ep, NULL), 
         "Failed to open endpoint", REPORT_ON_FAILURE
     );
     if(ret) return ret;
+   
+    /** Construct the smart pointer to manage the endpoint */ 
+    ep = unique_ptr<fid_ep, std::function<void(fid_ep *)>>(
+        raw_ep, [](fid_ep *ep) { fi_close(&ep->fid); }
+    ); 
  
     /** Bind endpoint to event queue and completion queue */
     FAIL_IF_NONZERO(
-        ret = fi_ep_bind(ep, &(g_ctxt.eq)->fid, 0), 
+        ret = fi_ep_bind(ep.get(), &(g_ctxt.eq)->fid, 0), 
         "Failed to bind endpoint and event queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
     const int ep_flags = FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION;
     FAIL_IF_NONZERO(
-        ret = fi_ep_bind(ep, &(g_ctxt.cq)->fid, ep_flags), 
+        ret = fi_ep_bind(ep.get(), &(g_ctxt.cq)->fid, ep_flags), 
         "Failed to bind endpoint and tx completion queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
     FAIL_IF_NONZERO(
-        ret = fi_enable(ep), 
+        ret = fi_enable(ep.get()), 
         "Failed to enable endpoint", REPORT_ON_FAILURE
     );
     return ret;
@@ -283,21 +297,18 @@ int endpoint::init(struct fi_info *fi) {
 
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-    return sst_connections->exchange(r_id, s, t);
+    return rdmc_connections->exchange(r_id, s, t);
 }
 
 void endpoint::connect(size_t remote_index, bool is_lf_server, 
                        std::function<void(endpoint *)> post_recvs) {
     struct cm_con_data_t local_cm_data, remote_cm_data;
-    memset(&local_con_data, 0, sizeof(local_con_data));
-    memset(&remote_con_data, 0, sizeof(remote_con_data));
+    memset(&local_cm_data, 0, sizeof(local_cm_data));
+    memset(&remote_cm_data, 0, sizeof(remote_cm_data));
     
     /** Populate local cm struct and exchange cm info */    
     local_cm_data.pep_addr_len  = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
-    /** TODO Check if this needs to be rkey, lkey, etc */
-    local_cm_data.mr_key        = (uint64_t)htonll(mr->key);
-    local_cm_data.vaddr         = (uint64_t)htonll((uint64_t)buffer);
 
     FAIL_IF_ZERO(
         rdmc_connections->exchange(remote_index, local_cm_data, remote_cm_data),
@@ -305,9 +316,6 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     );
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
-    /** TODO Check if this needs to be rkey, lkey, etc */
-    mr->key                     = (uint64_t)ntohll(remote_cm_data.mr_key);
-    remote_fi_addr              = (fi_addr_t)ntohll(remote_cm_data.vaddr);
 
     /** Connect to remote node */
     ssize_t nRead;
@@ -325,7 +333,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             fi_freeinfo(entry.info);
             CRASH_WITH_MESSAGE("Failed to initialize server endpoint.\n");
         }
-        if (fi_accept(ep, NULL, 0)){
+        if (fi_accept(ep.get(), NULL, 0)){
             fi_reject(g_ctxt.pep, entry.info->handle, NULL, 0);
             fi_freeinfo(entry.info);
             CRASH_WITH_MESSAGE("Failed to accept connection.\n");
@@ -356,12 +364,12 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             CRASH_WITH_MESSAGE("failed to initialize client endpoint.\n");
         }
         FAIL_IF_NONZERO(
-            fi_connect(ep, remote_cm_data.pep_addr, NULL, 0),
+            fi_connect(ep.get(), remote_cm_data.pep_addr, NULL, 0),
             "fi_connect() failed", CRASH_ON_FAILURE
         );
        
         /** TODO document this */
-         nRead = fi_eq_sread(g_ctxt.eq, &event, &entry, sizeof(entry), -1, 0);
+        nRead = fi_eq_sread(g_ctxt.eq, &event, &entry, sizeof(entry), -1, 0);
         if (nRead != sizeof(entry)) {
             CRASH_WITH_MESSAGE("failed to connect remote. nRead=%ld.\n",nRead);
         }
@@ -376,94 +384,127 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
 
     post_recvs(this);
     int tmp = -1;
-    if (!sst_connections->exchange(remote_index, 0, tmp) || tmp != 0)
+    if (!rdmc_connections->exchange(remote_index, 0, tmp) || tmp != 0)
         CRASH_WITH_MESSAGE("Failed to sync after endpoint creation");
 }
 
-bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
+bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,  
                          uint64_t wr_id, uint32_t immediate, 
                          const message_type& type) {
-    int ret = 0;
-    struct iovec iov;
+    struct iovec msg_iov;
     struct fi_msg msg;
     
-    iov.iov_base  = mr.buffer + offset;
-    iov.iov_len   = size;
+    msg_iov.iov_base = mr.buffer + offset;
+    msg_iov.iov_len  = size;
 
     msg.msg_iov   = &msg_iov;
-    msg.desc      = &fi_mr_desc(mr);
+    msg.desc      = (void**)&mr.mr->key;
     msg.iov_count = 1;
-    msg.addr      = 0;           /** Not used for connected ep */
-    msg.context   =              /** Used to store the tag for a block */ 
-        (uintptr_t)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data      = immediate;   /** Used to store the immdiate for a block */
-
-    const int flags = 0;         /** TODO Check if I should be passing FI_COMPLETION */
+    msg.addr      = 0;
+    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
+    msg.data      = immediate;
  
     FAIL_IF_NONZERO(
-        ret = fi_sendmsg(ep, &msg, flags);
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
         "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
-    return ret; 
+    return true; 
 }
 
-bool post_recv(const memory_region& mr, size_t offset, size_t size,
-               uint64_t wr_id, const message_type& type) {
-    return false;
-}
+bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size, 
+                         uint64_t wr_id, const message_type& type) {
+    struct iovec msg_iov;
+    struct fi_msg msg;
 
-bool post_empty_send(uint64_t wr_id, uint32_t immediate,
-                     const message_type& type) {
-    return false;
-}
-
-bool post_empty_recv(uint64_t wr_id, const message_type& type) {
-    return false;
-}
-
-bool post_write(const memory_region& mr, size_t offset, size_t size,
-                uint64_t wr_id, remote_memory_region remote_mr,
-                size_t remote_offset, const message_type& type,
-                bool signaled = false, bool send_inline = false) {
-    return false;
-
-    /** TODO: Update this. Original was my first attempt at post_send */
-    int ret = 0;
-    struct iovec iov;
-    struct fi_rma_iov rma_iov;
-    struct fi_msg_rma msg;
-    
-    iov.iov_base  = buffer + offset;
-    iov.iov_len   = size;
-   
-    rma_iov.addr  = ((LF_USE_VADDR) ? remote_fi_addr : 0) + offset;
-    rma_iov.len   = size;
-    rma_iov.key   = mr.get_rkey();
+    msg_iov.iov_base = mr.buffer + offset;
+    msg_iov.iov_len  = size;
 
     msg.msg_iov   = &msg_iov;
-    msg.desc      = &fi_mr_desc(mr);
+    msg.desc      = (void**)&mr.mr->key;
     msg.iov_count = 1;
-    msg.addr      = 0;           /** Not used for connected ep */
-    msg.rma_iov   = &rma_iov;
-    msg.rma_iov_count = 1;
-    msg.context   =              /** Used to store the tag for a block */ 
-        (uintptr_t)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data      = immediate;   /** Used to store the immdiate for a block */
+    msg.addr      = 0;
+    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
+    msg.data      = 0;
 
-    const int flags = 0;         /** TODO Check if I should be passing FI_COMPLETION */
+    FAIL_IF_NONZERO(
+        fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_recvmsg() failed", REPORT_ON_FAILURE
+    );
+    return true; 
+}
+
+bool endpoint::post_empty_send(uint64_t wr_id, uint32_t immediate,
+                               const message_type& type) {
+    struct fi_msg msg;
+
+    memset(&msg, 0, sizeof(msg));
+    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
+    msg.data    = immediate;
  
     FAIL_IF_NONZERO(
-        ret = fi_writemsg(ep, &msg, flags),
-        "fi_send() failed", REPORT_ON_FAILURE
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_sendmsg() failed", REPORT_ON_FAILURE
+    );
+    return true; 
+}
+
+bool endpoint::post_empty_recv(uint64_t wr_id, const message_type& type) {
+    struct fi_msg msg;
+
+    memset(&msg, 0, sizeof(msg));
+    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
+    msg.data    = 0;
+ 
+    FAIL_IF_NONZERO(
+        fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_recvmsg() failed", REPORT_ON_FAILURE
+    );
+    return true; 
+}
+
+bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
+                          uint64_t wr_id, remote_memory_region remote_mr,
+                          size_t remote_offset, const message_type& type,  
+                          bool signaled, bool send_inline) {
+   if(wr_id >> type.shift_bits || !type.tag) throw invalid_args();
+    if(mr.size < offset + size || remote_mr.size < remote_offset + size) {
+        cout << "mr.size = " << mr.size << " offset = " << offset
+             << " length = " << size << " remote_mr.size = " << remote_mr.size
+             << " remote_offset = " << remote_offset;
+        return false;
+    }
+  
+    struct iovec msg_iov;
+    struct fi_rma_iov rma_iov;
+    struct fi_msg_rma msg;
+
+    msg_iov.iov_base = mr.buffer + offset;
+    msg_iov.iov_len  = size;
+
+    rma_iov.addr = ((LF_USE_VADDR) ? remote_mr.buffer : 0) + remote_offset;
+    rma_iov.len  = size;
+    rma_iov.key  = remote_mr.rkey;
+
+    msg.msg_iov       = &msg_iov;
+    msg.desc          = (void**)&mr.mr->key;
+    msg.iov_count     = 1;
+    msg.addr          = 0;
+    msg.rma_iov       = &rma_iov;
+    msg.rma_iov_count = 1;
+    msg.context       = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
+    msg.data          = 0l;
+
+    FAIL_IF_NONZERO(
+        fi_writemsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_writemsg() failed", REPORT_ON_FAILURE
     );
 
-    return ret; 
-
+    return true;
 }
 
 message_type::message_type(const std::string& name, completion_handler send_handler,
                            completion_handler recv_handler,
-                 completin_handler write_handler = nullptr) {
+                 completion_handler write_handler) {
 
     std::lock_guard<std::mutex> l(completion_handlers_mutex);
 
@@ -485,51 +526,76 @@ message_type message_type::ignored() {
     return m;
 }
 
+struct task::task_impl {
+  int dummy;
+};
+
 task::task(std::shared_ptr<manager_endpoint> manager_ep) {
-
+     return;
 }
 
-void append_wait(const completion_queue& cq, int count, bool signaled,
+task::~task() {}
+
+void task::append_wait(const completion_queue& cq, int count, bool signaled,
                  bool last, uint64_t wr_id, const message_type& type) {
-
+    throw unsupported_feature();
 }
 
-void append_enable_send(const managed_endpoint& ep, int count) {
-
+void task::append_enable_send(const managed_endpoint& ep, int count) {
+    throw unsupported_feature();
 }
 
-void append_send(const managed_endpoint& ep, const memory_region& mr, 
+void task::append_send(const managed_endpoint& ep, const memory_region& mr,
                  size_t offset, size_t length, uint32_t immediate) {
-
+    throw unsupported_feature();
 }
-void append_recv(const managed_endpoint& ep, const memory_region& mr, 
+void task::append_recv(const managed_endpoint& ep, const memory_region& mr,
                  size_t offset, size_t length) {
-
+    throw unsupported_feature();
 }
 
-bool post() __attribute__((warn_unused_result)) {
-    return false;
+bool task::post() {
+    throw unsupported_feature();
 }
 
 namespace impl {
 /**
  * Adds a node to the group via tcp
  */
-bool rdmc_add_node(uint32_t new_id, const std::string new_ip_addr) {
+bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr) {
    return rdmc_connections->add_node(new_id, new_ip_addr);
+}
+
+static atomic<bool> interrupt_mode;
+//static atomic<bool> polling_loop_shutdown_flag;
+static void polling_loop() {
+/*    pthread_setname_np(pthread_self(), "rdmc_poll");
+
+    const int max_cq_entries = 1024;
+    unique_ptr<fi_cq_entry[]> cq_entires(new fi_cq_entry[max_cq_entires]);
+
+    while(true) {
+        int num_completions = 0;
+        if (polling_loop_shutdown_flag) return;
+            uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
+            do {
+                if(polling_loop_shutdown_flag) return;
+                num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get() max_cq_entries);
+            } while(num_completions == 0 && get_time() < poll_end);
+    }  */
 }
 
 /**
  * Initialize the global context 
  */
-void lf_initialize( 
-    const std::map<uint32_t, std::string> &node_addrs, uint32_t node_rank) {
+bool lf_initialize( 
+    const std::map<uint32_t, std::string>& node_addrs, uint32_t node_rank) {
    
     /** Initialize the connection listener on the rdmc tcp port */     
     connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
     
     /** Initialize the tcp connections, also connects all the nodes together */
-    sst_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::rdmc_tcp_port); 
+    rdmc_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::rdmc_tcp_port);
     
     /** Set the context to defaults to start with */
     default_context();
@@ -582,20 +648,44 @@ void lf_initialize(
     );
 
     /** Start a polling thread and run in the background */
-    polling_thread = std::thread(polling_loop);
+    std::thread polling_thread(polling_loop);
     polling_thread.detach();
+
+    return true;
 }
 
-void lf_destroy {
-
+bool lf_destroy() {
+  return false;
 }
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
          const std::vector<uint32_t>& members, uint32_t node_rank,
-         const memory_region& mr);
+         const memory_region& mr) {
+    /** Maps a node's ID to a memory region on that node */
+    map<uint32_t, remote_memory_region> remote_mrs;
+    for (uint32_t m : members) {
+        if (m == node_rank) {
+            continue;
+        }
+
+        uint64_t buffer;
+        size_t size;
+        uint64_t rkey;
+        
+        if(!rdmc_connections->exchange(m, (uint64_t)mr.buffer, buffer) || 
+           !rdmc_connections->exchange(m, mr.size, size) ||
+           !rdmc_connections->exchange(m, mr.get_key(), rkey)) {
+            fprintf(stderr, "WARNING: lost connection to node %u\n", m);
+            throw rdma::connection_broken();
+        }
+        remote_mrs.emplace(m, remote_memory_region(buffer, size, rkey));
+    }
+    return remote_mrs;
+}
 
 bool set_interrupt_mode(bool enabled) {
-    return false;
+    interrupt_mode = enabled;
+    return true;
 }
 
 }/* namespace impl */

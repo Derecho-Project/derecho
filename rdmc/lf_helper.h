@@ -33,7 +33,6 @@ class cq_creation_failure : public creation_failure {};
 class message_types_exhausted : public exception {};
 class unsupported_feature : public exception {};
 
-
 /**
  * A wrapper for fi_close. The previous way this was done used a lambda and
  * std::function, but that incurs the overhead of type-erasure
@@ -49,11 +48,9 @@ class unsupported_feature : public exception {};
  */
 class memory_region {
     /** Smart pointer for managing the registered memory region */
-    //std::unique_ptr<fid_mr, close<fid_mr>> mr;
+    std::unique_ptr<fid_mr, std::function<void(fid_mr *)>> mr;
     /** Smart pointer for managing the buffer the mr uses */
-    //std::unique_ptr<char[]> allocated_buffer;
-    /** A raw pointer to the memory region */
-    fid_mr* mr;
+    std::unique_ptr<char[]> allocated_buffer;
 
     friend class endpoint;
     friend class task;
@@ -66,10 +63,8 @@ public:
      *
      * @param size The size in bytes of the buffer to be associated with
      *     the memory region.
-     * @param node_rank The id of the remote node the region is being 
-     *     created on or for. TODO: Is this right?
      */ 
-    memory_region(size_t size, uint32_t node_rank);
+    memory_region(size_t size);
     /**
      * Constructor
      * Registers a memory region using the specified buffer and suggests
@@ -78,12 +73,10 @@ public:
      * @param buffer The allocated memory that will be registered.
      * @param size The size in bytes of the buffer to be associated with
      *      the memory region.
-     * @param node_rank The id of the remote node the region is being 
-     *      created on or for. TODO: Is this right?
      */ 
-    memory_region(char* buffer, size_t size, uint32_t node_rank);
-    /** Return the remote key of the registered memory region */
-    uint32_t get_rkey() const;
+    memory_region(char* buffer, size_t size);
+    /** Return the key of the registered memory region, same as verbs lkey */
+    uint64_t get_key() const;
 
     char* const buffer;
     const size_t size;
@@ -101,12 +94,12 @@ public:
      *     for remote accesses
      */
     remote_memory_region(uint64_t remote_address, size_t length,
-                         uint32_t remote_key)
+                         uint64_t remote_key)
         : buffer(remote_address), size(length), rkey(remote_key) {}
 
     const uint64_t buffer;
     const size_t size;
-    const uint32_t rkey;         
+    const uint64_t rkey;
 };
 
 /**
@@ -114,9 +107,7 @@ public:
  */
 class completion_queue {
     /** Smart pointer for managing the completion queue */
-    // std::unique_ptr<fid_cq, close<fid_cq>> cq;
-    /** A raw pointer to the cq, used for interacting with the fi api */
-    fid_cq* cq;
+    std::unique_ptr<fid_cq, std::function<void(fid_cq *)>> cq;
 
     friend class managed_endpoint;
     friend class task;
@@ -152,13 +143,10 @@ public:
 /**
  * A C++ wrapper for the libfabric fid_ep struct and its associated functions.
  */
-
 class endpoint {
 protected:
-    /** Smart pointer for managing the completion queue */
-    // std::unique_ptr<fid_ep, close<fid_ep>> ep;
-    /** A raw pointer to the endpoint used for interacting with the fi api */
-    fid_ep* ep;
+    /** Smart pointer for managing the endpoint */
+    std::unique_ptr<fid_ep, std::function<void(fid_ep *)>> ep;
 
     explicit endpoint() {}
 
@@ -172,7 +160,7 @@ public:
      *
      * @param remote_index The id of the remote node.
      */ 
-    explicit endpoint(size_t remote_index);
+    explicit endpoint(size_t remote_index, bool is_lf_server);
      /**
      * Constructor
      * Initializes members and then calls endpoint::connect
@@ -197,11 +185,12 @@ public:
     void connect(size_t remote_index, bool is_lf_server,
                  std::function<void(endpoint *)> post_recvs);
 
-    bool post_send(const memory_region& mr, size_t offset, size_t size,
-                   uint64_t wr_id, uint32_t immediate,
+    bool post_send(const memory_region& mr, size_t offset, 
+                   size_t size, uint64_t wr_id, uint32_t immediate, 
                    const message_type& type);
-    bool post_recv(const memory_region& mr, size_t offset, size_t size,
-                   uint64_t wr_id, const message_type& type);
+    bool post_recv(const memory_region& mr, size_t offset, 
+                   size_t size, uint64_t wr_id, 
+                   const message_type& type);
 
     bool post_empty_send(uint64_t wr_id, uint32_t immediate,
                          const message_type& type);
@@ -252,9 +241,8 @@ public:
 namespace impl {
 bool lf_initialize(const std::map<uint32_t, std::string>& node_addresses,
                    uint32_t node_rank);
-bool lf_add_connection(uint32_t index, const std::string& address,
-                       uint32_t node_rank);
-void lf_destroy();
+bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr);
+bool lf_destroy();
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
          const std::vector<uint32_t>& members, uint32_t node_rank,
