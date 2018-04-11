@@ -35,13 +35,7 @@ group::group(uint16_t _group_number, size_t _block_size,
           transfer_schedule(std::move(_schedule)),
           completion_callback(callback),
           incoming_message_upcall(upcall) {}
-group::~group() { 
-  
-  send_ctxts.reserve(members.size());
-  for (size_t i = 0; i < send_ctxts.size(); i++)
-    send_ctxts.emplace_back(new struct rdmc_send_ctxt);
-  unique_lock<mutex> lock(monitor); 
-}
+group::~group() { unique_lock<mutex> lock(monitor); }
 
 void polling_group::initialize_message_types() {
     auto find_group = [](uint16_t group_number) {
@@ -84,12 +78,7 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
     if(member_index != 0) {
         first_block_buffer = unique_ptr<char[]>(new char[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
-#ifdef USE_VERBS_API        
         first_block_mr = make_unique<memory_region>(first_block_buffer.get(), block_size);
-#else
-        first_block_mr = make_unique<memory_region>(first_block_buffer.get(), block_size, 
-                                                    _member_index);
-#endif
     }
 
     auto connections = transfer_schedule->get_connections();
@@ -105,9 +94,6 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
         send_ready_for_block(transfer->target);
         // puts("Issued Ready For Block CCCCCCCCC");
     }
-
-    // Allocate the vector of contexts, used for sending
-    
 }
 void polling_group::receive_block(uint32_t send_imm, size_t received_block_size) {
     unique_lock<mutex> lock(monitor);
@@ -350,16 +336,15 @@ void polling_group::send_next_block() {
     assert(it != endpoints.end());
 #endif
     if(first_block_number && block_number == *first_block_number) {
-        CHECK(it->second.post_send(send_ctxts.at(target).get(), *first_block_mr, 
-                                   0, block_size,
+        CHECK(it->second.post_send(*first_block_mr, 0, block_size,
                                    form_tag(group_number, target),
                                    form_immediate(num_blocks, block_number),
                                    message_types.data_block));
     } else {
         size_t offset = block_number * block_size;
         size_t nbytes = min(block_size, message_size - offset);
-        CHECK(it->second.post_send(send_ctxts.at(target).get(), *mr, mr_offset + offset, 
-                                   nbytes, form_tag(group_number, target),
+        CHECK(it->second.post_send(*mr, mr_offset + offset, nbytes,
+                                   form_tag(group_number, target),
                                    form_immediate(num_blocks, block_number),
                                    message_types.data_block));
     }
@@ -462,7 +447,7 @@ void polling_group::connect(uint32_t neighbor) {
     rfb_queue_pairs.emplace(neighbor, endpoint(members[neighbor], post_recv));
 #else
     // Decide whether the endpoint will act as a server in the connection
-    bool is_lf_server = members[member_index] > members[neighbor];
+    bool is_lf_server = members[member_index] < members[neighbor];
     endpoints.emplace(neighbor, endpoint(members[neighbor], is_lf_server));
     
     auto post_recv = [this, neighbor](rdma::endpoint* ep) {

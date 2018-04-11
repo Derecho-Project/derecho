@@ -24,7 +24,6 @@ using std::map;
 using std::unique_ptr;
 using rdmc::incoming_message_callback_t;
 using rdmc::completion_callback_t;
-using rdma::rdmc_send_ctxt;
 
 class group {
 protected:
@@ -42,10 +41,6 @@ protected:
     size_t mr_offset;
     size_t message_size;
     size_t num_blocks;
-
-#ifndef USE_VERBS_API
-    vector<unique_ptr<struct rdmc_send_ctxt>> send_ctxts; // ctxts for sending
-#endif
 
     completion_callback_t completion_callback;
     incoming_message_callback_t incoming_message_upcall;
