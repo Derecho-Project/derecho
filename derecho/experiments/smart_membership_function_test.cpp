@@ -105,23 +105,6 @@ int main(int argc, char** argv) {
     }
     cout << "Finished constructing/joining Group" << endl;
 
-    //Keep attempting to get a subgroup pointer to see if the group is "adequately provisioned"
-    bool inadequately_provisioned = true;
-    while(inadequately_provisioned) {
-        try {
-            if(node_id < 3) {
-                group->get_subgroup<LoadBalancer>();
-            } else {
-                group->get_subgroup<Cache>();
-            }
-            inadequately_provisioned = false;
-        } catch(derecho::subgroup_provisioning_exception& e) {
-            inadequately_provisioned = true;
-        }
-    }
-
-    cout << "All members have joined, subgroups are provisioned" << endl;
-
     if(node_id == 1) {
         derecho::ExternalCaller<Cache>& cache_handle = group->get_nonmember_subgroup<Cache>();
         derecho::node_id_t who = 3;

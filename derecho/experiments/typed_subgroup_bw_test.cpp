@@ -88,17 +88,6 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    bool inadequately_provisioned = true;
-    while(inadequately_provisioned) {
-        try {
-            group->get_subgroup<TestObject>();
-            inadequately_provisioned = false;
-        } catch(derecho::subgroup_provisioning_exception& e) {
-            inadequately_provisioned = true;
-        }
-    }
-
-    std::cout << "All members have joined, subgroups are provisioned." << std::endl;
     derecho::Replicated<TestObject>& handle = group->get_subgroup<TestObject>();
     //std::string str_1k(max_msg_size, 'x');
     char * bbuf = (char*)malloc(max_msg_size);
