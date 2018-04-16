@@ -189,5 +189,44 @@ for(auto& reply_pair : results.get()) {
 ```
 Note that the type of `reply_pair` is `std::pair<derecho::node_id_t, std::future<bool>>`, which is why a node's response is accessed by writing `reply_pair.second.get()`.
 
+### Tracking Updates with Version Vectors
+Derecho allows tracking data update history with a version vector in memory or persistent storage. A new class template is introduced for this purpose: Persistent<T,ST>. In a Persistent instance, data is managed in an in-memory object of type T (we call it the ‘current object’) along with a log in a datastore specified by storage type ST. The log can be index using a version, an index, or a timestamp. A version is a 64-bit integer attached to each version, it is managed by derecho SST and guaranteed to be monotonic. A log is also an array of versions accessible using zero-based indices. Each log is also attached by a timestamp (microseconds) indicating when this update happens according to local RTC. To enable this feature, we need to manage the data in a serializable object T, and define a member of type Persistent<T> in the Replicated Object in a relevant group. Persistent_typed_subgroup_test.cpp gives an example.
+```cpp
+/**
+ * Example for replicated object with Persistent<T>
+ */
+ class PFoo : public mutils::ByteRepresentable {
+  Persistent<int> pint;
+ public:
+  virtual ~PFoo() noexcept (true) {}
+  int read_state() {
+    return *pint; 
+  }
+  bool change_state(int new_int) {
+    if(new_int == *pint) {
+      return false;
+    }
+ 
+    *pint = new_int;
+    return true;
+  }
+ 
+  enum Functions { READ_STATE,
+                   CHANGE_STATE };
+  static auto register_functions() {
+    return std::make_tuple(derecho::rpc::tag<READ_STATE>(&PFoo::read_state),
+      derecho::rpc::tag<CHANGE_STATE>(&PFoo::change_state));
+  }
+ 
+  // constructor for PersistentRegistry
+  PFoo(PersistentRegistry * pr):pint(nullptr,pr) {}
+  PFoo(Persistent<int> & init_pint):pint(std::move(init_pint)) {}
+  DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
+ };
+```
+	
+ For simplicity, the versioned type is int in this example. Basically, you set it up as a non versioned member of a replicated object except that you need pass the PersistentRegistry to the constructor from the replicated object to Persistent<T>. Derecho uses PersistentRegistry to keep track of all the Persistent<T> objects so that it can create versions on updates.The Persistent<T> constructor hooks itself to the registry.
 
+By default, the Persistent<T> stores log in filesystem (.plog in the current directory). Application can specify memory as storage by setting the second template parameter: Persistent<T,ST_MEM> (or Volatile<T> as syntactic sugar). We are working on more store storage types including NVM.
 
+Once the version vector is setup with derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
