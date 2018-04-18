@@ -59,7 +59,7 @@ public:
     /**
      * Constructor
      * Creates a buffer of the specified size and then calls the second 
-     * constructor with the new buffer as an argument
+     * constructor with the new buffer as an argument.
      *
      * @param size The size in bytes of the buffer to be associated with
      *     the memory region.
@@ -67,15 +67,18 @@ public:
     memory_region(size_t size);
     /**
      * Constructor
-     * Registers a memory region using the specified buffer and suggests
-     * a key to libfabric using the node_rank argument.
+     * Registers a memory region using the specified buffer and size. 
      *
      * @param buffer The allocated memory that will be registered.
      * @param size The size in bytes of the buffer to be associated with
      *      the memory region.
      */ 
     memory_region(char* buffer, size_t size);
-    /** Return the key of the registered memory region, same as verbs lkey */
+    /**
+     * get_key
+     * Returns the key associated with the registered memory region, which
+     * is used to access the region.
+     */ 
     uint64_t get_key() const;
 
     char* const buffer;
@@ -86,12 +89,12 @@ class remote_memory_region {
 public:
     /**
      * Constructor
-     * Takes in parameters representing a remote memory region
+     * Takes in parameters representing a remote memory region.
      *
      * @param remote_address The address of the remote buffer.
      * @param length The size of the remote buffer in bytes.
      * @param remote_key The key used to refer to the buffer
-     *     for remote accesses
+     *     for remote accesses.
      */
     remote_memory_region(uint64_t remote_address, size_t length,
                          uint64_t remote_key)
@@ -113,6 +116,10 @@ class completion_queue {
     friend class task;
 
 public:
+    /**
+     * Constructor
+     * Uses the libfabrics API to open a completion queue
+     */
     explicit completion_queue();
 };
 
@@ -163,15 +170,15 @@ public:
     explicit endpoint(size_t remote_index, bool is_lf_server);
      /**
      * Constructor
-     * Initializes members and then calls endpoint::connect
+     * Initializes members and then calls endpoint::connect.
      *
-     * @param remote_index The id of the remote node.
+     * @param remote_index The index of the remote node in the group.
      * @param is_lf_server This parameter decide local role in connection.
      *     If is_lf_server is true, it waits on PEP for connection from remote
      *     side. Otherwise, it initiate a connection to remote side.
      * @param post_recvs A lambda that is called at the end of initializing the
      *     endpoints on the client and remote sides to avoid race conditions 
-     *     between post_send() and post_recv()
+     *     between post_send() and post_recv().
      */    
     endpoint(size_t remote_index, bool is_lf_server,
              std::function<void(endpoint*)> post_recvs);
@@ -180,14 +187,53 @@ public:
      * Default move constructor
      */ 
     endpoint(endpoint&&) = default;
-
+    /**
+     * init
+     * Creates an endpoint, and then initializes/enables it
+     *
+     * @param fi A struct containing information about the current 
+     *     fabric services.
+     */ 
     int init(struct fi_info *fi);
+    /**
+     * connect
+     * Uses the initialized endpoint to connect to a remote node
+     *
+     * @param remote_index The index of the remote node in the group. 
+     * @param is_lf_server This parameter decide local role in connection.
+     *     If is_lf_server is true, it waits on PEP for connection from remote
+     *     side. Otherwise, it initiate a connection to remote side.
+     * @param post_recvs A lambda that is called at the end of initializing the
+     *     endpoints on the client and remote sides to avoid race conditions 
+     *     between post_send() and post_recv().
+     */ 
     void connect(size_t remote_index, bool is_lf_server,
                  std::function<void(endpoint *)> post_recvs);
 
+    /**
+     * post_send
+     * Uses the libfabrics API to post a buffer to an endpoint.
+     *
+     * @param mr The wrapper around the memory region that is being sent.
+     * @param offset The offset into the buffer managed by mr.
+     * @param size The size (in bytes) of the buffer being sent.
+     * @param wr_id A parameter used to differentiate types of messages.
+     * @param immediate A parameter used only for send operations.
+     * @param message_type 
+     */
     bool post_send(const memory_region& mr, size_t offset, 
                    size_t size, uint64_t wr_id, uint32_t immediate, 
                    const message_type& type);
+    /**
+     * post_recv
+     * Uses the libfabrics API to post a buffer to the recv queue of an endpoint.
+     *
+     * @param mr The wrapper around the memory region that is being posted.
+     * @param offset The offset into the buffer managed by mr.
+     * @param size The size (in bytes) of the buffer.
+     * @param wr_id A parameter used to differentiate types of messages.
+     * @param message_type  
+     */
     bool post_recv(const memory_region& mr, size_t offset, 
                    size_t size, uint64_t wr_id, 
                    const message_type& type);

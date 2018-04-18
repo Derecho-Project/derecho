@@ -153,6 +153,13 @@ struct lf_ctxt g_ctxt;
 #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & FI_MR_VIRT_ADDR)
 #define LF_CONFIG_FILE "rdma.cfg"
 
+#define LOWER32(x) (x & 0xffffffffLL)
+#define UPPER32(x) ((x >> 32) & 0xffffffffLL)
+
+#define RDMA_OP_SEND  (1LL << 32)
+#define RDMA_OP_RECV  (2LL << 32)
+#define RDMA_OP_WRITE (3LL << 32)
+
 namespace impl {
 
 /** 
@@ -168,12 +175,10 @@ static void default_context() {
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;
     /** Enable all modes */
     g_ctxt.hints->mode = ~0;
-    /** Set the completion format to be user-specifed */ 
-    if (g_ctxt.cq_attr.format == FI_CQ_FORMAT_UNSPEC) {
-        g_ctxt.cq_attr.format = FI_CQ_FORMAT_CONTEXT;
-    }
-    /** Says the user will only wait on the CQ using libfabric calls */
-    g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC;
+    /** Set the completion format to contain additional context */ 
+    g_ctxt.cq_attr.format = FI_CQ_FORMAT_DATA;
+    /** Use a file descriptor as the wait object (see polling_loop)*/
+    g_ctxt.cq_attr.wait_obj = FI_WAIT_FD;
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = MAX_LF_ADDR_SIZE;
 }
@@ -297,6 +302,7 @@ int endpoint::init(struct fi_info *fi) {
 
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
+
     return rdmc_connections->exchange(r_id, s, t);
 }
 
@@ -402,7 +408,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg.iov_count = 1;
     msg.addr      = 0;
     msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data      = immediate;
+    msg.data      = RDMA_OP_SEND | immediate;
  
     FAIL_IF_NONZERO(
         fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
@@ -424,7 +430,7 @@ bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size,
     msg.iov_count = 1;
     msg.addr      = 0;
     msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data      = 0;
+    msg.data      = RDMA_OP_RECV;
 
     FAIL_IF_NONZERO(
         fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
@@ -439,7 +445,7 @@ bool endpoint::post_empty_send(uint64_t wr_id, uint32_t immediate,
 
     memset(&msg, 0, sizeof(msg));
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data    = immediate;
+    msg.data    = RDMA_OP_SEND | immediate;
  
     FAIL_IF_NONZERO(
         fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
@@ -453,7 +459,7 @@ bool endpoint::post_empty_recv(uint64_t wr_id, const message_type& type) {
 
     memset(&msg, 0, sizeof(msg));
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data    = 0;
+    msg.data    = RDMA_OP_RECV;
  
     FAIL_IF_NONZERO(
         fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
@@ -492,7 +498,7 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     msg.rma_iov       = &rma_iov;
     msg.rma_iov_count = 1;
     msg.context       = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data          = 0l;
+    msg.data          = RDMA_OP_WRITE;
 
     FAIL_IF_NONZERO(
         fi_writemsg(ep.get(), &msg, FI_COMPLETION),
@@ -567,22 +573,75 @@ bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr) {
 }
 
 static atomic<bool> interrupt_mode;
-//static atomic<bool> polling_loop_shutdown_flag;
+static atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
-/*    pthread_setname_np(pthread_self(), "rdmc_poll");
+    pthread_setname_np(pthread_self(), "rdmc_poll");
 
     const int max_cq_entries = 1024;
-    unique_ptr<fi_cq_entry[]> cq_entires(new fi_cq_entry[max_cq_entires]);
+    unique_ptr<fi_cq_data_entry[]> cq_entries(new fi_cq_data_entry[max_cq_entries]);
 
-    while(true) {
+    while (true) {
         int num_completions = 0;
-        if (polling_loop_shutdown_flag) return;
+        while (num_completions == 0) {
+            if (polling_loop_shutdown_flag) return;
             uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
             do {
                 if(polling_loop_shutdown_flag) return;
-                num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get() max_cq_entries);
+                num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get(), max_cq_entries);
             } while(num_completions == 0 && get_time() < poll_end);
-    }  */
+
+            if (num_completions == 0) {
+                /** Need ibv_req_notify_cq equivalent here? */
+            
+                num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get(), max_cq_entries);
+                
+                if (num_completions == 0) {
+                    pollfd file_descriptor;
+                    fi_control(&g_ctxt.cq->fid, FI_GETWAIT, &file_descriptor);
+                    int rc = 0;
+                    while (rc == 0 && !polling_loop_shutdown_flag) {
+                        if(polling_loop_shutdown_flag) return;
+                        rc = poll(&file_descriptor, 1, 50);
+                    }
+
+                    if (rc > 0) {
+                        num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get(), max_cq_entries);
+                    }
+                }
+            }
+        }
+
+        if (num_completions < 0) {
+            cout << "Failed to read from completion queue\n";
+        }
+
+        std::lock_guard<std::mutex> l(completion_handlers_mutex);
+        for (int i = 0; i < num_completions; i++) {
+            fi_cq_data_entry &cq_entry = cq_entries[i];
+                
+            message_type::tag_type type = (uint64_t)cq_entry.op_context >> message_type::shift_bits;
+            if (type == std::numeric_limits<message_type::tag_type>::max())
+                continue;
+
+            uint64_t masked_wr_id = (uint64_t)cq_entry.op_context & 0x00ffffffffffffff;
+            uint32_t opcode = UPPER32(cq_entry.data);
+            uint32_t immediate = LOWER32(cq_entry.data);
+            if (type >= completion_handlers.size()) {
+                // Unrecognized message type
+            } else if (opcode == RDMA_OP_SEND) {
+                completion_handlers[type].send(masked_wr_id, immediate,
+                                               cq_entry.len);
+            } else if (opcode == RDMA_OP_RECV) {
+                completion_handlers[type].recv(masked_wr_id, immediate,
+                                               cq_entry.len);
+            } else if (opcode == RDMA_OP_WRITE) {
+                completion_handlers[type].write(masked_wr_id, immediate,
+                                                cq_entry.len);
+            } else {
+                puts("Sent unrecognized completion type?!");
+            }
+        }
+    }
 }
 
 /**
