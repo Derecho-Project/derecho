@@ -12,7 +12,6 @@ include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/getpot)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 
-
 ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp schedule.cpp lf_helper.cpp)
 TARGET_LINK_LIBRARIES(rdmc tcp rdmacm ibverbs rt pthread fabric)
 
@@ -22,7 +21,7 @@ if (SLURM_FOUND)
   add_definitions(-DUSE_SLURM)
 endif (SLURM_FOUND)
 
-ADD_EXECUTABLE(verbs-mcast experiment.cpp)
-TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
+#ADD_EXECUTABLE(verbs-mcast experiment.cpp)
+#TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
 
 add_custom_target(format_rdmc clang-format-3.8 -i *.cpp *.h)
