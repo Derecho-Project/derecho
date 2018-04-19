@@ -549,6 +549,7 @@ void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num
 void MulticastGroup::deliver_messages_upto(
         const std::vector<int32_t>& max_indices_for_senders,
         subgroup_id_t subgroup_num, uint32_t num_shard_senders) {
+    bool msgs_delivered = false;
     // DERECHO_LOG(-1, -1, "deliver_messages_upto");
     assert(max_indices_for_senders.size() == (size_t)num_shard_senders);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
@@ -568,12 +569,14 @@ void MulticastGroup::deliver_messages_upto(
         }
         auto rdmc_msg_ptr = locally_stable_rdmc_messages[subgroup_num].find(seq_num);
         if(rdmc_msg_ptr != locally_stable_rdmc_messages[subgroup_num].end()) {
+            msgs_delivered = true;
             deliver_message(rdmc_msg_ptr->second, subgroup_num);
             version_message(rdmc_msg_ptr->second, subgroup_num, seq_num);
             // DERECHO_LOG(-1, -1, "erase_message");
             locally_stable_rdmc_messages[subgroup_num].erase(rdmc_msg_ptr);
             // DERECHO_LOG(-1, -1, "erase_message_done");
         } else {
+            msgs_delivered = true;
             deliver_message(locally_stable_sst_messages[subgroup_num].at(seq_num), subgroup_num);
             version_message(locally_stable_sst_messages[subgroup_num].at(seq_num), subgroup_num, seq_num);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
@@ -583,7 +586,7 @@ void MulticastGroup::deliver_messages_upto(
     sst->put(get_shard_sst_indices(subgroup_num),
              (char*)std::addressof(sst->delivered_num[0][subgroup_num]) - sst->getBaseAddress(),
              sizeof(decltype(sst->delivered_num)::value_type));
-    if(subgroup_settings.at(subgroup_num).mode != Mode::UNORDERED) {
+    if(subgroup_settings.at(subgroup_num).mode != Mode::UNORDERED && msgs_delivered) {
         //Call the persistence_manager_post_persist_func
         std::get<1>(persistence_manager_callbacks)(subgroup_num,
                                                    persistent::combine_int32s(sst->vid[member_index], sst->delivered_num[member_index][subgroup_num]));

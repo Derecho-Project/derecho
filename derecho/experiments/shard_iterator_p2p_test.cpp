@@ -90,22 +90,6 @@ int main(int argc, char** argv) {
     }
 
     cout << "Finished constructing/joining Group" << endl;
-    //Keep attempting to get a subgroup pointer to see if the group is "adequately provisioned"
-    bool inadequately_provisioned = true;
-    while(inadequately_provisioned) {
-        try {
-            if(node_id < num_nodes - 1) {
-                group->get_subgroup<Foo>();
-            } else {
-                group->get_nonmember_subgroup<Foo>();
-            }
-            inadequately_provisioned = false;
-        } catch(derecho::subgroup_provisioning_exception& e) {
-            inadequately_provisioned = true;
-        }
-    }
-
-    cout << "All members have joined, subgroups are provisioned" << endl;
 
     // all shards change their state to a unique integer
     if(node_id < num_nodes - 1 && node_id % 2 == 0) {

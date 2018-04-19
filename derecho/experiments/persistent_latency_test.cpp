@@ -193,18 +193,6 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Finished constructing/joining Group" <<std::endl;
 
-  bool inadequately_provisioned = true;
-  while(inadequately_provisioned) {
-    try {
-      group->get_subgroup<ByteArrayObject>();
-      inadequately_provisioned = false;
-    } catch(derecho::subgroup_provisioning_exception& e) {
-      inadequately_provisioned = true;
-    }
-  }
-
-  std::cout << "All members have joined, subgroups are provisioned." <<std::endl;
-
   auto members_order = group->get_members();
   cout << "The order of members is :" << endl;
   for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
