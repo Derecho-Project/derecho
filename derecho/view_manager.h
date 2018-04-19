@@ -35,6 +35,21 @@ class RPCManager;
 }
 
 /**
+ * Represents the data needed to log a "ragged trim" decision to disk. There
+ * will be one of these per subgroup that a node belongs to, because each
+ * subgroup decides its ragged edge cleanup separately.
+ */
+struct RaggedTrim : public mutils::ByteRepresentable {
+    subgroup_id_t subgroup_id;
+    int vid;
+    node_id_t leader_id;
+    std::vector<int32_t> max_received_by_sender;
+    RaggedTrim(subgroup_id_t subgroup_id, int vid, node_id_t leader_id, std::vector<int32_t> max_received_by_sender)
+    : subgroup_id(subgroup_id), vid(vid), leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
+    DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, vid, leader_id, max_received_by_sender);
+};
+
+/**
  * A little helper class that implements a threadsafe queue by requiring all
  * clients to lock a mutex before accessing the queue.
  */
@@ -143,6 +158,12 @@ private:
      * after transitioning to a new view, in the case where the previous
      * view was inadequately provisioned. */
     initialize_rpc_objects_t initialize_subgroup_objects;
+    /** List of logged ragged trim states, indexed by subgroup ID, recovered
+     * from the last view before a total crash. Used only during total restart;
+     * empty if the group started up normally. */
+    std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>> logged_ragged_trim;
+
+    std::vector<std::vector<int64_t>> old_shard_leaders;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -154,7 +175,7 @@ private:
     void receive_join(tcp::socket& client_socket);
 
     /** Helper for joining an existing group; receives the View and parameters from the leader. */
-    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection, bool total_restart);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
@@ -179,11 +200,18 @@ private:
     void terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                          uint32_t next_num_received_size,
                          DerechoSST& gmsSST);
-    /**  and finishes installing the new view. */
+    /** Finishes installing the new view, assuming it is adequately provisioned.
+     * Sends the new view and necessary Replicated Object state to new members,
+     * sets up the new SST and MulticastGroup instances, and calls the new-view upcalls. */
     void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
                             std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                             uint32_t next_num_received_size,
                             DerechoSST& gmsSST);
+
+    /** Helper method for completing view changes; determines whether this node
+     * needs to send Replicated Object state to each node that just joined, and
+     * calls the send_subgroup_object callback to do so. */
+    void send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders);
 
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
@@ -208,19 +236,55 @@ private:
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
+    /**
+     * Constructs the next view from the current view and the set of committed
+     * changes in the SST.
+     * @param curr_view The current view, which the proposed changes are relative to
+     * @param gmsSST The SST containing the proposed/committed changes
+     * @param logger A logger for printing out debug information
+     * @return A View object for the next view
+     */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const DerechoSST& gmsSST,
                                                 std::shared_ptr<spdlog::logger> logger);
+    /**
+     * Constructs the next view from the current view and a list of joining
+     * nodes, by ID and IP address. This version is only used by the restart
+     * leader during total restart, and assumes that all nodes marked failed
+     * in curr_view will be removed.
+     * @param curr_view The current view, including the list of failed members
+     * to remove
+     * @param joiner_ids
+     * @param joiner_ips
+     * @param logger
+     * @return A View object for the next view
+     */
+    static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
+                                                const std::vector<node_id_t> joiner_ids,
+                                                const std::vector<ip_addr> joiner_ips,
+                                                std::shared_ptr<spdlog::logger> logger);
 
+    //Setup/constructor helpers
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
     void register_predicates();
+    /** Constructor helper that reads logged ragged trim information from disk,
+     * called only if there is also a logged view on disk from a previous failed group. */
+    void load_ragged_trim();
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
     void await_first_view(const node_id_t my_id,
                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                           uint32_t& num_received_size);
+    /** Constructor helper for the leader when it is restarting from complete failure;
+     * waits for a majority of nodes from the last known view to join. */
+    void await_rejoining_nodes(const node_id_t my_id,
+                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                               uint32_t& num_received_size);
+
+    void truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims);
+
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
 
@@ -235,6 +299,7 @@ private:
                                    const DerechoParams& derecho_params,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size);
+
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
      * and copies over the SST data from the current view. */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
@@ -257,6 +322,15 @@ private:
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
+    /**
+     * Recomputes num_received_size (the length of the num_received column in
+     * the SST) for an existing provisioned View, without re-running the
+     * subgroup membership functions. Used in total restart to set up an SST
+     * when all you have is a logged View.
+     * @param view The View to compute num_received_size for, based on its SubViews
+     * @return The length to provide to DerechoSST for num_received_size
+     */
+    static uint32_t compute_num_received_size(const View& view);
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
     /**
@@ -274,6 +348,8 @@ private:
             const View& new_view);
 
 public:
+
+    static const int RESTART_LEADER_TIMEOUT = 300000;
     /**
      * Constructor for a new group where this node is the GMS leader.
      * @param my_ip The IP address of the node executing this code
@@ -323,33 +399,6 @@ public:
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
-    /**
-     * Constructor for recovering a failed node by loading its View from log
-     * files.
-     * @param recovery_filename The base name of the set of recovery files to
-     * use (extensions will be added automatically)
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
-     * @param callbacks The set of callback functions to use for message
-     * delivery events once the group has been re-joined
-     * @param _persistence_manager_callbacks
-     * @param derecho_params (Optional) If set, and this node is the leader of
-     * the restarting group, a new set of Derecho parameters to configure the
-     * group with. Otherwise, these parameters will be read from the logfile or
-     * copied from the existing group leader.
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
-     */
-    ViewManager(const std::string& recovery_filename,
-                const node_id_t my_id,
-                const ip_addr my_ip,
-                CallbackSet callbacks,
-                const SubgroupInfo& subgroup_info,
-                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                const DerechoParams& derecho_params = DerechoParams(0, 0),
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
-
     ~ViewManager();
 
     /** Completes first-time setup of the ViewManager, including synchronizing
@@ -359,8 +408,12 @@ public:
     void finish_setup();
 
     /** Starts predicate evaluation in the current view's SST. Call this only
-     * when all other setup has been done for the managed Derecho group. */
-    void start();
+     * when all other setup has been done for the managed Derecho group.
+     * @param old_shard_leaders_for_restart The list of shard leaders from the
+     * previous view, which may have just been received from the leader if this
+     * node is not the leader. A parameter only needed if the group is doing
+     * total restart. This is an ugly hack, there must be a better way. */
+    void start(const std::unique_ptr<std::vector<std::vector<int64_t>>>& old_shard_leaders_for_restart);
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();

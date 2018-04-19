@@ -11,19 +11,20 @@ bool tcp_connections::add_connection(const node_id_t other_id,
         try {
             sockets[other_id] = socket(other_ip, port);
         } catch(exception) {
-            std::cerr << "WARNING: failed to node " << other_id << " at "
+            std::cerr << "WARNING: failed to connect to node " << other_id << " at "
                       << other_ip << ":" << port << std::endl;
             return false;
         }
 
         node_id_t remote_id = 0;
         if(!sockets[other_id].exchange(my_id, remote_id)) {
-            std::cerr << "WARNING: failed to exchange rank with node "
+            std::cerr << "WARNING: failed to exchange ID with node "
                       << other_id << " at " << other_ip << ":" << port
                       << std::endl;
             sockets.erase(other_id);
             return false;
-        } else if(remote_id != other_id) {
+        }
+        if(remote_id != other_id) {
             std::cerr << "WARNING: node at " << other_ip << ":" << port
                       << " replied with wrong id (expected " << other_id
                       << " but got " << remote_id << ")" << std::endl;
@@ -39,7 +40,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
 
                 node_id_t remote_id = 0;
                 if(!s.exchange(my_id, remote_id)) {
-                    std::cerr << "WARNING: failed to exchange id with node"
+                    std::cerr << "WARNING: failed to exchange id with node" << other_id
                               << std::endl;
                     return false;
                 } else {
@@ -50,8 +51,8 @@ bool tcp_connections::add_connection(const node_id_t other_id,
                     if(remote_id == other_id)
                         return true;
                 }
-            } catch(exception) {
-                std::cerr << "Got error while attempting to listing on port"
+            } catch(exception&) {
+                std::cerr << "Got error while attempting to listen on port"
                           << std::endl;
                 return false;
             }

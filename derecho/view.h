@@ -110,6 +110,8 @@ public:
     std::vector<std::vector<SubView>> subgroup_shard_views;
     /** Reverse index of members[]; maps node ID -> SST rank */
     std::map<node_id_t, uint32_t> node_id_to_rank;
+    /** Lists the (subgroup ID, shard num) pairs that this node is a member of */
+    std::map<subgroup_id_t, uint32_t> my_subgroups;
 
     bool i_know_i_am_leader = false;  // I am the leader (and know it)
 
@@ -148,12 +150,14 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, subgroup_shard_views, my_subgroups);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-         const std::vector<node_id_t>& departed, const int32_t num_members);
+         const std::vector<node_id_t>& departed, const int32_t num_members,
+         const std::vector<std::vector<SubView>>& subgroup_shard_views,
+         const std::map<subgroup_id_t, uint32_t>& my_subgroups);
 
     /** Standard constructor for making a new View */
     View(const int32_t vid,
@@ -167,15 +171,6 @@ public:
 };
 
 /**
- * Custom implementation of load_object for Views. The View from the swap file
- * will be used if it is newer than the View from view_file_name (according to
- * VID), since this means a crash occurred before the swap file could be renamed.
- * @param view_file_name The name of the file to read for a serialized View
- * @return A new View constructed with the data in the file
- */
-std::unique_ptr<View> load_view(const std::string& view_file_name);
-
-/**
  * Prints a plaintext representation of the View to an output stream. This is
  * not interchangeable with the serialization library, but can be used to create
  * a log file parseable by standard bash tools.
@@ -185,8 +180,8 @@ std::unique_ptr<View> load_view(const std::string& view_file_name);
  */
 std::ostream& operator<<(std::ostream& stream, const View& view);
 /**
-   * Parses the plaintext representation created by operator<< and modifies the View
-   * argument to contain the view it represents.
-   */
+ * Parses the plaintext representation created by operator<< and modifies the View
+ * argument to contain the view it represents.
+ */
 View parse_view(std::istream& stream);
 }

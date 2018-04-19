@@ -18,9 +18,9 @@ class socket {
             : sock(_sock), remote_ip(remote_ip) {}
 
     friend class connection_listener;
+    std::string remote_ip;
 
 public:
-    std::string remote_ip;
 
     /**
      * Constructs an empty, unconnected socket.

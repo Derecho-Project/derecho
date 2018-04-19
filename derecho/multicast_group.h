@@ -311,7 +311,7 @@ private:
      */
     void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num);
 
-    uint32_t get_num_senders(std::vector<int> shard_senders) {
+    uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;
         for(const auto i : shard_senders) {
             if(i) {
@@ -344,24 +344,42 @@ private:
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
 
 public:
+    /**
+     * Standard constructor for setting up a MulticastGroup for the first time.
+     * @param _members A list of node IDs of members in this group
+     * @param my_node_id The rank (ID) of this node in the group
+     * @param _sst The SST this group will use; created by the GMS (membership
+     * service) for this group.
+     * @param _callbacks A set of functions to call when messages have reached
+     * various levels of stability
+     * @param total_num_subgroups The total number of subgroups in this Derecho
+     * Group
+     * @param subgroup_settings_by_id A list of SubgroupSettings, one for each
+     * subgroup this node belongs to, indexed by subgroup ID
+     * @param derecho_params The parameters for multicasts in this group
+     * @param _persistence_manager_callbacks The callbacks to PersistenceManager
+     * that will be used to persist received messages
+     * @param already_failed (Optional) A Boolean vector indicating which
+     * elements of _members are nodes that have already failed in this view
+     */
     MulticastGroup(
-            std::vector<node_id_t> _members, node_id_t my_node_id,
-            std::shared_ptr<DerechoSST> _sst,
+            std::vector<node_id_t> members, node_id_t my_node_id,
+            std::shared_ptr<DerechoSST> sst,
             CallbackSet callbacks,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const DerechoParams derecho_params,
-            const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+            const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
     MulticastGroup(
-            std::vector<node_id_t> _members, node_id_t my_node_id,
-            std::shared_ptr<DerechoSST> _sst,
+            std::vector<node_id_t> members, node_id_t my_node_id,
+            std::shared_ptr<DerechoSST> sst,
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-            const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+            const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {}, uint32_t rpc_port = derecho_rpc_port);
 
     ~MulticastGroup();

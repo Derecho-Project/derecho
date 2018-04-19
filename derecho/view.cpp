@@ -70,7 +70,9 @@ uint32_t SubView::num_senders() const {
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-           const std::vector<node_id_t>& departed, const int32_t num_members)
+           const std::vector<node_id_t>& departed, const int32_t num_members,
+           const std::vector<std::vector<SubView>>& subgroup_shard_views,
+           const std::map<subgroup_id_t, uint32_t>& my_subgroups)
         : vid(vid),
           members(members),
           member_ips(member_ips),
@@ -79,8 +81,10 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0),               //This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(0) { /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
+          my_rank(0),               /* This will always get overwritten by the receiver after deserializing */
+          next_unassigned_rank(0),  /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
+          subgroup_shard_views(subgroup_shard_views),
+          my_subgroups(my_subgroups) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
@@ -251,41 +255,6 @@ std::string View::debug_string() const {
     }
     s << "}";
     return s.str();
-}
-
-std::unique_ptr<View> load_view(const std::string& view_file_name) {
-    std::ifstream view_file(view_file_name);
-    std::ifstream view_file_swap(view_file_name + ".swp");
-    std::unique_ptr<View> view;
-    std::unique_ptr<View> swap_view;
-    //The expected view file might not exist, in which case we'll fall back to the swap file
-    if(view_file.good()) {
-        //Each file contains the size of the view (an int copied as bytes),
-        //followed by a serialized view
-        std::size_t size_of_view;
-        view_file.read((char*)&size_of_view, sizeof(size_of_view));
-        char buffer[size_of_view];
-        view_file.read(buffer, size_of_view);
-        //If the view file doesn't contain a complete view (due to a crash
-        //during writing), the read() call will set failbit
-        if(!view_file.fail()) {
-            view = mutils::from_bytes<View>(nullptr, buffer);
-        }
-    }
-    if(view_file_swap.good()) {
-        std::size_t size_of_view;
-        view_file_swap.read((char*)&size_of_view, sizeof(size_of_view));
-        char buffer[size_of_view];
-        view_file_swap.read(buffer, size_of_view);
-        if(!view_file_swap.fail()) {
-            swap_view = mutils::from_bytes<View>(nullptr, buffer);
-        }
-    }
-    if(swap_view == nullptr || (view != nullptr && view->vid >= swap_view->vid)) {
-        return view;
-    } else {
-        return swap_view;
-    }
 }
 
 std::ostream& operator<<(std::ostream& stream, const View& view) {

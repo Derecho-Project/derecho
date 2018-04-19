@@ -57,6 +57,7 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
     return a;
 }
 
+/* Leader constructor */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(
         const node_id_t my_id,
@@ -83,10 +84,11 @@ Group<ReplicatedTypes...>::Group(
     persistence_manager.set_view_manager(std::addressof(view_manager));
     view_manager.finish_setup();
     rpc_manager.start_listening();
-    view_manager.start();
+    view_manager.start(std::unique_ptr<vector_int64_2d>());
     persistence_manager.start();
 }
 
+/* Non-leader constructor, phase 1 */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  const ip_addr my_ip,
@@ -100,6 +102,7 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                 callbacks, subgroup_info, _view_upcalls,
                 gms_port, factories...) {}
 
+/* Non-leader constructor, phase 2 */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  tcp::socket leader_connection,
@@ -126,7 +129,7 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     receive_objects(subgroups_and_leaders);
     rpc_manager.start_listening();
-    view_manager.start();
+    view_manager.start(old_shard_leaders);
     persistence_manager.start();
 }
 
@@ -241,6 +244,12 @@ void Group<ReplicatedTypes...>::set_up_components() {
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
+    /* Note for the future: Since this "send" requires first receiving the log tail length,
+     * it's really a blocking receive-then-send. Since all nodes call send_subgroup_object
+     * before initialize_subgroup_objects, there's a small chance of a deadlock: node A could
+     * be attempting to send an object to node B at the same time as B is attempting to send a
+     * different object to A, and neither node will be able to send the log tail length that
+     * the other one is waiting on. */
     view_manager.register_send_object_upcall([this](subgroup_id_t subgroup_id, node_id_t new_node_id) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = rpc_manager.get_socket(new_node_id);
         //First, read the log tail length sent by the joining node

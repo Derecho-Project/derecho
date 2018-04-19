@@ -23,16 +23,6 @@ size_t index_of(T container, U elem) {
     return container.size();
 }
 
-/**
- *
- * @param _members A list of node IDs of members in this group
- * @param my_node_id The rank (ID) of this node in the group
- * @param sst The SST this group will use; created by the GMS (membership
- * service) for this group.
- * @param _callbacks A set of functions to call when messages have reached
- * various levels of stability
- */
-
 MulticastGroup::MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> sst,
@@ -40,7 +30,7 @@ MulticastGroup::MulticastGroup(
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const DerechoParams derecho_params,
-        const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+        const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : logger(spdlog::get("debug_log")),
           members(_members),
@@ -64,7 +54,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          persistence_manager_callbacks(_persistence_manager_callbacks) {
+          persistence_manager_callbacks(persistence_manager_callbacks) {
     assert(window_size >= 1);
 
     for(uint i = 0; i < num_members; ++i) {

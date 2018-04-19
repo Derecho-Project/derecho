@@ -10,6 +10,7 @@
 #include <functional>
 #include <map>
 #include <sys/types.h>
+#include <cstdint>
 
 #include "persistent/HLC.hpp"
 #include "persistent/Persistent.hpp"
