@@ -116,7 +116,7 @@ tcp::tcp_connections *rdmc_connections;
 /** 
  * Listener to detect new incoming connections 
  */
-static unique_ptr<tcp::connection_listener> connection_listener;
+//static unique_ptr<tcp::connection_listener> connection_listener;
 
 /**
  * Vector of completion handlers and a mutex for accessing it
@@ -168,46 +168,30 @@ namespace impl {
 static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(struct lf_ctxt));
     /** Create a new empty fi_info structure */
-    g_ctxt.hints = fi_allocinfo();
+    FAIL_IF_ZERO(g_ctxt.hints = fi_allocinfo(),"Fail to allocate fi hints",CRASH_ON_FAILURE);
     /** Set the interface capabilities, see fi_getinfo(3) for details */
-    g_ctxt.hints->caps = FI_MSG|FI_RMA|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE;
+    g_ctxt.hints->caps = FI_MSG | FI_RMA | FI_READ | FI_WRITE | 
+                         FI_REMOTE_READ | FI_REMOTE_WRITE;
     /** Use connection-based endpoints */
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;
     /** Enable all modes */
     g_ctxt.hints->mode = ~0;
     /** Set the completion format to contain additional context */ 
-    g_ctxt.cq_attr.format = FI_CQ_FORMAT_DATA;
+    g_ctxt.cq_attr.format = FI_CQ_FORMAT_CONTEXT; // FI_CQ_FORMAT_DATA;
     /** Use a file descriptor as the wait object (see polling_loop)*/
-    g_ctxt.cq_attr.wait_obj = FI_WAIT_FD;
+    g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = MAX_LF_ADDR_SIZE;
-}
-
-/** 
- * Load the global context from a configuration file
- */
-static void load_configuration() {
-    #define DEFAULT_PROVIDER "sockets"  /** Can be one of verbs|psm|sockets|usnic */
-    #define DEFAULT_DOMAIN   "eth0"     /** Default domain depends on system */
-    #define DEFAULT_TX_DEPTH  4096      /** Tx queue depth */
-    #define DEFAULT_RX_DEPTH  4096      /** Rx queue depth */
-    GetPot cfg(LF_CONFIG_FILE);         /** Load the configuration file */
-    
-    FAIL_IF_ZERO(g_ctxt.hints, "FI hints not allocated",  CRASH_ON_FAILURE);
-    FAIL_IF_ZERO(                       /** Load the provider from config */
-        g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider", DEFAULT_PROVIDER)),
-        "Failed to load the provider from config file", CRASH_ON_FAILURE
-    );
-    FAIL_IF_ZERO(                       /** Load the domain from config */
-        g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN)),
-        "Failed to load the domain from config file", CRASH_ON_FAILURE
-    );
+    /** Set the provider, can be verbs|psm|sockets|usnic */
+    g_ctxt.hints->fabric_attr->prov_name = strdup("verbs");
+    /** Set the domain, this shouldn't be the default */
+    g_ctxt.hints->domain_attr->name = strdup("mlx5_0");
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
     g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | 
-                                         FI_MR_VIRT_ADDR;
+                                         FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
     /** Set the tx and rx queue sizes, see fi_endpoint(3) for details */
-    g_ctxt.hints->tx_attr->size = cfg("tx_depth", DEFAULT_TX_DEPTH);
-    g_ctxt.hints->rx_attr->size = cfg("rx_depth", DEFAULT_RX_DEPTH);
+    g_ctxt.hints->tx_attr->size = 4096;
+    g_ctxt.hints->rx_attr->size = 4096;
 }
 }
 
@@ -287,7 +271,7 @@ int endpoint::init(struct fi_info *fi) {
         "Failed to bind endpoint and event queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
-    const int ep_flags = FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION;
+    const uint64_t ep_flags = FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION;
     FAIL_IF_NONZERO(
         ret = fi_ep_bind(ep.get(), &(g_ctxt.cq)->fid, ep_flags), 
         "Failed to bind endpoint and tx completion queue", REPORT_ON_FAILURE
@@ -582,7 +566,7 @@ static void polling_loop() {
 
     while (true) {
         int num_completions = 0;
-        while (num_completions == 0) {
+        while (num_completions == 0 || num_completions == -11) {
             if (polling_loop_shutdown_flag) return;
             uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
             do {
@@ -612,7 +596,8 @@ static void polling_loop() {
         }
 
         if (num_completions < 0) {
-            cout << "Failed to read from completion queue\n";
+            cout << "Failed to read from completion queue, fi_cq_read returned " 
+                 << num_completions << std::endl;
         }
 
         std::lock_guard<std::mutex> l(completion_handlers_mutex);
@@ -651,15 +636,18 @@ bool lf_initialize(
     const std::map<uint32_t, std::string>& node_addrs, uint32_t node_rank) {
    
     /** Initialize the connection listener on the rdmc tcp port */     
-    connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
+    //connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
     
     /** Initialize the tcp connections, also connects all the nodes together */
     rdmc_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::rdmc_tcp_port);
     
     /** Set the context to defaults to start with */
     default_context();
-    load_configuration();  
+    //load_configuration();  
    
+    std::cout << "Loaded the default context" << std::endl;
+    std::cout << fi_tostr(g_ctxt.hints, FI_TYPE_INFO) << std::endl;
+
     dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO)); 
 
     /** Initialize the fabric, domain and completion queue */ 
@@ -675,6 +663,13 @@ bool lf_initialize(
         fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),
         "fi_domain() failed", CRASH_ON_FAILURE
     );
+    FAIL_IF_NONZERO(
+        fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),
+        "failed to initialize tx completion queue", CRASH_ON_FAILURE
+    );
+    FAIL_IF_ZERO(g_ctxt.cq, "Pointer to completion queue is null", CRASH_ON_FAILURE);
+
+    std::cout << "Initialized fabric + domain" << std::endl;
 
     /** Initialize the event queue, initialize and configure pep  */
     FAIL_IF_NONZERO(
@@ -705,6 +700,8 @@ bool lf_initialize(
         fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
         "failed to open the event queue for rdma transmission.", CRASH_ON_FAILURE
     );
+
+    std::cout << "Initialized event queue and passive endpoint" << std::endl;
 
     /** Start a polling thread and run in the background */
     std::thread polling_thread(polling_loop);
