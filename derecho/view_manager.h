@@ -260,10 +260,19 @@ private:
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const std::vector<node_id_t> joiner_ids,
-                                                const std::vector<ip_addr> joiner_ips,
+                                                const std::vector<node_id_t>& joiner_ids,
+                                                const std::vector<ip_addr>& joiner_ips,
                                                 std::shared_ptr<spdlog::logger> logger);
 
+    /**
+     * Updates curr_view and makes a new next_view based on the current set of
+     * rejoining nodes during total restart.
+     * @param waiting_join_sockets The set of connections to restarting nodes
+     * @param rejoined_node_ids The IDs of those nodes
+     * @return The next view that will be installed if the restart continues at this point
+     */
+    std::unique_ptr<View> update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
+                                                            const std::set<node_id_t>& rejoined_node_ids);
     //Setup/constructor helpers
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();

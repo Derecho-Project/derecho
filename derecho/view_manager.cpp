@@ -137,7 +137,9 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             mutils::post_object(leader_socket_write, *ragged_trim_pair.second);
         }
     }
-
+    /* This second ID exchange is really a "heartbeat" to assure the leader
+     * the client is still alive by the time it's ready to send the view */
+    leader_connection.exchange(my_id, leader_id);
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
     bool success = leader_connection.read(size_of_view);
@@ -233,7 +235,8 @@ void ViewManager::await_first_view(const node_id_t my_id,
                                    uint32_t& num_received_size) {
     std::list<tcp::socket> waiting_join_sockets;
     curr_view->is_adequately_provisioned = false;
-    bool joiner_failed;
+    bool joiner_failed = false;
+    std::list<tcp::socket>::iterator last_checked_joiner;
     do {
         while(!curr_view->is_adequately_provisioned) {
             tcp::socket client_socket = server_socket.accept();
@@ -252,20 +255,22 @@ void ViewManager::await_first_view(const node_id_t my_id,
             waiting_join_sockets.emplace_back(std::move(client_socket));
         }
         /* Now that enough joiners are queued up to make an adequate view,
-         * send it to all of them.  */
+         * test to see if any of them have failed while waiting to join by
+         * exchanging some trivial data and checking the TCP socket result */
+        if(!joiner_failed) {
+            //initialize this pointer on the first iteration of the outer loop
+            last_checked_joiner = waiting_join_sockets.begin();
+        }
         joiner_failed = false;
-        while(!waiting_join_sockets.empty()) {
-            ip_addr joiner_ip = waiting_join_sockets.front().get_remote_ip();
-            node_id_t joiner_id = curr_view->members[curr_view->rank_of(joiner_ip)];
-            auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
-                bool success = waiting_join_sockets.front().write(bytes, size);
-                assert(success);
-            };
-            std::size_t size_of_view = mutils::bytes_size(*curr_view);
-            bool write_success = waiting_join_sockets.front().write(size_of_view);
+        //Starting at the position we left off ensures the earlier non-failed nodes won't get multiple exchanges
+        for(auto waiting_sockets_iter = last_checked_joiner;
+                waiting_sockets_iter != waiting_join_sockets.end(); ) {
+            ip_addr joiner_ip = waiting_sockets_iter->get_remote_ip();
+            node_id_t joiner_id = 0;
+            bool write_success = waiting_sockets_iter->exchange(my_id, joiner_id);
             if(!write_success) {
-                //The client crashed while waiting to join, so we must remove it from the view and try again
-                waiting_join_sockets.pop_front();
+                //Remove the failed client and try again
+                waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
                 std::vector<ip_addr> filtered_ips(curr_view->member_ips.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
@@ -283,6 +288,17 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 joiner_failed = true;
                 break;
             }
+            last_checked_joiner = waiting_sockets_iter;
+            ++waiting_sockets_iter;
+        }
+        if(joiner_failed) continue;
+        // If none of the joining nodes have failed, we can continue sending them all the view
+        while(!waiting_join_sockets.empty()) {
+            auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
+                bool success = waiting_join_sockets.front().write(bytes, size);
+                assert(success);
+            };
+            mutils::post_object(bind_socket_write, mutils::bytes_size(*curr_view));
             mutils::post_object(bind_socket_write, *curr_view);
             waiting_join_sockets.front().write(mutils::bytes_size(derecho_params));
             mutils::post_object(bind_socket_write, derecho_params);
@@ -299,6 +315,8 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> rejoined_node_ids;
     std::set<node_id_t> last_known_view_members(curr_view->members.begin(), curr_view->members.end());
+    std::unique_ptr<View> restart_view;
+    node_id_t last_checked_joiner = 0;
     //Wait for a majority of nodes from the last known view to join
     bool ready_to_restart = false;
     int time_remaining_ms = RESTART_LEADER_TIMEOUT;
@@ -357,49 +375,48 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                                   last_known_view_members.begin(), last_known_view_members.end(), 
                                   std::inserter(intersection_of_ids, intersection_of_ids.end()));
             if(intersection_of_ids.size() >= (last_known_view_members.size() / 2) + 1) {
-                ready_to_restart = true;
+                //A majority of the last known view has reconnected, now determine if the new view would be adequate
+                restart_view = update_curr_and_next_restart_view(waiting_join_sockets, rejoined_node_ids);
+                num_received_size = make_subgroup_maps(curr_view, *restart_view, subgroup_settings);
+                if(restart_view->is_adequately_provisioned) {
+                    //Keep waiting for more than a quorum if the next view would not be adequate
+                    ready_to_restart = true;
+                }
             }
-            //If all the members have rejoined, no need to wait for the rest of the timeout
-            if(intersection_of_ids.size() == last_known_view_members.size()) {
+            //If we're about to restart, go back and test to see if any joining nodes have since failed
+            if(ready_to_restart) {
+                if(last_checked_joiner == 0) {
+                    last_checked_joiner = waiting_join_sockets.begin()->first;
+                }
+                //Don't re-exchange with joiners already tested; this works because std::map is sorted
+                for(auto waiting_sockets_iter = waiting_join_sockets.find(last_checked_joiner);
+                        waiting_sockets_iter != waiting_join_sockets.end(); ) {
+                     node_id_t joiner_id = 0;
+                     bool write_success = waiting_sockets_iter->second.exchange(my_id, joiner_id);
+                     if(!write_success) {
+                         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
+                         rejoined_node_ids.erase(waiting_sockets_iter->first);
+                         ready_to_restart = false;
+                         break;
+                     }
+                     last_checked_joiner = waiting_sockets_iter->first;
+                     ++waiting_sockets_iter;
+                }
+            }
+            //If all the members have rejoined, no need to keep waiting
+            if(intersection_of_ids.size() == last_known_view_members.size() && ready_to_restart) {
                 break;
             }
         } else if(!ready_to_restart) {
-            //Timed out, but we haven't heard from enough nodes yet, so reset the timer
+            //Accept timed out, but we haven't heard from enough nodes yet, so reset the timer
             time_remaining_ms = RESTART_LEADER_TIMEOUT;
         }
     }
-    SPDLOG_DEBUG(logger, "Reached a quorum of nodes from view {}, constructing view {}", curr_view->vid, curr_view->vid+1);
-    //Nodes that were not in the last view but have restarted will immediately "join" in the new view
-    std::vector<node_id_t> nodes_to_add_in_next_view;
-    std::vector<ip_addr> ips_to_add_in_next_view;
-    for(const auto& id_socket_pair : waiting_join_sockets) {
-        node_id_t joiner_id = id_socket_pair.first;
-        int joiner_rank = curr_view->rank_of(joiner_id);
-        if(joiner_rank == -1) {
-            nodes_to_add_in_next_view.emplace_back(joiner_id);
-            ips_to_add_in_next_view.emplace_back(id_socket_pair.second.get_remote_ip());
-            //If this node had been marked as failed, but not yet excluded, let him back in
-        } else if(curr_view->failed[joiner_rank] == true) {
-            curr_view->failed[joiner_rank] = false;
-            curr_view->num_failed--;
-        }
-    }
-    //Mark any nodes from the last view that didn't respond before the timeout as failed
-    for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {
-        if(rejoined_node_ids.count(curr_view->members[rank]) == 0
-                && !curr_view->failed[rank]) {
-            curr_view->failed[rank] = true;
-            curr_view->num_failed++;
-        }
-    }
+    assert(restart_view);
+    SPDLOG_DEBUG(logger, "Reached a quorum of nodes from view {}, installing view {}", curr_view->vid, restart_view->vid);
 
-    //Compute the next view, which will include all the members currently rejoining and remove the failed ones
-    auto restart_view = make_next_view(curr_view, nodes_to_add_in_next_view, ips_to_add_in_next_view, logger);
-    //What if this view isn't adequately provisioned? I guess we have to wait for more members to restart...
-    num_received_size = make_subgroup_maps(curr_view, *restart_view, subgroup_settings);
     std::vector<std::vector<int64_t>> old_shard_leaders_by_id =
             translate_types_to_ids(make_shard_leaders_map(*curr_view), *restart_view);
-
     curr_view.swap(restart_view);
     //Send the next view to all the members
     for(auto waiting_sockets_iter = waiting_join_sockets.begin(); 
@@ -428,6 +445,36 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     }
     //Save this to a class member so that we still have it in start()...ugh, that's ugly
     old_shard_leaders = old_shard_leaders_by_id;
+}
+
+std::unique_ptr<View> ViewManager::update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
+                                                                     const std::set<node_id_t>& rejoined_node_ids) {
+    //Nodes that were not in the last view but have restarted will immediately "join" in the new view
+    std::vector<node_id_t> nodes_to_add_in_next_view;
+    std::vector<ip_addr> ips_to_add_in_next_view;
+    for(const auto& id_socket_pair : waiting_join_sockets) {
+        node_id_t joiner_id = id_socket_pair.first;
+        int joiner_rank = curr_view->rank_of(joiner_id);
+        if(joiner_rank == -1) {
+            nodes_to_add_in_next_view.emplace_back(joiner_id);
+            ips_to_add_in_next_view.emplace_back(id_socket_pair.second.get_remote_ip());
+            //If this node had been marked as failed, but was still in the view, un-fail it
+        } else if(curr_view->failed[joiner_rank] == true) {
+            curr_view->failed[joiner_rank] = false;
+            curr_view->num_failed--;
+        }
+    }
+    //Mark any nodes from the last view that didn't respond before the timeout as failed
+    for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {
+        if(rejoined_node_ids.count(curr_view->members[rank]) == 0
+                && !curr_view->failed[rank]) {
+            curr_view->failed[rank] = true;
+            curr_view->num_failed++;
+        }
+    }
+
+    //Compute the next view, which will include all the members currently rejoining and remove the failed ones
+    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_to_add_in_next_view, logger);
 }
 
 void ViewManager::initialize_rdmc_sst() {
@@ -1001,6 +1048,9 @@ void ViewManager::receive_join(tcp::socket& client_socket) {
 
 void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) {
     SPDLOG_DEBUG(logger, "Sending client the new view");
+    node_id_t joining_client_id = 0;
+    //Optional: Check the result of this exchange to see if the client has crashed while waiting to join
+    client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
     client_socket.write(size_of_view);
@@ -1124,8 +1174,8 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
 }
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
-                                                  const std::vector<node_id_t> joiner_ids,
-                                                  const std::vector<ip_addr> joiner_ips,
+                                                  const std::vector<node_id_t>& joiner_ids,
+                                                  const std::vector<ip_addr>& joiner_ips,
                                                   std::shared_ptr<spdlog::logger> logger) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
