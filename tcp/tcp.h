@@ -42,9 +42,9 @@ public:
 
     ~socket();
 
-    bool is_empty();
+    bool is_empty() const;
     std::string get_self_ip();
-    std::string get_remote_ip() { return remote_ip; }
+    std::string get_remote_ip() const { return remote_ip; }
 
     /**
      * Attempts to connect the socket to the specified address and port, but

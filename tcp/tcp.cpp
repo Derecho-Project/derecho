@@ -56,7 +56,7 @@ socket::~socket() {
     if(sock >= 0) close(sock);
 }
 
-bool socket::is_empty() { return sock == -1; }
+bool socket::is_empty() const { return sock == -1; }
 
 int socket::try_connect(string servername, int port, int timeout_ms) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);

@@ -223,6 +223,11 @@ void ViewManager::load_ragged_trim() {
     }
 }
 
+
+void ViewManager::truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims) {
+    //????
+}
+
 void ViewManager::await_first_view(const node_id_t my_id,
                                    std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    uint32_t& num_received_size) {
@@ -372,7 +377,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         int joiner_rank = curr_view->rank_of(joiner_id);
         if(joiner_rank == -1) {
             nodes_to_add_in_next_view.emplace_back(joiner_id);
-            ips_to_add_in_next_view.emplace_back(id_socket_pair.second.remote_ip);
+            ips_to_add_in_next_view.emplace_back(id_socket_pair.second.get_remote_ip());
             //If this node had been marked as failed, but not yet excluded, let him back in
         } else if(curr_view->failed[joiner_rank] == true) {
             curr_view->failed[joiner_rank] = false;
@@ -399,7 +404,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     //Send the next view to all the members
     for(auto waiting_sockets_iter = waiting_join_sockets.begin(); 
             waiting_sockets_iter != waiting_join_sockets.end(); ) {
-        auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
+        auto bind_socket_write = [&waiting_sockets_iter](const char* bytes, std::size_t size) {
             bool success = waiting_sockets_iter->second.write(bytes, size);
             assert(success);
         };
