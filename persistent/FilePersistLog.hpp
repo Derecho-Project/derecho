@@ -201,6 +201,7 @@ namespace persistent {
     virtual void trimByIndex(const int64_t &eno) noexcept(false);
     virtual void trim(const int64_t &ver) noexcept(false);
     virtual void trim(const HLC & hlc) noexcept(false);
+    virtual void truncate(const int64_t &ver) noexcept(false);
     virtual size_t bytes_size(const int64_t &ver) noexcept(false);
     virtual size_t to_bytes(char* buf, const int64_t &ver) noexcept(false);
     virtual void post_object(const std::function<void (char const *const, std::size_t)> &f,

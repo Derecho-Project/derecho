@@ -61,6 +61,7 @@ using version_t = int64_t;
   using PersistFunc = std::function<const version_t(void)>;
   using TrimFunc = std::function<void(const version_t &)>;
   using LatestPersistedGetterFunc = std::function<const version_t(void)>;
+  using TruncateFunc = std::function<void(const int64_t &)>;
   // this function is obsolete, now we use a shared pointer to persistence registry
   // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
 
@@ -116,6 +117,7 @@ using version_t = int64_t;
     #define PERSIST_FUNC_IDX (1)
     #define TRIM_FUNC_IDX (2)
     #define GET_ML_PERSISTED_VER (3)
+    #define TRUNCATE_FUNC_IDX (4)
     // make a version
     void makeVersion(const int64_t & ver, const HLC & mhlc) noexcept(false) {
       callFunc<VERSION_FUNC_IDX>(ver,mhlc);
@@ -162,15 +164,16 @@ using version_t = int64_t;
       const VersionFunc &vf,
       const PersistFunc &pf,
       const TrimFunc &tf,
-      const LatestPersistedGetterFunc &lpgf) noexcept(false) {
+      const LatestPersistedGetterFunc &lpgf,
+      const TruncateFunc &tcf) noexcept(false) {
       //this->_registry.push_back(std::make_tuple(vf,pf,tf));
-      auto tuple_val = std::make_tuple(vf,pf,tf,lpgf);
+      auto tuple_val = std::make_tuple(vf,pf,tf,lpgf,tcf);
       std::size_t key = std::hash<std::string>{}(obj_name);
-      auto res = this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>>(key,tuple_val));
+      auto res = this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc,TruncateFunc>>(key,tuple_val));
       if (res.second==false) {
         //override the previous value:
         this->_registry.erase(res.first);
-        this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>>(key,tuple_val));
+        this->_registry.insert(std::pair<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc,TruncateFunc>>(key,tuple_val));
       }
     };
     // deregister
@@ -213,7 +216,7 @@ using version_t = int64_t;
   protected:
     const std::string _subgroup_prefix; // this appears in the first part of storage file for persistent<T>
     ITemporalQueryFrontierProvider * _temporal_query_frontier_provider;
-    std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc>> _registry;
+    std::map<std::size_t,std::tuple<VersionFunc,PersistFunc,TrimFunc,LatestPersistedGetterFunc,TruncateFunc>> _registry;
     template<int funcIdx,typename ... Args >
     void callFunc(Args ... args) {
       for (auto itr = this->_registry.begin();
@@ -318,7 +321,8 @@ using version_t = int64_t;
             std::bind(&Persistent<ObjectType,storageType>::version,this,std::placeholders::_1),
             std::bind(&Persistent<ObjectType,storageType>::persist,this),
             std::bind(&Persistent<ObjectType,storageType>::trim<const int64_t>,this,std::placeholders::_1), //trim by version:(const int64_t)
-            std::bind(&Persistent<ObjectType,storageType>::getLatestVersion,this) //get the latest persisted versions
+            std::bind(&Persistent<ObjectType,storageType>::getLatestVersion,this), //get the latest persisted versions
+            std::bind(&Persistent<ObjectType,storageType>::truncate,this,std::placeholders::_1) // truncate persistent versions.
           );
         }
       }
@@ -520,6 +524,15 @@ using version_t = int64_t;
         dbg_trace("trim.");
         this->m_pLog->trim(k);
         dbg_trace("trim...done");
+      }
+
+      // truncate the log
+      // @param ver: all versions strictly newer than 'ver' will be truncated.
+      // 
+      void truncate(const int64_t & ver) {
+        dbg_trace("truncate.");
+        this->m_pLog->truncate(ver);
+        dbg_trace("truncate...done");
       }
 
       // get a version of Value T, specified by HLC clock. the user lambda will be fed with

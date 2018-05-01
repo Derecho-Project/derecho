@@ -182,6 +182,13 @@ namespace persistent {
      * @PARAM v - serialized log bytes to be apllied
      */
     virtual void applyLogTail(char const *v) = 0;
+
+
+    /**
+     * Truncate the log strictly newer than 'ver'.
+     * @param ver - all log entry strict after ver will be truncated.
+     */
+    virtual void truncate(const int64_t &ver) noexcept(false) = 0;
   };
 }
 

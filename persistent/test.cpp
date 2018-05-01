@@ -8,12 +8,17 @@
 #include "Persistent.hpp"
 #include "HLC.hpp"
 #include "util.hpp"
+#include "signal.h"
 
 using namespace persistent;
 using namespace mutils;
 using std::cout;
 using std::endl;
 using std::cerr;
+
+void sig_handler(int num) {
+  printf("I received signal:%d.\n", num);
+}
 
 // A test class
 class X {
@@ -73,6 +78,7 @@ static void printhelp(){
   cout << "\ttrimbyidx <index>" << endl;
   cout << "\ttrimbyver <version>" << endl;
   cout << "\ttrimbytime <time>" << endl;
+  cout << "\ttruncate <version>" << endl;
   cout << "\tlist" << endl;
   cout << "\tvolatile" << endl;
   cout << "\thlc" << endl;
@@ -162,6 +168,8 @@ static void eval_write (std::size_t osize, int nops, bool batch) {
 int main(int argc,char ** argv){
   spdlog::set_level(spdlog::level::trace);
 
+  signal(SIGSEGV, sig_handler);
+
   if(argc <2){
     printhelp();
     return 0;
@@ -225,6 +233,11 @@ int main(int argc,char ** argv){
       npx.trim(ver);
       npx.persist();
       cout<<"trim till ver "<<ver<<" successfully"<<endl;
+    }
+    else if(strcmp(argv[1],"truncate") == 0){
+      int64_t ver = atol(argv[2]);
+      npx.truncate(ver);
+      cout<<"truncated after version"<<ver<<"successfully"<<endl;
     }
     else if(strcmp(argv[1],"trimbytime") == 0){
       HLC hlc;
