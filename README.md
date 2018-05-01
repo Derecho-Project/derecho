@@ -44,7 +44,7 @@ To use Derecho in your code, you simply need to include the header `derecho/dere
 ### Testing (and some hidden gotchas)
 There are many experiment files in derecho/experiments that can be run to test the installation. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
 * sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
-sudo apt-get install infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
+infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
 * sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw_nes iw_c2 ib_mthca
 Depending on your system, some of the modules might not load which is fine.
 
