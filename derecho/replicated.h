@@ -439,8 +439,8 @@ public:
      * @param pf - the persistent function
      * @param tf - the trim function
      */
-    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf, const LatestPersistedGetterFunc& gf) noexcept(false) {
-        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf);
+    virtual void register_persistent_member(const char* object_name, const VersionFunc& vf, const PersistFunc& pf, const TrimFunc& tf, const LatestPersistedGetterFunc& gf, TruncateFunc tcf) noexcept(false) {
+        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf, tcf);
     }
 };
 
