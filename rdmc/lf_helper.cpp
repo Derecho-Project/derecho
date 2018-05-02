@@ -187,8 +187,7 @@ static void default_context() {
     /** Set the domain, this shouldn't be the default */
     g_ctxt.hints->domain_attr->name = strdup("mlx5_0");
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
-    g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | 
-                                         FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+    g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_VIRT_ADDR | FI_MR_PROV_KEY;
     /** Set the tx and rx queue sizes, see fi_endpoint(3) for details */
     g_ctxt.hints->tx_attr->size = 4096;
     g_ctxt.hints->rx_attr->size = 4096;
@@ -251,6 +250,7 @@ endpoint::endpoint(size_t remote_index, bool is_lf_server,
 }
 
 int endpoint::init(struct fi_info *fi) {
+    std::cout << "Initializing the endpoint" << std::endl;
     int ret;
     /** Open an endpoint */
     fid_ep* raw_ep;
@@ -267,18 +267,18 @@ int endpoint::init(struct fi_info *fi) {
  
     /** Bind endpoint to event queue and completion queue */
     FAIL_IF_NONZERO(
-        ret = fi_ep_bind(ep.get(), &(g_ctxt.eq)->fid, 0), 
+        ret = fi_ep_bind(raw_ep, &(g_ctxt.eq)->fid, 0), 
         "Failed to bind endpoint and event queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
     const uint64_t ep_flags = FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION;
     FAIL_IF_NONZERO(
-        ret = fi_ep_bind(ep.get(), &(g_ctxt.cq)->fid, ep_flags), 
+        ret = fi_ep_bind(raw_ep, &(g_ctxt.cq)->fid, ep_flags), 
         "Failed to bind endpoint and tx completion queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
     FAIL_IF_NONZERO(
-        ret = fi_enable(ep.get()), 
+        ret = fi_enable(raw_ep), 
         "Failed to enable endpoint", REPORT_ON_FAILURE
     );
     return ret;
@@ -300,10 +300,14 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     local_cm_data.pep_addr_len  = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
 
+    std::cout << "Exchanging connection manager data" << std::endl;
+
     FAIL_IF_ZERO(
         rdmc_connections->exchange(remote_index, local_cm_data, remote_cm_data),
         "Failed to exchange cm info", CRASH_ON_FAILURE
     );
+
+    std::cout << "Finished exchanging connection manager data" << std::endl;
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
 
@@ -313,6 +317,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     uint32_t event;
 
     if (is_lf_server) {
+        std::cout << "Acting as a server in the connection" << std::endl;
         /** Synchronously read from the passive event queue, init the server ep */ 
         nRead = fi_eq_sread(g_ctxt.peq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
@@ -329,7 +334,9 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             CRASH_WITH_MESSAGE("Failed to accept connection.\n");
         }
         fi_freeinfo(entry.info);
+        std::cout << "Connected" << std::endl;
     } else {
+        std::cout << "Acting as a client in the connection" << std::endl;
         struct fi_info * client_hints = fi_dupinfo(g_ctxt.hints);
         struct fi_info * client_info = NULL;
 
@@ -347,7 +354,9 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             "fi_getinfo() failed.", CRASH_ON_FAILURE
         );
 
-        /** TODO document this */
+        std::cout << fi_tostr(client_info, FI_TYPE_INFO) << std::endl;
+ 
+         /** TODO document this */
         if (init(client_info)){
             fi_freeinfo(client_hints);
             fi_freeinfo(client_info);
@@ -370,6 +379,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
         }
         fi_freeinfo(client_hints);
         fi_freeinfo(client_info);
+        std::cout << "Connected" << std::endl;
     }
 
     post_recvs(this);
@@ -646,15 +656,13 @@ bool lf_initialize(
     //load_configuration();  
    
     std::cout << "Loaded the default context" << std::endl;
-    std::cout << fi_tostr(g_ctxt.hints, FI_TYPE_INFO) << std::endl;
-
     dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO)); 
-
     /** Initialize the fabric, domain and completion queue */ 
     FAIL_IF_NONZERO(
         fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),
         "fi_getinfo() failed", CRASH_ON_FAILURE
     );
+
     FAIL_IF_NONZERO(
         fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),
         "fi_fabric() failed", CRASH_ON_FAILURE
