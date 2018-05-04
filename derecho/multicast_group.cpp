@@ -520,10 +520,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     }
 }
 
-void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num) {
-    char* buf = msg.message_buffer.buffer.get();
-    header* h = (header*)(buf);
-    uint64_t msg_ts = h->timestamp;
+void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts) {
     if(msg.sender_id == members[member_index]) {
         pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_ts;
     }
@@ -538,10 +535,7 @@ void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
                                                persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
 }
 
-void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num) {
-    char* buf = const_cast<char*>(msg.buf);
-    header* h = (header*)(buf);
-    uint64_t msg_ts = h->timestamp;
+void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts) {
     if(msg.sender_id == members[member_index]) {
         pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_ts;
     }
@@ -579,16 +573,24 @@ void MulticastGroup::deliver_messages_upto(
         }
         auto rdmc_msg_ptr = locally_stable_rdmc_messages[subgroup_num].find(seq_num);
         if(rdmc_msg_ptr != locally_stable_rdmc_messages[subgroup_num].end()) {
+            auto& msg = rdmc_msg_ptr->second;
+            char* buf = msg.message_buffer.buffer.get();
+            header* h = (header*)(buf);
+            uint64_t msg_ts = h->timestamp;
             msgs_delivered = true;
-            deliver_message(rdmc_msg_ptr->second, subgroup_num);
-            version_message(rdmc_msg_ptr->second, subgroup_num, seq_num);
+            deliver_message(msg, subgroup_num);
+            version_message(msg, subgroup_num, seq_num, msg_ts);
             // DERECHO_LOG(-1, -1, "erase_message");
             locally_stable_rdmc_messages[subgroup_num].erase(rdmc_msg_ptr);
             // DERECHO_LOG(-1, -1, "erase_message_done");
         } else {
             msgs_delivered = true;
-            deliver_message(locally_stable_sst_messages[subgroup_num].at(seq_num), subgroup_num);
-            version_message(locally_stable_sst_messages[subgroup_num].at(seq_num), subgroup_num, seq_num);
+            auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
+            char* buf = (char*) msg.buf;
+            header* h = (header*)(buf);
+            uint64_t msg_ts = h->timestamp;
+            deliver_message(msg, subgroup_num);
+            version_message(msg, subgroup_num, seq_num, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
         }
     }
@@ -797,8 +799,11 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                           subgroup_num, min_stable_num, least_undelivered_rdmc_seq_num);
             RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
+                char* buf = msg.message_buffer.buffer.get();
+                header* h = (header*)(buf);
+                uint64_t msg_ts = h->timestamp;
                 deliver_message(msg, subgroup_num);
-                version_message(msg, subgroup_num, least_undelivered_rdmc_seq_num);
+                version_message(msg, subgroup_num, least_undelivered_rdmc_seq_num, msg_ts);
             }
             // DERECHO_LOG(-1, -1, "deliver_message() done");
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
@@ -810,8 +815,11 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                           subgroup_num, min_stable_num, least_undelivered_sst_seq_num);
             SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
+                char* buf = (char*)msg.buf;
+                header* h = (header*)(buf);
+                uint64_t msg_ts = h->timestamp;
                 deliver_message(msg, subgroup_num);
-                version_message(msg, subgroup_num, least_undelivered_sst_seq_num);
+                version_message(msg, subgroup_num, least_undelivered_sst_seq_num, msg_ts);
             }
             // DERECHO_LOG(-1, -1, "deliver_message() done");
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;

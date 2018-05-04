@@ -301,7 +301,7 @@ private:
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
      */
-    void version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num);
+    void version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
@@ -309,7 +309,7 @@ private:
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
      */
-    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num);
+  void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
