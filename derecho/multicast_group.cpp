@@ -575,9 +575,9 @@ void MulticastGroup::deliver_messages_upto(
         if(rdmc_msg_ptr != locally_stable_rdmc_messages[subgroup_num].end()) {
             auto& msg = rdmc_msg_ptr->second;
             char* buf = msg.message_buffer.buffer.get();
-            header* h = (header*)(buf);
-            uint64_t msg_ts = h->timestamp;
+            uint64_t msg_ts = ((header*) buf)->timestamp;
             msgs_delivered = true;
+            //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             deliver_message(msg, subgroup_num);
             version_message(msg, subgroup_num, seq_num, msg_ts);
             // DERECHO_LOG(-1, -1, "erase_message");
@@ -587,8 +587,7 @@ void MulticastGroup::deliver_messages_upto(
             msgs_delivered = true;
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*) msg.buf;
-            header* h = (header*)(buf);
-            uint64_t msg_ts = h->timestamp;
+            uint64_t msg_ts = ((header*) buf)->timestamp;
             deliver_message(msg, subgroup_num);
             version_message(msg, subgroup_num, seq_num, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
@@ -800,8 +799,8 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
                 char* buf = msg.message_buffer.buffer.get();
-                header* h = (header*)(buf);
-                uint64_t msg_ts = h->timestamp;
+                uint64_t msg_ts = ((header*) buf)->timestamp;
+                //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
                 deliver_message(msg, subgroup_num);
                 version_message(msg, subgroup_num, least_undelivered_rdmc_seq_num, msg_ts);
             }
@@ -816,8 +815,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
                 char* buf = (char*)msg.buf;
-                header* h = (header*)(buf);
-                uint64_t msg_ts = h->timestamp;
+                uint64_t msg_ts = ((header*) buf)->timestamp;
                 deliver_message(msg, subgroup_num);
                 version_message(msg, subgroup_num, least_undelivered_sst_seq_num, msg_ts);
             }
