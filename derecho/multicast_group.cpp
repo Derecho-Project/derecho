@@ -520,12 +520,12 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     }
 }
 
-void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts) {
+void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp) {
     if(msg.sender_id == members[member_index]) {
-        pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_ts;
+        pending_persistence[subgroup_num][locally_stable_rdmc_messages[subgroup_num].begin()->first] = msg_timestamp;
     }
     // make a version for persistent<t>/volatile<t>
-    uint64_t msg_ts_us = msg_ts / 1e3;
+    uint64_t msg_ts_us = msg_timestamp / 1e3;
     if(msg_ts_us == 0) {
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
@@ -535,12 +535,12 @@ void MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
                                                persistent::combine_int32s(sst->vid[member_index], seq_num), HLC{msg_ts_us, 0});
 }
 
-void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_ts) {
+void MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp) {
     if(msg.sender_id == members[member_index]) {
-        pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_ts;
+        pending_persistence[subgroup_num][locally_stable_sst_messages[subgroup_num].begin()->first] = msg_timestamp;
     }
     // make a version for persistent<t>/volatile<t>
-    uint64_t msg_ts_us = msg_ts / 1e3;
+    uint64_t msg_ts_us = msg_timestamp / 1e3;
     if(msg_ts_us == 0) {
         struct timespec now;
         clock_gettime(CLOCK_REALTIME, &now);
