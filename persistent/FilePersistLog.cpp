@@ -877,4 +877,44 @@ namespace persistent{
   noexcept(false) {
     return checkOrCreateFileWithSize(dataFile,MAX_DATA_SIZE);
   }
+
+  void FilePersistLog::truncate(const int64_t & ver) noexcept(false) {
+    dbg_trace("{0} truncate at version: {1}.",this->m_sName,ver);
+    FPL_WRLOCK;
+    // STEP 1: search for the log entry
+    // TODO
+    //binary search
+    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
+    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
+    if (tail < head) tail += MAX_LOG_ENTRY;
+    dbg_trace("{0} - begin binary search.",this->m_sName);
+    int64_t l_idx = binarySearch<int64_t>(
+      [&](const LogEntry *ple){
+        return ple->fields.ver;
+      },
+      ver,head,tail);
+    dbg_trace("{0} - end binary search.",this->m_sName);
+    // STEP 2: update META_HEADER
+    if (l_idx == -1) { // not adequate log found. We need to remove all logs.
+      // TODO: this may not be safe in case the log has been trimmed beyond 'ver' !!!
+      META_HEADER->fields.tail = META_HEADER->fields.head;
+    } else {
+      int64_t _idx = ( META_HEADER->fields.head + l_idx - head ) + ((head > l_idx)?MAX_LOG_ENTRY:0);
+      META_HEADER->fields.tail = _idx + 1;
+    }
+    if (META_HEADER->fields.ver > ver)
+      META_HEADER->fields.ver = ver; 
+    // STEP 3: update PERSISTENT STATE
+    FPL_PERS_LOCK;
+    try{
+      persistMetaHeaderAtomically(META_HEADER);
+    } catch(uint64_t e) {
+      FPL_PERS_UNLOCK;
+      FPL_UNLOCK;  
+      throw e;
+    }
+    FPL_PERS_UNLOCK;
+    FPL_UNLOCK;  
+    dbg_trace("{0} truncate at version: {1}....done",this->m_sName,ver);
+  }
 }

@@ -482,7 +482,7 @@ void resources_create() {
         cout << "NO RDMA device present" << endl;
     }
     // search for the specific device we want to work with
-    for(i = 1; i < num_devices; i++) {
+    for(i = 0; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
             fprintf(stdout, "device not specified, using first one found: %s\n",
