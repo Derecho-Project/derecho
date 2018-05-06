@@ -84,7 +84,7 @@ namespace sst{
   #define LF_CONFIG_FILE "rdma.cfg"
   // singlton: global states
   struct lf_ctxt g_ctxt;
-  #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & FI_MR_VIRT_ADDR)
+  #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & (FI_MR_VIRT_ADDR|FI_MR_BASIC))
   static bool shutdown = false;
   std::thread polling_thread;
   tcp::tcp_connections *sst_connections;
@@ -190,7 +190,11 @@ namespace sst{
     // domain:
     FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(cfg("domain",DEFAULT_DOMAIN)),
         "strdup domain name.", CRASH_ON_FAILURE);
-    g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+    if (strcmp(g_ctxt.hints->fabric_attr->prov_name,"sockets")==0) {
+      g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
+    } else { // default
+      g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+    }
     // scatter/gather batch size
     // g_ctxt.sge_bat_size = DEFAULT_SGE_BATCH_SIZE;
     // send pipeline depth
