@@ -409,7 +409,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg.data       = immediate;
  
     FAIL_IF_NONZERO(
-        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
         "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
@@ -445,7 +445,7 @@ bool endpoint::post_empty_send(uint64_t wr_id, uint32_t immediate,
     msg.data   = immediate;
  
     FAIL_IF_NONZERO(
-        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
         "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
