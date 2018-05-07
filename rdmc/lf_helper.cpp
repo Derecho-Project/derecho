@@ -151,12 +151,17 @@ struct lf_ctxt {
 /** The global context for libfabric */
 struct lf_ctxt g_ctxt;
 
-#define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & FI_MR_VIRT_ADDR)
+#define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & (FI_MR_VIRT_ADDR | FI_MR_BASIC))
 #define LF_CONFIG_FILE "rdma.cfg"
 
-#define RDMA_OP_SEND  (1)
-#define RDMA_OP_RECV  (2)
-#define RDMA_OP_WRITE (3)
+enum RDMAOps {
+  RDMA_OP_SEND = 1,
+  RDMA_OP_RECV,
+  RDMA_OP_WRITE
+};
+#define OP_BITS_SHIFT (48)
+#define OP_BITS_MASK (0x00ff000000000000ull)
+#define EXTRACT_RDMA_OP_CODE(x) ((uint8_t)((((uint64_t)x) & OP_BITS_MASK) >> OP_BITS_SHIFT))
 
 namespace impl {
 
@@ -175,7 +180,7 @@ static void default_context() {
     /** Enable all modes */
     g_ctxt.hints->mode = ~0;
     /** Set the completion format to contain additional context */ 
-    g_ctxt.cq_attr.format = FI_CQ_FORMAT_TAGGED;
+    g_ctxt.cq_attr.format = FI_CQ_FORMAT_DATA;
     /** Use a file descriptor as the wait object (see polling_loop)*/
     g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
     /** Set the size of the local pep address */
@@ -391,7 +396,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
                          uint64_t wr_id, uint32_t immediate, 
                          const message_type& type) {
     struct iovec msg_iov;
-    struct fi_msg_tagged msg;
+    struct fi_msg msg;
     
     msg_iov.iov_base = mr.buffer + offset;
     msg_iov.iov_len  = size;
@@ -400,13 +405,12 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg.desc      = (void**)&mr.mr->key;
     msg.iov_count = 1;
     msg.addr      = 0;
-    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.tag       = immediate;
-    msg.data      = RDMA_OP_SEND;
+    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT);
+    msg.data       = immediate;
  
     FAIL_IF_NONZERO(
-        fi_tsendmsg(ep.get(), &msg, FI_COMPLETION),
-        "fi_tsendmsg() failed", REPORT_ON_FAILURE
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
 }
@@ -414,7 +418,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
 bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size, 
                          uint64_t wr_id, const message_type& type) {
     struct iovec msg_iov;
-    struct fi_msg_tagged msg;
+    struct fi_msg msg;
 
     msg_iov.iov_base = mr.buffer + offset;
     msg_iov.iov_len  = size;
@@ -423,43 +427,39 @@ bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size,
     msg.desc      = (void**)&mr.mr->key;
     msg.iov_count = 1;
     msg.addr      = 0;
-    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.tag       = 0;
-    msg.data      = RDMA_OP_RECV;
+    msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT); 
  
     FAIL_IF_NONZERO(
-        fi_trecvmsg(ep.get(), &msg, FI_COMPLETION),
-        "fi_trecvmsg() failed", REPORT_ON_FAILURE
+        fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_recvmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
 }
 
 bool endpoint::post_empty_send(uint64_t wr_id, uint32_t immediate,
                                const message_type& type) {
-    struct fi_msg_tagged msg;
+    struct fi_msg msg;
 
     memset(&msg, 0, sizeof(msg));
-    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.tag    = immediate;
-    msg.data   = RDMA_OP_SEND;
+    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT); 
+    msg.data   = immediate;
  
     FAIL_IF_NONZERO(
-        fi_tsendmsg(ep.get(), &msg, FI_COMPLETION),
-        "fi_tsendmsg() failed", REPORT_ON_FAILURE
+        fi_sendmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
 }
 
 bool endpoint::post_empty_recv(uint64_t wr_id, const message_type& type) {
-    struct fi_msg_tagged msg;
+    struct fi_msg msg;
 
     memset(&msg, 0, sizeof(msg));
-    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data    = RDMA_OP_RECV;
+    msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT);
  
     FAIL_IF_NONZERO(
-        fi_trecvmsg(ep.get(), &msg, FI_COMPLETION),
-        "fi_trecvmsg() failed", REPORT_ON_FAILURE
+        fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
+        "fi_recvmsg() failed", REPORT_ON_FAILURE
     );
     return true; 
 }
@@ -493,8 +493,8 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     msg.addr          = 0;
     msg.rma_iov       = &rma_iov;
     msg.rma_iov_count = 1;
-    msg.context       = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits)); 
-    msg.data          = RDMA_OP_WRITE;
+    msg.context       = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_WRITE) << OP_BITS_SHIFT); 
+    // msg.data          = RDMA_OP_WRITE;
 
     FAIL_IF_NONZERO(
         fi_writemsg(ep.get(), &msg, FI_COMPLETION),
@@ -574,7 +574,7 @@ static void polling_loop() {
     pthread_setname_np(pthread_self(), "rdmc_poll");
 
     const int max_cq_entries = 1024;
-    unique_ptr<fi_cq_tagged_entry[]> cq_entries(new fi_cq_tagged_entry[max_cq_entries]);
+    unique_ptr<fi_cq_data_entry[]> cq_entries(new fi_cq_data_entry[max_cq_entries]);
 
     while (true) {
         int num_completions = 0;
@@ -614,15 +614,15 @@ static void polling_loop() {
 
         std::lock_guard<std::mutex> l(completion_handlers_mutex);
         for (int i = 0; i < num_completions; i++) {
-            fi_cq_tagged_entry &cq_entry = cq_entries[i];
+            fi_cq_data_entry &cq_entry = cq_entries[i];
                 
             message_type::tag_type type = (uint64_t)cq_entry.op_context >> message_type::shift_bits;
             if (type == std::numeric_limits<message_type::tag_type>::max())
                 continue;
 
-            uint64_t masked_wr_id = (uint64_t)cq_entry.op_context & 0x00ffffffffffffff;
-            uint32_t opcode = cq_entry.data;
-            uint32_t immediate = cq_entry.tag;
+            uint64_t masked_wr_id = (uint64_t)cq_entry.op_context & 0x0000ffffffffffffull;
+            uint32_t opcode = (uint32_t)EXTRACT_RDMA_OP_CODE(cq_entry.op_context);
+            uint32_t immediate = cq_entry.data;
             if (type >= completion_handlers.size()) {
                 // Unrecognized message type
             } else if (opcode == RDMA_OP_SEND) {
