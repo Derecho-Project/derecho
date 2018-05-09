@@ -62,11 +62,11 @@ struct Opcode {
     FunctionTag function_id;
     bool is_reply;
 };
-bool operator<(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator<(const Opcode& lhs, const Opcode& rhs) {
     return std::tie(lhs.class_id, lhs.subgroup_id, lhs.function_id, lhs.is_reply)
            < std::tie(rhs.class_id, rhs.subgroup_id, rhs.function_id, rhs.is_reply);
 }
-bool operator==(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator==(const Opcode& lhs, const Opcode& rhs) {
     return lhs.class_id == rhs.class_id && lhs.subgroup_id == rhs.subgroup_id
            && lhs.function_id == rhs.function_id && lhs.is_reply == rhs.is_reply;
 }

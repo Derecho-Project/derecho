@@ -54,12 +54,16 @@ private:
     std::shared_ptr<spdlog::logger> logger;
 
     const node_id_t my_id;
+
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
     /** Contains all state related to managing Views, including the
      * ManagedGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
+    /** Contains a TCP connection to each member of the group.
+     * This connection pool is shared between Group, ViewManager, and RPCManager. */
+    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
     /** Contains all state related to receiving and handling RPC function
      * calls for any Replicated objects implemented by this group. */
     rpc::RPCManager rpc_manager;
@@ -122,6 +126,10 @@ private:
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
+
+    /** A new-view callback that adds and removes TCP connections from the pool
+     * of long-standing TCP connections to each member (used mostly by RPCManager). */
+    void update_tcp_connections_callback(const View& new_view);
 
     /**
      * Constructor helper that constructs RawSubgroup objects for each subgroup

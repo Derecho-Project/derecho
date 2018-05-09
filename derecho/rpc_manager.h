@@ -51,8 +51,7 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    /** Contains a TCP connection to each member of the group. */
-    tcp::tcp_connections connections;
+    std::shared_ptr<tcp::tcp_connections> connections;
 
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
@@ -115,14 +114,13 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
+    RPCManager(node_id_t node_id, ViewManager& group_view_manager,
+               const std::shared_ptr<tcp::tcp_connections>& group_tcp_connections)
             : nid(node_id),
               receivers(new std::decay_t<decltype(*receivers)>()),
               logger(spdlog::get("debug_log")),
               view_manager(group_view_manager),
-              //Connections is initially empty, all connections are added in the new view callback
-              connections(node_id, std::map<node_id_t, ip_addr>(),
-                          group_view_manager.derecho_params.rpc_port),
+              connections(group_tcp_connections),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
@@ -215,15 +213,6 @@ public:
      * @param payload_size The size of the message in the buffer, in bytes
      */
     void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size);
-
-    /**
-     * Returns a LockedReference to the TCP socket connected to the specified
-     * node. This allows other Derecho components to re-use RPCManager's
-     * connection pool without causing a race condition.
-     * @param node The ID of the node to get a TCP connection to
-     * @return A LockedReference containing a reference to that node's socket.
-     */
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> get_socket(node_id_t node);
 
     /**
      * Writes the "list of destination nodes" header field into the given

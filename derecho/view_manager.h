@@ -30,6 +30,8 @@ class Replicated;
 template <typename T>
 class ExternalCaller;
 
+class ReplicatedObject;
+
 namespace rpc {
 class RPCManager;
 }
@@ -83,7 +85,6 @@ class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    using send_object_upcall_t = std::function<void(subgroup_id_t, node_id_t)>;
     using initialize_rpc_objects_t = std::function<void(node_id_t, const View&, const std::vector<std::vector<int64_t>>&)>;
 
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
@@ -150,13 +151,23 @@ private:
     const SubgroupInfo subgroup_info;
     DerechoParams derecho_params;
 
-    /** A function that will be called to send replicated objects to a new
-     * member of a subgroup after a view change. This abstracts away the RPC
-     * functionality, which ViewManager shouldn't need to know about. */
-    send_object_upcall_t send_subgroup_object;
+    /** The same set of TCP sockets used by Group and RPCManager. */
+    std::shared_ptr<tcp::tcp_connections> group_member_sockets;
+
+    using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
+    /**
+     * A type-erased list of references to the Replicated<T> objects in
+     * this group, indexed by their subgroup ID. The actual objects live in the
+     * Group<ReplicatedTypes...> that owns this ViewManager, and the abstract
+     * ReplicatedObject interface only provides functions for the object state
+     * management tasks that ViewManager needs to do. This list also lives in
+     * the Group, where it is updated as replicated objects are added and
+     * destroyed, so ViewManager has only a reference to it.
+     */
+    ReplicatedObjectReferenceMap& subgroup_objects;
     /** A function that will be called to initialize replicated objects
-     * after transitioning to a new view, in the case where the previous
-     * view was inadequately provisioned. */
+     * after transitioning to a new view. This transfers control back to
+     * Group because the objects' constructors are only known by Group. */
     initialize_rpc_objects_t initialize_subgroup_objects;
     /** List of logged ragged trim states, indexed by subgroup ID, recovered
      * from the last view before a total crash. Used only during total restart;
@@ -209,9 +220,12 @@ private:
                             DerechoSST& gmsSST);
 
     /** Helper method for completing view changes; determines whether this node
-     * needs to send Replicated Object state to each node that just joined, and
-     * calls the send_subgroup_object callback to do so. */
+     * needs to send Replicated Object state to each node that just joined, and then
+     * sends the state if necessary. */
     void send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders);
+
+    /** Sends a single subgroup's replicated object to a new member after a view change. */
+    void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
 
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
@@ -368,6 +382,9 @@ public:
      * for this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
+     * @param object_reference_map A mutable reference to the list of
+     * ReplicatedObject references in Group, so that ViewManager can access it
+     * while Group manages the list
      * @param _persistence_manager_callbacks The persistence manager callbacks.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
@@ -379,6 +396,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
+                ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
@@ -394,6 +412,9 @@ public:
      * @param subgroup_info The set of functions defining subgroup membership
      * in this group. Must be the same as the SubgroupInfo used to set up the
      * leader.
+     * @param object_reference_map A mutable reference to the list of
+     * ReplicatedObject references in Group, so that ViewManager can access it
+     * while Group manages the list
      * @param _persistence_manager_callbacks The persistence manager callbacks
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
@@ -404,17 +425,24 @@ public:
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 
     ~ViewManager();
 
-    /** Completes first-time setup of the ViewManager, including synchronizing
+    /**
+     * Completes first-time setup of the ViewManager, including synchronizing
      * the initial SST and delivering the first new-view upcalls. This must be
      * separate from the constructor to resolve the circular dependency of SST
-     * synchronization. */
-    void finish_setup();
+     * synchronization.
+     * @param group_tcp_sockets The TCP connection pool that is shared with
+     * Group and RPCManager. This also must be set after the constructor to
+     * resolve a circular dependency: The RPC port for these sockets comes from
+     * DerechoParams, which is received from the leader in the constructor.
+     */
+    void finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets);
 
     /** Starts predicate evaluation in the current view's SST. Call this only
      * when all other setup has been done for the managed Derecho group.
@@ -448,6 +476,10 @@ public:
      */
     SharedLockedReference<View> get_current_view();
 
+    /** Gets a read-only reference to the DerechoParams settings,
+     * in case other components need to see them after construction time. */
+    const DerechoParams& get_derecho_params() const { return derecho_params; }
+
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -456,16 +488,6 @@ public:
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
-
-    /**
-     * Registers a function that will send serializable object state from this node
-     * to a new node in a specified subgroup and shard. ViewManager will call it when
-     * it has installed a new view that adds a member to a shard for which this node
-     * is the leader.
-     */
-    void register_send_object_upcall(send_object_upcall_t upcall) {
-        send_subgroup_object = std::move(upcall);
-    }
 
     /**
      * Registers a function that will initialize all the RPC objects at this node,

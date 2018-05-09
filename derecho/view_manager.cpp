@@ -8,6 +8,7 @@
 
 #include "derecho_exception.h"
 #include "view_manager.h"
+#include "replicated.h" //Needed for the ReplicatedObject interface
 #include <persistent/Persistent.hpp>
 
 namespace derecho {
@@ -22,6 +23,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
+                         ReplicatedObjectReferenceMap& object_reference_map,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
@@ -33,6 +35,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
+          subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
@@ -64,6 +67,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          tcp::socket& leader_connection,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
+                         ReplicatedObjectReferenceMap& object_reference_map,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
@@ -75,6 +79,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(0, 0),
+          subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     //Determine if a saved view was loaded from disk
     if(curr_view != nullptr) {
@@ -172,7 +177,8 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     }
 }
 
-void ViewManager::finish_setup() {
+void ViewManager::finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets) {
+    group_member_sockets = group_tcp_sockets;
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     SPDLOG_DEBUG(logger, "Done setting up initial SST and RDMC");
@@ -970,7 +976,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
     }
-    // One of those view upcalls is to RPCManager, which will set up TCP connections to the new members
+    // One of those view upcalls is a function in Group that sets up TCP connections to the new members
     // After doing that, shard leaders can send them RPC objects
     send_objects_to_new_members(old_shard_leaders_by_id);
 
@@ -1082,6 +1088,23 @@ void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int6
             }
         }
     }
+}
+
+/* Note for the future: Since this "send" requires first receiving the log tail length,
+ * it's really a blocking receive-then-send. Since all nodes call send_subgroup_object
+ * before initialize_subgroup_objects, there's a small chance of a deadlock: node A could
+ * be attempting to send an object to node B at the same time as B is attempting to send a
+ * different object to A, and neither node will be able to send the log tail length that
+ * the other one is waiting on. */
+void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = group_member_sockets->get_socket(new_node_id);
+    //First, read the log tail length sent by the joining node
+    int64_t persistent_log_length = 0;
+    joiner_socket.get().read(persistent_log_length);
+    PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
+    SPDLOG_DEBUG(logger, "Got log tail length {}", persistent_log_length);
+    SPDLOG_DEBUG(logger, "Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
+    subgroup_objects.at(subgroup_id).get().send_object(joiner_socket.get());
 }
 
 uint32_t ViewManager::compute_num_received_size(const View& view) {

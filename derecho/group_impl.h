@@ -71,10 +71,15 @@ Group<ReplicatedTypes...>::Group(
         : logger(create_logger()),
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
+          //Yes, objects_by_subgroup_id is empty at this point, but view_manager stores a reference
           view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
+                       objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
                        _view_upcalls, gms_port),
-          rpc_manager(my_id, view_manager),
+          //Initially empty, all connections are added in the new view callback
+          tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
+                      derecho_params.rpc_port)),
+          rpc_manager(my_id, view_manager, tcp_sockets),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     //In this case there will be no subgroups to receive objects for
@@ -82,7 +87,7 @@ Group<ReplicatedTypes...>::Group(
     set_up_components();
     persistence_manager.set_objects(std::addressof(replicated_objects));
     persistence_manager.set_view_manager(std::addressof(view_manager));
-    view_manager.finish_setup();
+    view_manager.finish_setup(tcp_sockets);
     rpc_manager.start_listening();
     view_manager.start(std::unique_ptr<vector_int64_2d>());
     persistence_manager.start();
@@ -115,16 +120,19 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
+                       objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
                        _view_upcalls, gms_port),
-          rpc_manager(my_id, view_manager),
+          tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
+                      view_manager.get_derecho_params().rpc_port)),
+          rpc_manager(my_id, view_manager, tcp_sockets),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
     persistence_manager.set_objects(std::addressof(replicated_objects));
     persistence_manager.set_view_manager(std::addressof(view_manager));
-    view_manager.finish_setup();
+    view_manager.finish_setup(tcp_sockets);
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     receive_objects(subgroups_and_leaders);
@@ -140,6 +148,7 @@ Group<ReplicatedTypes...>::~Group() {
     // Will a nodebe able to come back once it leaves? if not, maybe we should
     // shut it down on leave().
     persistence_manager.shutdown(true);
+    tcp_sockets->destroy();
 }
 
 template <typename... ReplicatedTypes>
@@ -237,29 +246,20 @@ std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(cons
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
+    //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
+    //Now that ViewManager is constructed, register some new-view upcalls for system functionality
+    view_manager.add_view_upcall([this](const View& new_view) {
+        update_tcp_connections_callback(new_view);
+    });
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
-    /* Note for the future: Since this "send" requires first receiving the log tail length,
-     * it's really a blocking receive-then-send. Since all nodes call send_subgroup_object
-     * before initialize_subgroup_objects, there's a small chance of a deadlock: node A could
-     * be attempting to send an object to node B at the same time as B is attempting to send a
-     * different object to A, and neither node will be able to send the log tail length that
-     * the other one is waiting on. */
-    view_manager.register_send_object_upcall([this](subgroup_id_t subgroup_id, node_id_t new_node_id) {
-        LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = rpc_manager.get_socket(new_node_id);
-        //First, read the log tail length sent by the joining node
-        int64_t persistent_log_length = 0;
-        joiner_socket.get().read(persistent_log_length);
-        PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-        SPDLOG_DEBUG(logger, "Got log tail length {}", persistent_log_length);
-        SPDLOG_DEBUG(logger, "Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
-        objects_by_subgroup_id.at(subgroup_id).get().send_object(joiner_socket.get());
-    });
+    //ViewManager must call back to Group after a view change in order to call construct_objects,
+    //since ViewManager doesn't know the template parameters
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
                                                            const vector_int64_2d& old_shard_leaders) {
         //ugh, we have to copy the vector to get it as a pointer
@@ -287,6 +287,30 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
             std::chrono::high_resolution_clock::now().time_since_epoch());
     log->debug("Program start time (microseconds): {}", start_ms.count());
     return log;
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::update_tcp_connections_callback(const View& new_view) {
+    if(std::find(new_view.joined.begin(), new_view.joined.end(), my_id) != new_view.joined.end()) {
+        //If this node is in the joined list, we need to set up a connection to everyone
+        for(int i = 0; i < new_view.num_members; ++i) {
+            if(new_view.members[i] != my_id) {
+                tcp_sockets->add_node(new_view.members[i], new_view.member_ips[i]);
+                SPDLOG_DEBUG(logger, "Established a TCP connection to node {}", new_view.members[i]);
+            }
+        }
+    } else {
+        //This node is already a member, so we already have connections to the previous view's members
+        for(const node_id_t& joiner_id : new_view.joined) {
+            tcp_sockets->add_node(joiner_id,
+                                  new_view.member_ips[new_view.rank_of(joiner_id)]);
+            SPDLOG_DEBUG(logger, "Established a TCP connection to node {}", joiner_id);
+        }
+        for(const node_id_t& removed_id : new_view.departed) {
+            SPDLOG_DEBUG(logger, "Removing TCP connection for failed node {}", removed_id);
+            tcp_sockets->delete_node(removed_id);
+        }
+    }
 }
 
 template <typename... ReplicatedTypes>
@@ -361,7 +385,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     //This will receive one object from each shard leader in ascending order of subgroup ID
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
-                = rpc_manager.get_socket(subgroup_and_leader.second);
+                = tcp_sockets->get_socket(subgroup_and_leader.second);
         int64_t log_tail_length = objects_by_subgroup_id.at(subgroup_and_leader.first).get().get_minimum_latest_persisted_version();
         SPDLOG_DEBUG(logger, "Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
         leader_socket.get().write(log_tail_length);

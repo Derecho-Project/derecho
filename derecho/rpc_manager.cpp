@@ -18,7 +18,6 @@ RPCManager::~RPCManager() {
     if(rpc_thread.joinable()) {
         rpc_thread.join();
     }
-    connections.destroy();
 }
 
 void RPCManager::start_listening() {
@@ -27,9 +26,6 @@ void RPCManager::start_listening() {
     thread_start_cv.notify_all();
 }
 
-LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
-    return connections.get_socket(node);
-}
 
 std::exception_ptr RPCManager::receive_message(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
@@ -116,7 +112,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                         replySendBuffer.get(), reply_size,
                         [](size_t size) -> char* { assert(false); });
             } else {
-                connections.write(sender_id, replySendBuffer.get(), reply_size);
+                connections->write(sender_id, replySendBuffer.get(), reply_size);
             }
         } else {
             SPDLOG_TRACE(logger, "RPC message handled, no reply necessary.");
@@ -133,12 +129,12 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
 void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size) {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
-    connections.read(sender_id, msg_buf, header_size);
+    connections->read(sender_id, msg_buf, header_size);
     std::size_t payload_size;
     Opcode indx;
     node_id_t received_from;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from);
-    connections.read(sender_id, msg_buf + header_size, payload_size);
+    connections->read(sender_id, msg_buf + header_size, payload_size);
     size_t reply_size = 0;
     receive_message(indx, received_from, msg_buf + header_size, payload_size,
                     [&msg_buf, &buffer_size, &reply_size](size_t _size) -> char* {
@@ -150,32 +146,11 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
                         }
                     });
     if(reply_size > 0) {
-        connections.write(received_from, msg_buf, reply_size);
+        connections->write(received_from, msg_buf, reply_size);
     }
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
-    if(std::find(new_view.joined.begin(), new_view.joined.end(), nid) != new_view.joined.end()) {
-        //If this node is in the joined list, we need to set up a connection to everyone
-        for(int i = 0; i < new_view.num_members; ++i) {
-            if(new_view.members[i] != nid) {
-                connections.add_node(new_view.members[i], new_view.member_ips[i]);
-                SPDLOG_DEBUG(logger, "Established a TCP connection to node {}", new_view.members[i]);
-            }
-        }
-    } else {
-        //This node is already a member, so we already have connections to the previous view's members
-        for(const node_id_t& joiner_id : new_view.joined) {
-            connections.add_node(joiner_id,
-                                 new_view.member_ips[new_view.rank_of(joiner_id)]);
-            SPDLOG_DEBUG(logger, "Established a TCP connection to node {}", joiner_id);
-        }
-        for(const node_id_t& removed_id : new_view.departed) {
-            SPDLOG_DEBUG(logger, "Removing TCP connection for failed node {}", removed_id);
-            connections.delete_node(removed_id);
-        }
-    }
-
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
         for(auto removed_id : new_view.departed) {
@@ -218,7 +193,7 @@ bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
 }
 
 void RPCManager::finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle) {
-    connections.write(dest_node, msg_buf, size);
+    connections->write(dest_node, msg_buf, size);
     pending_results_handle.fulfill_map({dest_node});
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     fulfilledList.push_back(pending_results_handle);
@@ -234,7 +209,7 @@ void RPCManager::p2p_receive_loop() {
     }
     SPDLOG_DEBUG(logger, "P2P listening thread started");
     while(!thread_shutdown) {
-        auto other_id = connections.probe_all();
+        auto other_id = connections->probe_all();
         if(other_id < 0) {
             continue;
         }
