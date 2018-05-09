@@ -233,14 +233,21 @@ void ViewManager::load_ragged_trim() {
 
 
 void ViewManager::truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims) {
-    /* To implement this, I need to:
-     * 1. Iterate over each subgroup by ID
-     * 2. For each subgroup ID, get the corresponding Replicated Object
-     * 3. Figure out what the "latest version" corresponding to the logged_ragged_trims.at(id)->max_received_by_sender is
-     * 4. Call truncate(version) on the Replicated Object
-     * This will only work if I give ViewManager yet another callback to Group, similar to send_subgroup_object,
-     * because ViewManager doesn't have access to the ReplicatedObjects.
-     */
+    for(const auto& id_trim_pair : logged_ragged_trims) {
+        subgroup_id_t subgroup_id = id_trim_pair.first;
+        const auto& ragged_trim = id_trim_pair.second;
+        uint32_t num_shard_senders = ragged_trim->max_received_by_sender.size();
+        //Determine the last deliverable sequence number using the same logic as deliver_messages_upto
+        int32_t max_seq_num = 0;
+        for(uint sender = 0; sender < num_shard_senders; sender++) {
+            max_seq_num = std::max(max_seq_num,
+                               static_cast<int32_t>(ragged_trim->max_received_by_sender[sender] * num_shard_senders + sender));
+        }
+        //Make the corresponding version number using the same logic as version_message
+        persistent::version_t max_delivered_version = persistent::combine_int32s(ragged_trim->vid, max_seq_num);
+        //Call Persistent::truncate() with this version
+        subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
+    }
 }
 
 void ViewManager::await_first_view(const node_id_t my_id,
@@ -1497,8 +1504,6 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
                    (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
                    sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
 
-    //Persist the agreed-upon "ragged trim" here
-
     deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members, num_shard_senders, logger);
     SPDLOG_DEBUG(logger, "Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
 }
@@ -1520,7 +1525,6 @@ void ViewManager::follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t sub
     Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
                    (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
                    sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
-    //Persist the agreed-upon "ragged trim" here
 
     deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset, shard_members, num_shard_senders, logger);
     SPDLOG_DEBUG(logger, "Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);
