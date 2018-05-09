@@ -95,7 +95,7 @@ using version_t = int64_t;
       return std::make_pair(static_cast<int_type>(packed_int >> 32), static_cast<int_type>(0xffffffffll & packed_int));
   }
 
-  /*
+  /**
    * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
    * variables. Replicated<T> class should maintain such a registry to perform
    * the following operations:
@@ -118,27 +118,29 @@ using version_t = int64_t;
     #define TRIM_FUNC_IDX (2)
     #define GET_ML_PERSISTED_VER (3)
     #define TRUNCATE_FUNC_IDX (4)
-    // make a version
+    /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t & ver, const HLC & mhlc) noexcept(false) {
       callFunc<VERSION_FUNC_IDX>(ver,mhlc);
     };
 
-    // persist data
+    /** (attempt to) Persist all existing versions
+     * @return The newest version number that was actually persisted. */
     const int64_t persist() noexcept(false) {
       return callFuncMin<PERSIST_FUNC_IDX,int64_t>();
     };
 
-    // trim the log
-    void trim(const int64_t & ver) noexcept(false) {
-      callFunc<TRIM_FUNC_IDX>(ver);
+    /** Trims the log of all versions earlier than the argument. */
+    void trim(const int64_t & earliest_version) noexcept(false) {
+      callFunc<TRIM_FUNC_IDX>(earliest_version);
     };
 
-    // get the minimum latest version persisted
+    /** Returns the minimum of the latest persisted versions among all Persistent fields. */
     const int64_t getMinimumLatestPersistedVersion() noexcept(false) {
       return callFuncMin<GET_ML_PERSISTED_VER,int64_t>();
     }
 
-    /** Set the earliest version for serialization, exclusive. This version will
+    /**
+     * Set the earliest version for serialization, exclusive. This version will
      * be stored in a thread-local variable. When to_bytes() is next called on
      * Persistent<T>, it will serialize the logs starting after that version
      * (so the serialized logs exclude version ver).
@@ -148,14 +150,23 @@ using version_t = int64_t;
       PersistentRegistry::earliest_version_to_serialize = ver;
     }
 
-    // reset the earliest version for serialization.
+    /** Reset the earliest version for serialization to an invalid "uninitialized" state */
     static void resetEarliestVersionToSerialize() noexcept(true) {
       PersistentRegistry::earliest_version_to_serialize = INVALID_VERSION;
     }
 
-    // get the earliest version for serialization.
+    /** Returns the earliest version for serialization. */
     static int64_t getEarliestVersionToSerialize() noexcept(true) {
       return PersistentRegistry::earliest_version_to_serialize;
+    }
+
+    /**
+     * Truncates the log, deleting all versions newer than the provided argument.
+     * Since this throws away recently-used data, it should only be used during
+     * failure recovery when those versions must be rolled back.
+     */
+    void truncate(const int64_t& last_version) {
+        callFunc<TRUNCATE_FUNC_IDX>(last_version);
     }
 
     // set the latest version for serialization

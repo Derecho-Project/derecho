@@ -45,6 +45,7 @@ public:
     virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
     virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
+    virtual void truncate(const persistent::version_t& latest_version) = 0;
 };
 
 template <typename T>
@@ -53,7 +54,7 @@ private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<PersistentRegistry> persistent_registry_ptr;
-/** The user-provided state object with some RPC methods. Stored by
+    /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
 #if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
@@ -426,12 +427,22 @@ public:
 
     /**
      * trim the logs to a version, inclusively.
-     * @param ver - the version number, before which, logs are going to be
-     * trimmed
+     * @param earliest_version - the version number, before which, logs are
+     * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& ver) noexcept(false) {
-        persistent_registry_ptr->trim(ver);
+    virtual void trim(const persistent::version_t& earliest_version) noexcept(false) {
+        persistent_registry_ptr->trim(earliest_version);
     };
+
+    /**
+     * Truncate the logs of all Persistent<T> members back to the version
+     * specified. This deletes recently-used data, so it should only be called
+     * during failure recovery when some versions must be rolled back.
+     * @param latest_version The latest version number that should remain in the logs
+     */
+    virtual void truncate(const persistent::version_t& latest_version) {
+        persistent_registry_ptr->truncate(latest_version);
+    }
 
     /**
      * Register a persistent member

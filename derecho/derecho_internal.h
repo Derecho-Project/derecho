@@ -27,6 +27,11 @@ using ip_addr = std::string;
 /** Type alias for Node IDs in a Derecho group. */
 using node_id_t = uint32_t;
 
+/** Alias for the type of std::function that is used for message delivery event callbacks. */
+using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int)>;
+using persistence_callback_t = std::function<void(subgroup_id_t, persistent::version_t)>;
+using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
+
 // for persistence manager
 using persistence_manager_make_version_func_t = std::function<void(
         const subgroup_id_t &,
@@ -35,7 +40,8 @@ using persistence_manager_make_version_func_t = std::function<void(
 using persistence_manager_post_persist_func_t = std::function<void(
         const subgroup_id_t &,
         const persistent::version_t &)>;
-using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t, persistence_manager_post_persist_func_t>;
+using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t,
+        persistence_manager_post_persist_func_t>;
 }
 
 #endif  //DERECHO_INTERNAL_H

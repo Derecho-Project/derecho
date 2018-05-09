@@ -227,7 +227,14 @@ void ViewManager::load_ragged_trim() {
 
 
 void ViewManager::truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims) {
-    //????
+    /* To implement this, I need to:
+     * 1. Iterate over each subgroup by ID
+     * 2. For each subgroup ID, get the corresponding Replicated Object
+     * 3. Figure out what the "latest version" corresponding to the logged_ragged_trims.at(id)->max_received_by_sender is
+     * 4. Call truncate(version) on the Replicated Object
+     * This will only work if I give ViewManager yet another callback to Group, similar to send_subgroup_object,
+     * because ViewManager doesn't have access to the ReplicatedObjects.
+     */
 }
 
 void ViewManager::await_first_view(const node_id_t my_id,

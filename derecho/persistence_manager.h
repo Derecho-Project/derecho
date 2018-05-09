@@ -15,6 +15,7 @@
 
 #include "derecho_internal.h"
 #include "replicated.h"
+#include "view_manager.h"
 
 #include "mutils-containers/KindMap.hpp"
 #include "persistent/Persistent.hpp"
