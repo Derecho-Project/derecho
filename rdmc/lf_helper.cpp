@@ -253,7 +253,6 @@ endpoint::endpoint(size_t remote_index, bool is_lf_server,
 }
 
 int endpoint::init(struct fi_info *fi) {
-    std::cout << "Initializing the endpoint" << std::endl;
     int ret;
     /** Open an endpoint */
     fid_ep* raw_ep;
@@ -303,14 +302,10 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     local_cm_data.pep_addr_len  = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
 
-    std::cout << "Exchanging connection manager data" << std::endl;
-
     FAIL_IF_ZERO(
         rdmc_connections->exchange(remote_index, local_cm_data, remote_cm_data),
         "Failed to exchange cm info", CRASH_ON_FAILURE
     );
-
-    std::cout << "Finished exchanging connection manager data" << std::endl;
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
 
@@ -320,7 +315,6 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     uint32_t event;
 
     if (is_lf_server) {
-        std::cout << "Acting as a server in the connection" << std::endl;
         /** Synchronously read from the passive event queue, init the server ep */ 
         nRead = fi_eq_sread(g_ctxt.peq, &event, &entry, sizeof(entry), -1, 0);
         if(nRead != sizeof(entry)) {
@@ -337,9 +331,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             CRASH_WITH_MESSAGE("Failed to accept connection.\n");
         }
         fi_freeinfo(entry.info);
-        std::cout << "Connected" << std::endl;
     } else {
-        std::cout << "Acting as a client in the connection" << std::endl;
         struct fi_info * client_hints = fi_dupinfo(g_ctxt.hints);
         struct fi_info * client_info = NULL;
 
@@ -357,8 +349,6 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             "fi_getinfo() failed.", CRASH_ON_FAILURE
         );
 
-        std::cout << fi_tostr(client_info, FI_TYPE_INFO) << std::endl;
- 
          /** TODO document this */
         if (init(client_info)){
             fi_freeinfo(client_hints);
@@ -382,14 +372,12 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
         }
         fi_freeinfo(client_hints);
         fi_freeinfo(client_info);
-        std::cout << "Connected" << std::endl;
     }
 
     post_recvs(this);
     int tmp = -1;
     if (!rdmc_connections->exchange(remote_index, 0, tmp) || tmp != 0)
         CRASH_WITH_MESSAGE("Failed to sync after endpoint creation");
-    std::cout << "Synced" << std::endl;
 }
 
 bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,  
@@ -657,7 +645,6 @@ bool lf_initialize(
     default_context();
     //load_configuration();  
    
-    std::cout << "Loaded the default context" << std::endl;
     dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO)); 
     /** Initialize the fabric, domain and completion queue */ 
     FAIL_IF_NONZERO(
@@ -679,7 +666,6 @@ bool lf_initialize(
     );
     FAIL_IF_ZERO(g_ctxt.cq, "Pointer to completion queue is null", CRASH_ON_FAILURE);
 
-    std::cout << "Initialized fabric + domain" << std::endl;
 
     /** Initialize the event queue, initialize and configure pep  */
     FAIL_IF_NONZERO(
@@ -710,8 +696,6 @@ bool lf_initialize(
         fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
         "failed to open the event queue for rdma transmission.", CRASH_ON_FAILURE
     );
-
-    std::cout << "Initialized event queue and passive endpoint" << std::endl;
 
     /** Start a polling thread and run in the background */
     std::thread polling_thread(polling_loop);
