@@ -170,6 +170,7 @@ namespace impl {
  */
 static void default_context() {
     memset((void*)&g_ctxt, 0, sizeof(struct lf_ctxt));
+    
     /** Create a new empty fi_info structure */
     FAIL_IF_ZERO(g_ctxt.hints = fi_allocinfo(),"Fail to allocate fi hints",CRASH_ON_FAILURE);
     /** Set the interface capabilities, see fi_getinfo(3) for details */
@@ -185,17 +186,40 @@ static void default_context() {
     g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = MAX_LF_ADDR_SIZE;
+
+    /** Load the config file */
+    GetPot cfg(LF_CONFIG_FILE);
+
+    #define DEFAULT_PROVIDER  ("sockets")
+    #define DEFAULT_DOMAIN    ("eth0")
+    #define DEFAULT_TX_DEPTH  ("4096")
+    #define DEFAULT_RX_DEPTH  ("4096")
+
     /** Set the provider, can be verbs|psm|sockets|usnic */
-    g_ctxt.hints->fabric_attr->prov_name = strdup("verbs");
-    /** Set the domain, this shouldn't be the default */
-    g_ctxt.hints->domain_attr->name = strdup("mlx5_0");
+    FAIL_IF_ZERO(
+      g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider", DEFAULT_PROVIDER)),
+      "strdup provider name.", CRASH_ON_FAILURE
+    );
+    /** Set the domain */
+    FAIL_IF_ZERO(
+      g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN)),
+      "strdup domain name.", CRASH_ON_FAILURE
+    );
+    /** Set the sizes of the tx and rx queues */
+    FAIL_IF_ZERO(
+      g_ctxt.hints->tx_attr->size = strtol(cfg("tx_depth", DEFAULT_TX_DEPTH), NULL, 10),
+      "strdup domain name.", CRASH_ON_FAILURE
+    );
+    FAIL_IF_ZERO(
+      g_ctxt.hints->rx_attr->size = strtol(cfg("rx_depth",DEFAULT_RX_DEPTH), NULL, 10),
+        "strol rx queue size", CRASH_ON_FAILURE
+    );
+
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
     if (strcmp(g_ctxt.hints->fabric_attr->prov_name,"sockets")==0) {
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else { // default
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
-      g_ctxt.hints->tx_attr->size = 4096;
-      g_ctxt.hints->rx_attr->size = 4096;
     }
 }
 }
