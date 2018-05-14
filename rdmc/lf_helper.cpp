@@ -190,10 +190,13 @@ static void default_context() {
     /** Set the domain, this shouldn't be the default */
     g_ctxt.hints->domain_attr->name = strdup("mlx5_0");
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
-    g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_VIRT_ADDR | FI_MR_PROV_KEY;
-    /** Set the tx and rx queue sizes, see fi_endpoint(3) for details */
-    g_ctxt.hints->tx_attr->size = 4096;
-    g_ctxt.hints->rx_attr->size = 4096;
+    if (strcmp(g_ctxt.hints->fabric_attr->prov_name,"sockets")==0) {
+      g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
+    } else { // default
+      g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
+      g_ctxt.hints->tx_attr->size = 4096;
+      g_ctxt.hints->rx_attr->size = 4096;
+    }
 }
 }
 
