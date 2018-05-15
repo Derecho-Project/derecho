@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -30,7 +31,8 @@ int main(int argc, char *argv[]) {
         std::cout << "Exiting" << std::endl;
     }
     // size of one message
-    long long int msg_size = 100;
+    int num_messages = strtol(argv[1], NULL, 10);
+    int msg_size = strtol(argv[2], NULL, 10);
     // set block size
     const size_t block_size = get_block_size(msg_size);
     // size of the buffer
@@ -43,7 +45,6 @@ int main(int argc, char *argv[]) {
     }
 
     volatile int count = 0;
-    int num_messages = 10;
     // type of send algorithm
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
 
@@ -55,16 +56,9 @@ int main(int argc, char *argv[]) {
     // create the group
     success = rdmc::create_group(0, members, block_size, type,
                                  [&mr](size_t length) -> rdmc::receive_destination {
-                                     std::cout << "Incoming message callback for message of length " << length << std::endl;
                                      return {mr, 0};
                                  },
                                  [&count](char *data, size_t size) {
-                                     std::cout << "Received message number " << count << " of size " << size << std::endl;
-                                     std::cout << "Message contents" << std::endl;
-                                     for(uint i = 0; i < size; ++i) {
-                                         std::cout << data[i];
-                                     }
-                                     std::cout << std::endl;
                                      ++count;
                                  },
                                  [](std::experimental::optional<uint32_t>) {});
@@ -80,7 +74,7 @@ int main(int argc, char *argv[]) {
     if(node_rank == 0) {
         for(int i = 0; i < num_messages; ++i) {
             for(uint i = 0; i < buffer_size; ++i) {
-	      buffer[i] = rand() % 26 + 'a';
+        buffer[i] = rand() % 26 + 'a';
             }
             // send the message
             success = rdmc::send(node_rank, mr, 0, msg_size);
@@ -92,4 +86,13 @@ int main(int argc, char *argv[]) {
         }
     }
     clock_gettime(CLOCK_REALTIME, &end_time);
+    long start_ns = start_time.tv_sec * 1000000000 + start_time.tv_nsec;
+    long end_ns = end_time.tv_sec * 1000000000 + end_time.tv_nsec;
+    double elapsed_time = end_ns - start_ns;
+    double bytes_sent = num_messages * msg_size;
+    std::cout << std::endl;
+    std::cout << "Message size (bytes): " << msg_size << std::endl;
+    std::cout << "Elapsed time (ns): " << elapsed_time << std::endl;
+    std::cout << "Bytes sent: " << bytes_sent << std::endl;
+    std::cout << "Throughput (GB/s): "<< std::setprecision(5) << bytes_sent/elapsed_time << std::endl;
 }

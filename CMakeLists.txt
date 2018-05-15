@@ -33,7 +33,7 @@ include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 
 add_custom_target(
 	libfabric_target
-	COMMAND ./autogen.sh && ./configure --enable-debug --prefix=/ && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
+	COMMAND ./autogen.sh && ./configure --prefix=/ && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
 	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/libfabric
 )
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)

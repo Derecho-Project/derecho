@@ -205,20 +205,19 @@ static void default_context() {
       g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN)),
       "strdup domain name.", CRASH_ON_FAILURE
     );
-    /** Set the sizes of the tx and rx queues */
-    FAIL_IF_ZERO(
-      g_ctxt.hints->tx_attr->size = strtol(cfg("tx_depth", DEFAULT_TX_DEPTH), NULL, 10),
-      "strdup domain name.", CRASH_ON_FAILURE
-    );
-    FAIL_IF_ZERO(
-      g_ctxt.hints->rx_attr->size = strtol(cfg("rx_depth",DEFAULT_RX_DEPTH), NULL, 10),
-        "strol rx queue size", CRASH_ON_FAILURE
-    );
-
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
     if (strcmp(g_ctxt.hints->fabric_attr->prov_name,"sockets")==0) {
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else { // default
+      /** Set the sizes of the tx and rx queues */
+      FAIL_IF_ZERO(
+        g_ctxt.hints->tx_attr->size = strtol(cfg("tx_depth", DEFAULT_TX_DEPTH), NULL, 10),
+        "strdup domain name.", CRASH_ON_FAILURE
+      );
+      FAIL_IF_ZERO(
+        g_ctxt.hints->rx_attr->size = strtol(cfg("rx_depth",DEFAULT_RX_DEPTH), NULL, 10),
+        "strol rx queue size", CRASH_ON_FAILURE
+      );
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
     }
 }

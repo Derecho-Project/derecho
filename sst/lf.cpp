@@ -195,6 +195,7 @@ namespace sst{
     } else { // default
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
     }
+
     // scatter/gather batch size
     // g_ctxt.sge_bat_size = DEFAULT_SGE_BATCH_SIZE;
     // send pipeline depth
@@ -526,7 +527,7 @@ namespace sst{
     default_context(); // default the context
     load_configuration(); // load configuration
 
-    dbg_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
+    //dbg_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
     FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
     dbg_trace("going to use virtual address?{}",LF_USE_VADDR);
