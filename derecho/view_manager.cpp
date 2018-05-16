@@ -81,23 +81,12 @@ ViewManager::ViewManager(const node_id_t my_id,
           derecho_params(0, 0),
           subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
-    //Determine if a saved view was loaded from disk
-    if(curr_view != nullptr) {
-        SPDLOG_DEBUG(logger, "Found view {} on disk, attempting to recover", curr_view->vid);
-        //How do we know if this node is really participating in total recovery,
-        //or is just rejoining with a new ID? curr_view didn't record its old ID.
-        load_ragged_trim();
-        receive_configuration(my_id, leader_connection, true);
-        curr_view->my_rank = curr_view->rank_of(my_id);
-        persistent::saveObject(*curr_view);
-    } else {
-        //First, receive the view and parameters over the given socket
-        receive_configuration(my_id, leader_connection, false);
+    //First, receive the view and parameters over the given socket
+    receive_configuration(my_id, leader_connection);
 
-        //Set this while we still know my_id
-        curr_view->my_rank = curr_view->rank_of(my_id);
-        persistent::saveObject(*curr_view);
-    }
+    //Set this while we still know my_id
+    curr_view->my_rank = curr_view->rank_of(my_id);
+    persistent::saveObject(*curr_view);
     last_suspected = std::vector<bool>(curr_view->members.size());
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
@@ -124,17 +113,40 @@ ViewManager::~ViewManager() {
 
 /* ----------  1. Constructor Components ------------- */
 
-void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection, bool total_restart) {
-    SPDLOG_DEBUG(logger, "Successfully connected to leader, exchanging IDs.");
-    node_id_t leader_id = 0;
-    leader_connection.exchange(my_id, leader_id);
-    if(total_restart) {
+void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+    JoinResponse leader_response;
+    bool leader_redirect;
+    do {
+        leader_redirect = false;
+        SPDLOG_DEBUG(logger, "Socket connected to leader, exchanging IDs.");
+        leader_connection.write(my_id);
+        leader_connection.read(leader_response);
+        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
+            logger->error("Error! Leader refused connection because ID {} is already in use!", my_id);
+            throw derecho_exception("Leader rejected join, ID already in use");
+        }
+        if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
+            std::size_t ip_addr_size;
+            leader_connection.read(ip_addr_size);
+            char buffer[ip_addr_size];
+            leader_connection.read(buffer, ip_addr_size);
+            ip_addr leader_ip(buffer);
+            SPDLOG_DEBUG(logger, "That node was not the leader! Redirecting to {}", leader_ip);
+            //Use move-assignment to reconnect the socket to the given IP address, and try again
+            //(good thing that leader_connection reference is mutable)
+            leader_connection = tcp::socket(leader_ip, gms_port);
+            leader_redirect = true;
+        }
+    } while(leader_redirect);
+    node_id_t leader_id = leader_response.leader_id;
+    if(leader_response.code == JoinResponseCode::TOTAL_RESTART) {
         SPDLOG_DEBUG(logger, "In restart mode, sending view {} to leader", curr_view->vid);
         leader_connection.write(mutils::bytes_size(*curr_view));
         auto leader_socket_write = [&leader_connection](const char* bytes, std::size_t size) {
             leader_connection.write(bytes, size);
         };
         mutils::post_object(leader_socket_write, *curr_view);
+        load_ragged_trim();
         //Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim
         leader_connection.write(logged_ragged_trim.size());
         for(const auto& ragged_trim_pair : logged_ragged_trim) {
@@ -161,7 +173,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     assert(success);
     std::unique_ptr<DerechoParams> params_ptr = mutils::from_bytes<DerechoParams>(nullptr, buffer2);
     derecho_params = *params_ptr;
-    if(total_restart) {
+    if(leader_response.code == JoinResponseCode::TOTAL_RESTART) {
         SPDLOG_DEBUG(logger, "In restart mode, receiving ragged trim from leader");
         logged_ragged_trim.clear();
         std::size_t num_of_ragged_trims;
@@ -261,7 +273,12 @@ void ViewManager::await_first_view(const node_id_t my_id,
         while(!curr_view->is_adequately_provisioned) {
             tcp::socket client_socket = server_socket.accept();
             node_id_t joiner_id = 0;
-            client_socket.exchange(my_id, joiner_id);
+            client_socket.read(joiner_id);
+            if(curr_view->rank_of(joiner_id) != -1) {
+                client_socket.write(JoinResponse(JoinResponseCode::ID_IN_USE, my_id));
+                continue;
+            }
+            client_socket.write(JoinResponse(JoinResponseCode::OK, my_id));
             const ip_addr& joiner_ip = client_socket.get_remote_ip();
             ip_addr my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
@@ -348,7 +365,8 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         time_remaining_ms -= time_waited.count();
         if(client_socket) {
             node_id_t joiner_id = 0;
-            client_socket->exchange(my_id, joiner_id);
+            client_socket->read(joiner_id);
+            client_socket->write(JoinResponse(JoinResponseCode::TOTAL_RESTART, my_id));
             SPDLOG_DEBUG(logger, "Node {} rejoined", joiner_id);
             rejoined_node_ids.emplace(joiner_id);
 
@@ -559,6 +577,11 @@ void ViewManager::register_predicates() {
     };
     auto start_join_trig = [this](DerechoSST& sst) { leader_start_join(sst); };
 
+    auto reject_join_pred = [this](const DerechoSST& sst) {
+        return !curr_view->i_am_leader() && has_pending_join();
+    };
+    auto reject_join = [this](DerechoSST& sst) { redirect_join_attempt(sst); };
+
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
         return curr_view->i_am_leader()
                && min_acked(gmsSST, curr_view->failed) > gmsSST.num_committed[gmsSST.get_local_index()];
@@ -584,6 +607,10 @@ void ViewManager::register_predicates() {
     if(!start_join_handle.is_valid()) {
         start_join_handle = curr_view->gmsSST->predicates.insert(start_join_pred, start_join_trig,
                                                                  sst::PredicateType::RECURRENT);
+    }
+    if(!reject_join_handle.is_valid()) {
+        reject_join_handle = curr_view->gmsSST->predicates.insert(reject_join_pred, reject_join,
+                                                                  sst::PredicateType::RECURRENT);
     }
     if(!change_commit_ready_handle.is_valid()) {
         change_commit_ready_handle = curr_view->gmsSST->predicates.insert(change_commit_ready, commit_change,
@@ -657,10 +684,30 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
 void ViewManager::leader_start_join(DerechoSST& gmsSST) {
     SPDLOG_DEBUG(logger, "GMS handling a new client connection");
-    //C++'s ugly two-step dequeue: leave queue.front() in an invalid state, then delete it
-    proposed_join_sockets.emplace_back(std::move(pending_join_sockets.locked().access.front()));
-    pending_join_sockets.locked().access.pop_front();
-    receive_join(proposed_join_sockets.back());
+    {
+        //Hold the lock on pending_join_sockets while moving a socket into proposed_join_sockets
+        auto pending_join_sockets_locked = pending_join_sockets.locked();
+        proposed_join_sockets.splice(proposed_join_sockets.end(), pending_join_sockets_locked.access, pending_join_sockets_locked.access.begin());
+    }
+    bool success = receive_join(proposed_join_sockets.back());
+    //If the join failed, close the socket
+    if(!success) proposed_join_sockets.pop_back();
+}
+
+void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
+    tcp::socket client_socket;
+    {
+        auto pending_join_sockets_locked = pending_join_sockets.locked();
+        client_socket = std::move(pending_join_sockets_locked.access.front());
+        pending_join_sockets_locked.access.pop_front();
+    }
+    node_id_t joiner_id;
+    client_socket.read(joiner_id);
+    client_socket.write(JoinResponse(JoinResponseCode::LEADER_REDIRECT, curr_view->members[curr_view->my_rank]));
+    //Send the client the IP address of the current leader
+    client_socket.write(mutils::bytes_size(curr_view->member_ips[curr_view->rank_of_leader()]));
+    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
+    mutils::post_object(bind_socket_write, curr_view->member_ips[curr_view->rank_of_leader()]);
 }
 
 void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
@@ -698,6 +745,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
     SPDLOG_DEBUG(logger, "Meta-wedging view {}", curr_view->vid);
     // Disable all the other SST predicates, except suspected_changed and the one I'm about to register
     gmsSST.predicates.remove(start_join_handle);
+    gmsSST.predicates.remove(reject_join_handle);
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
@@ -900,6 +948,7 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 
     // Disable all the other SST predicates, except suspected_changed
     gmsSST.predicates.remove(start_join_handle);
+    gmsSST.predicates.remove(reject_join_handle);
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
@@ -1040,7 +1089,7 @@ void ViewManager::transition_multicast_group(const std::map<subgroup_id_t, Subgr
     gmssst::set(next_view->gmsSST->vid[next_view->my_rank], next_view->vid);
 }
 
-void ViewManager::receive_join(tcp::socket& client_socket) {
+bool ViewManager::receive_join(tcp::socket& client_socket) {
     DerechoSST& gmsSST = *curr_view->gmsSST;
     if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
         //TODO: this shouldn't throw an exception, it should just block the client until the group stabilizes
@@ -1051,7 +1100,15 @@ void ViewManager::receive_join(tcp::socket& client_socket) {
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
     node_id_t joining_client_id = 0;
-    client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
+    client_socket.read(joining_client_id);
+    //Safety check: The joiner's ID can't be the same as an existing member's ID, otherwise that member will get kicked out
+    if(curr_view->rank_of(joining_client_id) != -1) {
+        logger->warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joining_client_id);
+        client_socket.write(JoinResponse(JoinResponseCode::ID_IN_USE, curr_view->members[curr_view->my_rank]));
+        return false;
+    }
+    client_socket.write(JoinResponse(JoinResponseCode::OK, curr_view->members[curr_view->my_rank]));
+
 
     SPDLOG_DEBUG(logger, "Proposing change to add node {}", joining_client_id);
     size_t next_change = gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_installed[curr_view->my_rank];
@@ -1064,11 +1121,13 @@ void ViewManager::receive_join(tcp::socket& client_socket) {
     curr_view->wedge();
     SPDLOG_DEBUG(logger, "Leader done wedging view.");
     gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(), gmsSST.num_committed.get_base() - gmsSST.changes.get_base());
+    return true;
 }
 
 void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) {
     SPDLOG_DEBUG(logger, "Sending client the new view");
     node_id_t joining_client_id = 0;
+    //Extra ID exchange, to match the protocol in await_first_view
     //Optional: Check the result of this exchange to see if the client has crashed while waiting to join
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };

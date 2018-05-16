@@ -76,6 +76,26 @@ public:
     }
 };
 
+/**
+ * A set of status codes the group leader can respond with upon initially
+ * receiving a connection request from a new node.
+ */
+enum class JoinResponseCode {
+    OK,            //!< OK The new member can proceed to join as normal.
+    TOTAL_RESTART, //!< TOTAL_RESTART The group is currently restarting from a total failure, so the new member should send its logged view and ragged trim
+    ID_IN_USE,     //!< ID_IN_USE The node's ID is already listed as a member of the current view, so it can't join.
+    LEADER_REDIRECT//!< LEADER_REDIRECT This node is not actually the leader and can't accept a join.
+};
+
+/**
+ * Bundles together a JoinResponseCode and the leader's node ID, which it also
+ * needs to send to the new node that wants to join.
+ */
+struct JoinResponse {
+    JoinResponseCode code;
+    node_id_t leader_id;
+};
+
 template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
@@ -140,6 +160,7 @@ private:
     //Handles for all the predicates the GMS registered with the current view's SST.
     pred_handle suspected_changed_handle;
     pred_handle start_join_handle;
+    pred_handle reject_join_handle;
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
@@ -183,10 +204,10 @@ private:
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
     /** Assuming this node is the leader, handles a join request from a client.*/
-    void receive_join(tcp::socket& client_socket);
+    bool receive_join(tcp::socket& client_socket);
 
     /** Helper for joining an existing group; receives the View and parameters from the leader. */
-    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection, bool total_restart);
+    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
@@ -194,6 +215,8 @@ private:
     void new_suspicion(DerechoSST& gmsSST);
     /** Runs only on the group leader; proposes new views to include new members. */
     void leader_start_join(DerechoSST& gmsSST);
+    /** Runs on non-leaders to redirect confused new members to the current leader. */
+    void redirect_join_attempt(DerechoSST& gmsSST);
     /** Runs only on the group leader and updates num_committed when all non-failed
      * members have acked a proposed view change. */
     void leader_commit_change(DerechoSST& gmsSST);
