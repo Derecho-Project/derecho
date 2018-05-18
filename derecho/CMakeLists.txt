@@ -18,7 +18,7 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/persistence)
 
-add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager.cpp multicast_group.cpp raw_subgroup.cpp subgroup_functions.cpp filewriter.cpp connection_manager.cpp)
+add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager.cpp p2p_connections.cpp multicast_group.cpp raw_subgroup.cpp subgroup_functions.cpp filewriter.cpp connection_manager.cpp)
 target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization persistent)
 add_dependencies(derecho mutils_serialization_target mutils_target)
 

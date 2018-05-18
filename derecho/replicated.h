@@ -119,10 +119,10 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+								[this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-			  return group_rpc_manager.get_sendbuffer_ptr(dest_node);
+			  return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
@@ -155,8 +155,7 @@ public:
               subgroup_id(subgroup_id),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())) {
 #ifdef _DEBUG
         std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
 #endif  //_DEBUG
@@ -448,10 +447,10 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-			  return group_rpc_manager.get_sendbuffer_ptr(dest_node);
+                            return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }

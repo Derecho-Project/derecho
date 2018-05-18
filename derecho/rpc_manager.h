@@ -250,7 +250,7 @@ public:
   /**
    * called by replicated.h for sending a p2p send/query
    */
-  volatile char* get_sendbuffer_ptr(uint32_t dest_id);
+  volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
   
     /**
      * Sends the message in msg_buf to the node identified by dest_node over a

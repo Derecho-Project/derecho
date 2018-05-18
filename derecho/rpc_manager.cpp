@@ -91,16 +91,16 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     if(in_dest || dest_size == 0) {
         //Use the reply-buffer allocation lambda to detect whether handle_receive generated a reply
         size_t reply_size = 0;
-	char* reply_buf;
+        char* reply_buf;
         handle_receive(msg_buf, payload_size, [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
             reply_size = size;
             if(reply_size <= connections->get_max_p2p_size()) {
-                reply_buf = connections->get_sendbuffer_ptr(
-                        connections->get_node_rank(sender_id), true);
+	      reply_buf = (char*)connections->get_sendbuffer_ptr(
+							    connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
                 return reply_buf;
             } else {
-	      // the reply size is too large - not part of the design to handle it
-	      return nullptr;
+                // the reply size is too large - not part of the design to handle it
+                return nullptr;
             }
         });
         if(reply_size > 0) {
@@ -110,7 +110,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                     //Destination was "all nodes in my shard of the subgroup"
                     int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
                     std::lock_guard<std::mutex> lock(pending_results_mutex);
-		    assert(!toFulfillQueue.empty());
+                    assert(!toFulfillQueue.empty());
                     toFulfillQueue.front().get().fulfill_map(
                             view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
@@ -121,7 +121,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                         reply_buf, reply_size,
                         [](size_t size) -> char* { assert(false); });
             } else {
-	      connections->send(connections->get_node_rank(sender_id));
+                connections->send(connections->get_node_rank(sender_id));
             }
         }
     }
@@ -139,27 +139,26 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
                    [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
                        reply_size = _size;
                        if(reply_size <= buffer_size) {
-                           return connections->get_sendbuffer_ptr(
-                                   connections->get_node_rank(sender_id), true);
+			 return (char*) connections->get_sendbuffer_ptr(
+								  connections->get_node_rank(sender_id), sst::REQUEST_TYPE::P2P_REPLY);
                        }
-                       return nullptr; 
+                       return nullptr;
                    });
     if(reply_size > 0) {
-      connections->send(connections->get_node_rank(sender_id));
+        connections->send(connections->get_node_rank(sender_id));
     }
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
-  
-  connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
-  logger->debug("Created new connections among the new view members");
+    connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+    logger->debug("Created new connections among the new view members");
 
-  std::lock_guard<std::mutex> lock(pending_results_mutex);
-  for(auto& pending : fulfilledList) {
-      for(auto removed_id : new_view.departed) {
-          pending.get().set_exception_for_removed_node(removed_id);
-      }
-  }
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    for(auto& pending : fulfilledList) {
+        for(auto removed_id : new_view.departed) {
+            pending.get().set_exception_for_removed_node(removed_id);
+        }
+    }
 }
 
 int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_nodes, char* buffer,
@@ -194,11 +193,11 @@ bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
     return true;
 }
 
-volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id) {
+volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
     auto dest_rank = connections->get_node_rank(dest_id);
     volatile char* buf;
     do {
-        buf = connections->get_sendbuffer_ptr(dest_rank);
+        buf = connections->get_sendbuffer_ptr(dest_rank, type);
     } while(!buf);
     return buf;
 }
@@ -219,12 +218,12 @@ void RPCManager::p2p_receive_loop() {
     }
     logger->debug("P2P listening thread started");
     while(!thread_shutdown) {
-      auto optional_reply_pair = connections->probe_all();
-      if(optional_reply_pair) {
-	auto reply_pair = optional_reply_pair.value();
-	p2p_message_handler(reply_pair.first, reply_pair.second, max_payload_size);
-      }
+        auto optional_reply_pair = connections->probe_all();
+        if(optional_reply_pair) {
+            auto reply_pair = optional_reply_pair.value();
+            p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+        }
     }
 }
-}
-}
+}  // namespace rpc
+}  // namespace derecho
