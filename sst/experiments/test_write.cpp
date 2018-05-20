@@ -52,10 +52,16 @@ int main() {
     uint32_t id = util::polling_data.get_index(tid);
 
     // remotely write data from the write_buf
-    res->post_remote_write(id, 10);
+    struct lf_sender_ctxt sctxt;
+    sctxt.remote_id = r_index;
+    sctxt.ce_idx = id;
+    res->post_remote_write_with_completion(&sctxt, 10);
     // poll for completion
-    util::polling_data.get_completion_entry(tid);
-
+    while(true)
+    {
+      auto ce =  util::polling_data.get_completion_entry(tid);
+      if (ce) break;
+    }
     sync(r_index);
 
     cout << "Buffer written by remote side is : " << read_buf << endl;

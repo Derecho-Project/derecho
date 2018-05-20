@@ -183,7 +183,7 @@ namespace sst{
     // load configuration file:
     GetPot cfg(LF_CONFIG_FILE);
 
-    dbg_info("No RDMA conf file, use the default values.");
+    // dbg_info("No RDMA conf file, use the default values.");
     // provider:
     FAIL_IF_ZERO(g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider",DEFAULT_PROVIDER)),
           "strdup provider name.", CRASH_ON_FAILURE);
@@ -445,12 +445,12 @@ namespace sst{
 
   void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
-    std::cout << "Polling thread starting" << std::endl;
-    while(shutdown) {
+    dbg_trace("Polling thread starting.");
+    while(!shutdown) {
         auto ce = lf_poll_completion();
         util::polling_data.insert_completion_entry(ce.first, ce.second);
     }
-    std::cout << "Polling thread ending" << std::endl;
+    dbg_trace("Polling thread ending.");
   }
 
   /**
@@ -466,15 +466,15 @@ namespace sst{
     struct fi_cq_entry entry;
     int poll_result;
 
-    while(shutdown) {
+    while(!shutdown) {
         poll_result = 0;
         for(int i = 0; i < 50; ++i) {
             poll_result = fi_cq_read(g_ctxt.cq, &entry, 1);
-            if(poll_result) {
+            if(poll_result && (poll_result!=-FI_EAGAIN)) {
                 break;
             }
         }
-        if(poll_result) {
+        if(poll_result && (poll_result!=-FI_EAGAIN)) {
             break;
         }
         // util::polling_data.wait_for_requests();

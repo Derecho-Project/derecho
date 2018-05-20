@@ -592,7 +592,7 @@ static void polling_loop() {
 
     while (true) {
         int num_completions = 0;
-        while (num_completions == 0 || num_completions == -11) {
+        while (num_completions == 0 || num_completions == -FI_EAGAIN) {
             if (polling_loop_shutdown_flag) return;
             uint64_t poll_end = get_time() + (interrupt_mode ? 0L : 50000000L);
             do {
