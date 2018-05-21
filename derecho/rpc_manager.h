@@ -52,6 +52,8 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
+    tcp::tcp_connections tcp_connections;
+
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
 
@@ -90,6 +92,8 @@ public:
               logger(spdlog::get("debug_log")),
               view_manager(group_view_manager),
               //Connections initially only contains the local node. Other nodes are added in the new view callback
+              tcp_connections(node_id, std::map<node_id_t, ip_addr>(),
+                          group_view_manager.derecho_params.rpc_port),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);

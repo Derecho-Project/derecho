@@ -19,6 +19,7 @@ RPCManager::~RPCManager() {
         rpc_thread.join();
     }
     // connections.destroy();
+    tcp_connections.destroy();
 }
 
 void RPCManager::start_listening() {
@@ -30,9 +31,9 @@ void RPCManager::start_listening() {
 /*
  * Outdated function. To be removed altogether later.
  */
-// LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
-//     return connections.get_socket(node);
-// }
+LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
+    return tcp_connections.get_socket(node);
+}
 
 std::exception_ptr RPCManager::handle_receive(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
@@ -150,6 +151,27 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
+    if(std::find(new_view.joined.begin(), new_view.joined.end(), nid) != new_view.joined.end()) {
+        //If this node is in the joined list, we need to set up a connection to everyone
+        for(int i = 0; i < new_view.num_members; ++i) {
+            if(new_view.members[i] != nid) {
+                tcp_connections.add_node(new_view.members[i], new_view.member_ips[i]);
+                logger->debug("Established a TCP connection to node {}", new_view.members[i]);
+            }
+        }
+    } else {
+        //This node is already a member, so we already have connections to the previous view's members
+        for(const node_id_t& joiner_id : new_view.joined) {
+            tcp_connections.add_node(joiner_id,
+                                 new_view.member_ips[new_view.rank_of(joiner_id)]);
+            logger->debug("Established a TCP connection to node {}", joiner_id);
+        }
+        for(const node_id_t& removed_id : new_view.departed) {
+            logger->debug("Removing TCP connection for failed node {}", removed_id);
+            tcp_connections.delete_node(removed_id);
+        }
+    }
+
     connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
     logger->debug("Created new connections among the new view members");
 
