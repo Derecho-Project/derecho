@@ -66,10 +66,12 @@ public:
     char *write_buf;
     /** Pointer to the memory buffer used for the results of RDMA remote reads. */
     char *read_buf;
-    /** local memory lkey: we use push mode, mr_lkey points to local write buffer. */
-    uint64_t mr_lkey;
-    /** remote memory rkey: we use push mode, mr_rkey points to remote write buffer. */
-    uint64_t mr_rkey;
+    /** key for local read buffer */
+    uint64_t mr_lrkey;
+    /** key for local write buffer */
+    uint64_t mr_lwkey;
+    /** key for remote write buffer */
+    uint64_t mr_rwkey;
     /** remote write memory address */
     fi_addr_t remote_fi_addr;
 

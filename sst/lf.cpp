@@ -103,6 +103,7 @@ namespace sst{
     #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
     #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
     #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
+    #define dbg_flush() dbgConsole()->flush()
   #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -110,6 +111,7 @@ namespace sst{
     #define dbg_warn(...)
     #define dbg_error(...)
     #define dbg_crit(...)
+    #define dbg_flush()
   #endif//_DEBUG
   #define CRASH_WITH_MESSAGE(...) \
   do { \
@@ -238,13 +240,13 @@ namespace sst{
     dbg_trace("Exchanging connection management info.");
     local_cm_data.pep_addr_len = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr,&g_ctxt.pep_addr,g_ctxt.pep_addr_len);
-    local_cm_data.mr_key = (uint64_t)htonll(this->mr_lkey);
+    local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
     local_cm_data.vaddr = (uint64_t)htonll((uint64_t)this->write_buf); // for pull mode
 
     FAIL_IF_ZERO(sst_connections->exchange(this->remote_id,local_cm_data,remote_cm_data),"exchange connection management info.",CRASH_ON_FAILURE);
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
-    this->mr_rkey = (uint64_t)ntohll(remote_cm_data.mr_key);
+    this->mr_rwkey = (uint64_t)ntohll(remote_cm_data.mr_key);
     this->remote_fi_addr = (fi_addr_t)ntohll(remote_cm_data.vaddr);
     dbg_trace("Exchanging connection management info succeeds.");
 
@@ -327,28 +329,39 @@ namespace sst{
       dbg_warn("{}:{} called with NULL write_addr!",__FILE__,__func__);
     }
     this->read_buf = read_addr;
-    if (!write_addr) {
+    if (!read_addr) {
       dbg_warn("{}:{} called with NULL read_addr!",__FILE__,__func__);
     }
 
 #define LF_RMR_KEY(rid) (((uint64_t)0xf0000000)<<32 | (uint64_t)(rid))
 #define LF_WMR_KEY(rid) (((uint64_t)0xf8000000)<<32 | (uint64_t)(rid))
-    // register the memory buffers
+    // register the write buffer
     FAIL_IF_NONZERO(
       fi_mr_reg(
-        g_ctxt.domain,write_buf,size_w,FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE,
-        0, LF_WMR_KEY(r_id), 0, &this->write_mr, NULL),
+        g_ctxt.domain,write_buf,size_w,FI_SEND|FI_RECV|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE,
+        0, 0, 0, &this->write_mr, NULL),
+        // 0, LF_WMR_KEY(r_id), 0, &this->write_mr, NULL),
       "register memory buffer for write",
       CRASH_ON_FAILURE);
+    dbg_trace("{}:{} registered memory for remote write: {}:{}",__FILE__,__func__,(void*)write_addr,size_w);
+    // register the read buffer
     FAIL_IF_NONZERO(
       fi_mr_reg(
-        g_ctxt.domain,read_buf,size_w,FI_READ|FI_WRITE|FI_REMOTE_READ,
-        0, LF_RMR_KEY(r_id), 0, &this->read_mr, NULL),
+        g_ctxt.domain,read_buf,size_r,FI_SEND|FI_RECV|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE,
+        0, 0, 0, &this->read_mr, NULL),
+        //0, LF_RMR_KEY(r_id), 0, &this->read_mr, NULL),
       "register memory buffer for read",
       CRASH_ON_FAILURE);
-    this->mr_lkey = fi_mr_key(this->write_mr);
-    if (this->mr_lkey == FI_KEY_NOTAVAIL) {
-      CRASH_WITH_MESSAGE("fail to get memory key.");
+    dbg_trace("{}:{} registered memory for remote read: {}:{}",__FILE__,__func__,(void*)read_addr,size_r);
+
+    this->mr_lrkey = fi_mr_key(this->read_mr);
+    if (this->mr_lrkey == FI_KEY_NOTAVAIL) {
+      CRASH_WITH_MESSAGE("fail to get read memory key.");
+    }
+    this->mr_lwkey = fi_mr_key(this->write_mr);
+    dbg_trace("{}:{} local write key:{}, local read key:{}",__FILE__,__func__,(uint64_t)this->mr_lwkey,(uint64_t)this->mr_lrkey);
+    if (this->mr_lwkey == FI_KEY_NOTAVAIL) {
+      CRASH_WITH_MESSAGE("fail to get write memory key.");
     }
     // set up the endpoint
     connect_endpoint(is_lf_server);
@@ -386,16 +399,21 @@ namespace sst{
 
     rma_iov.addr = ((LF_USE_VADDR)?remote_fi_addr:0) + offset;
     rma_iov.len = size;
-    rma_iov.key = this->mr_rkey;
+    rma_iov.key = this->mr_rwkey;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&this->mr_lkey;
+    msg.desc = (void**)&this->mr_lrkey;
     msg.iov_count = 1;
     msg.addr = 0; // not used for a connection endpoint
     msg.rma_iov = &rma_iov;
     msg.rma_iov_count = 1;
     msg.context = (void*)ctxt;
     msg.data = 0l; // not used
+
+    dbg_trace("{}:{} calling fi_writemsg/fi_readmsg with",__FILE__,__func__);
+    dbg_trace("remote addr = {} len = {} key = {}",(void*)rma_iov.addr,rma_iov.len,(uint64_t)this->mr_rwkey);
+    dbg_trace("local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
+    dbg_flush();
 
     if(op) { //write
       FAIL_IF_NONZERO(ret = fi_writemsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
@@ -407,6 +425,7 @@ namespace sst{
         REPORT_ON_FAILURE);
     }
     dbg_trace("post_remote_send return with ret={}",ret);
+    dbg_flush();
     return ret;
   }
 
@@ -499,7 +518,9 @@ namespace sst{
       dbg_error("\ttag={}",eentry.tag);
       dbg_error("\tolen={}",eentry.olen);
       dbg_error("\terr={}",eentry.err);
-      dbg_error("\tprov_errno={}",eentry.prov_errno);
+      char errbuf[1024];
+      dbg_error("\tprov_errno={}:{}",eentry.prov_errno,
+        fi_cq_strerror(g_ctxt.cq,eentry.prov_errno,eentry.err_data,errbuf,1024));
       dbg_error("\terr_data={}",eentry.err_data);
       dbg_error("\terr_data_size={}",eentry.err_data_size);
 
