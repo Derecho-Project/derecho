@@ -40,7 +40,7 @@ int main(int argc, char** argv) {
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
     //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 6) {
                       std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();

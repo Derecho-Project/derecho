@@ -121,13 +121,12 @@ void print_subgroup_layout(const subgroup_shard_layout_t& layout) {
 void test_provision_subgroups(const SubgroupInfo& subgroup_info,
                               const std::unique_ptr<View>& prev_view,
                               View& curr_view) {
-    bool previous_was_ok = !prev_view || prev_view->is_adequately_provisioned;
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     std::cout << "View has these members: " << curr_view.members << std::endl;
     for(const auto& subgroup_type : subgroup_info.membership_function_order) {
         subgroup_shard_layout_t subgroup_shard_views;
         try {
-            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank, previous_was_ok);
+            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank);
             subgroup_shard_views = std::move(temp);
             std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
             derecho::print_subgroup_layout(subgroup_shard_views);

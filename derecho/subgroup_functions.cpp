@@ -13,13 +13,13 @@
 
 namespace derecho {
 
-subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank) {
     subgroup_shard_layout_t subgroup_vector(1);
     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
     next_unassigned_rank = curr_view.members.size();
     return subgroup_vector;
 }
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank) {
     subgroup_shard_layout_t subgroup_vector(1);
     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, Mode::UNORDERED));
     next_unassigned_rank = curr_view.members.size();
@@ -80,15 +80,7 @@ void DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_
 }
 
 subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_view,
-                                                             int& next_unassigned_rank,
-                                                             bool previous_was_successful) {
-    if(previous_was_successful) {
-        //Save the previous assignment since it was successful
-        last_good_assignment = deep_pointer_copy(previous_assignment);
-    } else {
-        //Overwrite previous_assignment with the one before that, if it exists
-        previous_assignment = deep_pointer_copy(last_good_assignment);
-    }
+                                                             int& next_unassigned_rank) {
     if(previous_assignment) {
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
             int num_shards_in_subgroup;
@@ -132,10 +124,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
 }
 
 subgroup_shard_layout_t CrossProductAllocator::operator()(const View& curr_view,
-                                                          int& next_unassigned_rank,
-                                                          bool previous_was_successful) {
-    /* Ignore previous_was_successful and next_unassigned_rank, because this subgroup's assignment
-     * is based entirely on the source and target subgroups, and doesn't provision any new nodes. */
+                                                          int& next_unassigned_rank) {
+    /* Ignore next_unassigned_rank, because this subgroup's assignment is based entirely
+     * on the source and target subgroups, and doesn't provision any new nodes. */
     subgroup_id_t source_subgroup_id = curr_view.subgroup_ids_by_type.at(policy.source_subgroup.first)
                                                .at(policy.source_subgroup.second);
     subgroup_id_t target_subgroup_id = curr_view.subgroup_ids_by_type.at(policy.target_subgroup.first)

@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 
     derecho::SubgroupInfo subgroup_info{
         {{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1,3)))},
-         {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+         {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
              if(curr_view.num_members - next_unassigned_rank < 3) {
                  throw derecho::subgroup_provisioning_exception();
              }

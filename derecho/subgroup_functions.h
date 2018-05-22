@@ -30,8 +30,8 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
     }
 }
 
-subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
+subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank);
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank);
 
 struct ShardAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */
@@ -123,7 +123,6 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
 class DefaultSubgroupAllocator {
 protected:
     std::unique_ptr<subgroup_shard_layout_t> previous_assignment;
-    std::unique_ptr<subgroup_shard_layout_t> last_good_assignment;
     const SubgroupAllocationPolicy policy;
 
     void assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy);
@@ -133,11 +132,10 @@ public:
             : policy(allocation_policy) {}
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
             : previous_assignment(deep_pointer_copy(to_copy.previous_assignment)),
-              last_good_assignment(deep_pointer_copy(to_copy.last_good_assignment)),
               policy(to_copy.policy) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
-    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
+    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank);
 };
 
 struct CrossProductPolicy {
@@ -170,6 +168,6 @@ public:
     CrossProductAllocator(const CrossProductAllocator& to_copy) : policy(to_copy.policy) {}
     CrossProductAllocator(CrossProductAllocator&&) = default;
 
-    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful);
+    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank);
 };
 }

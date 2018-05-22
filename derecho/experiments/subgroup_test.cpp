@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     std::unordered_set<derecho::node_id_t> group_2_members{6, 7, 8};
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(RawObject)),
-              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank) {
             std::vector<derecho::node_id_t> subgroup_0_members;
             std::vector<derecho::node_id_t> subgroup_1_members;
             std::vector<derecho::node_id_t> subgroup_2_members;

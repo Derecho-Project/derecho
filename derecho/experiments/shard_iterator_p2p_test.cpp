@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     const int32_t num_nodes = 7;
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [num_nodes](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(Foo)), [num_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < num_nodes) {
                       std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();

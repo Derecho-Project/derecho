@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     derecho::CallbackSet callback_set{stability_callback};
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
                   cout << "Foo function setting next_unassigned_rank to " << next_unassigned_rank << endl;
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
                   cout << "Bar function setting next_unassigned_rank to " << next_unassigned_rank << endl;
                   return subgroup_vector;
               }},
-             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 6) {
                       std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
