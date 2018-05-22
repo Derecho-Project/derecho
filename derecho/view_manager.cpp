@@ -123,6 +123,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         leader_connection.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             logger->error("Error! Leader refused connection because ID {} is already in use!", my_id);
+            logger->flush();
             throw derecho_exception("Leader rejected join, ID already in use");
         }
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
@@ -236,6 +237,7 @@ void ViewManager::load_ragged_trim() {
         auto ragged_trim = persistent::loadObject<RaggedTrim>(ragged_trim_filename.c_str());
         if(ragged_trim == nullptr) {
             logger->error("No ragged trim information found for Subgroup {}!", subgroup_shard_pair.first);
+            logger->flush();
             //what do I do in this case? Try to download ragged trim information from someone else?
             throw derecho_exception("Error! Can't recover with partial logs.");
         }
@@ -275,10 +277,10 @@ void ViewManager::await_first_view(const node_id_t my_id,
             node_id_t joiner_id = 0;
             client_socket.read(joiner_id);
             if(curr_view->rank_of(joiner_id) != -1) {
-                client_socket.write(JoinResponse(JoinResponseCode::ID_IN_USE, my_id));
+                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
                 continue;
             }
-            client_socket.write(JoinResponse(JoinResponseCode::OK, my_id));
+            client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
             const ip_addr& joiner_ip = client_socket.get_remote_ip();
             ip_addr my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
@@ -354,6 +356,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     std::set<node_id_t> last_known_view_members(curr_view->members.begin(), curr_view->members.end());
     std::unique_ptr<View> restart_view;
     node_id_t last_checked_joiner = 0;
+    rejoined_node_ids.emplace(my_id);
     //Wait for a majority of nodes from the last known view to join
     bool ready_to_restart = false;
     int time_remaining_ms = RESTART_LEADER_TIMEOUT;
@@ -366,7 +369,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         if(client_socket) {
             node_id_t joiner_id = 0;
             client_socket->read(joiner_id);
-            client_socket->write(JoinResponse(JoinResponseCode::TOTAL_RESTART, my_id));
+            client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
             SPDLOG_DEBUG(logger, "Node {} rejoined", joiner_id);
             rejoined_node_ids.emplace(joiner_id);
 
@@ -415,6 +418,8 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
             if(intersection_of_ids.size() >= (last_known_view_members.size() / 2) + 1) {
                 //A majority of the last known view has reconnected, now determine if the new view would be adequate
                 restart_view = update_curr_and_next_restart_view(waiting_join_sockets, rejoined_node_ids);
+                //Oops, this won't work because curr_view doesn't have subgroup_ids_by_type - it's not serialized!
+                //Should we serialize subgroup_ids_by_type, or can we reconstruct it from subgroup_shard_views?
                 num_received_size = make_subgroup_maps(curr_view, *restart_view, subgroup_settings);
                 if(restart_view->is_adequately_provisioned) {
                     //Keep waiting for more than a quorum if the next view would not be adequate
@@ -646,6 +651,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             //This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[q] = gmsSST.suspected[myRank][q];
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
+                logger->flush();
                 throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
             }
 
@@ -657,6 +663,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.num_failed++;
 
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
+                logger->flush();
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
@@ -703,7 +710,7 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
     }
     node_id_t joiner_id;
     client_socket.read(joiner_id);
-    client_socket.write(JoinResponse(JoinResponseCode::LEADER_REDIRECT, curr_view->members[curr_view->my_rank]));
+    client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT, curr_view->members[curr_view->my_rank]});
     //Send the client the IP address of the current leader
     client_socket.write(mutils::bytes_size(curr_view->member_ips[curr_view->rank_of_leader()]));
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
@@ -1104,10 +1111,10 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
     //Safety check: The joiner's ID can't be the same as an existing member's ID, otherwise that member will get kicked out
     if(curr_view->rank_of(joining_client_id) != -1) {
         logger->warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joining_client_id);
-        client_socket.write(JoinResponse(JoinResponseCode::ID_IN_USE, curr_view->members[curr_view->my_rank]));
+        client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, curr_view->members[curr_view->my_rank]});
         return false;
     }
-    client_socket.write(JoinResponse(JoinResponseCode::OK, curr_view->members[curr_view->my_rank]));
+    client_socket.write(JoinResponse{JoinResponseCode::OK, curr_view->members[curr_view->my_rank]});
 
 
     SPDLOG_DEBUG(logger, "Proposing change to add node {}", joining_client_id);
@@ -1320,6 +1327,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         }
     }
     if(my_new_rank == -1) {
+        logger->flush();
         throw derecho_exception("Recovery leader wasn't in the next view it computed?!?!");
     }
 
@@ -1603,6 +1611,7 @@ void ViewManager::report_failure(const node_id_t who) {
     }
 
     if(cnt >= (curr_view->num_members + 1) / 2) {
+        logger->flush();
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(), sizeof(curr_view->gmsSST->suspected[0][r]));
