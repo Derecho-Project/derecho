@@ -511,6 +511,15 @@ namespace sst{
         struct lf_sender_ctxt *sctxt = (struct lf_sender_ctxt *)eentry.op_context;
         dbg_error("\top_context:ce_idx={},remote_id={}",sctxt->ce_idx,sctxt->remote_id);
       }
+#ifdef DEBUG_FOR_RELEASE
+      printf("\tflags=%x\n",eentry.flags);
+      printf("\tlen=%x\n",eentry.len);
+      printf("\tbuf=%p\n",eentry.buf);
+      printf("\tdata=0x%x\n",eentry.data);
+      printf("\ttag=0x%x\n",eentry.tag);
+      printf("\tolen=0x%x\n",eentry.olen);
+      printf("\terr=0x%x\n",eentry.err);
+#endif//DEBUG_FOR_RELEASE
       dbg_error("\tflags={}",eentry.flags);
       dbg_error("\tlen={}",eentry.len);
       dbg_error("\tbuf={}",eentry.buf);
@@ -521,14 +530,20 @@ namespace sst{
       char errbuf[1024];
       dbg_error("\tprov_errno={}:{}",eentry.prov_errno,
         fi_cq_strerror(g_ctxt.cq,eentry.prov_errno,eentry.err_data,errbuf,1024));
+#ifdef DEBUG_FOR_RELEASE
+      printf("\tproverr=0x%x,%s\n",eentry.prov_errno,
+        fi_cq_strerror(g_ctxt.cq,eentry.prov_errno,eentry.err_data,errbuf,1024));
+#endif//DEBUG_FOR_RELEASE
       dbg_error("\terr_data={}",eentry.err_data);
       dbg_error("\terr_data_size={}",eentry.err_data_size);
-
+#ifdef DEBUG_FOR_RELEASE
+      printf("\terr_data_size=%d\n",eentry.err_data_size);
+#endif//DEBUG_FOR_RELEASE
       if (eentry.op_context!=NULL){
         struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)eentry.op_context;
         return {sctxt->ce_idx, {sctxt->remote_id, -1}};
       } else {
-        CRASH_WITH_MESSAGE("faile to poll the completion queue");
+        CRASH_WITH_MESSAGE("failed polling the completion queue");
       }
     }
     struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)entry.op_context;

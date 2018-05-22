@@ -31,8 +31,8 @@ int main(int argc, char *argv[]) {
         std::cout << "Exiting" << std::endl;
     }
     // size of one message
-    int num_messages = strtol(argv[1], NULL, 10);
-    int msg_size = strtol(argv[2], NULL, 10);
+    long long num_messages = strtol(argv[1], NULL, 10);
+    long long msg_size = strtol(argv[2], NULL, 10);
     // set block size
     const size_t block_size = get_block_size(msg_size);
     // size of the buffer
@@ -86,10 +86,10 @@ int main(int argc, char *argv[]) {
         }
     }
     clock_gettime(CLOCK_REALTIME, &end_time);
-    long start_ns = start_time.tv_sec * 1000000000 + start_time.tv_nsec;
-    long end_ns = end_time.tv_sec * 1000000000 + end_time.tv_nsec;
-    double elapsed_time = end_ns - start_ns;
-    double bytes_sent = num_messages * msg_size;
+    long long start_ns = start_time.tv_sec * 1000000000 + start_time.tv_nsec;
+    long long end_ns = end_time.tv_sec * 1000000000 + end_time.tv_nsec;
+    double elapsed_time = ((long long)end_ns) - start_ns;
+    double bytes_sent = num_messages * (double)msg_size;
     std::cout << std::endl;
     std::cout << "Message size (bytes): " << msg_size << std::endl;
     std::cout << "Elapsed time (ns): " << elapsed_time << std::endl;
