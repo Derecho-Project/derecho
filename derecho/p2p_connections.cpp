@@ -105,6 +105,9 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
 P2PConnections::~P2PConnections() {
     std::cout << "In the P2PConnections destructor" << std::endl;
     thread_shutdown = true;
+    if (timeout_thread.joinable()) {
+      timeout_thread.join();
+    }
 }
 
 uint32_t P2PConnections::get_node_rank(uint32_t node_id) {

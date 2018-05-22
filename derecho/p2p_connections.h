@@ -24,7 +24,7 @@ enum REQUEST_TYPE {
 };
 
 class P2PConnections {
-    const std::vector<uint32_t>& members;
+    const std::vector<uint32_t> members;
     const std::uint32_t num_members;
     const uint32_t my_node_id;
     uint32_t my_index;
