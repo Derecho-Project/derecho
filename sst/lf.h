@@ -74,6 +74,8 @@ public:
     uint64_t mr_rwkey;
     /** remote write memory address */
     fi_addr_t remote_fi_addr;
+    /** the event queue */
+    struct fid_eq * eq;
 
     /**
      * Constructor

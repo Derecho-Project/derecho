@@ -16,7 +16,7 @@
 
 #ifdef _DEBUG
   inline auto dbgConsole() {
-    static auto console = spdlog::stdout_color_mt("console");
+    static auto console = spdlog::stdout_color_mt("persistent");
     return console;
   }
   #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)

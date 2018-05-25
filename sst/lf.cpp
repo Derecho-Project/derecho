@@ -66,7 +66,7 @@ namespace sst{
     struct fid_domain  * domain;          // domain handle
     struct fid_pep     * pep;             // passive endpoint for receiving connection
     struct fid_eq      * peq;             // event queue for connection management
-    struct fid_eq      * eq;              // event queue for transmitting events
+    // struct fid_eq      * eq;           // event queue for transmitting events --> now move to resources.
     struct fid_cq      * cq;              // completion queue for all rma operations
     size_t             pep_addr_len;      // length of local pep address
     char               pep_addr[MAX_LF_ADDR_SIZE];
@@ -94,7 +94,7 @@ namespace sst{
   // Debug tools
   #ifdef _DEBUG
     inline auto dbgConsole() {
-      static auto console = spdlog::stdout_color_mt("console");
+      static auto console = spdlog::stdout_color_mt("sst");
       return console;
     }
     #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
@@ -223,8 +223,13 @@ namespace sst{
     // 2 - open endpoint
     FAIL_IF_NONZERO(ret = fi_endpoint(g_ctxt.domain, fi, &(this->ep), NULL), "open endpoint.", REPORT_ON_FAILURE);
     if(ret) return ret;
+    dbg_debug("{}:{} init_endpoint:ep->fid={}",__FILE__,__func__,(void*)&this->ep->fid);
+
+    // 2.5 - open an event queue.
+    FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&this->eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
+
     // 3 - bind them and global event queue together
-    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(this->eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
     if(ret) return ret;
     FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION), "bind endpoint and tx completion queue", REPORT_ON_FAILURE);
     if(ret) return ret;
@@ -293,17 +298,22 @@ namespace sst{
         fi_freeinfo(client_info);
         CRASH_WITH_MESSAGE("failed to initialize client endpoint.\n");
       }
+
       FAIL_IF_NONZERO(fi_connect(this->ep, remote_cm_data.pep_addr, NULL, 0),"fi_connect()",CRASH_ON_FAILURE);
-      nRead = fi_eq_sread(g_ctxt.eq, &event, &entry, sizeof(entry), -1, 0);
+
+      nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
       if (nRead != sizeof(entry)) {
         dbg_error("failed to connect remote.");
         CRASH_WITH_MESSAGE("failed to connect remote. nRead=%ld.\n",nRead);
       }
+      dbg_debug("{}:{} entry.fid={},this->ep->fid={}",__FILE__,__func__,(void*)entry.fid,(void*)&(this->ep->fid));
       if (event != FI_CONNECTED || entry.fid != &(this->ep->fid)) {
         fi_freeinfo(client_hints);
         fi_freeinfo(client_info);
-        CRASH_WITH_MESSAGE("Unexpected CM event: %d.\n", event);
+        dbg_flush();
+        CRASH_WITH_MESSAGE("SST: Unexpected CM event: %d.\n", event);
       }
+
       fi_freeinfo(client_hints);
       fi_freeinfo(client_info);
     }
@@ -375,6 +385,8 @@ namespace sst{
     //  FAIL_IF_NONZERO(fi_close(&this->rxcq->fid),"close rxcq",REPORT_ON_FAILURE);
     if(this->ep) 
       FAIL_IF_NONZERO(fi_close(&this->ep->fid),"close endpoint",REPORT_ON_FAILURE);
+    if(this->eq)
+      FAIL_IF_NONZERO(fi_close(&this->eq->fid),"close event",REPORT_ON_FAILURE);
     if(this->write_mr)
       FAIL_IF_NONZERO(fi_close(&this->write_mr->fid),"unregister write mr",REPORT_ON_FAILURE);
     if(this->read_mr)
@@ -579,7 +591,7 @@ namespace sst{
     FAIL_IF_NONZERO(fi_listen(g_ctxt.pep),"preparing passive endpoint for incoming connections",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO(fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),"get the local PEP address",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),"local name is too big to fit in local buffer",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
+    // FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
     
     // STEP 4: start polling thread.
     polling_thread = std::thread(polling_loop);
@@ -599,9 +611,10 @@ namespace sst{
     if (g_ctxt.peq) {
       FAIL_IF_NONZERO(fi_close(&g_ctxt.peq->fid),"close event queue for passive endpoint",REPORT_ON_FAILURE);
     }
-    if (g_ctxt.eq) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.eq->fid),"close event queue",REPORT_ON_FAILURE);
-    }
+    // g_ctxt.eq has been moved to resources
+    // if (g_ctxt.eq) {
+    //  FAIL_IF_NONZERO(fi_close(&g_ctxt.eq->fid),"close event queue",REPORT_ON_FAILURE);
+    // }
     if (g_ctxt.domain) {
       FAIL_IF_NONZERO(fi_close(&g_ctxt.domain->fid),"close domain",REPORT_ON_FAILURE);
     }

@@ -46,7 +46,7 @@ namespace rdma {
 /** Debugging tools from Weijia's sst code */  
 #ifdef _DEBUG
     inline auto dbgConsole() {
-        static auto console = spdlog::stdout_color_mt("console");
+        static auto console = spdlog::stdout_color_mt("rdmc");
         return console;
     }
     #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
@@ -55,6 +55,7 @@ namespace rdma {
     #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
     #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
     #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
+    #define dbg_flush() dbgConsole()->flush()
 #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -62,6 +63,7 @@ namespace rdma {
     #define dbg_warn(...)
     #define dbg_error(...)
     #define dbg_crit(...)
+    #define dbg_flush()
 #endif//_DEBUG
 #define CRASH_WITH_MESSAGE(...) \
 do { \
@@ -141,7 +143,7 @@ struct lf_ctxt {
     struct fid_domain  * domain;          /** domain handle */
     struct fid_pep     * pep;             /** passive endpoint for receiving connection */
     struct fid_eq      * peq;             /** event queue for connection management */
-    struct fid_eq      * eq;              /** event queue for transmitting events */
+    // struct fid_eq      * eq;              /** event queue for transmitting events */ : moved to resources.
     struct fid_cq      * cq;              /** completion queue for all rma operations */
     size_t             pep_addr_len;      /** length of local pep address */
     char               pep_addr[MAX_LF_ADDR_SIZE]; /** local pep address */
@@ -287,15 +289,33 @@ int endpoint::init(struct fi_info *fi) {
         "Failed to open endpoint", REPORT_ON_FAILURE
     );
     if(ret) return ret;
-   
+    dbg_info("{}:{} created rdmc endpoint: {}",__FILE__,__func__,(void*)&raw_ep->fid);
+    dbg_flush();
     /** Construct the smart pointer to manage the endpoint */ 
     ep = unique_ptr<fid_ep, std::function<void(fid_ep *)>>(
-        raw_ep, [](fid_ep *ep) { fi_close(&ep->fid); }
-    ); 
- 
+        raw_ep,
+        [](fid_ep *ep) { 
+          dbg_info("{}:{} destruct rdmc endpoint: {}",__FILE__,__func__,(void*)&ep->fid);
+          dbg_flush();
+          fi_close(&ep->fid);
+        }
+    );
+
+    /** Create an event queue */
+    fid_eq* raw_eq;
+    FAIL_IF_NONZERO(
+        ret = fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &raw_eq, NULL),
+        "Failed to open event queue", REPORT_ON_FAILURE
+    );
+    if(ret) return ret;
+    /** Construct the smart pointer to manage the event queue */ 
+    eq = unique_ptr<fid_eq, std::function<void(fid_eq *)>>(
+        raw_eq, [](fid_eq *eq) { fi_close(&eq->fid); }
+    );
+    
     /** Bind endpoint to event queue and completion queue */
     FAIL_IF_NONZERO(
-        ret = fi_ep_bind(raw_ep, &(g_ctxt.eq)->fid, 0), 
+        ret = fi_ep_bind(raw_ep, &(raw_eq)->fid, 0), 
         "Failed to bind endpoint and event queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
@@ -387,14 +407,14 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
         );
        
         /** TODO document this */
-        nRead = fi_eq_sread(g_ctxt.eq, &event, &entry, sizeof(entry), -1, 0);
+        nRead = fi_eq_sread(this->eq.get(), &event, &entry, sizeof(entry), -1, 0);
         if (nRead != sizeof(entry)) {
             CRASH_WITH_MESSAGE("failed to connect remote. nRead=%ld.\n",nRead);
         }
         if (event != FI_CONNECTED || entry.fid != &(ep->fid)) {
             fi_freeinfo(client_hints);
             fi_freeinfo(client_info);
-            CRASH_WITH_MESSAGE("Unexpected CM event: %d.\n", event);
+            CRASH_WITH_MESSAGE("RDMC Unexpected CM event: %d.\n", event);
         }
         fi_freeinfo(client_hints);
         fi_freeinfo(client_info);
@@ -718,10 +738,11 @@ bool lf_initialize(
         (g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),
         "local name is too big to fit in local buffer",CRASH_ON_FAILURE
     );
-    FAIL_IF_NONZERO(
-        fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
-        "failed to open the event queue for rdma transmission.", CRASH_ON_FAILURE
-    );
+//  event queue moved to endpoint.
+//  FAIL_IF_NONZERO(
+//      fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
+//      "failed to open the event queue for rdma transmission.", CRASH_ON_FAILURE
+//  );
 
     /** Start a polling thread and run in the background */
     std::thread polling_thread(polling_loop);

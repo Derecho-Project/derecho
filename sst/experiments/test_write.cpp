@@ -9,10 +9,21 @@
 #include "sst/lf.h"
 #endif
 
+#ifdef _DEBUG
+#include <spdlog/spdlog.h>
+#endif
+
 using namespace std;
 using namespace sst;
 
+// #define ROWSIZE (31893)
+#define ROWSIZE (2048)
+
 int main() {
+#ifdef _DEBUG
+    spdlog::set_level(spdlog::level::trace);
+#endif
+
     // input number of nodes and the local node id
     int num_nodes, node_rank;
     cin >> node_rank;
@@ -31,11 +42,16 @@ int main() {
     lf_initialize(ip_addrs, node_rank);
 #endif
     // create read and write buffers
-    char *write_buf = (char *)malloc(10);
-    char *read_buf = (char *)malloc(10);
+//  char *write_buf = (char *)malloc(ROWSIZE);
+//  char *read_buf = (char *)malloc(ROWSIZE);
+    char *write_buf = nullptr,*read_buf = nullptr;
+    if(posix_memalign((void**)&write_buf,4096l,ROWSIZE) || posix_memalign((void**)&read_buf,4096l,ROWSIZE)){
+      cerr << "failed to memalign SST ROWs." << endl;
+      return -1;
+    }
 
     // write message (in a way that distinguishes nodes)
-    for(int i = 0; i < 10; ++i) {
+    for(int i = 0; i < ROWSIZE; ++i) {
         write_buf[i] = '0' + i + node_rank % 10;
     }
     write_buf[9] = 0;
@@ -45,7 +61,7 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
-    resources *res = new resources(r_index, read_buf, write_buf, 10, 10, node_rank < r_index);
+    resources *res = new resources(r_index, read_buf, write_buf, ROWSIZE, ROWSIZE, node_rank < r_index);
 
     const auto tid = std::this_thread::get_id();
     // get id first
@@ -55,7 +71,7 @@ int main() {
     struct lf_sender_ctxt sctxt;
     sctxt.remote_id = r_index;
     sctxt.ce_idx = id;
-    res->post_remote_write_with_completion(&sctxt, 10);
+    res->post_remote_write_with_completion(&sctxt, ROWSIZE);
     // poll for completion
     while(true)
     {

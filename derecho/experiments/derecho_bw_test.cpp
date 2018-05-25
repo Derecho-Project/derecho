@@ -5,6 +5,10 @@
 #include <time.h>
 #include <vector>
 
+#ifdef _DEBUG
+#include <spdlog/spdlog.h>
+#endif
+
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
 #include "block_size.h"
@@ -38,6 +42,9 @@ struct exp_result {
 };
 
 int main(int argc, char *argv[]) {
+#ifdef _DEBUG
+    spdlog::set_level(spdlog::level::trace);
+#endif
     try {
         if(argc < 7) {
             cout << "Insufficient number of command line arguments" << endl;
