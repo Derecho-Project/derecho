@@ -7,6 +7,7 @@
 #include "derecho_internal.h"
 #include "multicast_group.h"
 #include "rdmc/util.h"
+#include "persistent/Persistent.hpp"
 
 namespace derecho {
 

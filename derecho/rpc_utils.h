@@ -368,9 +368,13 @@ inline char* extra_alloc(int i) {
 inline void populate_header(char* reply_buf,
                             const std::size_t& payload_size,
                             const Opcode& op, const node_id_t& from) {
-    ((std::size_t*)reply_buf)[0] = payload_size;                                 // size
-    ((Opcode*)(sizeof(std::size_t) + reply_buf))[0] = op;                        // what
-    ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
+    std::size_t offset = 0;
+    static_assert(sizeof(op) == sizeof(Opcode), "Opcode& is not the same size as Opcode!");
+    ((std::size_t*)(reply_buf + offset))[0] = payload_size;           // size
+    offset += sizeof(payload_size);
+    ((Opcode*)(reply_buf + offset))[0] = op;                        // what
+    offset += sizeof(op);
+    ((node_id_t*)(reply_buf + offset))[0] = from;                   // from
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
@@ -378,9 +382,12 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {
-    payload_size = ((std::size_t const* const)reply_buf)[0];
-    op = ((Opcode const* const)(sizeof(std::size_t) + reply_buf))[0];
-    from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0];
+    std::size_t offset = 0;
+    payload_size = ((std::size_t const* const)(reply_buf + offset))[0];
+    offset += sizeof(payload_size);
+    op = ((Opcode const* const)(reply_buf + offset))[0];
+    offset += sizeof(op);
+    from = ((node_id_t const* const)(reply_buf + offset))[0];
 }
 }  // namespace remote_invocation_utilities
 

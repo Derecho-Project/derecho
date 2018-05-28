@@ -82,7 +82,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     //First, receive the view and parameters over the given socket
-    receive_configuration(my_id, leader_connection);
+    bool is_total_restart = receive_configuration(my_id, leader_connection);
 
     //Set this while we still know my_id
     curr_view->my_rank = curr_view->rank_of(my_id);
@@ -90,7 +90,12 @@ ViewManager::ViewManager(const node_id_t my_id,
     last_suspected = std::vector<bool>(curr_view->members.size());
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
+    uint32_t num_received_size;
+    if(is_total_restart) {
+        //Todo next: write derive_subgroup_settings assuming curr_view already has subgroup_shard_views but my_subgroups is wrong
+    } else {
+        num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
+    };
     SPDLOG_DEBUG(logger, "Initializing SST and RDMC for the first time.");
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
 
@@ -113,7 +118,7 @@ ViewManager::~ViewManager() {
 
 /* ----------  1. Constructor Components ------------- */
 
-void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
     JoinResponse leader_response;
     bool leader_redirect;
     do {
@@ -140,7 +145,8 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         }
     } while(leader_redirect);
     node_id_t leader_id = leader_response.leader_id;
-    if(leader_response.code == JoinResponseCode::TOTAL_RESTART) {
+    bool is_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
+    if(is_total_restart) {
         SPDLOG_DEBUG(logger, "In restart mode, sending view {} to leader", curr_view->vid);
         leader_connection.write(mutils::bytes_size(*curr_view));
         auto leader_socket_write = [&leader_connection](const char* bytes, std::size_t size) {
@@ -165,16 +171,21 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     char buffer[size_of_view];
     success = leader_connection.read(buffer, size_of_view);
     assert(success);
-    curr_view = mutils::from_bytes<View>(nullptr, buffer);
-    //The leader will first send the size of the necessary buffer, then the serialized DerechoParams
+    if(is_total_restart) {
+        //In total restart mode the leader sends a complete View, including all SubViews
+        curr_view = mutils::from_bytes<View>(nullptr, buffer);
+    } else {
+        //This alternate from_bytes is needed because the leader didn't serialize the SubViews
+        curr_view = StreamlinedView::view_from_bytes(nullptr, buffer);
+    }
+    //Next, the leader sends DerechoParams
     std::size_t size_of_derecho_params;
     success = leader_connection.read(size_of_derecho_params);
     char buffer2[size_of_derecho_params];
     success = leader_connection.read(buffer2, size_of_derecho_params);
     assert(success);
-    std::unique_ptr<DerechoParams> params_ptr = mutils::from_bytes<DerechoParams>(nullptr, buffer2);
-    derecho_params = *params_ptr;
-    if(leader_response.code == JoinResponseCode::TOTAL_RESTART) {
+    derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
+    if(is_total_restart) {
         SPDLOG_DEBUG(logger, "In restart mode, receiving ragged trim from leader");
         logged_ragged_trim.clear();
         std::size_t num_of_ragged_trims;
@@ -188,6 +199,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             logged_ragged_trim.emplace(ragged_trim->subgroup_id, std::move(ragged_trim));
         }
     }
+    return is_total_restart;
 }
 
 void ViewManager::finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets) {
@@ -418,8 +430,6 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
             if(intersection_of_ids.size() >= (last_known_view_members.size() / 2) + 1) {
                 //A majority of the last known view has reconnected, now determine if the new view would be adequate
                 restart_view = update_curr_and_next_restart_view(waiting_join_sockets, rejoined_node_ids);
-                //Oops, this won't work because curr_view doesn't have subgroup_ids_by_type - it's not serialized!
-                //Should we serialize subgroup_ids_by_type, or can we reconstruct it from subgroup_shard_views?
                 num_received_size = make_subgroup_maps(curr_view, *restart_view, subgroup_settings);
                 if(restart_view->is_adequately_provisioned) {
                     //Keep waiting for more than a quorum if the next view would not be adequate
@@ -1138,9 +1148,10 @@ void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) 
     //Optional: Check the result of this exchange to see if the client has crashed while waiting to join
     client_socket.exchange(curr_view->members[curr_view->my_rank], joining_client_id);
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
-    std::size_t size_of_view = mutils::bytes_size(new_view);
+    StreamlinedView view_memento(new_view);
+    std::size_t size_of_view = mutils::bytes_size(view_memento);
     client_socket.write(size_of_view);
-    mutils::post_object(bind_socket_write, new_view);
+    mutils::post_object(bind_socket_write, view_memento);
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write(size_of_derecho_params);
     mutils::post_object(bind_socket_write, derecho_params);

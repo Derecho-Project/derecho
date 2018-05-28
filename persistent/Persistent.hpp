@@ -3,7 +3,6 @@
 #define PERSISTENT_HPP
 
 #include <sys/types.h>
-#include <inttypes.h>
 #include <string>
 #include <iostream>
 #include <memory>
@@ -13,6 +12,7 @@
 #include <typeindex>
 #include <time.h>
 #include "HLC.hpp"
+#include "PersistentTypenames.hpp"
 #include "PersistException.hpp"
 #include "PersistLog.hpp"
 #include "PersistNoLog.hpp"
@@ -30,7 +30,6 @@
 
 namespace persistent {
 
-using version_t = int64_t;
   // #define DEFINE_PERSIST_VAR(_t,_n) DEFINE_PERSIST_VAR(_t,_n,ST_FILE)
   #define DEFINE_PERSIST_VAR(_t,_n,_s) \
     Persistent<_t, _s> _n(# _n)
@@ -55,15 +54,6 @@ using version_t = int64_t;
     virtual const HLC getFrontier() = 0;
   };
 
-  // function types to be registered for create version
-  // , persist version, and trim a version
-  using VersionFunc = std::function<void(const version_t &,const HLC &)>;
-  using PersistFunc = std::function<const version_t(void)>;
-  using TrimFunc = std::function<void(const version_t &)>;
-  using LatestPersistedGetterFunc = std::function<const version_t(void)>;
-  using TruncateFunc = std::function<void(const int64_t &)>;
-  // this function is obsolete, now we use a shared pointer to persistence registry
-  // using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
 
   /**
    * Helper function for creating Persistent version numbers out of MulticastGroup

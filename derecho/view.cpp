@@ -71,6 +71,7 @@ uint32_t SubView::num_senders() const {
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed, const int32_t num_members,
+           const std::map<std::type_index, std::vector<subgroup_id_t>>& subgroup_ids_by_type,
            const std::vector<std::vector<SubView>>& subgroup_shard_views,
            const std::map<subgroup_id_t, uint32_t>& my_subgroups)
         : vid(vid),
@@ -83,6 +84,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           num_members(num_members),
           my_rank(0),               /* This will always get overwritten by the receiver after deserializing */
           next_unassigned_rank(0),  /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
+          subgroup_ids_by_type(subgroup_ids_by_type),
           subgroup_shard_views(subgroup_shard_views),
           my_subgroups(my_subgroups) {
     for(int rank = 0; rank < num_members; ++rank) {
@@ -255,6 +257,52 @@ std::string View::debug_string() const {
     }
     s << "}";
     return s.str();
+}
+
+std::size_t StreamlinedView::bytes_size() const {
+    return mutils::bytes_size(wrapped_view.vid) + mutils::bytes_size(wrapped_view.members)
+    + mutils::bytes_size(wrapped_view.member_ips) + mutils::bytes_size(wrapped_view.failed)
+    + mutils::bytes_size(wrapped_view.joined) + mutils::bytes_size(wrapped_view.departed)
+    + mutils::bytes_size(wrapped_view.num_members);
+}
+
+std::size_t StreamlinedView::to_bytes(char* buffer) const {
+    int bytes_written = mutils::to_bytes(wrapped_view.vid, buffer);
+    bytes_written += mutils::to_bytes(wrapped_view.members, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.member_ips, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.failed, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.joined, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.departed, buffer + bytes_written);
+    return bytes_written + mutils::to_bytes(wrapped_view.num_members, buffer + bytes_written);
+}
+
+void StreamlinedView::post_object(const std::function<void (char const * const, std::size_t)>& write_func) const {
+    mutils::post_object(write_func, wrapped_view.vid);
+    mutils::post_object(write_func, wrapped_view.members);
+    mutils::post_object(write_func, wrapped_view.member_ips);
+    mutils::post_object(write_func, wrapped_view.failed);
+    mutils::post_object(write_func, wrapped_view.joined);
+    mutils::post_object(write_func, wrapped_view.departed);
+    mutils::post_object(write_func, wrapped_view.num_members);
+}
+
+std::unique_ptr<View> StreamlinedView::view_from_bytes(mutils::DeserializationManager* dsm, const char* buffer) {
+    auto temp_vid = mutils::from_bytes_noalloc<int32_t>(dsm, buffer);
+    std::size_t bytes_read = mutils::bytes_size(*temp_vid);
+    auto temp_members = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_members);
+    auto temp_member_ips = mutils::from_bytes_noalloc<std::vector<ip_addr>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_member_ips);
+    auto temp_failed = mutils::from_bytes_noalloc<std::vector<char>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_failed);
+    auto temp_joined = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_joined);
+    auto temp_departed = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_departed);
+    auto temp_num_members = mutils::from_bytes_noalloc<int32_t>(dsm, buffer + bytes_read);
+    //This constructor will copy all the vectors into the new View, which is why it's OK to use noalloc
+    return std::make_unique<View>(*temp_vid, *temp_members, *temp_member_ips, *temp_failed,
+                                  *temp_joined, *temp_departed, *temp_num_members);
 }
 
 std::ostream& operator<<(std::ostream& stream, const View& view) {

@@ -10,6 +10,7 @@
 #include <memory>
 #include <vector>
 
+#include "type_index_serialization.h"
 #include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "derecho_sst.h"
@@ -17,6 +18,7 @@
 #include "sst/sst.h"
 #include <mutils-serialization/SerializationMacros.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
+
 
 namespace derecho {
 /**
@@ -108,10 +110,10 @@ public:
      * Note that this contains an entry for every subgroup and shard, even those
      * that the current node does not belong to. */
     std::vector<std::vector<SubView>> subgroup_shard_views;
-    /** Reverse index of members[]; maps node ID -> SST rank */
-    std::map<node_id_t, uint32_t> node_id_to_rank;
     /** Lists the (subgroup ID, shard num) pairs that this node is a member of */
     std::map<subgroup_id_t, uint32_t> my_subgroups;
+    /** Reverse index of members[]; maps node ID -> SST rank */
+    std::map<node_id_t, uint32_t> node_id_to_rank;
 
     bool i_know_i_am_leader = false;  // I am the leader (and know it)
 
@@ -150,12 +152,14 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed, num_members, subgroup_shard_views, my_subgroups);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips, failed, num_failed, joined, departed,
+                                  num_members, subgroup_ids_by_type, subgroup_shard_views, my_subgroups);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
          const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members,
+         const std::map<std::type_index, std::vector<subgroup_id_t>>& subgroup_ids_by_type,
          const std::vector<std::vector<SubView>>& subgroup_shard_views,
          const std::map<subgroup_id_t, uint32_t>& my_subgroups);
 
@@ -168,6 +172,25 @@ public:
          const std::vector<node_id_t>& departed = {},
          const int32_t my_rank = 0,
          const int32_t next_unassigned_rank = 0);
+};
+
+/**
+ * Simple wrapper for View that implements alternate serialization methods, so
+ * that we can choose to send only a "streamlined" version of a View over the
+ * network (instead of all the state it normally serializes).
+ */
+class StreamlinedView : public mutils::ByteRepresentable {
+private:
+    const View& wrapped_view;
+public:
+    StreamlinedView(const View& view) : wrapped_view(view) {}
+    std::size_t bytes_size() const;
+    void ensure_registered(mutils::DeserializationManager&) {};
+    /** Serializes the wrapped View in a minimal, streamlined form */
+    std::size_t to_bytes(char* buffer) const;
+    void post_object(const std::function<void (char const * const, std::size_t)>& write_func) const;
+    /** A replacement for mutils's from_bytes that constructs a View instead of a StreamlinedView. */
+    static std::unique_ptr<View> view_from_bytes(mutils::DeserializationManager* dsm, char const* buffer);
 };
 
 /**

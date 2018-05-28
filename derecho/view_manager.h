@@ -17,9 +17,9 @@
 #include "locked_reference.h"
 #include "multicast_group.h"
 #include "subgroup_info.h"
-#include "tcp/tcp.h"
 #include "view.h"
 
+#include "tcp/tcp.h"
 #include <spdlog/spdlog.h>
 #include <mutils-serialization/SerializationSupport.hpp>
 
@@ -203,11 +203,18 @@ private:
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
-    /** Assuming this node is the leader, handles a join request from a client.*/
+    /**
+     * Assuming this node is the leader, handles a join request from a client.
+     * @return True if the join succeeded, false if it failed because the
+     *         client's ID was already in use.
+     */
     bool receive_join(tcp::socket& client_socket);
 
-    /** Helper for joining an existing group; receives the View and parameters from the leader. */
-    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+    /**
+     * Helper for joining an existing group; receives the View and parameters from the leader.
+     * @return True if the leader informed this node that it is in total restart mode, false otherwise
+     */
+    bool receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
