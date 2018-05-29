@@ -92,7 +92,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size;
     if(is_total_restart) {
-        //Todo next: write derive_subgroup_settings assuming curr_view already has subgroup_shard_views but my_subgroups is wrong
+        num_received_size = derive_subgroup_settings(*curr_view, subgroup_settings_map);
     } else {
         num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
     };
@@ -344,13 +344,14 @@ void ViewManager::await_first_view(const node_id_t my_id,
         }
         if(joiner_failed) continue;
         // If none of the joining nodes have failed, we can continue sending them all the view
+        StreamlinedView view_memento(*curr_view);
         while(!waiting_join_sockets.empty()) {
             auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
                 bool success = waiting_join_sockets.front().write(bytes, size);
                 assert(success);
             };
-            mutils::post_object(bind_socket_write, mutils::bytes_size(*curr_view));
-            mutils::post_object(bind_socket_write, *curr_view);
+            mutils::post_object(bind_socket_write, mutils::bytes_size(view_memento));
+            mutils::post_object(bind_socket_write, view_memento);
             waiting_join_sockets.front().write(mutils::bytes_size(derecho_params));
             mutils::post_object(bind_socket_write, derecho_params);
             //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
@@ -1227,18 +1228,19 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
             curr_view.subgroup_shard_views.clear();
             curr_view.subgroup_ids_by_type.clear();
-
             subgroup_settings.clear();
             return 0;
         }
         std::size_t num_subgroups = subgroup_shard_views.size();
         curr_view.subgroup_ids_by_type[subgroup_type] = std::vector<subgroup_id_t>(num_subgroups);
+
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
             subgroup_id_t curr_subgroup_num = curr_view.subgroup_shard_views.size();
             curr_view.subgroup_ids_by_type[subgroup_type][subgroup_index] = curr_subgroup_num;
             uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
             uint32_t max_shard_senders = 0;
+
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
                 SubView& shard_view = subgroup_shard_views.at(subgroup_index).at(shard_num);
                 std::size_t shard_size = shard_view.members.size();
@@ -1275,14 +1277,50 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
                                         curr_members.begin(), curr_members.end(),
                                         std::back_inserter(shard_view.departed));
                 }
-            }
+            } // for(shard_num)
             /* Pull the shard->SubView mapping out of the subgroup membership list
              * and save it under its subgroup ID (which was shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
                     std::move(subgroup_shard_views[subgroup_index]));
             num_received_offset += max_shard_senders;
-        }
+        } // for(subgroup_index)
     }
+    return num_received_offset;
+}
+
+uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
+                                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
+    uint32_t num_received_offset = 0;
+    curr_view.my_subgroups.clear();
+    for(subgroup_id_t subgroup_id = 0; subgroup_id < curr_view.subgroup_shard_views.size(); ++subgroup_id) {
+        uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
+        uint32_t max_shard_senders = 0;
+
+        for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
+            SubView& shard_view = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num);
+            std::size_t shard_size = shard_view.members.size();
+            uint32_t num_shard_senders = shard_view.num_senders();
+            if(num_shard_senders > max_shard_senders) {
+                max_shard_senders = shard_size; //really? why not max_shard_senders = num_shard_senders?
+            }
+            //Initialize my_rank in the SubView for this node's ID
+            shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
+            if(shard_view.my_rank != -1) {
+                curr_view.my_subgroups[subgroup_id] = shard_num;
+                //Save the settings for MulticastGroup
+                subgroup_settings[subgroup_id] = {
+                        shard_num,
+                        (uint32_t)shard_view.my_rank,
+                        shard_view.members,
+                        shard_view.is_sender,
+                        shard_view.sender_rank_of(shard_view.my_rank),
+                        num_received_offset,
+                        shard_view.mode};
+            }
+        } // for(shard_num)
+        num_received_offset += max_shard_senders;
+    } // for(subgroup_id)
+
     return num_received_offset;
 }
 

@@ -372,6 +372,21 @@ private:
                                 View& curr_view,
                                 std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
+    /**
+     * Creates the subgroup-settings map that MulticastGroup's constructor needs
+     * (and the num_received_size for the SST) based on the subgroup information
+     * already in curr_view. Also reinitializes curr_view's my_subgroups to
+     * indicate which subgroups this node belongs to. This function is only used
+     * during total restart, when a joining node receives a View that already
+     * has subgroup_shard_views populated.
+     * @param curr_view A mutable reference to the current View, which will have its
+     * my_subgroups corrected
+     * @param subgroup_settings A mutable reference to the subgroup settings map,
+     * which will be filled in by this function
+     * @return num_received_size for the SST based on the current View's subgroup membership
+     */
+    uint32_t derive_subgroup_settings(View& curr_view,
+                                      std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
