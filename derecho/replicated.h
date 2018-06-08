@@ -43,7 +43,7 @@ public:
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
     virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
-    virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
+    virtual const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
     virtual void truncate(const persistent::version_t& latest_version) = 0;
 };
@@ -333,7 +333,7 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const int64_t get_minimum_latest_persisted_version() noexcept(false) {
+    const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) {
         return persistent_registry_ptr->getMinimumLatestPersistedVersion();
     }
 

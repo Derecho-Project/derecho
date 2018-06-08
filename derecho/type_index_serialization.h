@@ -35,6 +35,12 @@ std::unique_ptr<MustBeTypeIndex>> from_bytes(DeserializationManager*, const char
     std::type_index reinterpreted_type_index = ((std::type_index const*)(buffer))[0];
     return std::make_unique<MustBeTypeIndex>(reinterpreted_type_index);
 }
+
+/* Specialize ContextDeleter for std::type_index to specify that
+ * context_ptr<std::type_index> should have no deleter. */
+template<>
+struct ContextDeleter<std::type_index> : public ContextDeleter<void> {};
+
 //Is this the right declaration for from_bytes_noalloc? Do I need another const on buffer? Does it need to be a template?
 template<typename MustBeTypeIndex>
 std::enable_if_t<std::is_same<MustBeTypeIndex, std::type_index>::value,

@@ -229,6 +229,7 @@ void ViewManager::start(const std::unique_ptr<std::vector<std::vector<int64_t>>>
     //If this node is doing a total restart, it should now truncate its logs based on the last ragged trim
     //(This can't be done earlier, because this is the first point at which Replicated<T> objects are constructed)
     if(!logged_ragged_trim.empty()) {
+        SPDLOG_DEBUG(logger, "Truncating persistent logs to conform to leader's ragged trim");
         truncate_persistent_logs(logged_ragged_trim);
         if(old_shard_leaders_for_restart) {
             old_shard_leaders = *old_shard_leaders_for_restart;
@@ -272,6 +273,8 @@ void ViewManager::truncate_persistent_logs(const std::map<subgroup_id_t, std::un
         //Make the corresponding version number using the same logic as version_message
         persistent::version_t max_delivered_version = persistent::combine_int32s(ragged_trim->vid, max_seq_num);
         //Call Persistent::truncate() with this version
+        SPDLOG_TRACE(logger, "Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
+        logger->flush();
         subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
     }
 }
@@ -282,7 +285,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
     std::list<tcp::socket> waiting_join_sockets;
     curr_view->is_adequately_provisioned = false;
     bool joiner_failed = false;
-    std::list<tcp::socket>::iterator last_checked_joiner;
+    typename std::list<tcp::socket>::iterator next_joiner_to_check;
     do {
         while(!curr_view->is_adequately_provisioned) {
             tcp::socket client_socket = server_socket.accept();
@@ -310,11 +313,11 @@ void ViewManager::await_first_view(const node_id_t my_id,
          * exchanging some trivial data and checking the TCP socket result */
         if(!joiner_failed) {
             //initialize this pointer on the first iteration of the outer loop
-            last_checked_joiner = waiting_join_sockets.begin();
+            next_joiner_to_check = waiting_join_sockets.begin();
         }
         joiner_failed = false;
         //Starting at the position we left off ensures the earlier non-failed nodes won't get multiple exchanges
-        for(auto waiting_sockets_iter = last_checked_joiner;
+        for(auto waiting_sockets_iter = next_joiner_to_check;
                 waiting_sockets_iter != waiting_join_sockets.end(); ) {
             ip_addr joiner_ip = waiting_sockets_iter->get_remote_ip();
             node_id_t joiner_id = 0;
@@ -337,9 +340,10 @@ void ViewManager::await_first_view(const node_id_t my_id,
                  * start over from the beginning and test if we need to wait for more joiners. */
                 num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);
                 joiner_failed = true;
+                next_joiner_to_check++;
                 break;
             }
-            last_checked_joiner = waiting_sockets_iter;
+            next_joiner_to_check = waiting_sockets_iter;
             ++waiting_sockets_iter;
         }
         if(joiner_failed) continue;
@@ -439,12 +443,17 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
             }
             //If we're about to restart, go back and test to see if any joining nodes have since failed
             if(ready_to_restart) {
+                typename std::map<node_id_t, tcp::socket>::iterator waiting_sockets_iter;
                 if(last_checked_joiner == 0) {
                     last_checked_joiner = waiting_join_sockets.begin()->first;
+                    waiting_sockets_iter = waiting_join_sockets.find(last_checked_joiner);
                 }
+                else {
+                    waiting_sockets_iter = ++waiting_join_sockets.find(last_checked_joiner);
+                }
+
                 //Don't re-exchange with joiners already tested; this works because std::map is sorted
-                for(auto waiting_sockets_iter = waiting_join_sockets.find(last_checked_joiner);
-                        waiting_sockets_iter != waiting_join_sockets.end(); ) {
+                while(waiting_sockets_iter != waiting_join_sockets.end()) {
                      node_id_t joiner_id = 0;
                      bool write_success = waiting_sockets_iter->second.exchange(my_id, joiner_id);
                      if(!write_success) {
@@ -1216,12 +1225,12 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type.clear();
     for(const auto& subgroup_type : subgroup_info.membership_function_order) {
-        subgroup_shard_layout_t subgroup_shard_views;
+        subgroup_shard_layout_t curr_type_subviews;
         //This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank);
             //Hack to ensure RVO still works even though subgroup_shard_views had to be declared outside this scope
-            subgroup_shard_views = std::move(temp);
+            curr_type_subviews = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
             //Mark the view as inadequate and roll back everything done by previous allocation functions
             curr_view.is_adequately_provisioned = false;
@@ -1231,18 +1240,18 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             subgroup_settings.clear();
             return 0;
         }
-        std::size_t num_subgroups = subgroup_shard_views.size();
+        std::size_t num_subgroups = curr_type_subviews.size();
         curr_view.subgroup_ids_by_type[subgroup_type] = std::vector<subgroup_id_t>(num_subgroups);
 
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
             subgroup_id_t curr_subgroup_num = curr_view.subgroup_shard_views.size();
             curr_view.subgroup_ids_by_type[subgroup_type][subgroup_index] = curr_subgroup_num;
-            uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
+            uint32_t num_shards = curr_type_subviews.at(subgroup_index).size();
             uint32_t max_shard_senders = 0;
 
             for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-                SubView& shard_view = subgroup_shard_views.at(subgroup_index).at(shard_num);
+                SubView& shard_view = curr_type_subviews.at(subgroup_index).at(shard_num);
                 std::size_t shard_size = shard_view.members.size();
                 uint32_t num_shard_senders = shard_view.num_senders();
                 if(num_shard_senders > max_shard_senders) {
@@ -1281,7 +1290,7 @@ uint32_t ViewManager::make_subgroup_maps(const std::unique_ptr<View>& prev_view,
             /* Pull the shard->SubView mapping out of the subgroup membership list
              * and save it under its subgroup ID (which was shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
-                    std::move(subgroup_shard_views[subgroup_index]));
+                    std::move(curr_type_subviews[subgroup_index]));
             num_received_offset += max_shard_senders;
         } // for(subgroup_index)
     }
