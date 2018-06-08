@@ -23,6 +23,7 @@ P2PConnections::P2PConnections(const P2PParams params)
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
+    std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
     for(uint32_t i = 0; i < num_members; ++i) {
@@ -61,6 +62,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
+    std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
     for(uint32_t i = 0; i < num_members; ++i) {
@@ -87,7 +89,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
                                                                3 * max_msg_size * window_size + sizeof(bool), 3 * max_msg_size * window_size + sizeof(bool));
         } else {
             auto old_rank = node_id_to_rank[members[i]];
-            incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
+	    incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
             res_vec[i] = std::move(old_connections.res_vec[old_rank]);
             incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];

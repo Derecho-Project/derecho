@@ -57,6 +57,7 @@ class RPCManager {
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
 
+    std::mutex p2p_connections_mutex;
     std::mutex pending_results_mutex;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;

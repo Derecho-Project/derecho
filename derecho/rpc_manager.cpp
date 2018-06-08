@@ -151,6 +151,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
+    std::cout << "In the new_view_callback" << std::endl;
     if(std::find(new_view.joined.begin(), new_view.joined.end(), nid) != new_view.joined.end()) {
         //If this node is in the joined list, we need to set up a connection to everyone
         for(int i = 0; i < new_view.num_members; ++i) {
@@ -240,6 +241,7 @@ void RPCManager::p2p_receive_loop() {
     }
     logger->debug("P2P listening thread started");
     while(!thread_shutdown) {
+        std::unique_lock<std::mutex>(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
