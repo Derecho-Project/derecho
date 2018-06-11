@@ -6,6 +6,8 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+#include <sys/types.h>
+#include <dirent.h>
 #include "util.hpp"
 #include "FilePersistLog.hpp"
 
@@ -916,5 +918,48 @@ namespace persistent{
     FPL_PERS_UNLOCK;
     FPL_UNLOCK;  
     dbg_trace("{0} truncate at version: {1}....done",this->m_sName,ver);
+  }
+
+  const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::string & prefix) {
+    // STEP 1: list all meta files in the path
+    DIR *dir = opendir(DEFAULT_FILE_PERSIST_LOG_DATA_PATH);
+    if (dir == NULL) {
+      // We cannot open the persistent directory, so just return error.
+      dbg_error("{}:{} failed to open the directory. errno={}, err={}.",
+        __FILE__,__func__,errno,strerror(errno));
+      return INVALID_VERSION;
+    }
+    // STEP 2: get through the meta header for the minimum
+    struct dirent *dent;
+    bool found = false;
+    int64_t ver = INVALID_VERSION;
+    while ((dent=readdir(dir))!=NULL) {
+      uint32_t name_len = strlen(dent->d_name);
+      if (name_len > prefix.length() && 
+          strncmp(prefix.c_str(),dent->d_name,prefix.length()) == 0 &&
+          strncmp("." META_FILE_SUFFIX,dent->d_name+name_len-strlen(META_FILE_SUFFIX)-1,strlen(META_FILE_SUFFIX)+1) == 0
+      ) {
+        MetaHeader mh;
+        char fn[1024];
+        sprintf(fn,"%s/%s",DEFAULT_FILE_PERSIST_LOG_DATA_PATH,dent->d_name);
+        int fd = open(fn,O_RDONLY);
+        if (fd < 0) {
+          dbg_warn("{}:{} cannot read file:{}, errno={}, err={}.",
+            __FILE__,__func__,errno,strerror(errno));
+          continue;
+        }
+        int nRead = read(fd,(void*)&mh,sizeof(mh));
+        if (nRead != sizeof(mh)) {
+          dbg_warn("{}:{} cannot load meta header from file:{}, errno={}, err={}",
+            __FILE__,__func__,errno,strerror(errno));
+          close(fd);
+          continue;
+        }
+        close(fd);
+        if (!found || ver > mh.fields.ver)
+          ver = mh.fields.ver;
+      }
+    }
+    return ver;
   }
 }

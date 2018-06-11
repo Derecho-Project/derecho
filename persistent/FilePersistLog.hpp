@@ -10,10 +10,10 @@ namespace persistent {
 
   // TODO:hardwired definitions need go to configuration file
   #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH DEFAULT_FILE_PERSIST_PATH
-  #define META_FILE_SUFFIX ("meta")
-  #define LOG_FILE_SUFFIX  ("log")
-  #define DATA_FILE_SUFFIX ("data")
-  #define SWAP_FILE_SUFFIX ("swp")
+  #define META_FILE_SUFFIX "meta"
+  #define LOG_FILE_SUFFIX  "log"
+  #define DATA_FILE_SUFFIX "data"
+  #define SWAP_FILE_SUFFIX "swp"
 
   // meta header format
   typedef union meta_header {
@@ -245,6 +245,13 @@ namespace persistent {
       }
       FPL_UNLOCK;
     }
+
+    /**
+     * Get the minimum latest persisted version for a subgroup/shard with prefix
+     * @PARAM prefix the subgroup/shard prefix
+     * @RETURN the minimum latest persisted version
+     */
+    static const uint64_t getMinimumLatestPersistedVersion(const std::string & prefix);
 
   private:
     /**
