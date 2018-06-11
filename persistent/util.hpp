@@ -15,8 +15,12 @@
 #endif//_DEBUG
 
 #ifdef _DEBUG
+  static std::shared_ptr<spdlog::logger> console = nullptr;
+
   inline auto dbgConsole() {
-    static auto console = spdlog::stdout_color_mt("console");
+    if (console == nullptr) {
+      console = spdlog::stdout_color_mt("console");
+    }
     return console;
   }
   #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)

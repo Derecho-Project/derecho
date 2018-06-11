@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
 
     std::vector<derecho::node_id_t> members = group->get_members();
     int my_rank;
-    for(my_rank = 0; my_rank < members.size(); ++my_rank) {
+    for(my_rank = 0; (unsigned)my_rank < members.size(); ++my_rank) {
         if(members[my_rank] == node_id)
             break;
     }

@@ -29,6 +29,11 @@ public:
   }
 };
 
+class ReplicatedT {
+};
+
+PersistentRegistry pr(nullptr,typeid(ReplicatedT),123,321);
+
 // A variable that can change the length of its value
 class VariableBytes : public ByteRepresentable{
 public:
@@ -96,8 +101,9 @@ static void printhelp(){
        << "to remove this limitation."<<endl;
 }
 
-Persistent<X> px1;
-Persistent<VariableBytes> npx,npx_logtail;
+Persistent<X> px1(nullptr,&pr);
+//Persistent<X> px1;
+Persistent<VariableBytes> npx(nullptr,&pr),npx_logtail;
 //Persistent<X,ST_MEM> px2; 
 Volatile<X> px2; 
 Persistent<X> pxarr[3]; //unused
@@ -119,6 +125,8 @@ void listvar(Persistent<OT,st> &var){
     cout<<"["<<idx<<"]\t"<<var.getByIndex(idx)->to_string()<<"\t//by copy"<<endl;
     idx++;
   }
+  // list minimum latest persisted version:
+  cout<<"list minimum latest persisted version:"<<getMinimumLatestPersistedVersion(typeid(ReplicatedT),123,321)<<endl;
 }
 
 static void nologsave(int value) {

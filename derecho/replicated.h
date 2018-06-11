@@ -172,9 +172,9 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
-               rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
+               Factory<T> client_object_factory)
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -199,9 +199,8 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
-               rpc::RPCManager& group_rpc_manager)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),

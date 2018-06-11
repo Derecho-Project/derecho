@@ -95,8 +95,9 @@ namespace persistent {
    */
   class PersistentRegistry:public mutils::RemoteDeserializationContext{
   public:
-    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp, const std::type_index& subgroup_type, uint32_t subgroup_index):
-      _subgroup_prefix(std::string(subgroup_type.name())+std::to_string(subgroup_index)),
+    // TODO: take the subgroup_type,shubgroup_index,shard_num
+    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp, const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num):
+      _subgroup_prefix(generate_prefix(subgroup_type,subgroup_index,shard_num)),
       _temporal_query_frontier_provider(tqfp){
     };
     virtual ~PersistentRegistry() {
@@ -208,12 +209,44 @@ namespace persistent {
     }
     PersistentRegistry(PersistentRegistry &&) = default;
     PersistentRegistry(const PersistentRegistry &) = delete;
-
     // get prefix for subgroup, this will appear in the file name of Persistent<T>
     const char * get_subgroup_prefix() {
       return this->_subgroup_prefix.c_str();
     }
-
+    /** prefix generator
+     * prefix format: [hex of subgroup_type]-[subgroup_index]-[shard_num]
+     * @param subgroup_type, the type information of a subgroup
+     * @param subgroup_index, the index of a subgroup
+     * @param shard_num, the shard number of a subgroup
+     * @return a std::string representation of the prefix
+     */
+    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true) {
+      const char* subgroup_type_name = subgroup_type.name();
+      char prefix[strlen(subgroup_type_name)*2+32];
+      uint32_t i=0;
+      for(i=0;i<strlen(subgroup_type.name());i++) {
+        sprintf(prefix+2*i,"%02x",subgroup_type_name[i]);
+      }
+      sprintf(prefix+2*i,"-%u-%u",subgroup_index,shard_num);
+      return std::string(prefix);
+    }
+    /** match prefix
+     * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
+     * @param subgroup_type, the type information of a subgroup
+     * @param subgroup_index, the index of a subgroup
+     * @param shard_num, the shard number of a subgroup
+     * @return true if the prefix match the subgroup type,index, and shard_num; otherwise, false.
+     */
+    static bool match_prefix(const std::string str,const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true) {
+      std::string prefix = generate_prefix(subgroup_type,subgroup_index,shard_num);
+      try {
+        if (prefix == str.substr(0,prefix.length()))
+          return true;
+      } catch (const std::out_of_range& ) {
+        // str is shorter than prefix, just return false.
+      }
+      return false;
+    }
   protected:
     const std::string _subgroup_prefix; // this appears in the first part of storage file for persistent<T>
     ITemporalQueryFrontierProvider * _temporal_query_frontier_provider;
@@ -341,7 +374,7 @@ namespace persistent {
        */
       Persistent(
         const char * object_name = nullptr,
-        PersistentRegistry * persistent_registry = nullptr)
+        PersistentRegistry * persistent_registry = nullptr) // TODO: get the subgroup_type,subgroup_id,shard_num to intialize Persistent<T>
         noexcept(false)
         : m_pRegistry(persistent_registry) {
         // Initialize log
@@ -706,9 +739,9 @@ namespace persistent {
           //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
           char buf[256];
           sprintf(buf,"%s-%d-%s-%d",(prefix)?prefix:"none",storageType,this->m_sObjectTypeName,cnt);
-         // return std::make_shared<const char *>((const char*)buf);
-         *ret = buf;
-         return ret;
+          // return std::make_shared<const char *>((const char*)buf);
+          *ret = buf;
+          return ret;
         }
 
       private:
@@ -727,7 +760,7 @@ namespace persistent {
       // Persistence Registry
       PersistentRegistry* m_pRegistry;
       // get the static name maker.
-      static _NameMaker & getNameMaker();
+      static _NameMaker & getNameMaker(const std::string & prefix = std::string(""));
 
   //serialization supports
   public:
@@ -827,9 +860,16 @@ namespace persistent {
   // How many times the constructor was called.
   template <typename ObjectType, StorageType storageType>
   typename Persistent<ObjectType,storageType>::_NameMaker & 
-    Persistent<ObjectType,storageType>::getNameMaker() noexcept(false) {
-    static Persistent<ObjectType,storageType>::_NameMaker nameMaker;
-    return nameMaker;
+    Persistent<ObjectType,storageType>::getNameMaker(const std::string & prefix) noexcept(false) {
+    static std::map<std::string,Persistent<ObjectType,storageType>::_NameMaker> name_makers;
+
+    // make sure prefix does exist.
+    auto search = name_makers.find(prefix);
+    if (search == name_makers.end()) {
+      name_makers.emplace(std::make_pair(std::string(prefix),Persistent<ObjectType,storageType>::_NameMaker()));
+    }
+
+    return name_makers[prefix];
   }
 
   template <typename ObjectType>
@@ -926,6 +966,13 @@ namespace persistent {
       throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
     }
   }
+
+  // get the minmum latest persisted version for a Replicated<T>
+  // identified by
+  // @param subgroup_type
+  // @param subgroup_index
+  // @param shard_num
+  const uint64_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num);
 }
 
 #endif//PERSIST_VAR_H
