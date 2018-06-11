@@ -21,7 +21,7 @@
 /**
  * Example for replicated object with Persistent<T>
  */
-class PFoo : public mutils::ByteRepresentable {
+class PFoo : public mutils::ByteRepresentable, public derecho::PersistsFields {
   Persistent<int> pint;
 public:
   virtual ~PFoo() noexcept (true) {
