@@ -122,6 +122,7 @@ uint64_t P2PConnections::get_max_p2p_size() {
 
 // check if there's a new request from some node
 char* P2PConnections::probe(uint32_t rank) {
+    assert(incoming_p2p_buffers[rank]);
     // first check for RPC replies
     if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank]++ % window_size));

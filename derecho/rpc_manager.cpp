@@ -173,8 +173,11 @@ void RPCManager::new_view_callback(const View& new_view) {
         }
     }
 
+    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+    std::cout << "Number of members in the new view " << new_view.num_members << std::endl;
     connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
     logger->debug("Created new connections among the new view members");
+    std::cout << "Created new connections" << std::endl;
 
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
@@ -241,7 +244,7 @@ void RPCManager::p2p_receive_loop() {
     }
     logger->debug("P2P listening thread started");
     while(!thread_shutdown) {
-        std::unique_lock<std::mutex>(p2p_connections_mutex);
+        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
