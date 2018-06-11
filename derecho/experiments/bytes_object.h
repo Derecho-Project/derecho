@@ -3,11 +3,12 @@
 #include <cstring>
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils-serialization/context_ptr.hpp>
+#include "derecho/replicated.h"
 
 //A ByteRepresentable object representing a byte array that is used in several experiments.
 
 //This class is modified from Matt's implementation
-struct Bytes : public mutils::ByteRepresentable{
+struct Bytes : public mutils::ByteRepresentable, public derecho::PersistsFields {
 
         char *bytes;
         std::size_t size;

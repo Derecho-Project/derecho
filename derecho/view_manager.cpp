@@ -1192,13 +1192,16 @@ void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int6
  * the other one is waiting on. */
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = group_member_sockets->get_socket(new_node_id);
-    //First, read the log tail length sent by the joining node
-    int64_t persistent_log_length = 0;
-    joiner_socket.get().read(persistent_log_length);
-    PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
-    SPDLOG_DEBUG(logger, "Got log tail length {}", persistent_log_length);
+    ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
+    if(subgroup_object.is_persistent()) {
+        //First, read the log tail length sent by the joining node
+        int64_t persistent_log_length = 0;
+        joiner_socket.get().read(persistent_log_length);
+        PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
+        SPDLOG_DEBUG(logger, "Got log tail length {}", persistent_log_length);
+    }
     SPDLOG_DEBUG(logger, "Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
-    subgroup_objects.at(subgroup_id).get().send_object(joiner_socket.get());
+    subgroup_object.send_object(joiner_socket.get());
 }
 
 uint32_t ViewManager::compute_num_received_size(const View& view) {

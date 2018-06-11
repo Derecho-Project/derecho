@@ -13,7 +13,7 @@
 using namespace persistent;
 using derecho::Replicated;
 
-class PersistentThing : public mutils::ByteRepresentable {
+class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
 public:
     PersistentThing(Persistent<int>& init_state) : state(std::move(init_state)) {}

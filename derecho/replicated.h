@@ -26,13 +26,30 @@ using namespace persistent;
 
 namespace derecho {
 
+/**
+ * This is a marker interface for user-defined Replicated Objects (i.e. objects
+ * that will be used with the Replicated<T> template) to indicate that at least
+ * one of the object's fields is of type Persistent<T>. Users should inherit
+ * from this class in order for Persistent<T> fields to work properly.
+ */
+class PersistsFields {};
+
+/**
+ * A template whose member field "value" will be true if type T inherits from
+ * PersistsFields, and false otherwise. Just a convenient specialization of
+ * std::is_base_of.
+ */
+template<typename T>
+using has_persistent_fields = std::is_base_of<PersistsFields, T>;
+
+
 template <typename T>
 //using Factory = std::function<std::unique_ptr<T>(void)>;
 using Factory = std::function<std::unique_ptr<T>(PersistentRegistry*)>;
 /**
- * Common interface for all types of Replicated<T>, specifying the methods to
- * send and receive object state. This allows the Group to send object state
- * without knowing the full type of a subgroup.
+ * Common interface for all types of Replicated<T>, specifying some methods for
+ * state transfer and persistence. This allows non-templated Derecho components
+ * like ViewManager to take these actions without knowing the full type of a subgroup.
  */
 class ReplicatedObject {
 public:
@@ -42,6 +59,7 @@ public:
     virtual void send_object(tcp::socket& receiver_socket) const = 0;
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
+    virtual bool is_persistent() const = 0;
     virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
     virtual const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
@@ -154,8 +172,8 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
-               Factory<T> client_object_factory)
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+               rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
@@ -181,7 +199,8 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+               rpc::RPCManager& group_rpc_manager)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
@@ -204,6 +223,15 @@ public:
     }
     Replicated(const Replicated&) = delete;
     virtual ~Replicated() = default;
+
+    /**
+     * @return The value of has_persistent_fields<T> for this Replicated<T>'s
+     * template parameter. This is true if any field of the user object T is
+     * persistent.
+     */
+    bool is_persistent() const {
+        return has_persistent_fields<T>::value;
+    }
 
     /**
      * @return True if this Replicated<T> actually contains a reference to a

@@ -112,7 +112,7 @@ struct Bytes : public mutils::ByteRepresentable{
 /**
  * Non-Persitent Object with vairable sizes
  */
-class ByteArrayObject: public mutils::ByteRepresentable {
+class ByteArrayObject: public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
   Persistent<Bytes> pers_bytes;
   //Persistent<Bytes,ST_MEM> vola_bytes;

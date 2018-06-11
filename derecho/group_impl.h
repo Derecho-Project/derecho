@@ -180,19 +180,23 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 }
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
-                    /* Note: This constructs a new object of type FirstType as well as a Replicated<FirstType>,
-                     * even though the object may get overwritten by one sent from the shard's leader. We do
-                     * this because if FirstType contains Persistent<T> fields, they need to be constructed
-                     * in order to read their logs from disk before receiving the rest of the logs from the leader. */
-                    replicated_objects.template get<FirstType>().emplace(
-                            subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
-                                                                  factories.template get<FirstType>()));
                     //Determine if there is existing state for this shard that will need to be received
-                    if(old_shard_leaders && old_shard_leaders->size() > subgroup_id
-                       && (*old_shard_leaders)[subgroup_id].size() > shard_num
-                       && (*old_shard_leaders)[subgroup_id][shard_num] > -1
-                       && (*old_shard_leaders)[subgroup_id][shard_num] != my_id) {
+                    bool has_previous_leader = old_shard_leaders && old_shard_leaders->size() > subgroup_id
+                            && (*old_shard_leaders)[subgroup_id].size() > shard_num
+                            && (*old_shard_leaders)[subgroup_id][shard_num] > -1
+                            && (*old_shard_leaders)[subgroup_id][shard_num] != my_id;
+                    if(has_previous_leader) {
                         subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
+                    }
+                    if(has_previous_leader && !has_persistent_fields<FirstType>::value) {
+                        /* Construct an "empty" Replicated<T>, since all of T's state will be received
+                         * from the leader and there are no logs to update */
+                        replicated_objects.template get<FirstType>().emplace(
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager));
+                    } else {
+                        replicated_objects.template get<FirstType>().emplace(
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
+                                                                      factories.template get<FirstType>()));
                     }
                     //Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
@@ -386,9 +390,12 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = tcp_sockets->get_socket(subgroup_and_leader.second);
-        int64_t log_tail_length = objects_by_subgroup_id.at(subgroup_and_leader.first).get().get_minimum_latest_persisted_version();
-        SPDLOG_DEBUG(logger, "Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
-        leader_socket.get().write(log_tail_length);
+        ReplicatedObject& subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
+        if(subgroup_object.is_persistent()) {
+            int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
+            SPDLOG_DEBUG(logger, "Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
+            leader_socket.get().write(log_tail_length);
+        }
         SPDLOG_DEBUG(logger, "Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read(buffer_size);
@@ -396,7 +403,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         char buffer[buffer_size];
         success = leader_socket.get().read(buffer, buffer_size);
         assert(success);
-        objects_by_subgroup_id.at(subgroup_and_leader.first).get().receive_object(buffer);
+        subgroup_object.receive_object(buffer);
     }
     SPDLOG_DEBUG(logger, "Done receiving all Replicated Objects from subgroup leaders");
 }
