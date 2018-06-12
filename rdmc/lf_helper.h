@@ -153,8 +153,8 @@ public:
 class endpoint {
 protected:
     /** Smart pointer for managing the endpoint */
-    std::unique_ptr<fid_ep, std::function<void(fid_ep *)>> ep;
     std::unique_ptr<fid_eq, std::function<void(fid_eq *)>> eq;
+    std::unique_ptr<fid_ep, std::function<void(fid_ep *)>> ep;
 
     explicit endpoint() {}
 

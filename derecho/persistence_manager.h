@@ -176,7 +176,7 @@ public:
      * @wait - wait till the thread finished or not.
      */
     void shutdown(bool wait) {
-        if(replicated_objects == nullptr) return;  //skip for raw subgroups
+        // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
 
         thread_shutdown = true;
         sem_post(&persistence_request_sem); // kick the persistence thread in case it is sleeping

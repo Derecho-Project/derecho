@@ -400,7 +400,8 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
     for(int q = 0; q < Vc.num_members; q++) {
         //If this is a new suspicion
-        if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+        // if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+        if(gmsSST.suspected[myRank][q] && !last_suspected[q]) {
             //This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[q] = gmsSST.suspected[myRank][q];
             logger->debug("Marking {} failed", Vc.members[q]);
@@ -1103,6 +1104,7 @@ bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vecto
     for(int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
+                // std::cout<<__func__<<" returns true: old[who]="<<old[who]<<",who="<<who<<std::endl;
                 return true;
             }
         }

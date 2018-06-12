@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
     spdlog::set_level(spdlog::level::trace);
 #endif
     try {
-        if(argc < 7) {
+        if(argc < 6) {
             cout << "Insufficient number of command line arguments" << endl;
             cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, raw_mode" << endl;
             cout << "Thank you" << endl;
@@ -84,8 +84,8 @@ int main(int argc, char *argv[]) {
             num_senders_selector,
             num_last_received = 0u
         ](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
-            // cout << "In stability callback; sender = " << sender_id
-            // << ", index = " << index << endl;
+             // cout << "In stability callback; sender = " << sender_id
+             // << ", index = " << index << endl;
             if(num_senders_selector == 0) {
                 if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
                     done = true;
@@ -217,13 +217,15 @@ int main(int argc, char *argv[]) {
         }
 
         managed_group->barrier_sync();
-        // managed_group->leave();
-        // sst::verbs_destroy();
-        exit(0);
-        cout << "Finished destroying managed_group" << endl;
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        managed_group->leave();
+        // cout << "Finished destroying managed_group" << endl;
+        // std::this_thread::sleep_for(std::chrono::seconds(10));
     } catch(const std::exception &e) {
         cout << "Exception in main: " << e.what() << endl;
         cout << "main shutting down" << endl;
     }
+#ifdef _DEBUG
+    std::cout<<"End of Main"<<std::endl;
+#endif//_DEBUG
+    // sst::lf_destroy();
 }

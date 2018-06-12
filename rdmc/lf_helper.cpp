@@ -295,8 +295,6 @@ int endpoint::init(struct fi_info *fi) {
     ep = unique_ptr<fid_ep, std::function<void(fid_ep *)>>(
         raw_ep,
         [](fid_ep *ep) { 
-          dbg_info("{}:{} destruct rdmc endpoint: {}",__FILE__,__func__,(void*)&ep->fid);
-          dbg_flush();
           fi_close(&ep->fid);
         }
     );

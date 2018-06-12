@@ -40,9 +40,22 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
-
+#ifdef _DEBUG
+ #define RED   "\x1B[31m"
+ #define GRN   "\x1B[32m"
+ #define YEL   "\x1B[33m"
+ #define BLU   "\x1B[34m"
+ #define MAG   "\x1B[35m"
+ #define CYN   "\x1B[36m"
+ #define WHT   "\x1B[37m"
+ #define RESET "\x1B[0m"
+#endif//_DEBUG
 
 namespace sst{
+#ifdef _DEBUG
+  /* log infrastructure */
+  static auto console = spdlog::stdout_color_mt("sst");
+#endif//_DEBUG
   /**
    * passive endpoint info to be exchanged.
    */
@@ -58,7 +71,8 @@ namespace sst{
   /**
    * Global States
    */
-  struct lf_ctxt {
+  class lf_ctxt {
+  public:
     // libfabric resources
     struct fi_info     * hints;           // hints
     struct fi_info     * fi;              // fabric information
@@ -80,30 +94,30 @@ namespace sst{
     // uint32_t           rx_depth;          // transfer depth
     // #define DEFAULT_SGE_BATCH_SIZE      (8)
     // uint32_t           sge_bat_size;      // maximum scatter/gather batch size
+    virtual ~lf_ctxt() {
+      lf_destroy();
+    }
   };
   #define LF_CONFIG_FILE "rdma.cfg"
-  // singlton: global states
-  struct lf_ctxt g_ctxt;
   #define LF_USE_VADDR ((g_ctxt.fi->domain_attr->mr_mode) & (FI_MR_VIRT_ADDR|FI_MR_BASIC))
   static bool shutdown = false;
   std::thread polling_thread;
   tcp::tcp_connections *sst_connections;
+  // singlton: global states
+  lf_ctxt g_ctxt;
+
   /**
    * Internal Tools
    */
   // Debug tools
   #ifdef _DEBUG
-    inline auto dbgConsole() {
-      static auto console = spdlog::stdout_color_mt("sst");
-      return console;
-    }
-    #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
-    #define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
-    #define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
-    #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
-    #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
-    #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
-    #define dbg_flush() dbgConsole()->flush()
+    #define dbg_trace(...) console->trace(__VA_ARGS__)
+    #define dbg_debug(...) console->debug(__VA_ARGS__)
+    #define dbg_info(...) console->info(__VA_ARGS__)
+    #define dbg_warn(...) console->warn(__VA_ARGS__)
+    #define dbg_error(...) console->error(__VA_ARGS__)
+    #define dbg_crit(...) console->critical(__VA_ARGS__)
+    #define dbg_flush() console->flush()
   #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -132,6 +146,7 @@ namespace sst{
         fprintf(stderr,"%s:%d,ret=%ld,%s\n",__FILE__,__LINE__,_int64_r_,desc); \
         if (next == CRASH_ON_FAILURE) { \
           fflush(stderr); \
+          dbg_flush(); \
           exit(-1); \
         } \
       } \
@@ -144,6 +159,7 @@ namespace sst{
         fprintf(stderr,"%s:%d,%s\n",__FILE__,__LINE__,desc); \
         if (next == CRASH_ON_FAILURE) { \
           fflush(stderr); \
+          dbg_flush(); \
           exit(-1); \
         } \
       } \
@@ -151,7 +167,7 @@ namespace sst{
 
   /** initialize the context with default value */
   static void default_context() {
-    memset((void*)&g_ctxt,0,sizeof(struct lf_ctxt));
+    memset((void*)&g_ctxt,0,sizeof(lf_ctxt));
     FAIL_IF_ZERO(g_ctxt.hints = fi_allocinfo(),"Fail to allocate fi hints",CRASH_ON_FAILURE);
     //defaults the hints:
     g_ctxt.hints->caps = FI_MSG|FI_RMA|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE;
@@ -227,6 +243,7 @@ namespace sst{
 
     // 2.5 - open an event queue.
     FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&this->eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
+    dbg_debug("{}:{} event_queue opened={}",__FILE__,__func__,(void*)&this->eq->fid);
 
     // 3 - bind them and global event queue together
     FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(this->eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
@@ -330,6 +347,8 @@ namespace sst{
     int size_r,
     int is_lf_server) {
 
+    dbg_info("resources constructor:this={}",(void*)this);
+
     // set remote id
     this->remote_id = r_id;
 
@@ -378,7 +397,7 @@ namespace sst{
   }
 
   resources::~resources(){
-    dbg_trace("resources destructor.");
+    dbg_trace("resources destructor:this={}",(void*)this);
     // if(this->txcq) 
     //  FAIL_IF_NONZERO(fi_close(&this->txcq->fid),"close txcq",REPORT_ON_FAILURE);
     // if(this->rxcq) 
@@ -399,7 +418,12 @@ namespace sst{
     const long long int size,
     const int op,
     const bool completion) {
-    dbg_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={}).",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
+    // dbg_trace("resources::post_remote_send(),this={}",(void*)this);
+    #ifdef _DEBUG
+    printf(YEL "resources::post_remote_send(),this=%p\n" RESET, this);
+    fflush(stdout);
+    #endif
+    // dbg_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={})",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
 
     int ret = 0;
     struct iovec msg_iov;
@@ -422,10 +446,10 @@ namespace sst{
     msg.context = (void*)ctxt;
     msg.data = 0l; // not used
 
-    dbg_trace("{}:{} calling fi_writemsg/fi_readmsg with",__FILE__,__func__);
-    dbg_trace("remote addr = {} len = {} key = {}",(void*)rma_iov.addr,rma_iov.len,(uint64_t)this->mr_rwkey);
-    dbg_trace("local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
-    dbg_flush();
+    // dbg_trace("{}:{} calling fi_writemsg/fi_readmsg with",__FILE__,__func__);
+    // dbg_trace("remote addr = {} len = {} key = {}",(void*)rma_iov.addr,rma_iov.len,(uint64_t)this->mr_rwkey);
+    // dbg_trace("local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
+    // dbg_flush();
 
     if(op) { //write
       FAIL_IF_NONZERO(ret = fi_writemsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
@@ -436,8 +460,12 @@ namespace sst{
         "fi_readmsg failed.",
         REPORT_ON_FAILURE);
     }
-    dbg_trace("post_remote_send return with ret={}",ret);
-    dbg_flush();
+    // dbg_trace("post_remote_send return with ret={}",ret);
+    // dbg_flush();
+    #ifdef _DEBUG
+    printf(YEL "resources::post_remote_send return with ret=%d\n" RESET, ret);
+    fflush(stdout);
+    #endif//_DEBUG
     return ret;
   }
 
@@ -477,10 +505,15 @@ namespace sst{
   void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
     dbg_trace("Polling thread starting.");
+    std::cout<<"["<<std::this_thread::get_id()<<"] polling thread starts."<<std::endl;
     while(!shutdown) {
         auto ce = lf_poll_completion();
+        if (shutdown) {
+          break;
+        }
         util::polling_data.insert_completion_entry(ce.first, ce.second);
     }
+    std::cout<<"["<<std::this_thread::get_id()<<"] polling thread stops."<<std::endl;
     dbg_trace("Polling thread ending.");
   }
 
@@ -512,7 +545,7 @@ namespace sst{
     }
     // not sure what to do when we cannot read entries off the CQ
     // this means that something is wrong with the local node
-    if(poll_result < 0) {
+    if((poll_result < 0) && (poll_result != -FI_EAGAIN)) {
       struct fi_cq_err_entry eentry;
       fi_cq_readerr(g_ctxt.cq, &eentry, 0);
       
@@ -558,8 +591,12 @@ namespace sst{
         CRASH_WITH_MESSAGE("failed polling the completion queue");
       }
     }
-    struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)entry.op_context;
-    return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+    if (!shutdown) {
+      struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)entry.op_context;
+      return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+    } else { // shutdown return a bad entry
+      return {0,{0,0}};
+    }
   }
 
 
@@ -595,11 +632,17 @@ namespace sst{
     
     // STEP 4: start polling thread.
     polling_thread = std::thread(polling_loop);
-    polling_thread.detach();
+    // polling_thread.detach();
   }
 
   void shutdown_polling_thread(){
     shutdown = true;
+    std::cout<<"["<<std::this_thread::get_id()<<"] shutdown_polling_thread() begins."<<std::endl;
+    if(polling_thread.joinable()) {
+      std::cout<<"["<<std::this_thread::get_id()<<"] joinning polling thread."<<std::endl;
+      polling_thread.join();
+    }
+    std::cout<<"["<<std::this_thread::get_id()<<"] done with shutdown_polling_thread()."<<std::endl;
   }
 
   void lf_destroy(){
@@ -610,6 +653,9 @@ namespace sst{
     }
     if (g_ctxt.peq) {
       FAIL_IF_NONZERO(fi_close(&g_ctxt.peq->fid),"close event queue for passive endpoint",REPORT_ON_FAILURE);
+    }
+    if (g_ctxt.cq) {
+      FAIL_IF_NONZERO(fi_close(&g_ctxt.cq->fid),"close completion queue",REPORT_ON_FAILURE);
     }
     // g_ctxt.eq has been moved to resources
     // if (g_ctxt.eq) {
