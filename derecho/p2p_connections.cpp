@@ -65,7 +65,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
-    shutdown_failures_thread();
+    old_connections.shutdown_failures_thread();
     std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
