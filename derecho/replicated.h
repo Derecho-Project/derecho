@@ -42,10 +42,6 @@ class PersistsFields {};
 template<typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
 
-
-template <typename T>
-//using Factory = std::function<std::unique_ptr<T>(void)>;
-using Factory = std::function<std::unique_ptr<T>(PersistentRegistry*)>;
 /**
  * Common interface for all types of Replicated<T>, specifying some methods for
  * state transfer and persistence. This allows non-templated Derecho components

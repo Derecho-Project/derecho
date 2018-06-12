@@ -967,12 +967,13 @@ namespace persistent {
     }
   }
 
-  // get the minmum latest persisted version for a Replicated<T>
-  // identified by
-  // @param subgroup_type
-  // @param subgroup_index
-  // @param shard_num
-  const uint64_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num);
+  /// get the minmum latest persisted version for a Replicated<T>
+  /// identified by
+  /// @param subgroup_type
+  /// @param subgroup_index
+  /// @param shard_num
+  /// @return The minimum latest persisted version across the Replicated's Persistent<T> fields, as a version number
+  const version_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num);
 }
 
 #endif//PERSIST_VAR_H

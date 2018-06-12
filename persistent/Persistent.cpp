@@ -3,7 +3,7 @@
 namespace persistent{
   DEFINE_PERSISTENT_REGISTRY_STATIC_MEMBERS;
 
-  const uint64_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num) {
+  const version_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num) {
     // All persistent log implementation MUST implement getMinimumLatestPersistedVersion()
     // All of them need to be checked here
     // NOTE: we assume that an application will only use ONE type of PERSISTED LOG (ST_FILE or ST_NVM, ...). Otherwise,

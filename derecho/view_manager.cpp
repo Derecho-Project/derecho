@@ -5,10 +5,13 @@
  */
 
 #include <arpa/inet.h>
+#include <tuple>
 
 #include "derecho_exception.h"
 #include "view_manager.h"
 #include "replicated.h" //Needed for the ReplicatedObject interface
+#include "container_template_functions.h"
+
 #include <persistent/Persistent.hpp>
 
 namespace derecho {
@@ -154,11 +157,14 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         };
         mutils::post_object(leader_socket_write, *curr_view);
         load_ragged_trim();
-        //Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim
+        /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
+        /* Since we know this node is only a member of one shard per subgroup,
+         * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
         leader_connection.write(logged_ragged_trim.size());
-        for(const auto& ragged_trim_pair : logged_ragged_trim) {
-            leader_connection.write(mutils::bytes_size(*ragged_trim_pair.second));
-            mutils::post_object(leader_socket_write, *ragged_trim_pair.second);
+        for(const auto& id_to_shard_map : logged_ragged_trim) {
+            const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second; //The inner map has one entry
+            leader_connection.write(mutils::bytes_size(*ragged_trim));
+            mutils::post_object(leader_socket_write, *ragged_trim);
         }
     }
     /* This second ID exchange is really a "heartbeat" to assure the leader
@@ -196,7 +202,8 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             char buffer[size_of_ragged_trim];
             leader_connection.read(buffer, size_of_ragged_trim);
             std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-            logged_ragged_trim.emplace(ragged_trim->subgroup_id, std::move(ragged_trim));
+            //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
+            logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
         }
     }
     return is_total_restart;
@@ -230,48 +237,82 @@ void ViewManager::start(const std::unique_ptr<std::vector<std::vector<int64_t>>>
     //(This can't be done earlier, because this is the first point at which Replicated<T> objects are constructed)
     if(!logged_ragged_trim.empty()) {
         SPDLOG_DEBUG(logger, "Truncating persistent logs to conform to leader's ragged trim");
-        truncate_persistent_logs(logged_ragged_trim);
+        truncate_persistent_logs();
         if(old_shard_leaders_for_restart) {
-            old_shard_leaders = *old_shard_leaders_for_restart;
+            restart_shard_leaders = *old_shard_leaders_for_restart;
         }
         //Now, send the logs to any restarting nodes who are new members of the view
-        send_objects_to_new_members(old_shard_leaders);
-        //Once this is finished, we no longer need logged_ragged_trim or old_shard_leaders
+        send_objects_to_new_members(restart_shard_leaders);
+        //Once this is finished, we no longer need logged_ragged_trim or restart_shard_leaders
         logged_ragged_trim.clear();
-        old_shard_leaders.clear();
+        restart_shard_leaders.clear();
     }
     SPDLOG_DEBUG(logger, "Starting predicate evaluation");
     curr_view->gmsSST->start_predicate_evaluation();
 }
 
 void ViewManager::load_ragged_trim() {
-    for(const auto& subgroup_shard_pair : curr_view->my_subgroups) {
-        std::string ragged_trim_filename = "RaggedTrim_" + std::to_string(subgroup_shard_pair.first);
-        auto ragged_trim = persistent::loadObject<RaggedTrim>(ragged_trim_filename.c_str());
-        if(ragged_trim == nullptr) {
-            logger->error("No ragged trim information found for Subgroup {}!", subgroup_shard_pair.first);
-            logger->flush();
-            //what do I do in this case? Try to download ragged trim information from someone else?
-            throw derecho_exception("Error! Can't recover with partial logs.");
-        }
-        logged_ragged_trim.emplace(subgroup_shard_pair.first, std::move(ragged_trim));
+    /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
+     * so that I have access to the type_index. This wastes time, but I don't have a map
+     * from subgroup ID to type_index within curr_view. */
+    for(const auto& type_and_indices : curr_view->subgroup_ids_by_type) {
+        for(uint32_t subgroup_index = 0; subgroup_index < type_and_indices.second.size(); ++subgroup_index) {
+            subgroup_id_t subgroup_id = type_and_indices.second.at(subgroup_index);
+            //We only care if the subgroup's ID is in my_subgroups
+            auto subgroup_shard_ptr = curr_view->my_subgroups.find(subgroup_id);
+            if(subgroup_shard_ptr != curr_view->my_subgroups.end()) {
+                //If the subgroup ID is in my_subgroups, its value is this node's shard number
+                uint32_t shard_num = subgroup_shard_ptr->second;
+                std::string ragged_trim_filename = "RaggedTrim_" + std::to_string(subgroup_id);
+                std::unique_ptr<RaggedTrim> ragged_trim = persistent::loadObject<RaggedTrim>(ragged_trim_filename.c_str());
+                //If there was a logged ragged trim from an obsolete View, it's the same as not having a logged ragged trim
+                if(ragged_trim == nullptr || ragged_trim->vid < curr_view->vid) {
+                    SPDLOG_DEBUG(logger, "No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id);
+                    //Get the latest persisted version number from this subgroup's object's log
+                    persistent::version_t last_persisted_version =
+                            persistent::getMinimumLatestPersistedVersion(type_and_indices.first,
+                                                                         subgroup_index, shard_num);
+                    int32_t last_vid, last_seq_num;
+                    std::tie(last_vid, last_seq_num) = persistent::unpack_version<int32_t>(last_persisted_version);
+                    //Divide the sequence number into sender rank and message counter
+                    uint32_t num_shard_senders = curr_view->subgroup_shard_views.at(subgroup_id).at(shard_num).num_senders();
+                    int32_t last_message_counter = last_seq_num / num_shard_senders;
+                    uint32_t last_sender = last_seq_num % num_shard_senders;
+                    /* Fill max_received_by_sender: In round-robin order, all senders ranked below
+                     * the last sender delivered last_message_counter, while all senders ranked above
+                     * the last sender have only delivered last_message_counter-1. */
+                    std::vector<int32_t> max_received_by_sender(num_shard_senders);
+                    for(uint sender_rank = 0; sender_rank <= last_sender; ++sender_rank) {
+                        max_received_by_sender[sender_rank] = last_message_counter;
+                    }
+                    for(uint sender_rank = last_sender + 1; sender_rank < num_shard_senders; ++sender_rank) {
+                        max_received_by_sender[sender_rank] = last_message_counter - 1;
+                    }
+                    ragged_trim = std::make_unique<RaggedTrim>(subgroup_id, shard_num, last_vid, -1, max_received_by_sender);
+                }
+                //operator[] is intentional: default-construct an inner std::map at subgroup_id
+                //Note that the inner map will only one entry, except on the restart leader where it will have one for every shard
+                logged_ragged_trim[subgroup_id].emplace(shard_num, std::move(ragged_trim));
+            } // if(subgroup_shard_ptr != curr_view->my_subgroups.end())
+        } // for(subgroup_index)
     }
 }
 
 
-void ViewManager::truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims) {
-    for(const auto& id_trim_pair : logged_ragged_trims) {
-        subgroup_id_t subgroup_id = id_trim_pair.first;
-        const auto& ragged_trim = id_trim_pair.second;
-        uint32_t num_shard_senders = ragged_trim->max_received_by_sender.size();
+void ViewManager::truncate_persistent_logs() {
+    for(const auto& id_to_shard_map : logged_ragged_trim) {
+        subgroup_id_t subgroup_id = id_to_shard_map.first;
+        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(
+                curr_view->my_subgroups.at(subgroup_id));
+        uint32_t num_shard_senders = my_shard_ragged_trim->max_received_by_sender.size();
         //Determine the last deliverable sequence number using the same logic as deliver_messages_upto
         int32_t max_seq_num = 0;
         for(uint sender = 0; sender < num_shard_senders; sender++) {
             max_seq_num = std::max(max_seq_num,
-                               static_cast<int32_t>(ragged_trim->max_received_by_sender[sender] * num_shard_senders + sender));
+                               static_cast<int32_t>(my_shard_ragged_trim->max_received_by_sender[sender] * num_shard_senders + sender));
         }
         //Make the corresponding version number using the same logic as version_message
-        persistent::version_t max_delivered_version = persistent::combine_int32s(ragged_trim->vid, max_seq_num);
+        persistent::version_t max_delivered_version = persistent::combine_int32s(my_shard_ragged_trim->vid, max_seq_num);
         //Call Persistent::truncate() with this version
         SPDLOG_TRACE(logger, "Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
         logger->flush();
@@ -419,7 +460,8 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                     char buffer[size_of_ragged_trim];
                     client_socket->read(buffer, size_of_ragged_trim);
                     std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-                    logged_ragged_trim.emplace(ragged_trim->subgroup_id, std::move(ragged_trim));
+                    //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
+                    logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
                 }
                 //Remake the std::set version of curr_view->members
                 last_known_view_members.clear();
@@ -477,7 +519,10 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     }
     assert(restart_view);
     SPDLOG_DEBUG(logger, "Reached a quorum of nodes from view {}, installing view {}", curr_view->vid, restart_view->vid);
-
+    /*
+     * BUG: Actually, the shard leaders to specify on restart are the ones with the longest logs,
+     * NOT the previous view's leaders
+     */
     std::vector<std::vector<int64_t>> old_shard_leaders_by_id =
             translate_types_to_ids(make_shard_leaders_map(*curr_view), *restart_view);
     curr_view.swap(restart_view);
@@ -494,10 +539,14 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         mutils::post_object(bind_socket_write, mutils::bytes_size(derecho_params));
         mutils::post_object(bind_socket_write, derecho_params);
         SPDLOG_DEBUG(logger, "Sending ragged-trim information to node {}", waiting_sockets_iter->first);
-        waiting_sockets_iter->second.write(logged_ragged_trim.size());
-        for(const auto& ragged_trim_pair : logged_ragged_trim) {
-            mutils::post_object(bind_socket_write, mutils::bytes_size(*ragged_trim_pair.second));
-            mutils::post_object(bind_socket_write, *ragged_trim_pair.second);
+        std::size_t num_ragged_trims = multimap_size(logged_ragged_trim);
+        waiting_sockets_iter->second.write(num_ragged_trims);
+        //Unroll the maps and send each RaggedTrim individually, since it contains its subgroup_id and shard_num
+        for(const auto& subgroup_to_shard_map : logged_ragged_trim) {
+            for(const auto& shard_trim_pair : subgroup_to_shard_map.second) {
+                mutils::post_object(bind_socket_write, mutils::bytes_size(*shard_trim_pair.second));
+                mutils::post_object(bind_socket_write, *shard_trim_pair.second);
+            }
         }
         //Next, the joining node will expect a vector of shard leaders from which to receive Persistent logs
         mutils::post_object(bind_socket_write, mutils::bytes_size(old_shard_leaders_by_id));
@@ -507,7 +556,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
     //Save this to a class member so that we still have it in start()...ugh, that's ugly
-    old_shard_leaders = old_shard_leaders_by_id;
+    restart_shard_leaders = old_shard_leaders_by_id;
 }
 
 std::unique_ptr<View> ViewManager::update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
@@ -1571,18 +1620,20 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
     // Ragged cleanup is finished, deliver in the implied order
     std::vector<int32_t> max_received_indices(num_shard_senders);
     std::stringstream delivery_order;
-    for(uint n = 0; n < num_shard_senders; n++) {
+    for(uint sender_rank = 0; sender_rank < num_shard_senders; sender_rank++) {
         if(logger->should_log(spdlog::level::debug)) {
             delivery_order << "Subgroup " << subgroup_num
+                    << ", shard " << Vc.my_subgroups.at(subgroup_num)
                     << " " << Vc.members[Vc.my_rank]
-                    << ":0.."
-                    << Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + n]
+                    << ":0..."
+                    << Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank]
                     << " ";
         }
-        max_received_indices[n] = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + n];
+        max_received_indices[sender_rank] = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank];
     }
     std::string log_file_name = "RaggedTrim_" + std::to_string(subgroup_num);
-    RaggedTrim trim_log{subgroup_num, Vc.vid, Vc.members[Vc.rank_of_leader()], max_received_indices};
+    RaggedTrim trim_log{subgroup_num, Vc.my_subgroups.at(subgroup_num),
+        Vc.vid, Vc.members[Vc.rank_of_leader()], max_received_indices};
     SPDLOG_DEBUG(logger, "Logging ragged trim to disk");
     persistent::saveObject(trim_log, log_file_name.c_str());
     SPDLOG_DEBUG(logger, "Delivering ragged-edge messages in order: {}", delivery_order.str());

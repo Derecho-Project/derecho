@@ -43,12 +43,15 @@ class RPCManager;
  */
 struct RaggedTrim : public mutils::ByteRepresentable {
     subgroup_id_t subgroup_id;
+    uint32_t shard_num;
     int vid;
     node_id_t leader_id;
     std::vector<int32_t> max_received_by_sender;
-    RaggedTrim(subgroup_id_t subgroup_id, int vid, node_id_t leader_id, std::vector<int32_t> max_received_by_sender)
-    : subgroup_id(subgroup_id), vid(vid), leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
-    DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, vid, leader_id, max_received_by_sender);
+    RaggedTrim(subgroup_id_t subgroup_id, uint32_t shard_num, int vid,
+               node_id_t leader_id, std::vector<int32_t> max_received_by_sender)
+    : subgroup_id(subgroup_id), shard_num(shard_num), vid(vid),
+      leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
+    DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, shard_num, vid, leader_id, max_received_by_sender);
 };
 
 /**
@@ -190,12 +193,12 @@ private:
      * after transitioning to a new view. This transfers control back to
      * Group because the objects' constructors are only known by Group. */
     initialize_rpc_objects_t initialize_subgroup_objects;
-    /** List of logged ragged trim states, indexed by subgroup ID, recovered
-     * from the last view before a total crash. Used only during total restart;
-     * empty if the group started up normally. */
-    std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>> logged_ragged_trim;
+    /** List of logged ragged trim states, indexed by (subgroup ID, shard num),
+     * that have been recovered from the last view-change before a total crash.
+     * Used only during total restart; empty if the group started up normally. */
+    std::map<subgroup_id_t, std::map<uint32_t, std::unique_ptr<RaggedTrim>>> logged_ragged_trim;
 
-    std::vector<std::vector<int64_t>> old_shard_leaders;
+    std::vector<std::vector<int64_t>> restart_shard_leaders;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -336,7 +339,10 @@ private:
                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                uint32_t& num_received_size);
 
-    void truncate_persistent_logs(const std::map<subgroup_id_t, std::unique_ptr<RaggedTrim>>& logged_ragged_trims);
+    /** Helper function for total restart mode: Uses the RaggedTrim values
+     * in logged_ragged_trim to truncate any persistent logs that have a
+     * persisted version later than the last committed version in the RaggedTrim. */
+    void truncate_persistent_logs();
 
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
@@ -546,32 +552,5 @@ public:
 
     void debug_print_status() const;
 };
-
-/**
- * Base case for functional_append, with one argument.
- */
-template <typename T>
-std::vector<T> functional_append(const std::vector<T>& original, const T& item) {
-    std::vector<T> appended_vec(original);
-    appended_vec.emplace_back(item);
-    return appended_vec;
-}
-
-/**
- * Returns a new std::vector value that is equal to the parameter std::vector
- * with the rest of the arguments appended. Adds some missing functionality to
- * std::vector: the ability to append to a const vector without taking a
- * several-line detour to call the void emplace_back() method.
- * @param original The vector that should be the prefix of the new vector
- * @param first_item The first element to append to the original vector
- * @param rest_items The rest of the elements to append to the original vector
- * @return A new vector (by value), containing a copy of original plus all the
- * elements given as arguments.
- */
-template <typename T, typename... RestArgs>
-std::vector<T> functional_append(const std::vector<T>& original, const T& first_item, RestArgs... rest_items) {
-    std::vector<T> appended_vec = functional_append(original, first_item);
-    return functional_append(appended_vec, rest_items...);
-}
 
 } /* namespace derecho */
