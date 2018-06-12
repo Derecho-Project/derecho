@@ -24,7 +24,6 @@ P2PConnections::P2PConnections(const P2PParams params)
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
-    std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
     for(uint32_t i = 0; i < num_members; ++i) {
@@ -66,7 +65,6 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
     old_connections.shutdown_failures_thread();
-    std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
     for(uint32_t i = 0; i < num_members; ++i) {
@@ -135,18 +133,18 @@ uint64_t P2PConnections::get_max_p2p_size() {
 char* P2PConnections::probe(uint32_t rank) {
     assert(incoming_p2p_buffers[rank]);
     // first check for RPC replies
-    if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank]++ % window_size));
     }
     if(rank == my_index) {
       return nullptr;
     }
     // then check for P2P replies
-    if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_p2p_reply_seq_nums[rank] + 1) {
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_p2p_reply_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank]++ % window_size));
     }
     // finally check for any new requests
-    if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (incoming_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] == incoming_request_seq_nums[rank] + 1) {
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (incoming_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] == incoming_request_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (incoming_request_seq_nums[rank]++ % window_size);
     }
     return nullptr;
@@ -172,11 +170,11 @@ char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
         (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_p2p_reply_seq_nums[rank] + 1;
         return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size));
     } else {
-        if(incoming_p2p_reply_seq_nums[rank] > outgoing_request_seq_nums[rank] - window_size) {
-            (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (outgoing_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] = outgoing_request_seq_nums[rank] + 1;
-            return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (outgoing_request_seq_nums[rank] % window_size);
-        } else {
-            return nullptr;
+      if((int32_t)incoming_p2p_reply_seq_nums[rank] > (int32_t)(outgoing_request_seq_nums[rank] - window_size)) {
+          (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (outgoing_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] = outgoing_request_seq_nums[rank] + 1;
+          return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (outgoing_request_seq_nums[rank] % window_size);
+      } else {
+          return nullptr;
         }
     }
 }

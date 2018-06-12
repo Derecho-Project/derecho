@@ -45,6 +45,10 @@ target_link_libraries(latency_test derecho)
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
 
+# p2p_bandwidth_test
+add_executable(p2p_bandwidth_test p2p_bandwidth_test.cpp block_size.cpp)
+target_link_libraries(p2p_bandwidth_test derecho mutils mutils-serialization)
+
 # subgroup_test
 add_executable(subgroup_test subgroup_test.cpp initialize.cpp)
 target_link_libraries(subgroup_test derecho)
