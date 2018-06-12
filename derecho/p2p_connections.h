@@ -35,7 +35,8 @@ class P2PConnections {
     std::vector<std::unique_ptr<volatile char[]>> incoming_p2p_buffers;
     std::vector<std::unique_ptr<volatile char[]>> outgoing_p2p_buffers;
     std::vector<std::unique_ptr<resources_one_sided>> res_vec;
-    std::vector<uint64_t> incoming_request_seq_nums, incoming_rpc_reply_seq_nums, incoming_p2p_reply_seq_nums, outgoing_request_seq_nums, outgoing_rpc_reply_seq_nums, outgoing_p2p_reply_seq_nums;
+    std::vector<uint64_t> incoming_request_seq_nums, incoming_rpc_reply_seq_nums, incoming_p2p_reply_seq_nums,
+            outgoing_request_seq_nums, outgoing_rpc_reply_seq_nums, outgoing_p2p_reply_seq_nums;
     std::vector<REQUEST_TYPE> prev_mode;
     bool thread_shutdown = false;
     std::thread timeout_thread;
@@ -46,6 +47,7 @@ public:
     P2PConnections(const P2PParams params);
     P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members);
     ~P2PConnections();
+    void shutdown_failures_thread();
     uint32_t get_node_rank(uint32_t node_id);
     uint64_t get_max_p2p_size();
     std::experimental::optional<std::pair<uint32_t, char*>> probe_all();

@@ -1,6 +1,7 @@
 #include <map>
 
 #include <cassert>
+#include <cstring>
 #include <sys/time.h>
 
 #include "p2p_connections.h"
@@ -37,10 +38,12 @@ P2PConnections::P2PConnections(const P2PParams params)
     for(uint i = 0; i < num_members; ++i) {
         incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
         outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
-        if(i == my_index) {
-            continue;
+        if(i != my_index) {
+            res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+                                                               const_cast<char*>(outgoing_p2p_buffers[i].get()),
+                                                               3 * max_msg_size * window_size + sizeof(bool),
+                                                               3 * max_msg_size * window_size + sizeof(bool));
         }
-        res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()), const_cast<char*>(outgoing_p2p_buffers[i].get()), 3 * max_msg_size * window_size + sizeof(bool), 3 * max_msg_size * window_size + sizeof(bool));
     }
 
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
@@ -62,6 +65,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
+    shutdown_failures_thread();
     std::cout << "this=" << this << std::endl;
     //Figure out my SST index
     my_index = (uint32_t)-1;
@@ -79,25 +83,28 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     }
 
     for(uint i = 0; i < num_members; ++i) {
-        if(i == my_index) {
-            continue;
-        }
         if(node_id_to_rank.find(members[i]) == node_id_to_rank.end()) {
-	  incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
+            incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
             outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
-            res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()), const_cast<char*>(outgoing_p2p_buffers[i].get()),
-                                                               3 * max_msg_size * window_size + sizeof(bool), 3 * max_msg_size * window_size + sizeof(bool));
+            if(i != my_index) {
+                res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+                                                                   const_cast<char*>(outgoing_p2p_buffers[i].get()),
+                                                                   3 * max_msg_size * window_size + sizeof(bool),
+                                                                   3 * max_msg_size * window_size + sizeof(bool));
+            }
         } else {
             auto old_rank = node_id_to_rank[members[i]];
-	    incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
+            incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
-            res_vec[i] = std::move(old_connections.res_vec[old_rank]);
             incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];
             incoming_rpc_reply_seq_nums[i] = old_connections.incoming_rpc_reply_seq_nums[old_rank];
             incoming_p2p_reply_seq_nums[i] = old_connections.incoming_p2p_reply_seq_nums[old_rank];
             outgoing_request_seq_nums[i] = old_connections.outgoing_request_seq_nums[old_rank];
             outgoing_rpc_reply_seq_nums[i] = old_connections.outgoing_rpc_reply_seq_nums[old_rank];
             outgoing_p2p_reply_seq_nums[i] = old_connections.outgoing_p2p_reply_seq_nums[old_rank];
+            if(i != my_index) {
+                res_vec[i] = std::move(old_connections.res_vec[old_rank]);
+            }
         }
     }
 
@@ -106,9 +113,13 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
 
 P2PConnections::~P2PConnections() {
     std::cout << "In the P2PConnections destructor" << std::endl;
+    shutdown_failures_thread();
+}
+
+void P2PConnections::shutdown_failures_thread() {
     thread_shutdown = true;
-    if (timeout_thread.joinable()) {
-      timeout_thread.join();
+    if(timeout_thread.joinable()) {
+        timeout_thread.join();
     }
 }
 
@@ -127,6 +138,9 @@ char* P2PConnections::probe(uint32_t rank) {
     if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank]++ % window_size));
     }
+    if(rank == my_index) {
+      return nullptr;
+    }
     // then check for P2P replies
     if((uint64_t)incoming_p2p_buffers[rank][max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_p2p_reply_seq_nums[rank] + 1) {
       return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank]++ % window_size));
@@ -141,9 +155,6 @@ char* P2PConnections::probe(uint32_t rank) {
 // check if there's a new request from any node
 std::experimental::optional<std::pair<uint32_t, char*>> P2PConnections::probe_all() {
     for(uint rank = 0; rank < num_members; ++rank) {
-        if(rank == my_index) {
-            continue;
-        }
         auto buf = probe(rank);
         if(buf) {
             return std::pair<uint32_t, char*>(rank, buf);
@@ -172,7 +183,13 @@ char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
 
 void P2PConnections::send(uint32_t rank) {
     if(prev_mode[rank] == REQUEST_TYPE::RPC_REPLY) {
-        res_vec[rank]->post_remote_write(0, max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
+        if(rank == my_index) {
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
+                        max_msg_size);
+        } else {
+            res_vec[rank]->post_remote_write(0, max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
+        }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
         res_vec[rank]->post_remote_write(0, max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size);
