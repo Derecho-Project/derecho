@@ -45,14 +45,23 @@ struct RaggedTrim : public mutils::ByteRepresentable {
     subgroup_id_t subgroup_id;
     uint32_t shard_num;
     int vid;
-    node_id_t leader_id;
+    int32_t leader_id; //Signed instead of unsigned so it can have the special value -1
     std::vector<int32_t> max_received_by_sender;
     RaggedTrim(subgroup_id_t subgroup_id, uint32_t shard_num, int vid,
-               node_id_t leader_id, std::vector<int32_t> max_received_by_sender)
+               int32_t leader_id, std::vector<int32_t> max_received_by_sender)
     : subgroup_id(subgroup_id), shard_num(shard_num), vid(vid),
       leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
     DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, shard_num, vid, leader_id, max_received_by_sender);
 };
+
+/**
+ * Builds a filename to use for a RaggedTrim logged to disk using its subgroup and shard IDs.
+ */
+inline std::string ragged_trim_filename(subgroup_id_t subgroup_num, uint32_t shard_num) {
+    std::ostringstream string_builder;
+    string_builder << "RaggedTrim_" << subgroup_num << "_" << shard_num;
+    return string_builder.str();
+}
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -284,6 +293,24 @@ private:
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
     /**
+     * Computes the persistent version corresponding to a ragged trim proposal,
+     * i.e. the version number that will be persisted if these updates are committed.
+     * @param view_id The VID of the current View (since it's part of the version number)
+     * @param max_received_by_sender The ragged trim proposal for a single shard,
+     * corresponding to a single Replicated Object
+     * @return The persistent version number that the object will have if this
+     * ragged trim is delivered
+     */
+    static persistent::version_t ragged_trim_to_latest_version(const int32_t view_id,
+                                                               const std::vector<int32_t>& max_received_by_sender);
+
+    /**
+     * @return true if the set of node IDs includes at least one member of each
+     * subgroup in the given View.
+     */
+    static bool contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids, const View& last_view);
+
+    /**
      * Constructs the next view from the current view and the set of committed
      * changes in the SST.
      * @param curr_view The current view, which the proposed changes are relative to
@@ -313,7 +340,8 @@ private:
 
     /**
      * Updates curr_view and makes a new next_view based on the current set of
-     * rejoining nodes during total restart.
+     * rejoining nodes during total restart. This is only used by the restart
+     * leader during total restart.
      * @param waiting_join_sockets The set of connections to restarting nodes
      * @param rejoined_node_ids The IDs of those nodes
      * @return The next view that will be installed if the restart continues at this point
@@ -495,13 +523,20 @@ public:
      */
     void finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets);
 
+    /**
+     * An extra setup method only needed during total restart. Sends Replicated
+     * Object data (most importantly, the persistent logs) to all members of a
+     * shard if this node is listed as that shard's leader. This does nothing if
+     * the node is not in total restart mode, but it must be called anyway
+     * because only ViewManager knows if we are doing total restart.
+     * @param restart_shard_leaders The list of shard leaders for total restart
+     * received from the restart leader; these are the nodes with the longest logs.
+     */
+    void send_logs_if_total_restart(const std::unique_ptr<std::vector<std::vector<int64_t>>>& restart_shard_leaders);
+
     /** Starts predicate evaluation in the current view's SST. Call this only
-     * when all other setup has been done for the managed Derecho group.
-     * @param old_shard_leaders_for_restart The list of shard leaders from the
-     * previous view, which may have just been received from the leader if this
-     * node is not the leader. A parameter only needed if the group is doing
-     * total restart. This is an ugly hack, there must be a better way. */
-    void start(const std::unique_ptr<std::vector<std::vector<int64_t>>>& old_shard_leaders_for_restart);
+     * when all other setup has been done for the Derecho group. */
+    void start();
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
