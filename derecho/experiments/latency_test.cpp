@@ -117,7 +117,6 @@ int main(int argc, char *argv[]) {
                     *one_raw_group);
         }
 
-        std::cout<<"waiting for enough node to join..."<<std::endl;
         while(managed_group->get_members().size() < num_nodes) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -144,8 +143,6 @@ int main(int argc, char *argv[]) {
                 (t3 - t1) * 1e-3f, max(t2 - t1, t3 - t2) * 1e-3f);
         fflush(stdout);
 
-        cout << "Finished constructing/joining ManagedGroup" << endl;
-
         if(node_id == 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
@@ -164,6 +161,7 @@ int main(int argc, char *argv[]) {
             buf[msg_size - 1] = 0;
             start_times[i] = get_time();
             // DERECHO_LOG(my_rank, i, "start_send");
+            std::cout<<my_rank<<" "<<i<<" start_send."<<std::endl;
             group_as_subgroup.send();
 
             if(node_id == 0) {

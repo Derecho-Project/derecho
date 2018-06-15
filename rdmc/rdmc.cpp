@@ -156,8 +156,8 @@ barrier_group::barrier_group(vector<uint32_t> members) {
 
     for(auto it = qps.begin(); it != qps.end(); it++) {
         extra_endpoints.push_back(std::move(it->second));
-        qps.erase(it);
     }
+    qps.clear();
 #else
     map<uint32_t, endpoint> eps;
     for(auto target : targets) {
@@ -177,11 +177,10 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         endpoints.push_back(std::move(ep_it->second));
         eps.erase(ep_it);
     }
-
     for(auto it = eps.begin(); it != eps.end(); it++) {
         extra_endpoints.push_back(std::move(it->second));
-        eps.erase(it);
     }
+    eps.clear();
 #endif
 }
 void barrier_group::barrier_wait() {
