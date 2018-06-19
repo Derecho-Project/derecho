@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <experimental/optional>
 #include <iostream>
 #include <map>
@@ -38,7 +39,7 @@ class P2PConnections {
     std::vector<uint64_t> incoming_request_seq_nums, incoming_rpc_reply_seq_nums, incoming_p2p_reply_seq_nums,
             outgoing_request_seq_nums, outgoing_rpc_reply_seq_nums, outgoing_p2p_reply_seq_nums;
     std::vector<REQUEST_TYPE> prev_mode;
-    volatile bool thread_shutdown = false;
+    std::atomic<bool> thread_shutdown{false};
     std::thread timeout_thread;
     char* probe(uint32_t rank);
     void check_failures_loop();
