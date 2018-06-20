@@ -232,11 +232,14 @@ public:
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
         //Figure out my SST index
+        my_index = (uint)-1;
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
                 my_index = i;
+		break;
             }
         }
+	assert(my_index != (uint)-1);
 
         std::iota(all_indices.begin(), all_indices.end(), 0);
 

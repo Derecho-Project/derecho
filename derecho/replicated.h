@@ -93,9 +93,6 @@ private:
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
-    /** Buffer for replying to P2P messages, cached here so it doesn't need to be
-     * created in every p2p_send call. */
-    std::unique_ptr<char[]> p2pSendBuffer;
 
     template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send_or_query(const std::vector<node_id_t>& destination_nodes,
@@ -143,16 +140,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+								[this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return p2pSendBuffer.get();
+			  return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -179,8 +176,7 @@ public:
               subgroup_id(subgroup_id),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())) {
 #ifdef _DEBUG
         std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
 #endif  //_DEBUG
@@ -206,8 +202,7 @@ public:
               subgroup_id(subgroup_id),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())) {}
 
     // Replicated(Replicated&&) = default;
     Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
@@ -216,8 +211,7 @@ public:
                                    subgroup_id(rhs.subgroup_id),
                                    shard_num(rhs.shard_num),
                                    group_rpc_manager(rhs.group_rpc_manager),
-                                   wrapped_this(std::move(rhs.wrapped_this)),
-                                   p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
+                                   wrapped_this(std::move(rhs.wrapped_this)) {
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
@@ -483,9 +477,6 @@ private:
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
-    /** Buffer for replying to P2P messages, cached here so it doesn't need to be
-     * created in every p2p_send call. */
-    std::unique_ptr<char[]> p2pSendBuffer;
 
     //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
     //but I'm afraid that will introduce unnecessary overheads.
@@ -498,16 +489,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return p2pSendBuffer.get();
+                            return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -519,8 +510,7 @@ public:
             : node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())) {}
 
     ExternalCaller(ExternalCaller&&) = default;
     ExternalCaller(const ExternalCaller&) = delete;

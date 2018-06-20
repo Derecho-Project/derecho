@@ -9,16 +9,16 @@
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 
-using std::vector;
-using std::map;
-using std::string;
 using std::cout;
 using std::endl;
+using std::map;
+using std::string;
+using std::vector;
 using namespace std;
 using namespace mutils;
 
-using derecho::MulticastGroup;
 using derecho::DerechoSST;
+using derecho::MulticastGroup;
 
 int count = 0;
 
@@ -115,11 +115,9 @@ int main(int argc, char* argv[]) {
 
     // other nodes (first two) change each other's state
     if(my_id != 2) {
-        cout << "Changing each other's state to 35" << endl;
+        cout << "Changing other's state to " << 36 - my_id << endl;
         derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id},
-                                                                              36 - my_id)
-                                    .get());
+        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id}, 36 - my_id).get());
     }
 
     while(managed_group->get_members().size() < 3) {
