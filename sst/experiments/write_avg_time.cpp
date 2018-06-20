@@ -58,7 +58,7 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources_one_sided res(remote_rank, read_buf, write_buf, size, size);
+            resources res(remote_rank, read_buf, write_buf, size, size);
 
             // start the timing experiment
             struct timespec start_time;
@@ -89,7 +89,7 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources_one_sided res(remote_rank, read_buf, write_buf, size, size);
+            resources res(remote_rank, read_buf, write_buf, size, size);
 
             // start the timing experiment
             struct timespec start_time;

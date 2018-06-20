@@ -90,7 +90,7 @@ static bool shutdown = false;
  * @param size_w The size of the write buffer (in bytes).
  * @param size_r The size of the read buffer (in bytes).
  */
-resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
+_resources::_resources(int r_index, char *write_addr, char *read_addr, int size_w,
                      int size_r) {
     // set the remote index
     remote_index = r_index;
@@ -147,7 +147,7 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
 /**
  * Cleans up all IB Verbs resources associated with this connection.
  */
-resources::~resources() {
+_resources::~_resources() {
     int rc = 0;
     if(qp) {
         rc = ibv_destroy_qp(qp);
@@ -173,7 +173,7 @@ resources::~resources() {
 /**
  * This transitions the queue pair to the init state.
  */
-void resources::set_qp_initialized() {
+void _resources::set_qp_initialized() {
     struct ibv_qp_attr attr;
     int flags;
     int rc;
@@ -192,7 +192,7 @@ void resources::set_qp_initialized() {
     }
 }
 
-void resources::set_qp_ready_to_receive() {
+void _resources::set_qp_ready_to_receive() {
     struct ibv_qp_attr attr;
     int flags, rc;
     memset(&attr, 0, sizeof(attr));
@@ -227,7 +227,7 @@ void resources::set_qp_ready_to_receive() {
     }
 }
 
-void resources::set_qp_ready_to_send() {
+void _resources::set_qp_ready_to_send() {
     struct ibv_qp_attr attr;
     int flags, rc;
     memset(&attr, 0, sizeof(attr));
@@ -249,7 +249,7 @@ void resources::set_qp_ready_to_send() {
  * This method implements the entire setup of the queue pairs, calling all the
  * `modify_qp_*` methods in the process.
  */
-void resources::connect_qp() {
+void _resources::connect_qp() {
     // local connection data
     struct cm_con_data_t local_con_data;
     // remote connection data. Obtained via TCP
@@ -311,7 +311,7 @@ void resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
+int _resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
                                 const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
@@ -350,14 +350,14 @@ int resources::post_remote_send(const uint32_t id, const long long int offset, c
     return ret;
 }
 
-resources_one_sided::resources_one_sided(int r_index, char *write_addr, char *read_addr, int size_w,
-                                         int size_r) : resources(r_index, write_addr, read_addr, size_w, size_r) {
+resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
+                                         int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
 }
 
 /**
  * @param size The number of bytes to read from remote memory.
  */
-void resources_one_sided::post_remote_read(const uint32_t id, const long long int size) {
+void resources::post_remote_read(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -368,7 +368,7 @@ void resources_one_sided::post_remote_read(const uint32_t id, const long long in
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-void resources_one_sided::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
+void resources::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -378,7 +378,7 @@ void resources_one_sided::post_remote_read(const uint32_t id, const long long in
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources_one_sided::post_remote_write(const uint32_t id, const long long int size) {
+void resources::post_remote_write(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -391,21 +391,21 @@ void resources_one_sided::post_remote_write(const uint32_t id, const long long i
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources_one_sided::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
+void resources::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_one_sided::post_remote_write_with_completion(const uint32_t id, const long long int size) {
+void resources::post_remote_write_with_completion(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_one_sided::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -413,7 +413,7 @@ void resources_one_sided::post_remote_write_with_completion(const uint32_t id, c
 }
 
 resources_two_sided::resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
-                                         int size_r) : resources(r_index, write_addr, read_addr, size_w, size_r) {
+                                         int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
 }
 
 /**

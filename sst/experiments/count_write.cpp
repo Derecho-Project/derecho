@@ -109,7 +109,7 @@ int main() {
             // Anyway, the values will be quite close as the counting is synchronous
             if(node_rank == 0) {
                 int num_nodes = sst.get_num_rows();
-                resources_one_sided* res;
+                resources* res;
                 double times[num_nodes];
                 const auto tid = std::this_thread::get_id();
                 // get id first
@@ -121,7 +121,7 @@ int main() {
                     if(i == node_rank) {
                         times[i] = my_time;
                     } else {
-                        res = new resources_one_sided(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double));
+                        res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double));
                         res->post_remote_read(id, sizeof(double));
                         free(res);
                     }
@@ -149,9 +149,9 @@ int main() {
                     sync(i);
                 }
             } else {
-                resources_one_sided* res;
+                resources* res;
                 double no_need;
-                res = new resources_one_sided(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double));
+                res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double));
                 sync(0);
                 free(res);
             }

@@ -39,7 +39,7 @@ int main() {
     initialize(node_rank, ip_addrs);
 
     // create an array of resources
-    resources_one_sided *res[num_nodes];
+    resources *res[num_nodes];
     // create buffer for write and read
     char *write_buf[num_nodes], *read_buf[num_nodes];
     for(int r_index = 0; r_index < num_nodes; ++r_index) {
@@ -49,7 +49,7 @@ int main() {
 
         write_buf[r_index] = (char *)malloc(size);
         read_buf[r_index] = (char *)malloc(size);
-        res[r_index] = new resources_one_sided(r_index, write_buf[r_index], read_buf[r_index], size, size);
+        res[r_index] = new resources(r_index, write_buf[r_index], read_buf[r_index], size, size);
     }
 
     // start the timing experiment for reads
@@ -122,7 +122,7 @@ int main() {
 
     // node 0 finds the average by reading all the times taken by remote nodes
     if(node_rank == 0) {
-        resources_one_sided *res1, *res2;
+        resources *res1, *res2;
         double times1[num_nodes], times2[num_nodes];
         // read the other nodes' time
         for(int i = 0; i < num_nodes; ++i) {
@@ -130,8 +130,8 @@ int main() {
                 times1[i] = my_time1;
                 times2[i] = my_time2;
             } else {
-                res1 = new resources_one_sided(i, (char *)&my_time1, (char *)&times1[i], sizeof(double), sizeof(double));
-                res2 = new resources_one_sided(i, (char *)&my_time2, (char *)&times2[i], sizeof(double), sizeof(double));
+                res1 = new resources(i, (char *)&my_time1, (char *)&times1[i], sizeof(double), sizeof(double));
+                res2 = new resources(i, (char *)&my_time2, (char *)&times2[i], sizeof(double), sizeof(double));
                 res1->post_remote_read(sizeof(double));
                 res2->post_remote_read(sizeof(double));
                 verbs_poll_completion();
@@ -170,10 +170,10 @@ int main() {
     }
 
     else {
-        resources_one_sided *res1, *res2;
+        resources *res1, *res2;
         double no_need;
-        res1 = new resources_one_sided(0, (char *)&my_time1, (char *)&no_need, sizeof(double), sizeof(double));
-        res2 = new resources_one_sided(0, (char *)&my_time2, (char *)&no_need, sizeof(double), sizeof(double));
+        res1 = new resources(0, (char *)&my_time1, (char *)&no_need, sizeof(double), sizeof(double));
+        res2 = new resources(0, (char *)&my_time2, (char *)&no_need, sizeof(double), sizeof(double));
         sync(0);
         delete(res1);
         delete(res2);

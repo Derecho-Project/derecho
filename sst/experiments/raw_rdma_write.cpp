@@ -53,7 +53,7 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
-    resources_one_sided *res = new resources_one_sided(r_index, read_buf, write_buf, sizeof(int), sizeof(int));
+    resources *res = new resources(r_index, read_buf, write_buf, sizeof(int), sizeof(int));
 
     int num_times = 10000;
     vector<long long int> start_times(num_times), end_times(num_times);

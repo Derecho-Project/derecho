@@ -41,7 +41,7 @@ int main() {
     read_buf = (char *)malloc(size);
 
     int r_index = num_nodes - 1 - node_rank;
-    resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, size, size);
+    resources *res = new resources(r_index, write_buf, read_buf, size, size);
 
     // start the timing experiment
     struct timespec start_time;

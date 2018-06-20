@@ -31,7 +31,7 @@ struct cm_con_data_t {
  * Represents the set of RDMA resources needed to maintain a two-way connection
  * to a single remote node.
  */
-class resources {
+class _resources {
 private:
     /** Initializes the queue pair. */
     void set_qp_initialized();
@@ -65,15 +65,15 @@ public:
 
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */
-    resources(int r_index, char *write_addr, char *read_addr, int size_w,
+    _resources(int r_index, char *write_addr, char *read_addr, int size_w,
               int size_r);
     /** Destroys the resources. */
-    virtual ~resources();
+    virtual ~_resources();
 };
 
-class resources_one_sided : public resources {
+class resources : public _resources {
 public:
-    resources_one_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+    resources(int r_index, char *write_addr, char *read_addr, int size_w,
                         int size_r);
     /*
       wrapper functions that make up the user interface
@@ -92,7 +92,7 @@ public:
     void post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size);
 };
 
-class resources_two_sided : public resources {
+class resources_two_sided : public _resources {
     int post_receive(const uint32_t id, const long long int offset, const long long int size);
 
 public:

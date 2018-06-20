@@ -35,7 +35,7 @@ class P2PConnections {
     // one element per member for P2P
     std::vector<std::unique_ptr<volatile char[]>> incoming_p2p_buffers;
     std::vector<std::unique_ptr<volatile char[]>> outgoing_p2p_buffers;
-    std::vector<std::unique_ptr<resources_one_sided>> res_vec;
+    std::vector<std::unique_ptr<resources>> res_vec;
     std::vector<uint64_t> incoming_request_seq_nums, incoming_rpc_reply_seq_nums, incoming_p2p_reply_seq_nums,
             outgoing_request_seq_nums, outgoing_rpc_reply_seq_nums, outgoing_p2p_reply_seq_nums;
     std::vector<REQUEST_TYPE> prev_mode;

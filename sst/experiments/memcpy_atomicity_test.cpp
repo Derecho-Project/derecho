@@ -66,7 +66,7 @@ int main() {
         b_str[size - 1] = 0;
 
         int r_index = num_nodes - 1 - node_rank;
-        resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, size, 4);
+        resources *res = new resources(r_index, write_buf, read_buf, size, 4);
 
         char *ptr = a_str;
 
@@ -93,7 +93,7 @@ int main() {
         read_buf = (char *)malloc(size);
 
         int r_index = num_nodes - 1 - node_rank;
-        resources_one_sided *res = new resources_one_sided(r_index, write_buf, read_buf, 4, size);
+        resources *res = new resources(r_index, write_buf, read_buf, 4, size);
 
         for(int i = 0; i < num_reruns; ++i) {
             // index is 0, meaning that we start from the beginning and read the entire buffer

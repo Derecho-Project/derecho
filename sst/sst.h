@@ -19,7 +19,7 @@
 #include "predicates.h"
 #include "verbs.h"
 
-using sst::resources_one_sided;
+using sst::resources;
 
 namespace sst {
 
@@ -207,8 +207,8 @@ private:
     /** Mutex for failure detection and row freezing. */
     std::mutex freeze_mutex;
 
-    /** RDMA resources_one_sided vector, one for each member. */
-    std::vector<std::unique_ptr<resources_one_sided>> res_vec;
+    /** RDMA resources vector, one for each member. */
+    std::vector<std::unique_ptr<resources>> res_vec;
 
     /** Indicates whether the predicate evaluation thread should start after being
      * forked in the constructor. */
@@ -274,7 +274,7 @@ public:
                 if(row_is_frozen[sst_index]) {
                     continue;
                 }
-                res_vec[sst_index] = std::make_unique<resources_one_sided>(
+                res_vec[sst_index] = std::make_unique<resources>(
                         node_rank, write_addr, read_addr, rowLen, rowLen);
                 // update qp_num_to_index
                 qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;

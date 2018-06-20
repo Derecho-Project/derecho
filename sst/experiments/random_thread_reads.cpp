@@ -47,7 +47,7 @@ long long int buf_size = 1024 * 1024;
 int num_reads = 10000;
 
 // resources for the nodes
-vector<resources_one_sided *> res_vec;
+vector<resources *> res_vec;
 
 void *post_reads(void *tid) {
     int thread_id = (long)tid;
@@ -125,7 +125,7 @@ int main() {
     // create the resources
     res_vec.resize(num_nodes);
     for(int i = 0; i < num_nodes; ++i) {
-        res_vec[i] = new resources_one_sided(num_nodes - node_rank - 1, write_buf, read_buf, buf_size, read_size);
+        res_vec[i] = new resources(num_nodes - node_rank - 1, write_buf, read_buf, buf_size, read_size);
     }
 
     done_initializing.resize(num_threads, false);

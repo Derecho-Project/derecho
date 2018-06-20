@@ -31,16 +31,16 @@ int main() {
     // create all tcp connections and initialize global rdma resources
     initialize(node_rank, ip_addrs);
 
-    resources_one_sided *res1, *res2;
+    resources *res1, *res2;
     int r_index = num_nodes - 1 - node_rank;
     int size = 10;
     char *write_buf, *read_buf;
     write_buf = (char *)malloc(size);
     read_buf = (char *)malloc(size);
-    res1 = new resources_one_sided(r_index, write_buf, read_buf, size, size);
+    res1 = new resources(r_index, write_buf, read_buf, size, size);
     sync(r_index);
     cout << "Connected Once" << endl;
-    res2 = new resources_one_sided(r_index, write_buf, read_buf, size, size);
+    res2 = new resources(r_index, write_buf, read_buf, size, size);
     cout << "Connected Twice" << endl;
     sync(r_index);
 }

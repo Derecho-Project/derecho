@@ -38,7 +38,7 @@ P2PConnections::P2PConnections(const P2PParams params)
         incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
         outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
         if(i != my_index) {
-            res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                                const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                                3 * max_msg_size * window_size + sizeof(bool),
                                                                3 * max_msg_size * window_size + sizeof(bool));
@@ -85,7 +85,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
             incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
             outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
             if(i != my_index) {
-                res_vec[i] = std::make_unique<resources_one_sided>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+                res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                                    const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                                    3 * max_msg_size * window_size + sizeof(bool),
                                                                    3 * max_msg_size * window_size + sizeof(bool));
