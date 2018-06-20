@@ -110,7 +110,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
 }
 
 P2PConnections::~P2PConnections() {
-    std::cout << "In the P2PConnections destructor" << std::endl;
+    // std::cout << "In the P2PConnections destructor" << std::endl;
     shutdown_failures_thread();
 }
 

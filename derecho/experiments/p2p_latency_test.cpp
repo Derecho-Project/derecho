@@ -87,7 +87,7 @@ int main() {
         struct timespec end_time;
         clock_gettime(CLOCK_REALTIME, &end_time);
         long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
-	cout << "Average latency " << (double)nanoseconds_elapsed/(num_times * 1000) << endl;
+	cout << "Average latency: " << (double)nanoseconds_elapsed/(num_times * 1000) << " microseconds"<< endl;
     } else {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, leader_ip,
