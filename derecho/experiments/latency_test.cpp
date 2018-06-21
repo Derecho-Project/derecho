@@ -176,6 +176,7 @@ int main(int argc, char *argv[]) {
         double average_time = 0.0f;
         for(int i = 0; i < num_messages; ++i) {
             total_time += end_times[i] - start_times[i];
+            // std::cout << ((end_times[i] - start_times[i])/1000.0) << "us" << std::endl;
         }
         average_time = (total_time/num_messages); // in nano seconds
         // calculate the standard deviation:
