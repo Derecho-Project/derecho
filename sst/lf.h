@@ -16,8 +16,8 @@
 namespace sst {
 
 struct lf_sender_ctxt {
-  uint32_t      ce_idx; // index into the comepletion entry vector.
-  uint32_t       remote_id; // thread id of the sender
+  uint32_t      ce_idx; // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
+  uint32_t      remote_id; // thread id of the sender
 };
 
 /**

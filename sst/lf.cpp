@@ -511,7 +511,9 @@ namespace sst{
         if (shutdown) {
           break;
         }
-        util::polling_data.insert_completion_entry(ce.first, ce.second);
+        if (ce.first != 0xFFFFFFFF) {
+          util::polling_data.insert_completion_entry(ce.first, ce.second);
+        } // else we don't know who sent the message, so just drop it.
     }
     std::cout<<"["<<std::this_thread::get_id()<<"] polling thread stops."<<std::endl;
     dbg_trace("Polling thread ending.");
@@ -588,7 +590,10 @@ namespace sst{
         struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)eentry.op_context;
         return {sctxt->ce_idx, {sctxt->remote_id, -1}};
       } else {
-        CRASH_WITH_MESSAGE("failed polling the completion queue");
+          dbg_error("\tFailed polling the completion queue");
+          fprintf(stderr,"Failed polling the completion queue");
+          return {(uint32_t)0xFFFFFFFF,{0,-1}}; // we don't know who sent the message.
+          // CRASH_WITH_MESSAGE("failed polling the completion queue");
       }
     }
     if (!shutdown) {
