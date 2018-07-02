@@ -21,14 +21,32 @@
 #include <utility>
 #include <vector>
 
+#include "derecho_internal.h"
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <mutils/macro_utils.hpp>
 
 namespace derecho {
 
-//Copied-and-pasted from derecho_sst.h to avoid creating another header just for this type.
-using node_id_t = uint32_t;
-
 namespace rpc {
+
+/**
+ * This "compile-time String" puts a short sequence of characters into a type's
+ * template parameter, allowing it to be accessed at compile-time in a constexpr
+ * hash function. This allows us to generate FunctionTags at compile time from
+ * the literal names of functions.
+ */
+template <char... str>
+struct String {
+    static constexpr uint64_t hash() {
+        char string[] = {str...};
+        uint64_t hash_code = 0;
+        for(const int c : string) {
+            if(c == 0) break;  //NUL character terminates the string
+            hash_code = hash_code * 31 + c;
+        }
+        return hash_code;
+    }
+};
 
 using FunctionTag = unsigned long long;
 
@@ -40,7 +58,7 @@ using FunctionTag = unsigned long long;
  */
 struct Opcode {
     std::type_index class_id = std::type_index(typeid(void));
-    uint32_t subgroup_id;
+    subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
 };
@@ -106,7 +124,8 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        mutils::DeserializationManager* dsm, const node_id_t&, const char* recv_buf,
+        //        mutils::DeserializationManager* dsm,
+        mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
 /**
@@ -243,25 +262,46 @@ public:
  */
 template <typename Ret>
 struct PendingResults : public PendingBase {
-    std::promise<std::unique_ptr<reply_map<Ret>>> pending_map;
-    std::map<node_id_t, std::promise<Ret>> populated_promises;
+private:
+    /** A promise for a map containing one future for each reply to the RPC function
+     * call. The future end of this promise lives in QueryResults, and is fulfilled
+     * when the RPC function call is actually sent and the set of repliers is known. */
+    std::promise<std::unique_ptr<reply_map<Ret>>> promise_for_pending_map;
+
+    std::promise<std::map<node_id_t, std::promise<Ret>>> promise_for_reply_promises;
+    /** A future for a map containing one promise for each reply to the RPC function
+     * call. It will be fulfilled when fulfill_map is called, which means the RPC
+     * function call was actually sent and the set of destination nodes is known. */
+    std::future<std::map<node_id_t, std::promise<Ret>>> reply_promises_are_ready;
+    std::map<node_id_t, std::promise<Ret>> reply_promises;
 
     bool map_fulfilled = false;
     std::set<node_id_t> dest_nodes, responded_nodes;
+    std::shared_ptr<spdlog::logger> logger;
 
+public:
+    PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()),
+                       logger(spdlog::get("debug_log")) {
+        logger->trace("Created a PendingResults<{}>", typeid(Ret).name());
+    }
     /**
-     * Fill the result map with an entry for each node that will be contacted
-     * in this RPC call
-     * @param who A list of nodes that will be contacted
+     * Fill pending_map and reply_promises with one promise/future pair for
+     * each node that was contacted in this RPC call
+     * @param who A list of nodes from which to expect responses.
      */
     void fulfill_map(const node_list_t& who) {
+        logger->trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
+        logger->flush();
         map_fulfilled = true;
-        std::unique_ptr<reply_map<Ret>> to_add = std::make_unique<reply_map<Ret>>();
+        std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
+        std::map<node_id_t, std::promise<Ret>> promises_map;
         for(const auto& e : who) {
-            to_add->emplace(e, populated_promises[e].get_future());
+            futures_map->emplace(e, promises_map[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
-        pending_map.set_value(std::move(to_add));
+        logger->trace("Setting a value for reply_promises_are_ready");
+        promise_for_reply_promises.set_value(std::move(promises_map));
+        promise_for_pending_map.set_value(std::move(futures_map));
     }
 
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
@@ -276,16 +316,24 @@ struct PendingResults : public PendingBase {
 
     void set_value(const node_id_t& nid, const Ret& v) {
         responded_nodes.insert(nid);
-        populated_promises[nid].set_value(v);
+        if(reply_promises.size() == 0) {
+            logger->trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());
+            logger->flush();
+            reply_promises = std::move(reply_promises_are_ready.get());
+        }
+        reply_promises.at(nid).set_value(v);
     }
 
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
         responded_nodes.insert(nid);
-        populated_promises[nid].set_exception(e);
+        if(reply_promises.size() == 0) {
+            reply_promises = std::move(reply_promises_are_ready.get());
+        }
+        reply_promises.at(nid).set_exception(e);
     }
 
     QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{pending_map.get_future()};
+        return QueryResults<Ret>{promise_for_pending_map.get_future()};
     }
 };
 
@@ -295,7 +343,9 @@ struct PendingResults<void> : public PendingBase {
        we might want to have in both this and the non-void variant.
     */
 
-    void fulfill_map(const node_list_t&) {}
+    void fulfill_map(const node_list_t&) {
+        spdlog::get("debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");
+    }
     void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }
 };
@@ -323,7 +373,8 @@ inline void populate_header(char* reply_buf,
     ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
 }
 
-inline void retrieve_header(mutils::DeserializationManager* dsm,
+//inline void retrieve_header(mutils::DeserializationManager* dsm,
+inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {
@@ -335,3 +386,5 @@ inline void retrieve_header(mutils::DeserializationManager* dsm,
 
 }  // namespace rpc
 }  // namespace derecho
+
+#define CT_STRING(...) derecho::rpc::String<MACRO_GET_STR(#__VA_ARGS__)>

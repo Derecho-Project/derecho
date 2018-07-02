@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -26,7 +27,7 @@ SubView::SubView(Mode mode,
                  const std::vector<ip_addr>& member_ips)
         : mode(mode),
           members(members),
-	  is_sender(members.size(), 1),
+          is_sender(members.size(), 1),
           member_ips(member_ips),
           my_rank(-1) {
     // if the sender information is not provided, assume that all members are senders
@@ -69,8 +70,7 @@ uint32_t SubView::num_senders() const {
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
-           const std::vector<node_id_t>& departed, const int32_t num_members,
-           const int32_t next_unassigned_rank)
+           const std::vector<node_id_t>& departed, const int32_t num_members)
         : vid(vid),
           members(members),
           member_ips(member_ips),
@@ -79,8 +79,8 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0),  //This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(next_unassigned_rank) {
+          my_rank(0),               //This will always get overwritten by the receiver after deserializing
+          next_unassigned_rank(0) { /* next_unassigned_rank should never be serialized, since each node must re-run the allocation functions independently */
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
@@ -102,6 +102,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
           members(members),
           member_ips(member_ips),
           failed(failed),
+          num_failed(0),
           joined(joined),
           departed(departed),
           num_members(members.size()),
@@ -254,7 +255,7 @@ std::string View::debug_string() const {
 
 std::unique_ptr<View> load_view(const std::string& view_file_name) {
     std::ifstream view_file(view_file_name);
-    std::ifstream view_file_swap(view_file_name + persistence::SWAP_FILE_EXTENSION);
+    std::ifstream view_file_swap(view_file_name + ".swp");
     std::unique_ptr<View> view;
     std::unique_ptr<View> swap_view;
     //The expected view file might not exist, in which case we'll fall back to the swap file
@@ -297,8 +298,6 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
         stream << (fail_val ? "T" : "F") << " ";
     }
     stream << std::endl;
-    stream << view.num_failed << std::endl;
-    stream << view.num_members << std::endl;
     stream << view.my_rank << std::endl;
     return stream;
 }
@@ -332,19 +331,10 @@ View parse_view(std::istream& stream) {
             failed.emplace_back(fail_str == "T" ? true : false);
         }
     }
-    int32_t num_failed = 0;
-    //The last three lines each contain a single number
-    if(std::getline(stream, line)) {
-        num_failed = std::stoi(line);
-    }
-    int32_t num_members = 0;
-    if(std::getline(stream, line)) {
-        num_members = std::stoi(line);
-    }
     int32_t my_rank = -1;
     if(std::getline(stream, line)) {
         my_rank = std::stoi(line);
     }
-    return View(vid, members, member_ips, failed, num_failed, {}, {}, num_members, my_rank);
+    return View(vid, members, member_ips, failed, {}, {}, my_rank);
 }
 }

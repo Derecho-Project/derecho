@@ -12,6 +12,7 @@
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
 #include "mutils/tuple_extras.hpp"
+#include <spdlog/spdlog.h>
 
 #include "rpc_utils.h"
 
@@ -87,23 +88,23 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
     /**
      * Called to construct an RPC message to send that will invoke the remote-
-     * invocable function managed by this RemoteInvocable.
+     * invocable function targeted by this RemoteInvoker.
      * @param out_alloc A function that can allocate buffers, which will be
      * used to store the constructed message
      * @param a The arguments to be used when calling the remote-invocable function
      */
     send_return send(const std::function<char*(int)>& out_alloc,
-                     const std::decay_t<Args>&... a) {
+                     const std::decay_t<Args>&... remote_args) {
         auto invocation_id = mutils::long_rand();
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(remote_args)...};
             size += std::accumulate(t.begin(), t.end(), 0);
         }
         char* serialized_args = out_alloc(size);
         {
             auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
-            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, a...);
+            auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, remote_args...);
             assert(check_size == size);
         }
 
@@ -123,7 +124,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     template <typename definitely_char>
     inline recv_ret receive_response(
-            std::false_type*, mutils::DeserializationManager* dsm,
+            std::false_type*,
+            mutils::DeserializationManager* dsm,
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
@@ -160,11 +162,14 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * @param f
      * @return A recv_ret containing nothing of value.
      */
-    inline recv_ret receive_response(mutils::DeserializationManager* dsm,
-                                     const node_id_t& nid, const char* response,
-                                     const std::function<char*(int)>& f) {
+    inline recv_ret receive_response(  //mutils::DeserializationManager* dsm,
+            mutils::RemoteDeserialization_v* rdv,
+            const node_id_t& nid, const char* response,
+            const std::function<char*(int)>& f) {
         constexpr std::is_same<void, Ret>* choice{nullptr};
-        return receive_response(choice, dsm, nid, response, f);
+        //        return receive_response(choice, dsm, nid, response, f);
+        mutils::DeserializationManager dsm{*rdv};
+        return receive_response(choice, &dsm, nid, response, f);
     }
 
     /**
@@ -174,6 +179,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * @param who The list of nodes that will service this RPC call
      */
     inline void fulfill_pending_results_map(long int invocation_id, const node_list_t& who) {
+        // I think this function is never called
+        assert(false);
         results_map.at(invocation_id).fulfill_map(who);
     }
 
@@ -192,9 +199,9 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true} {
-        receivers[reply_opcode] = [this](auto... a) {
+        receivers.emplace(reply_opcode, [this](auto... a) {
             return this->receive_response(a...);
-        };
+        });
     }
 };
 
@@ -224,34 +231,6 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         return *this;
     }
 
-    std::tuple<> _deserialize(mutils::DeserializationManager*,
-                              char const* const) {
-        return std::tuple<>{};
-    }
-
-    template <typename fst, typename... rst>
-    std::tuple<std::unique_ptr<fst>, std::unique_ptr<rst>...> _deserialize(
-            mutils::DeserializationManager* dsm, char const* const buf, fst*,
-            rst*... rest) {
-        using Type = std::decay_t<fst>;
-        auto ds = mutils::from_bytes<Type>(dsm, buf);
-        const auto size = mutils::bytes_size(*ds);
-        return std::tuple_cat(std::make_tuple(std::move(ds)),
-                              _deserialize(dsm, buf + size, rest...));
-    }
-
-    /**
-     * Deserializes a buffer containing a list of arguments into a tuple
-     * containing the arguments, deserialized.
-     * @param dsm
-     * @param buf The buffer containing serialized objects
-     * @return A tuple of deserialized objects
-     */
-    std::tuple<std::unique_ptr<std::decay_t<Args>>...> deserialize(
-            mutils::DeserializationManager* dsm, char const* const buf) {
-        return _deserialize(dsm, buf, ((std::decay_t<Args>*)(nullptr))...);
-    }
-
     /**
      * Specialization of receive_call for non-void functions. After calling the
      * function locally, it constructs a message containing the return value to
@@ -266,9 +245,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         long int invocation_id = ((long int*)_recv_buf)[0];
         auto recv_buf = _recv_buf + sizeof(long int);
         try {
-            const auto result = mutils::callFunc([&](const auto&... args) { return remote_invocable_function(*args...); },
-                                                 deserialize(dsm, recv_buf));
-            // const auto result = remote_invocable_function(*deserialize<Args>(dsm, recv_buf)...);
+            const auto result = mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
             const auto result_size = mutils::bytes_size(result) + sizeof(long int) + 1;
             auto out = out_alloc(result_size);
             out[0] = false;
@@ -294,9 +271,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
                                  const std::function<char*(int)>&) {
         //TODO: Need to catch exceptions here, and possibly send them back, since void functions can still throw exceptions!
         auto recv_buf = _recv_buf + sizeof(long int);
-        mutils::callFunc([&](const auto&... args) { remote_invocable_function(*args...); },
-                         deserialize(dsm, recv_buf));
-        // remote_invocable_function(*deserialize<Args>(dsm, recv_buf)...);
+        mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
         return recv_ret{reply_opcode, 0, nullptr};
     }
 
@@ -310,11 +285,14 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * @param out_alloc A function that can allocate a buffer for the response message
      * @return
      */
-    inline recv_ret receive_call(mutils::DeserializationManager* dsm,
-                                 const node_id_t& who, const char* recv_buf,
-                                 const std::function<char*(int)>& out_alloc) {
+    inline recv_ret receive_call(  //mutils::DeserializationManager* dsm,
+            mutils::RemoteDeserialization_v* rdv,
+            const node_id_t& who, const char* recv_buf,
+            const std::function<char*(int)>& out_alloc) {
         constexpr std::is_same<Ret, void>* choice{nullptr};
-        return this->receive_call(choice, dsm, who, recv_buf, out_alloc);
+        //      return this->receive_call(choice, dsm, who, recv_buf, out_alloc);
+        mutils::DeserializationManager dsm{*rdv};
+        return this->receive_call(choice, &dsm, who, recv_buf, out_alloc);
     }
 
     /**
@@ -332,9 +310,9 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             : remote_invocable_function(f),
               invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true} {
-        receivers[invoke_opcode] = [this](auto... a) {
+        receivers.emplace(invoke_opcode, [this](auto... a) {
             return this->receive_call(a...);
-        };
+        });
     }
 };
 
@@ -521,13 +499,27 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
+    std::shared_ptr<spdlog::logger> logger;
+
 public:
     const node_id_t nid;
 
     RemoteInvocableClass(node_id_t nid, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
             : RemoteInvocablePairs<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs, fs.fun...),
+              logger(spdlog::get("debug_log")),
               nid(nid) {}
+
+    template <FunctionTag Tag, typename... Args>
+    std::size_t get_size(Args&&... a) {
+        auto invocation_id = mutils::long_rand();
+        std::size_t size = mutils::bytes_size(invocation_id);
+        {
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            size += std::accumulate(t.begin(), t.end(), 0);
+        }
+        return size;
+    }
 
     /**
      * Constructs a message that will remotely invoke a method of this class,

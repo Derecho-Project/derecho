@@ -8,14 +8,14 @@
 #include <thread>
 #include <vector>
 
-using namespace std;
-
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
 
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
+
+using namespace std;
 
 unique_ptr<rdmc::barrier_group> universal_barrier_group;
 
@@ -33,23 +33,22 @@ struct exp_result {
     long long unsigned int max_msg_size;
     unsigned int window_size;
     int num_messages;
-    int send_medium;
     int raw_mode;
     double latency;
 
     void print(std::ofstream &fout) {
         fout << num_nodes << " " << max_msg_size
 	     << " " << window_size << " "
-             << num_messages << " " << send_medium << " "
+             << num_messages << " "
              << raw_mode << " " << latency << endl;
     }
 };
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 6) {
+        if(argc < 5) {
             cout << "Insufficient number of command line arguments" << endl;
-            cout << "Enter num_nodes, msg_size, window_size, send_medium, raw_mode" << endl;
+            cout << "Enter num_nodes, msg_size, window_size, raw_mode" << endl;
             cout << "Thank you" << endl;
             exit(1);
         }
@@ -64,9 +63,8 @@ int main(int argc, char *argv[]) {
 
         const long long unsigned int max_msg_size = msg_size;
         const long long unsigned int block_size = get_block_size(max_msg_size);
-        const unsigned int window_size = atoi(argv[3]);
-        const int send_medium = atoi(argv[4]);
-        const int raw_mode = atoi(argv[5]);
+        const unsigned int window_size = atoi(argv[3]); 
+        const int raw_mode = atoi(argv[4]);
 
         int num_messages = 1000;
 	// only used by node 0
@@ -78,7 +76,7 @@ int main(int argc, char *argv[]) {
                 long long int msg_size) mutable {
             // cout << buf << endl;
             // cout << "Delivered a message" << endl;
-            // DERECHO_LOG(sender_id, index, "complete_send");
+            DERECHO_LOG(sender_id, index, "complete_send");
             if(sender_id == 0) {
                 end_times[index] = get_time();
             }
@@ -98,7 +96,7 @@ int main(int argc, char *argv[]) {
         }
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
-        derecho::DerechoParams param_object{max_msg_size, block_size, std::string(), window_size};
+        derecho::DerechoParams param_object{max_msg_size, block_size, window_size};
         std::unique_ptr<derecho::Group<>> managed_group;
 
         if(node_id == leader_id) {
@@ -106,7 +104,7 @@ int main(int argc, char *argv[]) {
                     node_id, my_ip,
                     callbacks,
                     *one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
+                    derecho::DerechoParams{max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, my_ip,
@@ -148,16 +146,16 @@ int main(int argc, char *argv[]) {
 
         derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size, send_medium);
+            char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
             while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(msg_size, send_medium);
+                buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
             }
             for(unsigned int j = 0; j < msg_size - 1; ++j) {
                 buf[j] = 'a' + (i % 26);
             }
             buf[msg_size - 1] = 0;
             start_times[i] = get_time();
-            // DERECHO_LOG(my_rank, i, "start_send");
+            DERECHO_LOG(my_rank, i, "start_send");
             group_as_subgroup.send();
 
             if(node_id == 0) {
@@ -172,10 +170,10 @@ int main(int argc, char *argv[]) {
             total_time += end_times[i] - start_times[i];
         }
         if(node_id == 0) {
-	  log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, send_medium, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
+	  log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
         }
-        // managed_group->barrier_sync();
-        // flush_events();
+	managed_group->barrier_sync();
+	flush_events();
         // for(int i = 100; i < num_messages - 100; i+= 5){
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }

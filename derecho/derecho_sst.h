@@ -7,16 +7,11 @@
 #include <sstream>
 #include <string>
 
+#include "derecho_internal.h"
 #include "sst/multicast_msg.h"
 #include "sst/sst.h"
 
 namespace derecho {
-
-using ip_addr = std::string;
-using node_id_t = uint32_t;
-
-const int MAX_STRING_LEN = 50;
-using cstring = char[MAX_STRING_LEN];
 
 using sst::SSTField;
 using sst::SSTFieldVector;
@@ -38,24 +33,24 @@ public:
      * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
-    SSTFieldVector<long long int> seq_num;
+    SSTFieldVector<message_id_t> seq_num;
     /** This represents the highest sequence number that has been received
      * by every node, as observed by this node. If a node updates stable_num,
      * then it believes that all messages up to stable_num in the global
      * round-robin order have been received by every node. */
-    SSTFieldVector<long long int> stable_num;
+    SSTFieldVector<message_id_t> stable_num;
     /** This represents the highest sequence number that has been delivered
      * at this node. Messages are only delievered once stable, so it must be
      * at least stable_num. */
-    SSTFieldVector<long long int> delivered_num;
-    /** This represents the highest sequence number that has been persisted
-     * to disk at this node, if persistence is enabled. Messages are only
-     * persisted to disk once delivered to the application. */
-    SSTFieldVector<long long int> persisted_num;
+    SSTFieldVector<message_id_t> delivered_num;
+    /** This represents the highest persistent version number that has been
+     * persisted to disk at this node, if persistence is enabled. This is
+     * updated by the PersistenceManager. */
+    SSTFieldVector<persistent::version_t> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
-    SSTField<int> vid;
+    SSTField<int32_t> vid;
     /** Array of same length as View::members, where each bool represents
      * whether the corresponding member is suspected to have failed */
     SSTFieldVector<bool> suspected;
@@ -87,7 +82,7 @@ public:
     /** Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
-    SSTFieldVector<long long int> num_received;
+    SSTFieldVector<int32_t> num_received;
     /** Set after calling rdmc::wedged(), reports that this member is wedged.
      * Must be after num_received!*/
     SSTField<bool> wedged;
@@ -98,10 +93,10 @@ public:
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
     SSTFieldVector<sst::Message> slots;
-    SSTFieldVector<long long int> num_received_sst;
+    SSTFieldVector<int32_t> num_received_sst;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
-    SSTField<bool> heartbeat;
+    SSTFieldVector<uint64_t> local_stability_frontier;
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
      * (0, false, etc.). Initializing the MulticastGroup fields is left to MulticastGroup.
@@ -121,14 +116,15 @@ public:
               global_min(num_received_size),
               global_min_ready(num_subgroups),
               slots(window_size * num_subgroups),
-              num_received_sst(num_received_size) {
+              num_received_sst(num_received_size),
+              local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-                slots, num_received_sst, heartbeat);
+                slots, num_received_sst, local_stability_frontier);
         //Once superclass constructor has finished, table entries can be initialized
-        for(int row = 0; row < get_num_rows(); ++row) {
+        for(unsigned int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
             for(size_t i = 0; i < suspected.size(); ++i) {
                 suspected[row][i] = false;
@@ -148,7 +144,13 @@ public:
             num_installed[row] = 0;
             num_acked[row] = 0;
             wedged[row] = false;
-            heartbeat[row] = true;
+            // start off local_stability_frontier with the current time
+            struct timespec start_time;
+            clock_gettime(CLOCK_REALTIME, &start_time);
+            auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
+            for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
+                local_stability_frontier[row][i] = current_time;
+            }
         }
     }
 
@@ -269,11 +271,7 @@ void set(volatile Arr (&dst)[L1], const volatile Arr (&src)[L2], const size_t& n
 
 void set(volatile char* string_array, const std::string& value);
 
-void set(volatile cstring& element, const std::string& value);
-
 void increment(volatile int& member);
-
-bool equals(const volatile cstring& element, const std::string& value);
 
 bool equals(const volatile char& string_array, const std::string& value);
 

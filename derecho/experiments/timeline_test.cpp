@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
 
     using derecho::RawObject;
 
-    derecho::CallbackSet callback_set{stability_callback, derecho::message_callback{}};
+    derecho::CallbackSet callback_set{stability_callback, derecho::persistence_callback_t{}};
     derecho::DerechoParams param_object{message_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};

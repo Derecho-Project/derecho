@@ -18,6 +18,8 @@
 #include "tcp/tcp.h"
 
 #include "derecho_exception.h"
+#include "derecho_internal.h"
+#include "persistence_manager.h"
 #include "raw_subgroup.h"
 #include "replicated.h"
 #include "rpc_manager.h"
@@ -29,6 +31,9 @@
 #include "spdlog/spdlog.h"
 
 namespace derecho {
+//Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
+template <typename T>
+using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
 /**
  * The top-level object for creating a Derecho group. This implements the group
@@ -42,9 +47,6 @@ class Group {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
-    template <typename T>
-    using replicated_index_map = std::map<uint32_t, Replicated<T>>;
     //Same thing for a sparse-vector of ExternalCaller
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
@@ -52,6 +54,9 @@ private:
     std::shared_ptr<spdlog::logger> logger;
 
     const node_id_t my_id;
+    /** Persist the objects. Once persisted, persistence_manager updates the SST
+     * so that the persistent progress is known by group members. */
+    PersistenceManager<ReplicatedTypes...> persistence_manager;
     /** Contains all state related to managing Views, including the
      * ManagedGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
@@ -242,38 +247,6 @@ public:
           std::vector<view_upcall_t> _view_upcalls = {},
           const int gms_port = derecho_gms_port,
           Factory<ReplicatedTypes>... factories);
-    /**
-     * Constructor that re-starts a failed group member from log files.
-     * It assumes the local ".paxosstate" file already contains the last known
-     * view, obtained from a quorum of members, and that any messages missing
-     * from the local log have already been appended from the longest log of a
-     * member of the last known view. (This can be accomplished by running the
-     * script log_recovery_helper.sh). Does NOT currently attempt to replay
-     * completion events for missing messages that were transferred over from
-     * another member's log.
-     *
-     * @param recovery_filename The base name of the set of recovery files to
-     * use (extensions will be added automatically)
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
-     * @param callbacks The set of callback functions to use for message
-     * delivery events once the group has been re-joined
-     * @param derecho_params (Optional) If set, and this node is the leader of
-     * the restarting group, a new set of Derecho parameters to configure the
-     * group with. Otherwise, these parameters will be read from the logfile or
-     * copied from the existing group leader.
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
-     */
-    Group(const std::string& recovery_filename,
-          const node_id_t my_id,
-          const ip_addr my_ip,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          std::experimental::optional<DerechoParams> _derecho_params = std::experimental::optional<DerechoParams>{},
-          std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
-          Factory<ReplicatedTypes>... factories);
 
     ~Group();
 
@@ -315,6 +288,9 @@ public:
      */
     template <typename SubgroupType>
     ExternalCaller<SubgroupType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
+    ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();

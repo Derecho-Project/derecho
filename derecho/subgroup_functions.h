@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "derecho_internal.h"
 #include "derecho_modes.h"
 #include "subgroup_info.h"
 
@@ -84,7 +85,7 @@ ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard);
  */
 ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard);
 /**
- * Returnsa ShardAllocationPolicy for a subgroup that has a different number of
+ * Returns a ShardAllocationPolicy for a subgroup that has a different number of
  * members in each shard, and possibly has each shard in a different delivery mode.
  * Note that the two parameter vectors must be the same length.
  * @param num_nodes_by_shard A vector specifying how many nodes should be in each
@@ -120,6 +121,7 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
  * allocation algorithm, parameterized based on a SubgroupAllocationPolicy.
  */
 class DefaultSubgroupAllocator {
+protected:
     std::unique_ptr<subgroup_shard_layout_t> previous_assignment;
     std::unique_ptr<subgroup_shard_layout_t> last_good_assignment;
     const SubgroupAllocationPolicy policy;

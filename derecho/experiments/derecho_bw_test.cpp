@@ -26,23 +26,22 @@ struct exp_result {
     long long unsigned int max_msg_size;
     unsigned int window_size;
     int num_messages;
-    int send_medium;
     int raw_mode;
     double bw;
 
     void print(std::ofstream &fout) {
         fout << num_nodes << " " << num_senders_selector << " "
              << max_msg_size << " " << window_size << " "
-             << num_messages << " " << send_medium << " "
-             << raw_mode << " " << bw << endl;
+             << num_messages << " " << raw_mode << " "
+	     << bw << endl;
     }
 };
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 7) {
+        if(argc < 6) {
             cout << "Insufficient number of command line arguments" << endl;
-            cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, send_medium, raw_mode" << endl;
+            cout << "Enter max_msg_size, num_senders_selector, window_size, num_messages, raw_mode" << endl;
             cout << "Thank you" << endl;
             exit(1);
         }
@@ -68,8 +67,7 @@ int main(int argc, char *argv[]) {
         const uint num_senders_selector = atoi(argv[2]);
         const unsigned int window_size = atoi(argv[3]);
         const int num_messages = atoi(argv[4]);
-        const int send_medium = atoi(argv[5]);
-        const int raw_mode = atoi(argv[6]);
+        const int raw_mode = atoi(argv[5]);
 
         volatile bool done = false;
         auto stability_callback = [
@@ -101,7 +99,7 @@ int main(int argc, char *argv[]) {
 
         derecho::Mode mode = derecho::Mode::ORDERED;
         if(raw_mode) {
-            mode = derecho::Mode::RAW;
+            mode = derecho::Mode::UNORDERED;
         }
 
         auto membership_function = [num_senders_selector, mode, num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
@@ -138,7 +136,7 @@ int main(int argc, char *argv[]) {
                     node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, std::string(), window_size});
+                    derecho::DerechoParams{max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, node_addresses[node_id],
@@ -166,9 +164,9 @@ int main(int argc, char *argv[]) {
             RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
             for(int i = 0; i < num_messages; ++i) {
                 // cout << "Asking for a buffer" << endl;
-                char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
+                char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
                 while(!buf) {
-                    buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size, send_medium);
+                    buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
                 }
                 buf[0] = '0' + i;
                 // cout << "Obtained a buffer, sending" << endl;
@@ -206,7 +204,7 @@ int main(int argc, char *argv[]) {
         double avg_bw = aggregate_bandwidth(members, node_id, bw);
         if(node_rank == 0) {
             log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
-                                   window_size, num_messages, send_medium,
+                                   window_size, num_messages,
                                    raw_mode, avg_bw},
                         "data_derecho_bw");
         }

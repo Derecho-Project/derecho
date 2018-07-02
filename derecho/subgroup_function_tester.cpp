@@ -8,6 +8,7 @@
 #include <iostream>
 #include <vector>
 
+#include "derecho_internal.h"
 #include "subgroup_function_tester.h"
 
 std::string ip_generator() {
@@ -43,22 +44,19 @@ int main(int argc, char* argv[]) {
 
     //This will create subgroups that are the cross product of the "uneven_sharded_policy" and "sharded_policy" groups
     CrossProductPolicy uneven_to_even_cp{
-        {std::type_index(typeid(TestType3)), 0},
-        {std::type_index(typeid(TestType1)), 0}
-    };
+            {std::type_index(typeid(TestType3)), 0},
+            {std::type_index(typeid(TestType1)), 0}};
 
     //We're really just testing the allocation functions, so assign each one to a dummy Replicated type
     derecho::SubgroupInfo test_subgroups{
-        { {std::type_index(typeid(TestType1)), DefaultSubgroupAllocator(sharded_policy)},
-          {std::type_index(typeid(TestType2)), DefaultSubgroupAllocator(unsharded_policy)},
-          {std::type_index(typeid(TestType3)), DefaultSubgroupAllocator(uneven_sharded_policy)},
-          {std::type_index(typeid(TestType4)), DefaultSubgroupAllocator(multiple_copies_policy)},
-          {std::type_index(typeid(TestType5)), DefaultSubgroupAllocator(multiple_subgroups_policy)},
-          {std::type_index(typeid(TestType6)), CrossProductAllocator(uneven_to_even_cp)}
-        },
-        { std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)), std::type_index(typeid(TestType3)),
-        std::type_index(typeid(TestType4)), std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6)) }
-    };
+            {{std::type_index(typeid(TestType1)), DefaultSubgroupAllocator(sharded_policy)},
+             {std::type_index(typeid(TestType2)), DefaultSubgroupAllocator(unsharded_policy)},
+             {std::type_index(typeid(TestType3)), DefaultSubgroupAllocator(uneven_sharded_policy)},
+             {std::type_index(typeid(TestType4)), DefaultSubgroupAllocator(multiple_copies_policy)},
+             {std::type_index(typeid(TestType5)), DefaultSubgroupAllocator(multiple_subgroups_policy)},
+             {std::type_index(typeid(TestType6)), CrossProductAllocator(uneven_to_even_cp)}},
+            {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)), std::type_index(typeid(TestType3)),
+             std::type_index(typeid(TestType4)), std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))}};
 
     std::vector<derecho::node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
@@ -175,7 +173,6 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
             curr_view.subgroup_shard_views.emplace_back(
                     std::move(subgroup_shard_views[subgroup_index]));
         }
-
     }
 }
 

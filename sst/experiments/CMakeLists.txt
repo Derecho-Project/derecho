@@ -4,6 +4,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 PROJECT(sst CXX)
 set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++14 -Wall -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++14 -Wall -O3 -ggdb -gdwarf-3")
 
 include_directories(${derecho_SOURCE_DIR})
 
@@ -38,6 +39,10 @@ target_link_libraries(multicast_throughput sst)
 # write_avg_time
 add_executable(write_avg_time write_avg_time.cpp compute_nodes_list.cpp)
 target_link_libraries(write_avg_time sst)
+
+# rdma_two_sided
+add_executable(rdma_two_sided rdma_two_sided.cpp)
+target_link_libraries(rdma_two_sided sst)
 
 # format experiments
 add_custom_target(format_sst_experiments clang-format-3.8 -i *.cpp *.h)

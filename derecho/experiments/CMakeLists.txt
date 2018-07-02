@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_DEBUG "-std=c++14 -Wall -ggdb -gdwarf-3 -D_DEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-std=c++14 -Wall -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++14 -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
@@ -44,6 +45,10 @@ target_link_libraries(latency_test derecho)
 add_executable(derecho_caller_test derecho_caller_test.cpp block_size.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
 
+# p2p_latency_test
+add_executable(p2p_latency_test p2p_latency_test.cpp block_size.cpp)
+target_link_libraries(p2p_latency_test derecho mutils mutils-serialization)
+
 # subgroup_test
 add_executable(subgroup_test subgroup_test.cpp initialize.cpp)
 target_link_libraries(subgroup_test derecho)
@@ -83,22 +88,71 @@ target_link_libraries(timeline_test derecho)
 add_executable(viewchange_timeline viewchange_timeline.cpp initialize.cpp)
 target_link_libraries(viewchange_timeline derecho)
 
-add_executable(basic_persistence_test basic_persistence_test.cpp initialize.cpp)
-target_link_libraries(basic_persistence_test derecho)
+# p2p_query_test
+add_executable(p2p_query_test p2p_query_test.cpp initialize.cpp)
+target_link_libraries(p2p_query_test derecho)
 
-add_executable(log_recovery_crash log_recovery_crash.cpp initialize.cpp)
-target_link_libraries(log_recovery_crash derecho)
-
-add_executable(local_filewriter_test local_filewriter_test.cpp)
-target_link_libraries(local_filewriter_test derecho)
+add_executable(repeated_rpc_test repeated_rpc_test.cpp initialize.cpp)
+target_link_libraries(repeated_rpc_test derecho)
 
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)
 
+# long_subgroup_test
+add_executable(long_subgroup_test long_subgroup_test.cpp initialize.cpp)
+target_link_libraries(long_subgroup_test derecho)
+
+# typed_subgroup_bw_test
+add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(typed_subgroup_bw_test derecho)
+
+# persistent_typed_subgroup_bw_test
+add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(persistent_typed_subgroup_bw_test derecho)
+
+# volatile_typed_subgroup_bw_test
+add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(volatile_typed_subgroup_bw_test derecho)
+
+# volatile_temporal_query_test
+add_executable(volatile_temporal_query_test volatile_temporal_query_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(volatile_temporal_query_test derecho)
+
+# persistent_temporal_query_test
+add_executable(persistent_temporal_query_test persistent_temporal_query_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(persistent_temporal_query_test derecho)
+
+# volatile_temporal_stability_test.cpp
+add_executable(volatile_temporal_stability_test volatile_temporal_stability_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(volatile_temporal_stability_test derecho)
+
+# persistent_temporal_stability_test
+add_executable(persistent_temporal_stability_test persistent_temporal_stability_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(persistent_temporal_stability_test derecho)
+
+# persistent_latency_test
+add_executable(persistent_latency_test persistent_latency_test.cpp block_size.cpp initialize.cpp)
+target_link_libraries(persistent_latency_test derecho)
+
 # smart membership function
-# add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
-# target_link_libraries(smart_membership_function_test derecho)
+add_executable(smart_membership_function_test smart_membership_function_test.cpp initialize.cpp)
+target_link_libraries(smart_membership_function_test derecho)
+
+# persistent_typed_subgroup_test
+add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)
+target_link_libraries(persistent_typed_subgroup_test derecho)
+
+#shard_iterator_p2p_test
+add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
+target_link_libraries(shard_iterator_p2p_test derecho)
+
+add_executable(persistent_rejoin_test persistent_rejoin_test.cpp initialize.cpp)
+target_link_libraries(persistent_rejoin_test derecho)
+
+# scaling_subgroup_test
+add_executable(scaling_subgroup_test scaling_subgroup_test.cpp initialize.cpp)
+target_link_libraries(scaling_subgroup_test derecho)
 
 # asynchronous_dht
 add_executable(asynchronous_dht asynchronous_dht.cpp initialize.cpp)
