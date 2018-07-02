@@ -20,14 +20,30 @@ public:
         return table[key];
     }
 
+  void fun(T v0, T v1, T v2) {
+    put(0, v0);
+    put(1, v1);
+    put(2, v2);
+  }
+
+  void print() {
+    for (auto p : table) {
+        std::cout << p.first << " " << p.second << std::endl;
+    }
+  }
+
     enum Functions {
         PUT,
-        GET
+        GET,
+	FUN,
+	PRINT
     };
 
     static auto register_functions() {
-      return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<T>::put),
-			     derecho::rpc::tag<GET>(&HashTable<T>::get));
+        return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<T>::put),
+                               derecho::rpc::tag<GET>(&HashTable<T>::get),
+                               derecho::rpc::tag<FUN>(&HashTable<T>::fun),
+                               derecho::rpc::tag<PRINT>(&HashTable<T>::print));
     }
 
     HashTable() : table() {}
@@ -64,7 +80,7 @@ int main() {
 
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(HashTable<std::string>)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
-                  if(curr_view.num_members < 10) {
+                  if(curr_view.num_members < 2) {
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
@@ -75,7 +91,7 @@ int main() {
                   return subgroup_vector;
               }}}};
 
-    auto HashTableGenerator = []() { return std::make_unique<HashTable<std::string>>(); };
+    auto HashTableGenerator = [](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
 
     std::unique_ptr<derecho::Group<HashTable<std::string>>> group;
     if(my_ip == leader_ip) {
@@ -86,6 +102,12 @@ int main() {
 
     std::unique_lock<std::mutex> main_lock(main_mutex);
     main_cv.wait(main_lock, [&groups_provisioned]() { return groups_provisioned; });
+    std::cout << "Subgroups provisioned" << std::endl;
+    auto& subgroup_handle = group->get_subgroup<HashTable<std::string>>();
+    // std::string a = "hello", b = "hi", c = "bye";
+    subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
+    subgroup_handle.ordered_send<HashTable<std::string>::PRINT>();
+    std::cout << "Entering infinite loop" << std::endl;
     while(true) {
     }
 }
