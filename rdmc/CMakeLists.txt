@@ -23,5 +23,6 @@ endif (SLURM_FOUND)
 
 #ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 #TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
+add_dependencies(rdmc libfabric_target)
 
 add_custom_target(format_rdmc clang-format-3.8 -i *.cpp *.h)
