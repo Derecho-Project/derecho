@@ -154,4 +154,8 @@ target_link_libraries(persistent_rejoin_test derecho)
 add_executable(scaling_subgroup_test scaling_subgroup_test.cpp initialize.cpp)
 target_link_libraries(scaling_subgroup_test derecho)
 
+# server_client_p2p
+add_executable(server_client_p2p server_client_p2p.cpp initialize.cpp)
+target_link_libraries(server_client_p2p derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)
