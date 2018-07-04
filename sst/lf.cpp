@@ -419,10 +419,10 @@ namespace sst{
     const int op,
     const bool completion) {
     // dbg_trace("resources::post_remote_send(),this={}",(void*)this);
-    #ifdef _DEBUG
-    printf(YEL "resources::post_remote_send(),this=%p\n" RESET, this);
-    fflush(stdout);
-    #endif
+    // #ifdef _DEBUG
+    // printf(YEL "resources::post_remote_send(),this=%p\n" RESET, this);
+    // fflush(stdout);
+    // #endif
     // dbg_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={})",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
 
     int ret = 0;
@@ -462,10 +462,10 @@ namespace sst{
     }
     // dbg_trace("post_remote_send return with ret={}",ret);
     // dbg_flush();
-    #ifdef _DEBUG
-    printf(YEL "resources::post_remote_send return with ret=%d\n" RESET, ret);
-    fflush(stdout);
-    #endif//_DEBUG
+    // #ifdef _DEBUG
+    // printf(YEL "resources::post_remote_send return with ret=%d\n" RESET, ret);
+    // fflush(stdout);
+    // #endif//_DEBUG
     return ret;
   }
 

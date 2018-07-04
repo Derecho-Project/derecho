@@ -43,7 +43,8 @@ struct exp_result {
 
 int main(int argc, char *argv[]) {
 #ifdef _DEBUG
-    spdlog::set_level(spdlog::level::trace);
+    //spdlog::set_level(spdlog::level::trace);
+    spdlog::set_level(spdlog::level::err);
 #endif
     try {
         if(argc < 6) {
