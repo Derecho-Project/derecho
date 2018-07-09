@@ -95,6 +95,10 @@ target_link_libraries(p2p_query_test derecho)
 add_executable(repeated_rpc_test repeated_rpc_test.cpp initialize.cpp)
 target_link_libraries(repeated_rpc_test derecho)
 
+# api_cost
+add_executable(api_cost api_cost.cpp initialize.cpp)
+target_link_libraries(api_cost derecho)
+
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(typed_subgroup_test derecho)

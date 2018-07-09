@@ -14,12 +14,12 @@
 
 /**
  * Example replicated object, containing some serializable state and providing
- * two RPC methods. In order to be serialized it must extend ByteRepresentable.
+ * two RPC methods.
  */
-class Foo : public mutils::ByteRepresentable {
+struct Foo{
+
     int state;
 
-public:
     int read_state() {
         return state;
     }
@@ -38,8 +38,43 @@ public:
      * @param initial_state
      */
     Foo(int initial_state = 0) : state(initial_state) {}
-    DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
+    Foo() = default;
+    Foo(const Foo&) = default;
 };
+
+static_assert(std::is_standard_layout<Foo>::value, "Erorr: Foo not standard layout");
+static_assert(std::is_pod<Foo>::value, "Erorr: Foo not POD");
+static_assert(sizeof(Foo) == sizeof(int), "Error: RTTI?");
+
+struct Faz{
+
+    std::array<std::size_t,20> state;
+
+    std::array<std::size_t,20> read_state() const {
+        return state;
+    }
+    bool change_state(std::array<std::size_t,20> new_state) {
+        if(new_state == state) {
+            return false;
+        }
+        state = new_state;
+        return true;
+    }
+
+    REGISTER_RPC_FUNCTIONS(Faz, read_state, change_state);
+
+    /**
+     * Constructs a Faz with an initial value.
+     * @param initial_state
+     */
+    Faz() = default;
+    Faz(const Faz&) = default;
+};
+
+static_assert(std::is_standard_layout<Faz>::value, "Erorr: Faz not standard layout");
+static_assert(std::is_pod<Faz>::value, "Erorr: Faz not POD");
+static_assert(sizeof(Faz) == sizeof(std::size_t)*20, "Error: RTTI?");
+
 
 class Bar : public mutils::ByteRepresentable {
     std::string log;
