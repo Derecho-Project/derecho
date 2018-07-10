@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
     constexpr auto window_size = 3u;
     constexpr auto raw_mode = false;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
-    constexpr auto num_nodes = 6u;
+    constexpr auto num_nodes = 3u;
     constexpr auto num_messages = 1000u;
 
     //probably paying attention to node 0's ones of these. 
