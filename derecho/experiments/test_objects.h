@@ -50,7 +50,7 @@ struct Faz{
 
     std::array<std::size_t,20> state;
 
-    std::array<std::size_t,20> read_state() const {
+    std::array<std::size_t,20> read_state() {
         return state;
     }
     bool change_state(std::array<std::size_t,20> new_state) {
