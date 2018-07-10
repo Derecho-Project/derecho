@@ -74,7 +74,9 @@ int main(int argc, char** argv) {
       if(sender_id == 0) {
         end_times[index] = get_time();
       }
+      std::cout << "index is " << index << std::endl;
       if(index == num_messages - 1) {
+        std::cout << "we are done" << std::endl;
         done = true;
       }
     };
