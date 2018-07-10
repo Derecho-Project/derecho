@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
                   //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes,derecho::Mode::ORDERED,{false,true,false}));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
               }}},
@@ -134,11 +134,9 @@ int main(int argc, char** argv) {
     fflush(stdout);
 		
     if(node_id == 0) {
-        for (auto i = 0u; i < num_messages; ++i){
-        Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
-       cout << "Reading Faz's state just to allow node 1's message to be delivered" << endl;
-       faz_rpc_handle.ordered_query<RPC_NAME(read_state)>();
-        }
+        //Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
+        //faz_rpc_handle.get_sendbuffer_ptr();
+       //faz_rpc_handle.ordered_query<RPC_NAME(read_state)>();
     }
     if(node_id == 1) {
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
@@ -155,14 +153,14 @@ int main(int argc, char** argv) {
           }
         }
     }
-    if(node_id == 2) {
+    if(node_id == 2) { /*
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Faz's state from the group" << endl;
         auto faz_results = faz_rpc_handle.ordered_query<RPC_NAME(read_state)>();
         for(auto& reply_pair : faz_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
-        }
+        }*/
     }
     cout << "Reached end of main(), loop so program doesn't exit" << std::endl;
     while(!done) {

@@ -9,6 +9,7 @@
         "type_traits": "cpp",
         "__config": "cpp",
         "bitset": "cpp",
-        "chrono": "cpp"
+        "chrono": "cpp",
+        "thread": "cpp"
     }
 }
