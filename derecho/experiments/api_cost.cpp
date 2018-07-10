@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     constexpr auto raw_mode = false;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
     constexpr auto num_nodes = 3u;
-    constexpr auto num_messages = 1000u;
+    constexpr auto num_messages = 10u;
 
     //probably paying attention to node 0's ones of these. 
     vector<uint64_t> start_times(num_messages), end_times(num_messages);
