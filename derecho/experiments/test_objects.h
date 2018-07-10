@@ -55,7 +55,7 @@ struct Faz{
         return state;
     }
     bool change_state(std::array<std::size_t,20> new_state) {
-        std::cout << std::endl << "executing change_state"  << std::endl <<std::endl;
+        std::cout << std::endl << "executing change_state "  << new_state[0] << std::endl <<std::endl;
         if(new_state == state) {
             return false;
         }
