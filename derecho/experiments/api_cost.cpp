@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
     //probably paying attention to node 0's ones of these. 
     vector<uint64_t> start_times(num_messages), end_times(num_messages);
     volatile bool done = false;
+    //note: stability callback isn't going to happen.
     auto stability_callback = [&num_messages, &done, &num_nodes, &end_times](
       int32_t subgroup, int sender_id, long long int index, char *buf,
       long long int msg_size) mutable {
@@ -165,8 +166,8 @@ int main(int argc, char** argv) {
         }*/
     }
     cout << "Reached end of main(), loop so program doesn't exit" << std::endl;
-    while(!done) {
-    }
+    group->barrier_sync();
+    this_thread::sleep_for(chrono::seconds{3});
     uint64_t total_time = 0;
     for(auto i = 0u; i < num_messages; ++i) {
       total_time += end_times[i] - start_times[i];
