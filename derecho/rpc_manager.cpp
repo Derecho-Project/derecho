@@ -96,7 +96,8 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                 return reply_buf;
             } else {
                 // the reply size is too large - not part of the design to handle it
-                return nullptr;
+                struct matthew_made_this_an_exception : public std::exception{};
+                throw matthew_made_this_an_exception{};
             }
         });
         if(reply_size > 0) {

@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
 
     //Derecho message parameters
     //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100;
+    long long unsigned int max_msg_size = 100000;
     long long unsigned int block_size = 100000;
     constexpr auto window_size = 3u;
     constexpr auto raw_mode = false;
