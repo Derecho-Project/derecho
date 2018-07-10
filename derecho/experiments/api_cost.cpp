@@ -47,6 +47,10 @@ int main(int argc, char** argv) {
     derecho::ip_addr leader_ip;
 
     query_node_info(node_id, my_ip, leader_ip);
+    {
+      using namespace chrono;
+      this_thread::sleep_for(seconds{node_id});
+    }
 
     //Derecho message parameters
     //Where do these come from? What do they mean? Does the user really need to supply them?
