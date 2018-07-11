@@ -41,7 +41,6 @@ struct exp_result {
 };
 
 int main(int argc, char** argv) {
-  assert_always(false);
   using namespace std;
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
