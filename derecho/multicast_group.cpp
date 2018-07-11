@@ -413,7 +413,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, block_size, type,
                            [this](size_t length) -> rdmc::receive_destination {
-                               assert(false);
+                               assert_always(false);
                                return {nullptr, 0};
                            },
                            receive_handler_plus_notify,

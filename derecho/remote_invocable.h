@@ -180,7 +180,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     inline void fulfill_pending_results_map(long int invocation_id, const node_list_t& who) {
         // I think this function is never called
-        assert(false);
+        assert_always(false);
         results_map.at(invocation_id).fulfill_map(who);
     }
 

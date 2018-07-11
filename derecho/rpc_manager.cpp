@@ -118,7 +118,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                 //Immediately handle the reply to myself
                 parse_and_receive(
                         reply_buf, reply_size,
-                        [](size_t size) -> char* { assert(false); });
+                        [](size_t size) -> char* { assert_always(false); });
             } else {
                 connections->send(connections->get_node_rank(sender_id));
             }
