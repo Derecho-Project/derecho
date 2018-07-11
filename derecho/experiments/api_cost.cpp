@@ -54,13 +54,13 @@ int main(int argc, char** argv) {
 
     //Derecho message parameters
     //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100000;
+    long long unsigned int max_msg_size = Faz::test_array_size*sizeof(std::size_t) + 100;
     long long unsigned int block_size = 100000;
     constexpr auto window_size = 3u;
     constexpr auto raw_mode = false;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
     constexpr auto num_nodes = 3u;
-    constexpr auto num_messages = 10u;
+    constexpr auto num_messages = 1000u;
 
     //probably paying attention to node 0's ones of these. 
     vector<uint64_t> start_times(num_messages), end_times(num_messages);

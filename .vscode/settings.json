@@ -10,6 +10,8 @@
         "__config": "cpp",
         "bitset": "cpp",
         "chrono": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp"
     }
 }
