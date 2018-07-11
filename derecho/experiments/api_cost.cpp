@@ -75,9 +75,9 @@ int main(int argc, char** argv) {
       if(sender_id == 0) {
         end_times[index] = get_time();
       }
-      std::cout << "index is " << index << std::endl;
+      whendebug(std::cout << "index is " << index << std::endl);
       if(index == num_messages - 1) {
-        std::cout << "we are done" << std::endl;
+        whendebug(std::cout << "we are done" << std::endl);
         done = true;
       }
     };
@@ -145,14 +145,16 @@ int main(int argc, char** argv) {
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
         for (auto i = 0u; i < num_messages; ++i){
           DECT(Faz{}.state) new_value = {i};
-          cout << "Changing Faz's state round " << i << endl;
+          whendebug(cout << "Changing Faz's state round " << i << endl);
           start_times[i] = get_time();
           derecho::rpc::QueryResults<bool> results = faz_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
-          std::cout << "checkpoint: query issued" << std::endl;
+          whendebug(std::cout << "checkpoint: query issued" << std::endl);
           decltype(results)::ReplyMap& replies = results.get();
-          cout << "Got a reply map!" << endl;
+          whendebug(cout << "Got a reply map!" << endl);
           for(auto& reply_pair : replies) {
-            cout << "Reply from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
+            whendebug(cout << "Reply from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl);
+            //block for replies even if we're not printing them.
+            whenrelease(reply_pair.second.get());
           }
         }
     }
@@ -165,14 +167,14 @@ int main(int argc, char** argv) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }*/
     }
-    cout << "Reached end of main(), loop so program doesn't exit" << std::endl;
+    cout << "Reached end of main(), barrier so program doesn't exit" << std::endl;
     group->barrier_sync();
     this_thread::sleep_for(chrono::seconds{3});
     uint64_t total_time = 0;
     for(auto i = 0u; i < num_messages; ++i) {
       total_time += end_times[i] - start_times[i];
     }
-    if(node_id == 0) {
+    if(node_id == 1) {
       log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
     }
 }
