@@ -55,13 +55,13 @@ struct Faz{
         whendebug(std::cout << std::endl << "executing read_state"  << std::endl <<std::endl);
         return state;
     }
-    bool change_state(std::array<std::size_t,test_array_size> new_state) {
+    void change_state(std::array<std::size_t,test_array_size> new_state) {
         whendebug(std::cout << std::endl << "executing change_state "  << new_state[0] << std::endl <<std::endl);
         if(new_state == state) {
-            return false;
+            return/* false*/;
         }
         state = new_state;
-        return true;
+        return/* true*/;
     }
 
     REGISTER_RPC_FUNCTIONS(Faz, read_state, change_state);

@@ -147,11 +147,10 @@ int main(int argc, char** argv) {
           DECT(Faz{}.state) new_value = {i};
           whendebug(cout << "Changing Faz's state round " << i << endl);
           start_times[i] = get_time();
-          derecho::rpc::QueryResults<bool> results = faz_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
+          /*derecho::rpc::QueryResults<bool> results = */faz_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
           whendebug(std::cout << "checkpoint: query issued" << std::endl);
           //don't wait for replies, because there is no equivalent in uncooked mode. 
-
-          
+          /*
           decltype(results)::ReplyMap& replies = results.get();
           whendebug(cout << "Got a reply map!" << endl);
           for(auto& reply_pair : replies) {
