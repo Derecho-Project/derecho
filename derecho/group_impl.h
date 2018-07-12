@@ -279,7 +279,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
         log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%l] %v");
     log->set_level(
-        whendebug(spdlog::level::debug)
+        whendebug(spdlog::level::off)
         whenrelease(spdlog::level::off)
         );
     //    log->set_level(spdlog::level::off);
