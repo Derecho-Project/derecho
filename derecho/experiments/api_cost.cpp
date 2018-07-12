@@ -45,7 +45,7 @@ volatile bool done = false;
 
 //probably paying attention to node 0's ones of these.
 std::vector<uint64_t> start_times(num_messages), end_times(num_messages);
-constexpr auto num_nodes = 3u;
+uint32_t num_nodes;
 
 decltype(auto) stability_callback(int32_t subgroup, int sender_id, long long int index, char* buf, long long int msg_size) {
     // cout << buf << endl;
@@ -99,6 +99,8 @@ static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error:
 
 int main(int argc, char** argv) {
     using namespace std;
+    assert_always(argc == 2);
+    num_nodes = std::stoi(argv[1]);
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
     derecho::ip_addr leader_ip;
