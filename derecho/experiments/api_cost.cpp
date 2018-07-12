@@ -193,10 +193,11 @@ int main(int argc, char** argv) {
     }
     else if(node_id == 1) {
       if (uncooked_mode){
-        for(auto i = 0u; i < num_messages; ++i) {
+          auto &handle = group->get_subgroup<Faz>();
           derecho::RawSubgroup& raw_handle = group->get_subgroup<derecho::RawObject>();
-          while(!raw_handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
-         raw_handle.send();
+        for(auto i = 0u; i < num_messages; ++i) {
+          while(!handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
+          handle.raw_send();
         }
       }
       else {
