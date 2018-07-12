@@ -275,9 +275,15 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>("derecho_debug_log", 1024 * 1024 * 5, 3));
     // Uncomment this to get debugging output printed to the terminal
     log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
-    std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log", log_sinks.begin(), log_sinks.end());
+    std::shared_ptr<spdlog::logger> log = spdlog::create(
+        whendebug("debug_log")
+        whenrelease("release_log"),
+        log_sinks.begin(), log_sinks.end());
     log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%l] %v");
-    log->set_level(spdlog::level::debug);
+    log->set_level(
+        whendebug(spdlog::level::debug)
+        whenrelease(spdlog::level::off)
+        );
     //    log->set_level(spdlog::level::off);
     auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
