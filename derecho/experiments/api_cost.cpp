@@ -52,7 +52,7 @@ decltype(auto) stability_callback(int32_t subgroup, int sender_id, long long int
     // cout << buf << endl;
     // cout << "Delivered a message" << endl;
     DERECHO_LOG(sender_id, index, "complete_send");
-    if(sender_id == 0) {
+    if(sender_id == 1) {
         end_times[index] = get_time();
     }
     whendebug(std::cout << "index is " << index << std::endl);
