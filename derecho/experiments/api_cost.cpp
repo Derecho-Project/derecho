@@ -46,6 +46,7 @@ volatile bool done = false;
 //probably paying attention to node 0's ones of these.
 std::vector<uint64_t> start_times(num_messages), end_times(num_messages);
 uint32_t num_nodes;
+bool raw_mode;
 
 decltype(auto) stability_callback(int32_t subgroup, int sender_id, long long int index, char* buf, long long int msg_size) {
     // cout << buf << endl;
@@ -99,8 +100,13 @@ static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error:
 
 int main(int argc, char** argv) {
     using namespace std;
-    assert_always(argc == 2);
+    assert_always(argc == 3);
     num_nodes = std::stoi(argv[1]);
+    switch(argv[2][0]){
+      case 't': raw_mode = true;
+      case 'f': raw_mode = false;
+      default: assert_always(false);
+    };
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
     derecho::ip_addr leader_ip;
@@ -116,7 +122,6 @@ int main(int argc, char** argv) {
     long long unsigned int max_msg_size = Faz::test_array_size * sizeof(std::size_t) + 100;
     long long unsigned int block_size = 100000;
     constexpr auto window_size = 3u;
-    constexpr auto raw_mode = false;
     derecho::DerechoParams derecho_params{max_msg_size, block_size};
 
     //note: stability callback isn't going to happen in cooked mode.
