@@ -145,9 +145,9 @@ int main(int argc, char** argv) {
               };
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Faz)), subgroup_function},
-            {std::type_index(typeid(derecho::RawObject)), subgroup_function}},
-            {std::type_index(typeid(Faz)),std::type_index(typeid(derecho::RawObject))}};
+            {{std::type_index(typeid(Faz)), subgroup_function}/*,
+            {std::type_index(typeid(derecho::RawObject)), subgroup_function}*/},
+            {std::type_index(typeid(Faz)) /*,std::type_index(typeid(derecho::RawObject)) */}};
 
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
@@ -194,7 +194,6 @@ int main(int argc, char** argv) {
     else if(node_id == 1) {
       if (uncooked_mode){
           auto &handle = group->get_subgroup<Faz>();
-          derecho::RawSubgroup& raw_handle = group->get_subgroup<derecho::RawObject>();
         for(auto i = 0u; i < num_messages; ++i) {
           while(!handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
           handle.raw_send();
