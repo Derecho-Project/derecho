@@ -51,7 +51,9 @@ private:
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
+#ifndef NOLOG
     std::shared_ptr<spdlog::logger> logger;
+#endif
 
     const node_id_t my_id;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
@@ -103,6 +105,7 @@ private:
     /** Deserializes a vector of shard leader IDs sent over the given socket. */
     static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
 
+#ifndef NOLOG
     /**
      * Constructs a spdlog::logger instance and registers it in spdlog's global
      * registry, so that dependent objects like ViewManager can retrieve a
@@ -110,7 +113,7 @@ private:
      * @return A pointer to the logger that was created.
      */
     std::shared_ptr<spdlog::logger> create_logger() const;
-
+#endif
     /**
      * Updates the state of the replicated objects that correspond to subgroups
      * identified in the provided map, by receiving serialized state from the
@@ -303,9 +306,11 @@ public:
     void barrier_sync();
     void debug_print_status() const;
 
+#ifndef NOLOG
     void log_event(const std::string& event_text) {
         logger->debug(event_text);
     }
+#endif
 };
 
 } /* namespace derecho */
