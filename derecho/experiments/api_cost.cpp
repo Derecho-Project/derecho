@@ -215,7 +215,6 @@ int main(int argc, char** argv) {
     }
     cout << "Exit done loop" << std::endl;
     group->barrier_sync();
-    this_thread::sleep_for(chrono::seconds{3});
     uint64_t total_time = 0;
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
