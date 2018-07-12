@@ -46,37 +46,7 @@ static_assert(std::is_standard_layout<Foo>::value, "Erorr: Foo not standard layo
 static_assert(std::is_pod<Foo>::value, "Erorr: Foo not POD");
 static_assert(sizeof(Foo) == sizeof(int), "Error: RTTI?");
 
-struct Faz{
-    static constexpr std::size_t test_array_size = 131072;
 
-    std::array<std::size_t,test_array_size> state;
-
-    std::array<std::size_t,test_array_size> read_state() {
-        whendebug(std::cout << std::endl << "executing read_state"  << std::endl <<std::endl);
-        return state;
-    }
-    void change_state(std::array<std::size_t,test_array_size> new_state) {
-        whendebug(std::cout << std::endl << "executing change_state "  << new_state[0] << std::endl <<std::endl);
-        if(new_state == state) {
-            return/* false*/;
-        }
-        state = new_state;
-        return/* true*/;
-    }
-
-    REGISTER_RPC_FUNCTIONS(Faz, read_state, change_state);
-
-    /**
-     * Constructs a Faz with an initial value.
-     * @param initial_state
-     */
-    Faz() = default;
-    Faz(const Faz&) = default;
-};
-
-static_assert(std::is_standard_layout<Faz>::value, "Erorr: Faz not standard layout");
-static_assert(std::is_pod<Faz>::value, "Erorr: Faz not POD");
-static_assert(sizeof(Faz) == sizeof(std::size_t)*Faz::test_array_size, "Error: RTTI?");
 
 
 class Bar : public mutils::ByteRepresentable {
