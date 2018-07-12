@@ -196,6 +196,7 @@ int main(int argc, char** argv) {
           auto &handle = group->get_subgroup<Faz>();
         for(auto i = 0u; i < num_messages; ++i) {
           while(!handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
+          start_times[i] = get_time();
           handle.raw_send();
         }
       }
