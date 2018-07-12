@@ -103,8 +103,8 @@ int main(int argc, char** argv) {
     assert_always(argc == 3);
     num_nodes = std::stoi(argv[1]);
     switch(argv[2][0]){
-      case 't': raw_mode = true;
-      case 'f': raw_mode = false;
+      case 't': raw_mode = true; break;
+      case 'f': raw_mode = false; break;
       default: assert_always(false);
     };
     derecho::node_id_t node_id;
