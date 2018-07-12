@@ -129,8 +129,9 @@ int main(int argc, char** argv) {
 
     //Since this is just a test, assume there will always be 3 members with IDs 0-2
     //Assign Faz and Bar to a subgroup containing 0, 1, and 2
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Faz)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+  
+
+  const auto subgroup_function = [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < 3) {
                       std::cout << "Faz function throwing subgroup_provisioning_exception" << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -141,8 +142,13 @@ int main(int argc, char** argv) {
                   subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes, derecho::Mode::ORDERED, {false, true, false}));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Faz))}};
+              };
+
+    derecho::SubgroupInfo subgroup_info{
+            {{std::type_index(typeid(Faz)), subgroup_function},
+            {std::type_index(typeid(derecho::RawObject)), subgroup_function}},
+            {std::type_index(typeid(Faz)),std::type_index(typeid(derecho::RawObject))}};
+
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
