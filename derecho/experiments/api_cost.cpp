@@ -195,7 +195,10 @@ int main(int argc, char** argv) {
       if (uncooked_mode){
           auto &handle = group->get_subgroup<Faz>();
         for(auto i = 0u; i < num_messages; ++i) {
-          while(!handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
+          DECT(Faz{}.state) new_value = {i};
+          char* ptr = nullptr;
+          while(!(ptr = handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size)));
+          memcpy(ptr, &new_value, sizeof(new_value));
           start_times[i] = get_time();
           handle.raw_send();
         }
@@ -203,8 +206,7 @@ int main(int argc, char** argv) {
       else {
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
         for(auto i = 0u; i < num_messages; ++i) {
-            DECT(Faz{}.state)
-            new_value = {i};
+            DECT(Faz{}.state) new_value = {i};
             whendebug(cout << "Changing Faz's state round " << i << endl);
             start_times[i] = get_time();
             /*derecho::rpc::QueryResults<bool> results = */ faz_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
