@@ -150,7 +150,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                                      const node_id_t& nid, const char* response,
                                      const std::function<char*(int)>&) {
         if(response[0]) throw remote_exception_occurred{nid};
-        assert(false && "was not expecting a response!");
+        assert_always(false && "was not expecting a response!");
     }
 
     /**
