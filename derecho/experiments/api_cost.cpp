@@ -29,14 +29,14 @@ struct exp_result {
     long long unsigned int max_msg_size;
     unsigned int window_size;
     int num_messages;
-    int raw_mode;
+    int uncooked_mode;
     double latency;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
-             << raw_mode << " " << latency << endl;
+             << uncooked_mode << " " << latency << endl;
     }
 };
 
@@ -46,7 +46,7 @@ volatile bool done = false;
 //probably paying attention to node 0's ones of these.
 std::vector<uint64_t> start_times(num_messages), end_times(num_messages);
 uint32_t num_nodes;
-bool raw_mode;
+bool uncooked_mode;
 
 decltype(auto) stability_callback(int32_t subgroup, int sender_id, long long int index, char* buf, long long int msg_size) {
     // cout << buf << endl;
@@ -103,8 +103,8 @@ int main(int argc, char** argv) {
     assert_always(argc == 3);
     num_nodes = std::stoi(argv[1]);
     switch(argv[2][0]){
-      case 't': raw_mode = true; break;
-      case 'f': raw_mode = false; break;
+      case 't': uncooked_mode = true; break;
+      case 'f': uncooked_mode = false; break;
       default: assert_always(false);
     };
     derecho::node_id_t node_id;
@@ -192,10 +192,12 @@ int main(int argc, char** argv) {
         //faz_rpc_handle.ordered_query<RPC_NAME(read_state)>();
     }
     else if(node_id == 1) {
-      if (raw_mode){
-        derecho::RawSubgroup& raw_handle = group->get_subgroup<derecho::RawObject>();
-        while(!raw_handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
-        raw_handle.send();
+      if (uncooked_mode){
+        for(auto i = 0u; i < num_messages; ++i) {
+          derecho::RawSubgroup& raw_handle = group->get_subgroup<derecho::RawObject>();
+          while(!raw_handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
+         raw_handle.send();
+        }
       }
       else {
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
@@ -238,7 +240,7 @@ int main(int argc, char** argv) {
         total_time += end_times[i] - start_times[i];
     }
     if(node_id == 1) {
-        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
+        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
     }
     //_exit(0);
 }
