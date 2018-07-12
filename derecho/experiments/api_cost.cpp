@@ -185,8 +185,13 @@ int main(int argc, char** argv) {
         //faz_rpc_handle.get_sendbuffer_ptr();
         //faz_rpc_handle.ordered_query<RPC_NAME(read_state)>();
     }
-    if(node_id == 1) {
-        Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
+    else if(node_id == 1) {
+      Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
+      if (raw_mode){
+        while(!faz_rpc_handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size));
+        faz_rpc_handle.raw_send();
+      }
+      else {
         for(auto i = 0u; i < num_messages; ++i) {
             DECT(Faz{}.state)
             new_value = {i};
@@ -205,8 +210,9 @@ int main(int argc, char** argv) {
           }
            //*/
         }
+        }
     }
-    if(node_id == 2) { /*
+    else if(node_id == 2) { /*
         Replicated<Faz>& faz_rpc_handle = group->get_subgroup<Faz>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Faz's state from the group" << endl;
