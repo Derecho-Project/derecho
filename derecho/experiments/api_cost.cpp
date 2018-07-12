@@ -221,5 +221,5 @@ int main(int argc, char** argv) {
     if(node_id == 1) {
         log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
     }
-    exit(0);
+    _exit(0);
 }
