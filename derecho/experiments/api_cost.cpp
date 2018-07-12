@@ -44,7 +44,7 @@ constexpr auto num_messages = 1000u;
 volatile bool done = false;
 
 //probably paying attention to node 0's ones of these.
-std::vector<uint64_t> start_times(num_messages), end_times(num_messages);
+std::vector<uint64_t> start_times(num_messages,0), end_times(num_messages,0);
 uint32_t num_nodes;
 bool uncooked_mode;
 
