@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = Faz::test_array_size * sizeof(std::size_t) + 100;
     long long unsigned int block_size = 100000;
-    constexpr auto window_size = 1500u;
+    constexpr auto window_size = 100u;
     derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
 
     //note: stability callback isn't going to happen in cooked mode.
