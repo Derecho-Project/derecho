@@ -1273,7 +1273,15 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     }
 }
 
+MulticastGroup::vector_ptr& MulticastGroup::middle_times(){
+    static MulticastGroup::vector_ptr mt = nullptr;
+    return mt;
+}
+
 bool MulticastGroup::send(subgroup_id_t subgroup_num) {
+    static std::size_t send_count = 0;
+    (*middle_times())[send_count] = get_time();
+    ++send_count;
     if(!rdmc_sst_groups_created) {
         return false;
     }

@@ -31,12 +31,13 @@ struct exp_result {
     int num_messages;
     int uncooked_mode;
     double latency;
+    double just_cooked_latency;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
-             << uncooked_mode << " " << latency << endl;
+             << uncooked_mode << " " << latency << " " << just_cooked_latency << endl;
     }
 };
 
@@ -99,6 +100,8 @@ static_assert(std::is_pod<Faz>::value, "Erorr: Faz not POD");
 static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error: RTTI?");
 
 int main(int argc, char** argv) {
+  derecho::MulticastGroup::middle_times() = new std::vector<uint64_t>{num_messages,0};
+    auto& middle_times = *derecho::MulticastGroup::middle_times();
     using namespace std;
     assert_always(argc == 3);
     num_nodes = std::stoi(argv[1]);
@@ -239,11 +242,13 @@ int main(int argc, char** argv) {
     cout << "Exit done loop" << std::endl;
     group->barrier_sync();
     uint64_t total_time = 0;
+    uint64_t just_cooked_total_time = 0;
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
+        just_cooked_total_time += end_times[i] - middle_times[i];
     }
     if(node_id == 1) {
-        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
+        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000), ((double)just_cooked_total_time) / (num_messages * 1000)}, "data_latency");
     }
     //_exit(0);
 }

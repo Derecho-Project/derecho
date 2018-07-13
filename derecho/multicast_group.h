@@ -380,6 +380,8 @@ public:
     /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */
+    using vector_ptr = std::vector<unsigned long>*;
+    static vector_ptr& middle_times();
     bool send(subgroup_id_t subgroup_num);
     bool check_pending_sst_sends(subgroup_id_t subgroup_num);
 
