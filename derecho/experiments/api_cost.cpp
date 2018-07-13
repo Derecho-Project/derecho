@@ -217,7 +217,7 @@ int main(int argc, char** argv) {
         for(auto i = 0u; i < num_messages; ++i) {
             DECT(Faz{}.state) new_value = {i};
             whendebug(cout << "Changing Faz's state round " << i << endl);
-            start_times[i] = get_time_timeh();
+            //start_times[i] = get_time_timeh();
             /*derecho::rpc::QueryResults<bool> results = */ faz_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
             whendebug(std::cout << "checkpoint: query issued" << std::endl);
             //don't wait for replies, because there is no equivalent in uncooked mode.
