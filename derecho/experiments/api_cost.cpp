@@ -54,7 +54,7 @@ decltype(auto) stability_callback(int32_t subgroup, int sender_id, long long int
     // cout << "Delivered a message" << endl;
     DERECHO_LOG(sender_id, index, "complete_send");
     if(sender_id == 1) {
-        end_times[index] = get_time();
+        end_times[index] = get_time_timeh();
     }
     whendebug(std::cout << "index is " << index << std::endl);
     if(index == num_messages - 1) {
@@ -78,7 +78,7 @@ struct Faz {
         whendebug(std::cout << std::endl
                             << "executing change_state " << new_state[0] << std::endl
                             << std::endl);
-        end_times[new_state[0]] = get_time();
+        end_times[new_state[0]] = get_time_timeh();
         if(new_state[0] == (num_messages - 1)) {
             done = true;
             whendebug(std::cout << "we are done" << std::endl;);
@@ -181,12 +181,12 @@ int main(int argc, char** argv) {
     unique_ptr<rdmc::barrier_group> universal_barrier_group = std::make_unique<rdmc::barrier_group>(members);
 
     universal_barrier_group->barrier_wait();
-    uint64_t t1 = get_time();
+    uint64_t t1 = get_time_timeh();
     universal_barrier_group->barrier_wait();
-    uint64_t t2 = get_time();
+    uint64_t t2 = get_time_timeh();
     reset_epoch();
     universal_barrier_group->barrier_wait();
-    uint64_t t3 = get_time();
+    uint64_t t3 = get_time_timeh();
     printf(
             "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
             "Max possible variation from local = %5.3f us\n",
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
           char* ptr = nullptr;
           while(!(ptr = handle.get_sendbuffer_ptr(sizeof(std::size_t) * Faz::test_array_size)));
           memcpy(ptr, &new_value, sizeof(new_value));
-          start_times[i] = get_time();
+          start_times[i] = get_time_timeh();
           handle.raw_send();
         }
       }
@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
         for(auto i = 0u; i < num_messages; ++i) {
             DECT(Faz{}.state) new_value = {i};
             whendebug(cout << "Changing Faz's state round " << i << endl);
-            start_times[i] = get_time();
+            start_times[i] = get_time_timeh();
             /*derecho::rpc::QueryResults<bool> results = */ faz_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
             whendebug(std::cout << "checkpoint: query issued" << std::endl);
             //don't wait for replies, because there is no equivalent in uncooked mode.

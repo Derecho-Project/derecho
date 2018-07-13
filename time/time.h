@@ -7,10 +7,16 @@
 #include <time.h>
 
 // Returns the number of nanoseconds since some fixed time in the past.
-inline uint64_t get_time() {
-    struct timespec now;
+
+inline uint64_t get_time_timeh() {
+        struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return now.tv_sec * 1000000000L + now.tv_nsec;
+    
+}
+
+inline uint64_t get_time() {
+    return get_time_timeh();
 }
 
 // Returns the number of nanoseconds of CPU time that have been used by this
