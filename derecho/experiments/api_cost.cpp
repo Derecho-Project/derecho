@@ -129,7 +129,7 @@ int main(int argc, char** argv) {
     long long unsigned int max_msg_size = Faz::test_array_size * sizeof(std::size_t) + 100;
     long long unsigned int block_size = 100000;
     constexpr auto window_size = 150u;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
 
     //note: stability callback isn't going to happen in cooked mode.
     derecho::CallbackSet callback_set{derecho::message_callback_t{stability_callback}, {}};
