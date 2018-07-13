@@ -1217,7 +1217,10 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         }
 
         std::unique_lock<std::mutex> lock(msg_state_mtx);
-        if(free_message_buffers[subgroup_num].empty()) return nullptr;
+        if(free_message_buffers[subgroup_num].empty()) {
+            assert_always(false);
+            return nullptr;
+        }
 
         // Create new Message
         RDMCMessage msg;
