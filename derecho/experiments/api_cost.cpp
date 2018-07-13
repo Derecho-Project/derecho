@@ -100,9 +100,13 @@ static_assert(std::is_pod<Faz>::value, "Erorr: Faz not POD");
 static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error: RTTI?");
 
 int main(int argc, char** argv) {
-  derecho::MulticastGroup::middle_times() = new std::vector<uint64_t>{num_messages,0};
-    auto& middle_times = *derecho::MulticastGroup::middle_times();
+  auto& middle_times = derecho::MulticastGroup::middle_times();
     using namespace std;
+    for (auto i = 0u; i < num_messages; ++i){
+      middle_times.push_back(0);
+    }
+    assert_always(middle_times.size() == num_messages);
+    assert_always(middle_times[num_messages-1] == 0);
     assert_always(argc == 3);
     num_nodes = std::stoi(argv[1]);
     switch(argv[2][0]){
