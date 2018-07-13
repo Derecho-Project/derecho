@@ -101,9 +101,11 @@ static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error:
 
 int main(int argc, char** argv) {
   auto& middle_times = derecho::MulticastGroup::middle_times();
+  auto &cooked_send_has_buffer = derecho::cooked_send_has_buffer();
     using namespace std;
     for (auto i = 0u; i < num_messages; ++i){
       middle_times.push_back(0);
+      cooked_send_has_buffer.push_back(0);
     }
     assert_always(middle_times.size() == num_messages);
     assert_always(middle_times[num_messages-1] == 0);
