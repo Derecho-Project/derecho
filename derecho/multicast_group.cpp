@@ -1282,7 +1282,6 @@ MulticastGroup::vector_ptr& MulticastGroup::middle_times(){
 
 bool MulticastGroup::send(subgroup_id_t subgroup_num) {
     {
-        abort();
         static std::size_t send_count = 0;
      middle_times()[send_count] = get_time_timeh();
       ++send_count;

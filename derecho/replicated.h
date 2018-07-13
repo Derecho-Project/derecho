@@ -15,6 +15,7 @@
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "persistent/Persistent.hpp"
 #include "tcp/tcp.h"
+#include "time/time.h"
 
 #include "derecho_exception.h"
 #include "derecho_internal.h"
@@ -65,6 +66,11 @@ public:
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
 };
 
+inline auto& cooked_send_has_buffer(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
+
 template <typename T>
 class Replicated : public ReplicatedObject, public ITemporalQueryFrontierProvider {
 private:
@@ -102,6 +108,9 @@ private:
             char* buffer;
             while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
             };
+            static std::size_t send_num = 0;
+            cooked_send_has_buffer()[send_num] = get_time_timeh();
+            ++send_num;
             // std::cout << "Obtained a buffer" << std::endl;
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
 
