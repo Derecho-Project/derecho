@@ -1193,11 +1193,12 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     int shard_sender_index = subgroup_settings.at(subgroup_num).sender_rank;
     num_shard_senders = get_num_senders(shard_senders);
     assert(shard_sender_index >= 0);
-
+    assert_always(false);
     if(subgroup_settings.at(subgroup_num).mode != Mode::UNORDERED) {
         for(uint i = 0; i < num_shard_members; ++i) {
             if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num]
                < static_cast<int32_t>((future_message_indices[subgroup_num] - window_size) * num_shard_senders + shard_sender_index)) {
+                   assert_always(false);
                 return nullptr;
             }
         }
@@ -1218,7 +1219,6 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 
         std::unique_lock<std::mutex> lock(msg_state_mtx);
         if(free_message_buffers[subgroup_num].empty()) {
-            assert_always(false);
             return nullptr;
         }
 
