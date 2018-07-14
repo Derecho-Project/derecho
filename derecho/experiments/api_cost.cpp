@@ -89,6 +89,7 @@ struct Faz {
             done = true;
             whendebug(std::cout << "we are done" << std::endl;);
         }
+        abort();
     }
 
     REGISTER_RPC_FUNCTIONS(Faz, read_state, change_state);
