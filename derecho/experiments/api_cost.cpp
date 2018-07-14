@@ -272,7 +272,7 @@ int main(int argc, char** argv) {
         ((double)total_time) / (num_messages * 1000), 
         ((double)just_cooked_total_time) / (num_messages * 1000), 
         ((double)until_send) / (num_messages * 1000), 
-        ((double)until_send) / (num_messages * 1000)}, 
+        ((double)post_send) / (num_messages * 1000)}, 
         "data_latency");
     }
     //_exit(0);
