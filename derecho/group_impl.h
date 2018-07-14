@@ -240,6 +240,7 @@ template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
+        //HERE
         rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
     view_manager.add_view_upcall([this](const View& new_view) {

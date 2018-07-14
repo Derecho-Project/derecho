@@ -69,6 +69,7 @@ std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
     retrieve_header(&rdv, buf, payload_size, indx, received_from);
     return receive_message(indx, received_from, buf + header_space(),
                            payload_size, out_alloc);
+                           //HERE
 }
 
 void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size) {

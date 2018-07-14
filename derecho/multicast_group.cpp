@@ -480,11 +480,17 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     if(msg.size > 0) {
         char* buf = msg.message_buffer.buffer.get();
         header* h = (header*)(buf);
+        {
+            std::size_t msgnum = 0;
+            msg_arrived()[msgnum] = get_time_timeh();
+            ++msgnum;
+        }
         // cooked send
         if(h->cooked_send) {
             buf += h->header_size;
             auto payload_size = msg.size - h->header_size;
             rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
+            //HERE
         }
         // raw send
         else {
@@ -906,6 +912,7 @@ void MulticastGroup::register_predicates() {
 
             auto delivery_pred = [this](const DerechoSST& sst) { return true; };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
+                //HERE
                 delivery_trigger(subgroup_num, curr_subgroup_settings, num_shard_members, sst);
             };
 
