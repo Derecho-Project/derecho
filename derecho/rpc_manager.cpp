@@ -37,6 +37,7 @@ std::exception_ptr RPCManager::receive_message(
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
+    abort();
 //    int offset = indx.is_reply ? 1 : 0;
 //    long int invocation_id = ((long int*)(buf + offset))[0];
 //    whenlog(logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",)
