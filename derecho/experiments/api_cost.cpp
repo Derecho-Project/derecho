@@ -275,8 +275,8 @@ int main(int argc, char** argv) {
     uint64_t post_send = 0;
     uint64_t arrival = 0;
     uint64_t pre_deserialize = 0;
-    uint64_t callfunc1;
-    uint64_t callfunc2;
+    uint64_t callfunc1 = 0;
+    uint64_t callfunc2 = 0;
     auto& pvs = derecho::rpc::post_view_manager_send_time();
     auto& ma = msg_arrived();
     auto& dd = about_to_deserialize();
