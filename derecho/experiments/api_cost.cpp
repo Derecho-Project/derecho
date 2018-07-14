@@ -257,7 +257,9 @@ int main(int argc, char** argv) {
         total_time += end_times[i] - start_times[i];
         just_cooked_total_time += middle_times[i] - start_times[i];
         until_send = actual_send_times[i] - start_times[i];
+        assert_always(actual_send_times[i] > middle_times[i]);
     }
+    if (uncooked_mode) until_send = 0;
     if(node_id == 1) {
         log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000), ((double)just_cooked_total_time) / (num_messages * 1000), ((double)until_send) / (num_messages * 1000)}, "data_latency");
     }
