@@ -272,6 +272,7 @@ int main(int argc, char** argv) {
         until_send += actual_send_times[i] - start_times[i]; 
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
+        assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;
     if(node_id == 1) {
