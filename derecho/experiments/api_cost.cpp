@@ -259,8 +259,8 @@ int main(int argc, char** argv) {
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
         just_cooked_total_time += middle_times[i] - start_times[i];
-        until_send = actual_send_times[i] - start_times[i]; 
-        post_send = pvs[i] - start_times[i];
+        until_send += actual_send_times[i] - start_times[i]; 
+        post_send += pvs[i] - start_times[i];
     }
     if (uncooked_mode) until_send = 0;
     if(node_id == 1) {
