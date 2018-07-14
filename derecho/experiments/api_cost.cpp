@@ -106,10 +106,14 @@ int main(int argc, char** argv) {
   auto& middle_times = derecho::MulticastGroup::middle_times();
   auto &actual_send_times = derecho::rpc::actual_send_time();
     using namespace std;
-    for (auto i = 0u; i < num_messages; ++i){
-      middle_times.push_back(0);
-      start_times.push_back(0);
-      actual_send_times.push_back(0);
+    {
+        auto& pvs = derecho::rpc::post_view_manager_send_time();
+        for (auto i = 0u; i < num_messages; ++i){
+            middle_times.push_back(0);
+            start_times.push_back(0);
+            actual_send_times.push_back(0);
+            pvs.push_back(0);
+        }
     }
     assert_always(middle_times.size() == num_messages);
     assert_always(middle_times[num_messages-1] == 0);
