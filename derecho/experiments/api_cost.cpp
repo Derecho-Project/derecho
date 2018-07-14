@@ -267,7 +267,7 @@ int main(int argc, char** argv) {
         log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, 
         ((double)total_time) / (num_messages * 1000), 
         ((double)just_cooked_total_time) / (num_messages * 1000), 
-        ((double)until_send) / (num_messages * 1000)}, 
+        ((double)until_send) / (num_messages * 1000), 
         ((double)until_send) / (num_messages * 1000)}, 
         "data_latency");
     }
