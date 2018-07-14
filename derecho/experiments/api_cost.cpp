@@ -35,14 +35,14 @@ struct exp_result {
     double final_send_latency;
     double post_send_latency;
     double arrival_latency;
-    double decoding_latency;
+    double pre_deserialize_latency;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
              << uncooked_mode << " " << latency << " " << just_cooked_latency << " " << final_send_latency << " " << post_send_latency << 
-             " " << arrival_latency << " " << decoding_latency << endl;
+             " " << arrival_latency << " " << pre_deserialize_latency << endl;
     }
 };
 
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     {
         auto& pvs = derecho::rpc::post_view_manager_send_time();
         auto& ma = msg_arrived();
-        auto& dd = decoding_done();
+        auto& dd = about_to_deserialize();
         for (auto i = 0u; i < num_messages; ++i){
             middle_times.push_back(0);
             start_times.push_back(0);
@@ -268,17 +268,17 @@ int main(int argc, char** argv) {
     uint64_t until_send = 0;
     uint64_t post_send = 0;
     uint64_t arrival = 0;
-    uint64_t decoding = 0;
+    uint64_t pre_deserialize = 0;
     auto& pvs = derecho::rpc::post_view_manager_send_time();
     auto& ma = msg_arrived();
-    auto& dd = decoding_done();
+    auto& dd = about_to_deserialize();
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
         just_cooked_total_time += middle_times[i] - start_times[i];
         until_send += actual_send_times[i] - start_times[i]; 
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
-        decoding += dd[i] - start_times[i];
+        pre_deserialize += dd[i] - start_times[i];
         assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;
@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
         ((double)until_send) / (num_messages * 1000), 
         ((double)post_send) / (num_messages * 1000), 
         ((double)arrival) / (num_messages * 1000), 
-        ((double)decoding) / (num_messages * 1000)}, 
+        ((double)pre_deserialize) / (num_messages * 1000)}, 
         "data_latency");
     }
     //_exit(0);

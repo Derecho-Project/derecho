@@ -48,11 +48,6 @@ std::exception_ptr RPCManager::receive_message(
     auto &&g = [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
             };
-    {
-        static std::size_t idx{0};
-        decoding_done()[idx] = get_time_timeh();
-        ++idx;
-    }
     recv_ret reply_return = f(
             &rdv, received_from, buf,
             g);
