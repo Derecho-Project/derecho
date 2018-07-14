@@ -216,6 +216,7 @@ bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }
+    post_view_manager_send_time()[actual_send_time_idx-1] = get_time_timeh();
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     if(dest_nodes.size() != 0) {
         pending_results_handle.fulfill_map(dest_nodes);

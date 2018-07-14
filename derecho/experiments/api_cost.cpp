@@ -33,12 +33,13 @@ struct exp_result {
     double latency;
     double just_cooked_latency;
     double final_send_latency;
+    double post_send_latency;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
-             << uncooked_mode << " " << latency << " " << just_cooked_latency << " " << final_send_latency << endl;
+             << uncooked_mode << " " << latency << " " << just_cooked_latency << " " << final_send_latency << " " << post_send_latency << endl;
     }
 };
 
@@ -253,15 +254,22 @@ int main(int argc, char** argv) {
     uint64_t total_time = 0;
     uint64_t just_cooked_total_time = 0;
     uint64_t until_send = 0;
+    uint64_t post_send = 0;
+    auto& pvs = derecho::rpc::post_view_manager_send_time();
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
         just_cooked_total_time += middle_times[i] - start_times[i];
-        until_send = actual_send_times[i] - start_times[i];
-        assert_always(actual_send_times[i] > middle_times[i]);
+        until_send = actual_send_times[i] - start_times[i]; 
+        post_send = pvs[i] - start_times[i];
     }
     if (uncooked_mode) until_send = 0;
     if(node_id == 1) {
-        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000), ((double)just_cooked_total_time) / (num_messages * 1000), ((double)until_send) / (num_messages * 1000)}, "data_latency");
+        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, 
+        ((double)total_time) / (num_messages * 1000), 
+        ((double)just_cooked_total_time) / (num_messages * 1000), 
+        ((double)until_send) / (num_messages * 1000)}, 
+        ((double)until_send) / (num_messages * 1000)}, 
+        "data_latency");
     }
     //_exit(0);
 }

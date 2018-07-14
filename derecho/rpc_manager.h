@@ -277,6 +277,11 @@ inline auto& actual_send_time(){
     return ret;
 }
 
+inline auto& post_view_manager_send_time(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
+
 //Now that RPCManager is finished being declared, we can declare these convenience types
 //(the declarations should really live in remote_invocable.h, but they depend on RPCManager existing)
 template <typename T>
