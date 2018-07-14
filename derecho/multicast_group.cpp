@@ -481,7 +481,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         char* buf = msg.message_buffer.buffer.get();
         header* h = (header*)(buf);
         {
-            std::size_t msgnum = 0;
+            static std::size_t msgnum = 0;
             msg_arrived()[msgnum] = get_time_timeh();
             ++msgnum;
         }
