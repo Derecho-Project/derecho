@@ -44,11 +44,18 @@ std::exception_ptr RPCManager::receive_message(
     auto reply_header_size = header_space();
     //TODO: Check that the given Opcode is actually in our receivers map,
     //and reply with a "no such method error" if it is not
-    recv_ret reply_return = receivers->at(indx)(
-            &rdv, received_from, buf,
-            [&out_alloc, &reply_header_size](std::size_t size) {
+    auto &&f = receivers->at(indx);
+    auto &&g = [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
-            });
+            };
+    {
+        static std::size_t idx{0};
+        decoding_done()[idx] = get_time_timeh();
+        ++idx;
+    }
+    recv_ret reply_return = f(
+            &rdv, received_from, buf,
+            g);
     auto* reply_buf = reply_return.payload;
     if(reply_buf) {
         reply_buf -= reply_header_size;

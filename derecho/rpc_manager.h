@@ -21,6 +21,11 @@
 #include "view.h"
 #include "view_manager.h"
 
+inline auto& decoding_done(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
+
 namespace derecho {
 
 template <typename T>
