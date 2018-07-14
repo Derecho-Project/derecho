@@ -32,12 +32,13 @@ struct exp_result {
     int uncooked_mode;
     double latency;
     double just_cooked_latency;
+    double final_send_latency;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
-             << uncooked_mode << " " << latency << " " << just_cooked_latency << endl;
+             << uncooked_mode << " " << latency << " " << just_cooked_latency << " " << final_send_latency << endl;
     }
 };
 
@@ -102,10 +103,12 @@ static_assert(sizeof(Faz) == sizeof(std::size_t) * Faz::test_array_size, "Error:
 
 int main(int argc, char** argv) {
   auto& middle_times = derecho::MulticastGroup::middle_times();
+  auto &actual_send_times = derecho::rpc::actual_send_time();
     using namespace std;
     for (auto i = 0u; i < num_messages; ++i){
       middle_times.push_back(0);
       start_times.push_back(0);
+      actual_send_times.push_back(0);
     }
     assert_always(middle_times.size() == num_messages);
     assert_always(middle_times[num_messages-1] == 0);
@@ -249,12 +252,14 @@ int main(int argc, char** argv) {
     group->barrier_sync();
     uint64_t total_time = 0;
     uint64_t just_cooked_total_time = 0;
+    uint64_t until_send = 0;
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
         just_cooked_total_time += middle_times[i] - start_times[i];
+        until_send = actual_send_times[i] - start_times[i];
     }
     if(node_id == 1) {
-        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000), ((double)just_cooked_total_time) / (num_messages * 1000)}, "data_latency");
+        log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, uncooked_mode, ((double)total_time) / (num_messages * 1000), ((double)just_cooked_total_time) / (num_messages * 1000), ((double)until_send) / (num_messages * 1000)}, "data_latency");
     }
     //_exit(0);
 }

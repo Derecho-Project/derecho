@@ -7,6 +7,7 @@
 #include <cassert>
 #include <iostream>
 
+#include "time/time.h"
 #include "rpc_manager.h"
 
 namespace derecho {
@@ -209,6 +210,9 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
 }
 
 bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+    static std::size_t actual_send_time_idx = 0;
+    actual_send_time()[actual_send_time_idx] = get_time_timeh();
+    ++actual_send_time_idx;
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }

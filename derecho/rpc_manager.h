@@ -272,6 +272,10 @@ public:
      */
   void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
 };
+inline auto& actual_send_time(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
 
 //Now that RPCManager is finished being declared, we can declare these convenience types
 //(the declarations should really live in remote_invocable.h, but they depend on RPCManager existing)
