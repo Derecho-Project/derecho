@@ -31,10 +31,6 @@ inline auto& about_to_deserialize(){
     return ret;
 }
 
-inline auto& deserialize_stats(){
-    static std::vector<mutils::dsr_info> ret;
-    return ret;
-}
 
 namespace derecho {
 
@@ -291,13 +287,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
                                  const std::function<char*(int)>&) {
         //TODO: Need to catch exceptions here, and possibly send them back, since void functions can still throw exceptions!
         auto recv_buf = _recv_buf + sizeof(long int);
-        {
-            static std::size_t idx{0};
-            about_to_deserialize()[idx] = get_time_timeh();
-            mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
-            deserialize_stats()[idx] = mutils::get_dsr_info();
-            ++idx;
-        }
+        mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
         return recv_ret{reply_opcode, 0, nullptr};
     }
 
