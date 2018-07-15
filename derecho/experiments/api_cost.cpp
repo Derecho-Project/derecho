@@ -36,15 +36,19 @@ struct exp_result {
     double post_send_latency;
     double arrival_latency;
     double pre_deserialize_latency;
-    double callfunc1;
-    double callfunc2;
+    double enter_deserialize_and_run;
+    double deserialize_things;
+    double precalltime;
+    double callfunc_over_local;
+    double callfunc_over_dsr;
 
     void print(std::ofstream& fout) {
         fout << num_nodes << " " << max_msg_size
              << " " << window_size << " "
              << num_messages << " "
              << uncooked_mode << " " << latency << " " << just_cooked_latency << " " << final_send_latency << " " << post_send_latency << 
-             " " << arrival_latency << " " << pre_deserialize_latency << " " << callfunc1 << " " << callfunc2 << endl;
+             " " << arrival_latency << " " << pre_deserialize_latency << " " << enter_deserialize_and_run << " " << deserialize_things << 
+             " " << precalltime << " " << callfunc_over_local << " " << callfunc_over_dsr << endl;
     }
 };
 
@@ -277,13 +281,17 @@ int main(int argc, char** argv) {
     uint64_t post_send = 0;
     uint64_t arrival = 0;
     uint64_t pre_deserialize = 0;
-    uint64_t callfunc1 = 0;
-    uint64_t callfunc2 = 0;
+    uint64_t enter_deserialize_and_run = 0;
+    uint64_t deserialize_things = 0;
+    uint64_t precalltime = 0;
+    uint64_t callfunc_over_local = 0;
+    uint64_t callfunc_over_dsr = 0;
     auto& pvs = derecho::rpc::post_view_manager_send_time();
     auto& ma = msg_arrived();
     auto& dd = about_to_deserialize();
     auto &pct = pre_call_time();
     auto &pct2 = post_call_time();
+    auto& ds = deserialize_stats();
     
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
@@ -292,8 +300,11 @@ int main(int argc, char** argv) {
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
         pre_deserialize += dd[i] - start_times[i];
-        callfunc1 += pct[i] - start_times[i];
-        callfunc2 += pct2[i] - start_times[i];
+        enter_deserialize_and_run += (ds[i].start_time - real_start_times[i]).count();
+        deserialize_things += (ds[i].to_callfunc + ds[i].start_time - real_start_times[i]).count();
+        precalltime += pct[i] - start_times[i];
+        callfunc_over_local += pct2[i] - start_times[i];
+        callfunc_over_dsr +=  (ds[i].to_exit + ds[i].start_time - real_start_times[i]).count();
         assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;
@@ -305,8 +316,11 @@ int main(int argc, char** argv) {
         ((double)post_send) / (num_messages * 1000), 
         ((double)arrival) / (num_messages * 1000), 
         ((double)pre_deserialize) / (num_messages * 1000),
-        ((double)callfunc1) / (num_messages * 1000), 
-        ((double)callfunc2) / (num_messages * 1000), }, 
+        ((double)enter_deserialize_and_run) / (num_messages * 1000), 
+        ((double)deserialize_things) / (num_messages * 1000), 
+        ((double)precalltime) / (num_messages * 1000),
+        ((double)callfunc_over_local) / (num_messages * 1000),
+        ((double)callfunc_over_dsr) / (num_messages * 1000)}, 
         "data_latency");
     }
     //_exit(0);

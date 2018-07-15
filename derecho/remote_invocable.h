@@ -31,6 +31,10 @@ inline auto& about_to_deserialize(){
     return ret;
 }
 
+inline auto& deserialize_stats(){
+    static std::vector<mutils::dsr_info> ret;
+    return ret;
+}
 
 namespace derecho {
 
@@ -290,9 +294,10 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         {
             static std::size_t idx{0};
             about_to_deserialize()[idx] = get_time_timeh();
+            mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
+            deserialize_stats()[idx] = mutils::get_dsr_info();
             ++idx;
         }
-        mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
         return recv_ret{reply_opcode, 0, nullptr};
     }
 
