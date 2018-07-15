@@ -291,8 +291,8 @@ int main(int argc, char** argv) {
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
         pre_deserialize += dd[i] - start_times[i];
-        callfunc1 += duration_cast<microseconds>(ds[i].to_callfunc + ds[i].start_time - real_start_times[i]).count();
-        callfunc2 += duration_cast<microseconds>(ds[i].to_exit + ds[i].start_time - real_start_times[i]).count();
+        callfunc1 += (ds[i].to_callfunc + ds[i].start_time - real_start_times[i]).count();
+        callfunc2 += (ds[i].to_exit + ds[i].start_time - real_start_times[i]).count();
         assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;
