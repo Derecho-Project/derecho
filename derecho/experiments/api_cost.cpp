@@ -123,6 +123,7 @@ int main(int argc, char** argv) {
         auto& dd = about_to_deserialize();
         auto& pct = pre_call_time();
         auto& pct2 = post_call_time();
+         auto& ds = deserialize_stats();
         for (auto i = 0u; i < num_messages; ++i){
             middle_times.push_back(0);
             start_times.push_back(0);
@@ -133,6 +134,9 @@ int main(int argc, char** argv) {
             dd.push_back(0);
             pct.push_back(0);
             pct2.push_back(0);
+            ds.emplace_back();
+            ds.back().to_callfunc = nanoseconds{0};
+            ds.back().to_exit = nanoseconds{0};
         }
     }
     assert_always(middle_times.size() == num_messages);
