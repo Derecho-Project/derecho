@@ -117,7 +117,8 @@ int main(int argc, char** argv) {
         auto& pvs = derecho::rpc::post_view_manager_send_time();
         auto& ma = msg_arrived();
         auto& dd = about_to_deserialize();
-        auto& ds = deserialize_stats();
+        auto& pct = pre_call_time();
+        auto& pct2 = post_call_time();
         for (auto i = 0u; i < num_messages; ++i){
             middle_times.push_back(0);
             start_times.push_back(0);
@@ -126,9 +127,8 @@ int main(int argc, char** argv) {
             pvs.push_back(0);
             ma.push_back(0);
             dd.push_back(0);
-            ds.emplace_back();
-            ds.back().to_callfunc = nanoseconds{0};
-            ds.back().to_exit = nanoseconds{0};
+            pct.push_back(0);
+            pct2.push_back(0);
         }
     }
     assert_always(middle_times.size() == num_messages);
@@ -282,7 +282,8 @@ int main(int argc, char** argv) {
     auto& pvs = derecho::rpc::post_view_manager_send_time();
     auto& ma = msg_arrived();
     auto& dd = about_to_deserialize();
-    auto& ds = deserialize_stats();
+    auto &pct = pre_call_time();
+    auto &pct2 = post_call_time();
     
     for(auto i = 0u; i < num_messages; ++i) {
         total_time += end_times[i] - start_times[i];
@@ -291,8 +292,8 @@ int main(int argc, char** argv) {
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
         pre_deserialize += dd[i] - start_times[i];
-        callfunc1 += (ds[i].to_callfunc + ds[i].start_time - real_start_times[i]).count();
-        callfunc2 += (ds[i].to_exit + ds[i].start_time - real_start_times[i]).count();
+        callfunc1 += pct[i] - start_times[i];
+        callfunc2 += pct2[i] - start_times[i];
         assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;

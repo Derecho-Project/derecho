@@ -16,6 +16,15 @@
 
 #include "rpc_utils.h"
 
+inline auto& pre_call_time(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
+
+inline auto& post_call_time(){
+    static std::vector<unsigned long> ret;
+    return ret;
+}
 
 inline auto& about_to_deserialize(){
     static std::vector<unsigned long> ret;
@@ -379,8 +388,18 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
                                                            const partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
-                    [_this, fun = partial.fun](Args... a){return ((_this->get())->*fun)(a...);
-}
+                    [_this, fun = partial.fun](Args... a){
+                        static thread_local std::size_t idx=0;
+                        struct post{
+                            ~post(){
+                                post_call_time()[idx] = get_time_timeh();
+                                ++idx;
+                            }
+                        };
+                        post p;
+                        pre_call_time()[idx] = get_time_timeh();
+                        return ((_this->get())->*fun)(a...);
+                    }
 };
 }
 
