@@ -87,7 +87,7 @@ struct Faz {
                             << std::endl);
         return state;
     }
-    void change_state(std::array<std::size_t, test_array_size> new_state) {
+    void change_state(const std::array<std::size_t, test_array_size> &new_state) {
         whendebug(std::cout << std::endl
                             << "executing change_state " << new_state[0] << std::endl
                             << std::endl);
