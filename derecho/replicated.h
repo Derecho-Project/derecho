@@ -71,6 +71,13 @@ inline auto& cooked_send_has_buffer(){
     return ret;
 }
 
+inline auto& has_buffer_time_point(){
+    using namespace std;
+    using namespace chrono;
+    static std::vector<typename high_resolution_clock::time_point> ret;
+    return ret;
+}
+
 template <typename T>
 class Replicated : public ReplicatedObject, public ITemporalQueryFrontierProvider {
 private:
@@ -110,6 +117,7 @@ private:
             };
             static std::size_t send_num = 0;
             cooked_send_has_buffer()[send_num] = get_time_timeh();
+            has_buffer_time_point()[send_num] = std::chrono::high_resolution_clock::now();
             ++send_num;
             // std::cout << "Obtained a buffer" << std::endl;
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);

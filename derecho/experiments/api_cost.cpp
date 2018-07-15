@@ -54,6 +54,7 @@ volatile bool done = false;
 //probably paying attention to node 0's ones of these.
 std::vector<uint64_t> end_times(num_messages,0);
 auto& start_times = derecho::cooked_send_has_buffer();
+auto& real_start_times = derecho::has_buffer_time_point();
 uint32_t num_nodes;
 bool uncooked_mode;
 
@@ -120,6 +121,7 @@ int main(int argc, char** argv) {
         for (auto i = 0u; i < num_messages; ++i){
             middle_times.push_back(0);
             start_times.push_back(0);
+            real_start_times.push_back(high_resolution_clock::now());
             actual_send_times.push_back(0);
             pvs.push_back(0);
             ma.push_back(0);
@@ -289,8 +291,8 @@ int main(int argc, char** argv) {
         post_send += pvs[i] - start_times[i];
         arrival += ma[i] - start_times[i];
         pre_deserialize += dd[i] - start_times[i];
-        callfunc1 += duration_cast<microseconds>(ds[i].to_callfunc).count();
-        callfunc2 += duration_cast<microseconds>(ds[i].to_exit).count();
+        callfunc1 += duration_cast<microseconds>(ds[i].to_callfunc + ds[i].start_time - real_start_times[i]).count();
+        callfunc2 += duration_cast<microseconds>(ds[i].to_exit + ds[i].start_time - real_start_times[i]).count();
         assert(ma[i] > start_times[i]);
     }
     if (uncooked_mode) until_send = 0;
