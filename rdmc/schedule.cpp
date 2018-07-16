@@ -7,6 +7,12 @@
 using std::experimental::optional;
 using std::min;
 
+#ifndef NDEBUG
+#define assert_always(x...) assert(x)
+#else
+#define assert_always(x...) if(!x){abort();}
+#endif
+
 vector<uint32_t> chain_schedule::get_connections() const {
     // establish connection with member_index-1 and member_index+1, if they
     // exist
@@ -130,7 +136,7 @@ optional<schedule::block_transfer> tree_schedule::get_first_block(size_t num_blo
         if((2ull << i) > member_index)
             return block_transfer{member_index - (1 << i), 0};
     }
-    assert(false);
+    assert_always(false);
 }
 vector<uint32_t> binomial_schedule::get_connections() const {
     vector<uint32_t> ret;

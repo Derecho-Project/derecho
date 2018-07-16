@@ -150,7 +150,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                                      const node_id_t& nid, const char* response,
                                      const std::function<char*(int)>&) {
         if(response[0]) throw remote_exception_occurred{nid};
-        assert(false && "was not expecting a response!");
+        assert_always(false && "was not expecting a response!");
     }
 
     /**
@@ -180,7 +180,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     inline void fulfill_pending_results_map(long int invocation_id, const node_list_t& who) {
         // I think this function is never called
-        assert(false);
+        assert_always(false);
         results_map.at(invocation_id).fulfill_map(who);
     }
 

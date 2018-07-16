@@ -38,10 +38,6 @@ public:
 
     _SSTField(const int field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
 
-    virtual bool operator==(_SSTField const&) {
-        assert(false);
-    }
-
     int set_base(volatile char* const base) {
         this->base = base;
         return padded_len(field_len);
