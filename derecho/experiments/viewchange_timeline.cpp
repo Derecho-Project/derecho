@@ -33,7 +33,7 @@ void stability_callback(uint32_t subgroup, uint32_t sender_id, long long int ind
                         long long int size) {
     std::stringstream string_formatter;
     string_formatter << "Message " << index << " from sender " << sender_id << " delivered";
-    managed_group->log_event(string_formatter.str());
+    whenlog(managed_group->log_event(string_formatter.str());)
 }
 
 void send_messages(uint64_t duration) {
@@ -98,9 +98,9 @@ int main(int argc, char *argv[]) {
         cout << "Connecting to group" << endl;
         managed_group = make_shared<derecho::Group<>>(
                 node_id, my_ip, leader_ip, callbacks, one_raw_group);
-        managed_group->log_event("About to start sending");
+        whenlog(managed_group->log_event("About to start sending");)
         send_messages(10 * SECOND);
-        managed_group->log_event("About to exit");
+        whenlog(managed_group->log_event("About to exit");)
         exit(0);
     } else {
         if(node_id == leader_id) {

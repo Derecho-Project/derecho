@@ -156,7 +156,7 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
     bool success = leader_connection.read(size_of_view);
-    assert(success);
+    assert_always(success);
     char buffer[size_of_view];
     success = leader_connection.read(buffer, size_of_view);
     assert(success);
@@ -229,7 +229,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
             node_id_t joiner_id = curr_view->members[curr_view->rank_of(joiner_ip)];
             auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
                 bool success = waiting_join_sockets.front().write(bytes, size);
-                assert(success);
+                assert_always(success);
             };
             std::size_t size_of_view = mutils::bytes_size(*curr_view);
             bool write_success = waiting_join_sockets.front().write(size_of_view);

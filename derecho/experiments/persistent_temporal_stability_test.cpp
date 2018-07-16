@@ -173,6 +173,7 @@ int main(int argc, char *argv[]) {
   uint64_t *appear_time_us; // when the temporal query appears
   uint64_t *message_time_us; // the latest timestamp
   int num_datapoints = 0; // number of data points
+  (void) num_datapoints;
   query_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);
   appear_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);
   message_time_us = (uint64_t*)malloc(sizeof(uint64_t)*num_of_nodes*count);

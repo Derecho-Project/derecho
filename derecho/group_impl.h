@@ -373,10 +373,10 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         whenlog(logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second));
         std::size_t buffer_size;
         bool success = leader_socket.get().read(buffer_size);
-        assert(success);
+        assert_always(success);
         char buffer[buffer_size];
         success = leader_socket.get().read(buffer, buffer_size);
-        assert(success);
+        assert_always(success);
         subgroup_object.receive_object(buffer);
     }
     whenlog(logger->debug("Done receiving all Replicated Objects from subgroup leaders"));

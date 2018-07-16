@@ -33,7 +33,7 @@ template <typename... ReplicatedTypes>
 class PersistenceManager {
 private:
 #ifndef NOLOG
-    /** whenlog(logger */)
+    /** whenlog(logger) */
     std::shared_ptr<spdlog::logger> whenlog(logger;)
 #endif
 

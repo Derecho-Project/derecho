@@ -105,7 +105,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         {
             auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
             auto check_size = mutils::bytes_size(invocation_id) + serialize_all(v, remote_args...);
-            assert(check_size == size);
+            assert_always(check_size == size);
         }
 
         lock_t l{map_lock};

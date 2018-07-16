@@ -39,16 +39,16 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
 
     stringstream string_formatter;
     string_formatter << "Global stability for message " << index << " from sender " << sender_id;
-    managed_group->log_event(string_formatter.str());
+    whenlog(managed_group->log_event(string_formatter.str()));
 
     while(!managed_group) {
     }
 
     unsigned int n = managed_group->get_members().size();
     if(message_number >= n) {
-        unsigned int dt = message_times.back() - message_times[message_number - n];
+        whenlog(unsigned int dt = message_times.back() - message_times[message_number - n];
         double bandwidth = (message_size * n * 8.0) / dt;
-        managed_group->log_event(std::to_string(bandwidth));
+        managed_group->log_event(std::to_string(bandwidth)));
     }
 
     ++message_number;
