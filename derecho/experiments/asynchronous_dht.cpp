@@ -6,38 +6,47 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 
 template <class T>
+class HashTable;
+
+template <class T>
 class HashTable : public mutils::ByteRepresentable {
 private:
-  std::map<uint64_t, T> table;
+    std::map<uint64_t, T> table;
+    derecho::Group<HashTable<T>>** group;
 
 public:
-  void put(uint64_t key, T value) {
+    enum Functions {
+        PUT,
+        GET,
+        FUN,
+        PRINT
+    };
+
+    void put(uint64_t key, T value) {
         table[key] = value;
     }
 
-  T get(uint64_t key) {
+    T get(uint64_t key) {
         // for now, create the entry if it doesn't exist
         return table[key];
     }
 
-  void fun(T v0, T v1, T v2) {
-    put(0, v0);
-    put(1, v1);
-    put(2, v2);
-  }
-
-  void print() {
-    for (auto p : table) {
-        std::cout << p.first << " " << p.second << std::endl;
+    void fun(T v0, T v1, T v2) {
+        put(0, v0);
+        put(1, v1);
+        put(2, v2);
     }
-  }
 
-    enum Functions {
-        PUT,
-        GET,
-	FUN,
-	PRINT
-    };
+    void print() {
+        for(auto p : table) {
+            std::cout << p.first << " " << p.second << std::endl;
+        }
+        auto& subgroup_handle = (*group)->template get_subgroup<HashTable<T>>();
+	std::thread temp([&]() {
+            subgroup_handle.template ordered_send<HashTable<std::string>::PRINT>();
+        });
+	temp.detach();
+    }
 
     static auto register_functions() {
         return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<T>::put),
@@ -46,9 +55,9 @@ public:
                                derecho::rpc::tag<PRINT>(&HashTable<T>::print));
     }
 
-    HashTable() : table() {}
+    HashTable(derecho::Group<HashTable<T>>** group = nullptr) : table(), group(group) {}
 
-    HashTable(const std::map<uint64_t, T>& table) : table(table) {}
+    HashTable(const std::map<uint64_t, T>& table, derecho::Group<HashTable<T>>** group = nullptr) : table(table), group(group) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(HashTable, table);
 };
@@ -91,22 +100,24 @@ int main() {
                   return subgroup_vector;
               }}}};
 
-    auto HashTableGenerator = [](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
+    derecho::Group<HashTable<std::string>>* group;
+    auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(&group); };
 
-    std::unique_ptr<derecho::Group<HashTable<std::string>>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<HashTable<std::string>>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
+        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
     } else {
-        group = std::make_unique<derecho::Group<HashTable<std::string>>>(node_id, my_ip, leader_ip, callback_set, subgroup_info, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
+        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, leader_ip, callback_set, subgroup_info, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
     }
 
     std::unique_lock<std::mutex> main_lock(main_mutex);
     main_cv.wait(main_lock, [&groups_provisioned]() { return groups_provisioned; });
     std::cout << "Subgroups provisioned" << std::endl;
     auto& subgroup_handle = group->get_subgroup<HashTable<std::string>>();
-    // std::string a = "hello", b = "hi", c = "bye";
-    subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
-    subgroup_handle.ordered_send<HashTable<std::string>::PRINT>();
+    if(node_id == 0) {
+        subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
+    } else {
+        subgroup_handle.ordered_send<HashTable<std::string>::PRINT>();
+    }
     std::cout << "Entering infinite loop" << std::endl;
     while(true) {
     }
