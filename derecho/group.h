@@ -35,6 +35,42 @@ namespace derecho {
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
+class _Group {
+private:
+public:
+    virtual ~_Group() = default;
+    template <typename SubgroupType>
+    auto& get_subgroup(uint32_t subgroup_num=0);
+};
+
+template <typename ReplicatedType>
+class GroupProjection : public virtual _Group {
+protected:
+    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+
+public:
+    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num=0);
+};
+
+template <>
+class GroupProjection<RawObject> : public virtual _Group {
+protected:
+    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+
+public:
+    RawSubgroup& get_subgroup(uint32_t subgroup_num = 0);
+};
+
+class GroupReference {
+public:
+    _Group* group;
+    uint32_t subgroup_index;
+    void set_group_pointers(_Group* group, uint32_t subgroup_index) {
+        this->group = group;
+        this->subgroup_index = subgroup_index;
+    }
+};
+
 /**
  * The top-level object for creating a Derecho group. This implements the group
  * management service (GMS) features and contains a MulticastGroup instance that
@@ -43,7 +79,10 @@ using replicated_index_map = std::map<uint32_t, Replicated<T>>;
  * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedTypes>
-class Group {
+class Group : public virtual _Group, public GroupProjection<RawObject>, public GroupProjection<ReplicatedTypes>... {
+public:
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 

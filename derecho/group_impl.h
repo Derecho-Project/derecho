@@ -57,6 +57,36 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
     return a;
 }
 
+template <typename SubgroupType>
+auto& _Group::get_subgroup(uint32_t subgroup_num) {
+    return (dynamic_cast<GroupProjection<SubgroupType>*>(this))->get_subgroup(subgroup_num);
+}
+
+template <typename ReplicatedType>
+Replicated<ReplicatedType>& GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num, &ret);
+    return *((Replicated<ReplicatedType>*)ret);
+}
+
+RawSubgroup& GroupProjection<RawObject>::get_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_replicated_pointer(std::type_index{typeid(RawObject)}, subgroup_num, &ret);
+    return *((RawSubgroup*)ret);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) {
+  if(type == std::type_index{typeid(RawObject)}) {
+        *ret = &get_subgroup<RawObject>(subgroup_num);
+    } else {
+        ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+                          ? &get_subgroup<ReplicatedTypes>(subgroup_num)
+                          : *ret)),
+         ...);
+    }
+}
+
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(
         const node_id_t my_id,
@@ -180,11 +210,11 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                         /* Construct an "empty" Replicated<T>, since all of T's state will be received
                          * from the leader and there are no logs to update */
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager));
+                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager, this));
                     } else {
                         replicated_objects.template get<FirstType>().emplace(
                                 subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
-                                                                      factories.template get<FirstType>()));
+                                                                      factories.template get<FirstType>(), this));
                     }
                     //Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id, replicated_objects.template get<FirstType>().at(subgroup_index));
