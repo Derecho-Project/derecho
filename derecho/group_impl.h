@@ -58,7 +58,7 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
 }
 
 template <typename SubgroupType>
-Replicated<SubgroupType>& _Group::get_subgroup(uint32_t subgroup_num) {
+auto& _Group::get_subgroup(uint32_t subgroup_num) {
     return (dynamic_cast<GroupProjection<SubgroupType>*>(this))->get_subgroup(subgroup_num);
 }
 

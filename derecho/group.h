@@ -39,7 +39,7 @@ class _Group {
 public:
     virtual ~_Group() = default;
     template <typename SubgroupType>
-    Replicated<SubgroupType>& get_subgroup(uint32_t subgroup_num=0);
+    auto& get_subgroup(uint32_t subgroup_num=0);
 };
 
 template <typename ReplicatedType>
