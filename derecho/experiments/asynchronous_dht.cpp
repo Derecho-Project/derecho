@@ -5,16 +5,17 @@
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
-template <class T>
+template <class DataType>
 class HashTable;
 
-template <class T>
-class HashTable : public mutils::ByteRepresentable {
+template <class DataType>
+class HashTable : public mutils::ByteRepresentable, public derecho::GroupReference {
 private:
-    std::map<uint64_t, T> table;
-    derecho::Group<HashTable<T>>** group;
+    std::map<uint64_t, DataType> table;
 
 public:
+    using derecho::GroupReference::group;
+    using derecho::GroupReference::subgroup_index;
     enum Functions {
         PUT,
         GET,
@@ -22,16 +23,16 @@ public:
         PRINT
     };
 
-    void put(uint64_t key, T value) {
+    void put(uint64_t key, DataType value) {
         table[key] = value;
     }
 
-    T get(uint64_t key) {
+    DataType get(uint64_t key) {
         // for now, create the entry if it doesn't exist
         return table[key];
     }
 
-    void fun(T v0, T v1, T v2) {
+    void fun(DataType v0, DataType v1, DataType v2) {
         put(0, v0);
         put(1, v1);
         put(2, v2);
@@ -41,23 +42,23 @@ public:
         for(auto p : table) {
             std::cout << p.first << " " << p.second << std::endl;
         }
-        auto& subgroup_handle = (*group)->template get_subgroup<HashTable<T>>();
-	std::thread temp([&]() {
+        auto& subgroup_handle = group->template get_subgroup<HashTable<DataType>>();
+        std::thread temp([&]() {
             subgroup_handle.template ordered_send<HashTable<std::string>::PRINT>();
         });
-	temp.detach();
+        temp.detach();
     }
 
     static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<T>::put),
-                               derecho::rpc::tag<GET>(&HashTable<T>::get),
-                               derecho::rpc::tag<FUN>(&HashTable<T>::fun),
-                               derecho::rpc::tag<PRINT>(&HashTable<T>::print));
+        return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<DataType>::put),
+                               derecho::rpc::tag<GET>(&HashTable<DataType>::get),
+                               derecho::rpc::tag<FUN>(&HashTable<DataType>::fun),
+                               derecho::rpc::tag<PRINT>(&HashTable<DataType>::print));
     }
 
-    HashTable(derecho::Group<HashTable<T>>** group = nullptr) : table(), group(group) {}
+    HashTable() : table() {}
 
-    HashTable(const std::map<uint64_t, T>& table, derecho::Group<HashTable<T>>** group = nullptr) : table(table), group(group) {}
+    HashTable(const std::map<uint64_t, DataType>& table) : table(table) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(HashTable, table);
 };
@@ -101,7 +102,7 @@ int main() {
               }}}};
 
     derecho::Group<HashTable<std::string>>* group;
-    auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(&group); };
+    auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
 
     if(my_ip == leader_ip) {
         group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);

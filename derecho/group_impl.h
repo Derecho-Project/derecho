@@ -57,6 +57,26 @@ std::set<T> functional_insert(std::set<T>& a, const std::set<T>& b) {
     return a;
 }
 
+template <typename SubgroupType>
+Replicated<SubgroupType>& _Group::get_subgroup(uint32_t subgroup_num) {
+    return (dynamic_cast<GroupProjection<SubgroupType>*>(this))->get_subgroup(subgroup_num);
+}
+
+template <typename ReplicatedType>
+Replicated<ReplicatedType>& GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_replicated_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num, &ret);
+    return *((Replicated<ReplicatedType>*)ret);
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) {
+    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+                      ? &get_subgroup<ReplicatedTypes>(subgroup_num)
+                      : *ret)),
+     ...);
+}
+
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(
         const node_id_t my_id,
