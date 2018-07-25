@@ -55,7 +55,7 @@ class GroupReference {
 public:
     _Group* group;
     uint32_t subgroup_index;
-    void set_group_pointers(_Group* group, uint32_t subgroup_index=0) {
+    void set_group_pointers(_Group* group, uint32_t subgroup_index) {
         this->group = group;
         this->subgroup_index = subgroup_index;
     }

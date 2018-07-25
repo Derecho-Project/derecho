@@ -26,6 +26,8 @@ using namespace persistent;
 
 namespace derecho {
 
+class _Group;
+
 /**
  * This is a marker interface for user-defined Replicated Objects (i.e. objects
  * that will be used with the Replicated<T> template) to indicate that at least
@@ -85,6 +87,7 @@ private:
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that replicates this object. */
     const subgroup_id_t subgroup_id;
+    const uint32_t subgroup_index;
     /** The index, within the subgroup, of the shard that replicates this object.
      * This needs to be stored in order to detect if a node has moved to a different
      * shard within the same subgroup (and hence its Replicated state is obsolete). */
@@ -93,6 +96,7 @@ private:
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
+    _Group* group;
 
     template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send_or_query(const std::vector<node_id_t>& destination_nodes,
@@ -169,17 +173,20 @@ public:
      * of T.
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
-               rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory)
+               rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
+	      subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())) {
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+	      group(group) {
 #ifdef _DEBUG
         std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
 #endif  //_DEBUG
+	(**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
 
     /**
@@ -195,23 +202,27 @@ public:
      * that owns this Replicated<T>
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
-               rpc::RPCManager& group_rpc_manager)
+               rpc::RPCManager& group_rpc_manager, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
+	      subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())) {}
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+	      group(group) {}
 
     // Replicated(Replicated&&) = default;
     Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
                                    user_object_ptr(std::move(rhs.user_object_ptr)),
                                    node_id(rhs.node_id),
                                    subgroup_id(rhs.subgroup_id),
+				   subgroup_index(rhs.subgroup_index),
                                    shard_num(rhs.shard_num),
                                    group_rpc_manager(rhs.group_rpc_manager),
-                                   wrapped_this(std::move(rhs.wrapped_this)) {
+                                   wrapped_this(std::move(rhs.wrapped_this)),
+				   group(rhs.group) {
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
@@ -418,6 +429,7 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
+	(**user_object_ptr).set_group_pointers(group, subgroup_index);
         return mutils::bytes_size(**user_object_ptr);
     }
 

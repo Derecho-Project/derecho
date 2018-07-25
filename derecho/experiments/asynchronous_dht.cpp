@@ -42,9 +42,10 @@ public:
         for(auto p : table) {
             std::cout << p.first << " " << p.second << std::endl;
         }
-        auto& subgroup_handle = group->template get_subgroup<HashTable<DataType>>();
+        auto& subgroup_handle = group->template get_subgroup<derecho::RawObject>();
         std::thread temp([&]() {
-            subgroup_handle.template ordered_send<HashTable<std::string>::PRINT>();
+            // subgroup_handle.template ordered_send<HashTable<std::string>::PRINT>();
+	    subgroup_handle.send();
         });
         temp.detach();
     }
