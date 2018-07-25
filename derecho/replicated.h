@@ -178,15 +178,14 @@ public:
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
-	      subgroup_index(subgroup_index),
+              subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-	      group(group) {
-#ifdef _DEBUG
-        std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
-#endif  //_DEBUG
-	(**user_object_ptr).set_group_pointers(group, subgroup_index);
+              group(group) {
+        if constexpr (std::is_base_of_v<_Group, T>) {
+            (**user_object_ptr).set_group_pointers(group, subgroup_index);
+        }
     }
 
     /**
@@ -227,7 +226,7 @@ public:
     }
     Replicated(const Replicated&) = delete;
     virtual ~Replicated() = default;
-
+  
     /**
      * @return The value of has_persistent_fields<T> for this Replicated<T>'s
      * template parameter. This is true if any field of the user object T is
@@ -429,7 +428,9 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-	(**user_object_ptr).set_group_pointers(group, subgroup_index);
+        if constexpr (std::is_base_of_v<_Group, T>) {
+            (**user_object_ptr).set_group_pointers(group, subgroup_index);
+        }
         return mutils::bytes_size(**user_object_ptr);
     }
 
