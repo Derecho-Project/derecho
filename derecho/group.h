@@ -36,6 +36,7 @@ template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
 class _Group {
+private:
 public:
     virtual ~_Group() = default;
     template <typename SubgroupType>
@@ -49,6 +50,15 @@ protected:
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num=0);
+};
+
+template <>
+class GroupProjection<RawObject> : public virtual _Group {
+protected:
+    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+
+public:
+    RawSubgroup& get_subgroup(uint32_t subgroup_num = 0);
 };
 
 class GroupReference {
@@ -69,7 +79,7 @@ public:
  * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedTypes>
-class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
+class Group : public virtual _Group, public GroupProjection<RawObject>, public GroupProjection<ReplicatedTypes>... {
 public:
     void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
 

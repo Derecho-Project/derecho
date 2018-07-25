@@ -69,12 +69,22 @@ Replicated<ReplicatedType>& GroupProjection<ReplicatedType>::get_subgroup(uint32
     return *((Replicated<ReplicatedType>*)ret);
 }
 
+RawSubgroup& GroupProjection<RawObject>::get_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_replicated_pointer(std::type_index{typeid(RawObject)}, subgroup_num, &ret);
+    return *((RawSubgroup*)ret);
+}
+
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) {
-    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                      ? &get_subgroup<ReplicatedTypes>(subgroup_num)
-                      : *ret)),
-     ...);
+  if(type == std::type_index{typeid(RawObject)}) {
+        *ret = &get_subgroup<RawObject>(subgroup_num);
+    } else {
+        ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+                          ? &get_subgroup<ReplicatedTypes>(subgroup_num)
+                          : *ret)),
+         ...);
+    }
 }
 
 template <typename... ReplicatedTypes>

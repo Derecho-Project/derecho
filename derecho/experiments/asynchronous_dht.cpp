@@ -45,7 +45,6 @@ public:
         derecho::Replicated<HashTable<DataType>>& subgroup_handle = group->template get_subgroup<HashTable<DataType>>();
         std::thread temp([&]() {
             subgroup_handle.template ordered_send<HashTable<DataType>::PRINT>();
-	    // subgroup_handle.send();
         });
         temp.detach();
     }
