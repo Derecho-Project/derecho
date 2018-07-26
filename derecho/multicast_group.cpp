@@ -575,7 +575,7 @@ void MulticastGroup::deliver_messages_upto(
         if(rdmc_msg_ptr != locally_stable_rdmc_messages[subgroup_num].end()) {
             auto& msg = rdmc_msg_ptr->second;
             char* buf = msg.message_buffer.buffer.get();
-            uint64_t msg_ts = ((header*) buf)->timestamp;
+            uint64_t msg_ts = ((header*)buf)->timestamp;
             msgs_delivered = true;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             deliver_message(msg, subgroup_num);
@@ -586,8 +586,8 @@ void MulticastGroup::deliver_messages_upto(
         } else {
             msgs_delivered = true;
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
-            char* buf = (char*) msg.buf;
-            uint64_t msg_ts = ((header*) buf)->timestamp;
+            char* buf = (char*)msg.buf;
+            uint64_t msg_ts = ((header*)buf)->timestamp;
             deliver_message(msg, subgroup_num);
             version_message(msg, subgroup_num, seq_num, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
@@ -799,7 +799,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             RDMCMessage& msg = locally_stable_rdmc_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
                 char* buf = msg.message_buffer.buffer.get();
-                uint64_t msg_ts = ((header*) buf)->timestamp;
+                uint64_t msg_ts = ((header*)buf)->timestamp;
                 //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
                 deliver_message(msg, subgroup_num);
                 version_message(msg, subgroup_num, least_undelivered_rdmc_seq_num, msg_ts);
@@ -815,7 +815,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             SSTMessage& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
             if(msg.size > 0) {
                 char* buf = (char*)msg.buf;
-                uint64_t msg_ts = ((header*) buf)->timestamp;
+                uint64_t msg_ts = ((header*)buf)->timestamp;
                 deliver_message(msg, subgroup_num);
                 version_message(msg, subgroup_num, least_undelivered_sst_seq_num, msg_ts);
             }
@@ -1211,13 +1211,19 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         }
     }
 
+    std::lock_guard<std::mutex> lock(msg_state_mtx);
     if(msg_size > sst::max_msg_size) {
         if(thread_shutdown) {
             return nullptr;
         }
 
-        std::unique_lock<std::mutex> lock(msg_state_mtx);
-        if(free_message_buffers[subgroup_num].empty()) return nullptr;
+        if(free_message_buffers[subgroup_num].empty()) {
+            return nullptr;
+        }
+
+        if(pending_sst_sends[subgroup_num] || next_sends[subgroup_num]) {
+            return nullptr;
+        }
 
         // Create new Message
         RDMCMessage msg;
@@ -1245,7 +1251,10 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         // DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     } else {
-        std::unique_lock<std::mutex> lock(msg_state_mtx);
+        if(pending_sst_sends[subgroup_num] || next_sends[subgroup_num]) {
+            return nullptr;
+        }
+
         pending_sst_sends[subgroup_num] = true;
         if(thread_shutdown) {
             pending_sst_sends[subgroup_num] = false;
@@ -1277,12 +1286,12 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
     if(!rdmc_sst_groups_created) {
         return false;
     }
+    std::lock_guard<std::mutex> lock(msg_state_mtx);
     if(last_transfer_medium[subgroup_num]) {
         // check thread_shutdown only for RDMC sends
         if(thread_shutdown) {
             return false;
         }
-        std::lock_guard<std::mutex> lock(msg_state_mtx);
         assert(next_sends[subgroup_num]);
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
         next_sends[subgroup_num] = std::experimental::nullopt;
@@ -1290,7 +1299,6 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
         // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;
     } else {
-        std::lock_guard<std::mutex> lock(msg_state_mtx);
         sst_multicast_group_ptrs[subgroup_num]->send();
         pending_sst_sends[subgroup_num] = false;
         // DERECHO_LOG(-1, -1, "user_send_finished");
