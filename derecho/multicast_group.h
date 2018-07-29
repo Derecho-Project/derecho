@@ -169,7 +169,7 @@ private:
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
 
-public:  //consts can be public, right?
+public:
     /** Block size used for message transfer.
      * we keep it simple; one block size for messages from all senders */
     const long long unsigned int block_size;
@@ -218,7 +218,7 @@ private:
     std::vector<std::experimental::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<std::pair<subgroup_id_t, message_id_t>, RDMCMessage> current_receives;
+    std::map<std::pair<subgroup_id_t, node_id_t>, RDMCMessage> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable.
      * Organized by [subgroup number] -> [sequence number] -> [message] */
@@ -309,7 +309,7 @@ private:
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
      */
-  void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
 
     uint32_t get_num_senders(std::vector<int> shard_senders) {
         uint32_t num = 0;
@@ -342,6 +342,9 @@ private:
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
+
+    // Internally used to automatically send a NULL message
+    void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
 
 public:
     MulticastGroup(

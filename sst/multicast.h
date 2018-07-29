@@ -117,8 +117,6 @@ public:
             if(queued_num - finished_multicasts_num < window_size) {
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
-                // std::cout << "queued_num " << queued_num << std::endl;
-                // std::cout << "Giving slot " << slot << std::endl;
                 // set size appropriately
                 sst->slots[my_row][slots_offset + slot].size = msg_size;
                 return sst->slots[my_row][slots_offset + slot].buf;

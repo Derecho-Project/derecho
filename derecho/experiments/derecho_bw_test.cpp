@@ -7,16 +7,15 @@
 
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
 
-using std::vector;
-using std::map;
 using std::cout;
 using std::endl;
+using std::map;
+using std::vector;
 
 using namespace derecho;
 
@@ -25,7 +24,7 @@ struct exp_result {
     uint num_senders_selector;
     long long unsigned int max_msg_size;
     unsigned int window_size;
-    int num_messages;
+    uint num_messages;
     int raw_mode;
     double bw;
 
@@ -33,7 +32,7 @@ struct exp_result {
         fout << num_nodes << " " << num_senders_selector << " "
              << max_msg_size << " " << window_size << " "
              << num_messages << " " << raw_mode << " "
-	     << bw << endl;
+             << bw << endl;
     }
 };
 
@@ -66,32 +65,32 @@ int main(int argc, char *argv[]) {
         const long long unsigned int block_size = get_block_size(max_msg_size);
         const uint num_senders_selector = atoi(argv[2]);
         const unsigned int window_size = atoi(argv[3]);
-        const int num_messages = atoi(argv[4]);
+        const unsigned int num_messages = atoi(argv[4]);
         const int raw_mode = atoi(argv[5]);
 
         volatile bool done = false;
-        auto stability_callback = [
-            &num_messages,
-            &done,
-            &num_nodes,
-            num_senders_selector,
-            num_last_received = 0u
-        ](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
+        auto stability_callback = [&num_messages,
+                                   &done,
+                                   &num_nodes,
+                                   num_senders_selector,
+                                   num_total_received = 0u](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
+            if(msg_size == 0) {
+                return;
+            }
             // cout << "In stability callback; sender = " << sender_id
             // << ", index = " << index << endl;
+
+            ++num_total_received;
             if(num_senders_selector == 0) {
-                if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
+                if(num_total_received == num_messages * num_nodes) {
                     done = true;
                 }
             } else if(num_senders_selector == 1) {
-                if(index == num_messages - 1) {
-                    ++num_last_received;
-                }
-                if(num_last_received == num_nodes / 2) {
+                if(num_total_received == num_messages * (num_nodes / 2)) {
                     done = true;
                 }
             } else {
-                if(index == num_messages - 1) {
+                if(num_total_received == num_messages) {
                     done = true;
                 }
             }
@@ -149,26 +148,25 @@ int main(int argc, char *argv[]) {
 
         while(managed_group->get_members().size() < num_nodes) {
         }
-	uint32_t node_rank = -1;
+        uint32_t node_rank = -1;
         auto members_order = managed_group->get_members();
         cout << "The order of members is :" << endl;
         for(uint i = 0; i < num_nodes; ++i) {
             cout << members_order[i] << " ";
-	    if (members_order[i] == node_id) {
-	      node_rank = i;
-	    }
+            if(members_order[i] == node_id) {
+                node_rank = i;
+            }
         }
         cout << endl;
 
         auto send_all = [&]() {
             RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-            for(int i = 0; i < num_messages; ++i) {
+            for(uint i = 0; i < num_messages; ++i) {
                 // cout << "Asking for a buffer" << endl;
                 char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
                 while(!buf) {
                     buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
                 }
-                buf[0] = '0' + i;
                 // cout << "Obtained a buffer, sending" << endl;
                 group_as_subgroup.send();
             }
