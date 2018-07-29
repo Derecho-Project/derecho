@@ -1171,7 +1171,7 @@ void MulticastGroup::check_failures_loop() {
 
 // we already hold the lock on msg_state_mtx when we call this
 void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
-    std::cout << "Sending a null message" << std::endl;
+    // std::cout << "Sending a null message" << std::endl;
     // short-circuits most of the normal checks because
     // we know that we received a message and are sending a null
     long long unsigned int msg_size = sizeof(header);

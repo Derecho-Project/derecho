@@ -77,8 +77,6 @@ int main(int argc, char *argv[]) {
             if(msg_size == 0) {
                 return;
             }
-            // cout << "In stability callback; sender = " << sender_id
-            // << ", index = " << index << endl;
 
             ++num_total_received;
             if(num_senders_selector == 0) {
