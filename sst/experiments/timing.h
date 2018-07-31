@@ -21,7 +21,7 @@ namespace experiments {
 long long int get_realtime_clock();
 /** Idles the current thread in a busy loop (to avoid descheduling) until a certain amount of time has elapsed. */
 void busy_wait_for(int wait_nsec);
-}
-}
+}  // namespace experiments
+}  // namespace sst
 
 #endif /* EXPERIMENTS_TIMING_H_ */

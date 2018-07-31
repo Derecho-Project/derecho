@@ -63,8 +63,8 @@ template <typename T>
 class SSTField : public _SSTField {
 public:
     using _SSTField::base;
-    using _SSTField::rowLen;
     using _SSTField::field_len;
+    using _SSTField::rowLen;
 
     SSTField() : _SSTField(sizeof(T)) {
     }
@@ -94,8 +94,8 @@ private:
 
 public:
     using _SSTField::base;
-    using _SSTField::rowLen;
     using _SSTField::field_len;
+    using _SSTField::rowLen;
     using value_type = T;
 
     SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
@@ -236,10 +236,10 @@ public:
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
                 my_index = i;
-		break;
+                break;
             }
         }
-	assert(my_index != (uint)-1);
+        assert(my_index != (uint)-1);
 
         std::iota(all_indices.begin(), all_indices.end(), 0);
 

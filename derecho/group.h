@@ -40,7 +40,7 @@ private:
 public:
     virtual ~_Group() = default;
     template <typename SubgroupType>
-    auto& get_subgroup(uint32_t subgroup_num=0);
+    auto& get_subgroup(uint32_t subgroup_num = 0);
 };
 
 template <typename ReplicatedType>
@@ -49,7 +49,7 @@ protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
 
 public:
-    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num=0);
+    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
 };
 
 template <>

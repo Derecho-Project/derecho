@@ -59,6 +59,7 @@ void send_messages(uint64_t duration) {
 }
 
 int main(int argc, char *argv[]) {
+    const long long unsigned int sst_message_size = (message_size < 17000 ? message_size : 0);
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
              << endl;
@@ -95,7 +96,7 @@ int main(int argc, char *argv[]) {
     using derecho::RawObject;
 
     derecho::CallbackSet callback_set{stability_callback, derecho::persistence_callback_t{}};
-    derecho::DerechoParams param_object{message_size, block_size};
+    derecho::DerechoParams param_object{message_size, sst_message_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
 

@@ -107,4 +107,4 @@ std::list<K> keys_as_list(const std::map<K, V>& map) {
     }
     return keys;
 }
-}
+}  // namespace derecho

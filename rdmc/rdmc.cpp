@@ -169,4 +169,4 @@ void barrier_group::barrier_wait() {
     }
     LOG_EVENT(-1, -1, -1, "end_barrier");
 }
-}
+}  // namespace rdmc

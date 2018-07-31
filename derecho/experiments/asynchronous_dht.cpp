@@ -72,7 +72,8 @@ int main() {
 
     long long unsigned int max_msg_size = 10000;
     long long unsigned int block_size = 10100;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::CallbackSet callback_set{{}, {}};
 

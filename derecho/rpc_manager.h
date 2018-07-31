@@ -126,7 +126,7 @@ public:
               view_manager(group_view_manager),
               //Connections initially only contains the local node. Other nodes are added in the new view callback
               tcp_connections(node_id, std::map<node_id_t, ip_addr>(),
-                          group_view_manager.derecho_params.rpc_port),
+                              group_view_manager.derecho_params.rpc_port),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
@@ -253,11 +253,11 @@ public:
      */
     bool finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
 
-  /**
+    /**
    * called by replicated.h for sending a p2p send/query
    */
-  volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
-  
+    volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
+
     /**
      * Sends the message in msg_buf to the node identified by dest_node over a
      * TCP connection, and registers the "promise object" in pending_results_handle
@@ -268,7 +268,7 @@ public:
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-  void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types
@@ -283,5 +283,5 @@ template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
                                                         .make_remote_invoker<T>(std::declval<uint32_t>(),
                                                                                 T::register_functions()))>;
-}
-}
+}  // namespace rpc
+}  // namespace derecho

@@ -31,4 +31,4 @@ uint64_t RawSubgroup::compute_global_stability_frontier() {
         throw derecho::empty_reference_exception{"Attempted to use an empty RawSubgroup"};
     }
 }
-}
+}  // namespace derecho

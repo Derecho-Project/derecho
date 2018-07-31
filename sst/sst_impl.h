@@ -146,6 +146,7 @@ void SST<DerivedSST>::detect() {
 
 template <typename DerivedSST>
 void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+    assert(offset + size <= rowLen);
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
         if(index == my_index || row_is_frozen[index]) {
@@ -159,6 +160,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long 
 
 template <typename DerivedSST>
 void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+    assert(offset + size <= rowLen);
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);
 
@@ -260,11 +262,11 @@ void SST<DerivedSST>::freeze(int row_index) {
     num_frozen++;
     res_vec[row_index].reset();
     if(failure_upcall) {
-      try {
-        failure_upcall(members[row_index]);
-      } catch(const std::exception &e) {
-	std::cout << "Exception in the failure upcall: " << e.what() << std::endl;
-      }
+        try {
+            failure_upcall(members[row_index]);
+        } catch(const std::exception& e) {
+            std::cout << "Exception in the failure upcall: " << e.what() << std::endl;
+        }
     }
 }
 
@@ -300,4 +302,4 @@ void SST<DerivedSST>::sync_with_members(std::vector<uint32_t> row_indices) const
         }
     }
 }
-}
+}  // namespace sst

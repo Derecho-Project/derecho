@@ -66,7 +66,7 @@ public:
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */
     _resources(int r_index, char *write_addr, char *read_addr, int size_w,
-              int size_r);
+               int size_r);
     /** Destroys the resources. */
     virtual ~_resources();
 };
@@ -74,7 +74,7 @@ public:
 class resources : public _resources {
 public:
     resources(int r_index, char *write_addr, char *read_addr, int size_w,
-                        int size_r);
+              int size_r);
     /*
       wrapper functions that make up the user interface
       all call post_remote_send with different parameters

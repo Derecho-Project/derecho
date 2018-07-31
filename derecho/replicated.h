@@ -41,9 +41,8 @@ class PersistsFields {};
  * PersistsFields, and false otherwise. Just a convenient specialization of
  * std::is_base_of.
  */
-template<typename T>
+template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
-
 
 template <typename T>
 //using Factory = std::function<std::unique_ptr<T>(void)>;
@@ -144,10 +143,10 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-								[this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-			  return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
@@ -183,7 +182,7 @@ public:
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               group(group) {
-        if constexpr (std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<_Group, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
     }
@@ -206,27 +205,27 @@ public:
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
-	      subgroup_index(subgroup_index),
+              subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-	      group(group) {}
+              group(group) {}
 
     // Replicated(Replicated&&) = default;
     Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
                                    user_object_ptr(std::move(rhs.user_object_ptr)),
                                    node_id(rhs.node_id),
                                    subgroup_id(rhs.subgroup_id),
-				   subgroup_index(rhs.subgroup_index),
+                                   subgroup_index(rhs.subgroup_index),
                                    shard_num(rhs.shard_num),
                                    group_rpc_manager(rhs.group_rpc_manager),
                                    wrapped_this(std::move(rhs.wrapped_this)),
-				   group(rhs.group) {
+                                   group(rhs.group) {
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
     virtual ~Replicated() = default;
-  
+
     /**
      * @return The value of has_persistent_fields<T> for this Replicated<T>'s
      * template parameter. This is true if any field of the user object T is
@@ -428,7 +427,7 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-        if constexpr (std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<_Group, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
         return mutils::bytes_size(**user_object_ptr);
@@ -505,7 +504,7 @@ private:
                     [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return (char*) group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
@@ -591,4 +590,4 @@ public:
         return query_result_vec;
     }
 };
-}
+}  // namespace derecho

@@ -8,14 +8,13 @@
 #include <sstream>
 
 #include "derecho/derecho.h"
-#include "test_objects.h"
 #include "initialize.h"
+#include "test_objects.h"
 
-
+using derecho::ExternalCaller;
+using derecho::Replicated;
 using std::cout;
 using std::endl;
-using derecho::Replicated;
-using derecho::ExternalCaller;
 using namespace persistent;
 
 int main(int argc, char** argv) {
@@ -29,7 +28,8 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback};
@@ -76,9 +76,9 @@ int main(int argc, char** argv) {
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry *) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry *) { return std::make_unique<Bar>(); };
-    auto cache_factory = [](PersistentRegistry *) { return std::make_unique<Cache>(); };
+    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
+    auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
     std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
     if(my_ip == leader_ip) {

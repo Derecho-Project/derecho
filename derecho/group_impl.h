@@ -77,7 +77,7 @@ RawSubgroup& GroupProjection<RawObject>::get_subgroup(uint32_t subgroup_num) {
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret) {
-  if(type == std::type_index{typeid(RawObject)}) {
+    if(type == std::type_index{typeid(RawObject)}) {
         *ret = &get_subgroup<RawObject>(subgroup_num);
     } else {
         ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
@@ -200,9 +200,9 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
                     //Determine if there is existing state for this shard that will need to be received
                     bool has_previous_leader = old_shard_leaders && old_shard_leaders->size() > subgroup_id
-                            && (*old_shard_leaders)[subgroup_id].size() > shard_num
-                            && (*old_shard_leaders)[subgroup_id][shard_num] > -1
-                            && (*old_shard_leaders)[subgroup_id][shard_num] != my_id;
+                                               && (*old_shard_leaders)[subgroup_id].size() > shard_num
+                                               && (*old_shard_leaders)[subgroup_id][shard_num] > -1
+                                               && (*old_shard_leaders)[subgroup_id][shard_num] != my_id;
                     if(has_previous_leader) {
                         subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
                     }

@@ -4,11 +4,11 @@
 #include "initialize.h"
 
 using namespace sst;
+using derecho::RawObject;
+using std::cin;
 using std::cout;
 using std::endl;
-using std::cin;
 using std::vector;
-using derecho::RawObject;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -21,6 +21,7 @@ int main() {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 10;
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
     auto stability_callback = [](uint32_t subgroup, uint32_t sender_id, long long int index, char* buf,
                                  long long int msg_size) {
@@ -31,7 +32,7 @@ int main() {
     };
     derecho::CallbackSet callbacks{stability_callback,
                                    persist_callback};
-    derecho::DerechoParams parameters{max_msg_size, block_size};
+    derecho::DerechoParams parameters{max_msg_size, sst_max_msg_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
     std::unique_ptr<derecho::Group<>> g;

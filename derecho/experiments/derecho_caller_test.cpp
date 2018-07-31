@@ -66,12 +66,13 @@ int main(int argc, char* argv[]) {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = get_block_size(max_msg_size);
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
     // int num_messages = 10;
 
     auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, char* buf,
                                  long long int msg_size) {};
 
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
     derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(test1_str))}};
     derecho::Group<test1_str>* managed_group;

@@ -73,7 +73,7 @@ bool socket::read(char *buffer, size_t size) {
     return true;
 }
 
-ssize_t socket::read_partial(char* buffer, size_t max_size) {
+ssize_t socket::read_partial(char *buffer, size_t max_size) {
     if(sock < 0) {
         fprintf(stderr, "WARNING: Attempted to read from closed socket\n");
         return -1;
@@ -143,7 +143,7 @@ connection_listener::connection_listener(int port) {
         fprintf(stderr,
                 "ERROR on binding to socket in ConnectionListener: %s\n",
                 strerror(errno));
-	std::cout << "Port is: " << port << std::endl;
+        std::cout << "Port is: " << port << std::endl;
     }
     listen(listenfd, 5);
 
@@ -172,4 +172,4 @@ socket connection_listener::accept() {
 
     return socket(sock, std::string(client_ip_cstr));
 }
-}
+}  // namespace tcp

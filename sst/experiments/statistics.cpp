@@ -11,14 +11,14 @@ namespace experiments {
 
 const double NSEC_TO_USEC = 1000.0;
 
-using std::vector;
+using std::accumulate;
 using std::cout;
 using std::endl;
-using std::accumulate;
-using std::sqrt;
-using std::tuple;
 using std::make_tuple;
+using std::sqrt;
 using std::tie;
+using std::tuple;
+using std::vector;
 
 class Sum_Sqr {
 public:

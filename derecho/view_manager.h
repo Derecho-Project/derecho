@@ -20,8 +20,8 @@
 #include "tcp/tcp.h"
 #include "view.h"
 
-#include <spdlog/spdlog.h>
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <spdlog/spdlog.h>
 
 namespace derecho {
 
@@ -346,7 +346,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                const DerechoParams& derecho_params = DerechoParams(0, 0),
+                const DerechoParams& derecho_params = DerechoParams(0, 0, 0),
                 std::vector<view_upcall_t> _view_upcalls = {},
                 const int gms_port = derecho_gms_port);
 

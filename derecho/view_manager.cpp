@@ -61,7 +61,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
-          derecho_params(0, 0),
+          derecho_params(0, 0, 0),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     //First, receive the view and parameters over the given socket
     receive_configuration(my_id, leader_connection);
@@ -611,7 +611,6 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
 
     auto global_min_ready_continuation = [this, follower_subgroups_and_shards,
                                           next_subgroup_settings, next_num_received_size](DerechoSST& gmsSST) {
-
         logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size());
         //Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
         for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
@@ -798,7 +797,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, curr_view->failed, false),
-            num_subgroups, num_received_size, derecho_params.window_size);
+            num_subgroups, num_received_size, derecho_params.window_size, derecho_params.sst_max_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -815,7 +814,7 @@ void ViewManager::transition_multicast_group(const std::map<subgroup_id_t, Subgr
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); }, next_view->failed, false),
-            num_subgroups, new_num_received_size, derecho_params.window_size);
+            num_subgroups, new_num_received_size, derecho_params.window_size, derecho_params.sst_max_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank], next_view->gmsSST,

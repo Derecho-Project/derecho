@@ -10,11 +10,10 @@
 #include "initialize.h"
 #include "test_objects.h"
 
-
+using derecho::ExternalCaller;
+using derecho::Replicated;
 using std::cout;
 using std::endl;
-using derecho::Replicated;
-using derecho::ExternalCaller;
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
@@ -27,7 +26,8 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback};
@@ -74,9 +74,9 @@ int main(int argc, char** argv) {
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry *) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry *) { return std::make_unique<Bar>(); };
-    auto cache_factory = [](PersistentRegistry *) { return std::make_unique<Cache>(); };
+    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
+    auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
     std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
     if(my_ip == leader_ip) {
@@ -118,8 +118,7 @@ int main(int argc, char** argv) {
         derecho::rpc::QueryResults<std::string> result = cache_p2p_handle.p2p_query<RPC_NAME(get)>(p2p_target, "Stuff");
         std::string response = result.get().get(p2p_target);
         cout << "Node " << p2p_target << " had cache entry Stuff = " << response << endl;
-    }
-    else {
+    } else {
         Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
         int trials = 1000;
         if(node_id == 7) {
@@ -138,7 +137,7 @@ int main(int argc, char** argv) {
             }
         }
         //Tell the group this node is not sending for 10 rounds, to allow other nodes to finish sending their messages.
-	std::cout << "Sending Raw message with pause_sending_turns = 10" << std::endl;
+        std::cout << "Sending Raw message with pause_sending_turns = 10" << std::endl;
         cache_rpc_handle.get_sendbuffer_ptr(1, 10);
         cache_rpc_handle.raw_send();
         std::this_thread::sleep_for(std::chrono::seconds(1));

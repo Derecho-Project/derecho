@@ -52,7 +52,8 @@ int main(int argc, char** argv) {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
@@ -67,7 +68,7 @@ int main(int argc, char** argv) {
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
                   // only one subgroup of type Foo, shards of size 'Too' D:
-                  for(uint i = 0; i < (uint32_t) num_nodes / 2; ++i) {
+                  for(uint i = 0; i < (uint32_t)num_nodes / 2; ++i) {
                       subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
                   }
                   next_unassigned_rank = std::max(next_unassigned_rank, num_nodes - 1);

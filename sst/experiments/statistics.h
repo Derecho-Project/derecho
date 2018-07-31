@@ -18,7 +18,7 @@ void print_statistics(const std::vector<long long int> &start_times,
 
 /** Converts parallel vectors of timestamps to a vector of elapsed times. */
 std::vector<double> timestamps_to_elapsed(const std::vector<long long int> &start_times, const std::vector<long long int> &end_times);
-}
-}
+}  // namespace experiments
+}  // namespace sst
 
 #endif

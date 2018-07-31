@@ -4,8 +4,8 @@
 #include <cassert>
 #include <climits>
 
-using std::experimental::optional;
 using std::min;
+using std::experimental::optional;
 
 vector<uint32_t> chain_schedule::get_connections() const {
     // establish connection with member_index-1 and member_index+1, if they

@@ -129,21 +129,21 @@ int main() {
         members[i] = i;
     }
     std::cout << "Printing average times" << std::endl;
-    for (int i = 0; i < num_nodes; ++i) {
-      for (uint j = 0; j < size_arr.size(); ++j) {
-          std::cout << avg_times[i][j] << " ";
-      }
-      std::cout << std::endl;
+    for(int i = 0; i < num_nodes; ++i) {
+        for(uint j = 0; j < size_arr.size(); ++j) {
+            std::cout << avg_times[i][j] << " ";
+        }
+        std::cout << std::endl;
     }
     ResultSST sst(SSTParams(members, node_rank));
     for(uint k = 0; k < size_arr.size(); ++k) {
         int size = size_arr[k];
         for(int j = 0; j < num_nodes; ++j) {
             sst.avg_times[node_rank][j] = avg_times[j][k];
-	    std::cout << sst.avg_times[node_rank][j] << " ";
+            std::cout << sst.avg_times[node_rank][j] << " ";
         }
-	std::cout << std::endl;
-	sst.put();
+        std::cout << std::endl;
+        sst.put();
         sst.sync_with_members();
         if(node_rank == 0) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

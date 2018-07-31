@@ -9,8 +9,8 @@
 
 namespace derecho {
 
-using std::string;
 using std::shared_ptr;
+using std::string;
 
 SubView::SubView(int32_t num_members)
         : mode(Mode::ORDERED),
@@ -337,4 +337,4 @@ View parse_view(std::istream& stream) {
     }
     return View(vid, members, member_ips, failed, {}, {}, my_rank);
 }
-}
+}  // namespace derecho

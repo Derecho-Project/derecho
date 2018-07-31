@@ -9,7 +9,6 @@
 #include <thread>
 #include <vector>
 
-#include "sst/multicast_msg.h"
 #include "sst/sst.h"
 
 namespace sst {
@@ -48,6 +47,8 @@ class multicast_group {
     uint32_t num_senders;
     // window size
     const uint32_t window_size;
+    // maximum size that the SST can send
+    const uint64_t max_msg_size;
 
     std::thread timeout_thread;
 
@@ -57,8 +58,8 @@ class multicast_group {
                 sst->num_received_sst[i][j] = -1;
             }
             for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
-                sst->slots[i][j].buf[0] = 0;
-                sst->slots[i][j].next_seq = 0;
+                sst->slots[i][max_msg_size * j] = 0;
+                (uint64_t&)sst->slots[i][max_msg_size * (j + 1) - sizeof(uint64_t)] = 0;
             }
         }
         sst->sync_with_members(row_indices);
@@ -69,6 +70,7 @@ public:
     multicast_group(std::shared_ptr<sstType> sst,
                     std::vector<uint32_t> row_indices,
                     uint32_t window_size,
+                    uint64_t max_msg_size,
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
                     uint32_t slots_offset = 0)
@@ -85,7 +87,8 @@ public:
               num_received_offset(num_received_offset),
               slots_offset(slots_offset),
               num_members(row_indices.size()),
-              window_size(window_size) {
+              window_size(window_size),
+              max_msg_size(max_msg_size + 2 * sizeof(uint64_t)) {
         // find my_member_index
         for(uint i = 0; i < num_members; ++i) {
             if(row_indices[i] == my_row) {
@@ -109,7 +112,7 @@ public:
         initialize();
     }
 
-    volatile char* get_buffer(uint32_t msg_size) {
+    volatile char* get_buffer(uint64_t msg_size) {
         assert(my_sender_index >= 0);
         std::lock_guard<std::mutex> lock(msg_send_mutex);
         assert(msg_size <= max_msg_size);
@@ -118,8 +121,8 @@ public:
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
                 // set size appropriately
-                sst->slots[my_row][slots_offset + slot].size = msg_size;
-                return sst->slots[my_row][slots_offset + slot].buf;
+                (uint64_t&)sst->slots[my_row][max_msg_size * (slots_offset + slot + 1) - 2 * sizeof(uint64_t)] = msg_size;
+                return &sst->slots[my_row][max_msg_size * (slots_offset + slot)];
             } else {
                 long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
                 for(auto i : row_indices) {
@@ -137,17 +140,12 @@ public:
     }
 
     void send() {
-        // std::cout << "In send: " << std::endl;
         uint32_t slot = num_sent % window_size;
-        // std::cout << "slot = " << slot << std::endl;
-        // std::cout << "slots_offset = " << slots_offset << std::endl;
         num_sent++;
-        sst->slots[my_row][slots_offset + slot].next_seq++;
+        ((uint64_t&)sst->slots[my_row][max_msg_size * (slots_offset + slot + 1) - sizeof(uint64_t)])++;
         sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + slot]) - sst->getBaseAddress(),
-                sizeof(Message));
-	// std::cout << "Finished send()" << std::endl;
-	// debug_print();
+                (char*)std::addressof(sst->slots[0][max_msg_size * (slots_offset + slot)]) - sst->getBaseAddress(),
+                max_msg_size);
     }
 
     void debug_print() {
@@ -156,7 +154,7 @@ public:
         for(auto i : row_indices) {
             cout << "Printing slots::next_seq" << endl;
             for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
-                cout << sst->slots[i][j].next_seq << " ";
+                cout << (uint64_t&)sst->slots[i][max_msg_size * (j + 1) - sizeof(uint64_t)] << " ";
             }
             cout << endl;
             cout << "Printing num_received_sst" << endl;
@@ -168,4 +166,4 @@ public:
         cout << endl;
     }
 };
-}
+}  // namespace sst

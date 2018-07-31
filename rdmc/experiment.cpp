@@ -554,7 +554,7 @@ void test_create_group_failure() {
                 return {nullptr, 0};
             },
             [&](char *data, size_t) { puts("FAILURE: received message called"); },
-            [group_number = next_group_number](std::experimental::optional<uint32_t>){});
+            [group_number = next_group_number](std::experimental::optional<uint32_t>) {});
 
     t = get_time() - t;
     if(ret) {

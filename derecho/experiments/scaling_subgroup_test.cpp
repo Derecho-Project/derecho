@@ -7,10 +7,10 @@
 #include "initialize.h"
 #include "test_objects.h"
 
+using derecho::ExternalCaller;
+using derecho::Replicated;
 using std::cout;
 using std::endl;
-using derecho::Replicated;
-using derecho::ExternalCaller;
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
@@ -22,35 +22,36 @@ int main(int argc, char** argv) {
     //Derecho message parameters
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
 
     derecho::SubgroupInfo subgroup_info{
-        {{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1,3)))},
-         {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
-             if(curr_view.num_members - next_unassigned_rank < 3) {
-                 throw derecho::subgroup_provisioning_exception();
-             }
-             derecho::subgroup_shard_layout_t subgroup_vector(1);
-             std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[next_unassigned_rank],
-                                                           &curr_view.members[next_unassigned_rank] + 3);
-             subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-             next_unassigned_rank += 3;
-             //If there are at least 3 more nodes left, make a second subgroup
-             if(curr_view.num_members - next_unassigned_rank >= 3) {
-                 std::vector<derecho::node_id_t> next_3_nodes(&curr_view.members[next_unassigned_rank],
-                                                              &curr_view.members[next_unassigned_rank] + 3);
-                 subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
-                 next_unassigned_rank += 3;
-             }
-             return subgroup_vector;
-         }}},
-        {std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}};
+            {{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3)))},
+             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+                  if(curr_view.num_members - next_unassigned_rank < 3) {
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+                  std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[next_unassigned_rank],
+                                                                &curr_view.members[next_unassigned_rank] + 3);
+                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+                  next_unassigned_rank += 3;
+                  //If there are at least 3 more nodes left, make a second subgroup
+                  if(curr_view.num_members - next_unassigned_rank >= 3) {
+                      std::vector<derecho::node_id_t> next_3_nodes(&curr_view.members[next_unassigned_rank],
+                                                                   &curr_view.members[next_unassigned_rank] + 3);
+                      subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
+                      next_unassigned_rank += 3;
+                  }
+                  return subgroup_vector;
+              }}},
+            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}};
 
-    auto foo_factory = [](PersistentRegistry *) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry *) { return std::make_unique<Bar>(); };
+    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
 
     std::unique_ptr<derecho::Group<Foo, Bar>> group;
     if(my_ip == leader_ip) {

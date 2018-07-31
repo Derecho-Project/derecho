@@ -91,7 +91,7 @@ static bool shutdown = false;
  * @param size_r The size of the read buffer (in bytes).
  */
 _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_w,
-                     int size_r) {
+                       int size_r) {
     // set the remote index
     remote_index = r_index;
 
@@ -302,7 +302,7 @@ void _resources::connect_qp() {
         cout << "Could not sync in connect_qp after qp transition to RTS state" << endl;
     }
 }
-  
+
 /**
  * This is used for both reads and writes.
  *
@@ -312,7 +312,7 @@ void _resources::connect_qp() {
  * @return The return code of the IB Verbs post_send operation.
  */
 int _resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
-                                const int op, const bool completion) {
+                                 const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
@@ -331,7 +331,7 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
     // set opcode depending on op parameter
     if(op == 0) {
         sr.opcode = IBV_WR_RDMA_READ;
-    } else if (op == 1) {
+    } else if(op == 1) {
         sr.opcode = IBV_WR_RDMA_WRITE;
     } else {
         sr.opcode = IBV_WR_SEND;
@@ -351,7 +351,7 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
 }
 
 resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
-                                         int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
+                     int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
 }
 
 /**
@@ -436,21 +436,21 @@ void resources_two_sided::post_two_sided_send(const uint32_t id, const long long
 void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 2, false);
     if(rc) {
-      cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int size) {
     int rc = post_remote_send(id, 0, size, 2, true);
     if(rc) {
-      cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size) {
     int rc = post_remote_send(id, offset, size, 2, true);
     if(rc) {
-      cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
+        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
@@ -477,10 +477,10 @@ int resources_two_sided::post_receive(const uint32_t id, const long long int off
 }
 
 void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int size) {
-  int rc = post_receive(id, 0, size);
-  if(rc) {
-    cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
-  }
+    int rc = post_receive(id, 0, size);
+    if(rc) {
+        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
+    }
 }
 
 void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size) {

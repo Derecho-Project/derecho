@@ -109,6 +109,6 @@ public:
     barrier_group(std::vector<uint32_t> members);
     void barrier_wait();
 };
-};
+};  // namespace rdmc
 
 #endif /* RDMC_H */

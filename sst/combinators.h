@@ -119,7 +119,7 @@ struct PredicateBuilder<Row, TypeList<Metadata>> {
         //{[captured_pred = this->curr_pred](volatile const T& t) { ...
         auto captured_pred = this->curr_pred;
         std::function<row_entry(volatile const T &)> f{[captured_pred](
-                volatile const T &t) { return captured_pred(t, t); }};
+                                                               volatile const T &t) { return captured_pred(t, t); }};
         return std::make_tuple(f);
     }
 
@@ -258,7 +258,7 @@ struct PredicateBuilder {
         //{[captured_pred = this->curr_pred](volatile const T& t) { ...
         auto captured_pred = curr_pred;
         std::function<row_entry(volatile const T &)> f{[captured_pred](
-                volatile const T &t) { return captured_pred(t, t); }};
+                                                               volatile const T &t) { return captured_pred(t, t); }};
         return std::tuple_cat(std::make_tuple(f),
                               prev_preds.template wrap_getters<T>());
     }
@@ -390,9 +390,9 @@ auto Min(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
     auto curr_pred_raw = pb.curr_pred_raw;
 
     auto updater_f = [curr_pred_raw](
-            volatile /*Row_Extension that is mine*/ auto &my_row,
-            auto /*wrapped SST::operator[] (returns Row,Row_Extension, because no access to InternalRow in PredicateBuilder)*/ lookup_row,
-            const int num_rows) {
+                             volatile /*Row_Extension that is mine*/ auto &my_row,
+                             auto /*wrapped SST::operator[] (returns Row,Row_Extension, because no access to InternalRow in PredicateBuilder)*/ lookup_row,
+                             const int num_rows) {
         using Prev_Row_Extension =
                 typename std::decay_t<decltype(my_row)>::super;
         const std::function<min_t(const volatile Row &,
@@ -418,8 +418,8 @@ auto Min(const PredicateBuilder<Row, TypeList<hd, tl...>> &pb) {
 
     return outermore_builder{pb, updater_f, getter_f};
 }
-}
-}
+}  // namespace predicate_builder
+}  // namespace sst
 
 /*
 

@@ -13,12 +13,12 @@
 #include <set>
 #include <vector>
 
-using std::experimental::optional;
-using std::vector;
+using rdmc::completion_callback_t;
+using rdmc::incoming_message_callback_t;
 using std::map;
 using std::unique_ptr;
-using rdmc::incoming_message_callback_t;
-using rdmc::completion_callback_t;
+using std::vector;
+using std::experimental::optional;
 
 class group {
 protected:

@@ -4,8 +4,8 @@
 using std::cin;
 using std::cout;
 using std::endl;
-using std::vector;
 using std::map;
+using std::vector;
 
 class mySST : public sst::SST<mySST> {
 public:

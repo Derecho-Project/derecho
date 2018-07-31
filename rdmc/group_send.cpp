@@ -13,7 +13,7 @@ using namespace rdmc;
 namespace rdmc {
 extern map<uint16_t, shared_ptr<group>> groups;
 extern mutex groups_lock;
-};
+};  // namespace rdmc
 
 decltype(polling_group::message_types) polling_group::message_types;
 
@@ -52,7 +52,7 @@ void polling_group::initialize_message_types() {
     };
     auto send_ready_for_block = [](uint64_t, uint32_t, size_t) {};
     auto receive_ready_for_block = [find_group](
-            uint64_t tag, uint32_t immediate, size_t length) {
+                                           uint64_t tag, uint32_t immediate, size_t length) {
         ParsedTag parsed_tag = parse_tag(tag);
         shared_ptr<group> g = find_group(parsed_tag.group_number);
         if(g) g->receive_ready_for_block(immediate, parsed_tag.target);
@@ -198,7 +198,7 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
         LOG_EVENT(group_number, message_number, block_number, "received_block");
 
         // Figure out the next block to receive.
-	std::experimental::optional<schedule::block_transfer> transfer;
+        std::experimental::optional<schedule::block_transfer> transfer;
         while(!transfer && receive_step + 1 < transfer_schedule->get_total_steps(num_blocks)) {
             transfer = transfer_schedule->get_incoming_transfer(num_blocks, ++receive_step);
         }

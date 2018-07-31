@@ -36,10 +36,10 @@ std::exception_ptr RPCManager::receive_message(
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
-//    int offset = indx.is_reply ? 1 : 0;
-//    long int invocation_id = ((long int*)(buf + offset))[0];
-//    logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
-//                  received_from, indx.class_id.name(), indx.subgroup_id, indx.function_id, indx.is_reply, invocation_id);
+    //    int offset = indx.is_reply ? 1 : 0;
+    //    long int invocation_id = ((long int*)(buf + offset))[0];
+    //    logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",
+    //                  received_from, indx.class_id.name(), indx.subgroup_id, indx.function_id, indx.is_reply, invocation_id);
     auto reply_header_size = header_space();
     //TODO: Check that the given Opcode is actually in our receivers map,
     //and reply with a "no such method error" if it is not
@@ -89,10 +89,10 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         size_t reply_size = 0;
         char* reply_buf;
         parse_and_receive(msg_buf, payload_size, [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
-	    reply_size = size;
+            reply_size = size;
             if(reply_size <= connections->get_max_p2p_size()) {
-	      reply_buf = (char*)connections->get_sendbuffer_ptr(
-							    connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
+                reply_buf = (char*)connections->get_sendbuffer_ptr(
+                        connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
                 return reply_buf;
             } else {
                 // the reply size is too large - not part of the design to handle it
@@ -112,7 +112,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                             view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
                     fulfilledList.push_back(std::move(toFulfillQueue.front()));
                     toFulfillQueue.pop();
-//                    logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
+                    //                    logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
                 }
                 //Immediately handle the reply to myself
                 parse_and_receive(
@@ -127,7 +127,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                 std::lock_guard<std::mutex> lock(pending_results_mutex);
                 assert(!toFulfillQueue.empty());
                 toFulfillQueue.pop();
-//                logger->trace("Deleted a useless PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
+                //                logger->trace("Deleted a useless PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());
             }
         }
     }
@@ -168,7 +168,7 @@ void RPCManager::new_view_callback(const View& new_view) {
         //This node is already a member, so we already have connections to the previous view's members
         for(const node_id_t& joiner_id : new_view.joined) {
             tcp_connections.add_node(joiner_id,
-                                 new_view.member_ips[new_view.rank_of(joiner_id)]);
+                                     new_view.member_ips[new_view.rank_of(joiner_id)]);
             logger->debug("Established a TCP connection to node {}", joiner_id);
         }
         for(const node_id_t& removed_id : new_view.departed) {
@@ -217,7 +217,7 @@ bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id
         fulfilledList.push_back(pending_results_handle);
     } else {
         toFulfillQueue.push(pending_results_handle);
-//        logger->trace("finish_rpc_send pushed a PendingResults onto toFulfillQueue, size is now {}", toFulfillQueue.size());
+        //        logger->trace("finish_rpc_send pushed a PendingResults onto toFulfillQueue, size is now {}", toFulfillQueue.size());
     }
     return true;
 }

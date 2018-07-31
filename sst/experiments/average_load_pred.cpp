@@ -22,12 +22,12 @@ static uint32_t num_nodes, this_node_rank;
 
 using std::cout;
 using std::endl;
-using std::vector;
-using std::map;
-using std::string;
 using std::ifstream;
+using std::map;
 using std::ofstream;
+using std::string;
 using std::tie;
+using std::vector;
 
 struct Load_Row {
     volatile double avg_response_time;
@@ -38,7 +38,7 @@ namespace sst {
 namespace tcp {
 extern int port;
 }
-}
+}  // namespace sst
 
 int main(int argc, char** argv) {
     using namespace sst;

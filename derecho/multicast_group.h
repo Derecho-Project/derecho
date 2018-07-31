@@ -52,6 +52,7 @@ struct CallbackSet {
 
 struct DerechoParams : public mutils::ByteRepresentable {
     long long unsigned int max_payload_size;
+    long long unsigned int sst_max_payload_size;
     long long unsigned int block_size;
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
@@ -59,12 +60,14 @@ struct DerechoParams : public mutils::ByteRepresentable {
     uint32_t rpc_port = derecho_rpc_port;
 
     DerechoParams(long long unsigned int max_payload_size,
+                  long long unsigned int sst_max_payload_size,
                   long long unsigned int block_size,
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
                   uint32_t rpc_port = derecho_rpc_port)
             : max_payload_size(max_payload_size),
+              sst_max_payload_size(sst_max_payload_size),
               block_size(block_size),
               window_size(window_size),
               timeout_ms(timeout_ms),
@@ -72,7 +75,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
               rpc_port(rpc_port) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, sst_max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
 };
 
 struct __attribute__((__packed__)) header {
@@ -175,6 +178,8 @@ public:
     const long long unsigned int block_size;
     // maximum size of any message that can be sent
     const long long unsigned int max_msg_size;
+    // maximum size of message that can be sent using SST multicast
+    const long long unsigned int sst_max_msg_size;
     /** Send algorithm for constructing a multicast from point-to-point unicast.
      *  Binomial pipeline by default. */
     const rdmc::send_algorithm type;
@@ -332,7 +337,7 @@ private:
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
-                             volatile char* data, uint32_t size);
+                             volatile char* data, uint64_t size);
 
     bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,

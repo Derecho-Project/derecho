@@ -5,9 +5,9 @@
  */
 
 #pragma once
-#include <string>
 #include <map>
 #include <memory>
+#include <string>
 
 #include "derecho/derecho.h"
 #include <mutils-serialization/SerializationSupport.hpp>

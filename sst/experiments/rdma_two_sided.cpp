@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "sst/verbs.h"
 #include "sst/poll_utils.h"
+#include "sst/verbs.h"
 #include "tcp/tcp.h"
 
 using std::cin;
@@ -53,30 +53,30 @@ int main() {
     util::polling_data.set_waiting(tid);
 
     if(node_rank == 0) {
-      // wait for random time
-      volatile long long int wait_time = (long long int)5e5;
-      for(long long int i = 0; i < wait_time; ++i) {
-      }
-      cout << "Wait finished" << endl;
+        // wait for random time
+        volatile long long int wait_time = (long long int)5e5;
+        for(long long int i = 0; i < wait_time; ++i) {
+        }
+        cout << "Wait finished" << endl;
 
-      a = 1;
-      res->post_two_sided_send(id, sizeof(int));
-      res->post_two_sided_receive(id, sizeof(int));
-      cout << "Receive buffer posted" << endl;
-      while(b == 0) {
-      }
+        a = 1;
+        res->post_two_sided_send(id, sizeof(int));
+        res->post_two_sided_receive(id, sizeof(int));
+        cout << "Receive buffer posted" << endl;
+        while(b == 0) {
+        }
     }
 
     else {
-      res->post_two_sided_receive(id, sizeof(int));
-      cout << "Receive buffer posted" << endl;
-      while(b == 0) {
-      }
-      a = 1;
-      cout << "Sending" << endl;
-      res->post_two_sided_send(id, sizeof(int));
+        res->post_two_sided_receive(id, sizeof(int));
+        cout << "Receive buffer posted" << endl;
+        while(b == 0) {
+        }
+        a = 1;
+        cout << "Sending" << endl;
+        res->post_two_sided_send(id, sizeof(int));
     }
 
-    sync(r_index); 
+    sync(r_index);
     return 0;
 }

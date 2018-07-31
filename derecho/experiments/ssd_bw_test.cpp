@@ -11,18 +11,17 @@
 
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
 #include "rdmc/util.h"
 
 #include "rdmc/rdmc.h"
 
-using std::vector;
-using std::map;
 using std::cout;
 using std::endl;
 using std::ifstream;
+using std::map;
+using std::vector;
 
 using derecho::RawObject;
 
@@ -100,20 +99,19 @@ int main(int argc, char *argv[]) {
         members[i] = i;
     }
 
-    // long long unsigned int max_msg_size = buffer_size;
     long long unsigned int block_size = 1000000ull;
+    const long long unsigned int sst_buffer_size = (buffer_size < 17000 ? buffer_size : 0);
+
     int num_messages = 100;
 
     volatile bool done = false;
-    auto stability_callback = [
-        &num_messages,
-        &done,
-        &num_nodes,
-        &fd,
-        &buf,
-        &buffer_size,
-        num_last_received = 0u
-    ](uint32_t subgroup, int sender_id, long long int index, char *msg_buf, long long int msg_size) mutable {
+    auto stability_callback = [&num_messages,
+                               &done,
+                               &num_nodes,
+                               &fd,
+                               &buf,
+                               &buffer_size,
+                               num_last_received = 0u](uint32_t subgroup, int sender_id, long long int index, char *msg_buf, long long int msg_size) mutable {
         // cout << "In stability callback; sender = " << sender_id << ", index =
         // " << index << endl;
         int ret = write(fd, buf, buffer_size);
@@ -128,7 +126,8 @@ int main(int argc, char *argv[]) {
     };
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
-    derecho::DerechoParams param_object{buffer_size, block_size};
+    derecho::DerechoParams param_object{buffer_size, sst_buffer_size, block_size};
+
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
 

@@ -67,6 +67,7 @@ int main(int argc, char *argv[]) {
         const unsigned int window_size = atoi(argv[3]);
         const unsigned int num_messages = atoi(argv[4]);
         const int raw_mode = atoi(argv[5]);
+        const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
         volatile bool done = false;
         auto stability_callback = [&num_messages,
@@ -74,6 +75,7 @@ int main(int argc, char *argv[]) {
                                    &num_nodes,
                                    num_senders_selector,
                                    num_total_received = 0u](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
+            // null message filter
             if(msg_size == 0) {
                 return;
             }
@@ -133,7 +135,7 @@ int main(int argc, char *argv[]) {
                     node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     one_raw_group,
-                    derecho::DerechoParams{max_msg_size, block_size, window_size});
+                    derecho::DerechoParams{max_msg_size, sst_max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, node_addresses[node_id],

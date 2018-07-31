@@ -62,5 +62,5 @@ void PollingData::wait_for_requests() {
     std::unique_lock<std::mutex> lk(poll_mutex);
     poll_cv.wait(lk, check_waiting);
 }
-}
-}
+}  // namespace util
+}  // namespace sst

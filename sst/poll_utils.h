@@ -35,5 +35,5 @@ public:
 
 //There is one global instance of PollingData
 extern PollingData polling_data;
-}
-}
+}  // namespace util
+}  // namespace sst

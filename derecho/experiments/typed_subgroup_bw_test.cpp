@@ -6,12 +6,11 @@
 #include <vector>
 
 #include "block_size.h"
+#include "bytes_object.h"
 #include "derecho/derecho.h"
 #include "initialize.h"
-#include "bytes_object.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
-
 
 /**
  * RPC Object with a single function that accepts a string
@@ -45,7 +44,8 @@ int main(int argc, char* argv[]) {
     derecho::ip_addr leader_ip;
     query_node_info(node_id, my_ip, leader_ip);
     long long unsigned int block_size = get_block_size(max_msg_size);
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here
@@ -90,9 +90,9 @@ int main(int argc, char* argv[]) {
 
     derecho::Replicated<TestObject>& handle = group->get_subgroup<TestObject>();
     //std::string str_1k(max_msg_size, 'x');
-    char * bbuf = (char*)malloc(max_msg_size);
-    bzero(bbuf,max_msg_size);
-    Bytes bytes(bbuf,max_msg_size);
+    char* bbuf = (char*)malloc(max_msg_size);
+    bzero(bbuf, max_msg_size);
+    Bytes bytes(bbuf, max_msg_size);
 
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -102,13 +102,13 @@ int main(int argc, char* argv[]) {
         handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
     if(node_id == 0) {
-      derecho::rpc::QueryResults<bool> results = handle.ordered_query<RPC_NAME(finishing_call)>(0);
-      std::cout<<"waiting for response..."<<std::endl;
+        derecho::rpc::QueryResults<bool> results = handle.ordered_query<RPC_NAME(finishing_call)>(0);
+        std::cout << "waiting for response..." << std::endl;
 #pragma GCC diagnostic ignored "-Wunused-variable"
-      decltype(results)::ReplyMap& replies = results.get();
+        decltype(results)::ReplyMap& replies = results.get();
 #pragma GCC diagnostic pop
     }
-  
+
     clock_gettime(CLOCK_REALTIME, &t2);
     free(bbuf);
 

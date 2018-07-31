@@ -189,4 +189,4 @@ std::ostream& operator<<(std::ostream& stream, const View& view);
    * argument to contain the view it represents.
    */
 View parse_view(std::istream& stream);
-}
+}  // namespace derecho

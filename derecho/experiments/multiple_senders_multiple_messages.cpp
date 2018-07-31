@@ -9,11 +9,11 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 
+using derecho::RawObject;
+using std::cin;
 using std::cout;
 using std::endl;
-using std::cin;
 using std::vector;
-using derecho::RawObject;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -28,6 +28,7 @@ int main() {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 10;
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
     int num_messages = 1000;
 
@@ -44,7 +45,7 @@ int main() {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip,
                                                derecho::CallbackSet{stability_callback, nullptr},
                                                one_raw_group,
-                                               derecho::DerechoParams{max_msg_size, block_size});
+                                               derecho::DerechoParams{max_msg_size, sst_max_msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip,
                                                derecho::CallbackSet{stability_callback, nullptr},

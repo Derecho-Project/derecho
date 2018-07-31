@@ -8,7 +8,6 @@
 #include <string>
 
 #include "derecho_internal.h"
-#include "sst/multicast_msg.h"
 #include "sst/sst.h"
 
 namespace derecho {
@@ -92,7 +91,7 @@ public:
      * has published a global_min for the current view change*/
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
-    SSTFieldVector<sst::Message> slots;
+    SSTFieldVector<char> slots;
     SSTFieldVector<int32_t> num_received_sst;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
@@ -103,7 +102,7 @@ public:
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-    DerechoSST(const sst::SSTParams& parameters, const uint32_t num_subgroups, const uint32_t num_received_size, uint32_t window_size)
+    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t num_received_size, uint32_t window_size, uint64_t sst_max_msg_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
               stable_num(num_subgroups),
@@ -115,7 +114,7 @@ public:
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
-              slots(window_size * num_subgroups),
+              slots((sst_max_msg_size)*window_size * num_subgroups),
               num_received_sst(num_received_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,

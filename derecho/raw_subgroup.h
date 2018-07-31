@@ -56,4 +56,4 @@ public:
      */
     void send();
 };
-}
+}  // namespace derecho

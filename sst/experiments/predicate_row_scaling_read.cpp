@@ -14,15 +14,15 @@
 #include "statistics.h"
 #include "timing.h"
 
-using std::vector;
-using std::map;
-using std::string;
 using std::cin;
 using std::cout;
 using std::endl;
-using std::ofstream;
 using std::ifstream;
+using std::map;
+using std::ofstream;
+using std::string;
 using std::tie;
+using std::vector;
 
 struct TestRow {
     volatile int data;
@@ -32,7 +32,7 @@ namespace sst {
 namespace tcp {
 extern int port;
 }
-}
+}  // namespace sst
 
 static uint32_t num_nodes, this_node_rank;
 static const int EXPERIMENT_TRIALS = 10000;

@@ -36,4 +36,4 @@ struct empty_reference_exception : public derecho_exception {
 struct invalid_subgroup_exception : public derecho_exception {
     invalid_subgroup_exception(const std::string& message) : derecho_exception(message) {}
 };
-}
+}  // namespace derecho

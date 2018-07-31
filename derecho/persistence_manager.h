@@ -202,4 +202,4 @@ public:
                 });
     }
 };
-}
+}  // namespace derecho

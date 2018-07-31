@@ -82,4 +82,4 @@ struct NamedRowPredicates<PredicateBuilder, PredBuilders...> {
             std::declval<typename PredBuilders::template Getters<T>>()...))>;
 };
 
-} /* namespace SST */
+}  // namespace sst

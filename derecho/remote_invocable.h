@@ -362,9 +362,9 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
                                                            const partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
-                    [_this, fun = partial.fun](Args... a){return ((_this->get())->*fun)(a...);
-}
-};
+            [_this, fun = partial.fun](Args... a) {
+                return ((_this->get())->*fun)(a...);
+            }};
 }
 
 /**
@@ -656,5 +656,5 @@ auto build_remote_invoker_for_class(const node_id_t nid, const uint32_t instance
                                     std::map<Opcode, receive_fun_t>& rvrs) {
     return std::make_unique<RemoteInvokerForClass<IdentifyingClass, WrappedFuns...>>(nid, instance_id, rvrs);
 }
-}
-}
+}  // namespace rpc
+}  // namespace derecho

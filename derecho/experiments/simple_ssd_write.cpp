@@ -3,8 +3,8 @@
 #include <memory>
 #include <time.h>
 
-using std::cout;
 using std::cin;
+using std::cout;
 using std::endl;
 
 int main() {

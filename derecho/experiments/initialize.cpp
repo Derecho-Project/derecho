@@ -9,8 +9,8 @@
 #include <map>
 #include <string>
 
-using std::cout;
 using std::cin;
+using std::cout;
 
 std::map<uint32_t, std::string> initialize(uint32_t& node_rank, uint32_t& num_nodes) {
     std::map<uint32_t, std::string> node_addresses;

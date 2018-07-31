@@ -11,12 +11,10 @@
 #include "initialize.h"
 #include "test_objects.h"
 
-
+using derecho::ExternalCaller;
+using derecho::Replicated;
 using std::cout;
 using std::endl;
-using derecho::Replicated;
-using derecho::ExternalCaller;
-
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
@@ -29,7 +27,8 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback};
@@ -51,7 +50,7 @@ int main(int argc, char** argv) {
               }}},
             {std::type_index(typeid(Foo))}};
 
-    auto foo_factory = [](PersistentRegistry *) { return std::make_unique<Foo>(-1); };
+    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
     std::unique_ptr<derecho::Group<Foo>> group;
     if(my_ip == leader_ip) {

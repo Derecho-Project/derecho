@@ -471,7 +471,7 @@ bool set_contiguous_memory_mode(bool enabled) {
     return false;
 #endif
 }
-}
+}  // namespace impl
 
 using ibv_mr_unique_ptr = unique_ptr<ibv_mr, std::function<void(ibv_mr *)>>;
 static ibv_mr_unique_ptr create_mr(char *buffer, size_t size) {
@@ -1145,5 +1145,5 @@ map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
 }
 ibv_cq *verbs_get_cq() { return verbs_resources.cq; }
 ibv_comp_channel *verbs_get_completion_channel() { return verbs_resources.cc; }
-}
-}
+}  // namespace impl
+}  // namespace rdma

@@ -6,8 +6,8 @@
 #include <experimental/optional>
 #include <vector>
 
-using std::experimental::optional;
 using std::vector;
+using std::experimental::optional;
 
 class schedule {
 protected:
