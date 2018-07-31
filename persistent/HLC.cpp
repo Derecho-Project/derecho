@@ -22,6 +22,13 @@ HLC::HLC ()
   }
 }
 
+HLC::HLC (uint64_t _r,uint64_t _l):
+    m_rtc_us(_r),m_logic(_l){
+      if (pthread_spin_init(&this->m_oLck,PTHREAD_PROCESS_SHARED) != 0) {
+     throw HLC_EXP_SPIN_INIT(errno);
+    }
+  }
+
 HLC::~HLC ()
   noexcept(false) {
   if (pthread_spin_destroy(&this->m_oLck) != 0) {

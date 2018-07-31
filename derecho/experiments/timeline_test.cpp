@@ -1,3 +1,7 @@
+//this test really needs the logger as written
+#ifdef NOLOG
+int main(){}
+#else 
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -130,3 +134,4 @@ int main(int argc, char *argv[]) {
         managed_group->leave();
     }
 }
+#endif

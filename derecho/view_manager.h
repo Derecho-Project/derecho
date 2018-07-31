@@ -80,7 +80,7 @@ private:
     template <typename... T>
     friend class PersistenceManager;
 
-    std::shared_ptr<spdlog::logger> logger;
+    whenlog(std::shared_ptr<spdlog::logger> logger;)
 
     /** The port that this instance of the GMS communicates on. */
     const int gms_port;
@@ -188,20 +188,21 @@ private:
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                                 std::shared_ptr<spdlog::logger> logger);
+                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders
+                                 whenlog(,
+                                 std::shared_ptr<spdlog::logger> logger));
     static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
-                                           uint num_shard_senders,
-                                           std::shared_ptr<spdlog::logger> logger,
+                                           uint num_shard_senders ,
+                                           whenlog(std::shared_ptr<spdlog::logger> logger,)
                                            const std::vector<node_id_t>& next_view_members);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members,
-                                             uint num_shard_senders,
-                                             std::shared_ptr<spdlog::logger> logger);
+                                             uint num_shard_senders whenlog(,
+                                             std::shared_ptr<spdlog::logger> logger));
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -209,8 +210,8 @@ private:
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const DerechoSST& gmsSST,
-                                                std::shared_ptr<spdlog::logger> logger);
+                                                const DerechoSST& gmsSST whenlog(,
+                                                std::shared_ptr<spdlog::logger> logger));
 
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();

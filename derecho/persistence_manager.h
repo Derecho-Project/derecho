@@ -32,8 +32,10 @@ using persistence_request_t = std::tuple<subgroup_id_t, persistent::version_t>;
 template <typename... ReplicatedTypes>
 class PersistenceManager {
 private:
-    /** logger */
-    std::shared_ptr<spdlog::logger> logger;
+#ifndef NOLOG
+    /** whenlog(logger) */
+    std::shared_ptr<spdlog::logger> whenlog(logger;)
+#endif
 
     /** Thread handle */
     std::thread persist_thread;
@@ -58,7 +60,7 @@ public:
     PersistenceManager(
             mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro,
             const persistence_callback_t &_persistence_callback)
-            : logger(spdlog::get("debug_log")),
+            : whenlog(logger(spdlog::get("debug_log")),)
               thread_shutdown(false),
               persistence_callback(_persistence_callback),
               replicated_objects(pro) {
@@ -137,7 +139,7 @@ public:
                                    (char *)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
                                    sizeof(long long int));
                 } catch(uint64_t exp) {
-                    logger->debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
+                    whenlog(logger->debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);)
                     std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
                 }
 

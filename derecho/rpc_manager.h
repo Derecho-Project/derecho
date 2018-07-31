@@ -44,7 +44,9 @@ class RPCManager {
     // Weijia: I prefer the deserialization context vector.
     mutils::RemoteDeserialization_v rdv{};
 
+#ifndef NOLOG
     std::shared_ptr<spdlog::logger> logger;
+#endif
 
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
@@ -122,7 +124,7 @@ public:
     RPCManager(node_id_t node_id, ViewManager& group_view_manager)
             : nid(node_id),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              logger(spdlog::get("debug_log")),
+              whenlog(logger(spdlog::get("debug_log")),)
               view_manager(group_view_manager),
               //Connections initially only contains the local node. Other nodes are added in the new view callback
               tcp_connections(node_id, std::map<node_id_t, ip_addr>(),

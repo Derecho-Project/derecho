@@ -16,9 +16,7 @@ public:
   // constructors
   HLC () noexcept(false);
 
-  HLC (uint64_t _r,uint64_t _l):
-    m_rtc_us(_r),m_logic(_l){
-  }
+  HLC (uint64_t _r,uint64_t _l);
 
   // destructors
   virtual ~HLC() noexcept(false);

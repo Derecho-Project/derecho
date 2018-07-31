@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 2.8.1)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS_DEBUG "-std=c++1z -Wall -ggdb -gdwarf-3 -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "-std=c++1z -Wall -O3")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwarf-3 -pg")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 add_subdirectory(experiments)
 

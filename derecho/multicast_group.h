@@ -161,7 +161,7 @@ class MulticastGroup {
     friend class ViewManager;
 
 private:
-    std::shared_ptr<spdlog::logger> logger;
+    whenlog(std::shared_ptr<spdlog::logger> logger;)
     /** vector of member id's */
     std::vector<node_id_t> members;
     /** inverse map of node_ids to sst_row */
