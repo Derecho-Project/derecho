@@ -103,7 +103,7 @@ private:
         if(is_valid()) {
             // std::cout << "In ordered_send_or_query: T=" << typeid(T).name() << std::endl;
             char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
+            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
             };
             // std::cout << "Obtained a buffer" << std::endl;
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
@@ -343,9 +343,8 @@ public:
      * @param pause_sending_turns
      * @return
      */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns = 0, bool null_send = false) {
-        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id,
-                                                                 payload_size, pause_sending_turns, false, null_send);
+    char* get_sendbuffer_ptr(unsigned long long int payload_size) {
+        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
     }
 
     const uint64_t compute_global_stability_frontier() {
