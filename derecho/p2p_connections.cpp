@@ -182,14 +182,17 @@ void P2PConnections::send(uint32_t rank) {
                         max_msg_size);
         } else {
             res_vec[rank]->post_remote_write(0, max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
+	    num_rdma_writes++;
         }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
         res_vec[rank]->post_remote_write(0, max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size);
         outgoing_p2p_reply_seq_nums[rank]++;
+	num_rdma_writes++;
     } else {
         res_vec[rank]->post_remote_write(0, max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size);
         outgoing_request_seq_nums[rank]++;
+	num_rdma_writes++;
     }
 }
 
@@ -200,6 +203,10 @@ void P2PConnections::check_failures_loop() {
     uint32_t id = util::polling_data.get_index(tid);
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if(num_rdma_writes < 1000) {
+            continue;
+        }
+	num_rdma_writes = 0;
 
         util::polling_data.set_waiting(tid);
 

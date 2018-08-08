@@ -42,6 +42,7 @@ class P2PConnections {
     std::atomic<bool> thread_shutdown{false};
     std::thread timeout_thread;
     char* probe(uint32_t rank);
+    uint32_t num_rdma_writes = 0;
     void check_failures_loop();
 
 public:
