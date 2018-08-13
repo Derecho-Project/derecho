@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
         const unsigned int window_size = atoi(argv[3]);
         const int raw_mode = atoi(argv[4]);
 
-        int num_messages = 1000;
+        int num_messages = 20000;
 	// only used by node 0
         vector<uint64_t> start_times(num_messages), end_times(num_messages);
 
@@ -172,7 +172,7 @@ int main(int argc, char *argv[]) {
         }
 
         uint64_t total_time = 0;
-        uint64_t sum_of_square = 0;
+        double sum_of_square = 0.0f;
         double average_time = 0.0f;
         for(int i = 0; i < num_messages; ++i) {
             total_time += end_times[i] - start_times[i];
