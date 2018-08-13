@@ -10,11 +10,11 @@
 #include "PersistException.hpp"
 
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
-#endif//_DEBUG
+#endif//NDEBUG
 
-#ifdef _DEBUG
+#ifndef NDEBUG
   inline auto dbgConsole() {
     static auto console = spdlog::stdout_color_mt("persistent");
     return console;
@@ -32,7 +32,7 @@
   #define dbg_warn(...)
   #define dbg_error(...)
   #define dbg_crit(...)
-#endif//_DEBUG
+#endif//NDEBUG
 
 #define MAX(a,b) \
   ({ __typeof__ (a) _a = (a); \

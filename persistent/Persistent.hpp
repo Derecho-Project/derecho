@@ -17,7 +17,7 @@
 #include "FilePersistLog.hpp"
 #include "SerializationSupport.hpp"
 
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 #include "time.h"
 #endif//_PERFORMANCE_DEBUG
 
@@ -107,13 +107,13 @@ namespace ns_persistent {
     // get temporal query frontier
     inline const HLC getFrontier(){
       if (_temporal_query_frontier_provider != nullptr) {
-#ifdef _DEBUG
+#ifndef NDEBUG
         const HLC r = _temporal_query_frontier_provider->getFrontier();
         dbg_warn("temporal_query_frontier=HLC({},{})",r.m_rtc_us,r.m_logic);
         return r;
 #else
         return _temporal_query_frontier_provider->getFrontier();
-#endif//_DEBUG
+#endif//NDEBUG
       } else {
         struct timespec t;
         clock_gettime(CLOCK_REALTIME,&t);
@@ -500,13 +500,13 @@ namespace ns_persistent {
       virtual void set(const ObjectType &v, const int64_t & ver)
         noexcept(false) {
         HLC mhlc; // generate a default timestamp for it.
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
         struct timespec t1,t2;
         clock_gettime(CLOCK_REALTIME,&t1);
 #endif
         this->set(v,ver,mhlc);
 
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
         clock_gettime(CLOCK_REALTIME,&t2);
         cnt_in_set ++;
         ns_in_set += ((t2.tv_sec-t1.tv_sec)*1000000000ul + t2.tv_nsec - t1.tv_nsec);
@@ -527,7 +527,7 @@ namespace ns_persistent {
        */
       virtual const int64_t persist()
         noexcept(false){
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
         struct timespec t1,t2;
         clock_gettime(CLOCK_REALTIME,&t1);
         const int64_t ret = this->m_pLog->persist();
@@ -629,7 +629,7 @@ namespace ns_persistent {
       // derived from ByteRepresentable
       virtual void ensure_registered(mutils::DeserializationManager&){}
 
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
       uint64_t ns_in_persist = 0ul;
       uint64_t ns_in_set = 0ul;
       uint64_t cnt_in_persist = 0ul;

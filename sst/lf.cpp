@@ -17,9 +17,9 @@
 #include <rdma/fi_errno.h>
 #include <GetPot>
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
-#endif//_DEBUG
+#endif//NDEBUG
 
 #include "derecho/connection_manager.h"
 #include "derecho/derecho_ports.h"
@@ -40,7 +40,7 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
-#ifdef _DEBUG
+#ifndef NDEBUG
  #define RED   "\x1B[31m"
  #define GRN   "\x1B[32m"
  #define YEL   "\x1B[33m"
@@ -49,13 +49,13 @@ __LITTLE_ENDIAN nor __BIG_ENDIAN
  #define CYN   "\x1B[36m"
  #define WHT   "\x1B[37m"
  #define RESET "\x1B[0m"
-#endif//_DEBUG
+#endif//NDEBUG
 
 namespace sst{
-#ifdef _DEBUG
+#ifndef NDEBUG
   /* log infrastructure */
   static auto console = spdlog::stdout_color_mt("sst");
-#endif//_DEBUG
+#endif//NDEBUG
   /**
    * passive endpoint info to be exchanged.
    */
@@ -110,7 +110,7 @@ namespace sst{
    * Internal Tools
    */
   // Debug tools
-  #ifdef _DEBUG
+  #ifndef NDEBUG
     #define dbg_trace(...) console->trace(__VA_ARGS__)
     #define dbg_debug(...) console->debug(__VA_ARGS__)
     #define dbg_info(...) console->info(__VA_ARGS__)
@@ -126,7 +126,7 @@ namespace sst{
     #define dbg_error(...)
     #define dbg_crit(...)
     #define dbg_flush()
-  #endif//_DEBUG
+  #endif//NDEBUG
   #define CRASH_WITH_MESSAGE(...) \
   do { \
     fprintf(stderr,__VA_ARGS__); \
@@ -419,7 +419,7 @@ namespace sst{
     const int op,
     const bool completion) {
     // dbg_trace("resources::post_remote_send(),this={}",(void*)this);
-    // #ifdef _DEBUG
+    // #ifdef !NDEBUG
     // printf(YEL "resources::post_remote_send(),this=%p\n" RESET, this);
     // fflush(stdout);
     // #endif
@@ -462,10 +462,10 @@ namespace sst{
     }
     // dbg_trace("post_remote_send return with ret={}",ret);
     // dbg_flush();
-    // #ifdef _DEBUG
+    // #ifdef !NDEBUG
     // printf(YEL "resources::post_remote_send return with ret=%d\n" RESET, ret);
     // fflush(stdout);
-    // #endif//_DEBUG
+    // #endif//!NDEBUG
     return ret;
   }
 

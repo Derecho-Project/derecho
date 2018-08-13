@@ -5,7 +5,7 @@
 #include <time.h>
 #include <vector>
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
 #endif
 
@@ -42,7 +42,7 @@ struct exp_result {
 };
 
 int main(int argc, char *argv[]) {
-#ifdef _DEBUG
+#ifndef NDEBUG
     //spdlog::set_level(spdlog::level::trace);
     spdlog::set_level(spdlog::level::err);
 #endif
@@ -225,8 +225,8 @@ int main(int argc, char *argv[]) {
         cout << "Exception in main: " << e.what() << endl;
         cout << "main shutting down" << endl;
     }
-#ifdef _DEBUG
+#ifndef NDEBUG
     std::cout<<"End of Main"<<std::endl;
-#endif//_DEBUG
+#endif//NDEBUG
     // sst::lf_destroy();
 }

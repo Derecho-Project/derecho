@@ -172,7 +172,7 @@ public:
 
 int main(int argc, char *argv[]) {
 
-#ifdef _DEBUG
+#ifndef NDEBUG
    spdlog::set_level(spdlog::level::trace);  
 #endif
   if(argc != 7) {

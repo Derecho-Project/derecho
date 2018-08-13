@@ -63,9 +63,9 @@ namespace ns_persistent {
     const string m_sName;
     // HLCIndex
     std::set<hlc_index_entry,hlc_index_entry_comp> hidx;
-#ifdef _DEBUG
+#ifndef NDEBUG
     void dump_hidx();
-#endif//_DEBUG
+#endif//NDEBUG
     // Constructor:
     // Remark: the constructor will check the persistent storage
     // to make sure if this named log(by "name" in the template 

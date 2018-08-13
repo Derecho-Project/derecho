@@ -9,7 +9,7 @@
 #include "sst/lf.h"
 #endif
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
 #endif
 
@@ -20,7 +20,7 @@ using namespace sst;
 #define ROWSIZE (2048)
 
 int main() {
-#ifdef _DEBUG
+#ifndef NDEBUG
     spdlog::set_level(spdlog::level::trace);
 #endif
 

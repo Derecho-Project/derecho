@@ -53,11 +53,11 @@ private:
 /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 public:
 #endif
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 private:
 #endif
     /** The ID of this node */
@@ -160,9 +160,9 @@ public:
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
-#ifdef _DEBUG
+#ifndef NDEBUG
         std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
-#endif  //_DEBUG
+#endif  //NDEBUG
     }
 
     /**

@@ -23,7 +23,7 @@
 #include "tcp/tcp.h"
 #include "util.h"
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
 #endif
 
@@ -44,7 +44,7 @@ using namespace std;
 namespace rdma {
 
 /** Debugging tools from Weijia's sst code */  
-#ifdef _DEBUG
+#ifndef NDEBUG
     inline auto dbgConsole() {
         static auto console = spdlog::stdout_color_mt("rdmc");
         return console;
@@ -64,7 +64,7 @@ namespace rdma {
     #define dbg_error(...)
     #define dbg_crit(...)
     #define dbg_flush()
-#endif//_DEBUG
+#endif//!NDEBUG
 #define CRASH_WITH_MESSAGE(...) \
 do { \
     fprintf(stderr,__VA_ARGS__); \

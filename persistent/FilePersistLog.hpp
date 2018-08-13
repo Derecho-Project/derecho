@@ -238,7 +238,7 @@ namespace ns_persistent {
     }
 
   private:
-#ifdef _DEBUG
+#ifndef NDEBUG
     //dbg functions
     void dbgDumpMeta() {
       dbg_trace("m_pData={0},m_pLog={1}",(void*)this->m_pData,(void*)this->m_pLog);
@@ -246,7 +246,7 @@ namespace ns_persistent {
       dbg_trace("MEAT_HEADER_PERS:head={0},tail={1}",(int64_t)META_HEADER_PERS->fields.head,(int64_t)META_HEADER_PERS->fields.tail);
       dbg_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}",(void*)NEXT_LOG_ENTRY,(void*)NEXT_LOG_ENTRY_PERS);
     }
-#endif
+#endif//NDEBUG
   };
 }
 
