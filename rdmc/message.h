@@ -7,7 +7,7 @@
 
 struct ParsedTag {
     uint8_t reserved;
-    uint8_t padding;
+    uint8_t padding; // now used for libfabric opcode.
     uint16_t group_number;
     uint32_t target;
 };

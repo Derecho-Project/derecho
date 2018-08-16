@@ -8,6 +8,7 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
+#include "spdlog/spdlog.h"
 
 using std::cout;
 using std::endl;
@@ -53,6 +54,7 @@ void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
+    spdlog::set_level(spdlog::level::trace);
 
     string leader_ip;
     uint32_t my_id;

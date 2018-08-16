@@ -8,7 +8,11 @@
 #include <thread>
 #include <vector>
 
-#include "sst/verbs.h"
+#ifdef USE_VERBS_API
+  #include "sst/verbs.h"
+#else
+  #include "sst/lf.h"
+#endif
 
 namespace sst {
 struct P2PParams {

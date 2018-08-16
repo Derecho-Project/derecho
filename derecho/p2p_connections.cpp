@@ -38,10 +38,18 @@ P2PConnections::P2PConnections(const P2PParams params)
         incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
         outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
         if(i != my_index) {
+#ifdef USE_VERBS_API
             res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      3 * max_msg_size * window_size + sizeof(bool),
                                                      3 * max_msg_size * window_size + sizeof(bool));
+#else
+            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+                                                     const_cast<char*>(outgoing_p2p_buffers[i].get()),
+                                                     3 * max_msg_size * window_size + sizeof(bool),
+                                                     3 * max_msg_size * window_size + sizeof(bool),
+                                                     i>my_index);
+#endif
         }
     }
 
@@ -83,7 +91,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
                 res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                          const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                          3 * max_msg_size * window_size + sizeof(bool),
-                                                         3 * max_msg_size * window_size + sizeof(bool));
+                                                         3 * max_msg_size * window_size + sizeof(bool),
+                                                         i>my_index);
             }
         } else {
             auto old_rank = old_connections.node_id_to_rank[members[i]];
@@ -181,16 +190,16 @@ void P2PConnections::send(uint32_t rank) {
                         const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
                         max_msg_size);
         } else {
-            res_vec[rank]->post_remote_write(0, max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
+            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
 	    num_rdma_writes++;
         }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
-        res_vec[rank]->post_remote_write(0, max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size);
+        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size);
         outgoing_p2p_reply_seq_nums[rank]++;
 	num_rdma_writes++;
     } else {
-        res_vec[rank]->post_remote_write(0, max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size);
+        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size);
         outgoing_request_seq_nums[rank]++;
 	num_rdma_writes++;
     }
@@ -200,7 +209,7 @@ void P2PConnections::check_failures_loop() {
     pthread_setname_np(pthread_self(), "p2p_timeout_thread");
     const auto tid = std::this_thread::get_id();
     // get id first
-    uint32_t id = util::polling_data.get_index(tid);
+    uint32_t ce_idx = util::polling_data.get_index(tid);
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         if(num_rdma_writes < 1000) {
@@ -209,13 +218,21 @@ void P2PConnections::check_failures_loop() {
 	num_rdma_writes = 0;
 
         util::polling_data.set_waiting(tid);
+#ifdef USE_VERBS_API
+        struct verbs_sender_ctxt sctxt[num_members];
+#else
+        struct lf_sender_ctxt sctxt[num_members];
+#endif
 
         for(uint rank = 0; rank < num_members; ++rank) {
             if(rank == my_index) {
                 continue;
             }
 
-            res_vec[rank]->post_remote_write_with_completion(id, max_msg_size * 3 * window_size, sizeof(bool));
+            sctxt[rank].remote_id = rank;
+            sctxt[rank].ce_idx = ce_idx;
+
+            res_vec[rank]->post_remote_write_with_completion(&sctxt[rank], max_msg_size * 3 * window_size, sizeof(bool));
         }
 
         /** Completion Queue poll timeout in millisec */

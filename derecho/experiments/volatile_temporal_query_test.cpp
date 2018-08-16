@@ -160,8 +160,8 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-#ifdef _DEBUG
-    spdlog::set_level(spdlog::level::trace);
+#ifndef NDEBUG
+   spdlog::set_level(spdlog::level::trace);  
 #endif
     if(argc != 7) {
         std::cout << "usage:" << argv[0] << "<shard_size> <num_of_shards> <ops_per_sec> <min_dur_sec> <msg_size> <query_cnt>" << std::endl;

@@ -25,11 +25,19 @@ endfunction(output_directory TGT DIR)
 
 # Warning: This is different from the way all other Derecho components include 
 # the third_party directory, and makes include statements work differently
-include_directories(../third_party/mutils ../third_party/mutils-serialization ../third_party/spdlog/include)
-link_directories(../third_party/mutils ../third_party/mutils-serialization)
+include_directories(
+  ${derecho_SOURCE_DIR}/third_party/mutils
+  ${derecho_SOURCE_DIR}/third_party/mutils-serialization
+  ${derecho_SOURCE_DIR}/third_party/libfabric/build/include
+  ${derecho_SOURCE_DIR}/third_party/spdlog/include
+  ${derecho_SOURCE_DIR}/third_party/getpot)
+link_directories(
+  ${derecho_SOURCE_DIR}/third_party/mutils 
+  ${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 
 add_library(persistent SHARED Persistent.hpp Persistent.cpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp HLC.cpp HLC.hpp PersistNoLog.hpp)
 output_directory(persistent target/usr/local/lib)
+add_dependencies(persistent libfabric_target)
 
 add_executable(ptst test.cpp)
 target_link_libraries(ptst persistent pthread mutils mutils-serialization)

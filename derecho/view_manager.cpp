@@ -272,7 +272,11 @@ void ViewManager::initialize_rdmc_sst() {
         std::cout << "Global setup failed" << std::endl;
         exit(0);
     }
+#ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
+#else
+    sst::lf_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
+#endif
 }
 
 std::map<node_id_t, ip_addr> ViewManager::make_member_ips_map(const View& view) {
@@ -383,12 +387,12 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     }
 
     for(int q = 0; q < Vc.num_members; q++) {
-        //If this is a new suspicion
-        if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
-            whenlog(logger->debug("New suspicion: node {}", Vc.members[q]);)
-                    //This is safer than copy_suspected, since suspected[] might change during this loop
-                    last_suspected[q]
-                    = gmsSST.suspected[myRank][q];
+        // if(gmsSST.suspected[myRank][q] && !Vc.failed[q]) {
+        if(gmsSST.suspected[myRank][q] && !last_suspected[q]) {
+            //This is safer than copy_suspected, since suspected[] might change during this loop
+            last_suspected[q] = gmsSST.suspected[myRank][q];
+            whenlog(logger->debug("Marking {} failed", Vc.members[q]);)
+
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
                 throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
             }
@@ -709,8 +713,13 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
             for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         //The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        rdma::impl::verbs_add_connection(next_view->members[joiner_rank], next_view->member_ips[joiner_rank],
-                                         my_id);
+#ifdef USE_VERBS_API
+        rdma::impl::verbs_add_connection(next_view->members[joiner_rank], 
+                                         next_view->member_ips[joiner_rank], my_id);
+#else
+       rdma::impl::lf_add_connection(next_view->members[joiner_rank], 
+                                     next_view->member_ips[joiner_rank]);
+#endif
     }
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
@@ -1085,6 +1094,7 @@ bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vecto
     for(unsigned int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
+                // std::cout<<__func__<<" returns true: old[who]="<<old[who]<<",who="<<who<<std::endl;
                 return true;
             }
         }

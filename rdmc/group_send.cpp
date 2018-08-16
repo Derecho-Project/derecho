@@ -1,7 +1,12 @@
-
 #include "group_send.h"
 #include "message.h"
 #include "util.h"
+
+#ifdef USE_VERBS_API
+  #include "verbs_helper.h"
+#else 
+  #include "lf_helper.h"
+#endif
 
 #include <cassert>
 #include <cstring>
@@ -73,7 +78,6 @@ polling_group::polling_group(uint16_t _group_number, size_t _block_size,
     if(member_index != 0) {
         first_block_buffer = unique_ptr<char[]>(new char[block_size]);
         memset(first_block_buffer.get(), 0, block_size);
-
         first_block_mr = make_unique<memory_region>(first_block_buffer.get(), block_size);
     }
 
@@ -234,8 +238,13 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
 void polling_group::receive_ready_for_block(uint32_t step, uint32_t sender) {
     unique_lock<mutex> lock(monitor);
 
+#ifdef USE_VERBS_API
     auto it = rfb_queue_pairs.find(sender);
     assert(it != rfb_queue_pairs.end());
+#else
+    auto it = rfb_endpoints.find(sender);
+    assert(it != rfb_endpoints.end());
+#endif
     it->second.post_empty_recv(form_tag(group_number, sender),
                                message_types.ready_for_block);
 
@@ -319,9 +328,13 @@ void polling_group::send_next_block() {
     // printf("sending block #%d to node #%d on step %d\n", (int)block_number,
     // 	   (int)target, (int)send_step-1);
     // fflush(stdout);
+#ifdef USE_VERBS_API
     auto it = queue_pairs.find(target);
     assert(it != queue_pairs.end());
-
+#else
+    auto it = endpoints.find(target);
+    assert(it != endpoints.end());
+#endif
     if(first_block_number && block_number == *first_block_number) {
         CHECK(it->second.post_send(*first_block_mr, 0, block_size,
                                    form_tag(group_number, target),
@@ -394,9 +407,13 @@ void polling_group::complete_message() {
     }
 }
 void polling_group::post_recv(schedule::block_transfer transfer) {
+#ifdef USE_VERBS_API
     auto it = queue_pairs.find(transfer.target);
     assert(it != queue_pairs.end());
-
+#else 
+    auto it = endpoints.find(transfer.target);
+    assert(it != endpoints.end());
+#endif
     // printf("Posting receive buffer for block #%d from node #%d\n",
     //        (int)transfer.block_number, (int)transfer.target);
     // fflush(stdout);
@@ -419,18 +436,38 @@ void polling_group::post_recv(schedule::block_transfer transfer) {
               "posted_receive_buffer");
 }
 void polling_group::connect(uint32_t neighbor) {
+#ifdef USE_VERBS_API
     queue_pairs.emplace(neighbor, queue_pair(members[neighbor]));
-
+    
     auto post_recv = [this, neighbor](rdma::queue_pair* qp) {
         qp->post_empty_recv(form_tag(group_number, neighbor),
                             message_types.ready_for_block);
     };
 
-    rfb_queue_pairs.emplace(neighbor, queue_pair(members[neighbor], post_recv));
+    rfb_queue_pairs.emplace(neighbor, endpoint(members[neighbor], post_recv));
+#else
+    // Decide whether the endpoint will act as a server in the connection
+    bool is_lf_server = members[member_index] < members[neighbor];
+    endpoints.emplace(neighbor, endpoint(members[neighbor], is_lf_server));
+    
+    auto post_recv = [this, neighbor](rdma::endpoint* ep) {
+        ep->post_empty_recv(form_tag(group_number, neighbor),
+                            message_types.ready_for_block);
+    };
+
+    rfb_endpoints.emplace(neighbor, endpoint(members[neighbor], is_lf_server, post_recv));
+#endif
 }
+
 void polling_group::send_ready_for_block(uint32_t neighbor) {
+#ifdef USE_VERBS_API
     auto it = rfb_queue_pairs.find(neighbor);
     assert(it != rfb_queue_pairs.end());
+#else
+    auto it = rfb_endpoints.find(neighbor);
+    assert(it != rfb_endpoints.end());
+#endif
+
     it->second.post_empty_send(form_tag(group_number, neighbor), 0,
                                message_types.ready_for_block);
 }

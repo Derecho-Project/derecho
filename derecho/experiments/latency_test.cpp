@@ -32,14 +32,18 @@ struct exp_result {
     long long unsigned int max_msg_size;
     unsigned int window_size;
     int num_messages;
+    // int send_medium;
     int raw_mode;
     double latency;
+    double stddev;
 
     void print(std::ofstream &fout) {
         fout << num_nodes << " " << max_msg_size
-             << " " << window_size << " "
+	     << " " << window_size << " "
+             // << num_messages << " " << send_medium << " "
              << num_messages << " "
-             << raw_mode << " " << latency << endl;
+             << raw_mode << " " << latency << " "
+             << stddev << endl;
     }
 };
 
@@ -67,7 +71,7 @@ int main(int argc, char *argv[]) {
         const int raw_mode = atoi(argv[4]);
 
         int num_messages = 1000;
-        // only used by node 0
+	// only used by node 0
         vector<uint64_t> start_times(num_messages), end_times(num_messages);
 
         volatile bool done = false;
@@ -116,6 +120,7 @@ int main(int argc, char *argv[]) {
         while(managed_group->get_members().size() < num_nodes) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+        std::cout<<"All nodes joined."<<std::endl;
 
         int my_rank = 0;
         auto group_members = managed_group->get_members();
@@ -137,8 +142,6 @@ int main(int argc, char *argv[]) {
                 "Max possible variation from local = %5.3f us\n",
                 (t3 - t1) * 1e-3f, max(t2 - t1, t3 - t2) * 1e-3f);
         fflush(stdout);
-
-        cout << "Finished constructing/joining ManagedGroup" << endl;
 
         if(node_id == 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -166,11 +169,21 @@ int main(int argc, char *argv[]) {
         }
 
         uint64_t total_time = 0;
+        double sum_of_square = 0.0f;
+        double average_time = 0.0f;
         for(int i = 0; i < num_messages; ++i) {
             total_time += end_times[i] - start_times[i];
+            // std::cout << ((end_times[i] - start_times[i])/1000.0) << "us" << std::endl;
         }
+        average_time = (total_time/num_messages); // in nano seconds
+        // calculate the standard deviation:
+        for (int i=0; i < num_messages; ++i) {
+          sum_of_square += (double)(end_times[i] - start_times[i] - average_time) * (end_times[i] - start_times[i] - average_time) ;
+        }
+        double std = sqrt(sum_of_square / (num_messages - 1));
+
         if(node_id == 0) {
-            log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, ((double)total_time) / (num_messages * 1000)}, "data_latency");
+	    log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, (average_time / 1000.0), (std / 1000.0)}, "data_latency");
         }
         managed_group->barrier_sync();
         flush_events();

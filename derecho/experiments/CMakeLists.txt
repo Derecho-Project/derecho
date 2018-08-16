@@ -10,8 +10,11 @@ include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
+
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 
 # test_group_interface
 add_executable(test_group_interface test_group_interface.cpp initialize.cpp )
@@ -28,6 +31,10 @@ target_link_libraries(single_sender_multiple_messages derecho)
 # multiple_senders_multiple_messages
 add_executable(multiple_senders_multiple_messages multiple_senders_multiple_messages.cpp initialize.cpp )
 target_link_libraries(multiple_senders_multiple_messages derecho)
+
+# rdmc_test
+add_executable(rdmc_test rdmc_test.cpp block_size.cpp)
+target_link_libraries(rdmc_test rdmc derecho)
 
 # derecho_bw_test
 add_executable(derecho_bw_test derecho_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )

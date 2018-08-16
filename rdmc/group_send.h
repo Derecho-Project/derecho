@@ -4,7 +4,12 @@
 
 #include "rdmc.h"
 #include "schedule.h"
-#include "verbs_helper.h"
+
+#ifdef USE_VERBS_API
+    #include "verbs_helper.h"
+#else
+    #include "lf_helper.h"
+#endif
 
 #include <experimental/optional>
 #include <map>
@@ -80,9 +85,13 @@ private:
     vector<bool> received_blocks;
 
     // maps from member_indices to the queue pairs
+#ifdef USE_VERBS_API
     map<size_t, rdma::queue_pair> queue_pairs;
     map<size_t, rdma::queue_pair> rfb_queue_pairs;
-
+#else
+    map<size_t, rdma::endpoint> endpoints;
+    map<size_t, rdma::endpoint> rfb_endpoints;
+#endif
     static struct {
         rdma::message_type data_block;
         rdma::message_type ready_for_block;

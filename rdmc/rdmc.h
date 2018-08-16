@@ -2,7 +2,11 @@
 #ifndef RDMC_H
 #define RDMC_H
 
+#ifdef USE_VERBS_API
 #include "verbs_helper.h"
+#else
+#include "lf_helper.h"
+#endif
 
 #include <array>
 #include <experimental/optional>
@@ -80,12 +84,20 @@ void query_addresses(std::map<uint32_t, std::string>& addresses,
 class barrier_group {
     // Queue Pairs and associated remote memory regions used for performing a
     // barrier.
+#ifdef USE_VERBS_API
     std::vector<rdma::queue_pair> queue_pairs;
+#else
+    std::vector<rdma::endpoint> endpoints;
+#endif
     std::vector<rdma::remote_memory_region> remote_memory_regions;
 
     // Additional queue pairs which will handle incoming writes (but which this
     // node does not need to interact with directly).
+#ifdef USE_VERBS_API
     std::vector<rdma::queue_pair> extra_queue_pairs;
+#else
+    std::vector<rdma::endpoint> extra_endpoints;
+#endif
 
     // RDMA memory region used for doing the barrier
     std::array<volatile int64_t, 32> steps;

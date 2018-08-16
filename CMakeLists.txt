@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 2.8.1)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwarf-3 -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -DNOLOG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -DNOLOG")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -gdwarf-3 -pg")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DNOLOG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
 add_subdirectory(derecho)
 add_subdirectory(rdmc)
@@ -30,5 +30,13 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-containers)
 
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+
+add_custom_target(
+	libfabric_target
+	COMMAND libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
+	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/libfabric
+)
+include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
+link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 
 include_directories(${derecho_SOURCE_DIR}/third_party)

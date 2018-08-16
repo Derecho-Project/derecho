@@ -55,7 +55,7 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-#ifdef _DEBUG
+#ifndef NDEBUG
     spdlog::set_level(spdlog::level::trace);
 #endif
     if(argc < 6) {
@@ -174,7 +174,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     dbg_debug("about to start the querying thread.");
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
     int num_datapoints = 0;     // number of data points
     pqt = std::make_unique<std::thread>([&]() {
         struct timespec tqt;
@@ -270,7 +270,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-#if defined(_PERFORMANCE_DEBUG) || (_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 //      (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
 

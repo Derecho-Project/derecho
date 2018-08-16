@@ -60,8 +60,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-#ifdef _DEBUG
-    spdlog::set_level(spdlog::level::trace);
+
+#ifndef NDEBUG
+   spdlog::set_level(spdlog::level::trace);  
 #endif
     if(argc < 6) {
         std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> [window_size=3]" << std::endl;
@@ -173,7 +174,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "allocate memory error!" << std::endl;
     }
     dbg_debug("about to start the querying thread.");
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
     int num_datapoints = 0;  // number of data points
     pqt = std::make_unique<std::thread>([&]() {
         struct timespec tqt;
@@ -233,7 +234,7 @@ int main(int argc, char *argv[]) {
         std::cout << std::flush;
         exit(0);
     });
-#endif  //_PERFORMANCE_DEBUG || _DEBUG
+#endif  //_PERFORMANCE_DEBUG || NDEBUG
     dbg_debug("querying thread started.");
 
     if(is_sending) {
@@ -261,14 +262,13 @@ int main(int argc, char *argv[]) {
                     handle.ordered_send<RPC_NAME(change_vola_bytes)>(bs);
                 }
             }
-
         } catch(uint64_t exp) {
             std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
             return -1;
         }
     }
 
-#if defined(_PERFORMANCE_DEBUG) || (_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 //      (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
 

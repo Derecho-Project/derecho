@@ -57,8 +57,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-#ifdef _DEBUG
-    spdlog::set_level(spdlog::level::trace);
+
+#ifndef NDEBUG
+   spdlog::set_level(spdlog::level::trace);  
 #endif
     if(argc < 6) {
         std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <msg_size> <count> <max_ops> [window_size=3]" << std::endl;

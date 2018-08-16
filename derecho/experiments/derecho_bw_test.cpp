@@ -5,6 +5,10 @@
 #include <time.h>
 #include <vector>
 
+#ifndef NDEBUG
+#include <spdlog/spdlog.h>
+#endif
+
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
 #include "derecho/derecho.h"
@@ -37,6 +41,10 @@ struct exp_result {
 };
 
 int main(int argc, char *argv[]) {
+#ifndef NDEBUG
+    //spdlog::set_level(spdlog::level::trace);
+    spdlog::set_level(spdlog::level::err);
+#endif
     try {
         if(argc < 6) {
             cout << "Insufficient number of command line arguments" << endl;
@@ -208,13 +216,15 @@ int main(int argc, char *argv[]) {
         }
 
         managed_group->barrier_sync();
-        // managed_group->leave();
-        // sst::verbs_destroy();
-        exit(0);
-        cout << "Finished destroying managed_group" << endl;
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        managed_group->leave();
+        // cout << "Finished destroying managed_group" << endl;
+        // std::this_thread::sleep_for(std::chrono::seconds(10));
     } catch(const std::exception &e) {
         cout << "Exception in main: " << e.what() << endl;
         cout << "main shutting down" << endl;
     }
+#ifndef NDEBUG
+    std::cout<<"End of Main"<<std::endl;
+#endif//NDEBUG
+    // sst::lf_destroy();
 }

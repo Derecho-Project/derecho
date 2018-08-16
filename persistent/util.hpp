@@ -10,13 +10,13 @@
 #include "PersistException.hpp"
 
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
-#endif//_DEBUG
+#endif//NDEBUG
 
-#ifdef _DEBUG
+#ifndef NDEBUG
   inline auto dbgConsole() {
-    static auto console = spdlog::stdout_color_mt("console");
+    static auto console = spdlog::stdout_color_mt("persistent");
     return console;
   }
   #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
@@ -34,7 +34,7 @@
   #define dbg_error(...)
   #define dbg_crit(...)
   #define dbg_flush()
-#endif//_DEBUG
+#endif//NDEBUG
 
 #define MAX(a,b) \
   ({ __typeof__ (a) _a = (a); \

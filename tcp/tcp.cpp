@@ -10,6 +10,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <linux/tcp.h>
 
 namespace tcp {
 
@@ -33,6 +34,11 @@ socket::socket(string servername, int port) {
     serv_addr.sin_port = htons(port);
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
           server->h_length);
+
+    int optval = 1;
+    if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval))) {
+      fprintf(stderr, "WARNING: Failed to disable Nagle's algorithm, continue without TCP_NODELAY...\n");
+    }
 
     while(connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
         /* do nothing*/;

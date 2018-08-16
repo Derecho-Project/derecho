@@ -46,7 +46,11 @@ int main(int argc, char* argv[]) {
     }
 
     // initialize the rdma resources
+#ifdef USE_VERBS_API
     verbs_initialize(ip_addrs, node_id);
+#else
+    lf_initialize(ip_addrs, node_id);
+#endif
 
     std::vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {
