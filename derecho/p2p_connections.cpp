@@ -48,7 +48,7 @@ P2PConnections::P2PConnections(const P2PParams params)
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      3 * max_msg_size * window_size + sizeof(bool),
                                                      3 * max_msg_size * window_size + sizeof(bool),
-                                                     i>my_index);
+                                                     i > my_index);
 #endif
         }
     }
@@ -92,7 +92,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
                                                          const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                          3 * max_msg_size * window_size + sizeof(bool),
                                                          3 * max_msg_size * window_size + sizeof(bool),
-                                                         i>my_index);
+                                                         i > my_index);
             }
         } else {
             auto old_rank = old_connections.node_id_to_rank[members[i]];
@@ -190,18 +190,21 @@ void P2PConnections::send(uint32_t rank) {
                         const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
                         max_msg_size);
         } else {
-            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size);
-	    num_rdma_writes++;
+            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
+            num_rdma_writes++;
         }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
-        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size);
+        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
         outgoing_p2p_reply_seq_nums[rank]++;
-	num_rdma_writes++;
+        num_rdma_writes++;
     } else {
-        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size);
+        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
         outgoing_request_seq_nums[rank]++;
-	num_rdma_writes++;
+        num_rdma_writes++;
     }
 }
 
@@ -215,7 +218,7 @@ void P2PConnections::check_failures_loop() {
         if(num_rdma_writes < 1000) {
             continue;
         }
-	num_rdma_writes = 0;
+        num_rdma_writes = 0;
 
         util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API

@@ -216,8 +216,19 @@ void View::merge_changes() {
             gmssst::increment(gmsSST->num_changes[myRank]);
         }
     }
+    // gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
+    //             gmsSST->num_acked.get_base() - gmsSST->changes.get_base());
+    /* breaking the above put statement into individual put calls, to be sure that
+     * if we were relying on any ordering guarantees, we won't run into issue when
+     * guarantees do not hold*/
     gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_acked.get_base() - gmsSST->changes.get_base());
+		gmsSST->joiner_ips.get_base() - gmsSST->changes.get_base());
+    gmsSST->put(gmsSST->joiner_ips.get_base() - gmsSST->getBaseAddress(),
+		gmsSST->num_changes.get_base() - gmsSST->joiner_ips.get_base());
+    gmsSST->put(gmsSST->num_changes.get_base() - gmsSST->getBaseAddress(),
+		gmsSST->num_committed.get_base() - gmsSST->num_changes.get_base());
+    gmsSST->put(gmsSST->num_committed.get_base() - gmsSST->getBaseAddress(),
+		gmsSST->num_acked.get_base() - gmsSST->num_committed.get_base());
 }
 
 void View::wedge() {

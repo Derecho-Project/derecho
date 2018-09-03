@@ -145,7 +145,10 @@ public:
         ((uint64_t&)sst->slots[my_row][max_msg_size * (slots_offset + slot + 1) - sizeof(uint64_t)])++;
         sst->put(
                 (char*)std::addressof(sst->slots[0][max_msg_size * (slots_offset + slot)]) - sst->getBaseAddress(),
-                max_msg_size);
+                max_msg_size - sizeof(uint64_t));
+        sst->put(
+                (char*)std::addressof(sst->slots[0][max_msg_size * (slots_offset + slot)]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
+                sizeof(uint64_t));
     }
 
     void debug_print() {

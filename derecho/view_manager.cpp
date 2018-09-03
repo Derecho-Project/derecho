@@ -461,8 +461,23 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
 
     // Notice a new request, acknowledge it
     gmssst::set(gmsSST.num_acked[myRank], gmsSST.num_changes[myRank]);
+    // gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
+    //            gmsSST.num_received.get_base() - gmsSST.changes.get_base());
+    /* breaking the above put statement into individual put calls, to be sure that
+     * if we were relying on any ordering guarantees, we won't run into issue when
+     * guarantees do not hold*/
     gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_received.get_base() - gmsSST.changes.get_base());
+		gmsSST.joiner_ips.get_base() - gmsSST.changes.get_base());
+    gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_committed.get_base() - gmsSST.num_changes.get_base());
+    gmsSST.put(gmsSST.num_committed.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_acked.get_base() - gmsSST.num_committed.get_base());
+    gmsSST.put(gmsSST.num_acked.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_installed.get_base() - gmsSST.num_acked.get_base());
+    gmsSST.put(gmsSST.num_installed.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_received.get_base() - gmsSST.num_installed.get_base());
     whenlog(logger->debug("Wedging current view.");)
             curr_view->wedge();
     whenlog(logger->debug("Done wedging current view.");)
@@ -866,7 +881,16 @@ void ViewManager::receive_join(tcp::socket& client_socket) {
     whenlog(logger->debug("Wedging view {}", curr_view->vid);)
             curr_view->wedge();
     whenlog(logger->debug("Leader done wedging view.");)
-            gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(), gmsSST.num_committed.get_base() - gmsSST.changes.get_base());
+      // gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(), gmsSST.num_committed.get_base() - gmsSST.changes.get_base());
+    /* breaking the above put statement into individual put calls, to be sure that
+     * if we were relying on any ordering guarantees, we won't run into issue when
+     * guarantees do not hold*/
+    gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.joiner_ips.get_base() - gmsSST.changes.get_base());
+    gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(),
+		gmsSST.num_committed.get_base() - gmsSST.num_changes.get_base());
 }
 
 void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) {
