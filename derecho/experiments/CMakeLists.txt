@@ -10,11 +10,11 @@ include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
+include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
 
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
+link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 # test_group_interface
 add_executable(test_group_interface test_group_interface.cpp initialize.cpp )

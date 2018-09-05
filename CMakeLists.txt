@@ -33,10 +33,13 @@ include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 
 add_custom_target(
 	libfabric_target
-	COMMAND libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
+#	COMMAND { if [ ! -e Makefile ]\; then libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ \; fi } && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
+	COMMAND { if [ ! -e src/.libs/libfabric.so]\; then libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ \; fi } && make
 	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/libfabric
 )
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
+# include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
+include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
+# link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
+link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 include_directories(${derecho_SOURCE_DIR}/third_party)
