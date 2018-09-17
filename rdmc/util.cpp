@@ -88,7 +88,7 @@ void query_peer_addresses(map<uint32_t, string> &addresses,
     if(slurm_query_addresses(addresses, node_rank)) return;
 
     uint32_t num_nodes;
-    cout << "Please enter '[node_rank] [num_nodes]': ";
+    cout << "Please enter '[node_id] [num_nodes]': ";
     cin >> node_rank >> num_nodes;
 
     string addr;

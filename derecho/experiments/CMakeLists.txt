@@ -169,4 +169,12 @@ target_link_libraries(server_client_p2p derecho)
 add_executable(asynchronous_dht asynchronous_dht.cpp initialize.cpp)
 target_link_libraries(asynchronous_dht derecho)
 
+# simple_send
+add_executable(simple_send simple_send.cpp)
+target_link_libraries(simple_send derecho)
+
+# random_messages
+add_executable(random_messages random_messages.cpp)
+target_link_libraries(random_messages derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)

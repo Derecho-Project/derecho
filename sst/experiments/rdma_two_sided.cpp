@@ -45,7 +45,7 @@ void wait_for_completion(std::thread::id tid) {
             break;
         }
         gettimeofday(&cur_time, NULL);
-        long cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+	cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
         if((cur_time_msec - start_time_msec) >= 2000) {
             break;
         }
