@@ -177,4 +177,8 @@ target_link_libraries(simple_send derecho)
 add_executable(random_messages random_messages.cpp)
 target_link_libraries(random_messages derecho)
 
+#sample_application
+add_executable(sample_application sample_application.cpp)
+target_link_libraries(sample_application derecho)
+
 add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)
