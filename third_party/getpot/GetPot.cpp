@@ -2210,7 +2210,7 @@ GetPot::unidentified_nominuses(const STRING_VECTOR& Knowns) const
     return ufos;
 }
 
-bool 
+__GETPOT_INLINE bool 
 GetPot::__constraint_check(const std::string& Value, const char* ConstraintStr, 
                            bool ThrowExceptionF) const
 {
@@ -2249,7 +2249,7 @@ GetPot::__constraint_check(const std::string& Value, const char* ConstraintStr,
  *            'string'
  *            '(' or_expr ')'                             */
 
-bool 
+__GETPOT_INLINE bool 
 GetPot::__constraint_check_OR(const std::string& Value, const char** iterator) const
 {
     bool result = false;
@@ -2264,7 +2264,7 @@ GetPot::__constraint_check_OR(const std::string& Value, const char** iterator) c
     return result;
 }
 
-bool
+__GETPOT_INLINE bool
 GetPot::__constrain_check_EQUAL_STRING(const char* viterator, const char** iterator) const
 {
     ++(*iterator);
@@ -2286,7 +2286,7 @@ GetPot::__constrain_check_EQUAL_STRING(const char* viterator, const char** itera
     return false;
 }
 
-bool 
+__GETPOT_INLINE bool  
 GetPot::__constraint_check_AND(const std::string& Value, const char** iterator) const
 {
     bool result = true;
@@ -2301,7 +2301,7 @@ GetPot::__constraint_check_AND(const std::string& Value, const char** iterator) 
     return result;
 }
 
-bool
+__GETPOT_INLINE bool
 GetPot::__constraint_check_PRIMARY(const std::string& Value, 
                                    const char**       iterator) const
 {

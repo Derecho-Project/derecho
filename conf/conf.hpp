@@ -11,44 +11,35 @@ namespace derecho {
 
 #define CONF_ENTRY_INTEGER(name,section,string) \
 
-  /** RMDA Hardware Configuration **/
-  class RDMAHwConf {
-  public:
-    RDMAHwConf(GetPot &cfg);
-    const char * provider;
-    const char * domain;
-    const uint32_t rx_depth;
-    const uint32_t tx_depth;
-  };
-
-  /** SST Configuration **/
-  class SSTConf {
-  public:
-    constexpr uint32_t getSSTPort() const noexcept;
-  };
-
-  /** RDMC Configuration **/
-  class RDMCConf {
-  public:
-    constexpr uint32_t getRDMCPort() const noexcept;
-  };
-
-  /** Persistent Configuration **/
-  class PersistentConf {
-  public:
-    constexpr uint32_t getPersMedia() const noexcept;
-  };
-
   /** The single configuration file for derecho **/
   class Conf {
   private:
     // Configuration Table: 
     // config name --> default value
+#define CONF_DERECHO_GMS_PORT   "DERECHO/gms_port"
+#define CONF_DERECHO_RPC_PORT   "DERECHO/rpc_port"
+
+#define CONF_RDMA_PROVIDER      "RDMA/provider"
+#define CONF_RDMA_DOMAIN        "RDMA/domain"
+#define CONF_RDMA_TX_DEPTH      "RDMA/tx_depth"
+#define CONF_RDMA_RX_DEPTH      "RDMA/rx_depth"
+
+#define CONF_SST_TCP_PORT       "SST/tcp_port"
+#define CONF_RDMC_TCP_PORT      "RDMC/tcp_port"
+
     std::map<const std::string, std::string> config = {
-      {"RDMA/provider",         "sockets"},
-      {"RDMA/domain",           "eth0"},
-      {"RDMA/tx_depth",         "256"},
-      {"RDMA/rx_depth",         "256"}
+      // [DERECHO]
+      {CONF_DERECHO_GMS_PORT,   "23580"},
+      {CONF_DERECHO_RPC_PORT,   "28366"},
+      // [RDMA]
+      {CONF_RDMA_PROVIDER,      "sockets"},
+      {CONF_RDMA_DOMAIN,        "eth0"},
+      {CONF_RDMA_TX_DEPTH,      "256"},
+      {CONF_RDMA_RX_DEPTH,      "256"},
+      // [SST]
+      {CONF_SST_TCP_PORT,       "37683"},
+      // [RDMC]
+      {CONF_RDMC_TCP_PORT,      "31675"}
     };
   public:
     /** Constructor **/
@@ -90,5 +81,12 @@ namespace derecho {
     static std::unique_ptr<Conf> singleton;
     static std::atomic<uint32_t> singleton_initialized_flag;
   };
+
+  // helpers
+  const std::string & getConfString(const std::string & key);
+  const int32_t getConfInt32(const std::string & key);
+  const int64_t getConfInt64(const std::string & key);
+  const float getConfFloat(const std::string & key);
+  const double getConfDouble(const std::string & key);
 }
 #endif//CONF_HPP

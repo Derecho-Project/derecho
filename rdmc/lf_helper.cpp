@@ -7,7 +7,6 @@
 #include <poll.h>
 #include <thread>
 #include <vector>
-#include <GetPot>
 #include <arpa/inet.h>
 #include <byteswap.h>
 #include <rdma/fabric.h>
@@ -17,8 +16,8 @@
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_domain.h>
 
+#include "conf/conf.hpp"
 #include "derecho/connection_manager.h"
-#include "derecho/derecho_ports.h"
 #include "lf_helper.h"
 #include "tcp/tcp.h"
 #include "util.h"
@@ -189,22 +188,14 @@ static void default_context() {
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = MAX_LF_ADDR_SIZE;
 
-    /** Load the config file */
-    GetPot cfg(LF_CONFIG_FILE);
-
-    #define DEFAULT_PROVIDER  ("sockets")
-    #define DEFAULT_DOMAIN    ("eth0")
-    #define DEFAULT_TX_DEPTH  ("4096")
-    #define DEFAULT_RX_DEPTH  ("4096")
-
     /** Set the provider, can be verbs|psm|sockets|usnic */
     FAIL_IF_ZERO(
-      g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider", DEFAULT_PROVIDER)),
+      g_ctxt.hints->fabric_attr->prov_name = strdup(derecho::getConfString(CONF_RDMA_PROVIDER).c_str()),
       "strdup provider name.", CRASH_ON_FAILURE
     );
     /** Set the domain */
     FAIL_IF_ZERO(
-      g_ctxt.hints->domain_attr->name = strdup(cfg("domain", DEFAULT_DOMAIN)),
+      g_ctxt.hints->domain_attr->name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str()),
       "strdup domain name.", CRASH_ON_FAILURE
     );
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
@@ -213,12 +204,12 @@ static void default_context() {
     } else { // default
       /** Set the sizes of the tx and rx queues */
       FAIL_IF_ZERO(
-        g_ctxt.hints->tx_attr->size = strtol(cfg("tx_depth", DEFAULT_TX_DEPTH), NULL, 10),
-        "strdup domain name.", CRASH_ON_FAILURE
+        g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_TX_DEPTH),
+        "get tx depth.", CRASH_ON_FAILURE
       );
       FAIL_IF_ZERO(
-        g_ctxt.hints->rx_attr->size = strtol(cfg("rx_depth",DEFAULT_RX_DEPTH), NULL, 10),
-        "strol rx queue size", CRASH_ON_FAILURE
+        g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH),
+        "get rx depth.", CRASH_ON_FAILURE
       );
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
     }
@@ -683,7 +674,7 @@ bool lf_initialize(
     //connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
     
     /** Initialize the tcp connections, also connects all the nodes together */
-    rdmc_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::rdmc_tcp_port);
+    rdmc_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::getConfInt32(CONF_RDMC_TCP_PORT));
     
     /** Set the context to defaults to start with */
     default_context();

@@ -4,6 +4,7 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
+#include "conf/conf.hpp"
 
 template <class DataType>
 class HashTable;
@@ -106,9 +107,9 @@ int main() {
     auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
 
     if(my_ip == leader_ip) {
-        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
+        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT), HashTableGenerator);
     } else {
-        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, leader_ip, callback_set, subgroup_info, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::derecho_gms_port, HashTableGenerator);
+        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, leader_ip, callback_set, subgroup_info, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT), HashTableGenerator);
     }
 
     std::unique_lock<std::mutex> main_lock(main_mutex);

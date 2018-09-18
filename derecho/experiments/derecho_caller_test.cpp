@@ -9,6 +9,7 @@
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 #include "spdlog/spdlog.h"
+#include "conf/conf.hpp"
 
 using std::cout;
 using std::endl;
@@ -102,7 +103,7 @@ int main(int argc, char* argv[]) {
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, {stability_callback, {}}, subgroup_info,
-                derecho_params, {new_view_callback}, derecho::derecho_gms_port,
+                derecho_params, {new_view_callback}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 
@@ -110,7 +111,7 @@ int main(int argc, char* argv[]) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, leader_ip,
                 {stability_callback, {}}, subgroup_info,
-                {new_view_callback}, derecho::derecho_gms_port,
+                {new_view_callback}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 

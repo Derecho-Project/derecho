@@ -82,4 +82,24 @@ const Conf* Conf::get() noexcept {
   return Conf::singleton.get();
 }
 
+const std::string & getConfString(const std::string & key){
+  return Conf::get()->getString(key);
+}
+
+const int32_t getConfInt32(const std::string & key){
+  return Conf::get()->getInt32(key);
+}
+
+const int64_t getConfInt64(const std::string & key){
+  return Conf::get()->getInt64(key);
+}
+
+const float getConfFloat(const std::string & key){
+  return Conf::get()->getFloat(key);
+}
+
+const double getConfDouble(const std::string & key){
+  return Conf::get()->getDouble(key);
+}
+
 }
