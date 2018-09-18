@@ -65,7 +65,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT))
+                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT))
             : max_payload_size(max_payload_size),
               sst_max_payload_size(sst_max_payload_size),
               block_size(block_size),
@@ -369,7 +369,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT));
 
     ~MulticastGroup();
 
