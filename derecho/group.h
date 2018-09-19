@@ -26,6 +26,7 @@
 #include "subgroup_info.h"
 #include "view_manager.h"
 
+#include "conf/conf.hpp"
 #include "mutils-containers/KindMap.hpp"
 #include "mutils-containers/TypeMap2.hpp"
 #include "spdlog/spdlog.h"
@@ -256,7 +257,7 @@ public:
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
+          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     /**
@@ -287,7 +288,7 @@ public:
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
+          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     ~Group();

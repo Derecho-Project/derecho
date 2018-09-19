@@ -17,7 +17,6 @@
 #include "connection_manager.h"
 #include "derecho_internal.h"
 #include "derecho_modes.h"
-#include "derecho_ports.h"
 #include "derecho_sst.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
@@ -26,6 +25,7 @@
 #include "sst/multicast.h"
 #include "sst/sst.h"
 #include "subgroup_info.h"
+#include "conf/conf.hpp"
 
 namespace derecho {
 
@@ -57,7 +57,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
-    uint32_t rpc_port = derecho_rpc_port;
+    uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT);
 
     DerechoParams(long long unsigned int max_payload_size,
                   long long unsigned int sst_max_payload_size,
@@ -65,7 +65,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = derecho_rpc_port)
+                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT))
             : max_payload_size(max_payload_size),
               sst_max_payload_size(sst_max_payload_size),
               block_size(block_size),
@@ -369,7 +369,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho_rpc_port);
+            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT));
 
     ~MulticastGroup();
 

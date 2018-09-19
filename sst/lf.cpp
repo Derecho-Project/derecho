@@ -15,14 +15,13 @@
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
-#include <GetPot>
+#include <conf/conf.hpp>
 
 #ifndef NDEBUG
 #include <spdlog/spdlog.h>
 #endif//NDEBUG
 
 #include "derecho/connection_manager.h"
-#include "derecho/derecho_ports.h"
 #include "poll_utils.h"
 #include "tcp/tcp.h"
 #include "lf.h"
@@ -192,23 +191,12 @@ namespace sst{
   static void load_configuration() {
     FAIL_IF_ZERO(g_ctxt.hints,"hints is not initialized.", CRASH_ON_FAILURE);
 
-    // possible providers: verbs|psm|sockets|usnic
-    #define DEFAULT_PROVIDER    "sockets"
-    // possible domain is decided by the system
-    #define DEFAULT_DOMAIN      "eth0"
-    // tx_depth
-    #define DEFAULT_TX_DEPTH    (4096)
-    // rx_depth
-    #define DEFAULT_RX_DEPTH     (4096)
-    // load configuration file:
-    GetPot cfg(LF_CONFIG_FILE);
-
     // dbg_info("No RDMA conf file, use the default values.");
     // provider:
-    FAIL_IF_ZERO(g_ctxt.hints->fabric_attr->prov_name = strdup(cfg("provider",DEFAULT_PROVIDER)),
+    FAIL_IF_ZERO(g_ctxt.hints->fabric_attr->prov_name = strdup(derecho::getConfString(CONF_RDMA_PROVIDER).c_str()),
           "strdup provider name.", CRASH_ON_FAILURE);
     // domain:
-    FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(cfg("domain",DEFAULT_DOMAIN)),
+    FAIL_IF_ZERO(g_ctxt.hints->domain_attr->name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str()),
         "strdup domain name.", CRASH_ON_FAILURE);
     if (strcmp(g_ctxt.hints->fabric_attr->prov_name,"sockets")==0) {
       g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
@@ -224,8 +212,8 @@ namespace sst{
     // g_ctxt.rx_depth = DEFAULT_RX_DEPTH;
 
     // tx_depth
-    g_ctxt.hints->tx_attr->size = cfg("tx_depth",DEFAULT_TX_DEPTH);
-    g_ctxt.hints->rx_attr->size = cfg("rx_depth",DEFAULT_RX_DEPTH);
+    g_ctxt.hints->tx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_TX_DEPTH);
+    g_ctxt.hints->rx_attr->size = derecho::Conf::get()->getInt32(CONF_RDMA_RX_DEPTH);
   }
 
   int _resources::init_endpoint(struct fi_info *fi) {
@@ -708,7 +696,7 @@ namespace sst{
     uint32_t node_rank){
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::getConfInt32(CONF_SST_TCP_PORT));
 
     // initialize global resources:
     // STEP 1: initialize with configuration.

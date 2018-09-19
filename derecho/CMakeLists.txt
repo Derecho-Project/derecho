@@ -22,11 +22,11 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 add_library(derecho SHARED derecho_sst.cpp view.cpp view_manager.cpp rpc_manager.cpp p2p_connections.cpp multicast_group.cpp raw_subgroup.cpp subgroup_functions.cpp connection_manager.cpp)
-target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization persistent)
+target_link_libraries(derecho rdmacm ibverbs rt pthread atomic rdmc sst mutils mutils-serialization persistent conf)
 add_dependencies(derecho mutils_serialization_target mutils_target libfabric_target)
 
 add_executable(subgroup_function_tester subgroup_function_tester.cpp)
-target_link_libraries(subgroup_function_tester derecho)
+target_link_libraries(subgroup_function_tester derecho conf)
 
 add_custom_target(format_derecho 
 	COMMAND clang-format-3.8 -i *.cpp *.h

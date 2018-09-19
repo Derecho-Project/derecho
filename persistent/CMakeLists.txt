@@ -40,4 +40,4 @@ output_directory(persistent target/usr/local/lib)
 add_dependencies(persistent libfabric_target)
 
 add_executable(ptst test.cpp)
-target_link_libraries(ptst persistent pthread mutils mutils-serialization)
+target_link_libraries(ptst conf persistent pthread mutils mutils-serialization)

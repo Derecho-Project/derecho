@@ -10,13 +10,11 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -W
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/getpot)
-# include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-# link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp schedule.cpp lf_helper.cpp)
-TARGET_LINK_LIBRARIES(rdmc tcp rdmacm ibverbs rt pthread fabric)
+TARGET_LINK_LIBRARIES(rdmc conf tcp rdmacm ibverbs rt pthread fabric)
 
 find_library(SLURM_FOUND slurm)
 if (SLURM_FOUND)

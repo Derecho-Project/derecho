@@ -13,6 +13,7 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include <persistent/util.hpp>
+#include "conf/conf.hpp"
 
 using std::cout;
 using std::endl;
@@ -177,12 +178,12 @@ int main(int argc, char *argv[]) {
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<ByteArrayObject>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
+                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 ba_factory);
     } else {
         group = std::make_unique<derecho::Group<ByteArrayObject>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
+                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 ba_factory);
     }
 

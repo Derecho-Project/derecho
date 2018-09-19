@@ -10,16 +10,14 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -W
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/getpot)
-# include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-# link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 add_subdirectory(experiments)
 
 # ADD_LIBRARY(sst SHARED verbs.cpp lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)
 ADD_LIBRARY(sst SHARED lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)
-TARGET_LINK_LIBRARIES(sst tcp rdmacm fabric ibverbs pthread rt) 
+TARGET_LINK_LIBRARIES(sst conf tcp rdmacm fabric ibverbs pthread rt) 
 add_dependencies(sst libfabric_target)
 
 add_custom_target(format_sst clang-format-3.8 -i *.cpp *.h)

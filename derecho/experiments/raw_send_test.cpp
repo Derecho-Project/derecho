@@ -8,8 +8,9 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
+#include "conf/conf.hpp"
 
-static const int GMS_PORT = derecho::derecho_gms_port;
+static const int GMS_PORT = derecho::getConfInt32(CONF_DERECHO_GMS_PORT);
 
 using std::cout;
 using std::endl;
