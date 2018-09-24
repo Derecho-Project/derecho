@@ -98,10 +98,13 @@ int main(int argc, char *argv[]) {
     cout << endl;
 
     RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
-    std::cin.sync();
     while(true) {
 	std::string msg_str;
 	std::getline(std::cin, msg_str);
+	if (std::cin.fail()) {
+	  std::cout << "End of input" << std::endl;
+	  break;
+	}
 	if (!msg_str.size()) {
 	  continue;
 	}
@@ -110,6 +113,7 @@ int main(int argc, char *argv[]) {
 	  buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
         }
 	msg_str.copy(buf, msg_str.size());
+	// buf = "Here's a message";
 	group_as_subgroup.send();
     }
 }
