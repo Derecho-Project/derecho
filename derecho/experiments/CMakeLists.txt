@@ -119,6 +119,10 @@ target_link_libraries(typed_subgroup_bw_test derecho)
 add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(persistent_typed_subgroup_bw_test derecho)
 
+# objstore
+add_executable(objstore objstore.cpp block_size.cpp initialize.cpp)
+target_link_libraries(objstore derecho)
+
 # volatile_typed_subgroup_bw_test
 add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp block_size.cpp initialize.cpp)
 target_link_libraries(volatile_typed_subgroup_bw_test derecho)

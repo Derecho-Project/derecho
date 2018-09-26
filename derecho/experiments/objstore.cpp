@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "block_size.h"
-#include "bytes_object.h"
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
@@ -17,62 +16,172 @@ using std::cout;
 using std::endl;
 using namespace persistent;
 
-class ObjStore : public mutils::ByteRepresentable, public derecho::PersistsFields {
-    Persistent<std::map<uint64_t,Bytes>> objects;
+// The binary large object for serialized objects.
+class Blob : public mutils::ByteRepresentable {
+public:
+    char * bytes;
+    std::size_t size;
 
-    void put(const uint64_t oid, const Bytes& obj) {
-      //TODO:
+    // constructor - we always copy to 'own' the data
+    Blob(const char * const b, const decltype(size) s) : bytes(nullptr),size(s) {
+        if ( s > 0 ) {
+            bytes = new char[s];
+            memcpy(bytes, b, s);
+        }
     }
 
-    // This get is SUPER inefficient!!!
-    // Passing an output buffer??
-    Bytes get(const uint64_t oid) {
-      // TODO: 
-      Bytes b();
-      return b;
+    // copy constructor - we always copy to 'own' the data
+    Blob(const Blob & other): bytes(nullptr),size(other.size) {
+        bytes = nullptr;
+        if ( size > 0 ) {
+            bytes = new char[size];
+            memcpy(bytes, other.bytes, other.size);
+        }
     }
 
-   //TODO: other staff
+    // default constructor - no data at all
+    Blob () : bytes(nullptr), size(0) { }
+
+    // destructor
+    virtual ~Blob() {
+        if (bytes) delete bytes;
+    }
+
+    // move evaluator:
+    Blob & operator = (Blob &&other) {
+        char *swp_bytes = other.bytes;
+        std::size_t swp_size = other.size;
+        other.bytes = bytes;
+        other.size = size;
+        bytes = swp_bytes;
+        size = swp_size;
+        return *this;
+    }
+
+    // copy evaluator:
+    Blob & operator = (const Blob &other) {
+        if(bytes != nullptr) {
+            delete bytes;
+        }
+        size = other.size;
+        if(size > 0) {
+            bytes = new char[size];
+            memcpy(bytes, other.bytes, size);
+        } else {
+            bytes = nullptr;
+        }
+        return *this;
+    }
+
+    std::size_t to_bytes(char *v) const {
+        ((std::size_t *)(v))[0] = size; 
+        if(size > 0) {
+            memcpy(v + sizeof(size), bytes, size);
+        }   
+        return size + sizeof(size);
+    }   
+    
+    std::size_t bytes_size() const {
+        return size + sizeof(size);
+    }   
+    
+    void post_object(const std::function<void(char const *const, std::size_t)> &f) const {
+        f((char *)&size, sizeof(size));
+        f(bytes, size);
+    }   
+    
+    void ensure_registered(mutils::DeserializationManager &) {}
+    
+    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager *, const char *const v) {
+        return std::make_unique<Blob>(v + sizeof(std::size_t), ((std::size_t *)(v))[0]); 
+    }   
+
+    // we disabled from_bytes_noalloc calls for now.    
 };
 
-/**
- * Non-Persitent Object with vairable sizes
- */
-class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
+class OSObject : public mutils::ByteRepresentable {
 public:
-    Persistent<Bytes> pers_bytes;
-    //  Persistent<Bytes,ST_MEM> vola_bytes;
+#define INVALID_OID	(0xffffffffffffffffLLU)
+    const uint64_t oid; // object_id
+    Blob blob; // the object
 
-    void change_pers_bytes(const Bytes& bytes) {
-        *pers_bytes = bytes;
+    bool operator == (const OSObject & other) {
+      return this->oid == other.oid;
+    }
+    bool is_valid () const {
+      return (oid == INVALID_OID);
     }
 
-    //  void change_vola_bytes(const Bytes& bytes) {
-    //    *vola_bytes = bytes;
-    //  }
+    // constructor 0 : normal
+    OSObject(uint64_t & _oid, Blob & _blob):
+        oid(_oid),
+        blob(_blob) {}
+    // constructor 1 : raw
+    OSObject(const uint64_t _oid, const char * const _b, const std::size_t _s):
+        oid(_oid),
+        blob(_b,_s) {}
+    // constructor 2 : move
+    OSObject(OSObject && other):
+        oid(other.oid) {
+        blob = other.blob;
+    }
+    // constructor 3 : copy
+    OSObject(const OSObject & other):
+       oid(other.oid),
+       blob(other.blob.bytes,other.blob.size) {}
+    // constructor 4 : invalid
+    OSObject() : oid(INVALID_OID) {}
 
-    /** Named integers that will be used to tag the RPC methods */
-    //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-    enum Functions { CHANGE_PERS_BYTES };
+    DEFAULT_SERIALIZATION_SUPPORT(OSObject, oid, blob);
+};
+
+class ObjStore : public mutils::ByteRepresentable, public derecho::PersistsFields {
+public:
+    Persistent<std::vector<OSObject>> objects;
+    const OSObject inv_obj;
+
+    void put(const OSObject & obj) {
+        for (OSObject & o : *objects) {
+            if ( o == obj ) {
+                Blob tmp(obj.blob); // create
+                o.blob = std::move(tmp); // swap.
+                return;
+            }
+        }
+        // we didn't find it. insert...
+        objects->emplace_back(obj);
+    }
+
+    // This get is SUPER inefficient
+    // Passing an output buffer??
+    const OSObject get(const uint64_t oid) {
+        for(OSObject & o : *objects) {
+            if ( o.oid == oid ) {
+                return o;
+            }
+        }
+        return this->inv_obj;
+    }
+
+    enum Functions { PUT_OBJ, GET_OBJ };
 
     static auto register_functions() {
-        return std::make_tuple(
-                derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-        //      derecho::rpc::tag<CHANGE_VOLA_BYTES>(&ByteArrayObject::change_vola_bytes));
+      return std::make_tuple(
+        derecho::rpc::tag<PUT_OBJ>(&ObjStore::put),
+        derecho::rpc::tag<GET_OBJ>(&ObjStore::get)
+      );
     }
 
-    //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
-    DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
-    // constructor
-    //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    //  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {
-        //    vola_bytes(std::move(_v_bytes)) {
-    }
-    // the default constructor
-    ByteArrayObject(PersistentRegistry* pr) : pers_bytes(nullptr, pr) {
-        //    vola_bytes(nullptr,pr) {
-    }
+    DEFAULT_SERIALIZATION_SUPPORT(ObjStore, objects);
+
+    /*
+    **/
+
+    // Only for test: persistent registry is null and we make a copy constructor move.
+    ObjStore(Persistent<std::vector<OSObject>> & _objects) : objects(std::move(_objects)) {}
+
+    // Working with derecho.
+    ObjStore(PersistentRegistry* pr) : objects(nullptr, pr) {}
 };
 
 int main(int argc, char* argv[]) {
@@ -86,7 +195,8 @@ int main(int argc, char* argv[]) {
     int num_of_nodes = atoi(argv[2]);
     int msg_size = atoi(argv[3]);
     int count = atoi(argv[4]);
-    struct timespec t1, t2, t3;
+    struct timespec t1, t3;
+    // struct timespec t2;
 
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
@@ -136,7 +246,7 @@ int main(int argc, char* argv[]) {
             }};
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ByteArrayObject)), [num_of_nodes, sender_selector](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(ObjStore)), [num_of_nodes, sender_selector](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < num_of_nodes) {
                       std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -163,21 +273,21 @@ int main(int argc, char* argv[]) {
                   next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes);
                   return subgroup_vector;
               }}},
-            {std::type_index(typeid(ByteArrayObject))}};
+            {std::type_index(typeid(ObjStore))}};
 
-    auto ba_factory = [](PersistentRegistry* pr) { return std::make_unique<ByteArrayObject>(pr); };
+    auto store_factory = [](PersistentRegistry* pr) { return std::make_unique<ObjStore>(pr); };
 
-    std::unique_ptr<derecho::Group<ByteArrayObject>> group;
+    std::unique_ptr<derecho::Group<ObjStore>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
+        group = std::make_unique<derecho::Group<ObjStore>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
                 std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
-                ba_factory);
+                store_factory);
     } else {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
+        group = std::make_unique<derecho::Group<ObjStore>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
-                ba_factory);
+                store_factory);
     }
 
     std::cout << "Finished constructing/joining Group" << std::endl;
@@ -209,6 +319,8 @@ int main(int argc, char* argv[]) {
   }
 */
     // if (node_id == 0) {
+
+/*
     if(is_sending) {
         derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
         char* bbuf = new char[msg_size];
@@ -237,7 +349,7 @@ int main(int argc, char* argv[]) {
         (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
     }
-
+*/
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }

@@ -2027,7 +2027,7 @@ GetPot::unidentified_flags(const char* KnownFlagList, int ArgumentNumber=-1) con
             if( arg.length() < 2 || arg[0] != '-' || arg[1] == '-' ) continue;
 
             // -- check out if flags inside option are contained in KnownFlagList
-            for(ptrdiff_t i=1; i<arg.length(); ++i) {
+            for(ptrdiff_t i=1; i<(int)arg.length(); ++i) {
                 if( KFL.find(arg[i]) == std::string::npos ) ufos += arg[i];
             }
         }
@@ -2044,7 +2044,7 @@ GetPot::unidentified_flags(const char* KnownFlagList, int ArgumentNumber=-1) con
                 if( no_matches == ArgumentNumber) {
                     // -- the right argument number inside the section is found
                     // => check it for flags
-                    for(ptrdiff_t i=1; i<Remain.length(); ++i) {
+                    for(ptrdiff_t i=1; i<(int)Remain.length(); ++i) {
                         if( KFL.find(Remain[i]) == std::string::npos ) ufos += Remain[i];
                     }
                     return ufos;
@@ -2510,7 +2510,7 @@ __GETPOT_INLINE STRING_VECTOR GetPot::__get_section_tree(const std::string& Full
     // -- cuts a variable name into a tree of sub-sections. this is requested for recording
     //    requested sections when dealing with 'ufo' detection.
     STRING_VECTOR   result;
-    for(ptrdiff_t i=0; i<FullPath.length(); ++i) {
+    for(ptrdiff_t i=0; i<(int)FullPath.length(); ++i) {
         if( FullPath[i] == '/' ) { 
             result.push_back(FullPath.substr(0, i));
         }
