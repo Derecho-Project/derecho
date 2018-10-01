@@ -86,14 +86,10 @@ int main(int argc, char *argv[]) {
 
     while(managed_group->get_members().size() < num_nodes) {
     }
-    uint32_t node_rank = -1;
     auto members_order = managed_group->get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < num_nodes; ++i) {
         cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
     }
     cout << endl;
 
@@ -113,7 +109,6 @@ int main(int argc, char *argv[]) {
 	  buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
         }
 	msg_str.copy(buf, msg_str.size());
-	// buf = "Here's a message";
 	group_as_subgroup.send();
     }
 }

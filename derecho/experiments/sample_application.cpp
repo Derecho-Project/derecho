@@ -22,9 +22,12 @@ int main() {
     Group<>* group;
 
     auto delivery_callback = [my_id](subgroup_id_t subgroup_id, node_id_t sender_id, message_id_t index, char* buf, long long int size) {
-        std::cout << "In the delivery callback" << std::endl;
-
-        std::cout << buf << std::endl;
+        // null message filter
+        if(size == 0) {
+            return;
+        }
+        std::cout << "In the delivery callback for subgroup_id=" << subgroup_id << ", sender=" << sender_id << std::endl;
+        std::cout << "Message: " << buf << std::endl;
         return;
     };
 
@@ -34,28 +37,23 @@ int main() {
             subgroup_membership_functions{{std::type_index(typeid(RawObject)),
                                            [](const View& view, int&, bool) {
                                                if(view.members.size() < 5) {
+                                                   std::cout << "Throwing subgroup exception: not enough members" << std::endl;
                                                    throw subgroup_provisioning_exception();
                                                }
                                                subgroup_shard_layout_t layout(2);
-                                               vector<node_id_t> members(3);
-                                               members[0] = view.members[0];
-                                               members[1] = view.members[2];
-                                               members[2] = view.members[3];
-                                               layout[0].push_back(view.make_subview(members));
-                                               vector<node_id_t> members2(4);
-                                               members2[0] = view.members[0];
-                                               members2[1] = view.members[1];
-                                               members2[2] = view.members[2];
-                                               members2[3] = view.members[4];
-                                               layout[1].push_back(view.make_subview(members2));
+                                               vector<node_id_t> members_for_subgroup_one{view.members[0], view.members[2], view.members[3]};
+                                               layout[0].push_back(view.make_subview(members_for_subgroup_one));
+                                               vector<node_id_t> members_for_subgroup_two{view.members[0], view.members[1], view.members[2], view.members[4]};
+                                               layout[1].push_back(view.make_subview(members_for_subgroup_two));
                                                return layout;
                                            }}};
 
     unsigned long long int max_msg_size = 100;
-    DerechoParams derecho_params{max_msg_size, max_msg_size + 100, max_msg_size};
+    DerechoParams derecho_params{max_msg_size, max_msg_size, max_msg_size};
 
     SubgroupInfo subgroup_info(subgroup_membership_functions);
 
+    std::cout << "Going to construct the group" << std::endl;
     if(my_id == 0) {
         group = new Group<>(my_id, my_ip, callbacks, subgroup_info, derecho_params);
     } else {
@@ -73,7 +71,7 @@ int main() {
         }
     }
     std::cout << std::endl;
-    if (my_rank == -1) {
+    if (my_rank == (uint32_t) -1) {
         exit(1);
     }
 
