@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
         std::cout << "usage:" << argv[0] << " <num_of_nodes> [window_size]" << std::endl;
         return -1;
     }
-    int num_of_nodes = atoi(argv[2]);
+    int num_of_nodes = atoi(argv[1]);
 
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
@@ -201,6 +201,9 @@ int main(int argc, char* argv[]) {
     long long unsigned int block_size = get_block_size(msg_size);
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
     unsigned int window_size = 3;
+    if (argc > 2) {
+        window_size = atoi(argv[2]);
+    }
     if(argc >= 6) {
         window_size = (unsigned int)atoi(argv[5]);
     }
