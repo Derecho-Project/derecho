@@ -19,6 +19,7 @@ using mutils::context_ptr;
 using std::cout;
 using std::endl;
 using namespace persistent;
+using derecho::Bytes;
 
 //the payload is used to identify the user timestamp
 typedef struct _payload {

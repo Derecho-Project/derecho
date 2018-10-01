@@ -13,6 +13,8 @@
 #include <persistent/Persistent.hpp>
 #include <conf/conf.hpp>
 
+using derecho::Bytes;
+
 /**
  * RPC Object with a single function that accepts a string
  */
