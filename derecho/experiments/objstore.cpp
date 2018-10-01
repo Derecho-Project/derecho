@@ -4,6 +4,7 @@
 #include <string>
 #include <time.h>
 #include <vector>
+#include <string.h>
 
 #include "block_size.h"
 #include "derecho/derecho.h"
@@ -185,45 +186,33 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 5) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <msg_size> <count> [window_size=3]" << std::endl;
+    if(argc < 2) {
+        std::cout << "usage:" << argv[0] << " <num_of_nodes> [window_size]" << std::endl;
         return -1;
     }
-    int sender_selector = 0;  // 0 for all sender
-    if(strcmp(argv[1], "half") == 0) sender_selector = 1;
-    if(strcmp(argv[1], "one") == 0) sender_selector = 2;
     int num_of_nodes = atoi(argv[2]);
-    int msg_size = atoi(argv[3]);
-    int count = atoi(argv[4]);
-    struct timespec t1, t3;
-    // struct timespec t2;
 
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
     derecho::ip_addr leader_ip;
     query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int max_msg_size = msg_size;
+    long long unsigned int max_msg_size = 10000;
+    long long unsigned int msg_size = 1000;
     long long unsigned int block_size = get_block_size(msg_size);
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
     unsigned int window_size = 3;
     if(argc >= 6) {
         window_size = (unsigned int)atoi(argv[5]);
     }
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size, window_size};
+    derecho::DerechoParams derecho_params{
+      max_msg_size,
+      sst_max_msg_size,
+      block_size,
+      window_size};
     bool is_sending = true;
-
-    long total_num_messages;
-    switch(sender_selector) {
-        case 0:
-            total_num_messages = num_of_nodes * count;
-            break;
-        case 1:
-            total_num_messages = (num_of_nodes / 2) * count;
-            break;
-        case 2:
-            total_num_messages = count;
-            break;
-    }
+    long count = 1;
+    long total_num_messages = num_of_nodes * count;
+    struct timespec t1,t2,t3;
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here
@@ -246,7 +235,7 @@ int main(int argc, char* argv[]) {
             }};
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ObjStore)), [num_of_nodes, sender_selector](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(ObjStore)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
                   if(curr_view.num_members < num_of_nodes) {
                       std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -255,19 +244,8 @@ int main(int argc, char* argv[]) {
 
                   std::vector<uint32_t> members(num_of_nodes);
                   std::vector<int> senders(num_of_nodes, 1);
-                  for(int i = 0; i < num_of_nodes; i++) {
+                  for(int i = 0; i < num_of_nodes; i++)
                       members[i] = i;
-                      switch(sender_selector) {
-                          case 0:  // all senders
-                              break;
-                          case 1:  // half senders
-                              if(i <= (num_of_nodes - 1) / 2) senders[i] = 0;
-                              break;
-                          case 2:  // one senders
-                              if(i != (num_of_nodes - 1)) senders[i] = 0;
-                              break;
-                      }
-                  }
 
                   subgroup_vector[0].emplace_back(curr_view.make_subview(members, derecho::Mode::ORDERED, senders));
                   next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes);
@@ -302,10 +280,23 @@ int main(int argc, char* argv[]) {
         }
     }
     cout << endl;
-    if((sender_selector == 1) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) is_sending = false;
-    if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes - 1)) is_sending = false;
 
     std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
+
+    /* send message */
+    char data[256] = "Hello! My rank is: ";
+    sprintf(data+strlen(data),"%d",node_rank);
+    derecho::Replicated<ObjStore> & handle = group->get_subgroup<ObjStore>();
+    {
+        // send
+        OSObject obj{(uint64_t)node_rank,data,strlen(data)};
+        try {
+            handle.ordered_send<ObjStore::PUT_OBJ>(obj);
+        } catch (uint64_t exp) {
+            std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
+        }
+    }
+
     /*
   if (node_id == 0) {
     derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
@@ -350,6 +341,7 @@ int main(int argc, char* argv[]) {
 #endif  //_PERFORMANCE_DEBUG
     }
 */
+
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }
