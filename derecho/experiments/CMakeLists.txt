@@ -11,6 +11,7 @@ include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
+include_directories(${derecho_SOURCE_DIR}/third_party/getpot)
 
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)

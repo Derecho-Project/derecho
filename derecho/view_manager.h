@@ -13,12 +13,12 @@
 #include <vector>
 
 #include "derecho_internal.h"
-#include "derecho_ports.h"
 #include "locked_reference.h"
 #include "multicast_group.h"
 #include "subgroup_info.h"
 #include "tcp/tcp.h"
 #include "view.h"
+#include "conf/conf.hpp"
 
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>
@@ -297,7 +297,7 @@ public:
                 const DerechoParams& derecho_params,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
+                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -322,7 +322,7 @@ public:
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
+                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
 
     /**
      * Constructor for recovering a failed node by loading its View from log
@@ -349,7 +349,7 @@ public:
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 const DerechoParams& derecho_params = DerechoParams(0, 0, 0),
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
+                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
 
     ~ViewManager();
 

@@ -3,6 +3,7 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
+#include "conf/conf.hpp"
 
 using std::cin;
 using std::cout;
@@ -65,7 +66,7 @@ int main() {
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, {{}, {}}, subgroup_info,
-                derecho_params, {}, derecho::derecho_gms_port,
+                derecho_params, {}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
         derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
 
@@ -93,7 +94,7 @@ int main() {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, leader_ip,
                 {{}, {}}, subgroup_info,
-                {}, derecho::derecho_gms_port,
+                {}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
     managed_group->barrier_sync();
