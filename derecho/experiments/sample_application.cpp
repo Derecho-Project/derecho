@@ -6,6 +6,51 @@
 using namespace derecho;
 using std::vector;
 
+class TicketBookingSystem : public mutils::ByteRepresentable {
+  uint num_tickets;
+  // booked[i] = 1, if i^th ticket is booked, otherwise 0
+  vector<int> booked;
+
+public:
+  TicketBookingSystem (uint num_tickets) : num_tickets(num_tickets), booked(num_tickets, 0){
+  }
+  TicketBookingSystem (const uint& num_tickets, const vector<int>& booked) : num_tickets(num_tickets), booked(booked){
+  }
+  TicketBookingSystem(const TicketBookingSystem&) = default;
+  
+  bool book (uint tid) {
+    std::cout << "In function book with argument " << tid << std::endl;
+    if (!booked[tid]) {
+      booked[tid] = true;
+      std::cout << "Ticket booking successful" << std::endl;
+      return true;
+    }
+    else {
+      // ticket already booked
+      std::cout << "Error: Ticket already booked" << std::endl;
+      return false;
+    }
+  }
+
+  bool cancel (uint tid) {
+    if (booked[tid]) {
+      booked[tid] = false;
+      return true;
+    }
+    else {
+      // ticket is not booked
+      return false;
+    }
+  }
+
+  // default state
+  DEFAULT_SERIALIZATION_SUPPORT(TicketBookingSystem, num_tickets, booked);
+
+  // what operations you want as part of the subgroup
+  REGISTER_RPC_FUNCTIONS(TicketBookingSystem, book, cancel);
+  
+};
+
 int main() {
     node_id_t my_id;
     ip_addr leader_ip, my_ip;
@@ -19,7 +64,7 @@ int main() {
     std::cout << "Enter leader's ip: " << std::endl;
     std::cin >> leader_ip;
 
-    Group<>* group;
+    Group<TicketBookingSystem>* group;
 
     auto delivery_callback = [my_id](subgroup_id_t subgroup_id, node_id_t sender_id, message_id_t index, char* buf, long long int size) {
         // null message filter
@@ -34,7 +79,13 @@ int main() {
     CallbackSet callbacks{delivery_callback};
 
     std::map<std::type_index, shard_view_generator_t>
-            subgroup_membership_functions{{std::type_index(typeid(RawObject)),
+      subgroup_membership_functions{{std::type_index(typeid(TicketBookingSystem)),
+				     [](const View& view, int&, bool) {
+				       subgroup_shard_layout_t layout(1);
+				       layout[0].push_back(view.make_subview(view.members));
+				       return layout;
+				     }},
+				    {std::type_index(typeid(RawObject)),
                                            [](const View& view, int&, bool) {
                                                if(view.members.size() < 5) {
                                                    std::cout << "Throwing subgroup exception: not enough members" << std::endl;
@@ -48,6 +99,8 @@ int main() {
                                                return layout;
                                            }}};
 
+    auto ticket_subgroup_factory = [] (PersistentRegistry*) {return std::make_unique<TicketBookingSystem>(15);};
+    
     unsigned long long int max_msg_size = 100;
     DerechoParams derecho_params{max_msg_size, max_msg_size, max_msg_size};
 
@@ -55,9 +108,9 @@ int main() {
 
     std::cout << "Going to construct the group" << std::endl;
     if(my_id == 0) {
-        group = new Group<>(my_id, my_ip, callbacks, subgroup_info, derecho_params);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, {}, derecho_gms_port, ticket_subgroup_factory);
     } else {
-        group = new Group<>(my_id, my_ip, leader_ip, callbacks, subgroup_info);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, leader_ip, callbacks, subgroup_info, {}, derecho_gms_port, ticket_subgroup_factory);
     }
 
     std::cout << "Finished constructing/joining the group" << std::endl;
@@ -110,6 +163,17 @@ int main() {
         buf[2] = 0;
         subgroupHandle2.send();
     }
+
+    // all members book a ticket
+    Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
+
+    ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
+    
+    // TicketBookingSystem TBS;
+    // TBS.book(0);
+    // TBS.book(2);
+    // TBS.book(1);
+    // TBS.cancel(2);
 
     while(true) {
     }
