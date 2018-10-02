@@ -329,17 +329,16 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         if(!locally_stable_sst_messages[subgroup_num].empty()
                            && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
                             auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
-                            if(msg.size > 0) {
-                                char* buf = const_cast<char*>(msg.buf);
-                                header* h = (header*)(buf);
-                                if(callbacks.global_stability_callback) {
-                                    callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                        msg.index, buf + h->header_size,
-                                                                        msg.size - h->header_size);
-                                }
-                                if(node_id == members[member_index]) {
-                                    pending_message_timestamps[subgroup_num].erase(h->timestamp);
-                                }
+                            char* buf = const_cast<char*>(msg.buf);
+                            header* h = (header*)(buf);
+			    // no delivery callback for a NULL message
+                            if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                    msg.index, buf + h->header_size,
+                                                                    msg.size - h->header_size);
+                            }
+                            if(node_id == members[member_index]) {
+                                pending_message_timestamps[subgroup_num].erase(h->timestamp);
                             }
                             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
                         } else {
@@ -347,18 +346,16 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             auto it2 = locally_stable_rdmc_messages[subgroup_num].begin();
                             assert(it2->first == seq_num);
                             auto& msg = it2->second;
-                            if(msg.size > 0) {
-                                char* buf = msg.message_buffer.buffer.get();
-                                header* h = (header*)(buf);
-                                if(callbacks.global_stability_callback) {
-                                    callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                        msg.index, buf + h->header_size,
-                                                                        msg.size - h->header_size);
-                                }
-                                free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
-                                if(node_id == members[member_index]) {
-                                    pending_message_timestamps[subgroup_num].erase(h->timestamp);
-                                }
+                            char* buf = msg.message_buffer.buffer.get();
+                            header* h = (header*)(buf);
+                            if(msg.size > h->header_size && callbacks.global_stability_callback) {
+                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+                                                                    msg.index, buf + h->header_size,
+                                                                    msg.size - h->header_size);
+                            }
+                            free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+                            if(node_id == members[member_index]) {
+                                pending_message_timestamps[subgroup_num].erase(h->timestamp);
                             }
                             locally_stable_rdmc_messages[subgroup_num].erase(it2);
                         }
@@ -484,7 +481,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         }
         // raw send
         else {
-            if(callbacks.global_stability_callback) {
+            if(msg.size > h->header_size && callbacks.global_stability_callback) {
                 callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                                     buf + h->header_size, msg.size - h->header_size);
             }
@@ -507,7 +504,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
         // raw send
         else {
             // DERECHO_LOG(-1, -1, "start_stability_callback");
-            if(callbacks.global_stability_callback) {
+            if(msg.size > h->header_size && callbacks.global_stability_callback) {
                 callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                                     buf + h->header_size, msg.size - h->header_size);
             }
@@ -690,7 +687,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                 if(msg.size > 0) {
                     char* buf = const_cast<char*>(msg.buf);
                     header* h = (header*)(buf);
-                    if(callbacks.global_stability_callback) {
+                    if(msg.size > h->header_size && callbacks.global_stability_callback) {
                         callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                             msg.index, buf + h->header_size,
                                                             msg.size - h->header_size);
@@ -708,7 +705,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                 if(msg.size > 0) {
                     char* buf = msg.message_buffer.buffer.get();
                     header* h = (header*)(buf);
-                    if(callbacks.global_stability_callback) {
+                    if(msg.size > h->header_size && callbacks.global_stability_callback) {
                         callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                             msg.index, buf + h->header_size,
                                                             msg.size - h->header_size);
