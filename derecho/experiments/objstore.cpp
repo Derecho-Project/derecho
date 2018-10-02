@@ -286,7 +286,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
 
-    /* send message */
+    /* send operation */
     char data[256] = "Hello! My rank is: ";
     sprintf(data+strlen(data),"%d",node_rank);
     derecho::Replicated<ObjStore> & handle = group->get_subgroup<ObjStore>();
@@ -300,6 +300,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    /* query operation */
+    {
+        OSObject obj1;
+        uint64_t key = num_of_nodes - node_rank - 1;
+        auto results = handle.ordered_query<ObjStore::GET_OBJ>(key);
+        decltype(results)::ReplyMap& replies = results.get();
+        std::cout<<"Got a reply map!"<<std::endl;
+        for (auto& ritr:replies) {
+            std::cout << "Reply from node " << ritr.first << " was [" << ritr.second.get().oid << ":"
+                << ritr.second.get().blob.size << std::endl;
+        }
+    }
     /*
   if (node_id == 0) {
     derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
