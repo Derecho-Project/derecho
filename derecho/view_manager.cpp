@@ -577,7 +577,7 @@ void ViewManager::terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, Subgro
         while(curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
         }
         curr_view->gmsSST->put_with_completion();
-        curr_view->gmsSST->sync_with_members();
+        curr_view->gmsSST->sync_with_members(curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
         while(curr_view->multicast_group->receiver_predicate(subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda = [this, subgroup_id, curr_subgroup_settings,
                                                shard_ranks_by_sender_rank,
