@@ -5,6 +5,7 @@
 #include <time.h>
 #include <vector>
 #include <string.h>
+#include <chrono>
 
 #include "block_size.h"
 #include "derecho/derecho.h"
@@ -16,6 +17,7 @@
 using std::cout;
 using std::endl;
 using namespace persistent;
+using namespace std::chrono_literals;
 
 // The binary large object for serialized objects.
 class Blob : public mutils::ByteRepresentable {
@@ -186,6 +188,7 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+    spdlog::set_level(spdlog::level::warn);
     if(argc < 2) {
         std::cout << "usage:" << argv[0] << " <num_of_nodes> [window_size]" << std::endl;
         return -1;
@@ -233,7 +236,6 @@ int main(int argc, char* argv[]) {
                         std::cout << "(pers)throughput:" << thp_ops << "ops." << std::endl;
                         std::cout << std::flush;
                     }
-                    exit(0);
                 }
             }};
 
@@ -299,6 +301,8 @@ int main(int argc, char* argv[]) {
             std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
         }
     }
+
+    // std::this_thread::sleep_for(5s);
 
     /* query operation */
     {
