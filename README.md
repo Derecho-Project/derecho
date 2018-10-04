@@ -15,6 +15,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
 * libboost-dev, libboost-system and libboost-system-dev
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
+* sysctl -w vm.overcommit_memory = 1
 
 ### Getting Started
 Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
