@@ -15,6 +15,7 @@
 
 using std::cout;
 using std::endl;
+using derecho::Bytes;
 
 /**
  * Non-Persitent Object with vairable sizes
@@ -22,13 +23,13 @@ using std::endl;
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     //Persistent<Bytes> pers_bytes;
-    Persistent<Bytes, ST_MEM> vola_bytes;
+    Persistent<derecho::Bytes, ST_MEM> vola_bytes;
 
     //void change_pers_bytes(const Bytes& bytes) {
     //  *pers_bytes = bytes;
     //}
 
-    void change_vola_bytes(const Bytes& bytes) {
+    void change_vola_bytes(const derecho::Bytes& bytes) {
         *vola_bytes = bytes;
     }
 
@@ -38,7 +39,7 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, vola_bytes);
     // constructor
     //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes, ST_MEM>& _v_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+    ByteArrayObject(Persistent<derecho::Bytes, ST_MEM>& _v_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
                                                             //    pers_bytes(std::move(_p_bytes)) {
                                                            vola_bytes(std::move(_v_bytes)) {
     }
@@ -185,7 +186,7 @@ int main(int argc, char* argv[]) {
         derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
         char* bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
-        Bytes bs(bbuf, msg_size);
+        derecho::Bytes bs(bbuf, msg_size);
 
         try {
             clock_gettime(CLOCK_REALTIME, &t1);

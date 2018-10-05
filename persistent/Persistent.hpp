@@ -444,6 +444,21 @@ using version_t = int64_t;
         return *this->m_pWrappedObject;
       }
 
+      /**
+       * overload the '->' operator to access the wrapped object
+       */
+      ObjectType* operator -> () {
+        return this->m_pWrappedObject.get();
+      }
+
+      /**
+       * get a const reference to the wrapped object
+       * @return const ObjectType&
+       */
+      const ObjectType& getConstRef () const {
+        return *this->m_pWrappedObject;
+      }
+
       /*
        * get object name
        */

@@ -5,6 +5,7 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils-serialization/context_ptr.hpp>
 
+namespace derecho {
 //A ByteRepresentable object representing a byte array that is used in several experiments.
 
 //This class is modified from Matt's implementation
@@ -85,3 +86,5 @@ struct Bytes : public mutils::ByteRepresentable, public derecho::PersistsFields 
         return mutils::context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t *)(v))[0])};
     }
 };
+
+}
