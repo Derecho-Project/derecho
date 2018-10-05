@@ -8,8 +8,6 @@
 
 namespace persistent {
 
-  // TODO:hardwired definitions need go to configuration file
-  #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH DEFAULT_FILE_PERSIST_PATH
   #define META_FILE_SUFFIX ("meta")
   #define LOG_FILE_SUFFIX  ("log")
   #define DATA_FILE_SUFFIX ("data")
@@ -177,7 +175,7 @@ namespace persistent {
     //Constructor
     FilePersistLog(const std::string &name,const std::string &dataPath) noexcept(false);
     FilePersistLog(const std::string &name) noexcept(false):
-      FilePersistLog(name,DEFAULT_FILE_PERSIST_LOG_DATA_PATH){
+      FilePersistLog(name,getPersFilePath()){
     };
     //Destructor
     virtual ~FilePersistLog() noexcept(true);

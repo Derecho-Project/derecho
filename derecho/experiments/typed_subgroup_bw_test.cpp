@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
     query_node_info(node_id, my_ip, leader_ip);
     long long unsigned int block_size = get_block_size(max_msg_size);
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
+    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size};
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here

@@ -72,7 +72,8 @@ int main(int argc, char* argv[]) {
     if(argc >= 6) {
         window_size = (unsigned int)atoi(argv[5]);
     }
-    derecho::DerechoParams derecho_params{max_msg_size, block_size, window_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size, window_size};
     bool is_sending = true;
 
     long total_num_messages;

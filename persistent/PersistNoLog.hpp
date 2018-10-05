@@ -15,7 +15,7 @@
 
 namespace persistent {
 
-#define _NOLOG_OBJECT_DIR_ ((storageType==ST_MEM)?DEFAULT_RAMDISK_PATH:DEFAULT_FILE_PERSIST_PATH)
+#define _NOLOG_OBJECT_DIR_ ((storageType==ST_MEM)?getPersRamdiskPath().c_str():getPersFilePath().c_str())
 #define _NOLOG_OBJECT_NAME_ ((object_name==nullptr)?typeid(ObjectType).name():object_name)
   /** save object in file
    * @param obj Reference to the object to be persistent

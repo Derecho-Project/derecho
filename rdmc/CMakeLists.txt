@@ -9,7 +9,6 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -W
 
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/conf/getpot)
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
