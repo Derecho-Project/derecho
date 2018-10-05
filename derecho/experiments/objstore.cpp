@@ -188,7 +188,6 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    spdlog::set_level(spdlog::level::warn);
     if(argc < 2) {
         std::cout << "usage:" << argv[0] << " <num_of_nodes> [window_size]" << std::endl;
         return -1;
@@ -312,8 +311,9 @@ int main(int argc, char* argv[]) {
         decltype(results)::ReplyMap& replies = results.get();
         std::cout<<"Got a reply map!"<<std::endl;
         for (auto& ritr:replies) {
-            std::cout << "Reply from node " << ritr.first << " was [" << ritr.second.get().oid << ":"
-                << ritr.second.get().blob.size << std::endl;
+            auto obj = ritr.second.get();
+            std::cout << "Reply from node " << ritr.first << " was [" << obj.oid << ":"
+                << obj.blob.size << std::endl;
         }
     }
     /*
