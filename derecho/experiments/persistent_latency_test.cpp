@@ -17,6 +17,7 @@
 
 using std::cout;
 using std::endl;
+using derecho::Bytes;
 
 #define DELTA_T_US(t1, t2) ((double)(((t2).tv_sec - (t1).tv_sec) * 1e6 + ((t2).tv_nsec - (t1).tv_nsec) * 1e-3))
 

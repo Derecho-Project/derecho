@@ -681,10 +681,12 @@ namespace sst{
     if (!shutdown) {
       struct lf_sender_ctxt * sctxt = (struct lf_sender_ctxt *)entry.op_context;
       if (sctxt == NULL) {
-        dbg_debug("WIRED: we get an entry with op_context = NULL.");
-        return {0xFFFFFFFFu,{0,0}}; // return a bad entry: wired!!!!
-      } else
+        dbg_debug("WEIRD: we get an entry with op_context = NULL.");
+        return {0xFFFFFFFFu,{0,0}}; // return a bad entry: weird!!!!
+      } else {
+        dbg_debug("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
         return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+      }
     } else { // shutdown return a bad entry
       return {0,{0,0}};
     }

@@ -289,8 +289,8 @@ using version_t = int64_t;
         // volatile
         case ST_MEM:
         {
-          const std::string tmpfsPath = "/dev/shm/volatile_t";
-          this->m_pLog = std::make_unique<FilePersistLog>(object_name, tmpfsPath);
+          // const std::string tmpfsPath = "/dev/shm/volatile_t";
+          this->m_pLog = std::make_unique<FilePersistLog>(object_name, getPersRamdiskPath());
           if(this->m_pLog == nullptr){
             throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
           }
@@ -441,6 +441,21 @@ using version_t = int64_t;
        * @return ObjectType&
        */
       ObjectType& operator * (){
+        return *this->m_pWrappedObject;
+      }
+
+      /**
+       * overload the '->' operator to access the wrapped object
+       */
+      ObjectType* operator -> () {
+        return this->m_pWrappedObject.get();
+      }
+
+      /**
+       * get a const reference to the wrapped object
+       * @return const ObjectType&
+       */
+      const ObjectType& getConstRef () const {
         return *this->m_pWrappedObject;
       }
 

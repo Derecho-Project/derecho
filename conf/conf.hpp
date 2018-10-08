@@ -4,7 +4,7 @@
 #include <memory>
 #include <atomic>
 #include <inttypes.h>
-#include <GetPot>
+#include <conf/getpot/GetPot>
 #include <map>
 
 namespace derecho {
@@ -27,6 +27,9 @@ namespace derecho {
 #define CONF_SST_TCP_PORT       "SST/tcp_port"
 #define CONF_RDMC_TCP_PORT      "RDMC/tcp_port"
 
+#define CONF_PERS_FILE_PATH     "PERS/file_path"
+#define CONF_PERS_RAMDISK_PATH  "PERS/ramdisk_path"
+
     std::map<const std::string, std::string> config = {
       // [DERECHO]
       {CONF_DERECHO_GMS_PORT,   "23580"},
@@ -39,7 +42,10 @@ namespace derecho {
       // [SST]
       {CONF_SST_TCP_PORT,       "37683"},
       // [RDMC]
-      {CONF_RDMC_TCP_PORT,      "31675"}
+      {CONF_RDMC_TCP_PORT,      "31675"},
+      // [PERS]
+      {CONF_PERS_FILE_PATH,     ".plog"},
+      {CONF_PERS_RAMDISK_PATH,  "/dev/shm/volatile_t"}
     };
   public:
     /** Constructor **/

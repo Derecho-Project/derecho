@@ -22,10 +22,10 @@ using namespace persistent;
  */
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
-    Persistent<Bytes> pers_bytes;
+    Persistent<derecho::Bytes> pers_bytes;
     //  Persistent<Bytes,ST_MEM> vola_bytes;
 
-    void change_pers_bytes(const Bytes& bytes) {
+    void change_pers_bytes(const derecho::Bytes& bytes) {
         *pers_bytes = bytes;
     }
 
@@ -48,7 +48,7 @@ public:
     // constructor
     //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
     //  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {
+    ByteArrayObject(Persistent<derecho::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {
         //    vola_bytes(std::move(_v_bytes)) {
     }
     // the default constructor
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     if(argc >= 6) {
         window_size = (unsigned int)atoi(argv[5]);
     }
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size, window_size};
+    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size, window_size};
     bool is_sending = true;
 
     long total_num_messages;
@@ -195,7 +195,7 @@ int main(int argc, char* argv[]) {
         derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
         char* bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
-        Bytes bs(bbuf, msg_size);
+        derecho::Bytes bs(bbuf, msg_size);
 
         try {
             clock_gettime(CLOCK_REALTIME, &t1);

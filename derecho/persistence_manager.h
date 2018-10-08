@@ -117,8 +117,11 @@ public:
                 while(prq_lock.test_and_set(std::memory_order_acquire)) // acquire lock
                     ; // spin
                 if (this->persistence_request_queue.empty()) {
-                  prq_lock.clear(std::memory_order_release); // release lock
-                  continue;
+                    prq_lock.clear(std::memory_order_release);  // release lock
+                    if(this->thread_shutdown) {
+                        break;
+                    }
+                    continue;
                 }
 
                 subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
