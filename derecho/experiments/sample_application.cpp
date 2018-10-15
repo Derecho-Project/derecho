@@ -108,9 +108,9 @@ int main() {
 
     std::cout << "Going to construct the group" << std::endl;
     if(my_id == 0) {
-      group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, {}, derecho_gms_port, ticket_subgroup_factory);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, {}, ticket_subgroup_factory);
     } else {
-      group = new Group<TicketBookingSystem>(my_id, my_ip, leader_ip, callbacks, subgroup_info, {}, derecho_gms_port, ticket_subgroup_factory);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, leader_ip, callbacks, subgroup_info, {}, ticket_subgroup_factory);
     }
 
     std::cout << "Finished constructing/joining the group" << std::endl;
