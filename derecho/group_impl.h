@@ -95,14 +95,13 @@ Group<ReplicatedTypes...>::Group(
         const SubgroupInfo& subgroup_info,
         const DerechoParams& derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
-        const int gms_port,
         Factory<ReplicatedTypes>... factories)
         : whenlog(logger(create_logger()),)
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
                        persistence_manager.get_callbacks(),
-                       _view_upcalls, gms_port),
+                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
@@ -124,11 +123,10 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
-                                 const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
-        : Group(my_id, tcp::socket{leader_ip, gms_port},
+        : Group(my_id, tcp::socket{leader_ip, getConfInt32(CONF_DERECHO_GMS_PORT)},
                 callbacks, subgroup_info, _view_upcalls,
-                gms_port, factories...) {}
+		factories...) {}
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const node_id_t my_id,
@@ -136,14 +134,13 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
-                                 const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
         : whenlog(logger(create_logger()),)
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
                        persistence_manager.get_callbacks(),
-                       _view_upcalls, gms_port),
+                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
