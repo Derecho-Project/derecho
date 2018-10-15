@@ -83,12 +83,12 @@ int main(int argc, char** argv) {
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<PersistentThing>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{}, 12345,
+                std::vector<derecho::view_upcall_t>{},
                 thing_factory);
     } else {
         group = std::make_unique<derecho::Group<PersistentThing>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{}, 12345,
+                std::vector<derecho::view_upcall_t>{},
                 thing_factory);
     }
     std::cout << "Successfully joined group" << std::endl;

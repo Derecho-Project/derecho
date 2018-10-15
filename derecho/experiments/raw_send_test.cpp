@@ -10,8 +10,6 @@
 #include "rdmc/util.h"
 #include "conf/conf.hpp"
 
-static const int GMS_PORT = derecho::getConfInt32(CONF_DERECHO_GMS_PORT);
-
 using std::cout;
 using std::endl;
 using std::map;
