@@ -33,8 +33,10 @@ using persistence_request_t = std::tuple<subgroup_id_t, persistent::version_t>;
 template <typename... ReplicatedTypes>
 class PersistenceManager {
 private:
-    /** logger */
-    std::shared_ptr<spdlog::logger> logger;
+#ifndef NOLOG
+    /** whenlog(logger) */
+    std::shared_ptr<spdlog::logger> whenlog(logger;)
+#endif
 
     /** Thread handle */
     std::thread persist_thread;
@@ -44,6 +46,8 @@ private:
     sem_t persistence_request_sem;
     /** a queue for the requests */
     std::queue<persistence_request_t> persistence_request_queue;
+    /** lock for persistence request queue */
+    std::atomic_flag prq_lock = ATOMIC_FLAG_INIT;
 
     /** persistence callback */
     persistence_callback_t persistence_callback;
@@ -59,7 +63,7 @@ public:
     PersistenceManager(
             mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro,
             const persistence_callback_t &_persistence_callback)
-            : logger(spdlog::get("debug_log")),
+            : whenlog(logger(spdlog::get("debug_log")),)
               thread_shutdown(false),
               persistence_callback(_persistence_callback),
               replicated_objects(pro) {
@@ -111,16 +115,22 @@ public:
             do {
                 // wait for semaphore
                 sem_wait(&persistence_request_sem);
-                if(this->persistence_request_queue.empty()) {
+                while(prq_lock.test_and_set(std::memory_order_acquire)) // acquire lock
+                    ; // spin
+                if (this->persistence_request_queue.empty()) {
+                    prq_lock.clear(std::memory_order_release);  // release lock
+                    if(this->thread_shutdown) {
+                        break;
+                    }
                     continue;
                 }
 
                 subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
                 persistent::version_t version = std::get<1>(persistence_request_queue.front());
                 persistence_request_queue.pop();
+                prq_lock.clear(std::memory_order_release); // release lock
 
                 // persist
-
                 try {
                     this->replicated_objects->for_each([&](auto *pkey, replicated_index_map<auto> &map) {
                         auto search = map.find(subgroup_id);
@@ -138,7 +148,7 @@ public:
                                    (char *)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
                                    sizeof(long long int));
                 } catch(uint64_t exp) {
-                    SPDLOG_DEBUG(logger, "exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
+                    whenlog(logger->debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);)
                     std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
                 }
 
@@ -147,7 +157,16 @@ public:
                     this->persistence_callback(subgroup_id, version);
                 }
 
-            } while(!this->thread_shutdown || !this->persistence_request_queue.empty());
+                if (this->thread_shutdown) {
+                    while(prq_lock.test_and_set(std::memory_order_acquire)) // acquire lock
+                        ; // spin
+                    if (persistence_request_queue.empty() ) {
+                      prq_lock.clear(std::memory_order_release); // release lock
+                      break; // finish
+                    }
+                    prq_lock.clear(std::memory_order_release); // release lock
+                }
+            } while(true);
             std::cout << "The persist thread is exiting" << std::endl;
         }};
     }
@@ -155,7 +174,10 @@ public:
     /** post a persistence request */
     void post_persist_request(const subgroup_id_t &subgroup_id, const persistent::version_t &version) {
         // request enqueue
+        while(prq_lock.test_and_set(std::memory_order_acquire)) // acquire lock
+            ; // spin
         persistence_request_queue.push(std::make_tuple(subgroup_id, version));
+        prq_lock.clear(std::memory_order_release); // release lock
         // post semaphore
         sem_post(&persistence_request_sem);
     }
@@ -177,7 +199,7 @@ public:
      * @wait - wait till the thread finished or not.
      */
     void shutdown(bool wait) {
-        if(replicated_objects == nullptr) return;  //skip for raw subgroups
+        // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
 
         thread_shutdown = true;
         sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
@@ -203,4 +225,4 @@ public:
                 });
     }
 };
-}
+}  // namespace derecho

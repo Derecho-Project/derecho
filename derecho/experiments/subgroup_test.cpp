@@ -10,12 +10,12 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 
-using std::string;
+using derecho::RawObject;
 using std::cin;
 using std::cout;
 using std::endl;
 using std::map;
-using derecho::RawObject;
+using std::string;
 
 int main(int argc, char* argv[]) {
     if(argc < 2) {
@@ -31,12 +31,13 @@ int main(int argc, char* argv[]) {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
+    long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
     int num_messages = 100;
 
     auto stability_callback = [&node_id, &num_messages](
-            uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
-            long long int msg_size) {
+                                      uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
+                                      long long int msg_size) {
         if(index == num_messages - 1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_id << endl;
             cout << "The last message is: " << endl;
@@ -47,7 +48,7 @@ int main(int argc, char* argv[]) {
     };
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
-    derecho::DerechoParams param_object{max_msg_size, block_size};
+    derecho::DerechoParams param_object{max_msg_size, sst_max_msg_size, block_size};
     std::unique_ptr<derecho::Group<>> managed_group;
 
     //Assuming there will be a total of up to 9 nodes, define 3 subgroups with 3 nodes each

@@ -123,5 +123,5 @@ template <typename T>
 std::unique_ptr<T> heap_copy(const T &t) {
     return std::make_unique<T>(t);
 }
-}
-}
+}  // namespace util
+}  // namespace sst

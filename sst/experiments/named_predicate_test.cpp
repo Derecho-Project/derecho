@@ -10,10 +10,10 @@
 #include "statistics.h"
 #include "timing.h"
 
-using std::map;
 using std::cin;
 using std::cout;
 using std::endl;
+using std::map;
 using std::string;
 
 using namespace sst;

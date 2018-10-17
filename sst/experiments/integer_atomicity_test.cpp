@@ -7,13 +7,13 @@
 #include "sst/tcp.h"
 #include "sst/verbs.h"
 
-using std::string;
-using std::vector;
-using std::map;
 using std::cin;
 using std::cout;
 using std::endl;
+using std::map;
 using std::ofstream;
+using std::string;
+using std::vector;
 
 using namespace sst;
 using namespace sst::tcp;

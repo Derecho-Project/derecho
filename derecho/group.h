@@ -26,14 +26,51 @@
 #include "subgroup_info.h"
 #include "view_manager.h"
 
-#include <mutils-containers/KindMap.hpp>
-#include <mutils-containers/TypeMap2.hpp>
-#include <spdlog/spdlog.h>
+#include "conf/conf.hpp"
+#include "mutils-containers/KindMap.hpp"
+#include "mutils-containers/TypeMap2.hpp"
+#include "spdlog/spdlog.h"
 
 namespace derecho {
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
+
+class _Group {
+private:
+public:
+    virtual ~_Group() = default;
+    template <typename SubgroupType>
+    auto& get_subgroup(uint32_t subgroup_num = 0);
+};
+
+template <typename ReplicatedType>
+class GroupProjection : public virtual _Group {
+protected:
+    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+
+public:
+    Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
+};
+
+template <>
+class GroupProjection<RawObject> : public virtual _Group {
+protected:
+    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+
+public:
+    RawSubgroup& get_subgroup(uint32_t subgroup_num = 0);
+};
+
+class GroupReference {
+public:
+    _Group* group;
+    uint32_t subgroup_index;
+    void set_group_pointers(_Group* group, uint32_t subgroup_index) {
+        this->group = group;
+        this->subgroup_index = subgroup_index;
+    }
+};
 
 /**
  * The top-level object for creating a Derecho group. This implements the group
@@ -43,7 +80,10 @@ using replicated_index_map = std::map<uint32_t, Replicated<T>>;
  * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedTypes>
-class Group {
+class Group : public virtual _Group, public GroupProjection<RawObject>, public GroupProjection<ReplicatedTypes>... {
+public:
+    void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
@@ -51,7 +91,9 @@ private:
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
+#ifndef NOLOG
     std::shared_ptr<spdlog::logger> logger;
+#endif
 
     const node_id_t my_id;
 
@@ -107,6 +149,7 @@ private:
     /** Deserializes a vector of shard leader IDs sent over the given socket. */
     static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
 
+#ifndef NOLOG
     /**
      * Constructs a spdlog::logger instance and registers it in spdlog's global
      * registry, so that dependent objects like ViewManager can retrieve a
@@ -114,7 +157,7 @@ private:
      * @return A pointer to the logger that was created.
      */
     std::shared_ptr<spdlog::logger> create_logger() const;
-
+#endif
     /**
      * Updates the state of the replicated objects that correspond to subgroups
      * identified in the provided map, by receiving serialized state from the
@@ -222,7 +265,7 @@ public:
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
+          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     /**
@@ -253,7 +296,7 @@ public:
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = derecho_gms_port,
+          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     ~Group();
@@ -311,9 +354,11 @@ public:
     void barrier_sync();
     void debug_print_status() const;
 
+#ifndef NOLOG
     void log_event(const std::string& event_text) {
         SPDLOG_DEBUG(logger, event_text);
     }
+#endif
 };
 
 } /* namespace derecho */

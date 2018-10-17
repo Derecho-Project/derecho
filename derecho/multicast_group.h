@@ -17,7 +17,6 @@
 #include "connection_manager.h"
 #include "derecho_internal.h"
 #include "derecho_modes.h"
-#include "derecho_ports.h"
 #include "derecho_sst.h"
 #include "mutils-serialization/SerializationMacros.hpp"
 #include "mutils-serialization/SerializationSupport.hpp"
@@ -26,6 +25,7 @@
 #include "sst/multicast.h"
 #include "sst/sst.h"
 #include "subgroup_info.h"
+#include "conf/conf.hpp"
 
 namespace derecho {
 
@@ -51,19 +51,22 @@ struct CallbackSet {
  */
 struct DerechoParams : public mutils::ByteRepresentable {
     long long unsigned int max_payload_size;
+    long long unsigned int sst_max_payload_size;
     long long unsigned int block_size;
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
-    uint32_t rpc_port = derecho_rpc_port;
+    uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT);
 
     DerechoParams(long long unsigned int max_payload_size,
+                  long long unsigned int sst_max_payload_size,
                   long long unsigned int block_size,
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
                   rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = derecho_rpc_port)
+                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT))
             : max_payload_size(max_payload_size),
+              sst_max_payload_size(sst_max_payload_size),
               block_size(block_size),
               window_size(window_size),
               timeout_ms(timeout_ms),
@@ -71,7 +74,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
               rpc_port(rpc_port) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, sst_max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
 };
 
 /**
@@ -80,7 +83,6 @@ struct DerechoParams : public mutils::ByteRepresentable {
  */
 struct __attribute__((__packed__)) header {
     uint32_t header_size;
-    uint32_t pause_sending_turns;
     int32_t index;
     uint64_t timestamp;
     bool cooked_send;
@@ -168,7 +170,7 @@ class MulticastGroup {
     friend class ViewManager;
 
 private:
-    std::shared_ptr<spdlog::logger> logger;
+    whenlog(std::shared_ptr<spdlog::logger> logger;)
     /** vector of member id's */
     std::vector<node_id_t> members;
     /** inverse map of node_ids to sst_row */
@@ -178,12 +180,14 @@ private:
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
 
-public:  //consts can be public, right?
+public:
     /** Block size used for message transfer.
      * we keep it simple; one block size for messages from all senders */
     const long long unsigned int block_size;
     // maximum size of any message that can be sent
     const long long unsigned int max_msg_size;
+    // maximum size of message that can be sent using SST multicast
+    const long long unsigned int sst_max_msg_size;
     /** Send algorithm for constructing a multicast from point-to-point unicast.
      *  Binomial pipeline by default. */
     const rdmc::send_algorithm type;
@@ -227,7 +231,7 @@ private:
     std::vector<std::experimental::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
-    std::map<std::pair<subgroup_id_t, message_id_t>, RDMCMessage> current_receives;
+    std::map<std::pair<subgroup_id_t, node_id_t>, RDMCMessage> current_receives;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable.
      * Organized by [subgroup number] -> [sequence number] -> [message] */
@@ -318,7 +322,7 @@ private:
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
      */
-  void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;
@@ -330,7 +334,7 @@ private:
         return num;
     };
 
-    int32_t resolve_num_received(int32_t beg_index, int32_t end_index, uint32_t num_received_entry);
+    int32_t resolve_num_received(int32_t index, uint32_t num_received_entry);
 
     /* Predicate functions for receiving and delivering messages, parameterized by subgroup.
      * register_predicates will create and bind one of these for each subgroup. */
@@ -341,7 +345,7 @@ private:
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
-                             volatile char* data, uint32_t size);
+                             volatile char* data, uint64_t size);
 
     bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
@@ -351,6 +355,9 @@ private:
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
+
+    // Internally used to automatically send a NULL message
+    void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
 
 public:
     /**
@@ -389,7 +396,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
-            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho_rpc_port);
+            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT));
 
     ~MulticastGroup();
 
@@ -401,9 +408,7 @@ public:
 
     void deliver_messages_upto(const std::vector<int32_t>& max_indices_for_senders, subgroup_id_t subgroup_num, uint32_t num_shard_senders);
     /** Get a pointer into the current buffer, to write data into it before sending */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                             int pause_sending_turns = 0,
-                             bool cooked_send = false, bool null_send = false);
+    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send = false);
     /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
      * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
      * there is only one message per sender in the RDMC pipeline */

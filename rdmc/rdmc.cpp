@@ -1,10 +1,13 @@
-
 #include "rdmc.h"
 #include "group_send.h"
 #include "message.h"
 #include "schedule.h"
 #include "util.h"
-#include "verbs_helper.h"
+#ifdef USE_VERBS_API
+    #include "verbs_helper.h"
+#else
+    #include "lf_helper.h"
+#endif
 
 #include <atomic>
 #include <cmath>
@@ -33,7 +36,11 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     if(shutdown_flag) return false;
 
     node_rank = _node_rank;
+#ifdef USE_VERBS_API
     if(!::rdma::impl::verbs_initialize(addresses, node_rank)) {
+#else
+    if(!::rdma::impl::lf_initialize(addresses, node_rank)) {
+#endif
         return false;
     }
 
@@ -41,7 +48,11 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     return true;
 }
 void add_address(uint32_t index, const string& address) {
-    ::rdma::impl::verbs_add_connection(index, address, node_rank);
+#ifdef USE_VERBS_API
+    ::rdma::impl::verbs_add_connection(index, address);
+#else
+    ::rdma::impl::lf_add_connection(index, address);
+#endif
 }
 
 bool create_group(uint16_t group_number, std::vector<uint32_t> members,
@@ -125,6 +136,7 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         targets.insert(target2);
     }
 
+#ifdef USE_VERBS_API
     map<uint32_t, queue_pair> qps;
     for(auto target : targets) {
         qps.emplace(target, queue_pair(members[target]));
@@ -138,14 +150,38 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         remote_memory_regions.push_back(remote_mrs.find(target)->second);
 
         auto qp_it = qps.find(target);
-        queue_pairs.push_back(std::move(qp_it->second));
+        endpoints.push_back(std::move(qp_it->second));
         qps.erase(qp_it);
     }
 
     for(auto it = qps.begin(); it != qps.end(); it++) {
-        extra_queue_pairs.push_back(std::move(it->second));
-        qps.erase(it);
+        extra_endpoints.push_back(std::move(it->second));
     }
+    qps.clear();
+#else
+    map<uint32_t, endpoint> eps;
+    for(auto target : targets) {
+        // Decide whether the endpoint will act as server in the connection
+        bool is_lf_server = members[member_index] < members[target];
+        eps.emplace(target, endpoint(members[target], is_lf_server));
+    }
+ 
+    auto remote_mrs = ::rdma::impl::lf_exchange_memory_regions(
+            members, node_rank, *steps_mr.get());
+    for(unsigned int m = 0; m < total_steps; m++) {
+        auto target = (member_index + (1 << m)) % group_size;
+
+        remote_memory_regions.push_back(remote_mrs.find(target)->second);
+
+        auto ep_it = eps.find(target);
+        endpoints.push_back(std::move(ep_it->second));
+        eps.erase(ep_it);
+    }
+    for(auto it = eps.begin(); it != eps.end(); it++) {
+        extra_endpoints.push_back(std::move(it->second));
+    }
+    eps.clear();
+#endif
 }
 void barrier_group::barrier_wait() {
     // See:
@@ -156,7 +192,11 @@ void barrier_group::barrier_wait() {
     number++;
 
     for(unsigned int m = 0; m < total_steps; m++) {
-        if(!queue_pairs[m].post_write(
+#ifdef USE_VERBS_API
+         if(!queue_pairs[m].post_write(
+#else
+         if(!endpoints[m].post_write(
+#endif
                    *number_mr.get(), 0, 8,
                    form_tag(0, (node_rank + (1 << m)) % group_size),
                    remote_memory_regions[m], m * 8, message_type::ignored(),
@@ -169,4 +209,4 @@ void barrier_group::barrier_wait() {
     }
     LOG_EVENT(-1, -1, -1, "end_barrier");
 }
-}
+}  // namespace rdmc

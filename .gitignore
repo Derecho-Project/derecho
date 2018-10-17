@@ -5,7 +5,12 @@
 /TAGS
 tags
 /tcp/script_copy.sh
-Debug/
-debug/
-Release/
-release/
+/derecho/experiments/latency_test
+/derecho/subgroup_function_tester
+Debug
+Release
+/derecho/TAGS
+derecho/experiments/TAGS
+sst/TAGS
+sst/experiments/TAGS
+Release_Debug_mix/

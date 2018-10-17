@@ -8,9 +8,9 @@
 
 namespace derecho {
 
-char* RawSubgroup::get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns, bool null_send) {
+char* RawSubgroup::get_sendbuffer_ptr(unsigned long long int payload_size) {
     if(is_valid()) {
-        return group_view_manager.get_sendbuffer_ptr(subgroup_id, payload_size, pause_sending_turns, false, null_send);
+        return group_view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
     } else {
         throw derecho::empty_reference_exception{"Attempted to use an empty RawSubgroup"};
     }
@@ -31,4 +31,4 @@ uint64_t RawSubgroup::compute_global_stability_frontier() {
         throw derecho::empty_reference_exception{"Attempted to use an empty RawSubgroup"};
     }
 }
-}
+}  // namespace derecho

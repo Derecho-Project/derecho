@@ -163,4 +163,4 @@ subgroup_shard_layout_t CrossProductAllocator::operator()(const View& curr_view,
     }
     return assignment;
 }
-}
+}  // namespace derecho

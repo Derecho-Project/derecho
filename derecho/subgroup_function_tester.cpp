@@ -27,10 +27,10 @@ struct TestType5 {};
 struct TestType6 {};
 
 int main(int argc, char* argv[]) {
-    using derecho::SubgroupAllocationPolicy;
+    using derecho::CrossProductAllocator;
     using derecho::CrossProductPolicy;
     using derecho::DefaultSubgroupAllocator;
-    using derecho::CrossProductAllocator;
+    using derecho::SubgroupAllocationPolicy;
 
     //Reduce the verbosity of specifying "ordered" for three custom subgroups
     std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);

@@ -8,19 +8,15 @@
 #include <errno.h>
 #include <string>
 #include "PersistException.hpp"
+#include "conf/conf.hpp"
 
-
-#ifdef _DEBUG
+#ifndef NDEBUG
 #include <spdlog/spdlog.h>
-#endif//_DEBUG
+#endif//NDEBUG
 
-#ifdef _DEBUG
-  static std::shared_ptr<spdlog::logger> console = nullptr;
-
+#ifndef NDEBUG
   inline auto dbgConsole() {
-    if (console == nullptr) {
-      console = spdlog::stdout_color_mt("console");
-    }
+    static auto console = spdlog::stdout_color_mt("persistent");
     return console;
   }
   #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
@@ -38,7 +34,7 @@
   #define dbg_error(...)
   #define dbg_crit(...)
   #define dbg_flush()
-#endif//_DEBUG
+#endif//NDEBUG
 
 #define MAX(a,b) \
   ({ __typeof__ (a) _a = (a); \
@@ -55,8 +51,18 @@
 
 
 //Persistent folder:
-#define DEFAULT_FILE_PERSIST_PATH (".plog")
-#define DEFAULT_RAMDISK_PATH ("/dev/shm/volatile_t")
+// #define DEFAULT_FILE_PERSIST_PATH (".plog")
+// #define DEFAULT_RAMDISK_PATH ("/dev/shm/volatile_t")
+inline std::string getPersRamdiskPath() {
+    std::string path = derecho::getConfString(CONF_PERS_RAMDISK_PATH);
+    std::stringstream pid_ss;
+    pid_ss << getpid();
+    return path + pid_ss.str();
+}
+
+inline std::string getPersFilePath() {
+    return std::string(derecho::getConfString(CONF_PERS_FILE_PATH));
+}
 
 // verify the existence of a folder
 // Check if directory exists or not. Create it on absence.

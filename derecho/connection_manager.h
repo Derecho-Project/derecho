@@ -112,4 +112,4 @@ public:
      */
     derecho::LockedReference<std::unique_lock<std::mutex>, socket> get_socket(node_id_t node_id);
 };
-}
+}  // namespace tcp

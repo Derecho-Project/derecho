@@ -17,7 +17,12 @@
 #include <vector>
 
 #include "predicates.h"
-#include "verbs.h"
+
+#ifdef USE_VERBS_API
+  #include "verbs.h"
+#else//LIBFABRIC
+  #include "lf.h"
+#endif
 
 using sst::resources;
 
@@ -37,10 +42,6 @@ public:
     int field_len;
 
     _SSTField(const int field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
-
-    virtual bool operator==(_SSTField const&) {
-        assert(false);
-    }
 
     int set_base(volatile char* const base) {
         this->base = base;
@@ -63,8 +64,8 @@ template <typename T>
 class SSTField : public _SSTField {
 public:
     using _SSTField::base;
-    using _SSTField::rowLen;
     using _SSTField::field_len;
+    using _SSTField::rowLen;
 
     SSTField() : _SSTField(sizeof(T)) {
     }
@@ -94,8 +95,8 @@ private:
 
 public:
     using _SSTField::base;
-    using _SSTField::rowLen;
     using _SSTField::field_len;
+    using _SSTField::rowLen;
     using value_type = T;
 
     SSTFieldVector(size_t num_elements) : _SSTField(num_elements * sizeof(T)), length(num_elements) {
@@ -196,7 +197,7 @@ private:
     /** ID of this node in the system. */
     uint32_t my_node_id;
     /** Map of queue pair number to row. Useful for detecting failures. */
-    std::map<int, int> qp_num_to_index;
+    // std::map<int, int> qp_num_to_index;
 
     /** Array with one entry for each row index, tracking whether the row is
      *  marked frozen (meaning its corresponding remote node has crashed). */
@@ -232,11 +233,14 @@ public:
               res_vec(num_members),
               thread_start(params.start_predicate_thread) {
         //Figure out my SST index
+        my_index = (uint)-1;
         for(uint32_t i = 0; i < num_members; ++i) {
             if(members[i] == my_node_id) {
                 my_index = i;
+                break;
             }
         }
+        assert(my_index != (uint)-1);
 
         std::iota(all_indices.begin(), all_indices.end(), 0);
 
@@ -272,10 +276,15 @@ public:
                 if(row_is_frozen[sst_index]) {
                     continue;
                 }
+#ifdef USE_VERBS_API
                 res_vec[sst_index] = std::make_unique<resources>(
                         node_rank, write_addr, read_addr, rowLen, rowLen);
+#else // use libfabric api by default
+                res_vec[sst_index] = std::make_unique<resources>(
+                        node_rank, write_addr, read_addr, rowLen, rowLen, (my_node_id<node_rank));
+#endif
                 // update qp_num_to_index
-                qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
+                // qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
             }
         }
 

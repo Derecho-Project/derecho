@@ -1,16 +1,17 @@
 #include <iostream>
 #include <numeric>
+#include <functional>
 
 #include "poll_utils.h"
 
 namespace sst {
 namespace util {
 
-std::vector<std::list<std::pair<int32_t, int32_t>>> PollingData::completion_entries;
-std::map<std::thread::id, uint32_t> PollingData::tid_to_index;
-std::vector<bool> PollingData::if_waiting;
-std::condition_variable PollingData::poll_cv;
-std::mutex PollingData::poll_mutex;
+//std::vector<std::list<std::pair<int32_t, int32_t>>> PollingData::completion_entries;
+//std::map<std::thread::id, uint32_t> PollingData::tid_to_index;
+//std::vector<bool> PollingData::if_waiting;
+//std::condition_variable PollingData::poll_cv;
+//std::mutex PollingData::poll_mutex;
 
 //Single global instance, defined here
 PollingData polling_data;
@@ -60,7 +61,8 @@ void PollingData::reset_waiting(const std::thread::id id) {
 
 void PollingData::wait_for_requests() {
     std::unique_lock<std::mutex> lk(poll_mutex);
-    poll_cv.wait(lk, check_waiting);
+    // poll_cv.wait(lk, check_waiting);
+    poll_cv.wait(lk, std::bind(&PollingData::check_waiting, this));
 }
-}
-}
+}  // namespace util
+}  // namespace sst

@@ -8,17 +8,19 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
+#include "spdlog/spdlog.h"
+#include "conf/conf.hpp"
 
-using std::vector;
-using std::map;
-using std::string;
 using std::cout;
 using std::endl;
+using std::map;
+using std::string;
+using std::vector;
 using namespace std;
 using namespace mutils;
 
-using derecho::MulticastGroup;
 using derecho::DerechoSST;
+using derecho::MulticastGroup;
 
 int count = 0;
 
@@ -53,6 +55,7 @@ void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
 
 int main(int argc, char* argv[]) {
     srand(time(NULL));
+    spdlog::set_level(spdlog::level::trace);
 
     string leader_ip;
     uint32_t my_id;
@@ -66,12 +69,13 @@ int main(int argc, char* argv[]) {
 
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = get_block_size(max_msg_size);
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
     // int num_messages = 10;
 
     auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, char* buf,
                                  long long int msg_size) {};
 
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
     derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(test1_str))}};
     derecho::Group<test1_str>* managed_group;
@@ -99,7 +103,7 @@ int main(int argc, char* argv[]) {
     if(my_id == 0) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, {stability_callback, {}}, subgroup_info,
-                derecho_params, {new_view_callback}, derecho::derecho_gms_port,
+                derecho_params, {new_view_callback}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 
@@ -107,7 +111,7 @@ int main(int argc, char* argv[]) {
         managed_group = new derecho::Group<test1_str>(
                 my_id, my_ip, leader_ip,
                 {stability_callback, {}}, subgroup_info,
-                {new_view_callback}, derecho::derecho_gms_port,
+                {new_view_callback}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     }
 
@@ -115,11 +119,9 @@ int main(int argc, char* argv[]) {
 
     // other nodes (first two) change each other's state
     if(my_id != 2) {
-        cout << "Changing each other's state to 35" << endl;
+        cout << "Changing other's state to " << 36 - my_id << endl;
         derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id},
-                                                                              36 - my_id)
-                                    .get());
+        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id}, 36 - my_id).get());
     }
 
     while(managed_group->get_members().size() < 3) {

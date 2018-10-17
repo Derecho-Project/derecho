@@ -146,4 +146,4 @@ int32_t tcp_connections::probe_all() {
 derecho::LockedReference<std::unique_lock<std::mutex>, socket> tcp_connections::get_socket(node_id_t node_id) {
     return derecho::LockedReference<std::unique_lock<std::mutex>, socket>(sockets.at(node_id), sockets_mutex);
 }
-}
+}  // namespace tcp

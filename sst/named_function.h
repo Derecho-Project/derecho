@@ -55,6 +55,6 @@ auto build_named_function(F f) {
  */
 #define make_named_function(name, fun...) \
     build_named_function<decltype(name), name>(fun)
-}
+}  // namespace sst
 
 #endif /* NAMED_FUNCTION_H_ */

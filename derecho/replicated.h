@@ -26,6 +26,8 @@ using namespace persistent;
 
 namespace derecho {
 
+class _Group;
+
 /**
  * This is a marker interface for user-defined Replicated Objects (i.e. objects
  * that will be used with the Replicated<T> template) to indicate that at least
@@ -39,7 +41,7 @@ class PersistsFields {};
  * PersistsFields, and false otherwise. Just a convenient specialization of
  * std::is_base_of.
  */
-template<typename T>
+template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
 
 /**
@@ -71,17 +73,18 @@ private:
     /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 public:
 #endif
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
-#if defined(_PERFORMANCE_DEBUG) || defined(_DEBUG)
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 private:
 #endif
     /** The ID of this node */
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that replicates this object. */
     const subgroup_id_t subgroup_id;
+    const uint32_t subgroup_index;
     /** The index, within the subgroup, of the shard that replicates this object.
      * This needs to be stored in order to detect if a node has moved to a different
      * shard within the same subgroup (and hence its Replicated state is obsolete). */
@@ -90,9 +93,7 @@ private:
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
-    /** Buffer for replying to P2P messages, cached here so it doesn't need to be
-     * created in every p2p_send call. */
-    std::unique_ptr<char[]> p2pSendBuffer;
+    _Group* group;
 
     template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send_or_query(const std::vector<node_id_t>& destination_nodes,
@@ -100,7 +101,7 @@ private:
         if(is_valid()) {
             // std::cout << "In ordered_send_or_query: T=" << typeid(T).name() << std::endl;
             char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), 0, true))) {
+            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
             };
             // std::cout << "Obtained a buffer" << std::endl;
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
@@ -140,16 +141,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return p2pSendBuffer.get();
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -168,19 +169,20 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager,
-               Factory<T> client_object_factory)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+               rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
+              subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {
-#ifdef _DEBUG
-        std::cout << "address of Replicated<T>=" << (void*)this << std::endl;
-#endif  //_DEBUG
+              group(group) {
+        if constexpr(std::is_base_of_v<_Group, T>) {
+            (**user_object_ptr).set_group_pointers(group, subgroup_index);
+        }
     }
 
     /**
@@ -195,25 +197,28 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num, rpc::RPCManager& group_rpc_manager)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
+    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+               rpc::RPCManager& group_rpc_manager, _Group* group)
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
+              subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+              group(group) {}
 
     // Replicated(Replicated&&) = default;
     Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
                                    user_object_ptr(std::move(rhs.user_object_ptr)),
                                    node_id(rhs.node_id),
                                    subgroup_id(rhs.subgroup_id),
+                                   subgroup_index(rhs.subgroup_index),
                                    shard_num(rhs.shard_num),
                                    group_rpc_manager(rhs.group_rpc_manager),
                                    wrapped_this(std::move(rhs.wrapped_this)),
-                                   p2pSendBuffer(std::move(rhs.p2pSendBuffer)) {
+                                   group(rhs.group) {
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
@@ -336,9 +341,8 @@ public:
      * @param pause_sending_turns
      * @return
      */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns = 0, bool null_send = false) {
-        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id,
-                                                                 payload_size, pause_sending_turns, false, null_send);
+    char* get_sendbuffer_ptr(unsigned long long int payload_size) {
+        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
     }
 
     const uint64_t compute_global_stability_frontier() {
@@ -420,6 +424,9 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
+        if constexpr(std::is_base_of_v<_Group, T>) {
+            (**user_object_ptr).set_group_pointers(group, subgroup_index);
+        }
         return mutils::bytes_size(**user_object_ptr);
     }
 
@@ -489,9 +496,6 @@ private:
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
-    /** Buffer for replying to P2P messages, cached here so it doesn't need to be
-     * created in every p2p_send call. */
-    std::unique_ptr<char[]> p2pSendBuffer;
 
     //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
     //but I'm afraid that will introduce unnecessary overheads.
@@ -504,16 +508,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return p2pSendBuffer.get();
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, p2pSendBuffer.get(), size, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -525,8 +529,7 @@ public:
             : node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())),
-              p2pSendBuffer(new char[group_rpc_manager.view_manager.derecho_params.max_payload_size]) {}
+              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())) {}
 
     ExternalCaller(ExternalCaller&&) = default;
     ExternalCaller(const ExternalCaller&) = delete;
@@ -594,4 +597,4 @@ public:
         return query_result_vec;
     }
 };
-}
+}  // namespace derecho

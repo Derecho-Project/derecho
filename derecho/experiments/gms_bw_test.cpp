@@ -16,10 +16,10 @@
 
 using namespace std;
 using namespace std::chrono_literals;
-using std::chrono::high_resolution_clock;
-using std::chrono::duration;
-using std::chrono::microseconds;
 using derecho::RawObject;
+using std::chrono::duration;
+using std::chrono::high_resolution_clock;
+using std::chrono::microseconds;
 
 const int GMS_PORT = 12345;
 const uint64_t SECOND = 1000000000ull;
@@ -39,16 +39,16 @@ void stability_callback(uint32_t subgroup, int sender_id, long long int index, c
 
     stringstream string_formatter;
     string_formatter << "Global stability for message " << index << " from sender " << sender_id;
-    managed_group->log_event(string_formatter.str());
+    whenlog(managed_group->log_event(string_formatter.str()));
 
     while(!managed_group) {
     }
 
     unsigned int n = managed_group->get_members().size();
     if(message_number >= n) {
-        unsigned int dt = message_times.back() - message_times[message_number - n];
+        whenlog(unsigned int dt = message_times.back() - message_times[message_number - n];
         double bandwidth = (message_size * n * 8.0) / dt;
-        managed_group->log_event(std::to_string(bandwidth));
+        managed_group->log_event(std::to_string(bandwidth)));
     }
 
     ++message_number;
@@ -73,6 +73,8 @@ void send_messages(uint64_t duration) {
  * failures. It tests the bandwidth of a ManagedGroup in the "steady state."
  */
 int main(int argc, char *argv[]) {
+    const long long unsigned int sst_message_size = (message_size < 17000 ? message_size : 0);
+
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
@@ -109,7 +111,7 @@ int main(int argc, char *argv[]) {
          << endl;
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
-    derecho::DerechoParams param_object{message_size, block_size};
+    derecho::DerechoParams param_object{message_size, sst_message_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
 

@@ -30,7 +30,7 @@ std::ostream& operator<<(std::ostream& out, const std::set<T>& s) {
     }
     return out;
 }
-}
+}  // namespace std
 
 namespace derecho {
 //Functions that assist with testing subgroup layout allocation
@@ -71,4 +71,4 @@ void print_subgroup_layout(const subgroup_shard_layout_t& layout);
 void test_provision_subgroups(const SubgroupInfo& subgroup_info,
                               const std::unique_ptr<View>& prev_view,
                               View& curr_view);
-}
+}  // namespace derecho

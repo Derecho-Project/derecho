@@ -7,15 +7,15 @@
 #include "sst/tcp.h"
 
 using std::cin;
-using std::string;
-using std::vector;
-using std::map;
 using std::cout;
 using std::endl;
+using std::map;
+using std::string;
+using std::vector;
 
 using namespace sst;
-using sst::tcp::tcp_initialize;
 using sst::tcp::sync;
+using sst::tcp::tcp_initialize;
 
 struct TokenRow {
     int token_num;

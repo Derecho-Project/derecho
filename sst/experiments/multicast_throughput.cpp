@@ -6,7 +6,6 @@
 
 #include "derecho/experiments/aggregate_bandwidth.h"
 #include "derecho/experiments/log_results.h"
-#include "sst/max_msg_size.h"
 #include "sst/multicast.h"
 #include "sst/multicast_sst.h"
 
@@ -27,7 +26,6 @@ struct exp_results {
 };
 
 int main(int argc, char* argv[]) {
-    assert(max_msg_size == 1);
     constexpr uint max_msg_size = 1, window_size = 1000;
     const unsigned int num_messages = 1000000;
     if(argc < 2) {
@@ -48,7 +46,11 @@ int main(int argc, char* argv[]) {
     }
 
     // initialize the rdma resources
+#ifdef USE_VERBS_API
     verbs_initialize(ip_addrs, node_id);
+#else
+    lf_initialize(ip_addrs, node_id);
+#endif
 
     std::vector<uint32_t> members(num_nodes);
     for(uint i = 0; i < num_nodes; ++i) {
@@ -68,7 +70,7 @@ int main(int argc, char* argv[]) {
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
             sst::SSTParams(members, node_id),
             window_size,
-            num_senders);
+            num_senders, max_msg_size);
 
     auto check_failures_loop = [&sst]() {
         pthread_setname_np(pthread_self(), "check_failures");
@@ -85,8 +87,8 @@ int main(int argc, char* argv[]) {
     vector<bool> completed(num_senders, false);
     uint num_finished = 0;
     auto sst_receive_handler = [&num_finished, num_senders_selector, &num_nodes, &num_messages, &completed](
-            uint32_t sender_rank, uint64_t index,
-            volatile char* msg, uint32_t size) {
+                                       uint32_t sender_rank, uint64_t index,
+                                       volatile char* msg, uint32_t size) {
         if(index == num_messages - 1) {
             completed[sender_rank] = true;
             num_finished++;
@@ -105,10 +107,10 @@ int main(int argc, char* argv[]) {
             for(uint j = 0; j < num_senders; ++j) {
                 auto num_received = sst.num_received_sst[node_id][j] + 1;
                 uint32_t slot = num_received % window_size;
-                if((int64_t)sst.slots[row_offset + j][slot].next_seq == (num_received / window_size + 1)) {
+                if((int64_t&)sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)] == (num_received / window_size + 1)) {
                     sst_receive_handler(j, num_received,
-                                        sst.slots[row_offset + j][slot].buf,
-                                        sst.slots[row_offset + j][slot].size);
+                                        &sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * slot],
+                                        sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
                     sst.num_received_sst[node_id][j]++;
                 }
             }
@@ -146,7 +148,7 @@ int main(int argc, char* argv[]) {
             is_sender[i] = 0;
         }
     }
-    sst::multicast_group<multicast_sst> g(sst, indices, window_size, is_sender);
+    sst::multicast_group<multicast_sst> g(sst, indices, window_size, max_msg_size, is_sender);
     // now
     sst->predicates.insert(receiver_pred, receiver_trig,
                            sst::PredicateType::RECURRENT);

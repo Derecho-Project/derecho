@@ -13,15 +13,14 @@
 #include <vector>
 
 #include "derecho_internal.h"
-#include "derecho_ports.h"
 #include "locked_reference.h"
 #include "multicast_group.h"
 #include "subgroup_info.h"
 #include "view.h"
+#include "conf/conf.hpp"
 
-#include "tcp/tcp.h"
-#include <spdlog/spdlog.h>
 #include <mutils-serialization/SerializationSupport.hpp>
+#include <spdlog/spdlog.h>
 
 namespace derecho {
 
@@ -128,7 +127,7 @@ private:
     template <typename... T>
     friend class PersistenceManager;
 
-    std::shared_ptr<spdlog::logger> logger;
+    whenlog(std::shared_ptr<spdlog::logger> logger;)
 
     /** The port that this instance of the GMS communicates on. */
     const int gms_port;
@@ -272,20 +271,21 @@ private:
     // Static helper methods that implement chunks of view-management functionality
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                                 std::shared_ptr<spdlog::logger> logger);
+                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders
+                                 whenlog(,
+                                 std::shared_ptr<spdlog::logger> logger));
     static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
-                                           uint num_shard_senders,
-                                           std::shared_ptr<spdlog::logger> logger,
+                                           uint num_shard_senders ,
+                                           whenlog(std::shared_ptr<spdlog::logger> logger,)
                                            const std::vector<node_id_t>& next_view_members);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members,
-                                             uint num_shard_senders,
-                                             std::shared_ptr<spdlog::logger> logger);
+                                             uint num_shard_senders whenlog(,
+                                             std::shared_ptr<spdlog::logger> logger));
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -319,8 +319,8 @@ private:
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const DerechoSST& gmsSST,
-                                                std::shared_ptr<spdlog::logger> logger);
+                                                const DerechoSST& gmsSST whenlog(,
+                                                std::shared_ptr<spdlog::logger> logger));
     /**
      * Constructs the next view from the current view and a list of joining
      * nodes, by ID and IP address. This version is only used by the restart
@@ -478,7 +478,7 @@ public:
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
+                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -507,7 +507,8 @@ public:
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho_gms_port);
+                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+
 
     ~ViewManager();
 
@@ -546,9 +547,8 @@ public:
      * position where there are at least payload_size bytes remaining in the
      * buffer. The returned pointer can be used to write a message into the
      * buffer. */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size,
-                             int pause_sending_turns = 0, bool cooked_send = false,
-                             bool null_send = false);
+    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num,
+                             long long unsigned int payload_size, bool cooked_send = false);
     /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately; the send is scheduled to happen some time in the future. */
     void send(subgroup_id_t subgroup_num);

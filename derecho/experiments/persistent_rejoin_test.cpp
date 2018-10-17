@@ -15,6 +15,7 @@ using derecho::Replicated;
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
+
 public:
     PersistentThing(Persistent<int>& init_state) : state(std::move(init_state)) {}
     PersistentThing(PersistentRegistry* registry) : state(nullptr, registry) {}
@@ -38,9 +39,9 @@ public:
     REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state, print_log);
 };
 
-
 class TestThing : public mutils::ByteRepresentable {
     int state;
+
 public:
     TestThing(const int init_state) : state(init_state) {}
     int read_state() {
@@ -54,7 +55,6 @@ public:
     REGISTER_RPC_FUNCTIONS(TestThing, read_state, change_state);
 };
 
-
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
     derecho::ip_addr my_ip;
@@ -66,20 +66,18 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
     derecho::CallbackSet callback_set{
-        nullptr,
-        [](derecho::subgroup_id_t subgroup, persistent::version_t ver){
-            std::cout<<"Subgroup "<<subgroup << ", version "<<ver<<" is persisted."<<std::endl;
-        }
-    };
-    derecho::SubgroupInfo subgroup_info{{
-        {std::type_index(typeid(PersistentThing)), &derecho::one_subgroup_entire_view}},
-        {std::type_index(typeid(PersistentThing))}
-    };
+            nullptr,
+            [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
+                std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
+            }};
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(PersistentThing)), &derecho::one_subgroup_entire_view}},
+                                        {std::type_index(typeid(PersistentThing))}};
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
-//    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
+    //    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
     std::unique_ptr<derecho::Group<PersistentThing>> group;
     if(my_ip == leader_ip) {
@@ -94,7 +92,7 @@ int main(int argc, char** argv) {
                 thing_factory);
     }
     std::cout << "Successfully joined group" << std::endl;
-//    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
+    //    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
     Replicated<PersistentThing>& thing_handle = group->get_subgroup<PersistentThing>();
     //Node 3 will rejoin as node 4
     if(node_id == 4) {
@@ -117,7 +115,7 @@ int main(int argc, char** argv) {
         for(auto& reply_pair : replies) {
             try {
                 curr_state = reply_pair.second.get();
-            } catch (derecho::rpc::node_removed_from_group_exception& ex) {
+            } catch(derecho::rpc::node_removed_from_group_exception& ex) {
                 std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
             }
         }

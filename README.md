@@ -15,6 +15,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
 * libboost-dev, libboost-system and libboost-system-dev
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
+* sysctl -w vm.overcommit_memory = 1
 
 ### Getting Started
 Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
@@ -35,11 +36,39 @@ To add your own executable (that uses Derecho) to the build system, simply add a
     add_executable(my_project_main my_project_main.cpp)
 	target_link_libraries(my_project_main derecho)
 
-To use Derecho in your code, you simply need to include the header `derecho/derecho.h` in your \*.h or \*.cpp files:
+To use Derecho in your code, you simply need to 
+- include the header `derecho/derecho.h` in your \*.h or \*.cpp files, and
    
 ```cpp
 #include "derecho/derecho.h"
 ```
+- specify a configuration file with environment vairable DERECHO_CONF_FILE or `derecho.cfg` in the working directory. A sample configuration file along the explanation could be found in `conf/derecho-default.cfg`. The most important configuration entries are
+**provider** and **domain**. The **provider** entry specifies the type of RDMA device and the **domain** entry specifies the device (you can also understand it as NIC). [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
+
+Configuration 1: run derecho over TCP/IP with ethernet port 'eth0':
+
+```
+...
+[RDMA]
+provider = sockets
+domain = eth0
+tx_depth = 256
+rx_depth = 256
+...
+```
+
+Configuration 2: run derecho over verbs RDMA with RDMA device 'mlx5_0':
+
+```
+...
+[RDMA]
+provider = verbs
+domain = mlx5_0
+tx_depth = 4096
+rx_depth = 4096
+...
+```
+The **tx_depth** and **rx_depth** configure the maximum of pending requests waiting for ACK. Those numbers are different from one device to another. We recommend large numbers as possible.
 
 ### Testing (and some hidden gotchas)
 There are many experiment files in derecho/experiments that can be run to test the installation. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:

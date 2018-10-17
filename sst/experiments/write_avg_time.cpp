@@ -6,7 +6,11 @@
 
 #include "compute_nodes_list.h"
 #include "sst/sst.h"
+#ifdef USE_VERBS_API
 #include "sst/verbs.h"
+#else
+#include "sst/lf.h"
+#endif
 
 using namespace sst;
 
@@ -46,7 +50,11 @@ int main() {
     }
 
     // initialize the rdma resources
+#ifdef USE_VERBS_API
     verbs_initialize(ip_addrs, node_rank);
+#else
+    lf_initialize(ip_addrs, node_rank);
+#endif
 
     auto nodes_list = compute_nodes_list(node_rank, num_nodes);
     for(auto remote_rank : nodes_list) {
@@ -58,7 +66,7 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources res(remote_rank, read_buf, write_buf, size, size);
+            resources res(remote_rank, read_buf, write_buf, size, size, remote_rank > node_rank);
 
             // start the timing experiment
             struct timespec start_time;
@@ -71,7 +79,11 @@ int main() {
                     // write the entire buffer
                     res.post_remote_write_with_completion(0, size);
                     // poll for completion
+#ifdef USE_VERBS_API
                     verbs_poll_completion();
+#else
+                    lf_poll_completion();
+#endif
                 }
                 clock_gettime(CLOCK_REALTIME, &end_time);
                 nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -89,7 +101,7 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources res(remote_rank, read_buf, write_buf, size, size);
+            resources res(remote_rank, read_buf, write_buf, size, size, remote_rank > node_rank);
 
             // start the timing experiment
             struct timespec start_time;
@@ -102,7 +114,11 @@ int main() {
                     // write the entire buffer
                     res.post_remote_write_with_completion(0, size);
                     // poll for completion
+#ifdef USE_VERBS_API
                     verbs_poll_completion();
+#else
+                    lf_poll_completion();
+#endif
                 }
                 clock_gettime(CLOCK_REALTIME, &end_time);
                 nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * 1000000000 + (end_time.tv_nsec - start_time.tv_nsec);
@@ -129,21 +145,21 @@ int main() {
         members[i] = i;
     }
     std::cout << "Printing average times" << std::endl;
-    for (int i = 0; i < num_nodes; ++i) {
-      for (uint j = 0; j < size_arr.size(); ++j) {
-          std::cout << avg_times[i][j] << " ";
-      }
-      std::cout << std::endl;
+    for(int i = 0; i < num_nodes; ++i) {
+        for(uint j = 0; j < size_arr.size(); ++j) {
+            std::cout << avg_times[i][j] << " ";
+        }
+        std::cout << std::endl;
     }
     ResultSST sst(SSTParams(members, node_rank));
     for(uint k = 0; k < size_arr.size(); ++k) {
         int size = size_arr[k];
         for(int j = 0; j < num_nodes; ++j) {
             sst.avg_times[node_rank][j] = avg_times[j][k];
-	    std::cout << sst.avg_times[node_rank][j] << " ";
+            std::cout << sst.avg_times[node_rank][j] << " ";
         }
-	std::cout << std::endl;
-	sst.put();
+        std::cout << std::endl;
+        sst.put();
         sst.sync_with_members();
         if(node_rank == 0) {
             std::this_thread::sleep_for(std::chrono::seconds(1));

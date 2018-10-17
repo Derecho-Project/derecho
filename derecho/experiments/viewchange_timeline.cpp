@@ -16,8 +16,8 @@
 
 using namespace std;
 using namespace std::chrono_literals;
-using std::chrono::high_resolution_clock;
 using std::chrono::duration;
+using std::chrono::high_resolution_clock;
 using std::chrono::microseconds;
 
 const uint64_t SECOND = 1000000000ull;
@@ -33,7 +33,7 @@ void stability_callback(uint32_t subgroup, uint32_t sender_id, long long int ind
                         long long int size) {
     std::stringstream string_formatter;
     string_formatter << "Message " << index << " from sender " << sender_id << " delivered";
-    managed_group->log_event(string_formatter.str());
+    whenlog(managed_group->log_event(string_formatter.str());)
 }
 
 void send_messages(uint64_t duration) {
@@ -50,6 +50,7 @@ void send_messages(uint64_t duration) {
 }
 
 int main(int argc, char *argv[]) {
+    const long long unsigned int sst_message_size = (message_size < 17000 ? message_size : 0);
     srand(time(nullptr));
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument."
@@ -88,7 +89,7 @@ int main(int argc, char *argv[]) {
     using derecho::RawObject;
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
-    derecho::DerechoParams param_object{message_size, block_size};
+    derecho::DerechoParams param_object{message_size, sst_message_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};
 
@@ -98,9 +99,9 @@ int main(int argc, char *argv[]) {
         cout << "Connecting to group" << endl;
         managed_group = make_shared<derecho::Group<>>(
                 node_id, my_ip, leader_ip, callbacks, one_raw_group);
-        managed_group->log_event("About to start sending");
+        whenlog(managed_group->log_event("About to start sending");)
         send_messages(10 * SECOND);
-        managed_group->log_event("About to exit");
+        whenlog(managed_group->log_event("About to exit");)
         exit(0);
     } else {
         if(node_id == leader_id) {

@@ -54,6 +54,6 @@ using persistence_manager_post_persist_func_t = std::function<void(
         const persistent::version_t &)>;
 using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t,
         persistence_manager_post_persist_func_t>;
-}
+}  // namespace derecho
 
 #endif  //DERECHO_INTERNAL_H

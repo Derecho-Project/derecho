@@ -170,4 +170,4 @@ public:
 
     subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank);
 };
-}
+}  // namespace derecho

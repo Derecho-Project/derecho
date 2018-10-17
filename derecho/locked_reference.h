@@ -30,4 +30,4 @@ public:
         return reference;
     }
 };
-}
+}  // namespace derecho

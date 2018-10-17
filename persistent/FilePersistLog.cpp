@@ -42,8 +42,8 @@ namespace persistent{
     m_iDataFileDesc(-1),
     m_pLog(MAP_FAILED),
     m_pData(MAP_FAILED) {
-#ifdef _DEBUG
-    dbgConsole()->set_level(spdlog::level::trace);
+#ifndef NDEBUG
+    spdlog::set_level(spdlog::level::trace);
 #endif
     if (pthread_rwlock_init(&this->m_rwlock,NULL) != 0) {
       throw PERSIST_EXP_RWLOCK_INIT(errno);
@@ -544,13 +544,13 @@ namespace persistent{
     auto key = this->hidx.upper_bound(skey);
     FPL_UNLOCK;
 
-#ifdef _DEBUG
+#ifndef NDEBUG
     dbg_trace("hidx.size = {}",this->hidx.size());
     if(key == this->hidx.end())
       dbg_trace("found upper bound = hidx.end()");
     else
       dbg_trace("found upper bound = hlc({},{}),idx{}",key->hlc.m_rtc_us,key->hlc.m_logic,key->log_idx);
-#endif//_DEBUG
+#endif//NDEBUG
 
     if (key != this->hidx.begin() && this->hidx.size()>0) {
       key--;

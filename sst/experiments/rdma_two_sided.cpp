@@ -1,0 +1,134 @@
+#include <iostream>
+
+#include <sys/time.h>
+#include "sst/poll_utils.h"
+#ifdef USE_VERBS_API
+  #include "sst/verbs.h"
+#else
+  #include "sst/lf.h"
+#endif
+#include "tcp/tcp.h"
+
+using std::cin;
+using std::cout;
+using std::endl;
+using std::map;
+using std::string;
+
+using namespace sst;
+using namespace tcp;
+
+void initialize(int node_rank, const map<uint32_t, string> &ip_addrs) {
+    // initialize the rdma resources
+#ifdef USE_VERBS_API
+    verbs_initialize(ip_addrs, node_rank);
+#else
+    lf_initialize(ip_addrs, node_rank);
+#endif
+}
+
+void wait_for_completion(std::thread::id tid) {
+    std::experimental::optional<std::pair<int32_t, int32_t>> ce;
+
+    unsigned long start_time_msec;
+    unsigned long cur_time_msec;
+    struct timeval cur_time;
+
+    // wait for completion for a while before giving up of doing it ..
+    gettimeofday(&cur_time, NULL);
+    start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+
+    while(true) {
+        // check if polling result is available
+        ce = util::polling_data.get_completion_entry(tid);
+        if(ce) {
+            break;
+        }
+        gettimeofday(&cur_time, NULL);
+	cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+        if((cur_time_msec - start_time_msec) >= 2000) {
+            break;
+        }
+    }
+    // if waiting for a completion entry timed out
+    if(!ce) {
+        std::cerr << "Failed to get recv completion" << std::endl;
+    } 
+}
+
+int main() {
+    srand(time(NULL));
+    // input number of nodes and the local node id
+    int num_nodes, node_rank;
+    cin >> node_rank;
+    cin >> num_nodes;
+
+    // input the ip addresses
+    map<uint32_t, string> ip_addrs;
+    for(int i = 0; i < num_nodes; ++i) {
+        cin >> ip_addrs[i];
+    }
+
+    // create all tcp connections and initialize global rdma resources
+    initialize(node_rank, ip_addrs);
+
+    int a;
+    volatile int b;
+    a = b = 0;
+    // create read and write buffers
+    char *write_buf = (char *)&a;
+    char *read_buf = (char *)&b;
+
+    int r_index = num_nodes - 1 - node_rank;
+
+    // create the rdma struct for exchanging data
+    resources_two_sided *res = new resources_two_sided(r_index, read_buf, write_buf, sizeof(int), sizeof(int), r_index);
+
+    const auto tid = std::this_thread::get_id();
+    // get id first
+    uint32_t id = util::polling_data.get_index(tid);
+
+    util::polling_data.set_waiting(tid);
+
+    struct lf_sender_ctxt sctxt;
+    sctxt.remote_id = r_index;
+    sctxt.ce_idx = id;
+
+    if(node_rank == 0) {
+        // wait for random time
+        volatile long long int wait_time = (long long int)5e5;
+        for(long long int i = 0; i < wait_time; ++i) {
+        }
+        cout << "Wait finished" << endl;
+
+        a = 1;
+        res->post_two_sided_send(sizeof(int));
+        util::polling_data.set_waiting(tid);
+        res->post_two_sided_receive(&sctxt, sizeof(int));
+ 
+        cout << "Receive buffer posted" << endl;
+        wait_for_completion(tid);
+        util::polling_data.reset_waiting(tid);
+        cout << "Data received" << endl;
+ 
+        while(b == 0) {
+        }
+    }
+
+    else {
+        util::polling_data.set_waiting(tid);
+        res->post_two_sided_receive(&sctxt, sizeof(int));
+        cout << "Receive buffer posted" << endl;
+        wait_for_completion(tid);
+        util::polling_data.reset_waiting(tid);
+        cout << "Data received" << endl;
+        while(b == 0) {
+        }
+        a = 1;
+        cout << "Sending" << endl;
+        res->post_two_sided_send(sizeof(int));
+    }
+
+    sync(r_index);
+    return 0;
+}

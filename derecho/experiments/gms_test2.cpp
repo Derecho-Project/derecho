@@ -7,12 +7,12 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 
-using std::string;
+using derecho::RawObject;
 using std::cin;
 using std::cout;
 using std::endl;
 using std::map;
-using derecho::RawObject;
+using std::string;
 
 int main(int argc, char *argv[]) {
     try {
@@ -30,13 +30,14 @@ int main(int argc, char *argv[]) {
 
         long long unsigned int max_msg_size = 100;
         long long unsigned int block_size = 10;
+        const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
         int num_messages = 1000;
 
         bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes](
-                uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
-                long long int msg_size) {
+                                          uint32_t subgroup, uint32_t sender_id, long long int index, char *buf,
+                                          long long int msg_size) {
             cout << "In stability callback; sender ID = " << sender_id
                  << ", index = " << index << endl;
             printf("Message: %.*s\n", (int)msg_size, buf);
@@ -48,7 +49,7 @@ int main(int argc, char *argv[]) {
         std::this_thread::sleep_for(std::chrono::milliseconds{10 * node_id});
 
         derecho::CallbackSet callbacks{stability_callback, nullptr};
-        derecho::DerechoParams param_object{max_msg_size, block_size};
+        derecho::DerechoParams param_object{max_msg_size, sst_max_msg_size, block_size};
         derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                             {std::type_index(typeid(RawObject))}};
 

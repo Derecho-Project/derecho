@@ -91,7 +91,7 @@ send_stats measure_partially_concurrent_multicast(
                         send_done_cv.notify_all();
                     }
                 },
-                [group_number = base_group_number + i](optional<uint32_t>) {
+                [group_number = base_group_number + i](std::experimental::optional<uint32_t>) {
                     LOG_EVENT(group_number, -1, -1, "send_failed");
                     CHECK(false);
                 }));
@@ -554,7 +554,7 @@ void test_create_group_failure() {
                 return {nullptr, 0};
             },
             [&](char *data, size_t) { puts("FAILURE: received message called"); },
-            [group_number = next_group_number](optional<uint32_t>){});
+            [group_number = next_group_number](std::experimental::optional<uint32_t>) {});
 
     t = get_time() - t;
     if(ret) {

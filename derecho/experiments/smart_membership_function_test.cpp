@@ -16,6 +16,7 @@
 
 #include "derecho/derecho.h"
 #include "initialize.h"
+#include "conf/conf.hpp"
 
 class Cache : public mutils::ByteRepresentable {
     std::map<std::string, std::string> cache_map;
@@ -76,7 +77,8 @@ int main(int argc, char** argv) {
     //Where do these come from? What do they mean? Does the user really need to supply them?
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = 100000;
-    derecho::DerechoParams derecho_params{max_msg_size, block_size};
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
+    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::message_callback_t stability_callback{};
     derecho::CallbackSet callback_set{stability_callback, {}};
@@ -86,21 +88,20 @@ int main(int argc, char** argv) {
 
     derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3));
     derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(3, 3));
-    derecho::SubgroupInfo subgroup_info({
-            {std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy)},
-            {std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy)}},
-    keys_as_list(subgroup_info.subgroup_membership_functions));
+    derecho::SubgroupInfo subgroup_info({{std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy)},
+                                         {std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy)}},
+                                        keys_as_list(subgroup_info.subgroup_membership_functions));
 
     std::unique_ptr<derecho::Group<LoadBalancer, Cache>> group;
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<LoadBalancer, Cache>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
+                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 load_balancer_factory, cache_factory);
     } else {
         group = std::make_unique<derecho::Group<LoadBalancer, Cache>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{}, derecho::derecho_gms_port,
+                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
                 load_balancer_factory, cache_factory);
     }
     cout << "Finished constructing/joining Group" << endl;

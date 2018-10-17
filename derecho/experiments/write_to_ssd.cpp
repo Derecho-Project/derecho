@@ -9,11 +9,11 @@
 #include "initialize.h"
 #include "log_results.h"
 
+using derecho::RawObject;
+using std::cin;
 using std::cout;
 using std::endl;
-using std::cin;
 using std::vector;
-using derecho::RawObject;
 
 constexpr int MAX_GROUP_SIZE = 8;
 
@@ -44,13 +44,15 @@ int main(int argc, char *argv[]) {
 
     long long unsigned int msg_size = atoll(argv[1]);
     long long unsigned int block_size = get_block_size(msg_size);
+    const long long unsigned int sst_msg_size = (msg_size < 17000 ? msg_size : 0);
+
     int num_messages = 1000;
 
     std::ofstream fssd;
     fssd.open("messages");
     bool done = false;
     auto stability_callback = [&fssd, &num_messages, &done, &num_nodes](
-            uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) {
+                                      uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) {
         fssd.write(buf, msg_size);
         fssd.flush();
         if(index == num_messages - 1 && sender_id == (int)num_nodes - 1) {
@@ -66,7 +68,7 @@ int main(int argc, char *argv[]) {
         g = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, derecho::CallbackSet{stability_callback, nullptr},
                 one_raw_group,
-                derecho::DerechoParams{msg_size, block_size});
+                derecho::DerechoParams{msg_size, sst_msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, leader_ip,

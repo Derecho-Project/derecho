@@ -10,15 +10,15 @@
 #include "sst/sst.h"
 #include "sst/tcp.h"
 
-using std::vector;
-using std::map;
-using std::string;
 using std::cin;
 using std::cout;
 using std::endl;
-using std::ofstream;
 using std::ifstream;
+using std::map;
+using std::ofstream;
+using std::string;
 using std::tie;
+using std::vector;
 
 struct TestRow {
     volatile int flag;
@@ -28,7 +28,7 @@ namespace sst {
 namespace tcp {
 extern int port;
 }
-}
+}  // namespace sst
 
 static int num_nodes, this_node_rank;
 

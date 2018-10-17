@@ -6,21 +6,20 @@
 #include <map>
 #include <memory>
 #include <time.h>
-#include <vector>
 #include <typeindex>
+#include <vector>
 
 #include "aggregate_bandwidth.h"
-#include "block_size.h"
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
 
-using std::vector;
-using std::map;
 using std::cout;
 using std::endl;
+using std::map;
+using std::vector;
 
 using namespace derecho;
 
@@ -75,9 +74,9 @@ int main(int argc, char *argv[]) {
         const long long unsigned int max_msg_size = atoll(argv[1]);
         const long long unsigned int block_size = get_block_size(max_msg_size);
         const unsigned int window_size = ((max_msg_size < 20000) ? 15 : 3);
-        const int send_medium = ((max_msg_size < 20000) ? 0 : 1);
         uint32_t num_messages = ((max_msg_size < 20000) ? 10000 : 1000);
 
+        const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
         // will resize is as and when convenient
         uint32_t subgroup_size = atoi(argv[2]);
         auto num_subgroups = num_nodes;
@@ -134,7 +133,7 @@ int main(int argc, char *argv[]) {
                     node_id, node_addresses[node_id],
                     derecho::CallbackSet{stability_callback, nullptr},
                     raw_groups,
-                    derecho::DerechoParams{max_msg_size, block_size, window_size});
+                    derecho::DerechoParams{max_msg_size, sst_max_msg_size, block_size, window_size});
         } else {
             managed_group = std::make_unique<derecho::Group<>>(
                     node_id, node_addresses[node_id],
@@ -168,9 +167,9 @@ int main(int argc, char *argv[]) {
         //     for(uint i = 0; i < subgroup_size * num_messages; ++i) {
         //         uint j = i % subgroup_size;
         //         // cout << "Asking for a buffer" << endl;
-        //         char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+        //         char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
         //         while(!buf) {
-        //             buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+        //             buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
         //         }
         //         buf[0] = '0' + i;
         //         // cout << "Obtained a buffer, sending" << endl;
@@ -181,9 +180,9 @@ int main(int argc, char *argv[]) {
         //     if(subgroup_num == 1) {
         //         for(uint i = 0; i < subgroup_size; ++i) {
         //             // cout << "Asking for a buffer" << endl;
-        //             char *buf = subgroup1.get_sendbuffer_ptr(max_msg_size, send_medium);
+        //             char *buf = subgroup1.get_sendbuffer_ptr(max_msg_size);
         //             while(!buf) {
-        //                 buf = subgroup1.get_sendbuffer_ptr(max_msg_size, send_medium);
+        //                 buf = subgroup1.get_sendbuffer_ptr(max_msg_size);
         //             }
         //             buf[0] = '0' + i;
         //             // cout << "Obtained a buffer, sending" << endl;
@@ -192,9 +191,9 @@ int main(int argc, char *argv[]) {
         //     } else {
         //         for(uint i = 0; i < subgroup_size; ++i) {
         //             // cout << "Asking for a buffer" << endl;
-        //             char *buf = subgroup2.get_sendbuffer_ptr(max_msg_size, send_medium);
+        //             char *buf = subgroup2.get_sendbuffer_ptr(max_msg_size);
         //             while(!buf) {
-        //                 buf = subgroup2.get_sendbuffer_ptr(max_msg_size, send_medium);
+        //                 buf = subgroup2.get_sendbuffer_ptr(max_msg_size);
         //             }
         //             buf[0] = '0' + i;
         //             // cout << "Obtained a buffer, sending" << endl;
@@ -204,13 +203,13 @@ int main(int argc, char *argv[]) {
         // }
 
         auto send_some = [&](uint32_t num_subgroups) {
-	  const auto num_subgroups_to_send = send_subgroup_indices.size();
+            const auto num_subgroups_to_send = send_subgroup_indices.size();
             for(uint i = 0; i < num_subgroups * num_messages; ++i) {
-	      uint j = i % num_subgroups_to_send;
+                uint j = i % num_subgroups_to_send;
                 // cout << "Asking for a buffer" << endl;
-                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
                 while(!buf) {
-                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size, send_medium);
+                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
                 }
                 buf[0] = '0' + i;
                 // cout << "Obtained a buffer, sending" << endl;

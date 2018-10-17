@@ -291,7 +291,7 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
     local_config.dev_name = getenv("RDMC_DEVICE_NAME");
     fprintf(stdout, "found %d device(s)\n", num_devices);
     /* search for the specific device we want to work with */
-    for(i = 0; i < num_devices; i++) {
+    for(i = 1; i < num_devices; i++) {
         if(!local_config.dev_name) {
             local_config.dev_name = strdup(ibv_get_device_name(dev_list[i]));
             fprintf(stdout, "device not specified, using first one found: %s\n",
@@ -471,7 +471,7 @@ bool set_contiguous_memory_mode(bool enabled) {
     return false;
 #endif
 }
-}
+}  // namespace impl
 
 using ibv_mr_unique_ptr = unique_ptr<ibv_mr, std::function<void(ibv_mr *)>>;
 static ibv_mr_unique_ptr create_mr(char *buffer, size_t size) {
@@ -1145,5 +1145,5 @@ map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
 }
 ibv_cq *verbs_get_cq() { return verbs_resources.cq; }
 ibv_comp_channel *verbs_get_completion_channel() { return verbs_resources.cc; }
-}
-}
+}  // namespace impl
+}  // namespace rdma

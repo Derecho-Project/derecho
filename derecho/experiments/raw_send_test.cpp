@@ -8,14 +8,15 @@
 #include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
+#include "conf/conf.hpp"
 
-static const int GMS_PORT = derecho::derecho_gms_port;
+static const int GMS_PORT = derecho::getConfInt32(CONF_DERECHO_GMS_PORT);
 
-using std::vector;
-using std::map;
-using std::string;
 using std::cout;
 using std::endl;
+using std::map;
+using std::string;
+using std::vector;
 
 using derecho::RawObject;
 
@@ -39,18 +40,19 @@ int main(int argc, char *argv[]) {
     long long unsigned int max_msg_size = 100;
     long long unsigned int block_size = get_block_size(max_msg_size);
     int num_messages = 10;
+    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
     uint num_messages_received = 0;
 
     auto stability_callback = [&num_messages_received](
-            uint32_t subgroup, int sender_id, long long int index, char *buf,
-            long long int msg_size) mutable {
+                                      uint32_t subgroup, int sender_id, long long int index, char *buf,
+                                      long long int msg_size) mutable {
         cout << "Here" << endl;
         cout << buf << endl;
         num_messages_received++;
     };
 
     derecho::CallbackSet callbacks{stability_callback, nullptr};
-    derecho::DerechoParams parameters{max_msg_size, block_size};
+    derecho::DerechoParams parameters{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
                                         {std::type_index(typeid(RawObject))}};

@@ -5,21 +5,21 @@
  */
 
 #pragma once
-#include <string>
 #include <map>
 #include <memory>
+#include <string>
 
 #include "derecho/derecho.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
 /**
  * Example replicated object, containing some serializable state and providing
- * two RPC methods. In order to be serialized it must extend ByteRepresentable.
+ * two RPC methods.
  */
-class Foo : public mutils::ByteRepresentable {
+struct Foo{
+
     int state;
 
-public:
     int read_state() {
         return state;
     }
@@ -38,7 +38,8 @@ public:
      * @param initial_state
      */
     Foo(int initial_state = 0) : state(initial_state) {}
-    DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
+    Foo() = default;
+    Foo(const Foo&) = default;
 };
 
 class Bar : public mutils::ByteRepresentable {

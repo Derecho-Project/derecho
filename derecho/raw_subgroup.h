@@ -47,7 +47,7 @@ public:
      * @param pause_sending_turns
      * @return
      */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size, int pause_sending_turns = 0, bool null_send = false);
+    char* get_sendbuffer_ptr(unsigned long long int payload_size);
     uint64_t compute_global_stability_frontier();
 
     /**
@@ -56,4 +56,4 @@ public:
      */
     void send();
 };
-}
+}  // namespace derecho

@@ -67,7 +67,7 @@ public:
             other.valid = false;
             return *this;
         }
-        bool is_valid() const  {
+        bool is_valid() const {
             return valid && (*iter);
         }
     };

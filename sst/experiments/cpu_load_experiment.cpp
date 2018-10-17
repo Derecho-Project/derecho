@@ -82,8 +82,8 @@ int main() {
     vector<uint32_t> indices;
     iota(indices.begin(), indices.end(), 0);
     auto sst_receive_handler = [&start_time, &last_message_index, &done, &node_id, &num_nodes](
-            uint32_t sender_rank, uint64_t index,
-            volatile char* msg, uint32_t size) {
+                                       uint32_t sender_rank, uint64_t index,
+                                       volatile char* msg, uint32_t size) {
         // cout << "Sender rank = " << sender_rank << ", index = " << index << ", last message index = " << last_message_index << endl;
         if(sender_rank == node_id && index >= last_message_index) {
             cpuNow(pthread_self(), start_time);

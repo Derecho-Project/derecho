@@ -58,8 +58,8 @@ int main() {
 
     struct timespec recv_time, send_time;
     auto sst_receive_handler = [&recv_times, &recv_time, &num_finished, &num_nodes, &num_messages](
-            uint32_t sender_rank, uint64_t index, volatile char* msg,
-            uint32_t size) {
+                                       uint32_t sender_rank, uint64_t index, volatile char* msg,
+                                       uint32_t size) {
         // start timer
         clock_gettime(CLOCK_REALTIME, &recv_time);
         recv_times[sender_rank][index] = recv_time.tv_sec * 1e9 + recv_time.tv_nsec;

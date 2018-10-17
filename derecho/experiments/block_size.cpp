@@ -19,8 +19,8 @@ size_t get_block_size(long long int msg_size) {
             return 1000000;
         default:
             std::cout << "Not handled" << std::endl;
-	    std::cout << "Do not test with sizes that are non-multiples of 10" << std::endl;
-	    std::cout << "Use 1KB = 1000B instead of 1KB = 1024B" << std::endl;
+            std::cout << "Do not test with sizes that are non-multiples of 10" << std::endl;
+            std::cout << "Use 1KB = 1000B instead of 1KB = 1024B" << std::endl;
             exit(0);
     }
 }

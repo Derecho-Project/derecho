@@ -14,7 +14,7 @@ namespace sst {
 namespace tcp {
 extern int port;
 }
-}
+}  // namespace sst
 
 // limit of buffer size for remote write
 long long int max_size = 10000;

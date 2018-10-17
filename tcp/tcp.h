@@ -81,7 +81,7 @@ public:
      * @param max_size The number of bytes to attempt to read
      * @return The number of bytes actually read, or -1 if there was an error
      */
-    ssize_t read_partial(char* buffer, size_t max_size) ;
+    ssize_t read_partial(char* buffer, size_t max_size);
 
     /** Returns true if there is any data available to be read from the socket. */
     bool probe();
@@ -100,7 +100,7 @@ public:
      * Convenience method for sending a single POD object (e.g. an int) over
      * the socket.
      */
-    template<typename T>
+    template <typename T>
     bool write(const T& obj) {
         return write(reinterpret_cast<const char*>(&obj), sizeof(obj));
     }
@@ -111,7 +111,7 @@ public:
      * @param obj A local value of type T, which will be overwritten by a value
      * of the same size read from the socket.
      */
-    template<typename T>
+    template <typename T>
     bool read(T& obj) {
         return read(reinterpret_cast<char*>(&obj), sizeof(obj));
     }
@@ -158,4 +158,5 @@ public:
      */
     std::experimental::optional<socket> try_accept(int timeout_ms);
 };
-}
+}  // namespace tcp
+

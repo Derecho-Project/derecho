@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "p2p_connections.h"
 #include "remote_invocable.h"
 #include "rpc_utils.h"
 #include "view.h"
@@ -43,7 +44,9 @@ class RPCManager {
     // Weijia: I prefer the deserialization context vector.
     mutils::RemoteDeserialization_v rdv{};
 
+#ifndef NOLOG
     std::shared_ptr<spdlog::logger> logger;
+#endif
 
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
@@ -51,8 +54,12 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    std::shared_ptr<tcp::tcp_connections> connections;
+    std::shared_ptr<tcp::tcp_connections> tcp_connections;
 
+    /** Contains an RDMA connection to each member of the group. */
+    std::unique_ptr<sst::P2PConnections> connections;
+
+    std::mutex p2p_connections_mutex;
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
@@ -70,12 +77,12 @@ class RPCManager {
     std::atomic<bool> thread_shutdown{false};
     std::thread rpc_thread;
 
-    /** Listens for P2P RPC calls over the TCP connections and handles them. */
+    /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
 
     /**
      * Handler to be called by rpc_process_loop each time it receives a
-     * peer-to-peer message over a TCP connection.
+     * peer-to-peer message over an RDMA P2P connection.
      * @param sender_id The ID of the node that sent the message
      * @param msg_buf A buffer containing the message
      * @param buffer_size The size of the buffer, in bytes
@@ -118,9 +125,12 @@ public:
                const std::shared_ptr<tcp::tcp_connections>& group_tcp_connections)
             : nid(node_id),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              logger(spdlog::get("debug_log")),
+              whenlog(logger(spdlog::get("debug_log")),)
               view_manager(group_view_manager),
-              connections(group_tcp_connections),
+              tcp_connections(group_tcp_connections),
+              connections(std::make_unique<sst::P2PConnections>(
+                      sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size,
+                        group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
@@ -128,7 +138,7 @@ public:
     ~RPCManager();
 
     /**
-     * Starts the thread that listens for incoming P2P RPC requests over the TCP
+     * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
      * connections. This should only be called after Group's constructor has
      * finished receiving Replicated Object state, since that process uses the
      * same TCP sockets that this thread will use for RPC requests.
@@ -194,7 +204,7 @@ public:
 
     /**
      * Callback for new-view events that updates internal state in response to
-     * joins or leaves. Specifically, forms new TCP connections for P2P RPC
+     * joins or leaves. Specifically, forms new RDMA connections for P2P RPC
      * calls, and updates "pending results" (futures for RPC calls) to report
      * failures for nodes that were removed in the new view.
      * @param new_view The new view that was just installed.
@@ -238,6 +248,11 @@ public:
     bool finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
 
     /**
+   * called by replicated.h for sending a p2p send/query
+   */
+    volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
+
+    /**
      * Sends the message in msg_buf to the node identified by dest_node over a
      * TCP connection, and registers the "promise object" in pending_results_handle
      * to await its reply.
@@ -247,7 +262,7 @@ public:
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, char* msg_buf, std::size_t size, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types
@@ -262,5 +277,5 @@ template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
                                                         .make_remote_invoker<T>(std::declval<uint32_t>(),
                                                                                 T::register_functions()))>;
-}
-}
+}  // namespace rpc
+}  // namespace derecho

@@ -8,12 +8,10 @@
 
 namespace persistent {
 
-  // TODO:hardwired definitions need go to configuration file
-  #define DEFAULT_FILE_PERSIST_LOG_DATA_PATH DEFAULT_FILE_PERSIST_PATH
-  #define META_FILE_SUFFIX "meta"
-  #define LOG_FILE_SUFFIX  "log"
-  #define DATA_FILE_SUFFIX "data"
-  #define SWAP_FILE_SUFFIX "swp"
+  #define META_FILE_SUFFIX ("meta")
+  #define LOG_FILE_SUFFIX  ("log")
+  #define DATA_FILE_SUFFIX ("data")
+  #define SWAP_FILE_SUFFIX ("swp")
 
   // meta header format
   typedef union meta_header {
@@ -177,7 +175,7 @@ namespace persistent {
     //Constructor
     FilePersistLog(const std::string &name,const std::string &dataPath) noexcept(false);
     FilePersistLog(const std::string &name) noexcept(false):
-      FilePersistLog(name,DEFAULT_FILE_PERSIST_LOG_DATA_PATH){
+      FilePersistLog(name,getPersFilePath()){
     };
     //Destructor
     virtual ~FilePersistLog() noexcept(true);
@@ -338,7 +336,7 @@ namespace persistent {
       return pivot;
     }
 
-#ifdef _DEBUG
+#ifndef NDEBUG
     //dbg functions
     void dbgDumpMeta() {
       dbg_trace("m_pData={0},m_pLog={1}",(void*)this->m_pData,(void*)this->m_pLog);
@@ -346,7 +344,7 @@ namespace persistent {
       dbg_trace("MEAT_HEADER_PERS:head={0},tail={1}",(int64_t)META_HEADER_PERS->fields.head,(int64_t)META_HEADER_PERS->fields.tail);
       dbg_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}",(void*)NEXT_LOG_ENTRY,(void*)NEXT_LOG_ENTRY_PERS);
     }
-#endif
+#endif//NDEBUG
   };
 }
 
