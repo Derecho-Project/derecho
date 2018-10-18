@@ -51,7 +51,6 @@ Group<ReplicatedTypes...>::Group(
         const SubgroupInfo& subgroup_info,
         const DerechoParams& derecho_params,
         std::vector<view_upcall_t> _view_upcalls,
-        const int gms_port,
         Factory<ReplicatedTypes>... factories)
         : whenlog(logger(create_logger()),)
           my_id(my_id),
@@ -60,11 +59,11 @@ Group<ReplicatedTypes...>::Group(
           view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
                        objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
-                       _view_upcalls, gms_port),
+                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
                       derecho_params.rpc_port)),
-          rpc_manager(my_id, view_manager, tcp_sockets),
+          rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     set_up_components();
@@ -86,11 +85,10 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
-                                 const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
-        : Group(my_id, tcp::socket{leader_ip, gms_port},
+        : Group(my_id, tcp::socket{leader_ip, getConfInt32(CONF_DERECHO_GMS_PORT)},
                 callbacks, subgroup_info, _view_upcalls,
-                gms_port, factories...) {}
+		factories...) {}
 
 /* Non-leader constructor, phase 2 */
 template <typename... ReplicatedTypes>
@@ -99,7 +97,6 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
                                  const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
-                                 const int gms_port,
                                  Factory<ReplicatedTypes>... factories)
         : whenlog(logger(create_logger()),)
           my_id(my_id),
@@ -107,10 +104,10 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
                        objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
-                       _view_upcalls, gms_port),
+                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
                       view_manager.get_derecho_params().rpc_port)),
-          rpc_manager(my_id, view_manager, tcp_sockets),
+          rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);

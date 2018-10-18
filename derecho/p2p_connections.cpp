@@ -159,7 +159,7 @@ std::experimental::optional<std::pair<uint32_t, char*>> P2PConnections::probe_al
     for(uint rank = 0; rank < num_members; ++rank) {
         auto buf = probe(rank);
         if(buf) {
-            return std::pair<uint32_t, char*>(rank, buf);
+            return std::pair<uint32_t, char*>(members[rank], buf);
         }
     }
     return {};

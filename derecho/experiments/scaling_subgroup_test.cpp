@@ -58,12 +58,12 @@ int main(int argc, char** argv) {
     if(my_ip == leader_ip) {
         group = std::make_unique<derecho::Group<Foo, Bar>>(
                 node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
+                std::vector<derecho::view_upcall_t>{},
                 foo_factory, bar_factory);
     } else {
         group = std::make_unique<derecho::Group<Foo, Bar>>(
                 node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT),
+                std::vector<derecho::view_upcall_t>{},
                 foo_factory, bar_factory);
     }
 

@@ -54,8 +54,6 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    std::shared_ptr<tcp::tcp_connections> tcp_connections;
-
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
 
@@ -121,13 +119,11 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager,
-               const std::shared_ptr<tcp::tcp_connections>& group_tcp_connections)
+    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
             : nid(node_id),
               receivers(new std::decay_t<decltype(*receivers)>()),
               whenlog(logger(spdlog::get("debug_log")),)
               view_manager(group_view_manager),
-              tcp_connections(group_tcp_connections),
               connections(std::make_unique<sst::P2PConnections>(
                       sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size,
                         group_view_manager.derecho_params.max_payload_size})),

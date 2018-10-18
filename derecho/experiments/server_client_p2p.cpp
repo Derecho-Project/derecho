@@ -1,9 +1,9 @@
 #include <iostream>
 #include <vector>
 
+#include "conf/conf.hpp"
 #include "derecho/derecho.h"
 #include "initialize.h"
-#include "conf/conf.hpp"
 
 using std::cout;
 using std::endl;
@@ -73,9 +73,11 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<Group<Server>> group;
     if(my_ip == leader_ip) {
-        group = std::make_unique<Group<Server>>(node_id, my_ip, CallbackSet{{}, {}}, subgroup_info, DerechoParams{B + R + 100, (B + R + 100 < 17000 ? B + R + 100 : 0), B + R + 100}, std::vector<view_upcall_t>{announce_groups_provisioned}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT), server_factory);
+        group = std::make_unique<Group<Server>>(node_id, my_ip, CallbackSet{{}, {}}, subgroup_info,
+                                                DerechoParams{B + R + 100, (B + R + 100 < 17000 ? B + R + 100 : 0), B + R + 100},
+						std::vector<view_upcall_t>{announce_groups_provisioned}, server_factory);
     } else {
-        group = std::make_unique<Group<Server>>(node_id, my_ip, leader_ip, CallbackSet{{}, {}}, subgroup_info, std::vector<view_upcall_t>{announce_groups_provisioned}, derecho::getConfInt32(CONF_DERECHO_GMS_PORT), server_factory);
+        group = std::make_unique<Group<Server>>(node_id, my_ip, leader_ip, CallbackSet{{}, {}}, subgroup_info, std::vector<view_upcall_t>{announce_groups_provisioned}, server_factory);
     }
 
     cout << "Finished constructing/joining Group" << endl;

@@ -21,7 +21,6 @@ using std::chrono::duration;
 using std::chrono::high_resolution_clock;
 using std::chrono::microseconds;
 
-const int GMS_PORT = 12345;
 const uint64_t SECOND = 1000000000ull;
 const size_t message_size = 200000000;
 const size_t block_size = 1000000;
