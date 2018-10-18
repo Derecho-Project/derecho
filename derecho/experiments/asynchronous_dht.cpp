@@ -91,7 +91,7 @@ int main() {
     };
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(HashTable<std::string>)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(HashTable<std::string>)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < 2) {
                       throw derecho::subgroup_provisioning_exception();
                   }

@@ -6,9 +6,9 @@
 #include <time.h>
 #include <vector>
 
+#include "derecho/derecho.h"
 #include "block_size.h"
 #include "bytes_object.h"
-#include "derecho/derecho.h"
 #include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>

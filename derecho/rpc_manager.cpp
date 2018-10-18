@@ -87,8 +87,8 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         parse_and_receive(msg_buf, payload_size, [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
             reply_size = size;
             if(reply_size <= connections->get_max_p2p_size()) {
-                reply_buf = (char*)p2p_connections->get_sendbuffer_ptr(
-                        p2p_connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
+                reply_buf = (char*)connections->get_sendbuffer_ptr(
+                        connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
                 return reply_buf;
             } else {
                 // the reply size is too large - not part of the design to handle it

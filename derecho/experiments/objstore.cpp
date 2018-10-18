@@ -239,7 +239,7 @@ int main(int argc, char* argv[]) {
             }};
 
     derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ObjStore)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(ObjStore)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < num_of_nodes) {
                       std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
                       throw derecho::subgroup_provisioning_exception();

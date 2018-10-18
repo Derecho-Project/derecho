@@ -8,10 +8,10 @@
 
 namespace persistent {
 
-  #define META_FILE_SUFFIX ("meta")
-  #define LOG_FILE_SUFFIX  ("log")
-  #define DATA_FILE_SUFFIX ("data")
-  #define SWAP_FILE_SUFFIX ("swp")
+  #define META_FILE_SUFFIX "meta"
+  #define LOG_FILE_SUFFIX  "log"
+  #define DATA_FILE_SUFFIX "data"
+  #define SWAP_FILE_SUFFIX "swp"
 
   // meta header format
   typedef union meta_header {

@@ -129,8 +129,8 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         leader_connection.write(my_id);
         leader_connection.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-            logger->error("Error! Leader refused connection because ID {} is already in use!", my_id);
-            logger->flush();
+            whenlog(logger->error("Error! Leader refused connection because ID {} is already in use!", my_id);)
+            whenlog(logger->flush();)
             throw derecho_exception("Leader rejected join, ID already in use");
         }
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
@@ -666,7 +666,7 @@ std::unique_ptr<View> ViewManager::update_curr_and_next_restart_view(const std::
     }
 
     //Compute the next view, which will include all the members currently rejoining and remove the failed ones
-    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_to_add_in_next_view, logger);
+    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_to_add_in_next_view whenlog(, logger));
 }
 
 void ViewManager::initialize_rdmc_sst() {
@@ -806,7 +806,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             whenlog(logger->debug("Marking {} failed", Vc.members[q]);)
 
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
-                logger->flush();
+                whenlog(logger->flush();)
                 throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
             }
 
@@ -817,7 +817,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.num_failed++;
 
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
-                logger->flush();
+                whenlog(logger->flush();)
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
@@ -1283,7 +1283,7 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
     client_socket.read(joining_client_id);
     //Safety check: The joiner's ID can't be the same as an existing member's ID, otherwise that member will get kicked out
     if(curr_view->rank_of(joining_client_id) != -1) {
-        logger->warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joining_client_id);
+        whenlog(logger->warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joining_client_id);)
         client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, curr_view->members[curr_view->my_rank]});
         return false;
     }
@@ -1500,8 +1500,8 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const std::vector<node_id_t>& joiner_ids,
-                                                  const std::vector<ip_addr>& joiner_ips,
-                                                  std::shared_ptr<spdlog::logger> logger) {
+                                                  const std::vector<ip_addr>& joiner_ips
+                                                  whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
@@ -1549,7 +1549,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         }
     }
     if(my_new_rank == -1) {
-        logger->flush();
+        whenlog(logger->flush();)
         throw derecho_exception("Recovery leader wasn't in the next view it computed?!?!");
     }
 
@@ -1561,7 +1561,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST whenlog(,
-                                                                                   std::shared_ptr<spdlog::logger> logger)) {
+                                                  std::shared_ptr<spdlog::logger> logger)) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;
@@ -1767,14 +1767,14 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
     std::vector<int32_t> max_received_indices(num_shard_senders);
     std::stringstream delivery_order;
     for(uint sender_rank = 0; sender_rank < num_shard_senders; sender_rank++) {
-        if(logger->should_log(spdlog::level::debug)) {
+        whenlog(if(logger->should_log(spdlog::level::debug)) {
             delivery_order << "Subgroup " << subgroup_num
                     << ", shard " << Vc.my_subgroups.at(subgroup_num)
                     << " " << Vc.members[Vc.my_rank]
                     << ":0..."
                     << Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank]
                     << " ";
-        }
+        })
         max_received_indices[sender_rank] = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank];
     }
     uint32_t shard_num = Vc.my_subgroups.at(subgroup_num);
@@ -1789,7 +1789,8 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
 void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                                             whenlog(std::shared_ptr<spdlog::logger> logger, ) const std::vector<node_id_t>& next_view_members) {
+                                             whenlog(std::shared_ptr<spdlog::logger> logger, )
+                                             const std::vector<node_id_t>& next_view_members) {
     whenlog(logger->debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num);)
     int myRank = Vc.my_rank;
     // int Leader = Vc.rank_of_leader();  // We don't want this to change under our feet
@@ -1866,7 +1867,7 @@ void ViewManager::report_failure(const node_id_t who) {
     }
 
     if(cnt >= (curr_view->num_members + 1) / 2) {
-        logger->flush();
+        whenlog(logger->flush();)
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put((char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(), sizeof(curr_view->gmsSST->suspected[0][r]));

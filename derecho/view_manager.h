@@ -335,8 +335,8 @@ private:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<ip_addr>& joiner_ips,
-                                                std::shared_ptr<spdlog::logger> logger);
+                                                const std::vector<ip_addr>& joiner_ips whenlog(,
+                                                std::shared_ptr<spdlog::logger> logger));
 
     /**
      * Updates curr_view and makes a new next_view based on the current set of

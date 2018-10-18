@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     const uint32_t R = atoi(argv[3]);
 
     SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Server)), [S](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+            {{std::type_index(typeid(Server)), [S](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if((uint32_t)curr_view.num_members < S) {
                       throw subgroup_provisioning_exception();
                   }

@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         cout << endl;
     };
 
-    auto membership_function = [num_nodes](const View &curr_view, int &next_unassigned_rank, bool previous_was_successful) {
+    auto membership_function = [num_nodes](const View &curr_view, int &next_unassigned_rank) {
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         if(num_members < num_nodes) {

@@ -12,15 +12,15 @@
 #include <type_traits>
 #include <utility>
 
-#include "mutils-serialization/SerializationSupport.hpp"
-#include "persistent/Persistent.hpp"
-#include "tcp/tcp.h"
-
 #include "derecho_exception.h"
 #include "derecho_internal.h"
 #include "remote_invocable.h"
 #include "rpc_manager.h"
 #include "rpc_utils.h"
+
+#include "mutils-serialization/SerializationSupport.hpp"
+#include "persistent/Persistent.hpp"
+#include "tcp/tcp.h"
 
 using namespace persistent;
 
@@ -171,7 +171,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -199,7 +199,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, _Group* group)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),

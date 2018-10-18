@@ -922,7 +922,7 @@ namespace persistent{
 
   const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::string & prefix) {
     // STEP 1: list all meta files in the path
-    DIR *dir = opendir(DEFAULT_FILE_PERSIST_LOG_DATA_PATH);
+    DIR *dir = opendir(getPersFilePath().c_str());
     if (dir == NULL) {
       // We cannot open the persistent directory, so just return error.
       dbg_error("{}:{} failed to open the directory. errno={}, err={}.",
@@ -941,7 +941,7 @@ namespace persistent{
       ) {
         MetaHeader mh;
         char fn[1024];
-        sprintf(fn,"%s/%s",DEFAULT_FILE_PERSIST_LOG_DATA_PATH,dent->d_name);
+        sprintf(fn,"%s/%s",getPersFilePath().c_str(),dent->d_name);
         int fd = open(fn,O_RDONLY);
         if (fd < 0) {
           dbg_warn("{}:{} cannot read file:{}, errno={}, err={}.",
