@@ -231,11 +231,14 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     return buf;
 }
 
-void RPCManager::finish_p2p_send(node_id_t dest_id, PendingBase& pending_results_handle) {
+void RPCManager::finish_p2p_send(bool send_or_query, node_id_t dest_id, PendingBase& pending_results_handle) {
     connections->send(connections->get_node_rank(dest_id));
-    pending_results_handle.fulfill_map({dest_id});
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
-    fulfilledList.push_back(pending_results_handle);
+    if(!send_or_query) {
+        // only do the following if it's a query - UGH
+        pending_results_handle.fulfill_map({dest_id});
+        std::lock_guard<std::mutex> lock(pending_results_mutex);
+        fulfilledList.push_back(pending_results_handle);
+    }
 }
 
 void RPCManager::p2p_receive_loop() {

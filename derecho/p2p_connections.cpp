@@ -17,10 +17,12 @@ P2PConnections::P2PConnections(const P2PParams params)
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          incoming_request_seq_nums(num_members),
+          incoming_query_seq_nums(num_members),
+          incoming_send_seq_nums(num_members),
           incoming_rpc_reply_seq_nums(num_members),
           incoming_p2p_reply_seq_nums(num_members),
-          outgoing_request_seq_nums(num_members),
+          outgoing_query_seq_nums(num_members),
+          outgoing_send_seq_nums(num_members),
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
@@ -34,21 +36,19 @@ P2PConnections::P2PConnections(const P2PParams params)
     }
     assert(my_index != (uint32_t)-1);
 
+    uint64_t p2p_buf_size = 4 * max_msg_size * window_size + sizeof(bool);
     for(uint i = 0; i < num_members; ++i) {
-        incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
-        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
+        incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
+        outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
         if(i != my_index) {
 #ifdef USE_VERBS_API
             res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
-                                                     3 * max_msg_size * window_size + sizeof(bool),
-                                                     3 * max_msg_size * window_size + sizeof(bool));
+                                                     p2p_buf_size, p2p_buf_size);
 #else
             res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
-                                                     3 * max_msg_size * window_size + sizeof(bool),
-                                                     3 * max_msg_size * window_size + sizeof(bool),
-                                                     i > my_index);
+                                                     p2p_buf_size, p2p_buf_size, i > my_index);
 #endif
         }
     }
@@ -65,10 +65,12 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          incoming_request_seq_nums(num_members),
+          incoming_query_seq_nums(num_members),
+          incoming_send_seq_nums(num_members),
           incoming_rpc_reply_seq_nums(num_members),
           incoming_p2p_reply_seq_nums(num_members),
-          outgoing_request_seq_nums(num_members),
+          outgoing_query_seq_nums(num_members),
+          outgoing_send_seq_nums(num_members),
           outgoing_rpc_reply_seq_nums(num_members),
           outgoing_p2p_reply_seq_nums(num_members),
           prev_mode(num_members) {
@@ -83,25 +85,26 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     }
     assert(my_index != (uint32_t)-1);
 
+    uint64_t p2p_buf_size = 4 * max_msg_size * window_size + sizeof(bool);
     for(uint i = 0; i < num_members; ++i) {
         if(old_connections.node_id_to_rank.find(members[i]) == old_connections.node_id_to_rank.end()) {
-            incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
-            outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(3 * max_msg_size * window_size + sizeof(bool));
+            incoming_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
+            outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
             if(i != my_index) {
                 res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                          const_cast<char*>(outgoing_p2p_buffers[i].get()),
-                                                         3 * max_msg_size * window_size + sizeof(bool),
-                                                         3 * max_msg_size * window_size + sizeof(bool),
-                                                         i > my_index);
+                                                         p2p_buf_size, p2p_buf_size, i > my_index);
             }
         } else {
             auto old_rank = old_connections.node_id_to_rank[members[i]];
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
-            incoming_request_seq_nums[i] = old_connections.incoming_request_seq_nums[old_rank];
+            incoming_query_seq_nums[i] = old_connections.incoming_query_seq_nums[old_rank];
+            incoming_send_seq_nums[i] = old_connections.incoming_send_seq_nums[old_rank];
             incoming_rpc_reply_seq_nums[i] = old_connections.incoming_rpc_reply_seq_nums[old_rank];
             incoming_p2p_reply_seq_nums[i] = old_connections.incoming_p2p_reply_seq_nums[old_rank];
-            outgoing_request_seq_nums[i] = old_connections.outgoing_request_seq_nums[old_rank];
+            outgoing_query_seq_nums[i] = old_connections.outgoing_query_seq_nums[old_rank];
+            outgoing_send_seq_nums[i] = old_connections.outgoing_send_seq_nums[old_rank];
             outgoing_rpc_reply_seq_nums[i] = old_connections.outgoing_rpc_reply_seq_nums[old_rank];
             outgoing_p2p_reply_seq_nums[i] = old_connections.outgoing_p2p_reply_seq_nums[old_rank];
             if(i != my_index) {
@@ -137,19 +140,23 @@ uint64_t P2PConnections::get_max_p2p_size() {
 char* P2PConnections::probe(uint32_t rank) {
     assert(incoming_p2p_buffers[rank]);
     // first check for RPC replies
-    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
-        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (incoming_rpc_reply_seq_nums[rank]++ % window_size));
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (3 * window_size + (incoming_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_rpc_reply_seq_nums[rank] + 1) {
+        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (3 * window_size + (incoming_rpc_reply_seq_nums[rank]++ % window_size));
     }
     if(rank == my_index) {
         return nullptr;
     }
     // then check for P2P replies
-    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_p2p_reply_seq_nums[rank] + 1) {
-        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (window_size + (incoming_p2p_reply_seq_nums[rank]++ % window_size));
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (2 * window_size + (incoming_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_p2p_reply_seq_nums[rank] + 1) {
+        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (incoming_p2p_reply_seq_nums[rank]++ % window_size));
     }
-    // finally check for any new requests
-    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (incoming_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] == incoming_request_seq_nums[rank] + 1) {
-        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (incoming_request_seq_nums[rank]++ % window_size);
+    // then check for any new queries
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (window_size + (incoming_query_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] == incoming_query_seq_nums[rank] + 1) {
+        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (window_size + (incoming_query_seq_nums[rank]++ % window_size));
+    }
+    // finally check for any new sends
+    if((uint64_t&)incoming_p2p_buffers[rank][max_msg_size * (incoming_send_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] == incoming_send_seq_nums[rank] + 1) {
+        return const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (incoming_send_seq_nums[rank]++ % window_size);
     }
     return nullptr;
 }
@@ -168,42 +175,50 @@ std::experimental::optional<std::pair<uint32_t, char*>> P2PConnections::probe_al
 char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
     prev_mode[rank] = type;
     if(type == REQUEST_TYPE::RPC_REPLY) {
-        (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_rpc_reply_seq_nums[rank] + 1;
-        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size));
+        (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_rpc_reply_seq_nums[rank] + 1;
+        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size));
     } else if(type == REQUEST_TYPE::P2P_REPLY) {
-        (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_p2p_reply_seq_nums[rank] + 1;
-        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size));
-    } else {
-        if((int32_t)incoming_p2p_reply_seq_nums[rank] > (int32_t)(outgoing_request_seq_nums[rank] - window_size)) {
-            (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (outgoing_request_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] = outgoing_request_seq_nums[rank] + 1;
-            return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (outgoing_request_seq_nums[rank] % window_size);
+        (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (2 * window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_p2p_reply_seq_nums[rank] + 1;
+        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size));
+    } else if(type == REQUEST_TYPE::P2P_QUERY){
+        if((int32_t)incoming_p2p_reply_seq_nums[rank] > (int32_t)(outgoing_query_seq_nums[rank] - window_size)) {
+            (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (window_size + (outgoing_query_seq_nums[rank] % window_size) + 1) - sizeof(uint64_t)] = outgoing_query_seq_nums[rank] + 1;
+            return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (window_size + (outgoing_query_seq_nums[rank] % window_size));
         } else {
             return nullptr;
         }
+    } else {
+        (uint64_t&)outgoing_p2p_buffers[rank][max_msg_size * (outgoing_send_seq_nums[rank] % window_size + 1) - sizeof(uint64_t)] = outgoing_send_seq_nums[rank] + 1;
+        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (outgoing_send_seq_nums[rank] % window_size);
     }
 }
 
 void P2PConnections::send(uint32_t rank) {
     if(prev_mode[rank] == REQUEST_TYPE::RPC_REPLY) {
         if(rank == my_index) {
-            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
-                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)),
                         max_msg_size);
         } else {
-            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
-            res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(max_msg_size * (3 * window_size + (outgoing_rpc_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
             num_rdma_writes++;
         }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
-        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (2 * window_size + (outgoing_p2p_reply_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
         outgoing_p2p_reply_seq_nums[rank]++;
         num_rdma_writes++;
+    } else if(prev_mode[rank] == REQUEST_TYPE::P2P_QUERY){
+        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_query_seq_nums[rank] % window_size)), max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (window_size + (outgoing_query_seq_nums[rank] % window_size)) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
+        outgoing_query_seq_nums[rank]++;
+        num_rdma_writes++;
     } else {
-        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_request_seq_nums[rank] % window_size) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
-        outgoing_request_seq_nums[rank]++;
+        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_send_seq_nums[rank] % window_size), max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(max_msg_size * (outgoing_send_seq_nums[rank] % window_size) + max_msg_size - sizeof(uint64_t), sizeof(uint64_t));
+        outgoing_send_seq_nums[rank]++;
         num_rdma_writes++;
     }
 }

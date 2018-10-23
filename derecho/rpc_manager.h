@@ -270,7 +270,7 @@ public:
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
+    void finish_p2p_send(bool send_or_query, node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types
