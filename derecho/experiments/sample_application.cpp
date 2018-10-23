@@ -81,32 +81,25 @@ int main() {
     std::map<std::type_index, shard_view_generator_t>
       subgroup_membership_functions{{std::type_index(typeid(TicketBookingSystem)),
 				     [](const View& view, int&, bool) {
-				       subgroup_shard_layout_t layout(1);
-				       layout[0].push_back(view.make_subview(view.members));
+				       auto& members = view.members;
+				       auto num_members = members.size();
+				       if (num_members < 3) {
+					 throw subgroup_provisioning_exception();
+				       }
+				       subgroup_shard_layout_t layout(num_members);
+				       for (uint i = 0; i < num_members; ++i) {
+					 layout[i].push_back(view.make_subview(vector<uint32_t>{members[i], members[(i+1)%num_members], members[(i+2)%num_members]}));
+				       }
 				       return layout;
-				     }},
-				    {std::type_index(typeid(RawObject)),
-                                           [](const View& view, int&, bool) {
-                                               if(view.members.size() < 5) {
-                                                   std::cout << "Throwing subgroup exception: not enough members" << std::endl;
-                                                   throw subgroup_provisioning_exception();
-                                               }
-                                               subgroup_shard_layout_t layout(2);
-                                               vector<node_id_t> members_for_subgroup_one{view.members[0], view.members[2], view.members[3]};
-                                               layout[0].push_back(view.make_subview(members_for_subgroup_one));
-                                               vector<node_id_t> members_for_subgroup_two{view.members[0], view.members[1], view.members[2], view.members[4]};
-                                               layout[1].push_back(view.make_subview(members_for_subgroup_two));
-                                               return layout;
-                                           }}};
+				     }}};
 
-    auto ticket_subgroup_factory = [] (PersistentRegistry*) {return std::make_unique<TicketBookingSystem>(15);};
+    auto ticket_subgroup_factory = [num_tickets=100u] (PersistentRegistry*) {return std::make_unique<TicketBookingSystem>(num_tickets);};
     
-    unsigned long long int max_msg_size = 100;
+    const unsigned long long int max_msg_size = 200;
     DerechoParams derecho_params{max_msg_size, max_msg_size, max_msg_size};
 
     SubgroupInfo subgroup_info(subgroup_membership_functions);
 
-    std::cout << "Going to construct the group" << std::endl;
     if(my_id == 0) {
       group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, {}, ticket_subgroup_factory);
     } else {
@@ -128,53 +121,22 @@ int main() {
         exit(1);
     }
 
-    if(my_rank == 0) {
-        RawSubgroup& subgroupHandle1 = group->get_subgroup<RawObject>(); 
-        char* buf = subgroupHandle1.get_sendbuffer_ptr(6);
-        while(!buf) {
-            buf = subgroupHandle1.get_sendbuffer_ptr(6);
-        }
-        buf[0] = 'H';
-        buf[1] = 'e';
-        buf[2] = 'l';
-        buf[3] = 'l';
-        buf[4] = 'o';
-        buf[5] = 0;
-        subgroupHandle1.send();
-
-	RawSubgroup& subgroupHandle2 = group->get_subgroup<RawObject>(1);
-        char* buf2 = subgroupHandle2.get_sendbuffer_ptr(3);
-        while(!buf2) {
-            buf2 = subgroupHandle2.get_sendbuffer_ptr(3);
-        }
-        buf2[0] = 'H';
-        buf2[1] = 'i';
-        buf2[2] = 0;
-        subgroupHandle2.send();
-    }
-    if(my_rank == 4) {
-        RawSubgroup& subgroupHandle2 = group->get_subgroup<RawObject>(1);
-        char* buf = subgroupHandle2.get_sendbuffer_ptr(3);
-        while(!buf) {
-            buf = subgroupHandle2.get_sendbuffer_ptr(3);
-        }
-        buf[0] = 'H';
-        buf[1] = 'i';
-        buf[2] = 0;
-        subgroupHandle2.send();
-    }
-
     // all members book a ticket
     Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
 
-    ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
-    
-    // TicketBookingSystem TBS;
-    // TBS.book(0);
-    // TBS.book(2);
-    // TBS.book(1);
-    // TBS.cancel(2);
+    rpc::QueryResults<bool> results = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
+    rpc::QueryResults<bool>::ReplyMap& replies = results.get();
+    for (auto& reply_pair: replies) {
+        std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
+    }
 
+    rpc::QueryResults<bool> results2 = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
+    rpc::QueryResults<bool>::ReplyMap& replies2 = results2.get();
+    for (auto& reply_pair: replies2) {
+        std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
+    }
+    
+    std::cout << "End of main. Waiting indefinitely" << std::endl;
     while(true) {
     }
     return 0;
