@@ -23,7 +23,7 @@
 #include "util.h"
 
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif
 
 /** From sst/verbs.cpp */

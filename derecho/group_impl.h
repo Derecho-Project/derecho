@@ -5,6 +5,9 @@
  */
 
 #include <mutils-serialization/SerializationSupport.hpp>
+#include "spdlog/sinks/stdout_color_sinks.h"
+#include "spdlog/async.h"
+#include "spdlog/sinks/rotating_file_sink.h"
 
 #include "derecho_internal.h"
 #include "group.h"
@@ -261,16 +264,17 @@ void Group<ReplicatedTypes...>::set_up_components() {
 #ifndef NOLOG
 template <typename... ReplicatedTypes>
 std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const {
-    spdlog::set_async_mode(1048576);
+    spdlog::init_thread_pool(1048576, 1);
     std::vector<spdlog::sink_ptr> log_sinks;
     log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>("derecho_debug_log", 1024 * 1024 * 5, 3));
     // Uncomment this to get debugging output printed to the terminal
-    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_sink_mt>());
-    std::shared_ptr<spdlog::logger> log = spdlog::create("debug_log",
-        log_sinks.begin(), log_sinks.end());
+    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
+    std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::async_logger>("derecho_debug_log",
+        log_sinks.begin(), log_sinks.end(), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
+    spdlog::register_logger(log);
     log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%l] %v");
     log->set_level(
-        whendebug(spdlog::level::off)
+        whendebug(spdlog::level::debug)
         whenrelease(spdlog::level::off)
         );
     //    log->set_level(spdlog::level::off);

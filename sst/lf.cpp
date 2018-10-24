@@ -18,7 +18,7 @@
 #include <conf/conf.hpp>
 
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif//NDEBUG
 
 #include "derecho/connection_manager.h"
@@ -55,7 +55,18 @@ __LITTLE_ENDIAN nor __BIG_ENDIAN
 namespace sst{
 #ifndef NDEBUG
   /* log infrastructure */
-  static auto console = spdlog::stdout_color_mt("sst");
+  /** This tiny wrapper class for spdlog::logger allows the log level to be set
+   * in the constructor, which is the only way to initialize it statically. */
+  class SSTLogger {
+      std::shared_ptr<spdlog::logger> spdlogger;
+  public:
+      SSTLogger(spdlog::level::level_enum log_level)
+          : spdlogger(spdlog::stdout_color_mt("sst")) {
+          spdlogger->set_level(log_level);
+      }
+      std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }
+  };
+  static auto console = SSTLogger(spdlog::level::debug);
 #endif//NDEBUG
   /**
    * passive endpoint info to be exchanged.
@@ -112,13 +123,13 @@ namespace sst{
    */
   // Debug tools
   #ifndef NDEBUG
-    #define dbg_trace(...) console->trace(__VA_ARGS__)
-    #define dbg_debug(...) console->debug(__VA_ARGS__)
-    #define dbg_info(...) console->info(__VA_ARGS__)
-    #define dbg_warn(...) console->warn(__VA_ARGS__)
-    #define dbg_error(...) console->error(__VA_ARGS__)
-    #define dbg_crit(...) console->critical(__VA_ARGS__)
-    #define dbg_flush() console->flush()
+    #define dbg_trace(...) console.get_logger()->trace(__VA_ARGS__)
+    #define dbg_debug(...) console.get_logger()->debug(__VA_ARGS__)
+    #define dbg_info(...) console.get_logger()->info(__VA_ARGS__)
+    #define dbg_warn(...) console.get_logger()->warn(__VA_ARGS__)
+    #define dbg_error(...) console.get_logger()->error(__VA_ARGS__)
+    #define dbg_crit(...) console.get_logger()->critical(__VA_ARGS__)
+    #define dbg_flush() console.get_logger()->flush()
   #else
     #define dbg_trace(...)
     #define dbg_debug(...)

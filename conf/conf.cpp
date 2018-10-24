@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif//NDEBUG
 
 namespace derecho {

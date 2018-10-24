@@ -281,7 +281,7 @@ private:
 
 public:
     PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()) whenlog(,
-                       logger(spdlog::get("debug_log"))) {
+                       logger(spdlog::get("derecho_debug_log"))) {
         whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name());)
     }
     /**
@@ -344,7 +344,7 @@ struct PendingResults<void> : public PendingBase {
     */
 
     void fulfill_map(const node_list_t&) {
-        spdlog::get("debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");
+        spdlog::get("derecho_debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");
     }
     void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }

@@ -9,6 +9,7 @@
 
 #include <functional>
 #include <map>
+#include <string>
 #include <sys/types.h>
 #include <cstdint>
 

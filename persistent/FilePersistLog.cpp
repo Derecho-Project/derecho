@@ -42,9 +42,6 @@ namespace persistent{
     m_iDataFileDesc(-1),
     m_pLog(MAP_FAILED),
     m_pData(MAP_FAILED) {
-#ifndef NDEBUG
-    spdlog::set_level(spdlog::level::trace);
-#endif
     if (pthread_rwlock_init(&this->m_rwlock,NULL) != 0) {
       throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -82,29 +79,29 @@ namespace persistent{
     //// [1][2][3][4][5][6][1][2][3][4][5][6]
     this->m_pLog = mmap(NULL,MAX_LOG_SIZE<<1,PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if(this->m_pLog == MAP_FAILED) {
-      dbg_trace("{0}:reserve map space for log failed.", this->m_sName);
+      dbg_error("{0}:reserve map space for log failed.", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap(this->m_pLog,MAX_LOG_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iLogFileDesc,0) == MAP_FAILED) {
-      dbg_trace("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
+      dbg_error("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap((void*)((uint64_t)this->m_pLog+MAX_LOG_SIZE),MAX_LOG_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iLogFileDesc,0) == MAP_FAILED) {
-      dbg_trace("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
+      dbg_error("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     //// data ringbuffer
     this->m_pData = mmap(NULL,(size_t)(MAX_DATA_SIZE<<1),PROT_READ|PROT_WRITE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
     if (this->m_pData == MAP_FAILED) {
-      dbg_trace("{0}:reserve map space for data failed.", this->m_sName);
+      dbg_error("{0}:reserve map space for data failed.", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap(this->m_pData,(size_t)(MAX_DATA_SIZE),PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
-      dbg_trace("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
+      dbg_error("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap((void*)((uint64_t)this->m_pData + MAX_DATA_SIZE),(size_t)MAX_DATA_SIZE,PROT_READ|PROT_WRITE,MAP_SHARED|MAP_FIXED,this->m_iDataFileDesc,0) == MAP_FAILED) {
-      dbg_trace("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
+      dbg_error("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
       throw PERSIST_EXP_MMAP_FILE(errno);
     }
     dbg_trace("{0}:data/meta file mapped to memory",this->m_sName);
@@ -201,14 +198,14 @@ namespace persistent{
 #define __DO_VALIDATION \
     do { \
       if (NUM_FREE_SLOTS < 1 ) { \
-          dbg_trace("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}", \
+          dbg_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}", \
                     this->m_sName, NUM_FREE_SLOTS); \
           dbg_flush(); \
         FPL_UNLOCK; \
         throw PERSIST_EXP_NOSPACE_LOG; \
       } \
       if (NUM_FREE_BYTES < size) { \
-        dbg_trace("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}", \
+        dbg_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}", \
           this->m_sName, NUM_FREE_BYTES, size); \
         dbg_flush(); \
         FPL_UNLOCK; \
@@ -217,7 +214,7 @@ namespace persistent{
       if ((CURR_LOG_IDX != -1) && \
           (META_HEADER->fields.ver >= ver)) { \
         int64_t cver = META_HEADER->fields.ver; \
-        dbg_trace("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
+        dbg_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
           (int64_t)cver,(int64_t)ver); \
         dbg_flush(); \
         FPL_UNLOCK; \
@@ -267,7 +264,7 @@ namespace persistent{
       throw PERSIST_EXP_MSYNC(errno);
     }
 */
-    dbg_trace("{0} append a log ver:{1} hlc:({2},{3})",this->m_sName, 
+    dbg_debug("{0} append a log ver:{1} hlc:({2},{3})",this->m_sName,
       ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
   }

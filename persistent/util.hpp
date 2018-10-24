@@ -11,13 +11,25 @@
 #include "conf/conf.hpp"
 
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif//NDEBUG
 
 #ifndef NDEBUG
+  /** This tiny wrapper class for spdlog::logger allows the log level to be set
+   * in the constructor, which is the only way to initialize it statically. */
+  class PersistentLogger {
+      std::shared_ptr<spdlog::logger> spdlogger;
+  public:
+      PersistentLogger(spdlog::level::level_enum log_level)
+          : spdlogger(spdlog::stdout_color_mt("persistent")) {
+          spdlogger->set_level(log_level);
+      }
+      std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }
+  };
+
   inline auto dbgConsole() {
-    static auto console = spdlog::stdout_color_mt("persistent");
-    return console;
+    static auto console = PersistentLogger(spdlog::level::debug);
+    return console.get_logger();
   }
   #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
   #define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)

@@ -33,7 +33,7 @@ MulticastGroup::MulticastGroup(
         const DerechoParams derecho_params,
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
-        : whenlog(logger(spdlog::get("debug_log")), )
+        : whenlog(logger(spdlog::get("derecho_debug_log")), )
 	  members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),

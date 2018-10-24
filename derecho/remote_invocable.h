@@ -507,7 +507,7 @@ public:
     RemoteInvocableClass(node_id_t nid, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
             : RemoteInvocablePairs<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs, fs.fun...),
-              logger(spdlog::get("debug_log")),
+              logger(spdlog::get("derecho_debug_log")),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>

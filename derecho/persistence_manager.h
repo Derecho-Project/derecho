@@ -63,7 +63,7 @@ public:
     PersistenceManager(
             mutils::KindMap<replicated_index_map, ReplicatedTypes...> *pro,
             const persistence_callback_t &_persistence_callback)
-            : whenlog(logger(spdlog::get("debug_log")),)
+            : whenlog(logger(spdlog::get("derecho_debug_log")),)
               thread_shutdown(false),
               persistence_callback(_persistence_callback),
               replicated_objects(pro) {

@@ -30,7 +30,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
-        : whenlog(logger(spdlog::get("debug_log")), )
+        : whenlog(logger(spdlog::get("derecho_debug_log")), )
 	      gms_port(gms_port),
           curr_view(persistent::loadObject<View>()), //Attempt to load a saved View from disk, to see if one is there
           server_socket(gms_port),
@@ -73,7 +73,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
                          const int gms_port)
-        : whenlog(logger(spdlog::get("debug_log")), )
+        : whenlog(logger(spdlog::get("derecho_debug_log")), )
                   gms_port(gms_port),
                   curr_view(persistent::loadObject<View>()),
           server_socket(gms_port),
@@ -214,7 +214,7 @@ void ViewManager::finish_setup(const std::shared_ptr<tcp::tcp_connections>& grou
     curr_view->gmsSST->sync_with_members();
     whenlog(logger->debug("Done setting up initial SST and RDMC");)
 
-            if(curr_view->vid != 0) {
+    if(curr_view->vid != 0) {
         // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
         // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
         curr_view->gmsSST->init_local_change_proposals(curr_view->rank_of_leader());
