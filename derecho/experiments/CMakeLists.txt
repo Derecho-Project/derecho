@@ -154,6 +154,10 @@ target_link_libraries(smart_membership_function_test derecho)
 add_executable(persistent_typed_subgroup_test persistent_typed_subgroup_test.cpp initialize.cpp)
 target_link_libraries(persistent_typed_subgroup_test derecho)
 
+# persistent_vector
+add_executable(persistent_vector persistent_vector.cpp initialize.cpp)
+target_link_libraries(persistent_vector derecho)
+
 #shard_iterator_p2p_test
 add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
 target_link_libraries(shard_iterator_p2p_test derecho)

@@ -133,7 +133,7 @@ private:
     }
 
     template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_send_or_query(node_id_t dest_node, Args&&... args) {
+    auto p2p_send_or_query(bool send_or_query, node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
             //Ensure a view change isn't in progress
@@ -141,16 +141,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &send_or_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, send_or_query?sst::REQUEST_TYPE::P2P_SEND:sst::REQUEST_TYPE::P2P_QUERY);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(send_or_query, dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -313,7 +313,7 @@ public:
      */
     template <rpc::FunctionTag tag, typename... Args>
     void p2p_send(node_id_t dest_node, Args&&... args) {
-        p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+        p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
     }
 
     /**
@@ -330,7 +330,7 @@ public:
      */
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
-        return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+        return p2p_send_or_query<tag>(false, dest_node, std::forward<Args>(args)...);
     }
 
     /**
@@ -500,7 +500,7 @@ private:
     //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
     //but I'm afraid that will introduce unnecessary overheads.
     template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_send_or_query(node_id_t dest_node, Args&&... args) {
+    auto p2p_send_or_query(bool send_or_query, node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
             //Ensure a view change isn't in progress
@@ -508,16 +508,16 @@ private:
             size_t size;
             auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &send_or_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_REQUEST);
+			  return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, send_or_query?sst::REQUEST_TYPE::P2P_SEND:sst::REQUEST_TYPE::P2P_QUERY);
                         } else {
                             return nullptr;
                         }
                     },
                     std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+            group_rpc_manager.finish_p2p_send(send_or_query, dest_node, return_pair.pending);
             return std::move(return_pair.results);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -546,7 +546,7 @@ public:
      */
     template <rpc::FunctionTag tag, typename... Args>
     void p2p_send(node_id_t dest_node, Args&&... args) {
-        p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+        p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
     }
 
     /**
@@ -563,7 +563,7 @@ public:
      */
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_query(node_id_t dest_node, Args&&... args) {
-        return p2p_send_or_query<tag>(dest_node, std::forward<Args>(args)...);
+        return p2p_send_or_query<tag>(false, dest_node, std::forward<Args>(args)...);
     }
 };
 
