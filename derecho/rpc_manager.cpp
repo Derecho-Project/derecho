@@ -117,14 +117,6 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             } else {
                 connections->send(connections->get_node_rank(sender_id));
             }
-        } else {
-            whenlog(logger->trace("RPC message handled, no reply necessary.");)
-            if(sender_id == nid && dest_size == 0) {
-                std::lock_guard<std::mutex> lock(pending_results_mutex);
-                assert(!toFulfillQueue.empty());
-                toFulfillQueue.pop();
-                // whenlog(logger->trace("Deleted a useless PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());)
-            }
         }
     }
 }
@@ -181,17 +173,18 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     return header_size;
 }
 
-bool RPCManager::finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+bool RPCManager::finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(pending_results_mutex);
-    if(dest_nodes.size() != 0) {
-        pending_results_handle.fulfill_map(dest_nodes);
-        fulfilledList.push_back(pending_results_handle);
-    } else {
-        toFulfillQueue.push(pending_results_handle);
-        // whenlog(logger->trace("finish_rpc_send pushed a PendingResults onto toFulfillQueue, size is now {}", toFulfillQueue.size());)
+    if(is_query) {
+        std::lock_guard<std::mutex> lock(pending_results_mutex);
+        if(dest_nodes.size() != 0) {
+            pending_results_handle.fulfill_map(dest_nodes);
+            fulfilledList.push_back(pending_results_handle);
+        } else {
+            toFulfillQueue.push(pending_results_handle);
+        }
     }
     return true;
 }
@@ -205,10 +198,10 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     return buf;
 }
 
-void RPCManager::finish_p2p_send(bool send_or_query, node_id_t dest_id, PendingBase& pending_results_handle) {
+void RPCManager::finish_p2p_send(bool is_query, node_id_t dest_id, PendingBase& pending_results_handle) {
     connections->send(connections->get_node_rank(dest_id));
-    if(!send_or_query) {
-        // only do the following if it's a query - UGH
+    if(is_query) {
+        //only fulfill the reply map if this is a non-void query - sends ignore the PendingResults
         pending_results_handle.fulfill_map({dest_id});
         std::lock_guard<std::mutex> lock(pending_results_mutex);
         fulfilledList.push_back(pending_results_handle);
