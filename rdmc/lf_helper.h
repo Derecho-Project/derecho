@@ -289,6 +289,7 @@ namespace impl {
 bool lf_initialize(const std::map<uint32_t, std::string>& node_addresses,
                    uint32_t node_rank);
 bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr);
+bool lf_remove_connection(uint32_t node_id);
 bool lf_destroy();
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(

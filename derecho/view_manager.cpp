@@ -90,6 +90,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     curr_view->my_rank = curr_view->rank_of(my_id);
     persistent::saveObject(*curr_view);
     last_suspected = std::vector<bool>(curr_view->members.size());
+    whenlog(logger->debug("Starting global initialization of RDMC and SST, including SST TCP connection setup");)
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size;
@@ -1145,10 +1146,20 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
 
     node_id_t my_id = next_view->members[next_view->my_rank];
     whenlog(logger->debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid);)
+    for(const node_id_t failed_node_id : next_view->departed) {
+        whenlog(logger->debug("Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id);)
+#ifdef USE_VERBS_API
+        rdma::impl::verbs_remove_connection(failed_node_id);
+#else
+        rdma::impl::lf_remove_connection(failed_node_id);
+#endif
+        sst::remove_node(failed_node_id);
+    }
     // if new members have joined, add their RDMA connections to SST and RDMC
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         //The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
+        whenlog(logger->debug("Adding RDMC connection to node {}, at IP {}", next_view->members[joiner_rank], next_view->member_ips[joiner_rank]);)
 #ifdef USE_VERBS_API
         rdma::impl::verbs_add_connection(next_view->members[joiner_rank], 
                                          next_view->member_ips[joiner_rank], my_id);

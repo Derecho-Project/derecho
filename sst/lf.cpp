@@ -590,6 +590,10 @@ namespace sst{
     return sst_connections->add_node(new_id, new_ip_addr);
   }
 
+  bool remove_node(uint32_t node_id) {
+      return sst_connections->delete_node(node_id);
+  }
+
   bool sync(uint32_t r_id) {
     int s = 0, t = 0;
     return sst_connections->exchange(r_id, s, t);
@@ -695,7 +699,7 @@ namespace sst{
         dbg_debug("WEIRD: we get an entry with op_context = NULL.");
         return {0xFFFFFFFFu,{0,0}}; // return a bad entry: weird!!!!
       } else {
-        dbg_debug("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+        dbg_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
         return {sctxt->ce_idx, {sctxt->remote_id, 1}};
       }
     } else { // shutdown return a bad entry

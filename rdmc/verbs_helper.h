@@ -176,6 +176,7 @@ bool verbs_initialize(const std::map<uint32_t, std::string>& node_addresses,
                       uint32_t node_rank);
 bool verbs_add_connection(uint32_t index, const std::string& address,
                           uint32_t node_rank);
+bool verbs_remove_connection(uint32_t index);
 void verbs_destroy();
 // int poll_for_completions(int num, ibv_wc* wcs,
 //                          std::atomic<bool>& shutdown_flag);

@@ -625,6 +625,9 @@ void resources_create() {
 bool add_node(uint32_t new_id, const std::string new_ip_addr) {
     return sst_connections->add_node(new_id, new_ip_addr);
 }
+bool remove_node(uint32_t node_id) {
+    return sst_connections->delete_node(node_id);
+}
 
 /**
 *@param r_index The node rank of the node to exchange data with.

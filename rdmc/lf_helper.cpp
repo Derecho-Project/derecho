@@ -591,6 +591,13 @@ bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr) {
    return rdmc_connections->add_node(new_id, new_ip_addr);
 }
 
+/**
+ * Removes a node's TCP connection, presumably because it has failed.
+ */
+bool lf_remove_connection(uint32_t node_id) {
+     return rdmc_connections->delete_node(node_id);
+}
+
 static atomic<bool> interrupt_mode;
 static atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
