@@ -575,8 +575,8 @@ namespace sst{
       return ret;
   }
 
-  bool add_node(uint32_t new_id, const std::string new_ip_addr) {
-    return sst_connections->add_node(new_id, new_ip_addr);
+  bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return sst_connections->add_node(new_id, new_ip_addr_and_port);
   }
 
   bool sync(uint32_t r_id) {
@@ -637,7 +637,9 @@ namespace sst{
       if (eentry.op_context == NULL) {
         dbg_error("\top_context:NULL");
       } else {
+#ifndef NDEBUG
         struct lf_sender_ctxt *sctxt = (struct lf_sender_ctxt *)eentry.op_context;
+#endif
         dbg_error("\top_context:ce_idx={},remote_id={}",sctxt->ce_idx,sctxt->remote_id);
       }
 #ifdef DEBUG_FOR_RELEASE
@@ -656,7 +658,9 @@ namespace sst{
       dbg_error("\ttag={}",eentry.tag);
       dbg_error("\tolen={}",eentry.olen);
       dbg_error("\terr={}",eentry.err);
+#ifndef NDEBUG
       char errbuf[1024];
+#endif
       dbg_error("\tprov_errno={}:{}",eentry.prov_errno,
         fi_cq_strerror(g_ctxt.cq,eentry.prov_errno,eentry.err_data,errbuf,1024));
 #ifdef DEBUG_FOR_RELEASE
@@ -692,13 +696,12 @@ namespace sst{
     }
   }
 
-
-  void lf_initialize(
-    const std::map<uint32_t, std::string> &ip_addrs,
-    uint32_t node_rank){
+  void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                         &ip_addrs_and_ports,
+                     uint32_t node_rank) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::getConfInt32(CONF_SST_TCP_PORT));
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
     // initialize global resources:
     // STEP 1: initialize with configuration.

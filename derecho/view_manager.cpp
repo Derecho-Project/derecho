@@ -17,7 +17,7 @@ using unique_lock_t = std::unique_lock<std::mutex>;
 using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
 ViewManager::ViewManager(const node_id_t my_id,
-                         const ip_addr my_ip,
+                         const ip_addr_t my_ip,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
@@ -26,7 +26,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          const int gms_port)
         : whenlog(logger(spdlog::get("debug_log")), )
 	  gms_port(gms_port),
-          curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr>{my_ip},
+          curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr_t>{my_ip},
                                            std::vector<char>{0}, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 0)),
           server_socket(gms_port),
           thread_shutdown(false),
@@ -83,7 +83,7 @@ ViewManager::ViewManager(const node_id_t my_id,
 
 ViewManager::ViewManager(const std::string& recovery_filename,
                          const node_id_t my_id,
-                         const ip_addr my_ip,
+                         const ip_addr_t my_ip,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
@@ -116,7 +116,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
          * restart and join. */
         curr_view = std::make_unique<View>(last_view->vid + 1,
                                            std::vector<node_id_t>{my_id},
-                                           std::vector<ip_addr>{my_ip},
+                                           std::vector<ip_addr_t>{my_ip},
                                            std::vector<char>{0});
         initialize_rdmc_sst();
 
@@ -210,8 +210,8 @@ void ViewManager::await_first_view(const node_id_t my_id,
             tcp::socket client_socket = server_socket.accept();
             node_id_t joiner_id = 0;
             client_socket.exchange(my_id, joiner_id);
-            ip_addr& joiner_ip = client_socket.remote_ip;
-            ip_addr my_ip = client_socket.get_self_ip();
+            ip_addr_t& joiner_ip = client_socket.remote_ip;
+            ip_addr_t my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
             //None of these views are ever installed, so we don't use curr_view/next_view like normal
             curr_view = std::make_unique<View>(curr_view->vid,
@@ -226,7 +226,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
          * send it to all of them.  */
         joiner_failed = false;
         while(!waiting_join_sockets.empty()) {
-            ip_addr& joiner_ip = waiting_join_sockets.front().remote_ip;
+            ip_addr_t& joiner_ip = waiting_join_sockets.front().remote_ip;
             node_id_t joiner_id = curr_view->members[curr_view->rank_of(joiner_ip)];
             auto bind_socket_write = [&waiting_join_sockets](const char* bytes, std::size_t size) {
                 bool success = waiting_join_sockets.front().write(bytes, size);
@@ -238,7 +238,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 //The client crashed while waiting to join, so we must remove it from the view and try again
                 waiting_join_sockets.pop_front();
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
-                std::vector<ip_addr> filtered_ips(curr_view->member_ips.size() - 1);
+                std::vector<ip_addr_t> filtered_ips(curr_view->member_ips.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
                 std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
                                  filtered_members.begin(), joiner_id);
@@ -279,8 +279,8 @@ void ViewManager::initialize_rdmc_sst() {
 #endif
 }
 
-std::map<node_id_t, ip_addr> ViewManager::make_member_ips_map(const View& view) {
-    std::map<node_id_t, ip_addr> member_ips_map;
+std::map<node_id_t, ip_addr_t> ViewManager::make_member_ips_map(const View& view) {
+    std::map<node_id_t, ip_addr_t> member_ips_map;
     size_t num_members = view.members.size();
     for(uint i = 0; i < num_members; ++i) {
         if(!view.failed[i]) {
@@ -1005,7 +1005,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
     //Initialize the next view
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<ip_addr> member_ips(next_num_members);
+    std::vector<ip_addr_t> member_ips(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     for(std::size_t i = 0; i < join_indexes.size(); ++i) {
         const int join_index = join_indexes[i];

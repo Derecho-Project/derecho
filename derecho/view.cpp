@@ -16,7 +16,7 @@ SubView::SubView(int32_t num_members)
         : mode(Mode::ORDERED),
           members(num_members),
           is_sender(num_members, 1),
-          member_ips(num_members),
+          member_ips_and_gms_ports(num_members),
           joined(0),
           departed(0),
           my_rank(-1) {}
@@ -24,11 +24,11 @@ SubView::SubView(int32_t num_members)
 SubView::SubView(Mode mode,
                  const std::vector<node_id_t>& members,
                  std::vector<int> is_sender,
-                 const std::vector<ip_addr>& member_ips)
+                 const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports)
         : mode(mode),
           members(members),
           is_sender(members.size(), 1),
-          member_ips(member_ips),
+          member_ips_and_gms_ports(member_ips_and_gms_ports),
           my_rank(-1) {
     // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
@@ -68,12 +68,12 @@ uint32_t SubView::num_senders() const {
     return num;
 }
 
-View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports,
            const std::vector<char>& failed, const int32_t num_failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed, const int32_t num_members)
         : vid(vid),
           members(members),
-          member_ips(member_ips),
+          member_ips_and_gms_ports(member_ips_and_gms_ports),
           failed(failed),
           num_failed(num_failed),
           joined(joined),
@@ -95,12 +95,12 @@ int View::rank_of_leader() const {
     return -1;
 }
 
-View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<ip_addr>& member_ips,
+View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports,
            const std::vector<char>& failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed, const int32_t my_rank, const int32_t next_unassigned_rank)
         : vid(vid),
           members(members),
-          member_ips(member_ips),
+          member_ips_and_gms_ports(member_ips_and_gms_ports),
           failed(failed),
           num_failed(0),
           joined(joined),
@@ -118,9 +118,9 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members, const std::
     }
 }
 
-int View::rank_of(const ip_addr& who) const {
+int View::rank_of(const std::pair<ip_addr_t, uint16_t>& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
-        if(member_ips[rank] == who) {
+        if(member_ips_and_gms_ports[rank] == who) {
             return rank;
         }
     }
@@ -136,7 +136,7 @@ int View::rank_of(const node_id_t& who) const {
 }
 
 SubView View::make_subview(const std::vector<node_id_t>& with_members, const Mode mode, const std::vector<int>& is_sender) const {
-    std::vector<ip_addr> subview_member_ips(with_members.size());
+    std::vector<std::pair<ip_addr_t, uint16_t>> subview_member_ips_and_gms_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         std::size_t member_pos = std::distance(
                 members.begin(), std::find(members.begin(), members.end(), with_members[subview_rank]));
@@ -144,10 +144,10 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members, const Mod
             //The ID wasn't found in members[]
             throw subgroup_provisioning_exception();
         }
-        subview_member_ips[subview_rank] = member_ips[member_pos];
+        subview_member_ips_and_gms_ports[subview_rank] = member_ips_and_gms_ports[member_pos];
     }
     //Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
-    return SubView(mode, with_members, is_sender, subview_member_ips);
+    return SubView(mode, with_members, is_sender, subview_member_ips_and_gms_ports);
 }
 
 int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id, int shard_index) const {
@@ -226,7 +226,8 @@ void View::merge_changes() {
     gmsSST->put(gmsSST->joiner_ips.get_base() - gmsSST->getBaseAddress(),
 		gmsSST->num_changes.get_base() - gmsSST->joiner_ips.get_base());
     gmsSST->put(gmsSST->num_changes.get_base() - gmsSST->getBaseAddress(),
-		gmsSST->num_committed.get_base() - gmsSST->num_changes.get_base());
+		gmsSST->num_committed.get_base() -
+                    gmsSST->num_changes.get_base());
     gmsSST->put(gmsSST->num_committed.get_base() - gmsSST->getBaseAddress(),
 		gmsSST->num_acked.get_base() - gmsSST->num_committed.get_base());
 }
@@ -238,7 +239,7 @@ void View::wedge() {
 }
 
 std::string View::debug_string() const {
-    // need to add member ips and other fields
+    // need to add member ips and ports and other fields
     std::stringstream s;
     s << "View " << vid << ": MyRank=" << my_rank << ". ";
     s << "Members={ ";
@@ -303,7 +304,10 @@ std::ostream& operator<<(std::ostream& stream, const View& view) {
     stream << view.vid << std::endl;
     std::copy(view.members.begin(), view.members.end(), std::ostream_iterator<node_id_t>(stream, " "));
     stream << std::endl;
-    std::copy(view.member_ips.begin(), view.member_ips.end(), std::ostream_iterator<ip_addr>(stream, " "));
+    for (auto& ip_port : view.member_ips_and_gms_ports) {
+      stream << ip_port.first << " " << ip_port.second << " ";
+    }
+    // std::copy(view.member_ips_and_gms_ports.begin(), view.member_ips_and_gms_ports.end(), std::ostream_iterator<std::pair<ip_addr_t, uint16_t>>(stream, " "));
     stream << std::endl;
     for(const auto& fail_val : view.failed) {
         stream << (fail_val ? "T" : "F") << " ";
@@ -326,12 +330,19 @@ View parse_view(std::istream& stream) {
         std::copy(std::istream_iterator<node_id_t>(linestream), std::istream_iterator<node_id_t>(),
                   std::back_inserter(members));
     }
-    std::vector<ip_addr> member_ips;
-    //"List of member IPs" line
+    std::vector<std::pair<ip_addr_t, uint16_t>> member_ips_and_gms_ports;
+    //"List of member IPs and ports" line
     if(std::getline(stream, line)) {
         std::istringstream linestream(line);
-        std::copy(std::istream_iterator<ip_addr>(linestream), std::istream_iterator<ip_addr>(),
-                  std::back_inserter(member_ips));
+        // std::copy(std::istream_iterator<std::pair<ip_addr_t, uint16_t>>(linestream), std::istream_iterator<std::pair<ip_addr_t, uint16_t>>(),
+        //           std::back_inserter(member_ips_and_gms_ports));
+	while(!linestream.fail()) {
+	  ip_addr_t ip_addr;
+	  uint16_t port;
+	  linestream >> ip_addr;
+	  linestream >> port;
+	  member_ips_and_gms_ports.emplace_back(std::pair<ip_addr_t, uint16_t>{ip_addr, port});
+	}
     }
     std::vector<char> failed;
     //Failures array line, which was printed as "T" or "F" strings
@@ -346,6 +357,6 @@ View parse_view(std::istream& stream) {
     if(std::getline(stream, line)) {
         my_rank = std::stoi(line);
     }
-    return View(vid, members, member_ips, failed, {}, {}, my_rank);
+    return View(vid, members, member_ips_and_gms_ports, failed, {}, {}, my_rank);
 }
 }  // namespace derecho

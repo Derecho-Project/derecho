@@ -259,7 +259,7 @@ private:
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
-    static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
+    static std::map<node_id_t, ip_addr_t> make_member_ips_map(const View& view);
     /**
      * Constructs a map from subgroup type -> index -> shard -> node ID of that shard's leader.
      * If a shard has no leader in the current view (because it has no members), the vector will
@@ -291,7 +291,7 @@ public:
      * group-management messages
      */
     ViewManager(const node_id_t my_id,
-                const ip_addr my_ip,
+                const ip_addr_t my_ip,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
@@ -343,7 +343,7 @@ public:
      */
     ViewManager(const std::string& recovery_filename,
                 const node_id_t my_id,
-                const ip_addr my_ip,
+                const ip_addr_t my_ip,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,

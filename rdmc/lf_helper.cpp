@@ -587,8 +587,8 @@ namespace impl {
 /**
  * Adds a node to the group via tcp
  */
-bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr) {
-   return rdmc_connections->add_node(new_id, new_ip_addr);
+  bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+   return rdmc_connections->add_node(new_id, new_ip_addr_and_port);
 }
 
 static atomic<bool> interrupt_mode;
@@ -667,77 +667,67 @@ static void polling_loop() {
 /**
  * Initialize the global context 
  */
-bool lf_initialize( 
-    const std::map<uint32_t, std::string>& node_addrs, uint32_t node_rank) {
-   
-    /** Initialize the connection listener on the rdmc tcp port */     
-    //connection_listener = make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
-    
-    /** Initialize the tcp connections, also connects all the nodes together */
-    rdmc_connections = new tcp::tcp_connections(node_rank, node_addrs, derecho::getConfInt32(CONF_RDMC_TCP_PORT));
-    
-    /** Set the context to defaults to start with */
-    default_context();
-    //load_configuration();  
-   
-    dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO)); 
-    /** Initialize the fabric, domain and completion queue */ 
-    FAIL_IF_NONZERO(
-        fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),
-        "fi_getinfo() failed", CRASH_ON_FAILURE
-    );
+bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                       &ip_addrs_and_ports,
+                   uint32_t node_rank) {
 
-    FAIL_IF_NONZERO(
-        fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),
-        "fi_fabric() failed", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),
-        "fi_domain() failed", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),
-        "failed to initialize tx completion queue", CRASH_ON_FAILURE
-    );
-    FAIL_IF_ZERO(g_ctxt.cq, "Pointer to completion queue is null", CRASH_ON_FAILURE);
+  /** Initialize the connection listener on the rdmc tcp port */
+  // connection_listener =
+  // make_unique<tcp::connection_listener>(derecho::rdmc_tcp_port);
 
+  /** Initialize the tcp connections, also connects all the nodes together */
+  rdmc_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
-    /** Initialize the event queue, initialize and configure pep  */
-    FAIL_IF_NONZERO(
-        fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.peq, NULL),
-        "failed to open the event queue for passive endpoint",CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_passive_ep(g_ctxt.fabric, g_ctxt.fi, &g_ctxt.pep, NULL),
-        "failed to open a local passive endpoint", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_pep_bind(g_ctxt.pep, &g_ctxt.peq->fid, 0),
-        "failed to bind event queue to passive endpoint", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_listen(g_ctxt.pep), 
-        "failed to prepare passive endpoint for incoming connections", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),
-        "failed to get the local PEP address", CRASH_ON_FAILURE
-    );
-    FAIL_IF_NONZERO(
-        (g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),
-        "local name is too big to fit in local buffer",CRASH_ON_FAILURE
-    );
-//  event queue moved to endpoint.
-//  FAIL_IF_NONZERO(
-//      fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
-//      "failed to open the event queue for rdma transmission.", CRASH_ON_FAILURE
-//  );
+  /** Set the context to defaults to start with */
+  default_context();
+  // load_configuration();
 
-    /** Start a polling thread and run in the background */
-    std::thread polling_thread(polling_loop);
-    polling_thread.detach();
+  dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
+  /** Initialize the fabric, domain and completion queue */
+  FAIL_IF_NONZERO(
+      fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),
+      "fi_getinfo() failed", CRASH_ON_FAILURE);
 
-    return true;
+  FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),
+                  "fi_fabric() failed", CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),
+                  "fi_domain() failed", CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(
+      fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),
+      "failed to initialize tx completion queue", CRASH_ON_FAILURE);
+  FAIL_IF_ZERO(g_ctxt.cq, "Pointer to completion queue is null",
+               CRASH_ON_FAILURE);
+
+  /** Initialize the event queue, initialize and configure pep  */
+  FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.peq, NULL),
+                  "failed to open the event queue for passive endpoint",
+                  CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(fi_passive_ep(g_ctxt.fabric, g_ctxt.fi, &g_ctxt.pep, NULL),
+                  "failed to open a local passive endpoint", CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(fi_pep_bind(g_ctxt.pep, &g_ctxt.peq->fid, 0),
+                  "failed to bind event queue to passive endpoint",
+                  CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(fi_listen(g_ctxt.pep),
+                  "failed to prepare passive endpoint for incoming connections",
+                  CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO(
+      fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),
+      "failed to get the local PEP address", CRASH_ON_FAILURE);
+  FAIL_IF_NONZERO((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),
+                  "local name is too big to fit in local buffer",
+                  CRASH_ON_FAILURE);
+  //  event queue moved to endpoint.
+  //  FAIL_IF_NONZERO(
+  //      fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
+  //      "failed to open the event queue for rdma transmission.",
+  //      CRASH_ON_FAILURE
+  //  );
+
+  /** Start a polling thread and run in the background */
+  std::thread polling_thread(polling_loop);
+  polling_thread.detach();
+
+  return true;
 }
 
 bool lf_destroy() {

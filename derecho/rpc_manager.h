@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "p2p_connections.h"
 #include "remote_invocable.h"
@@ -121,17 +122,22 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
-            : nid(node_id),
-              receivers(new std::decay_t<decltype(*receivers)>()),
-              whenlog(logger(spdlog::get("debug_log")),)
-              view_manager(group_view_manager),
-              //Connections initially only contains the local node. Other nodes are added in the new view callback
-              tcp_connections(node_id, std::map<node_id_t, ip_addr>(),
-                              group_view_manager.derecho_params.rpc_port),
-              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
-              replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
-        rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
+  RPCManager(node_id_t node_id, ViewManager &group_view_manager)
+      : nid(node_id), receivers(new std::decay_t<decltype(*receivers)>()),
+        whenlog(logger(spdlog::get("debug_log")), )
+            view_manager(group_view_manager),
+        // Connections initially only contains the local node. Other nodes are
+        // added in the new view callback
+        tcp_connections(node_id,
+                        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>()),
+        connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{
+            node_id,
+            {node_id},
+            group_view_manager.derecho_params.window_size,
+            group_view_manager.derecho_params.max_payload_size})),
+        replySendBuffer(
+            new char[group_view_manager.derecho_params.max_payload_size]) {
+    rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
     ~RPCManager();
