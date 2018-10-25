@@ -90,7 +90,6 @@ ViewManager::ViewManager(const node_id_t my_id,
     curr_view->my_rank = curr_view->rank_of(my_id);
     persistent::saveObject(*curr_view);
     last_suspected = std::vector<bool>(curr_view->members.size());
-    whenlog(logger->debug("Starting global initialization of RDMC and SST, including SST TCP connection setup");)
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size;
@@ -671,6 +670,7 @@ std::unique_ptr<View> ViewManager::update_curr_and_next_restart_view(const std::
 }
 
 void ViewManager::initialize_rdmc_sst() {
+    whenlog(logger->debug("Starting global initialization of RDMC and SST, including internal TCP connection setup");)
     // construct member_ips
     auto member_ips_map = make_member_ips_map(*curr_view);
     if(!rdmc::initialize(member_ips_map, curr_view->members[curr_view->my_rank])) {
