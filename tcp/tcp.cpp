@@ -255,10 +255,6 @@ socket connection_listener::accept() {
 }
 
 std::experimental::optional<socket> connection_listener::try_accept(int timeout_ms) {
-    char client_ip_cstr[INET6_ADDRSTRLEN + 1];
-    struct sockaddr_storage client_addr_info;
-    socklen_t len = sizeof client_addr_info;
-
     //Temporarily set server socket to nonblocking
     int socket_flags = fcntl(*fd, F_GETFL, 0);
     socket_flags |= O_NONBLOCK;
@@ -273,6 +269,8 @@ std::experimental::optional<socket> connection_listener::try_accept(int timeout_
     accept_event.events = EPOLLIN;
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, *fd, &accept_event);
 
+    struct sockaddr_storage client_addr_info;
+    socklen_t len = sizeof client_addr_info;
     int client_sock;
     bool success = false;
     epoll_event array_of_one_event[1];
@@ -287,7 +285,15 @@ std::experimental::optional<socket> connection_listener::try_accept(int timeout_
     }
     close(epoll_fd);
 
+    //Set server socket back to blocking
+    socket_flags = fcntl(*fd, F_GETFL, 0);
+    socket_flags &= (~O_NONBLOCK);
+    if(fcntl(*fd, F_SETFL, socket_flags) < 0) {
+        throw connection_failure();
+    }
+
     if(success) {
+        char client_ip_cstr[INET6_ADDRSTRLEN + 1];
         if(client_addr_info.ss_family == AF_INET) {
         // Client has an IPv4 address
         struct sockaddr_in *s = (struct sockaddr_in *)&client_addr_info;
