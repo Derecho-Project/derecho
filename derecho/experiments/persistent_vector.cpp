@@ -18,17 +18,33 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 
+using derecho::ExternalCaller;
+using derecho::Replicated;
+using std::cout;
+using std::cerr;
+using std::endl;
+
 /**
  * Example for replicated object with Persistent<T>
  */
 class PFoo : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> pint;
+#define INVALID_VALUE	(-1)
 
 public:
     virtual ~PFoo() noexcept(true) {
     }
     int read_state(int64_t ver) {
         return *pint[ver];
+    }
+    int read_state_by_time(uint64_t epoch_us) {
+        int val = INVALID_VALUE;
+        try {
+            val = *pint[HLC(epoch_us,(uint64_t)0LLU)];
+        } catch (...) {
+            cout << "read_state_by_time(): invalid ts=" << epoch_us << endl;
+        }
+        return val;
     }
     bool change_state(int new_int) {
         if(new_int == *pint) {
@@ -42,11 +58,13 @@ public:
     }
 
     enum Functions { READ_STATE,
+                     READ_STATE_BY_TIME,
                      CHANGE_STATE,
-                     GET_LATEST_VERSION };
+                     GET_LATEST_VERSION, };
 
     static auto register_functions() {
         return std::make_tuple(derecho::rpc::tag<READ_STATE>(&PFoo::read_state),
+                               derecho::rpc::tag<READ_STATE_BY_TIME>(&PFoo::read_state_by_time),
                                derecho::rpc::tag<CHANGE_STATE>(&PFoo::change_state),
                                derecho::rpc::tag<GET_LATEST_VERSION>(&PFoo::get_latest_version));
     }
@@ -57,10 +75,6 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
 };
 
-using derecho::ExternalCaller;
-using derecho::Replicated;
-using std::cout;
-using std::endl;
 
 int main(int argc, char** argv) {
     derecho::node_id_t node_id;
@@ -145,6 +159,27 @@ int main(int argc, char** argv) {
             cout << "Query the value of version:" << ver << endl;
             for (auto& reply_pair:resultx.get()) {
                 cout <<"\tnode[" << reply_pair.first << "]: v["<<ver<<"]="<<reply_pair.second.get()<<endl;
+            }
+        }
+
+        // Query state by time.
+        struct timespec tv;
+        if(clock_gettime(CLOCK_REALTIME,&tv)) {
+            cerr << "failed to read current time" << endl;
+        } else {
+            uint64_t now = tv.tv_sec*1000000+tv.tv_nsec/1000;
+            uint64_t too_early = now - 5000000; // 5 second before
+            // wait for the temporal frontier...
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            derecho::rpc::QueryResults<int> resultx = pfoo_rpc_handle.ordered_query<PFoo::READ_STATE_BY_TIME>(now);
+            cout << "Query for now: ts="<< now << "us" << endl;
+            for (auto& reply_pair:resultx.get()) {
+                cout << "\tnode[" << reply_pair.first << "] replies with value:" << reply_pair.second.get() << endl;
+            }
+           derecho::rpc::QueryResults<int> resulty = pfoo_rpc_handle.ordered_query<PFoo::READ_STATE_BY_TIME>(too_early);
+            cout << "Query for 5 sec before: ts="<< too_early << "us" <<endl;
+            for (auto& reply_pair:resulty.get()) {
+                cout << "\tnode[" << reply_pair.first << "] replies with value:" << reply_pair.second.get() << endl;
             }
         }
     }
