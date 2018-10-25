@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
                 std::cout << "Subgroup " << subgroup << ", version " << ver << "is persisted." << std::endl;
             }};
 
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(PFoo)), [](const derecho::View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(PFoo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
                                               if(curr_view.num_members < 2) {
                                                   std::cout << "PFoo function throwing subgroup_provisioning_exception" << std::endl;
                                                   throw derecho::subgroup_provisioning_exception();
