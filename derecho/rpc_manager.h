@@ -254,12 +254,14 @@ public:
      * Sends the next message in the MulticastGroup's send buffer (which is
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
+     * @param is_query True if this message represents a query (which expects replies),
+     * false if it repesents a send (which does not)
      * @param dest_nodes The list of node IDs the message is being sent to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
+    bool finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
 
     /**
    * called by replicated.h for sending a p2p send/query
@@ -268,15 +270,17 @@ public:
 
     /**
      * Sends the message in msg_buf to the node identified by dest_node over a
-     * TCP connection, and registers the "promise object" in pending_results_handle
-     * to await its reply.
+     * dedicated P2P connection, and registers the "promise object" in
+     * pending_results_handle to await its reply.
+     * @param is_query True if this message represents a query (which expects replies),
+     * false if it repesents a send (which does not)
      * @param dest_node The node to send the message to
      * @param msg_buf A buffer containing the message
      * @param size The size of the message, in bytes
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
+    void finish_p2p_send(bool is_query, node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

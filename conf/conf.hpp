@@ -18,14 +18,13 @@ namespace derecho {
     // config name --> default value
 #define CONF_DERECHO_GMS_PORT   "DERECHO/gms_port"
 #define CONF_DERECHO_RPC_PORT   "DERECHO/rpc_port"
+#define CONF_DERECHO_SST_PORT       "DERECHO/sst_port"
+#define CONF_DERECHO_RDMC_PORT      "DERECHO/rdmc_port"
 
 #define CONF_RDMA_PROVIDER      "RDMA/provider"
 #define CONF_RDMA_DOMAIN        "RDMA/domain"
 #define CONF_RDMA_TX_DEPTH      "RDMA/tx_depth"
 #define CONF_RDMA_RX_DEPTH      "RDMA/rx_depth"
-
-#define CONF_SST_TCP_PORT       "SST/tcp_port"
-#define CONF_RDMC_TCP_PORT      "RDMC/tcp_port"
 
 #define CONF_PERS_FILE_PATH     "PERS/file_path"
 #define CONF_PERS_RAMDISK_PATH  "PERS/ramdisk_path"

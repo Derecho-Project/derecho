@@ -217,7 +217,6 @@ private:
      * @param callbacks
      * @param subgroup_info
      * @param _view_upcalls
-     * @param gms_port
      * @param factories
      */
     Group(const node_id_t my_id,
@@ -225,7 +224,6 @@ private:
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls,
-          const int gms_port,
           Factory<ReplicatedTypes>... factories);
 
 public:
@@ -245,8 +243,6 @@ public:
      * Derecho group instance, such as message size and logfile name
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
      * @param factories A variable number of Factory functions, one for each
      * template parameter of Group, providing a way to construct instances of
      * each Replicated Object
@@ -257,7 +253,6 @@ public:
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     /**
@@ -276,8 +271,6 @@ public:
      * same as the SubgroupInfo that was used to configure the group's leader.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
      * @param factories A variable number of Factory functions, one for each
      * template parameter of Group, providing a way to construct instances of
      * each Replicated Object
@@ -288,7 +281,6 @@ public:
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
-          const int gms_port = getConfInt32(CONF_DERECHO_GMS_PORT),
           Factory<ReplicatedTypes>... factories);
 
     ~Group();

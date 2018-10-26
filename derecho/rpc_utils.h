@@ -345,7 +345,7 @@ struct PendingResults<void> : public PendingBase {
     */
 
     void fulfill_map(const node_list_t&) {
-        spdlog::get("debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");
+        spdlog::get("debug_log")->error("Got a call to fulfill_map in PendingResults<void>! Serious logic error!");
     }
     void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }

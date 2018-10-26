@@ -103,7 +103,10 @@ ViewManager::ViewManager(const std::string& recovery_filename,
     uint32_t num_received_size = 0;
 
     if(my_id != last_view->members[last_view->rank_of_leader()]) {
-        tcp::socket leader_socket(last_view->member_ips[last_view->rank_of_leader()], gms_port);
+        tcp::socket leader_socket(
+             last_view->member_ips_and_gms_ports[last_view->rank_of_leader()].first, 
+             last_view->member_ips_and_gms_ports[last_view->rank_of_leader()].second);
+             
         receive_configuration(my_id, leader_socket);
         //derecho_params will be initialized by the existing view's leader
         num_received_size = make_subgroup_maps(last_view, *curr_view, subgroup_settings_map);

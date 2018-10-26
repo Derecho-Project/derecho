@@ -735,7 +735,7 @@ namespace sst{
     shutdown = true;
     std::cout<<"["<<std::this_thread::get_id()<<"] shutdown_polling_thread() begins."<<std::endl;
     if(polling_thread.joinable()) {
-      std::cout<<"["<<std::this_thread::get_id()<<"] joinning polling thread."<<std::endl;
+      std::cout<<"["<<std::this_thread::get_id()<<"] joining polling thread."<<std::endl;
       polling_thread.join();
     }
     std::cout<<"["<<std::this_thread::get_id()<<"] done with shutdown_polling_thread()."<<std::endl;
