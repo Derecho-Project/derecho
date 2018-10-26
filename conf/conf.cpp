@@ -90,6 +90,10 @@ const int32_t getConfInt32(const std::string & key){
   return Conf::get()->getInt32(key);
 }
 
+const int16_t getConfInt16(const std::string & key){
+  return Conf::get()->getInt16(key);
+}
+
 const int64_t getConfInt64(const std::string & key){
   return Conf::get()->getInt64(key);
 }

@@ -16,10 +16,11 @@ namespace derecho {
   private:
     // Configuration Table: 
     // config name --> default value
+#define CONF_DERECHO_LOCAL_IP   "DERECHO/local_ip"
 #define CONF_DERECHO_GMS_PORT   "DERECHO/gms_port"
 #define CONF_DERECHO_RPC_PORT   "DERECHO/rpc_port"
-#define CONF_DERECHO_SST_PORT       "DERECHO/sst_port"
-#define CONF_DERECHO_RDMC_PORT      "DERECHO/rdmc_port"
+#define CONF_DERECHO_SST_PORT   "DERECHO/sst_port"
+#define CONF_DERECHO_RDMC_PORT  "DERECHO/rdmc_port"
 
 #define CONF_RDMA_PROVIDER      "RDMA/provider"
 #define CONF_RDMA_DOMAIN        "RDMA/domain"
@@ -31,17 +32,16 @@ namespace derecho {
 
     std::map<const std::string, std::string> config = {
       // [DERECHO]
+      {CONF_DERECHO_LOCAL_IP,   "DERECHO/local_ip"},
       {CONF_DERECHO_GMS_PORT,   "23580"},
       {CONF_DERECHO_RPC_PORT,   "28366"},
+      {CONF_DERECHO_SST_PORT,   "37683"},
+      {CONF_DERECHO_RDMC_PORT,  "31675"},
       // [RDMA]
       {CONF_RDMA_PROVIDER,      "sockets"},
       {CONF_RDMA_DOMAIN,        "eth0"},
       {CONF_RDMA_TX_DEPTH,      "256"},
       {CONF_RDMA_RX_DEPTH,      "256"},
-      // [SST]
-      {CONF_SST_TCP_PORT,       "37683"},
-      // [RDMC]
-      {CONF_RDMC_TCP_PORT,      "31675"},
       // [PERS]
       {CONF_PERS_FILE_PATH,     ".plog"},
       {CONF_PERS_RAMDISK_PATH,  "/dev/shm/volatile_t"}
@@ -59,6 +59,9 @@ namespace derecho {
     /** get configuration **/
     const std::string & getString(const std::string & key) const {
       return this->config.at(key);
+    }
+    const int16_t getInt32(const std::string & key) const {
+      return (const int16_t)std::stoi(this->config.at(key));
     }
     const int32_t getInt32(const std::string & key) const {
       return (const int32_t)std::stoi(this->config.at(key));
@@ -89,6 +92,7 @@ namespace derecho {
 
   // helpers
   const std::string & getConfString(const std::string & key);
+  const int16_t getConfInt16(const std::string & key);
   const int32_t getConfInt32(const std::string & key);
   const int64_t getConfInt64(const std::string & key);
   const float getConfFloat(const std::string & key);

@@ -24,7 +24,7 @@ public:
     std::string remote_ip;
 
     socket() : sock(-1), remote_ip() {}
-    socket(std::string servername, int port);
+  socket(std::string server_ip, int server_port);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;

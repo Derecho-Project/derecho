@@ -18,17 +18,17 @@ using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
 ViewManager::ViewManager(const node_id_t my_id,
                          const ip_addr_t my_ip,
+			 const int my_gms_port,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                         std::vector<view_upcall_t> _view_upcalls,
-                         const int gms_port)
+                         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("debug_log")), )
-	  gms_port(gms_port),
+	  my_gms_port(my_gms_port),
           curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr_t>{my_ip},
                                            std::vector<char>{0}, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 0)),
-          server_socket(gms_port),
+          server_socket(my_gms_port),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
@@ -48,37 +48,35 @@ ViewManager::ViewManager(const node_id_t my_id,
             construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
 }
 
-ViewManager::ViewManager(const node_id_t my_id,
-                         tcp::socket& leader_connection,
-                         CallbackSet callbacks,
-                         const SubgroupInfo& subgroup_info,
-                         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                         std::vector<view_upcall_t> _view_upcalls,
-                         const int gms_port)
-        : whenlog(logger(spdlog::get("debug_log")), )
-                  gms_port(gms_port),
-          server_socket(gms_port),
-          thread_shutdown(false),
-          view_upcalls(_view_upcalls),
-          subgroup_info(subgroup_info),
-          derecho_params(0, 0, 0),
-          persistence_manager_callbacks(_persistence_manager_callbacks) {
-    //First, receive the view and parameters over the given socket
-    receive_configuration(my_id, leader_connection);
+ViewManager::ViewManager(
+    const node_id_t my_id, tcp::socket &leader_connection,
+    CallbackSet callbacks, const SubgroupInfo &subgroup_info,
+    const persistence_manager_callbacks_t &_persistence_manager_callbacks,
+    std::vector<view_upcall_t> _view_upcalls, const int my_gms_port)
+    : whenlog(logger(spdlog::get("debug_log")), )
+      my_gms_port(my_gms_port),
+      server_socket(my_gms_port), thread_shutdown(false),
+      view_upcalls(_view_upcalls), subgroup_info(subgroup_info),
+      derecho_params(0, 0, 0),
+      persistence_manager_callbacks(_persistence_manager_callbacks) {
+  // First, receive the view and parameters over the given socket
+  receive_configuration(my_id, leader_connection);
 
-    //Set this while we still know my_id
-    curr_view->my_rank = curr_view->rank_of(my_id);
+  // Set this while we still know my_id
+  curr_view->my_rank = curr_view->rank_of(my_id);
 
-    last_suspected = std::vector<bool>(curr_view->members.size());
+  last_suspected = std::vector<bool>(curr_view->members.size());
 
-    initialize_rdmc_sst();
-    persistent::saveObject(*curr_view);
+  initialize_rdmc_sst();
+  persistent::saveObject(*curr_view);
 
-    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    uint32_t num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
-    whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
-            construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
-    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
+  std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
+  uint32_t num_received_size = make_subgroup_maps(
+      std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
+  whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
+      construct_multicast_group(callbacks, derecho_params,
+                                subgroup_settings_map, num_received_size);
+  curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
 ViewManager::ViewManager(const std::string& recovery_filename,
@@ -89,10 +87,10 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          const DerechoParams& derecho_params,
                          std::vector<view_upcall_t> _view_upcalls,
-                         const int gms_port)
+                         const int my_gms_port)
         : whenlog(logger(spdlog::get("debug_log")), )
-                  gms_port(gms_port),
-          server_socket(gms_port),
+                  my_gms_port(my_gms_port),
+          server_socket(my_gms_port),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
@@ -104,8 +102,8 @@ ViewManager::ViewManager(const std::string& recovery_filename,
 
     if(my_id != last_view->members[last_view->rank_of_leader()]) {
         tcp::socket leader_socket(
-             last_view->member_ips_and_gms_ports[last_view->rank_of_leader()].first, 
-             last_view->member_ips_and_gms_ports[last_view->rank_of_leader()].second);
+				  std::get<0>(last_view->member_ips_and_ports[last_view->rank_of_leader()]), 
+				  std::get<PORT_TYPE::GMS>(last_view->member_ips_and_ports[last_view->rank_of_leader()]));
              
         receive_configuration(my_id, leader_socket);
         //derecho_params will be initialized by the existing view's leader
@@ -139,7 +137,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
 ViewManager::~ViewManager() {
     thread_shutdown = true;
     // force accept to return.
-    tcp::socket s{"localhost", gms_port};
+    tcp::socket s{"localhost", my_gms_port};
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
@@ -153,9 +151,11 @@ ViewManager::~ViewManager() {
 
 void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
     whenlog(logger->debug("Successfully connected to leader, about to receive the View.");)
-            node_id_t leader_id
-            = 0;
+    node_id_t leader_id = 0;
     leader_connection.exchange(my_id, leader_id);
+
+    uint16_t leader_gms_port;
+    leader_connection.exchange(my_gms_port, leader_gms_port);
 
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
@@ -213,13 +213,17 @@ void ViewManager::await_first_view(const node_id_t my_id,
             tcp::socket client_socket = server_socket.accept();
             node_id_t joiner_id = 0;
             client_socket.exchange(my_id, joiner_id);
+	    // Right now, the gms port is simply exchanged
+	    // TODO: figure out the port value from the socket with port binding on the client side
+	    uint16_t joiner_gms_port = 0;
+            client_socket.exchange(my_gms_port, joiner_gms_port);
             ip_addr_t& joiner_ip = client_socket.remote_ip;
             ip_addr_t my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
             //None of these views are ever installed, so we don't use curr_view/next_view like normal
             curr_view = std::make_unique<View>(curr_view->vid,
                                                functional_append(curr_view->members, joiner_id),
-                                               functional_append(curr_view->member_ips, joiner_ip),
+                                               functional_append(curr_view->member_ips_and_ports, std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> {joiner_ip, joiner_gms_port}),
                                                std::vector<char>(curr_view->num_members + 1, 0),
                                                functional_append(curr_view->joined, joiner_id));
             num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);
@@ -241,7 +245,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 //The client crashed while waiting to join, so we must remove it from the view and try again
                 waiting_join_sockets.pop_front();
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
-                std::vector<ip_addr_t> filtered_ips(curr_view->member_ips.size() - 1);
+                std::vector<ip_addr_t> filtered_ips(curr_view->member_ips_and_ports.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
                 std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
                                  filtered_members.begin(), joiner_id);
@@ -270,27 +274,20 @@ void ViewManager::await_first_view(const node_id_t my_id,
 
 void ViewManager::initialize_rdmc_sst() {
     // construct member_ips
-    auto member_ips_map = make_member_ips_map(*curr_view);
-    if(!rdmc::initialize(member_ips_map, curr_view->members[curr_view->my_rank])) {
+    auto member_ips_and_rdmc_ports_map =
+        make_member_ips_and_ports_map<PORT_TYPE::RDMC>(*curr_view);
+    if(!rdmc::initialize(member_ips_and_rdmc_ports_map, curr_view->members[curr_view->my_rank])) {
         std::cout << "Global setup failed" << std::endl;
         exit(0);
     }
-#ifdef USE_VERBS_API
-    sst::verbs_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
-#else
-    sst::lf_initialize(member_ips_map, curr_view->members[curr_view->my_rank]);
-#endif
-}
+    auto member_ips_and_sst_ports_map =
+      make_member_ips_and_ports_map<PORT_TYPE::SST>(*curr_view);
 
-std::map<node_id_t, ip_addr_t> ViewManager::make_member_ips_map(const View& view) {
-    std::map<node_id_t, ip_addr_t> member_ips_map;
-    size_t num_members = view.members.size();
-    for(uint i = 0; i < num_members; ++i) {
-        if(!view.failed[i]) {
-            member_ips_map[view.members[i]] = view.member_ips[i];
-        }
-    }
-    return member_ips_map;
+#ifdef USE_VERBS_API
+    sst::verbs_initialize(member_ips_and_sst_ports_map, curr_view->members[curr_view->my_rank]);
+#else
+    sst::lf_initialize(member_ips_and_sst_ports_map, curr_view->members[curr_view->my_rank]);
+#endif
 }
 
 void ViewManager::create_threads() {
@@ -735,13 +732,22 @@ void ViewManager::finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uin
         rdma::impl::verbs_add_connection(next_view->members[joiner_rank], 
                                          next_view->member_ips[joiner_rank], my_id);
 #else
-       rdma::impl::lf_add_connection(next_view->members[joiner_rank], 
-                                     next_view->member_ips[joiner_rank]);
+        rdma::impl::lf_add_connection(
+            next_view->members[joiner_rank],
+            std::pair<ip_addr_t, uint16_t>>
+                {std::get<0>(next_view->member_ips_and_ports_map[joiner_rank]),
+                 std::get<PORT_TYPE::RDMC>(
+                     next_view->member_ips_and_ports_map[joiner_rank])});
 #endif
     }
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        sst::add_node(next_view->members[joiner_rank], next_view->member_ips[joiner_rank]);
+        sst::add_node(
+            next_view->members[joiner_rank],
+            std::pair<ip_addr_t, uint16_t>>
+                {std::get<0>(next_view->member_ips_and_ports_map[joiner_rank]),
+                 std::get<PORT_TYPE::SST>(
+                     next_view->member_ips_and_ports_map[joiner_rank])});
     }
     // This will block until everyone responds to SST/RDMC initial handshakes
     transition_multicast_group(*next_subgroup_settings, next_num_received_size);

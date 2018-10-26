@@ -32,8 +32,8 @@ public:
     /** vector selecting the senders, 0 for non-sender, non-0 for sender*/
     /** integers instead of booleans due to the serialization issue :-/ */
     std::vector<int> is_sender;
-    /** IP addresses of members in this subgroup/shard, with the same indices as members. */
-    std::vector<std::pair<ip_addr_t, uint16_t>> member_ips_and_gms_ports;
+    /** IP addresses and ports of members in this subgroup/shard, with the same indices as members. */
+    std::vector<std::pair<ip_addr_t, uint16_t>> member_ips_and_ports;
     /** List of IDs of nodes that joined since the previous view, if any. */
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
@@ -52,18 +52,22 @@ public:
      * The vectors will have room for num_members elements. */
     SubView(int32_t num_members);
 
-    DEFAULT_SERIALIZATION_SUPPORT(SubView, mode, members, is_sender, member_ips_and_gms_ports, joined, departed);
-  SubView(Mode mode, const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports,
-            const std::vector<node_id_t>& joined, const std::vector<node_id_t>& departed)
-            : mode(mode),
-              members(members),
-              is_sender(is_sender),
-              member_ips_and_gms_ports(member_ips_and_gms_ports),
-              joined(joined),
-              departed(departed),
-              my_rank(-1) {}
+    DEFAULT_SERIALIZATION_SUPPORT(SubView, mode, members, is_sender,
+                                  member_ips_and_ports, joined, departed);
+    SubView(Mode mode, const std::vector<node_id_t> &members,
+            std::vector<int> is_sender,
+            const std::vector<std::pair<ip_addr_t, uint16_t>>
+	    &member_ips_and_ports,
+            const std::vector<node_id_t> &joined,
+            const std::vector<node_id_t> &departed)
+        : mode(mode), members(members), is_sender(is_sender),
+          member_ips_and_ports(member_ips_and_ports), joined(joined),
+          departed(departed), my_rank(-1) {}
 
-    SubView(Mode mode, const std::vector<node_id_t>& members, std::vector<int> is_sender, const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports);
+    SubView(Mode mode, const std::vector<node_id_t> &members,
+            std::vector<int> is_sender,
+            const std::vector<std::pair<ip_addr_t, uint16_t>>
+                &member_ips_and_ports);
 };
 
 class View : public mutils::ByteRepresentable {
@@ -72,8 +76,9 @@ public:
     const int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */
     const std::vector<node_id_t> members;
-    /** IP addresses of members in the current view, indexed by their SST rank. */
-    const std::vector<std::pair<ip_addr_t, uint16_t>> member_ips_and_gms_ports;
+    /** IP addresses and ports (gms, rpc, sst, rdmc in order) of members in the current view, indexed by their SST rank. */
+  const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
+        member_ips_and_ports;
     /** failed[i] is true if members[i] is considered to have failed.
      * Once a member is failed, it will be removed from the members list in a future view. */
     std::vector<char> failed;  //Note: std::vector<bool> is broken, so we pretend these char values are C-style booleans
@@ -148,20 +153,22 @@ public:
      *  Used for debugging only.*/
     std::string debug_string() const;
 
-    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_gms_ports, failed, num_failed, joined, departed, num_members);
+    DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_ports,
+                                  failed, num_failed, joined, departed,
+                                  num_members);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
-    View(const int32_t vid, const std::vector<node_id_t> &members,
-         const std::vector<std::pair<ip_addr_t, uint16_t>>
-             &member_ips_and_gms_ports,
-         const std::vector<char> &failed, const int32_t num_failed,
-         const std::vector<node_id_t> &joined,
-         const std::vector<node_id_t> &departed, const int32_t num_members);
+    View(
+        const int32_t vid, const std::vector<node_id_t> &members,
+        const std::vector<std::pair<ip_addr_t, uint16_t>> &member_ips_and_ports,
+        const std::vector<char> &failed, const int32_t num_failed,
+        const std::vector<node_id_t> &joined,
+        const std::vector<node_id_t> &departed, const int32_t num_members);
 
     /** Standard constructor for making a new View */
     View(const int32_t vid,
          const std::vector<node_id_t>& members,
-         const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_gms_ports,
+         const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_ports,
          const std::vector<char>& failed,
          const std::vector<node_id_t>& joined = {},
          const std::vector<node_id_t>& departed = {},

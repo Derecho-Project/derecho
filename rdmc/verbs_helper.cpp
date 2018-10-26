@@ -13,6 +13,8 @@
 #include "util.h"
 #include "verbs_helper.h"
 
+#error "Verbs implementation is obsolete. Compilation stopped."
+
 extern "C" {
 #include <infiniband/verbs.h>
 }
@@ -247,7 +249,7 @@ void verbs_destroy() {
     }
 }
 
-bool verbs_initialize(const map<uint32_t, string> &node_addresses,
+  bool verbs_initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports,
                       uint32_t node_rank) {
     memset(&verbs_resources, 0, sizeof(verbs_resources));
 
@@ -257,7 +259,7 @@ bool verbs_initialize(const map<uint32_t, string> &node_addresses,
 
     // Connect to other nodes in group. Since map traversal is ordered, we don't
     // have to worry about circular waits, so deadlock can't occur.
-    for(auto it = node_addresses.begin(); it != node_addresses.end(); it++) {
+    for(auto it = ip_addrs_and_ports.begin(); it != ip_addrs_and_ports.end(); it++) {
         if(it->first != node_rank) {
             if(!verbs_add_connection(it->first, it->second, node_rank)) {
                 fprintf(stderr, "WARNING: failed to connect to node %d at %s\n",

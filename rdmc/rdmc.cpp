@@ -32,14 +32,14 @@ atomic<bool> shutdown_flag;
 map<uint16_t, shared_ptr<group>> groups;
 mutex groups_lock;
 
-bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
+  bool initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports, uint32_t _node_rank) {
     if(shutdown_flag) return false;
 
     node_rank = _node_rank;
 #ifdef USE_VERBS_API
-    if(!::rdma::impl::verbs_initialize(addresses, node_rank)) {
+    if(!::rdma::impl::verbs_initialize(ip_addrs_and_ports, node_rank)) {
 #else
-    if(!::rdma::impl::lf_initialize(addresses, node_rank)) {
+    if (!::rdma::impl::lf_initialize(ip_addrs_and_ports, node_rank)) {
 #endif
         return false;
     }

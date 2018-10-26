@@ -587,8 +587,10 @@ namespace impl {
 /**
  * Adds a node to the group via tcp
  */
-  bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
-   return rdmc_connections->add_node(new_id, new_ip_addr_and_port);
+bool lf_add_connection(
+    uint32_t new_id,
+    const std::pair<ip_addr_t, uint16_t> &new_ip_addr_and_port) {
+  return rdmc_connections->add_node(new_id, new_ip_addr_and_port);
 }
 
 static atomic<bool> interrupt_mode;

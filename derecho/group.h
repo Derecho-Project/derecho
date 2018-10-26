@@ -248,7 +248,6 @@ public:
      * each Replicated Object
      */
     Group(const node_id_t my_id,
-          const ip_addr my_ip,
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           const DerechoParams& derecho_params,
@@ -276,7 +275,6 @@ public:
      * each Replicated Object
      */
     Group(const node_id_t my_id,
-          const ip_addr my_ip,
           const ip_addr leader_ip,
           const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
