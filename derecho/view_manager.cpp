@@ -18,17 +18,15 @@ using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
 ViewManager::ViewManager(const node_id_t my_id,
                          const ip_addr_t my_ip,
-			 const int my_gms_port,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("debug_log")), )
-	  my_gms_port(my_gms_port),
           curr_view(std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr_t>{my_ip},
                                            std::vector<char>{0}, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 0)),
-          server_socket(my_gms_port),
+          server_socket(derecho::getConfInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
@@ -52,10 +50,9 @@ ViewManager::ViewManager(
     const node_id_t my_id, tcp::socket &leader_connection,
     CallbackSet callbacks, const SubgroupInfo &subgroup_info,
     const persistence_manager_callbacks_t &_persistence_manager_callbacks,
-    std::vector<view_upcall_t> _view_upcalls, const int my_gms_port)
+    std::vector<view_upcall_t> _view_upcalls)
     : whenlog(logger(spdlog::get("debug_log")), )
-      my_gms_port(my_gms_port),
-      server_socket(my_gms_port), thread_shutdown(false),
+      server_socket(derecho::getConfInt32(CONF_DERECHO_GMS_PORT)), thread_shutdown(false),
       view_upcalls(_view_upcalls), subgroup_info(subgroup_info),
       derecho_params(0, 0, 0),
       persistence_manager_callbacks(_persistence_manager_callbacks) {
@@ -86,11 +83,9 @@ ViewManager::ViewManager(const std::string& recovery_filename,
                          const SubgroupInfo& subgroup_info,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          const DerechoParams& derecho_params,
-                         std::vector<view_upcall_t> _view_upcalls,
-                         const int my_gms_port)
+                         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("debug_log")), )
-                  my_gms_port(my_gms_port),
-          server_socket(my_gms_port),
+          server_socket(derecho::getConfInt32(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
@@ -137,7 +132,7 @@ ViewManager::ViewManager(const std::string& recovery_filename,
 ViewManager::~ViewManager() {
     thread_shutdown = true;
     // force accept to return.
-    tcp::socket s{"localhost", my_gms_port};
+    tcp::socket s{"localhost", derecho::getConfInt32(CONF_DERECHO_GMS_PORT)};
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
@@ -154,8 +149,10 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     node_id_t leader_id = 0;
     leader_connection.exchange(my_id, leader_id);
 
-    uint16_t leader_gms_port;
-    leader_connection.exchange(my_gms_port, leader_gms_port);
+    leader_connection.write(derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+    leader_connection.write(derecho::getConfInt32(CONF_DERECHO_RPC_PORT));
+    leader_connection.write(derecho::getConfInt32(CONF_DERECHO_SST_PORT));
+    leader_connection.write(derecho::getConfInt32(CONF_DERECHO_RDMC_PORT));
 
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
@@ -216,14 +213,20 @@ void ViewManager::await_first_view(const node_id_t my_id,
 	    // Right now, the gms port is simply exchanged
 	    // TODO: figure out the port value from the socket with port binding on the client side
 	    uint16_t joiner_gms_port = 0;
-            client_socket.exchange(my_gms_port, joiner_gms_port);
+            client_socket.read(joiner_gms_port);
+	    uint16_t joiner_rpc_port = 0;
+            client_socket.read(joiner_rpc_port);
+	    uint16_t joiner_sst_port = 0;
+            client_socket.read(joiner_sst_port);
+	    uint16_t joiner_rdmc_port = 0;
+            client_socket.read(joiner_rdmc_port);
             ip_addr_t& joiner_ip = client_socket.remote_ip;
             ip_addr_t my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
             //None of these views are ever installed, so we don't use curr_view/next_view like normal
             curr_view = std::make_unique<View>(curr_view->vid,
                                                functional_append(curr_view->members, joiner_id),
-                                               functional_append(curr_view->member_ips_and_ports, std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> {joiner_ip, joiner_gms_port}),
+                                               functional_append(curr_view->member_ips_and_ports, std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port}),
                                                std::vector<char>(curr_view->num_members + 1, 0),
                                                functional_append(curr_view->joined, joiner_id));
             num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings);

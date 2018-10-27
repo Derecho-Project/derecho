@@ -19,6 +19,8 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 
 namespace derecho {
+  enum PORT_TYPE { GMS=1, RPC, SST, RDMC };
+
 /**
  * The subset of a View associated with a single shard, or a single subgroup if
  * the subgroup is non-sharded.
@@ -33,7 +35,7 @@ public:
     /** integers instead of booleans due to the serialization issue :-/ */
     std::vector<int> is_sender;
     /** IP addresses and ports of members in this subgroup/shard, with the same indices as members. */
-    std::vector<std::pair<ip_addr_t, uint16_t>> member_ips_and_ports;
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports;
     /** List of IDs of nodes that joined since the previous view, if any. */
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
@@ -56,8 +58,9 @@ public:
                                   member_ips_and_ports, joined, departed);
     SubView(Mode mode, const std::vector<node_id_t> &members,
             std::vector<int> is_sender,
-            const std::vector<std::pair<ip_addr_t, uint16_t>>
-	    &member_ips_and_ports,
+            const std::vector<
+                std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
+                &member_ips_and_ports,
             const std::vector<node_id_t> &joined,
             const std::vector<node_id_t> &departed)
         : mode(mode), members(members), is_sender(is_sender),
@@ -66,7 +69,8 @@ public:
 
     SubView(Mode mode, const std::vector<node_id_t> &members,
             std::vector<int> is_sender,
-            const std::vector<std::pair<ip_addr_t, uint16_t>>
+            const std::vector<
+                std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
                 &member_ips_and_ports);
 };
 
@@ -130,7 +134,7 @@ public:
     SubView make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
 
     /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
-    int rank_of(const std::pair<ip_addr_t, uint16_t> &who) const;
+    int rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> &who) const;
     /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
     /** Returns the rank of this View's leader, based on failed[]. */
@@ -158,21 +162,20 @@ public:
                                   num_members);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
-    View(
-        const int32_t vid, const std::vector<node_id_t> &members,
-        const std::vector<std::pair<ip_addr_t, uint16_t>> &member_ips_and_ports,
-        const std::vector<char> &failed, const int32_t num_failed,
-        const std::vector<node_id_t> &joined,
-        const std::vector<node_id_t> &departed, const int32_t num_members);
+    View(const int32_t vid, const std::vector<node_id_t> &members,
+         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
+                                      uint16_t>> &member_ips_and_ports,
+         const std::vector<char> &failed, const int32_t num_failed,
+         const std::vector<node_id_t> &joined,
+         const std::vector<node_id_t> &departed, const int32_t num_members);
 
     /** Standard constructor for making a new View */
-    View(const int32_t vid,
-         const std::vector<node_id_t>& members,
-         const std::vector<std::pair<ip_addr_t, uint16_t>>& member_ips_and_ports,
-         const std::vector<char>& failed,
-         const std::vector<node_id_t>& joined = {},
-         const std::vector<node_id_t>& departed = {},
-         const int32_t my_rank = 0,
+    View(const int32_t vid, const std::vector<node_id_t> &members,
+         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
+                                      uint16_t>> &member_ips_and_ports,
+         const std::vector<char> &failed,
+         const std::vector<node_id_t> &joined = {},
+         const std::vector<node_id_t> &departed = {}, const int32_t my_rank = 0,
          const int32_t next_unassigned_rank = 0);
 };
 

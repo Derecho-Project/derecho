@@ -24,7 +24,7 @@ public:
     std::string remote_ip;
 
     socket() : sock(-1), remote_ip() {}
-  socket(std::string server_ip, int server_port);
+  socket(std::string server_ip, uint16_t server_port);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;
@@ -113,7 +113,7 @@ public:
      * given port of this machine's TCP interface.
      * @param port The port to listen on.
      */
-    explicit connection_listener(int port);
+    explicit connection_listener(uint16_t port);
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.

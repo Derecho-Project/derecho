@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "derecho/derecho_type_definitions.h"
+
 using namespace std;
 using namespace rdma;
 

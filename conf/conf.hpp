@@ -60,7 +60,7 @@ namespace derecho {
     const std::string & getString(const std::string & key) const {
       return this->config.at(key);
     }
-    const int16_t getInt32(const std::string & key) const {
+    const int16_t getInt16(const std::string & key) const {
       return (const int16_t)std::stoi(this->config.at(key));
     }
     const int32_t getInt32(const std::string & key) const {

@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
     bool is_sending = true;
     long count = 1;
     long total_num_messages = num_of_nodes * count;
-    struct timespec t1,t2,t3;
+    struct timespec t1,t3;
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here

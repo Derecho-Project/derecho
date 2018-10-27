@@ -82,9 +82,6 @@ private:
 
     whenlog(std::shared_ptr<spdlog::logger> logger;)
 
-    /** The port that this instance of the GMS communicates on. */
-    const int my_gms_port;
-
     /** Controls access to curr_view. Read-only accesses should acquire a
      * shared_lock, while view changes acquire a unique_lock. */
     std::shared_timed_mutex view_mutex;
@@ -258,8 +255,6 @@ private:
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
-    enum PORT_TYPE { GMS=1, RPC, SST, RDMC };
-
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
@@ -300,8 +295,6 @@ public:
      * @param _persistence_manager_callbacks The persistence manager callbacks.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
-     * @param my_gms_port The port to contact other group members on when sending
-     * group-management messages
      */
     ViewManager(const node_id_t my_id,
                 const ip_addr_t my_ip,
@@ -309,8 +302,7 @@ public:
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int my_gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+                std::vector<view_upcall_t> _view_upcalls = {});
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -326,16 +318,13 @@ public:
      * @param _persistence_manager_callbacks The persistence manager callbacks
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
-     * @param my_gms_port The port to contact other group members on when sending
-     * group-management messages
      */
     ViewManager(const node_id_t my_id,
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int my_gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+                std::vector<view_upcall_t> _view_upcalls = {});
 
     /**
      * Constructor for recovering a failed node by loading its View from log
@@ -351,8 +340,6 @@ public:
      * the restarting group, a new set of Derecho parameters to configure the
      * group with. Otherwise, these parameters will be read from the logfile or
      * copied from the existing group leader.
-     * @param my_gms_port The port to contact other group members on when sending
-     * group-management messages
      */
     ViewManager(const std::string& recovery_filename,
                 const node_id_t my_id,
@@ -361,8 +348,7 @@ public:
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 const DerechoParams& derecho_params = DerechoParams(0, 0, 0),
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int my_gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+                std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();
 

@@ -323,9 +323,9 @@ std::ostream &operator<<(std::ostream &stream, const View &view) {
             std::ostream_iterator<node_id_t>(stream, " "));
   stream << std::endl;
   for (auto &ip_ports : view.member_ips_and_ports) {
-    stream << std::get<0>(ip_ports) << " " << get<1>(ip_ports) << " "
-           << get<2>(ip_ports) << " " << get<3>(ip_ports) << " "
-           << get<4>(ip_ports) << " ";
+    stream << std::get<0>(ip_ports) << " " << std::get<PORT_TYPE::GMS>(ip_ports) << " "
+           << std::get<PORT_TYPE::RPC>(ip_ports) << " " << std::get<PORT_TYPE::SST>(ip_ports) << " "
+           << std::get<PORT_TYPE::RDMC>(ip_ports) << " ";
   }
   // std::copy(view.member_ips_and_gms_ports.begin(),
   // view.member_ips_and_gms_ports.end(),

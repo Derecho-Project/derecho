@@ -16,7 +16,7 @@ namespace tcp {
 
 using namespace std;
 
-socket::socket(string server_ip, int server_port) {
+socket::socket(string server_ip, uint16_t server_port) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure();
 
@@ -131,7 +131,7 @@ std::string socket::get_self_ip() {
     return std::string(my_ip_cstr);
 }
 
-connection_listener::connection_listener(int port) {
+connection_listener::connection_listener(uint16_t port) {
     sockaddr_in serv_addr;
 
     int listenfd = ::socket(AF_INET, SOCK_STREAM, 0);
