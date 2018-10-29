@@ -34,7 +34,7 @@ MulticastGroup::MulticastGroup(
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : whenlog(logger(spdlog::get("derecho_debug_log")), )
-	  members(_members),
+	      members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           block_size(derecho_params.block_size),
@@ -96,7 +96,7 @@ MulticastGroup::MulticastGroup(
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-        std::vector<char> already_failed, uint32_t rpc_port)
+        std::vector<char> already_failed)
         : whenlog(logger(old_group.logger), )
                   members(_members),
           num_members(members.size()),

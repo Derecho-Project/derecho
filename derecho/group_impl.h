@@ -58,19 +58,19 @@ Group<ReplicatedTypes...>::Group(
         : whenlog(logger(create_logger()),)
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
-          //Yes, objects_by_subgroup_id is empty at this point, but view_manager stores a reference
-          view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
-                       objects_by_subgroup_id,
-                       persistence_manager.get_callbacks(),
-                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
-                      derecho_params.rpc_port)),
+                      getConfInt32(CONF_DERECHO_RPC_PORT))),
+          //Yes, objects_by_subgroup_id is empty at this point, but view_manager stores a reference
+          view_manager(my_id, my_ip, callbacks, subgroup_info, derecho_params,
+                       tcp_sockets, objects_by_subgroup_id,
+                       persistence_manager.get_callbacks(),
+                       _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     set_up_components();
-    view_manager.finish_setup(tcp_sockets);
+    view_manager.finish_setup();
     //In this case there will be no subgroups to receive objects for
     construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
     //If in total restart mode, this will make ViewManager send out logs for shards in which this node is the shard leader
@@ -104,18 +104,18 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
         : whenlog(logger(create_logger()),)
           my_id(my_id),
           persistence_manager(callbacks.local_persistence_callback),
+          tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
+                      getConfInt32(CONF_DERECHO_RPC_PORT))),
           view_manager(my_id, leader_connection, callbacks, subgroup_info,
-                       objects_by_subgroup_id,
+                       tcp_sockets, objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
                        _view_upcalls, getConfInt32(CONF_DERECHO_GMS_PORT)),
-          tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, ip_addr>(),
-                      view_manager.get_derecho_params().rpc_port)),
           rpc_manager(my_id, view_manager),
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
-    view_manager.finish_setup(tcp_sockets);
+    view_manager.finish_setup();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
     view_manager.send_logs_if_total_restart(old_shard_leaders);

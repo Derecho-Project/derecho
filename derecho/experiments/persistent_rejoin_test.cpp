@@ -9,6 +9,11 @@
 
 #include "derecho/derecho.h"
 #include "initialize.h"
+#ifdef __CDT_PARSER__
+#define DEFAULT_SERIALIZATION_SUPPORT(...)
+#define REGISTER_RPC_FUNCTIONS(...)
+#define RPC_NAME(...) 0ULL
+#endif
 
 using namespace persistent;
 using derecho::Replicated;
@@ -35,6 +40,7 @@ public:
         }
         std::cout << "]" << std::endl;
     }
+
     DEFAULT_SERIALIZATION_SUPPORT(PersistentThing, state);
     REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state, print_log);
 };
@@ -50,7 +56,6 @@ public:
     void change_state(int new_int) {
         state = new_int;
     }
-
     DEFAULT_SERIALIZATION_SUPPORT(TestThing, state);
     REGISTER_RPC_FUNCTIONS(TestThing, read_state, change_state);
 };

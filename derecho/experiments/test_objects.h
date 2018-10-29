@@ -12,6 +12,18 @@
 #include "derecho/derecho.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
+/* The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS
+ * macro, probably because there are too many layers of variadic argument expansion.
+ * This definition makes the serialization and RPC macros no-ops when the CDT
+ * parser tries to expand them, which allows it to continue syntax-highlighting
+ * the rest of the file.
+ */
+#ifdef __CDT_PARSER__
+#define DEFAULT_SERIALIZATION_SUPPORT(...)
+#define REGISTER_RPC_FUNCTIONS(...)
+#define RPC_NAME(...) 0ULL
+#endif
+
 /**
  * Example replicated object, containing some serializable state and providing
  * two RPC methods.
@@ -32,7 +44,6 @@ struct Foo{
     }
 
     REGISTER_RPC_FUNCTIONS(Foo, read_state, change_state);
-
     /**
      * Constructs a Foo with an initial value.
      * @param initial_state

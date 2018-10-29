@@ -56,25 +56,22 @@ struct DerechoParams : public mutils::ByteRepresentable {
     unsigned int window_size = 3;
     unsigned int timeout_ms = 1;
     rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
-    uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT);
 
     DerechoParams(long long unsigned int max_payload_size,
                   long long unsigned int sst_max_payload_size,
                   long long unsigned int block_size,
                   unsigned int window_size = 3,
                   unsigned int timeout_ms = 1,
-                  rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT))
+                  rdmc::send_algorithm type = rdmc::BINOMIAL_SEND)
             : max_payload_size(max_payload_size),
               sst_max_payload_size(sst_max_payload_size),
               block_size(block_size),
               window_size(window_size),
               timeout_ms(timeout_ms),
-              type(type),
-              rpc_port(rpc_port) {
+              type(type) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, sst_max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, sst_max_payload_size, block_size, window_size, timeout_ms, type);
 };
 
 /**
@@ -396,7 +393,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
-            std::vector<char> already_failed = {}, uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT));
+            std::vector<char> already_failed = {});
 
     ~MulticastGroup();
 

@@ -135,9 +135,7 @@ public:
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
-     * connections. This should only be called after Group's constructor has
-     * finished receiving Replicated Object state, since that process uses the
-     * same TCP sockets that this thread will use for RPC requests.
+     * connections.
      */
     void start_listening();
     /**

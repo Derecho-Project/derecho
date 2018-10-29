@@ -227,6 +227,16 @@ private:
      */
     bool receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
+    /**
+     * Helper for total restart mode that re-initializes TCP connections (in the
+     * tcp_connections pool) to all of the "current" members of curr_view. This
+     * is needed because Group's update_tcp_connections_callback will only
+     * initialize TCP connections with nodes in the joiners list, but after
+     * total restart even nodes that are not "joining" the new view will need
+     * their TCP connections initialized.
+     */
+    void restart_existing_tcp_connections(node_id_t my_id);
+
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
      * array and, for the leader, proposes new views to exclude failed members. */
@@ -461,6 +471,8 @@ public:
      * for this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
+     * @param group_tcp_sockets The pool of TCP connections to each group member
+     * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
      * ReplicatedObject references in Group, so that ViewManager can access it
      * while Group manages the list
@@ -475,6 +487,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const DerechoParams& derecho_params,
+                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
@@ -491,6 +504,8 @@ public:
      * @param subgroup_info The set of functions defining subgroup membership
      * in this group. Must be the same as the SubgroupInfo used to set up the
      * leader.
+     * @param group_tcp_sockets The pool of TCP connections to each group member
+     * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
      * ReplicatedObject references in Group, so that ViewManager can access it
      * while Group manages the list
@@ -504,6 +519,7 @@ public:
                 tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {},
@@ -517,12 +533,8 @@ public:
      * the initial SST and delivering the first new-view upcalls. This must be
      * separate from the constructor to resolve the circular dependency of SST
      * synchronization.
-     * @param group_tcp_sockets The TCP connection pool that is shared with
-     * Group and RPCManager. This also must be set after the constructor to
-     * resolve a circular dependency: The RPC port for these sockets comes from
-     * DerechoParams, which is received from the leader in the constructor.
      */
-    void finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets);
+    void finish_setup();
 
     /**
      * An extra setup method only needed during total restart. Sends Replicated

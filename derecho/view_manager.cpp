@@ -26,6 +26,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
                          const DerechoParams& derecho_params,
+                         const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                          ReplicatedObjectReferenceMap& object_reference_map,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
@@ -38,12 +39,15 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
+          group_member_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
+    bool is_total_restart;
     //Determine if a saved view was loaded from disk
     if(curr_view != nullptr) {
+        is_total_restart = true;
         whenlog(logger->debug("Found view {} on disk, attempting to recover", curr_view->vid);)
         load_ragged_trim();
         await_rejoining_nodes(my_id, subgroup_settings_map, num_received_size);
@@ -51,6 +55,7 @@ ViewManager::ViewManager(const node_id_t my_id,
         curr_view->my_rank = curr_view->rank_of(my_id);
 
     } else {
+        is_total_restart = false;
         //Normal startup as the leader
         curr_view = std::make_unique<View>(0, std::vector<node_id_t>{my_id}, std::vector<ip_addr>{my_ip},
                                            std::vector<char>{0}, std::vector<node_id_t>{}, std::vector<node_id_t>{}, 0);
@@ -62,6 +67,9 @@ ViewManager::ViewManager(const node_id_t my_id,
     initialize_rdmc_sst();
     whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
+    if(is_total_restart) {
+        restart_existing_tcp_connections(my_id);
+    }
 }
 
 /* Non-leader Constructor */
@@ -69,6 +77,7 @@ ViewManager::ViewManager(const node_id_t my_id,
                          tcp::socket& leader_connection,
                          CallbackSet callbacks,
                          const SubgroupInfo& subgroup_info,
+                         const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                          ReplicatedObjectReferenceMap& object_reference_map,
                          const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                          std::vector<view_upcall_t> _view_upcalls,
@@ -81,6 +90,7 @@ ViewManager::ViewManager(const node_id_t my_id,
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           derecho_params(0, 0, 0),
+          group_member_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     //First, receive the view and parameters over the given socket
@@ -103,6 +113,9 @@ ViewManager::ViewManager(const node_id_t my_id,
 
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 
+    if(is_total_restart) {
+        restart_existing_tcp_connections(my_id);
+    }
 }
 
 ViewManager::~ViewManager() {
@@ -208,8 +221,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     return is_total_restart;
 }
 
-void ViewManager::finish_setup(const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets) {
-    group_member_sockets = group_tcp_sockets;
+void ViewManager::finish_setup() {
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     whenlog(logger->debug("Done setting up initial SST and RDMC");)
@@ -253,6 +265,22 @@ void ViewManager::send_logs_if_total_restart(const std::unique_ptr<std::vector<s
         }
     }
 
+}
+
+void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
+    /* If this node is marked as a joiner in the restart view, it will establish TCP
+     * connections to everyone in the new view upcall anyway, so do nothing. */
+    if(std::find(curr_view->joined.begin(), curr_view->joined.end(), my_id) != curr_view->joined.end()) {
+        return;
+    }
+    /* If this node is not a joiner, it "should" already have a TCP connection to every
+     * other current member. */
+    for(int i = 0; i < curr_view->num_members; ++i) {
+        if(curr_view->members[i] != my_id) {
+            group_member_sockets->add_node(curr_view->members[i], curr_view->member_ips[i]);
+            whendebug(logger->debug("Established a TCP connection to node {}", curr_view->members[i]);)
+        }
+    }
 }
 
 void ViewManager::start() {

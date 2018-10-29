@@ -100,12 +100,13 @@ private:
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
-    /** Contains all state related to managing Views, including the
-     * ManagedGroup and SST (since those change when the view changes). */
-    ViewManager view_manager;
-    /** Contains a TCP connection to each member of the group.
-     * This connection pool is shared between Group, ViewManager, and RPCManager. */
+    /** Contains a TCP connection to each member of the group, for the purpose
+     * of transferring state information to new members during a view change.
+     * This connection pool is shared between Group and ViewManager */
     std::shared_ptr<tcp::tcp_connections> tcp_sockets;
+    /** Contains all state related to managing Views, including the
+     * MulticastGroup and SST (since those change when the view changes). */
+    ViewManager view_manager;
     /** Contains all state related to receiving and handling RPC function
      * calls for any Replicated objects implemented by this group. */
     rpc::RPCManager rpc_manager;
