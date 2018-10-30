@@ -223,12 +223,12 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     return is_total_restart;
 }
 
-void ViewManager::finish_setup() {
+const std::vector<std::vector<int64_t>>& ViewManager::finish_setup() {
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     whenlog(logger->debug("Done setting up initial SST and RDMC");)
 
-    if(curr_view->vid != 0) {
+    if(curr_view->vid != 0 && curr_view->my_rank != curr_view->rank_of_leader()) {
         // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
         // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
         curr_view->gmsSST->init_local_change_proposals(curr_view->rank_of_leader());
@@ -243,13 +243,18 @@ void ViewManager::finish_setup() {
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
     }
+    //Hand this vector back to the Group constructor so it can call receive_objects if this node is the restart leader
+    return restart_shard_leaders;
 }
 
 void ViewManager::send_logs_if_total_restart(const std::unique_ptr<std::vector<std::vector<int64_t>>>& shard_leaders) {
+    //This map will be empty (default-constructed) if total restart is not happening
     if(logged_ragged_trim.empty()) {
         return;
     }
-    //The leader will call this method with nullptr, because it already knows the shard leaders
+    /* The leader will call this method with nullptr, because it already set restart_shard_leaders
+     * in await_rejoining_nodes, but for other nodes this is the first point at which they find out
+     * the restart leaders. */
     if(shard_leaders) {
         restart_shard_leaders = *shard_leaders;
     }
@@ -277,7 +282,7 @@ void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
         return;
     }
     /* If this node is not a joiner, it "should" already have a TCP connection to every
-     * other current member. */
+     * other current member, so establish those TCP connections. */
     for(int i = 0; i < curr_view->num_members; ++i) {
         if(curr_view->members[i] != my_id) {
             group_member_sockets->add_node(curr_view->members[i], curr_view->member_ips[i]);
@@ -674,8 +679,8 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         //Instead, send it the nodes with the longest logs, even though they're not "leaders"
         mutils::post_object(bind_socket_write, mutils::bytes_size(nodes_with_longest_log));
         mutils::post_object(bind_socket_write, nodes_with_longest_log);
-        //Put the sockets here, where subsequent methods will send them Persistent logs for Replicated Objects
-        proposed_join_sockets.emplace_back(std::move(waiting_sockets_iter->second));
+        //This completes the sequence of messages that the leader would send if it was doing a
+        //normal view change, so close the socket
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
     //Save this to a class member so that we still have it in send_objects_if_total_restart()...ugh, that's ugly

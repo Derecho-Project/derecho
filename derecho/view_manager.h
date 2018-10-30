@@ -206,6 +206,9 @@ private:
      * Used only during total restart; empty if the group started up normally. */
     std::map<subgroup_id_t, std::map<uint32_t, std::unique_ptr<RaggedTrim>>> logged_ragged_trim;
 
+    /** Map from (subgroup ID, shard num) to ID of the "restart leader" for that
+     * shard, which is the node with the longest persistent log for that shard's
+     * replicated state. This is only non-empty during a total restart. */
     std::vector<std::vector<int64_t>> restart_shard_leaders;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
@@ -278,7 +281,7 @@ private:
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
 
-    // Static helper methods that implement chunks of view-management functionality
+    /* -- Static helper methods that implement chunks of view-management functionality -- */
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
                                  const std::vector<node_id_t>& shard_members, uint num_shard_senders
@@ -301,7 +304,6 @@ private:
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
-
     /**
      * Computes the persistent version corresponding to a ragged trim proposal,
      * i.e. the version number that will be persisted if these updates are committed.
@@ -347,6 +349,8 @@ private:
                                                 const std::vector<node_id_t>& joiner_ids,
                                                 const std::vector<ip_addr>& joiner_ips whenlog(,
                                                 std::shared_ptr<spdlog::logger> logger));
+
+    /* ---------------------------------------------------------------------------------- */
 
     /**
      * Updates curr_view and makes a new next_view based on the current set of
@@ -532,9 +536,13 @@ public:
      * Completes first-time setup of the ViewManager, including synchronizing
      * the initial SST and delivering the first new-view upcalls. This must be
      * separate from the constructor to resolve the circular dependency of SST
-     * synchronization.
+     * synchronization. This also provides a convenient way to give the
+     * constructor a "return value" to hand back to its caller.
+     * @return A reference to restart_shard_leaders, which was computed in the
+     * constructor if we're in total restart mode. The Group leader constructor
+     * will need this information.
      */
-    void finish_setup();
+    const std::vector<std::vector<int64_t>>& finish_setup();
 
     /**
      * An extra setup method only needed during total restart. Sends Replicated

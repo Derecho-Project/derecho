@@ -193,7 +193,7 @@ private:
      */
     template <typename... Empty>
     typename std::enable_if<0 == sizeof...(Empty), std::set<std::pair<subgroup_id_t, node_id_t>>>::type
-    construct_objects(const View&, const std::unique_ptr<vector_int64_2d>&) {
+    construct_objects(const View&, const vector_int64_2d&) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
 
@@ -208,15 +208,16 @@ private:
      * subgroup, since all object state will be received from the shard leader.
      *
      * @param curr_view A reference to the current view as reported by View_manager
-     * @param old_shard_leaders A pointer to the array of old shard leaders for
-     * each subgroup (indexed by subgroup ID), if one exists.
+     * @param old_shard_leaders The array of old shard leaders for each subgroup
+     * (indexed by subgroup ID), which will contain -1 if there is no previous
+     * leader for that shard.
      * @return The set of subgroup IDs that are un-initialized because this node is
      * joining an existing group and needs to receive initial object state, paired
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
-            const View& curr_view, const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
+            const View& curr_view, const vector_int64_2d& old_shard_leaders);
 
     /**
      * Delegate constructor for joining an existing managed group, called after

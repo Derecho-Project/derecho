@@ -70,11 +70,17 @@ Group<ReplicatedTypes...>::Group(
           factories(make_kind_map(factories...)),
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     set_up_components();
-    view_manager.finish_setup();
-    //In this case there will be no subgroups to receive objects for
-    construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), std::unique_ptr<vector_int64_2d>());
-    //If in total restart mode, this will make ViewManager send out logs for shards in which this node is the shard leader
+    /* If in total restart mode, ViewManager will have computed the members of each shard
+     * with the longest logs, and this node will need to receive state from them even
+     * though it's the leader. Otherwise, this vector will be empty because the leader
+     * normally doesn't need to receive any object state. */
+    const vector_int64_2d& restart_shard_leaders = view_manager.finish_setup();
+    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive =
+            construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), restart_shard_leaders);
+    //The next two methods will do nothing unless we're in total restart mode
     view_manager.send_logs_if_total_restart(nullptr);
+    receive_objects(subgroups_and_leaders_to_receive);
+
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
@@ -116,10 +122,10 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
     view_manager.finish_setup();
-    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
-            = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), old_shard_leaders);
+    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
+            = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), *old_shard_leaders);
     view_manager.send_logs_if_total_restart(old_shard_leaders);
-    receive_objects(subgroups_and_leaders);
+    receive_objects(subgroups_and_leaders_to_receive);
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
@@ -139,7 +145,7 @@ template <typename... ReplicatedTypes>
 template <typename FirstType, typename... RestTypes>
 std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::construct_objects(
         const View& curr_view,
-        const std::unique_ptr<vector_int64_2d>& old_shard_leaders) {
+        const vector_int64_2d& old_shard_leaders) {
     std::set<std::pair<subgroup_id_t, uint32_t>> subgroups_to_receive;
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
@@ -165,12 +171,12 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
                     //Determine if there is existing state for this shard that will need to be received
-                    bool has_previous_leader = old_shard_leaders && old_shard_leaders->size() > subgroup_id
-                                               && (*old_shard_leaders)[subgroup_id].size() > shard_num
-                                               && (*old_shard_leaders)[subgroup_id][shard_num] > -1
-                                               && (*old_shard_leaders)[subgroup_id][shard_num] != my_id;
+                    bool has_previous_leader = old_shard_leaders.size() > subgroup_id
+                                               && old_shard_leaders[subgroup_id].size() > shard_num
+                                               && old_shard_leaders[subgroup_id][shard_num] > -1
+                                               && old_shard_leaders[subgroup_id][shard_num] != my_id;
                     if(has_previous_leader) {
-                        subgroups_to_receive.emplace(subgroup_id, (*old_shard_leaders)[subgroup_id][shard_num]);
+                        subgroups_to_receive.emplace(subgroup_id, old_shard_leaders[subgroup_id][shard_num]);
                     }
                     if(has_previous_leader && !has_persistent_fields<FirstType>::value) {
                         /* Construct an "empty" Replicated<T>, since all of T's state will be received
@@ -253,9 +259,8 @@ void Group<ReplicatedTypes...>::set_up_components() {
     //since ViewManager doesn't know the template parameters
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
                                                            const vector_int64_2d& old_shard_leaders) {
-        //ugh, we have to copy the vector to get it as a pointer
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
-                = construct_objects<ReplicatedTypes...>(view, std::make_unique<vector_int64_2d>(old_shard_leaders));
+                = construct_objects<ReplicatedTypes...>(view, old_shard_leaders);
         receive_objects(subgroups_and_leaders);
         raw_subgroups = construct_raw_subgroups(view);
     });
