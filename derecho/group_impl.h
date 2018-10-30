@@ -272,7 +272,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::async_logger>("derecho_debug_log",
         log_sinks.begin(), log_sinks.end(), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
     spdlog::register_logger(log);
-    log->set_pattern("[%H:%M:%S.%f] [Thread %t] [%^%l%$] %v");
+    log->set_pattern("[%H:%M:%S.%f] [%n] [Thread %t] [%^%l%$] %v");
     log->set_level(
         whendebug(spdlog::level::debug)
         whenrelease(spdlog::level::off)

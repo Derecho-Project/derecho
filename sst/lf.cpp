@@ -61,7 +61,7 @@ namespace sst{
       std::shared_ptr<spdlog::logger> spdlogger;
   public:
       SSTLogger(spdlog::level::level_enum log_level)
-          : spdlogger(spdlog::stdout_color_mt("sst")) {
+          : spdlogger(spdlog::stdout_color_mt("sst.lf")) {
           spdlogger->set_level(log_level);
       }
       std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }

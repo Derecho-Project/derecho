@@ -48,7 +48,8 @@ ViewManager::ViewManager(const node_id_t my_id,
     //Determine if a saved view was loaded from disk
     if(curr_view != nullptr) {
         is_total_restart = true;
-        whenlog(logger->debug("Found view {} on disk, attempting to recover", curr_view->vid);)
+        whenlog(logger->debug("Found view {} on disk", curr_view->vid);)
+        whenlog(logger->info("Logged View found on disk. Restarting in recovery mode.");)
         load_ragged_trim();
         await_rejoining_nodes(my_id, subgroup_settings_map, num_received_size);
 
@@ -67,6 +68,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     initialize_rdmc_sst();
     whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
+    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
     if(is_total_restart) {
         restart_existing_tcp_connections(my_id);
     }
@@ -255,6 +257,7 @@ void ViewManager::send_logs_if_total_restart(const std::unique_ptr<std::vector<s
     for(subgroup_id_t subgroup_id = 0; subgroup_id < restart_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < restart_shard_leaders[subgroup_id].size(); ++shard) {
             if(my_id == restart_shard_leaders[subgroup_id][shard]) {
+                whenlog(logger->debug("This node is the restart leader for subgroup {}, shard {}. Sending object data to shard members.", subgroup_id, shard);)
                 //Send object data to all shard members, since they will all be in receive_objects()
                 for(node_id_t shard_member : curr_view->subgroup_shard_views[subgroup_id][shard].members) {
                     if(shard_member != my_id) {
@@ -602,6 +605,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                      node_id_t joiner_id = 0;
                      bool write_success = waiting_sockets_iter->second.exchange(my_id, joiner_id);
                      if(!write_success) {
+                         whenlog(logger->info("Node {} failed while waiting for the leader to reach a quorum!", waiting_sockets_iter->first);)
                          waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
                          rejoined_node_ids.erase(waiting_sockets_iter->first);
                          ready_to_restart = false;
@@ -631,6 +635,17 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
             shard_trim_pair.second->leader_id = std::numeric_limits<node_id_t>::max();
         }
     }
+    whenlog(
+    std::ostringstream leader_list;
+    for(subgroup_id_t subgroup = 0; subgroup < longest_log_versions.size(); ++subgroup) {
+        for(uint32_t shard = 0; shard < longest_log_versions.at(subgroup).size(); ++shard) {
+            leader_list << "Subgroup (" << subgroup << "," << shard << "): node "
+                    << nodes_with_longest_log.at(subgroup).at(shard) << " with log length "
+                    << longest_log_versions.at(subgroup).at(shard) << ". ";
+        }
+    }
+    logger->debug("Restart subgroup/shard leaders: {}", leader_list.str());
+    )
 
     curr_view.swap(restart_view);
     //Send the next view to all the members

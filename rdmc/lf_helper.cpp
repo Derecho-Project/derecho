@@ -44,17 +44,30 @@ namespace rdma {
 
 /** Debugging tools from Weijia's sst code */  
 #ifndef NDEBUG
+    class RDMCLogger {
+        std::shared_ptr<spdlog::logger> spdlogger;
+    public:
+        RDMCLogger(spdlog::level::level_enum log_level)
+                : spdlogger(spdlog::stdout_color_mt("rdmc.lf")) {
+            spdlogger->set_level(log_level);
+            spdlogger->set_pattern("[%H:%M:%S.%f] [%n] [%^%l%$] %v");
+        }
+        std::shared_ptr<spdlog::logger> get_logger() {
+            return spdlogger;
+        }
+    };
+
     inline auto dbgConsole() {
-        static auto console = spdlog::stdout_color_mt("rdmc");
+        static auto console = RDMCLogger(spdlog::level::debug);
         return console;
     }
-    #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
-    #define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
-    #define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
-    #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
-    #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
-    #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
-    #define dbg_flush() dbgConsole()->flush()
+    #define dbg_trace(...) dbgConsole().get_logger()->trace(__VA_ARGS__)
+    #define dbg_debug(...) dbgConsole().get_logger()->debug(__VA_ARGS__)
+    #define dbg_info(...) dbgConsole().get_logger()->info(__VA_ARGS__)
+    #define dbg_warn(...) dbgConsole().get_logger()->warn(__VA_ARGS__)
+    #define dbg_error(...) dbgConsole().get_logger()->error(__VA_ARGS__)
+    #define dbg_crit(...) dbgConsole().get_logger()->critical(__VA_ARGS__)
+    #define dbg_flush() dbgConsole().get_logger()->flush()
 #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -687,7 +700,7 @@ bool lf_initialize(
     default_context();
     //load_configuration();  
    
-    dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO)); 
+    dbg_trace(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
     /** Initialize the fabric, domain and completion queue */ 
     FAIL_IF_NONZERO(
         fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),

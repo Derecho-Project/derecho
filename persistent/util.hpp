@@ -23,6 +23,7 @@
       PersistentLogger(spdlog::level::level_enum log_level)
           : spdlogger(spdlog::stdout_color_mt("persistent")) {
           spdlogger->set_level(log_level);
+          spdlogger->set_pattern("[%H:%M:%S.%f] [%n] [%^%l%$] %v");
       }
       std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }
   };

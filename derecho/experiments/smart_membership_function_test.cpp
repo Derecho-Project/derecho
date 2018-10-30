@@ -18,6 +18,17 @@
 #include "initialize.h"
 #include "conf/conf.hpp"
 
+/*
+ * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS
+ * macro, probably because there are too many layers of variadic argument expansion.
+ * This definition makes the RPC macros no-ops when the CDT parser tries to expand
+ * them, which allows it to continue syntax-highlighting the rest of the file.
+ */
+#ifdef __CDT_PARSER__
+#define REGISTER_RPC_FUNCTIONS(...)
+#define RPC_NAME(...) 0ULL
+#endif
+
 class Cache : public mutils::ByteRepresentable {
     std::map<std::string, std::string> cache_map;
 
