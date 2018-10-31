@@ -162,8 +162,12 @@ target_link_libraries(persistent_vector derecho)
 add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
 target_link_libraries(shard_iterator_p2p_test derecho)
 
+#persistent_rejoin_test
 add_executable(persistent_rejoin_test persistent_rejoin_test.cpp initialize.cpp)
 target_link_libraries(persistent_rejoin_test derecho)
+
+add_executable(total_restart_test total_restart_test.cpp initialize.cpp)
+target_link_libraries(total_restart_test derecho)
 
 # scaling_subgroup_test
 add_executable(scaling_subgroup_test scaling_subgroup_test.cpp initialize.cpp)
