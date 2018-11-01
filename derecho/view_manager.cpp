@@ -100,7 +100,6 @@ ViewManager::ViewManager(const node_id_t my_id,
 
     //Set this while we still know my_id
     curr_view->my_rank = curr_view->rank_of(my_id);
-    persistent::saveObject(*curr_view);
     last_suspected = std::vector<bool>(curr_view->members.size());
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
@@ -110,6 +109,8 @@ ViewManager::ViewManager(const node_id_t my_id,
     } else {
         num_received_size = make_subgroup_maps(std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
     };
+    //Persist the initial View to disk as soon as possible, which is after subgroup membership has been assigned
+    persistent::saveObject(*curr_view);
     whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
     construct_multicast_group(callbacks, derecho_params, subgroup_settings_map, num_received_size);
 
@@ -154,7 +155,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             char buffer[ip_addr_size];
             leader_connection.read(buffer, ip_addr_size);
             ip_addr leader_ip(buffer);
-            whenlog(logger->debug("That node was not the leader! Redirecting to {}", leader_ip);)
+            whenlog(logger->info("That node was not the leader! Redirecting to {}", leader_ip);)
             //Use move-assignment to reconnect the socket to the given IP address, and try again
             //(good thing that leader_connection reference is mutable)
             leader_connection = tcp::socket(leader_ip, gms_port);
@@ -171,6 +172,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         };
         mutils::post_object(leader_socket_write, *curr_view);
         load_ragged_trim();
+        whenlog(logger->debug("In restart mode, sending {} ragged trims to leader", logged_ragged_trim.size());)
         /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
         /* Since we know this node is only a member of one shard per subgroup,
          * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
@@ -515,7 +517,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
             auto client_view = mutils::from_bytes<View>(nullptr, view_buffer);
 
             if(client_view->vid > curr_view->vid) {
-                whenlog(logger->trace("Node {} had newer view {}, replacing view {}", joiner_id, client_view->vid, curr_view->vid);)
+                whenlog(logger->trace("Node {} had newer view {}, replacing view {} and discarding ragged trim", joiner_id, client_view->vid, curr_view->vid);)
                 //The joining node has a newer View, so discard any ragged trims that are not longest-log records
                 for(auto& subgroup_to_map : logged_ragged_trim) {
                     auto trim_map_iterator = subgroup_to_map.second.begin();
@@ -537,6 +539,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                 char buffer[size_of_ragged_trim];
                 client_socket->read(buffer, size_of_ragged_trim);
                 std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+                whenlog(logger->trace("Received ragged trim for subgroup {}, shard {} from node {}", ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id);)
                 /* If the joining node has an obsolete View, we only care about the
                  * "ragged trims" if they are actually longest-log records and from
                  * a newer view than any ragged trims we have for this subgroup. */
@@ -557,6 +560,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                     //In both of these cases, only keep the ragged trim if it is newer than anything we have
                     auto existing_ragged_trim = logged_ragged_trim[ragged_trim->subgroup_id].find(ragged_trim->shard_num);
                     if(existing_ragged_trim == logged_ragged_trim[ragged_trim->subgroup_id].end()) {
+                        whenlog(logger->trace("Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})", joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num);)
                         //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
                         logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
                     } else if (existing_ragged_trim->second->vid <= ragged_trim->vid) {
