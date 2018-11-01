@@ -185,4 +185,7 @@ target_link_libraries(simple_send derecho)
 add_executable(random_messages random_messages.cpp)
 target_link_libraries(random_messages derecho)
 
-add_custom_target(format_experiments clang-format-3.8 -i *.cpp *.h)
+add_custom_target( format_experiments
+    COMMAND clang-format-3.8 -i *.cpp *.h
+    WORKING_DIRECTORY ${derecho_SOURCE_DIR}/derecho/experiments
+)
