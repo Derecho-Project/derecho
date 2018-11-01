@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
 				       subgroup_shard_layout_t layout(num_members);
 				       for (uint i = 0; i < num_members; ++i) {
 					 layout[i].push_back(view.make_subview(vector<uint32_t>{members[i], members[(i+1)%num_members], members[(i+2)%num_members]}));
+					 layout[i].
 				       }
 				       return layout;
 				     }}};
@@ -114,33 +115,27 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Finished constructing/joining the group" << std::endl;
     auto group_members = group->get_members();
-    // uint32_t my_rank = -1;
+    uint32_t my_rank = -1;
     std::cout << "Members are" << std::endl;
     for(uint i = 0; i < group_members.size(); ++i) {
         std::cout << group_members[i] << " ";
-        // if(group_members[i] == my_id) {
-        //   my_rank = i;
-        // }
+        if(group_members[i] == my_id) {
+          my_rank = i;
+        }
     }
     std::cout << std::endl;
-    // if (my_rank == (uint32_t) -1) {
-    //     exit(1);
-    // }
+    if (my_rank == (uint32_t) -1) {
+        exit(1);
+    }
 
-    // // all members book a ticket
-    // Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
+    // all members book a ticket
+    Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
 
-    // rpc::QueryResults<bool> results = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
-    // rpc::QueryResults<bool>::ReplyMap& replies = results.get();
-    // for (auto& reply_pair: replies) {
-    //     std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
-    // }
-
-    // rpc::QueryResults<bool> results2 = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
-    // rpc::QueryResults<bool>::ReplyMap& replies2 = results2.get();
-    // for (auto& reply_pair: replies2) {
-    //     std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
-    // }
+    rpc::QueryResults<bool> results = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
+    rpc::QueryResults<bool>::ReplyMap& replies = results.get();
+    for (auto& reply_pair: replies) {
+        std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
+    }
     
     std::cout << "End of main. Waiting indefinitely" << std::endl;
     while(true) {
