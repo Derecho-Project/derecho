@@ -118,14 +118,16 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
 
 /**
  * Functor of type shard_view_generator_t that implements the default subgroup
- * allocation algorithm, parameterized based on a SubgroupAllocationPolicy.
+ * allocation algorithm, parameterized based on a SubgroupAllocationPolicy. Its
+ * operator() will throw a subgroup_provisioning_exception if there are not
+ * enough nodes in the current view to populate all of the subgroups and shards.
  */
 class DefaultSubgroupAllocator {
 protected:
     std::unique_ptr<subgroup_shard_layout_t> previous_assignment;
     const SubgroupAllocationPolicy policy;
 
-    void assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy);
+    bool assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy);
 
 public:
     DefaultSubgroupAllocator(const SubgroupAllocationPolicy& allocation_policy)
