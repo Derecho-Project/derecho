@@ -193,18 +193,4 @@ public:
     static std::unique_ptr<View> view_from_bytes(mutils::DeserializationManager* dsm, char const* buffer);
 };
 
-/**
- * Prints a plaintext representation of the View to an output stream. This is
- * not interchangeable with the serialization library, but can be used to create
- * a log file parseable by standard bash tools.
- * @param stream The output stream
- * @param view The View to print
- * @return The output stream
- */
-std::ostream& operator<<(std::ostream& stream, const View& view);
-/**
- * Parses the plaintext representation created by operator<< and modifies the View
- * argument to contain the view it represents.
- */
-View parse_view(std::istream& stream);
 }  // namespace derecho
