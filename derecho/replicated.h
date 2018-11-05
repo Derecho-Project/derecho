@@ -27,6 +27,7 @@ using namespace persistent;
 namespace derecho {
 
 class _Group;
+class GroupReference;
 
 /**
  * This is a marker interface for user-defined Replicated Objects (i.e. objects
@@ -182,7 +183,8 @@ public:
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               group(group) {
-        if constexpr(std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<GroupReference, T>) {
+            std::cout << "In replicated.h:186, group=" << group << std::endl;
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
     }
@@ -426,7 +428,7 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-        if constexpr(std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
         return mutils::bytes_size(**user_object_ptr);
