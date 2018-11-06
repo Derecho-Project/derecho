@@ -18,6 +18,7 @@
 #include "subgroup_info.h"
 #include "view.h"
 #include "conf/conf.hpp"
+#include "restart_state.h"
 
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>
@@ -35,32 +36,6 @@ namespace rpc {
 class RPCManager;
 }
 
-/**
- * Represents the data needed to log a "ragged trim" decision to disk. There
- * will be one of these per subgroup that a node belongs to, because each
- * subgroup decides its ragged edge cleanup separately.
- */
-struct RaggedTrim : public mutils::ByteRepresentable {
-    subgroup_id_t subgroup_id;
-    uint32_t shard_num;
-    int vid;
-    int32_t leader_id; //Signed instead of unsigned so it can have the special value -1
-    std::vector<int32_t> max_received_by_sender;
-    RaggedTrim(subgroup_id_t subgroup_id, uint32_t shard_num, int vid,
-               int32_t leader_id, std::vector<int32_t> max_received_by_sender)
-    : subgroup_id(subgroup_id), shard_num(shard_num), vid(vid),
-      leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
-    DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, shard_num, vid, leader_id, max_received_by_sender);
-};
-
-/**
- * Builds a filename to use for a RaggedTrim logged to disk using its subgroup and shard IDs.
- */
-inline std::string ragged_trim_filename(subgroup_id_t subgroup_num, uint32_t shard_num) {
-    std::ostringstream string_builder;
-    string_builder << "RaggedTrim_" << subgroup_num << "_" << shard_num;
-    return string_builder.str();
-}
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -112,6 +87,7 @@ using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed
 
 using view_upcall_t = std::function<void(const View&)>;
 
+
 class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
@@ -126,6 +102,8 @@ private:
     friend class ExternalCaller;
     template <typename... T>
     friend class PersistenceManager;
+
+    friend class RestartLeaderState;
 
     whenlog(std::shared_ptr<spdlog::logger> logger;)
 
@@ -179,8 +157,9 @@ private:
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
-    //Parameters stored here, in case we need them again after construction
+    /** The subgroup membership functions, which will be called whenever the view changes. */
     const SubgroupInfo subgroup_info;
+    //Parameters stored here, in case we need them again after construction
     DerechoParams derecho_params;
 
     /** The same set of TCP sockets used by Group and RPCManager. */
@@ -201,15 +180,10 @@ private:
      * after transitioning to a new view. This transfers control back to
      * Group because the objects' constructors are only known by Group. */
     initialize_rpc_objects_t initialize_subgroup_objects;
-    /** List of logged ragged trim states, indexed by (subgroup ID, shard num),
-     * that have been recovered from the last view-change before a total crash.
-     * Used only during total restart; empty if the group started up normally. */
-    std::map<subgroup_id_t, std::map<uint32_t, std::unique_ptr<RaggedTrim>>> logged_ragged_trim;
 
-    /** Map from (subgroup ID, shard num) to ID of the "restart leader" for that
-     * shard, which is the node with the longest persistent log for that shard's
-     * replicated state. This is only non-empty during a total restart. */
-    std::vector<std::vector<int64_t>> restart_shard_leaders;
+    /** State related to restarting, such as the current logged ragged trim;
+     * null if this node is not currently doing a total restart. */
+    std::unique_ptr<RestartState> restart_state;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -304,23 +278,6 @@ private:
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
-    /**
-     * Computes the persistent version corresponding to a ragged trim proposal,
-     * i.e. the version number that will be persisted if these updates are committed.
-     * @param view_id The VID of the current View (since it's part of the version number)
-     * @param max_received_by_sender The ragged trim proposal for a single shard,
-     * corresponding to a single Replicated Object
-     * @return The persistent version number that the object will have if this
-     * ragged trim is delivered
-     */
-    static persistent::version_t ragged_trim_to_latest_version(const int32_t view_id,
-                                                               const std::vector<int32_t>& max_received_by_sender);
-
-    /**
-     * @return true if the set of node IDs includes at least one member of each
-     * subgroup in the given View.
-     */
-    static bool contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids, const View& last_view);
 
     /**
      * Constructs the next view from the current view and the set of committed
@@ -333,35 +290,10 @@ private:
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const DerechoSST& gmsSST whenlog(,
                                                 std::shared_ptr<spdlog::logger> logger));
-    /**
-     * Constructs the next view from the current view and a list of joining
-     * nodes, by ID and IP address. This version is only used by the restart
-     * leader during total restart, and assumes that all nodes marked failed
-     * in curr_view will be removed.
-     * @param curr_view The current view, including the list of failed members
-     * to remove
-     * @param joiner_ids
-     * @param joiner_ips
-     * @param logger
-     * @return A View object for the next view
-     */
-    static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<ip_addr>& joiner_ips whenlog(,
-                                                std::shared_ptr<spdlog::logger> logger));
+
 
     /* ---------------------------------------------------------------------------------- */
 
-    /**
-     * Updates curr_view and makes a new next_view based on the current set of
-     * rejoining nodes during total restart. This is only used by the restart
-     * leader during total restart.
-     * @param waiting_join_sockets The set of connections to restarting nodes
-     * @param rejoined_node_ids The IDs of those nodes
-     * @return The next view that will be installed if the restart continues at this point
-     */
-    std::unique_ptr<View> update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
-                                                            const std::set<node_id_t>& rejoined_node_ids);
     //Setup/constructor helpers
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
@@ -384,7 +316,7 @@ private:
     /** Helper function for total restart mode: Uses the RaggedTrim values
      * in logged_ragged_trim to truncate any persistent logs that have a
      * persisted version later than the last committed version in the RaggedTrim. */
-    void truncate_persistent_logs();
+    void truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim);
 
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
@@ -406,19 +338,25 @@ private:
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size);
     /**
-     * Initializes the current View with subgroup information, and creates the
-     * subgroup-settings map that MulticastGroup's constructor needs based on
-     * this information. If the current View is inadequate based on the subgroup
-     * allocation functions, it will be marked as inadequate and no subgroup
-     * settings will be provided.
-     * @param prev_view The previous View, which may be null if the current view is the first one
-     * @param curr_view A mutable reference to the current View, which will have its SubViews initialized
-     * @param subgroup_settings A mutable reference to the subgroup settings map, which will be filled out
+     * Initializes curr_view with subgroup information based on the membership
+     * functions in subgroup_info, and creates the subgroup-settings map that
+     * MulticastGroup's constructor needs based on this information. If curr_view
+     * would be inadequate based on the subgroup allocation functions, it will
+     * be marked as inadequate and no subgroup settings will be provided.
+     * @param subgroup_info The SubgroupInfo (containing subgroup membership
+     * functions) to use to provision subgroups
+     * @param prev_view The previous View, which may be null if the current view
+     * is the first one
+     * @param curr_view A mutable reference to the current View, which will have
+     * its SubViews initialized
+     * @param subgroup_settings A mutable reference to the subgroup settings map,
+     * which will be filled out
      * @return num_received_size for the SST based on the computed subgroup membership
      */
-    uint32_t make_subgroup_maps(const std::unique_ptr<View>& prev_view,
-                                View& curr_view,
-                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    static uint32_t make_subgroup_maps(const SubgroupInfo& subgroup_info,
+                                       const std::unique_ptr<View>& prev_view,
+                                       View& curr_view,
+                                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
@@ -433,8 +371,8 @@ private:
      * which will be filled in by this function
      * @return num_received_size for the SST based on the current View's subgroup membership
      */
-    uint32_t derive_subgroup_settings(View& curr_view,
-                                      std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    static uint32_t derive_subgroup_settings(View& curr_view,
+                                             std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
@@ -465,7 +403,6 @@ private:
 
 public:
 
-    static const int RESTART_LEADER_TIMEOUT = 300000;
     /**
      * Constructor for a new group where this node is the GMS leader.
      * @param my_ip The IP address of the node executing this code
@@ -538,11 +475,11 @@ public:
      * separate from the constructor to resolve the circular dependency of SST
      * synchronization. This also provides a convenient way to give the
      * constructor a "return value" to hand back to its caller.
-     * @return A reference to restart_shard_leaders, which was computed in the
-     * constructor if we're in total restart mode. The Group leader constructor
-     * will need this information.
+     * @return A copy of restart_shard_leaders, which was computed in the
+     * constructor if we're in total restart mode, or an empty vector if we're
+     * not in total restart mode. The Group leader constructor will need this information.
      */
-    const std::vector<std::vector<int64_t>>& finish_setup();
+    std::vector<std::vector<int64_t>> finish_setup();
 
     /**
      * An extra setup method only needed during total restart. Sends Replicated

@@ -74,7 +74,7 @@ Group<ReplicatedTypes...>::Group(
      * with the longest logs, and this node will need to receive state from them even
      * though it's the leader. Otherwise, this vector will be empty because the leader
      * normally doesn't need to receive any object state. */
-    const vector_int64_2d& restart_shard_leaders = view_manager.finish_setup();
+    vector_int64_2d restart_shard_leaders = view_manager.finish_setup();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive =
             construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), restart_shard_leaders);
     //The next two methods will do nothing unless we're in total restart mode
@@ -121,6 +121,7 @@ Group<ReplicatedTypes...>::Group(const node_id_t my_id,
           raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
     std::unique_ptr<vector_int64_2d> old_shard_leaders = receive_old_shard_leaders(leader_connection);
     set_up_components();
+    //Ignore the returned restart_shard_leaders, it will always be empty
     view_manager.finish_setup();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
             = construct_objects<ReplicatedTypes...>(view_manager.get_current_view().get(), *old_shard_leaders);
