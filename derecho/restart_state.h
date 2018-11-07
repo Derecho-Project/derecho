@@ -92,7 +92,7 @@ private:
     const node_id_t my_id;
 public:
     static const int RESTART_LEADER_TIMEOUT = 300000;
-    RestartLeaderState(std::unique_ptr<View> curr_view, RestartState& restart_state,
+    RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
                        std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
                        uint32_t& num_received_size,
                        const SubgroupInfo& subgroup_info,

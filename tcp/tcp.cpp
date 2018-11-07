@@ -177,7 +177,9 @@ bool socket::write(const char *buffer, size_t size) {
 
     size_t total_bytes = 0;
     while(total_bytes < size) {
-        ssize_t bytes_written = ::write(sock, buffer + total_bytes, size - total_bytes);
+        //MSG_NOSIGNAL makes send return a proper error code if the socket has been
+        //closed by the remote, rather than crashing the entire program with a SIGPIPE
+        ssize_t bytes_written = send(sock, buffer + total_bytes, size - total_bytes, MSG_NOSIGNAL);
         if(bytes_written >= 0) {
             total_bytes += bytes_written;
         } else if(bytes_written == -1 && errno != EINTR) {

@@ -46,7 +46,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     uint32_t num_received_size = 0;
     bool is_total_restart;
     //Determine if a saved view was loaded from disk
-    if(curr_view != nullptr) {
+    if(curr_view) {
         is_total_restart = true;
         whenlog(logger->debug("Found view {} on disk", curr_view->vid);)
         whenlog(logger->info("Logged View found on disk. Restarting in recovery mode.");)
@@ -142,9 +142,12 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     bool leader_redirect;
     do {
         leader_redirect = false;
+        bool success;
         whenlog(logger->debug("Socket connected to leader, exchanging IDs.");)
-        leader_connection.write(my_id);
-        leader_connection.read(leader_response);
+        success = leader_connection.write(my_id);
+        if(!success) throw derecho_exception("Failed to exchange IDs with the leader! Leader has crashed.");
+        success = leader_connection.read(leader_response);
+        if(!success) throw derecho_exception("Failed to exchange IDs with the leader! Leader has crashed.");
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             whenlog(logger->error("Error! Leader refused connection because ID {} is already in use!", my_id);)
             whenlog(logger->flush();)
@@ -166,9 +169,12 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     bool is_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
     if(is_total_restart) {
         whenlog(logger->debug("In restart mode, sending view {} to leader", curr_view->vid);)
-        leader_connection.write(mutils::bytes_size(*curr_view));
+        bool success = leader_connection.write(mutils::bytes_size(*curr_view));
+        if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
         auto leader_socket_write = [&leader_connection](const char* bytes, std::size_t size) {
-            leader_connection.write(bytes, size);
+            if(!leader_connection.write(bytes, size)) {
+                throw derecho_exception("Restart leader crashed before sending a restart View!");
+            }
         };
         mutils::post_object(leader_socket_write, *curr_view);
         restart_state = std::make_unique<RestartState>();
@@ -177,10 +183,12 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
         /* Since we know this node is only a member of one shard per subgroup,
          * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
-        leader_connection.write(restart_state->logged_ragged_trim.size());
+        success = leader_connection.write(restart_state->logged_ragged_trim.size());
+        if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
         for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
             const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second; //The inner map has one entry
-            leader_connection.write(mutils::bytes_size(*ragged_trim));
+            success = leader_connection.write(mutils::bytes_size(*ragged_trim));
+            if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
             mutils::post_object(leader_socket_write, *ragged_trim);
         }
     }
@@ -189,10 +197,14 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         //The leader will first send the size of the necessary buffer, then the serialized View
         std::size_t size_of_view;
         bool success = leader_connection.read(size_of_view);
-        assert_always(success);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
         char buffer[size_of_view];
         success = leader_connection.read(buffer, size_of_view);
-        assert(success);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
         if(is_total_restart) {
             //In total restart mode the leader sends a complete View, including all SubViews
             curr_view = mutils::from_bytes<View>(nullptr, buffer);
@@ -205,12 +217,16 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         success = leader_connection.read(size_of_derecho_params);
         char buffer2[size_of_derecho_params];
         success = leader_connection.read(buffer2, size_of_derecho_params);
-        assert(success);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
         derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
         //Next, the leader will send a single bool indicating whether this View has been committed
         //at all newly joining members. If not, we must go back to waiting for a View.
         success = leader_connection.read(view_confirmed);
-        assert(success);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
         whenlog(logger->debug("Received view {} from leader. View_confirmed = {}", curr_view->vid, view_confirmed);)
     }
     if(is_total_restart) {
@@ -400,11 +416,6 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
-                //Send a "0" as the size of the "old shard leaders" vector, since there are no old leaders
-                send_success = waiting_sockets_iter->second.write(std::size_t{0});
-                if(!send_success) {
-                    throw waiting_sockets_iter->first;
-                }
                 members_sent_view.emplace(waiting_sockets_iter->first);
                 waiting_sockets_iter++;
             } catch (node_id_t failed_joiner_id) {
@@ -420,8 +431,15 @@ void ViewManager::await_first_view(const node_id_t my_id,
                                  filtered_ips.begin(), failed_joiner_ip);
                 std::remove_copy(curr_view->joined.begin(), curr_view->joined.end(),
                                  filtered_joiners.begin(), failed_joiner_id);
+                /* Since curr_view was adequate, it already had subgroups assigned and had the next_unassigned_rank
+                 * pointer moved by the subgroup allocation functions. Ideally we should tell the subgroup functions
+                 * to "forget" their previous assignment and reset next_unassigned_rank to 0, but for now, decrement
+                 * it by 1 if the failed node was assigned to a subgroup (just like in make_next_view). */
+                int next_unassigned_rank = (curr_view->rank_of(failed_joiner_id) <= curr_view->next_unassigned_rank) ?
+                        curr_view->next_unassigned_rank - 1 : curr_view->next_unassigned_rank;
                 curr_view = std::make_unique<View>(0, filtered_members, filtered_ips,
-                                                   std::vector<char>(curr_view->num_members - 1, 0), filtered_joiners);
+                                                   std::vector<char>(curr_view->num_members - 1, 0), filtered_joiners,
+                                                   std::vector<node_id_t>{}, 0, next_unassigned_rank);
                 /* This will update curr_view->is_adequately_provisioned, so set joiner_failed to true
                  * to start over from the beginning and test if we need to wait for more joiners. */
                 num_received_size = make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view, subgroup_settings);
@@ -432,12 +450,18 @@ void ViewManager::await_first_view(const node_id_t my_id,
         } //for (waiting_join_sockets)
         //Tell each node whether to commit or abort the view they received, which is the opposite of joiner_failed
         for(const node_id_t& member_sent_view : members_sent_view) {
+            whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, !joiner_failed);)
             waiting_join_sockets.at(member_sent_view).write(!joiner_failed);
         }
         members_sent_view.clear();
     } while(joiner_failed);
     //At this point, we have successfully sent an initial view to all joining nodes
-    waiting_join_sockets.clear();
+    //Now send a "0" as the size of the "old shard leaders" vector, since there are no old leaders, and close the socket
+    for(auto waiting_sockets_iter = waiting_join_sockets.begin();
+            waiting_sockets_iter != waiting_join_sockets.end();) {
+        waiting_sockets_iter->second.write(std::size_t{0});
+        waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
+    }
 }
 
 void ViewManager::await_rejoining_nodes(const node_id_t my_id,

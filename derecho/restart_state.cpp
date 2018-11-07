@@ -69,13 +69,13 @@ persistent::version_t RestartState::ragged_trim_to_latest_version(const int32_t 
     return persistent::combine_int32s(view_id, max_seq_num);
 }
 
-RestartLeaderState::RestartLeaderState(std::unique_ptr<View> curr_view, RestartState& restart_state,
+RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
                                        std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
                                        uint32_t& num_received_size,
                                        const SubgroupInfo& subgroup_info,
                                        const node_id_t my_id) :
         whenlog(logger(spdlog::get("derecho_debug_log")),)
-        curr_view(std::move(curr_view)),
+        curr_view(std::move(_curr_view)),
         restart_state(restart_state),
         restart_subgroup_settings(subgroup_settings_map),
         restart_num_received_size(num_received_size),
