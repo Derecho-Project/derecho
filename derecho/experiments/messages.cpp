@@ -12,13 +12,13 @@ using std::pair;
 class Messages : public mutils::ByteRepresentable {
   // vector of maps <node_id, message>
   static uint nodeid = 0;
-  vector<map<uint, vector<string>>> msgs;
+  vector<pair<uint, string>> msgs;
   std::ifstream inf("node%d.txt", id);
 
 public:
-  Messages () : msgs(10, map<uint, vector<string>>){
+  Messages () : msgs(1000, pair<uint, string>){
   }
-  Messages (const vector<map<uint,vector<string>>>& msgs) : msgs(msgs){
+  Messages (const vector<pair<uint,string>>& msgs) : msgs(msgs){
   }
   Messages(const Messages&) = default;
 
