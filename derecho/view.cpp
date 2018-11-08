@@ -259,14 +259,32 @@ std::string View::debug_string() const {
 
     s << "Failed={" << fs << " }, num_failed=" << num_failed;
     s << ", Departed: { ";
-    for(uint i = 0; i < departed.size(); ++i) {
-        s << members[departed[i]] << " ";
+    for(const node_id_t& departed_node : departed) {
+        s << departed_node << " ";
     }
     s << "} , Joined: { ";
-    for(uint i = 0; i < joined.size(); ++i) {
-        s << members[joined[i]] << " ";
+    for(const node_id_t& joined_node : joined) {
+        s << joined_node << " ";
     }
-    s << "}";
+    s << "}" << std::endl;
+    s << "SubViews: ";
+    for(subgroup_id_t subgroup = 0; subgroup < subgroup_shard_views.size(); ++subgroup) {
+        for(uint32_t shard = 0; shard < subgroup_shard_views[subgroup].size(); ++shard) {
+            s << "Shard (" << subgroup << ", " << shard << "): Members={";
+            for(const node_id_t& member : subgroup_shard_views[subgroup][shard].members) {
+                s << member << " ";
+            }
+            s << "}, is_sender={";
+            for(uint i = 0; i < subgroup_shard_views[subgroup][shard].members.size(); ++i) {
+                if(subgroup_shard_views[subgroup][shard].is_sender[i]) {
+                    s << "T ";
+                } else {
+                    s << "F ";
+                }
+            }
+            s << "}.  ";
+        }
+    }
     return s.str();
 }
 

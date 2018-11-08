@@ -120,6 +120,12 @@ public:
      * @param commit
      */
     void confirm_restart_view(const bool commit);
+    /**
+     * Sends the list of nodes from each shard that have the longest log (which
+     * are the restart shard leaders, though they won't be shard leaders after
+     * restart) to all members in the restart view, then closes their TCP sockets.
+     */
+    void send_shard_leaders();
     /** Read the curr_view (last known view) managed by RestartLeaderState. Only used for debugging. */
     const View& get_curr_view() const { return *curr_view; }
     /** Read the current restart view managed by RestartLeaderState. */

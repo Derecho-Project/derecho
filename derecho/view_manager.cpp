@@ -110,6 +110,7 @@ ViewManager::ViewManager(const node_id_t my_id,
     } else {
         num_received_size = make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view, subgroup_settings_map);
     };
+    whenlog(logger->trace("Received initial view: {}", curr_view->debug_string());)
     //Persist the initial View to disk as soon as possible, which is after subgroup membership has been assigned
     persistent::saveObject(*curr_view);
     whenlog(logger->debug("Initializing SST and RDMC for the first time.");)
@@ -221,6 +222,22 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
         derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
+        if(is_total_restart) {
+            //In total restart mode, the leader will also send the RaggedTrims it has collected
+            whenlog(logger->debug("In restart mode, receiving ragged trim from leader");)
+            restart_state->logged_ragged_trim.clear();
+            std::size_t num_of_ragged_trims;
+            leader_connection.read(num_of_ragged_trims);
+            for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
+                std::size_t size_of_ragged_trim;
+                leader_connection.read(size_of_ragged_trim);
+                char buffer[size_of_ragged_trim];
+                leader_connection.read(buffer, size_of_ragged_trim);
+                std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+                //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
+                restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
+            }
+        }
         //Next, the leader will send a single bool indicating whether this View has been committed
         //at all newly joining members. If not, we must go back to waiting for a View.
         success = leader_connection.read(view_confirmed);
@@ -228,21 +245,6 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
         whenlog(logger->debug("Received view {} from leader. View_confirmed = {}", curr_view->vid, view_confirmed);)
-    }
-    if(is_total_restart) {
-        whenlog(logger->debug("In restart mode, receiving ragged trim from leader");)
-        restart_state->logged_ragged_trim.clear();
-        std::size_t num_of_ragged_trims;
-        leader_connection.read(num_of_ragged_trims);
-        for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
-            std::size_t size_of_ragged_trim;
-            leader_connection.read(size_of_ragged_trim);
-            char buffer[size_of_ragged_trim];
-            leader_connection.read(buffer, size_of_ragged_trim);
-            std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-            //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
-            restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
-        }
     }
     return is_total_restart;
 }
@@ -378,11 +380,15 @@ void ViewManager::await_first_view(const node_id_t my_id,
             ip_addr my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
             //None of these views are ever installed, so we don't use curr_view/next_view like normal
+            //If we're here because a joiner failed, the subgroup functions have previously run to completion,
+            //so preserve next_unassigned_rank.
+            int next_unassigned_rank = joiner_failed ? curr_view->next_unassigned_rank : 0;
             curr_view = std::make_unique<View>(curr_view->vid,
                                                functional_append(curr_view->members, joiner_id),
                                                functional_append(curr_view->member_ips, joiner_ip),
                                                std::vector<char>(curr_view->num_members + 1, 0),
-                                               functional_append(curr_view->joined, joiner_id));
+                                               functional_append(curr_view->joined, joiner_id),
+                                               std::vector<node_id_t>{}, 0, next_unassigned_rank);
             num_received_size = make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view, subgroup_settings);
             waiting_join_sockets.emplace(joiner_id, std::move(client_socket));
             whenlog(logger->debug("Node {} connected from IP address {}", joiner_id, joiner_ip);)
@@ -433,8 +439,9 @@ void ViewManager::await_first_view(const node_id_t my_id,
                                  filtered_joiners.begin(), failed_joiner_id);
                 /* Since curr_view was adequate, it already had subgroups assigned and had the next_unassigned_rank
                  * pointer moved by the subgroup allocation functions. Ideally we should tell the subgroup functions
-                 * to "forget" their previous assignment and reset next_unassigned_rank to 0, but for now, decrement
-                 * it by 1 if the failed node was assigned to a subgroup (just like in make_next_view). */
+                 * to "forget" their previous assignment and reset next_unassigned_rank to 0, because that assignment
+                 * was never installed or used, but for now, decrement it by 1 if the failed node was assigned to a
+                 * subgroup (just like in make_next_view). */
                 int next_unassigned_rank = (curr_view->rank_of(failed_joiner_id) <= curr_view->next_unassigned_rank) ?
                         curr_view->next_unassigned_rank - 1 : curr_view->next_unassigned_rank;
                 curr_view = std::make_unique<View>(0, filtered_members, filtered_ips,
@@ -455,6 +462,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
         }
         members_sent_view.clear();
     } while(joiner_failed);
+    whenlog(logger->trace("Decided on initial view: {}", curr_view->debug_string());)
     //At this point, we have successfully sent an initial view to all joining nodes
     //Now send a "0" as the size of the "old shard leaders" vector, since there are no old leaders, and close the socket
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
@@ -474,6 +482,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
     while(still_need_quorum) {
         restart_leader_state_machine.await_quorum(server_socket);
         whenlog(logger->debug("Reached a quorum of nodes from view {}, created view {}", restart_leader_state_machine.get_curr_view().vid, restart_leader_state_machine.get_restart_view().vid);)
+        still_need_quorum = false;
         //Compute a final ragged trim
         //Actually, I don't think there's anything to "compute" because
         //we only kept the latest ragged trim from each subgroup and shard
@@ -510,9 +519,10 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
         }
 
     }
+    whenlog(logger->trace("Decided on restart view: {}", restart_leader_state_machine.get_restart_view().debug_string());)
     //Commit the restart view at all joining clients
     restart_leader_state_machine.confirm_restart_view(true);
-
+    restart_leader_state_machine.send_shard_leaders();
     curr_view = restart_leader_state_machine.take_restart_view();
 
 }

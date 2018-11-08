@@ -276,19 +276,6 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
                     }
                 }
             }
-            //Next, the joining node will expect a vector of shard leaders from which to receive Persistent logs
-            //Instead, send it the nodes with the longest logs, even though they're not "leaders"
-            std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
-            char leaders_buffer[leaders_buffer_size];
-            send_success = waiting_sockets_iter->second.write(leaders_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
-            mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
-            send_success = waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
             waiting_sockets_iter++;
         } catch (node_id_t failed_node) {
@@ -306,19 +293,32 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
     return -1;
 }
 
+void RestartLeaderState::send_shard_leaders() {
+    for(auto waiting_sockets_iter = waiting_join_sockets.begin();
+            waiting_sockets_iter != waiting_join_sockets.end(); ) {
+        std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
+        char leaders_buffer[leaders_buffer_size];
+        /* It would be nice to check the return values of these writes and handle a failure here,
+         * but since all the other nodes have already installed the View there's no way to tell
+         * them about the failure - they're already attempting to set up their SST with the
+         * failed node. */
+        waiting_sockets_iter->second.write(leaders_buffer_size);
+        mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
+        waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
+        //This is the last message a joining node expects to get, so close the socket
+        waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
+    }
+
+}
+
 void RestartLeaderState::confirm_restart_view(const bool commit) {
     for(const node_id_t& member_sent_view : members_sent_restart_view) {
         whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, commit);)
-        //Eventually it would be nice to also check for failures here, but
+        //Eventually it would be nice to check for failures here, but
         //we probably won't detect a failure by writing one byte.
         waiting_join_sockets.at(member_sent_view).write(commit);
     }
     members_sent_restart_view.clear();
-    /* If we are committing a successful restart view, this is the last message
-     * we need to send to joining clients, so close their sockets. */
-    if(commit) {
-        waiting_join_sockets.clear();
-    }
 }
 
 void RestartLeaderState::print_longest_logs() const {

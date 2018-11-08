@@ -85,6 +85,8 @@ bool DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_
 subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_view,
                                                              int& next_unassigned_rank) {
     if(previous_assignment) {
+        //Assume the new assignment will be the same as the previous except for a few changes
+        auto next_assignment = std::make_unique<subgroup_shard_layout_t>(*previous_assignment);
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
             int num_shards_in_subgroup;
             if(policy.identical_subgroups) {
@@ -99,21 +101,21 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
                     ++shard_rank) {
                     if(curr_view.rank_of((*previous_assignment)[subgroup_num][shard_num].members[shard_rank]) == -1) {
                         //This node is not in the current view, so take the next available one
-                        if(next_unassigned_rank >= (int)curr_view.members.size()) {
+                        if(next_unassigned_rank >= static_cast<int>(curr_view.members.size())) {
                             throw subgroup_provisioning_exception();
                         }
-                        (*previous_assignment)[subgroup_num][shard_num].members[shard_rank] = curr_view.members[next_unassigned_rank];
-                        (*previous_assignment)[subgroup_num][shard_num].member_ips[shard_rank] = curr_view.member_ips[next_unassigned_rank];
+                        (*next_assignment)[subgroup_num][shard_num].members[shard_rank] = curr_view.members[next_unassigned_rank];
+                        (*next_assignment)[subgroup_num][shard_num].member_ips[shard_rank] = curr_view.member_ips[next_unassigned_rank];
                         next_unassigned_rank++;
-                    } else {
-                        //Do nothing, keep the previous assignment
                     }
                 }
                 //These will be initialized from scratch by the calling ViewManager
-                (*previous_assignment)[subgroup_num][shard_num].joined.clear();
-                (*previous_assignment)[subgroup_num][shard_num].departed.clear();
+                (*next_assignment)[subgroup_num][shard_num].joined.clear();
+                (*next_assignment)[subgroup_num][shard_num].departed.clear();
             }
         }
+        //If we reached this point without throwing an exception, the new assignment is adequate and can be saved
+        previous_assignment = std::move(next_assignment);
     } else {
         previous_assignment = std::make_unique<subgroup_shard_layout_t>();
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {

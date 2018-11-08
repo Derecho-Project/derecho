@@ -69,9 +69,26 @@ int main(int argc, char** argv) {
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
+    const int num_subgroups = 1;
+    const int num_shards = 2;
+    const int members_per_shard = 3;
     derecho::SubgroupInfo subgroup_info({{std::type_index(typeid(PersistentThing)),
-                                          derecho::DefaultSubgroupAllocator(
-                                                  derecho::one_subgroup_policy(derecho::even_sharding_policy(2, 3)))}});
+                                          [&](const derecho::View& curr_view, int& next_unassigned_rank) {
+        if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
+        int member_rank = 0;
+        for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+            for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
+                std::vector<derecho::node_id_t> subview_members(&curr_view.members[member_rank],
+                                                                &curr_view.members[member_rank+members_per_shard]);
+                layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
+                member_rank += members_per_shard;
+            }
+        }
+        return layout_vector;
+    }}});
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
 
