@@ -2,11 +2,11 @@
 #include <iostream>
 #include <stdlib.h>
 
-#include "../sst.h"
+#include "sst/sst.h"
 #ifdef USE_VERBS_API
-#include "../verbs.h"
+#include "sst/verbs.h"
 #else
-#include "../lf.h"
+#include "sst/lf.h"
 #endif
 
 using std::cin;

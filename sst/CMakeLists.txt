@@ -12,7 +12,6 @@ include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
 include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
-add_subdirectory(experiments)
 
 # ADD_LIBRARY(sst SHARED verbs.cpp lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)
 ADD_LIBRARY(sst SHARED lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)

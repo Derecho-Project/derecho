@@ -13,6 +13,7 @@ add_subdirectory(rdmc)
 add_subdirectory(sst)
 add_subdirectory(tcp)
 add_subdirectory(persistent)
+add_subdirectory(applications)
 
 add_custom_target(
 	mutils_target

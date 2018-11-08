@@ -5,8 +5,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwa
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
-add_subdirectory(experiments)
-
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
