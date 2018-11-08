@@ -1,7 +1,7 @@
 #include "Persistent.hpp"
 
-namespace persistent{
-  DEFINE_PERSISTENT_REGISTRY_STATIC_MEMBERS;
+namespace persistent {
+DEFINE_PERSISTENT_REGISTRY_STATIC_MEMBERS;
 
   const version_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num) {
     // All persistent log implementation MUST implement getMinimumLatestPersistedVersion()
