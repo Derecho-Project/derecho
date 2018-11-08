@@ -89,14 +89,15 @@ int main(int argc, char *argv[]) {
 				     [num_nodes](const View& view, int&, bool) {
 				       auto& members = view.members;
 				       auto num_members = members.size();
-				       if (num_members < num_nodes) {
-					 throw subgroup_provisioning_exception();
-				       }
+				       // if (num_members < num_nodes) {
+				       // 	 throw subgroup_provisioning_exception();
+				       // }
 				       subgroup_shard_layout_t layout(num_members);
-				       for (uint i = 0; i < num_members; ++i) {
-					 layout[i].push_back(view.make_subview(vector<uint32_t>{members[i], members[(i+1)%num_members], members[(i+2)%num_members]}));
-					 layout[i].
-				       }
+				       // for (uint i = 0; i < num_members; ++i) {
+					 // layout[i].push_back(view.make_subview(vector<uint32_t>{members[i], members[(i+1)%num_members], members[(i+2)%num_members]}));
+					 // layout[i].
+					 layout[0].push_back(view.make_subview(vector<uint32_t>(members)));
+					 // }
 				       return layout;
 				     }}};
 
@@ -107,10 +108,18 @@ int main(int argc, char *argv[]) {
 
     SubgroupInfo subgroup_info(subgroup_membership_functions);
 
+    auto view_upcall = [](const View& view) {
+			 std::cout << "The members are: " << std::endl;
+			 for (auto m : view.members) {
+			   std::cout << m << " ";
+			 }
+			 std::cout << std::endl;
+		       };
+    
     if(my_id == 0) {
-      group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, {}, ticket_subgroup_factory);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, callbacks, subgroup_info, derecho_params, vector<view_upcall_t>{view_upcall}, ticket_subgroup_factory);
     } else {
-      group = new Group<TicketBookingSystem>(my_id, my_ip, leader_ip, callbacks, subgroup_info, {}, ticket_subgroup_factory);
+      group = new Group<TicketBookingSystem>(my_id, my_ip, leader_ip, callbacks, subgroup_info, vector<view_upcall_t>{view_upcall}, ticket_subgroup_factory);
     }
 
     std::cout << "Finished constructing/joining the group" << std::endl;
@@ -128,14 +137,14 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // all members book a ticket
-    Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
+    // // all members book a ticket
+    // Replicated<TicketBookingSystem>& ticketBookingHandle = group->get_subgroup<TicketBookingSystem>();
 
-    rpc::QueryResults<bool> results = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
-    rpc::QueryResults<bool>::ReplyMap& replies = results.get();
-    for (auto& reply_pair: replies) {
-        std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
-    }
+    // rpc::QueryResults<bool> results = ticketBookingHandle.ordered_query<RPC_NAME(book)>(my_rank);
+    // rpc::QueryResults<bool>::ReplyMap& replies = results.get();
+    // for (auto& reply_pair: replies) {
+    //     std::cout << "Reply from node " << reply_pair.first << ": " << std::boolalpha << reply_pair.second.get() << std::endl;
+    // }
     
     std::cout << "End of main. Waiting indefinitely" << std::endl;
     while(true) {
