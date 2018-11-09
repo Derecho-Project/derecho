@@ -14,7 +14,6 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
 * The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
-* sysctl -w vm.overcommit_memory = 1
 
 ### Getting Started
 Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
@@ -37,14 +36,11 @@ To add your own executable (that uses Derecho) to the build system, simply add a
 
 To use Derecho in your code, you simply need to 
 - include the header `derecho/derecho.h` in your \*.h or \*.cpp files, and
-   
-```cpp
-#include "derecho/derecho.h"
-```
-- specify a configuration file with environment vairable DERECHO_CONF_FILE or `derecho.cfg` in the working directory. A sample configuration file along the explanation could be found in `conf/derecho-default.cfg`. The most important configuration entries are
-**provider** and **domain**. The **provider** entry specifies the type of RDMA device and the **domain** entry specifies the device (you can also understand it as NIC). [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
+- specify a configuration file, either by setting environment vairable DERECHO_CONF_FILE or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along the explanation can be found in `conf/derecho-default.cfg`. The most important configuration entries are **provider** and **domain**. The **provider** entry specifies the type of RDMA device and the **domain** entry specifies the device (you can also understand it as NIC). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
 
-Configuration 1: run derecho over TCP/IP with ethernet port 'eth0':
+
+**Configuration Examples**
+Configuration 1: run Derecho over TCP/IP with ethernet port 'eth0':
 
 ```
 ...
@@ -56,7 +52,7 @@ rx_depth = 256
 ...
 ```
 
-Configuration 2: run derecho over verbs RDMA with RDMA device 'mlx5_0':
+Configuration 2: run Derecho over verbs RDMA with RDMA device 'mlx5_0':
 
 ```
 ...
@@ -67,40 +63,47 @@ tx_depth = 4096
 rx_depth = 4096
 ...
 ```
-The **tx_depth** and **rx_depth** configure the maximum of pending requests waiting for ACK. Those numbers are different from one device to another. We recommend large numbers as possible.
+The **tx_depth** and **rx_depth** configure the maximum of pending requests that can be waiting for acknowledgement before communication blocks. Those numbers can be different from one device to another. We recommend setting them as large as possible.
 
-### Testing (and some hidden gotchas)
-There are many experiment files in derecho/experiments that can be run to test the installation. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
-* sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
+### Setup and Testing
+There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
+
+```
+sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
 infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
-* sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw_nes iw_c2 ib_mthca
+sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw_nes iw_c2 ib_mthca
+```
 Depending on your system, some of the modules might not load which is fine.
 
 RDMA requires memory pinning of memory regions shared with other nodes. There's a limit on the maximum amount of memory a process can pin, typically 64 KB, which Derecho easily exceeds. Therefore, you need to set this to unlimited. To do so, append the following lines to /etc/security/limits.conf:
-* username hard memlock unlimited
-* username soft memlock unlimited
+* `[username] hard memlock unlimited`
+* `[username] soft memlock unlimited`
 
-where username is your linux username. A * in place of username will set this limit to unlimited for all users. Log out and back in again for the limits to reapply. You can test this by verifying that `ulimit -l` outputs `unlimited` in bash.
+where `[username]` is your linux username. A `*` in place of the username will set this limit to unlimited for all users. Log out and back in again for the limits to reapply. You can test this by verifying that `ulimit -l` outputs `unlimited` in bash.
+
+The persistence layer of Derecho stores durable logs of updates in memory-mapped files. Linux also limits the size of memory-mapped files to a small size that Derecho usually exceeds, so you will need to set the system parameter `vm.overcommit_memory` to `1` for persistence to work. To do this, run the command
+```
+sysctl -w vm.overcommit_memory = 1
+```
 
 We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
 
-To test if one of the experiments is working correctly, go to two of your machines (nodes), `cd` to `Release/derecho/experiments` and run `./derecho_bw_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
+A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance_tests. To run it, go to two of your machines (nodes), `cd` to `Release/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
 The input to the first node is:
-* 0 (it's node id)
+* 0 (its node ID)
 * 2 (number of nodes for the experiment)
-* ip-addr of node 1
-* ip-addr of node 2
-Replace the node id 0 by 1 for the input to the second node.
-As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw` something along the lines of `12 0 10000 15 1000 1 0 0.37282
-`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation at the link given earlier.
+* IP address of node 1
+* IP address of node 2
+Replace the node ID 0 by 1 for the input to the second node.
+As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw`, which will be something along the lines of `12 0 10000 15 1000 1 0 0.37282`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation for this program.
 
 ## Using Derecho
-The file `typed_subgroup_test.cpp` within derecho/experiments shows a complete working example of a program that sets up and uses a Derecho group with several Replicated Objects. You can read through that file if you prefer to learn by example, or read on for an explanation of how to use various features of Derecho.
+The file `simple_replicated_objects.cpp` within applications/demos shows a complete working example of a program that sets up and uses a Derecho group with several Replicated Objects. You can read through that file if you prefer to learn by example, or read on for an explanation of how to use various features of Derecho.
 
 ### Replicated Objects
 One of the core building blocks of Derecho is the concept of a Replicated Object. This provides a simple way for you to define state that is replicated among several machines and a set of RPC functions that operate on that state.
 
-A Replicated Object is any class that (1) is serializable with the mutils-serialization framework and (2) implements a static method called `register_functions()`. The [mutils-serialization](https://github.com/mpmilano/mutils-serialization) library should have more documentation on making objects serializable, but the most straightforward way is to inherit `mutils::ByteRepresentable`, use the macro `DEFAULT_SERIALIZATION_SUPPORT`, and write an element-by-element constructor. The `register_functions()` method is how your class specifies to Derecho which of its methods should be converted to RPC functions and what their numeric "function tags" should be. It should return a `std::tuple` containing a pointer to each RPC-callable method, wrapped in the template function `derecho::rpc::tag`. The template parameter to `tag` is the integer that will be used to identify RPC calls to the corresponding method pointer, so we recommend you use a named constant that has the same name as the method. Here is an example of a Replicated Object declaration:
+A Replicated Object is any class that (1) is serializable with the mutils-serialization framework and (2) implements a static method called `register_functions()`. The [mutils-serialization](https://github.com/mpmilano/mutils-serialization) library should have more documentation on making objects serializable, but the most straightforward way is to inherit `mutils::ByteRepresentable`, use the macro `DEFAULT_SERIALIZATION_SUPPORT`, and write an element-by-element constructor. The `register_functions()` method is how your class specifies to Derecho which of its methods should be converted to RPC functions and what their numeric "function tags" should be. It should return a `std::tuple` containing a pointer to each RPC-callable method, wrapped in the template function `derecho::rpc::tag`, whose template parameter is an integer constant. We have provided a default implementation of this function with the macro `REGISTER_RPC_FUNCTIONS`, which registers each method in its argument using the integer constant generated by the macro `RPC_NAME`. Here is an example of a Replicated Object declaration that uses the default implementation macros: 
 
 ```cpp
 class Cache : public mutils::ByteRepresentable {
@@ -111,26 +114,15 @@ public:
     std::string get(const std::string& key); 
     bool contains(const std::string& key);
     bool invalidate(const std::string& key);
-    enum Functions { PUT,
-                     GET,
-                     CONTAINS,
-                     INVALIDATE };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<PUT>(&Cache::put),
-                               derecho::rpc::tag<GET>(&Cache::get),
-                               derecho::rpc::tag<CONTAINS>(&Cache::contains),
-                               derecho::rpc::tag<INVALIDATE>(&Cache::invalidate));
-    }
-
     Cache() : cache_map() {}
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
+	REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
 };
 ```
 
-This object has one field, `cache_map`, so the DEFAULT_SERIALIZATION_SUPPORT macro is called with the name of the class and the name of this field. The second constructor, which initializes the field from a parameter of the same type, is required for serialization support. The object has four RPC methods, `put`, `get`, `contains`, and `invalidate`, and `register_functions()` tags them with enum constants that have similar names.
+This object has one field, `cache_map`, so the DEFAULT_SERIALIZATION_SUPPORT macro is called with the name of the class and the name of this field. The second constructor, which initializes the field from a parameter of the same type, is required for serialization support. The object has four RPC methods, `put`, `get`, `contains`, and `invalidate`, so the REGISTER_RPC_FUNCTIONS macro is called with the name of the class and the names of these methods. When these RPC functions are called, they will be identified with the tags `RPC_NAME(put)`, `RPC_NAME(get)` `RPC_NAME(contains)`, and `RPC_NAME(invalidate)`.
 
 ### Groups and Subgroups
 
@@ -152,18 +144,31 @@ Derecho provides a default subgroup membership function that automatically assig
 There are several helper functions in `subgroup_functions.h` that construct AllocationPolicy objects for different scenarios, to make it easier to set up the default subgroup membership function. Here is an example of a SubgroupInfo that uses these functions to set up two types of Replicated Objects using the default membership function:
 ```cpp
 derecho::SubgroupInfo subgroup_info {
-	{{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(
-			derecho::one_subgroup_policy(derecho::even_sharding_policy(2, 3)))},
-	 {std::type_index(typeid(Bar)), derecho::DefaultSubgroupAllocator(
-			derecho::identical_subgroups_policy(2, derecho::even_sharding_policy(1, 3)))}
-	}, 
-	{std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}
+    {{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(
+            derecho::one_subgroup_policy(derecho::even_sharding_policy(2, 3)))},
+     {std::type_index(typeid(Bar)), derecho::DefaultSubgroupAllocator(
+            derecho::identical_subgroups_policy(2, derecho::even_sharding_policy(1, 3)))}
+    }, 
+    {std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}
 };
-
 ```
 Based on the policies constructed for the constructor argument of DefaultSubgroupAllocator, the function associated with Foo will create one subgroup of type Foo, with two shards of 3 members each. The function associated with Bar will create two subgroups of type Bar, each of which has only one shard of size 3. Note that the second component of SubgroupInfo is a list of the same Replicated Object types that are in the function map; this list specifies the order in which the membership functions will be run. 
 
-More advanced users may, of course, want to define their own subgroup membership functions. We will describe how to do this in a later section of the user guide.
+More advanced users may, of course, want to define their own subgroup membership functions. The demo program `simple_replicated_objects.cpp` shows a relatively simple example of user-defined membership functions. In this program, each value in the SubgroupInfo map is a C++ lambda function that implements the `shard_view_generator_t` type signature. For example, this function defines a Replicated Object that will have one subgroup and one shard, with the members of that shard consisting of the first three nodes in the current View's members list:
+```cpp
+[](const derecho::View& curr_view, int& next_unassigned_rank) {
+    if(curr_view.num_members < 3) {
+      throw derecho::subgroup_provisioning_exception();
+    }
+    derecho::subgroup_shard_layout_t subgroup_vector(1);
+    std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
+    //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
+    subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+    next_unassigned_rank = std::max(next_unassigned_rank, 3);
+    return subgroup_vector;
+}
+```
+Note that if there are not enough members in the current view to assign 3 nodes to this subgroup, the function throws `derecho::subgroup_provisioning_exception`. This is how subgroup membership functions indicate to the view management logic that a view has suffered too many failures to continue executing (it is "inadequately provisioned") and must wait for more members to join before accepting any more state updates.
 
 
 #### Constructing a Group
@@ -187,11 +192,12 @@ Ordered sends and queries are invoked through the `Replicated` interface, whose 
 ```cpp
 Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>(1);
 ```
-The `ordered_send` and `ordered_query` methods use their template parameter, which is an integral "function tag," to specify which RPC function they invoke; this should correspond to the same constant you used to tag that function in the Replicated Object's `register_functions()` method. Their arguments are the arguments that will be passed to the RPC function call. The `ordered_send` function returns nothing, while the `ordered_query` function returns an instance of `derecho::rpc::QueryResults` with a template parameter equal to the return type of the RPC function. Using the Cache example from earlier, this is what RPC calls to the "put" and "contains" functions would look like:
+The `ordered_send` and `ordered_query` methods use their template parameter, which is an integral "function tag," to specify which RPC function they invoke; this should correspond to the same constant used to tag that function in the Replicated Object's `register_functions()` method. Their arguments are the arguments that will be passed to the RPC function call. The `ordered_send` function returns nothing, while the `ordered_query` function returns an instance of `derecho::rpc::QueryResults` with a template parameter equal to the return type of the RPC function. Using the Cache example from earlier, this is what RPC calls to the "put" and "contains" functions would look like:
 ```cpp
-cache_rpc_handle.ordered_send<Cache::PUT>("Foo", "Bar");
-derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<Cache::CONTAINS>("Foo");
+cache_rpc_handle.ordered_send<RPC_NAME(put)>("Foo", "Bar");
+derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Foo");
 ```
+Note that if you are using the `REGISTER_RPC_FUNCTIONS` macro, the function tag for an RPC function will be the integer generated by the `RPC_NAME` macro applied to the name of the function. 
 
 P2P (peer-to-peer) sends and queries are invoked through the `ExternalCaller` interface, which is exactly like the `Replicated` interface except it only provides the `p2p_send` and `p2p_query` functions. ExternalCaller objects are provided through the `get_nonmember_subgroup` method of Group, which works exactly like `get_subgroup` (except for the assumption that the caller is not a member of the requested subgroup). For example, this is how a process that is not a member of the second Cache-type subgroup would get an ExternalCaller to that subgroup:
 ```cpp
@@ -199,7 +205,7 @@ ExternalCaller<Cache>& p2p_cache_handle = group->get_nonmember_subgroup<Cache>(1
 ```
 When invoking a P2P send or query, the caller must specify, as the first argument, the ID of the node to communicate with. The caller must ensure that this node is actually a member of the subgroup that the ExternalCaller targets (though it can be in any shard of that subgroup). For example, if node 5 is in the Cache subgroup targeted above, this is how a non-member process could make a call to `get`:
 ```cpp
-derecho::rpc::QueryResults<std::string> results = p2p_cache_handle.p2p_query<Cache::GET>(5, "Foo");
+derecho::rpc::QueryResults<std::string> results = p2p_cache_handle.p2p_query<RPC_NAME(get)>(5, "Foo");
 ```
 
 #### Using QueryResults objects
@@ -208,7 +214,7 @@ The result of an ordered query is a slightly complex object, because it must con
 
 As an example, this code waits for the responses from each node and combines them to ensure that all replicas agree on an item's presence in the cache:
 ```cpp
-derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<Cache::CONTAINS>("Stuff");
+derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Stuff");
 bool contains_accum = true;
 for(auto& reply_pair : results.get()) {
 	bool contains_result = reply_pair.second.get();
