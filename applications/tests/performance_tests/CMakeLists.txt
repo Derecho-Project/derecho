@@ -16,3 +16,5 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
+add_executable(bandwidth_test bandwidth_test.cpp block_size.cpp aggregate_bandwidth.cpp)
+target_link_libraries(bandwidth_test derecho)
