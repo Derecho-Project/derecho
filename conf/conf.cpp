@@ -39,7 +39,36 @@ std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
   #define dbg_flush()
 #endif //NDEBUG
 
-void Conf::initialize(const char * conf_file){
+#define MAKE_LONG_OPT_ENTRY(x) \
+    {x, required_argument, 0, 0 }
+struct option Conf::long_options[] = {
+      // [DERECHO]
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_IP),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_GMS_PORT),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_ID),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_IP),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_GMS_PORT),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RPC_PORT),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_PORT),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_PORT),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_PAYLOAD_SIZE),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_BLOCK_SIZE),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_WINDOW_SIZE),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_TIMEOUT_MS),
+      MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_SEND_ALGORITHM),
+      // [RDMA]
+      MAKE_LONG_OPT_ENTRY(CONF_RDMA_PROVIDER),
+      MAKE_LONG_OPT_ENTRY(CONF_RDMA_DOMAIN),
+      MAKE_LONG_OPT_ENTRY(CONF_RDMA_TX_DEPTH),
+      MAKE_LONG_OPT_ENTRY(CONF_RDMA_RX_DEPTH),
+      // [PERS]
+      MAKE_LONG_OPT_ENTRY(CONF_PERS_FILE_PATH),
+      MAKE_LONG_OPT_ENTRY(CONF_PERS_RAMDISK_PATH),
+      {0,0,0,0}
+};
+
+void Conf::initialize(int argc, char * argv[], const char * conf_file){
   uint32_t expected = CONF_UNINITIALIZED;
   // if not initialized(0), set the flag to under initialization ... 
   if (Conf::singleton_initialized_flag.compare_exchange_strong(
@@ -68,7 +97,7 @@ void Conf::initialize(const char * conf_file){
     }
     else
       dbg_trace("no configuration is found...load defaults.");
-    Conf::singleton = std::make_unique<Conf>(cfg);
+    Conf::singleton = std::make_unique<Conf>(argc,argv,cfg);
     delete cfg;
 
     // 3 - set the flag to initialized
@@ -76,9 +105,11 @@ void Conf::initialize(const char * conf_file){
   }
 }
 
+// should we force the user to call Conf::initialize() by throw an expcetion
+// for uninitialized configuration?
 const Conf* Conf::get() noexcept {
   while (Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED)
-    Conf::initialize(nullptr);
+    Conf::initialize(1, nullptr, nullptr);
   return Conf::singleton.get();
 }
 
@@ -90,12 +121,24 @@ const int32_t getConfInt32(const std::string & key){
   return Conf::get()->getInt32(key);
 }
 
+const uint32_t getConfUInt32(const std::string & key){
+  return Conf::get()->getUInt32(key);
+}
+
 const int16_t getConfInt16(const std::string & key){
   return Conf::get()->getInt16(key);
 }
 
+const uint16_t getConfUInt16(const std::string & key){
+  return Conf::get()->getUInt16(key);
+}
+
 const int64_t getConfInt64(const std::string & key){
   return Conf::get()->getInt64(key);
+}
+
+const uint64_t getConfUInt64(const std::string &key) {
+  return Conf::get()->getUInt64(key);
 }
 
 const float getConfFloat(const std::string & key){

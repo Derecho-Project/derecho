@@ -18,12 +18,12 @@ using std::string;
 using namespace sst;
 using namespace tcp;
 
-void initialize(int node_rank, const map<uint32_t, string> &ip_addrs) {
+void initialize(int node_rank, const map<uint32_t, std::pair<string, uint16_t>> &ip_addrs_and_ports) {
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs, node_rank);
+    verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs, node_rank);
+    lf_initialize(ip_addrs_and_ports, node_rank);
 #endif
 }
 
@@ -59,18 +59,23 @@ void wait_for_completion(std::thread::id tid) {
 int main() {
     srand(time(NULL));
     // input number of nodes and the local node id
-    int num_nodes, node_rank;
+    std::cout << "Enter node_rank and num_nodes" << std::endl;
+    int node_rank, num_nodes;
     cin >> node_rank;
     cin >> num_nodes;
 
+    uint16_t port = 32567;
     // input the ip addresses
-    map<uint32_t, string> ip_addrs;
+    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(int i = 0; i < num_nodes; ++i) {
-        cin >> ip_addrs[i];
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     // create all tcp connections and initialize global rdma resources
-    initialize(node_rank, ip_addrs);
+    initialize(node_rank, ip_addrs_and_ports);
 
     int a;
     volatile int b;

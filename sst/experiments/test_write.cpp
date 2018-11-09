@@ -24,22 +24,28 @@ int main() {
     spdlog::set_level(spdlog::level::trace);
 #endif
 
-    // input number of nodes and the local node id
-    int num_nodes, node_rank;
+    // input number of nodes and the local node rank
+    std::cout << "Enter node_rank and num_nodes" << std::endl;
+    int node_rank, num_nodes;
     cin >> node_rank;
     cin >> num_nodes;
 
+    std::cout << "Input the IP addresses" << std::endl;
+    uint16_t port = 32567;
     // input the ip addresses
-    map<uint32_t, string> ip_addrs;
+    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(int i = 0; i < num_nodes; ++i) {
-        cin >> ip_addrs[i];
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     // create all tcp connections and initialize global rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs, node_rank);
+    verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs, node_rank);
+    lf_initialize(ip_addrs_and_ports, node_rank);
 #endif
     // create read and write buffers
 //  char *write_buf = (char *)malloc(ROWSIZE);

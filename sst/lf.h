@@ -154,7 +154,7 @@ public:
 /**
  * add a new node to sst_connection set.
  */
-bool add_node(uint32_t new_id, const std::string new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 /** sync
  * @param r_id - ID of the node to exchange data with.
  */

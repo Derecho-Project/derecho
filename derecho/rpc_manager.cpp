@@ -152,7 +152,7 @@ void RPCManager::new_view_callback(const View& new_view) {
         //If this node is in the joined list, we need to set up a connection to everyone
         for(int i = 0; i < new_view.num_members; ++i) {
             if(new_view.members[i] != nid) {
-                tcp_connections.add_node(new_view.members[i], new_view.member_ips[i]);
+	      tcp_connections.add_node(new_view.members[i], {std::get<0>(new_view.member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[i])});
                 whenlog(logger->debug("Established a TCP connection to node {}", new_view.members[i]);)
             }
         }
@@ -160,7 +160,7 @@ void RPCManager::new_view_callback(const View& new_view) {
         //This node is already a member, so we already have connections to the previous view's members
         for(const node_id_t& joiner_id : new_view.joined) {
             tcp_connections.add_node(joiner_id,
-                                     new_view.member_ips[new_view.rank_of(joiner_id)]);
+                                     {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
             whenlog(logger->debug("Established a TCP connection to node {}", joiner_id);)
         }
         for(const node_id_t& removed_id : new_view.departed) {

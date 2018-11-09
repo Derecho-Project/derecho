@@ -52,30 +52,51 @@ struct CallbackSet {
 
 struct DerechoParams : public mutils::ByteRepresentable {
     long long unsigned int max_payload_size;
-    long long unsigned int sst_max_payload_size;
+    long long unsigned int max_smc_payload_size;
     long long unsigned int block_size;
-    unsigned int window_size = 3;
-    unsigned int timeout_ms = 1;
-    rdmc::send_algorithm type = rdmc::BINOMIAL_SEND;
-    uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT);
+    unsigned int window_size;
+    unsigned int timeout_ms;
+    rdmc::send_algorithm rdmc_send_algorithm;
+    uint32_t rpc_port;
+
+    DerechoParams() {
+      max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+      max_smc_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE);
+      block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
+      window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
+      timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
+      std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
+      if (rdmc_send_algorithm_string == "binomial_send") {
+	rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
+      } else if (rdmc_send_algorithm_string == "chain_send") {
+	rdmc_send_algorithm = rdmc::send_algorithm::CHAIN_SEND;
+      } else if (rdmc_send_algorithm_string == "sequential_send") {
+	rdmc_send_algorithm = rdmc::send_algorithm::SEQUENTIAL_SEND;
+      } else if (rdmc_send_algorithm_string == "tree_send") {
+	rdmc_send_algorithm = rdmc::send_algorithm::TREE_SEND;
+      } else {
+	throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
+      }
+      rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
+    }
 
     DerechoParams(long long unsigned int max_payload_size,
-                  long long unsigned int sst_max_payload_size,
+                  long long unsigned int max_smc_payload_size,
                   long long unsigned int block_size,
-                  unsigned int window_size = 3,
-                  unsigned int timeout_ms = 1,
-                  rdmc::send_algorithm type = rdmc::BINOMIAL_SEND,
-                  uint32_t rpc_port = derecho::getConfInt32(CONF_DERECHO_RPC_PORT))
+                  unsigned int window_size,
+                  unsigned int timeout_ms,
+                  rdmc::send_algorithm rdmc_send_algorithm,
+                  uint32_t rpc_port)
             : max_payload_size(max_payload_size),
-              sst_max_payload_size(sst_max_payload_size),
+              max_smc_payload_size(max_smc_payload_size),
               block_size(block_size),
               window_size(window_size),
               timeout_ms(timeout_ms),
-              type(type),
+              rdmc_send_algorithm(rdmc_send_algorithm),
               rpc_port(rpc_port) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, sst_max_payload_size, block_size, window_size, timeout_ms, type, rpc_port);
+  DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
 };
 
 struct __attribute__((__packed__)) header {
@@ -181,7 +202,7 @@ public:
     const long long unsigned int sst_max_msg_size;
     /** Send algorithm for constructing a multicast from point-to-point unicast.
      *  Binomial pipeline by default. */
-    const rdmc::send_algorithm type;
+    const rdmc::send_algorithm rdmc_send_algorithm;
     const unsigned int window_size;
 
 private:

@@ -11,10 +11,10 @@ std::map<uint32_t, std::string> initialize(uint32_t& node_rank, uint32_t& num_no
 
 /**
  * Utility method for initializing experiments. Prompts the terminal for the
- * current node's ID and IP, and the group leader's IP, writing the results
- * into the three parameters.
+ * group leader's IP and GMS port, writing the results
+ * into the two parameters.
  */
-void query_node_info(uint32_t& node_id, std::string& node_ip, std::string& leader_ip);
+void query_node_info(ip_addr_t& leader_ip, uint16_t& leader_gms_port);
 
 //Just sticking this here for now (because it's only used by experiments),
 //but it should really go in a generic "utilities" header

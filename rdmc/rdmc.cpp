@@ -49,7 +49,7 @@ mutex groups_lock;
     polling_group::initialize_message_types();
     return true;
 }
-void add_address(uint32_t index, const string& address) {
+void add_address(uint32_t index, const std::pair<ip_addr_t, uint16_t>& address) {
 #ifdef USE_VERBS_API
     ::rdma::impl::verbs_add_connection(index, address);
 #else
@@ -111,10 +111,10 @@ bool send(uint16_t group_number, shared_ptr<memory_region> mr, size_t offset,
     g->send_message(mr, offset, length);
     return true;
 }
-void query_addresses(std::map<uint32_t, std::string>& addresses,
-                     uint32_t& node_rank) {
-    query_peer_addresses(addresses, node_rank);
-}
+// void query_addresses(std::map<uint32_t, std::string>& addresses,
+//                      uint32_t& node_rank) {
+//     query_peer_addresses(addresses, node_rank);
+// }
 
 barrier_group::barrier_group(vector<uint32_t> members) {
     member_index = index_of(members, node_rank);

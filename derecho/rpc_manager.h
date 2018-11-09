@@ -122,17 +122,17 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-  RPCManager(node_id_t node_id, ViewManager &group_view_manager)
-      : nid(node_id), receivers(new std::decay_t<decltype(*receivers)>()),
+  RPCManager(ViewManager &group_view_manager)
+    : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)), receivers(new std::decay_t<decltype(*receivers)>()),
         whenlog(logger(spdlog::get("debug_log")), )
             view_manager(group_view_manager),
         // Connections initially only contains the local node. Other nodes are
         // added in the new view callback
-        tcp_connections(node_id,
-                        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>()),
+        tcp_connections(nid,
+                        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{nid, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}),
         connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{
-            node_id,
-            {node_id},
+            nid,
+            {nid},
             group_view_manager.derecho_params.window_size,
             group_view_manager.derecho_params.max_payload_size})),
         replySendBuffer(

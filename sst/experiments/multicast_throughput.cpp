@@ -35,21 +35,28 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
     int num_senders_selector = atoi(argv[1]);
-    // input number of nodes and the local node id
-    uint32_t node_id, num_nodes;
-    cin >> node_id >> num_nodes;
 
+    // input number of nodes and the local node rank
+    std::cout << "Enter my_rank and num_nodes" << std::endl;
+    uint32_t node_rank, num_nodes;
+    cin >> node_rank >> num_nodes;
+
+    std::cout << "Input the IP addresses" << std::endl;
+    uint16_t port = 32567;
     // input the ip addresses
-    map<uint32_t, string> ip_addrs;
-    for(unsigned int i = 0; i < num_nodes; ++i) {
-        cin >> ip_addrs[i];
+    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
+    for(uint i = 0; i < num_nodes; ++i) {
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs, node_id);
+    verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs, node_id);
+    lf_initialize(ip_addrs_and_ports, node_rank);
 #endif
 
     std::vector<uint32_t> members(num_nodes);
@@ -68,7 +75,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
-            sst::SSTParams(members, node_id),
+            sst::SSTParams(members, node_rank),
             window_size,
             num_senders, max_msg_size);
 
@@ -97,21 +104,21 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    auto receiver_pred = [window_size, num_nodes, node_id](const multicast_sst& sst) {
+    auto receiver_pred = [window_size, num_nodes, node_rank](const multicast_sst& sst) {
         return true;
     };
     vector<int64_t> last_max_num_received(num_senders, -1);
-    auto receiver_trig = [&completed, last_max_num_received, window_size, num_nodes, node_id, sst_receive_handler,
+    auto receiver_trig = [&completed, last_max_num_received, window_size, num_nodes, node_rank, sst_receive_handler,
                           row_offset, num_senders](multicast_sst& sst) mutable {
         while(true) {
             for(uint j = 0; j < num_senders; ++j) {
-                auto num_received = sst.num_received_sst[node_id][j] + 1;
+                auto num_received = sst.num_received_sst[node_rank][j] + 1;
                 uint32_t slot = num_received % window_size;
                 if((int64_t&)sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)] == (num_received / window_size + 1)) {
                     sst_receive_handler(j, num_received,
                                         &sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * slot],
                                         sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
-                    sst.num_received_sst[node_id][j]++;
+                    sst.num_received_sst[node_rank][j]++;
                 }
             }
             bool time_to_push = true;
@@ -119,7 +126,7 @@ int main(int argc, char* argv[]) {
                 if(completed[j]) {
                     continue;
                 }
-                if(sst.num_received_sst[node_id][j] - last_max_num_received[j] <= window_size / 2) {
+                if(sst.num_received_sst[node_rank][j] - last_max_num_received[j] <= window_size / 2) {
                     time_to_push = false;
                 }
             }
@@ -130,7 +137,7 @@ int main(int argc, char* argv[]) {
         sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
                 sizeof(sst.num_received_sst[0][0]) * num_senders);
         for(uint j = 0; j < num_senders; ++j) {
-            last_max_num_received[j] = sst.num_received_sst[node_id][j];
+            last_max_num_received[j] = sst.num_received_sst[node_rank][j];
         }
     };
     // inserting later
@@ -156,7 +163,7 @@ int main(int argc, char* argv[]) {
     struct timespec start_time, end_time;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
-    if(node_id == num_nodes - 1 || num_senders_selector == 0 || (node_id > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
+    if(node_rank == num_nodes - 1 || num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
         for(uint i = 0; i < num_messages; ++i) {
             volatile char* buf;
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
@@ -182,7 +189,7 @@ int main(int argc, char* argv[]) {
         message_rate *= num_nodes / 2;
     }
 
-    double sum_message_rate = aggregate_bandwidth(members, node_id, message_rate);
+    double sum_message_rate = aggregate_bandwidth(members, node_rank, message_rate);
     log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, sum_message_rate},
                 "data_multicast");
     sst->sync_with_members();

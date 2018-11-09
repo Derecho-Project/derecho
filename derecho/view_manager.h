@@ -230,7 +230,6 @@ private:
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      */
     void construct_multicast_group(CallbackSet callbacks,
-                                   const DerechoParams& derecho_params,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size);
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
@@ -263,7 +262,7 @@ private:
       size_t num_members = view.members.size();
       for (uint i = 0; i < num_members; ++i) {
         if (!view.failed[i]) {
-          member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{std::get<0>(view.member_ips_and_ports_map[i]), std::get<port_index>(view.member_ips_and_ports_map[i])};
+          member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{std::get<0>(view.member_ips_and_ports[i]), std::get<port_index>(view.member_ips_and_ports[i])};
         }
       }
       return member_ips_and_ports_map;
@@ -296,11 +295,8 @@ public:
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
-    ViewManager(const node_id_t my_id,
-                const ip_addr_t my_ip,
-                CallbackSet callbacks,
+    ViewManager(CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const DerechoParams& derecho_params,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
@@ -319,35 +315,10 @@ public:
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
-    ViewManager(const node_id_t my_id,
-                tcp::socket& leader_connection,
+    ViewManager(tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {});
-
-    /**
-     * Constructor for recovering a failed node by loading its View from log
-     * files.
-     * @param recovery_filename The base name of the set of recovery files to
-     * use (extensions will be added automatically)
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
-     * @param callbacks The set of callback functions to use for message
-     * delivery events once the group has been re-joined
-     * @param _persistence_manager_callbacks
-     * @param derecho_params (Optional) If set, and this node is the leader of
-     * the restarting group, a new set of Derecho parameters to configure the
-     * group with. Otherwise, these parameters will be read from the logfile or
-     * copied from the existing group leader.
-     */
-    ViewManager(const std::string& recovery_filename,
-                const node_id_t my_id,
-                const ip_addr_t my_ip,
-                CallbackSet callbacks,
-                const SubgroupInfo& subgroup_info,
-                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                const DerechoParams& derecho_params = DerechoParams(0, 0, 0),
                 std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();

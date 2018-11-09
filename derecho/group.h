@@ -96,6 +96,8 @@ private:
 #endif
 
     const node_id_t my_id;
+    bool is_starting_leader;
+    std::optional<tcp::socket> leader_connection;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
@@ -209,23 +211,6 @@ private:
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
             const View& curr_view, const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
 
-    /**
-     * Delegate constructor for joining an existing managed group, called after
-     * the entry-point constructor constructs a socket that connects to the leader.
-     * @param my_id The node ID of the node running this code
-     * @param leader_connection A socket connected to the existing group's leader
-     * @param callbacks
-     * @param subgroup_info
-     * @param _view_upcalls
-     * @param factories
-     */
-    Group(const node_id_t my_id,
-          tcp::socket leader_connection,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          std::vector<view_upcall_t> _view_upcalls,
-          Factory<ReplicatedTypes>... factories);
-
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
@@ -233,50 +218,17 @@ public:
      * the underlying DerechoGroup. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
      *
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
-     * @param derecho_params The assorted configuration parameters for this
-     * Derecho group instance, such as message size and logfile name
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
      * template parameter of Group, providing a way to construct instances of
      * each Replicated Object
      */
-    Group(const node_id_t my_id,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          const DerechoParams& derecho_params,
-          std::vector<view_upcall_t> _view_upcalls = {},
-          Factory<ReplicatedTypes>... factories);
-
-    /**
-     * Constructor that joins an existing managed Derecho group. The parameters
-     * normally set by DerechoParams will be initialized by copying them from
-     * the existing group's leader.
-     *
-     * @param my_id The node ID of the node running this code
-     * @param my_ip The IP address of the node running this code
-     * @param leader_id The node ID of the existing group's leader
-     * @param leader_ip The IP address of the existing group's leader
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
-     * @param subgroup_info The set of functions that define how membership in
-     * each subgroup and shard will be determined in this group. Must be the
-     * same as the SubgroupInfo that was used to configure the group's leader.
-     * @param _view_upcalls A list of functions to be called when the group
-     * experiences a View-Change event (optional).
-     * @param factories A variable number of Factory functions, one for each
-     * template parameter of Group, providing a way to construct instances of
-     * each Replicated Object
-     */
-    Group(const node_id_t my_id,
-          const ip_addr leader_ip,
-          const CallbackSet& callbacks,
+    Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
