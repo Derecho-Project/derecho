@@ -2,7 +2,7 @@
 
 #include <assert.h>
 #include <condition_variable>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <list>
 #include <map>
@@ -218,14 +218,14 @@ private:
     std::vector<message_id_t> future_message_indices;
 
     /** next_message is the message that will be sent when send is called the next time.
-     * It is boost::none when there is no message to send. */
-    std::vector<std::experimental::optional<RDMCMessage>> next_sends;
+     * It is std::nullopt when there is no message to send. */
+    std::vector<std::optional<RDMCMessage>> next_sends;
     std::map<uint32_t, bool> pending_sst_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
     /** one per subgroup */
-    std::vector<std::experimental::optional<RDMCMessage>> current_sends;
+    std::vector<std::optional<RDMCMessage>> current_sends;
 
     /** Messages that are currently being received. */
     std::map<std::pair<subgroup_id_t, node_id_t>, RDMCMessage> current_receives;

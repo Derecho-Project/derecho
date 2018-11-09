@@ -11,7 +11,7 @@
     #include "lf_helper.h"
 #endif
 
-#include <experimental/optional>
+#include <optional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -23,7 +23,7 @@ using rdmc::incoming_message_callback_t;
 using std::map;
 using std::unique_ptr;
 using std::vector;
-using std::experimental::optional;
+using std::optional;
 
 class group {
 protected:

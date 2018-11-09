@@ -3,12 +3,12 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <time.h>
 #include <vector>
 
 #include "aggregate_bandwidth.h"
 #include "block_size.h"
-#include "boost/optional.hpp"
 #include "log_results.h"
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
                                  [&count](char *data, size_t size) {
                                      ++count;
                                  },
-                                 [](std::experimental::optional<uint32_t>) {});
+                                 [](std::optional<uint32_t>) {});
     if(!success) {
         std::cout << "Failed RDMC group creation" << std::endl;
         std::cout << "Exiting" << std::endl;

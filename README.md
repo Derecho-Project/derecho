@@ -11,9 +11,8 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
-* A C++ compiler supporting C++14: GCC 5.4+ or Clang 3.5+
+* A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
 * The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
-* libboost-dev, libboost-system and libboost-system-dev
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
 * sysctl -w vm.overcommit_memory = 1
 

@@ -2,7 +2,7 @@
 #define LF_HELPER_H
 
 #include <cstdint>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
@@ -132,7 +132,7 @@ public:
     static constexpr unsigned int shift_bits = 64 - 8 * sizeof(tag_type);
 
 private:
-    std::experimental::optional<tag_type> tag;
+    std::optional<tag_type> tag;
     message_type(tag_type t) : tag(t) {}
 
     friend class endpoint;

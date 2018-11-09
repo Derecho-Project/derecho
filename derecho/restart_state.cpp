@@ -1,3 +1,4 @@
+#include <optional>
 
 #include "restart_state.h"
 #include "container_template_functions.h"
@@ -109,7 +110,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     int time_remaining_ms = RESTART_LEADER_TIMEOUT;
     while(time_remaining_ms > 0) {
         auto start_time = std::chrono::high_resolution_clock::now();
-        std::experimental::optional<tcp::socket> client_socket = server_socket.try_accept(time_remaining_ms);
+        std::optional<tcp::socket> client_socket = server_socket.try_accept(time_remaining_ms);
         auto end_time = std::chrono::high_resolution_clock::now();
         std::chrono::milliseconds time_waited = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
         time_remaining_ms -= time_waited.count();

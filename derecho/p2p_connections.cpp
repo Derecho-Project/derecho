@@ -205,7 +205,7 @@ char* P2PConnections::probe(uint32_t rank) {
 }
 
 // check if there's a new request from any node
-std::experimental::optional<std::pair<uint32_t, char*>> P2PConnections::probe_all() {
+std::optional<std::pair<uint32_t, char*>> P2PConnections::probe_all() {
     for(uint rank = 0; rank < num_members; ++rank) {
         auto buf = probe(rank);
         if(buf) {
@@ -312,7 +312,7 @@ void P2PConnections::check_failures_loop() {
 
         uint32_t num_completions = 0;
         while(num_completions < num_members - 1) {
-            std::experimental::optional<std::pair<int32_t, int32_t>> ce;
+            std::optional<std::pair<int32_t, int32_t>> ce;
             while(true) {
                 // check if polling result is available
                 ce = util::polling_data.get_completion_entry(tid);

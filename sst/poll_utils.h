@@ -1,7 +1,7 @@
 #pragma once
 
 #include <condition_variable>
-#include <experimental/optional>
+#include <optional>
 #include <list>
 #include <map>
 #include <mutex>
@@ -27,7 +27,7 @@ class PollingData {
 public:
     void insert_completion_entry(uint32_t index, std::pair<int32_t, int32_t> ce);
 
-    std::experimental::optional<std::pair<int32_t, int32_t>> get_completion_entry(const std::thread::id id);
+    std::optional<std::pair<int32_t, int32_t>> get_completion_entry(const std::thread::id id);
 
     uint32_t get_index(const std::thread::id id);
 

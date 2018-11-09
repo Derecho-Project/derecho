@@ -285,7 +285,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 if(node_id == members[member_index]) {
                     assert(current_sends[subgroup_num]);
                     locally_stable_rdmc_messages[subgroup_num][sequence_number] = std::move(*current_sends[subgroup_num]);
-                    current_sends[subgroup_num] = std::experimental::nullopt;
+                    current_sends[subgroup_num] = std::nullopt;
                 }
                 else {
                     auto it = current_receives.find({subgroup_num, node_id});
@@ -407,7 +407,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                return {nullptr, 0};
                            },
                            receive_handler_plus_notify,
-                           [](std::experimental::optional<uint32_t>) {})) {
+                           [](std::optional<uint32_t>) {})) {
                     return false;
                 }
                 subgroup_to_rdmc_group[subgroup_num] = rdmc_group_num_offset;
@@ -431,7 +431,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                assert(ret.mr->buffer != nullptr);
                                return ret;
                            },
-                           rdmc_receive_handler, [](std::experimental::optional<uint32_t>) {})) {
+                           rdmc_receive_handler, [](std::optional<uint32_t>) {})) {
                     return false;
                 }
                 rdmc_group_num_offset++;
@@ -1313,7 +1313,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num) {
         }
         assert(next_sends[subgroup_num]);
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
-        next_sends[subgroup_num] = std::experimental::nullopt;
+        next_sends[subgroup_num] = std::nullopt;
         sender_cv.notify_all();
         // DERECHO_LOG(-1, -1, "user_send_finished");
         return true;

@@ -256,7 +256,7 @@ socket connection_listener::accept() {
     return socket(sock, std::string(client_ip_cstr));
 }
 
-std::experimental::optional<socket> connection_listener::try_accept(int timeout_ms) {
+std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     //Temporarily set server socket to nonblocking
     int socket_flags = fcntl(*fd, F_GETFL, 0);
     socket_flags |= O_NONBLOCK;
@@ -308,7 +308,7 @@ std::experimental::optional<socket> connection_listener::try_accept(int timeout_
         }
         return socket(client_sock, std::string(client_ip_cstr));
     } else {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
 }

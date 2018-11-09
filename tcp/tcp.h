@@ -3,7 +3,7 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <experimental/optional>
+#include <optional>
 
 namespace tcp {
 
@@ -156,7 +156,7 @@ public:
      * @return A socket connected to a remote client, or nullopt if the
      * timeout expired
      */
-    std::experimental::optional<socket> try_accept(int timeout_ms);
+    std::optional<socket> try_accept(int timeout_ms);
 };
 }  // namespace tcp
 

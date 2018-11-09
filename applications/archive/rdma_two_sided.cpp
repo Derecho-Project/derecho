@@ -28,7 +28,7 @@ void initialize(int node_rank, const map<uint32_t, string> &ip_addrs) {
 }
 
 void wait_for_completion(std::thread::id tid) {
-    std::experimental::optional<std::pair<int32_t, int32_t>> ce;
+    std::optional<std::pair<int32_t, int32_t>> ce;
 
     unsigned long start_time_msec;
     unsigned long cur_time_msec;

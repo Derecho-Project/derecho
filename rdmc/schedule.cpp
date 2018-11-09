@@ -5,7 +5,7 @@
 #include <climits>
 
 using std::min;
-using std::experimental::optional;
+using std::optional;
 
 #ifndef NDEBUG
 #define assert_always(x...) assert(x)
@@ -36,7 +36,7 @@ optional<schedule::block_transfer> chain_schedule::get_outgoing_transfer(size_t 
     size_t block_number = step - member_index;
 
     if(member_index > step || block_number >= num_blocks || member_index == num_members - 1) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
     return block_transfer{(uint32_t)(member_index + 1), block_number};
@@ -44,12 +44,12 @@ optional<schedule::block_transfer> chain_schedule::get_outgoing_transfer(size_t 
 optional<schedule::block_transfer> chain_schedule::get_incoming_transfer(size_t num_blocks, size_t step) const {
     size_t block_number = (step + 1) - member_index;
     if(member_index > step + 1 || block_number >= num_blocks || member_index == 0) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
     return block_transfer{(uint32_t)(member_index - 1), block_number};
 }
 optional<schedule::block_transfer> chain_schedule::get_first_block(size_t num_blocks) const {
-    if(member_index == 0) return std::experimental::nullopt;
+    if(member_index == 0) return std::nullopt;
     return block_transfer{(uint32_t)(member_index - 1), 0};
 }
 
@@ -72,7 +72,7 @@ size_t sequential_schedule::get_total_steps(size_t num_blocks) const {
 }
 optional<schedule::block_transfer> sequential_schedule::get_outgoing_transfer(size_t num_blocks, size_t step) const {
     if(member_index > 0 || step >= num_blocks * (num_members - 1)) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
     size_t block_number = step % num_blocks;
@@ -80,14 +80,14 @@ optional<schedule::block_transfer> sequential_schedule::get_outgoing_transfer(si
 }
 optional<schedule::block_transfer> sequential_schedule::get_incoming_transfer(size_t num_blocks, size_t step) const {
     if(1 + step / num_blocks != member_index) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
     size_t block_number = step % num_blocks;
     return block_transfer{(uint32_t)0, block_number};
 }
 optional<schedule::block_transfer> sequential_schedule::get_first_block(size_t num_blocks) const {
-    if(member_index == 0) return std::experimental::nullopt;
+    if(member_index == 0) return std::nullopt;
     return block_transfer{0, 0};
 }
 
@@ -114,7 +114,7 @@ size_t tree_schedule::get_total_steps(size_t num_blocks) const {
 optional<schedule::block_transfer> tree_schedule::get_outgoing_transfer(size_t num_blocks, size_t step) const {
     size_t stage = step / num_blocks;
     if(step >= get_total_steps(num_blocks) || (1u << stage) <= member_index || (1u << stage) >= num_members - member_index) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     } else {
         return block_transfer{member_index + (1u << stage),
                               step - stage * num_blocks};
@@ -126,11 +126,11 @@ optional<schedule::block_transfer> tree_schedule::get_incoming_transfer(size_t n
         return block_transfer{member_index - (1u << stage),
                               step - stage * num_blocks};
     } else {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 }
 optional<schedule::block_transfer> tree_schedule::get_first_block(size_t num_blocks) const {
-    if(member_index == 0) return std::experimental::nullopt;
+    if(member_index == 0) return std::nullopt;
 
     for(uint32_t i = 0; i < 32; i++) {
         if((2ull << i) > member_index)
@@ -191,7 +191,7 @@ optional<schedule::block_transfer> binomial_schedule::get_vertex_outgoing_transf
         //        printf("send_step = %d, neighbor = %d, log2(...) = %f\n",
         // (int)send_step, (int)neighbor, log2(member_index|neighbor));
         //        fflush(stdout);
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
     size_t rotated_rank = ((neighbor | (neighbor << log2_num_members)) >> step_index) & rank_mask;
@@ -203,7 +203,7 @@ optional<schedule::block_transfer> binomial_schedule::get_vertex_outgoing_transf
         if(send_step < log2_num_members) {
             //            printf("send_step < log2_num_members\n");
             //            fflush(stdout);
-            return std::experimental::nullopt;
+            return std::nullopt;
         }
         return block_transfer{neighbor, send_step - log2_num_members};
     }
@@ -211,7 +211,7 @@ optional<schedule::block_transfer> binomial_schedule::get_vertex_outgoing_transf
     for(unsigned int index = 1; index < log2_num_members; index++) {
         if(rotated_rank & (1 << index)) {
             if(send_step + index < log2_num_members) {
-                return std::experimental::nullopt;
+                return std::nullopt;
             }
             size_t block_number = min(send_step + index - log2_num_members, num_blocks - 1);
             return block_transfer{neighbor, block_number};
@@ -229,7 +229,7 @@ optional<schedule::block_transfer> binomial_schedule::get_vertex_incoming_transf
 
     auto transfer = get_vertex_outgoing_transfer(neighbor, send_step, num_members,
                                                  log2_num_members, num_blocks, total_steps);
-    if(!transfer) return std::experimental::nullopt;
+    if(!transfer) return std::nullopt;
     return block_transfer{neighbor, transfer->block_number};
 }
 optional<schedule::block_transfer> binomial_schedule::get_outgoing_transfer(
@@ -242,7 +242,7 @@ optional<schedule::block_transfer> binomial_schedule::get_outgoing_transfer(
             vertex, step, num_members, log2_num_members, num_blocks, total_steps);
 
     if(step >= total_steps) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     } else if(step == total_steps - 1 && num_blocks == 1 && num_members > (1u << log2_num_members)) {
         uint32_t intervertex_receiver = get_intervertex_receiver(vertex, step, num_members,
                                                                  log2_num_members, num_blocks, total_steps);
@@ -254,14 +254,14 @@ optional<schedule::block_transfer> binomial_schedule::get_outgoing_transfer(
         bool target_has_twin = target != 0 && (target >= (1u << log2_num_members) || target + (1u << log2_num_members) - 1 < num_members);
 
         if((node_has_twin && node == intervertex_receiver) || node == 1 || !target_has_twin)
-            return std::experimental::nullopt;
+            return std::nullopt;
         else
             return block_transfer{target, 0};
     } else if(node == intervertex_receiver && vertex != 0 && vertex + (1u << log2_num_members) - 1 < num_members) {
         auto block = get_intravertex_block(vertex, step, num_members, log2_num_members,
                                            num_blocks, total_steps);
 
-        if(!block) return std::experimental::nullopt;
+        if(!block) return std::nullopt;
         uint32_t twin = (node < (1u << log2_num_members))
                                 ? node + (1 << log2_num_members) - 1
                                 : node + 1 - (1 << log2_num_members);
@@ -269,7 +269,7 @@ optional<schedule::block_transfer> binomial_schedule::get_outgoing_transfer(
     } else {
         if(step == total_steps - 1 && num_members > 1u << log2_num_members) {
             if((vertex + (1u << log2_num_members) - 1) >= num_members || vertex == 0)
-                return std::experimental::nullopt;
+                return std::nullopt;
 
             uint32_t twin = (node < (1u << log2_num_members))
                                     ? node + (1 << log2_num_members) - 1
@@ -314,7 +314,7 @@ optional<schedule::block_transfer> binomial_schedule::get_incoming_transfer(
             vertex, step, num_members, log2_num_members, num_blocks, total_steps);
 
     if(step >= total_steps) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     } else if(step == total_steps - 1 && num_blocks == 1 && num_members > (1u << log2_num_members)) {
         uint32_t target = get_intervertex_receiver(vertex ^ 1, step, num_members,
                                                    log2_num_members, num_blocks, total_steps);
@@ -327,7 +327,7 @@ optional<schedule::block_transfer> binomial_schedule::get_incoming_transfer(
             target = target + (1 << log2_num_members) - 1;
 
         if(!node_has_twin || node != intervertex_receiver)
-            return std::experimental::nullopt;
+            return std::nullopt;
         else {
             return block_transfer{target, 0};
         }
@@ -335,7 +335,7 @@ optional<schedule::block_transfer> binomial_schedule::get_incoming_transfer(
         auto block = get_intravertex_block(vertex, step, num_members, log2_num_members,
                                            num_blocks, total_steps);
 
-        if(!block) return std::experimental::nullopt;
+        if(!block) return std::nullopt;
         uint32_t twin = (node < (1u << log2_num_members))
                                 ? node + (1 << log2_num_members) - 1
                                 : node + 1 - (1 << log2_num_members);
@@ -343,7 +343,7 @@ optional<schedule::block_transfer> binomial_schedule::get_incoming_transfer(
     } else {
         if(step == total_steps - 1 && num_members > 1u << log2_num_members) {
             if((vertex + (1u << log2_num_members) - 1) >= num_members || vertex == 0)
-                return std::experimental::nullopt;
+                return std::nullopt;
 
             uint32_t twin = (node < (1u << log2_num_members))
                                     ? node + (1 << log2_num_members) - 1
@@ -415,7 +415,7 @@ optional<size_t> binomial_schedule::get_intravertex_block(
     // If the vertex only has one node, then no intravertex transfer can take
     // place.
     if((vertex + (1u << log2_num_members) - 1) >= num_members || vertex == 0)
-        return std::experimental::nullopt;
+        return std::nullopt;
 
     size_t weight = 0;
     for(int i = 0; i < 32; i++) {
@@ -438,7 +438,7 @@ optional<size_t> binomial_schedule::get_intravertex_block(
     // The first block received triggers a flip. If we haven't gotten it yet,
     // then clearly there can't be an intravertex transfer.
     if(flips == 0) {
-        return std::experimental::nullopt;
+        return std::nullopt;
     }
 
     // uint32_t target = vertex;
@@ -448,7 +448,7 @@ optional<size_t> binomial_schedule::get_intravertex_block(
 
     size_t prev_receive_block_step = step - 1;
     if(flips != total_flips(step - 1)) {
-        if(flips <= 1) return std::experimental::nullopt;
+        if(flips <= 1) return std::nullopt;
 
         while(total_flips(prev_receive_block_step) != flips - 2) {
             --prev_receive_block_step;
@@ -459,7 +459,7 @@ optional<size_t> binomial_schedule::get_intravertex_block(
                                              num_members, log2_num_members,
                                              num_blocks, total_steps);
 
-    if(!last) return std::experimental::nullopt;
+    if(!last) return std::nullopt;
     return last->block_number;
 }
 
@@ -475,7 +475,7 @@ optional<schedule::block_transfer> binomial_schedule::get_incoming_transfer(size
 }
 
 optional<schedule::block_transfer> binomial_schedule::get_first_block(size_t num_blocks) const {
-    if(member_index == 0) return std::experimental::nullopt;
+    if(member_index == 0) return std::nullopt;
 
     size_t simulated_total_steps = num_members == 1u << log2_num_members
                                            ? 1024 + log2_num_members - 1
