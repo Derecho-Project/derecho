@@ -20,12 +20,14 @@ int main(int argc, char *argv[]) {
     pthread_setname_np(pthread_self(), "random_messages");
     srand(time(NULL));
 
-    Conf::initialize(argc, argv);
-
+    if(argc < 2) {
+      std::cout << "Usage: " << argv[0] << " <num_nodes> [configuration options...]" << std::endl;
+      return -1;
+    }
     uint32_t num_nodes;
+    num_nodes = std::stoi(argv[1]);
 
-    cout << "Enter the total number of nodes for this experiment: ";
-    std::cin >> num_nodes;
+    Conf::initialize(argc, argv);
 
     auto stability_callback = [](uint32_t subgroup, int sender_id,
                                  long long int index, char *buf,
@@ -61,22 +63,21 @@ int main(int argc, char *argv[]) {
             {std::type_index(typeid(RawObject)), membership_function}};
     derecho::SubgroupInfo one_raw_group(subgroup_map);
 
-    std::unique_ptr<derecho::Group<>> managed_group;
-    managed_group = std::make_unique<derecho::Group<>>(
-            derecho::CallbackSet{stability_callback, nullptr}, one_raw_group);
+    derecho::Group<> managed_group(derecho::CallbackSet{stability_callback, nullptr},
+                                   one_raw_group);
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    while(managed_group->get_members().size() < num_nodes) {
+    while(managed_group.get_members().size() < num_nodes) {
     }
-    auto members_order = managed_group->get_members();
+    auto members_order = managed_group.get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < num_nodes; ++i) {
         cout << members_order[i] << " ";
     }
     cout << endl;
 
-    RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
+    RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
     for(uint i = 0; i < 10; ++i) {
         char *buf = group_as_subgroup.get_sendbuffer_ptr(10);
         while(!buf) {

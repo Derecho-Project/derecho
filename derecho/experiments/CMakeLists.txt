@@ -37,7 +37,7 @@ add_executable(rdmc_test rdmc_test.cpp block_size.cpp)
 target_link_libraries(rdmc_test rdmc derecho)
 
 # derecho_bw_test
-add_executable(derecho_bw_test derecho_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
+add_executable(derecho_bw_test derecho_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp)
 target_link_libraries(derecho_bw_test derecho)
 
 # subgroup_scaling

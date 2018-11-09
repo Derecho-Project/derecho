@@ -43,11 +43,13 @@ MulticastGroup::MulticastGroup(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<char> already_failed)
         : whenlog(logger(spdlog::get("debug_log")), )
-	  members(_members),
+                  members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           block_size(derecho_params.block_size),
-          max_msg_size(compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size)),
+          max_msg_size(compute_max_msg_size(derecho_params.max_payload_size,
+                                            derecho_params.block_size,
+                                            derecho_params.max_payload_size > derecho_params.max_smc_payload_size)),
           sst_max_msg_size(derecho_params.max_smc_payload_size + sizeof(header)),
           rdmc_send_algorithm(derecho_params.rdmc_send_algorithm),
           window_size(derecho_params.window_size),
@@ -331,7 +333,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                             char* buf = const_cast<char*>(msg.buf);
                             header* h = (header*)(buf);
-			    // no delivery callback for a NULL message
+                            // no delivery callback for a NULL message
                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                     msg.index, buf + h->header_size,
@@ -979,10 +981,13 @@ MulticastGroup::~MulticastGroup() {
 
 long long unsigned int MulticastGroup::compute_max_msg_size(
         const long long unsigned int max_payload_size,
-        const long long unsigned int block_size) {
+        const long long unsigned int block_size,
+        bool using_rdmc) {
     auto max_msg_size = max_payload_size + sizeof(header);
-    if(max_msg_size % block_size != 0) {
-        max_msg_size = (max_msg_size / block_size + 1) * block_size;
+    if(using_rdmc) {
+        if(max_msg_size % block_size != 0) {
+            max_msg_size = (max_msg_size / block_size + 1) * block_size;
+        }
     }
     return max_msg_size;
 }
