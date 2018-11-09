@@ -8,7 +8,7 @@ def mkstr(nodes, num, length):
     with open(f"RandomStrings/node{i}.txt", 'w') as f:
       for j in range(num):
         x = len(str(num-1))
-        f.write(str(j).zfill(x) + ' ' + ''.join([choice(hexdigits + punctuation) for _ in range(length-(x+1))]) + '\n')
+        f.write(str(j).zfill(x) + ' ' + ''.join([choice(hexdigits) for _ in range(length-(x+1))]) + '\n')
 
 def main():
   nodes = 0
