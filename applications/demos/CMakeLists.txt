@@ -16,3 +16,5 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
+add_executable(simple_replicated_objects simple_replicated_objects.cpp)
+target_link_libraries(simple_replicated_objects derecho)
