@@ -16,22 +16,6 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
-# test_group_interface
-add_executable(test_group_interface test_group_interface.cpp initialize.cpp )
-target_link_libraries(test_group_interface derecho)
-
-# single_sender_one_message
-add_executable(single_sender_one_message single_sender_one_message.cpp initialize.cpp )
-target_link_libraries(single_sender_one_message derecho)
-
-# single_sender_multiple_messages
-add_executable(single_sender_multiple_messages single_sender_multiple_messages.cpp initialize.cpp )
-target_link_libraries(single_sender_multiple_messages derecho)
-
-# multiple_senders_multiple_messages
-add_executable(multiple_senders_multiple_messages multiple_senders_multiple_messages.cpp initialize.cpp )
-target_link_libraries(multiple_senders_multiple_messages derecho)
-
 # rdmc_test
 add_executable(rdmc_test rdmc_test.cpp block_size.cpp)
 target_link_libraries(rdmc_test rdmc derecho)
@@ -60,47 +44,9 @@ target_link_libraries(p2p_latency_test derecho mutils mutils-serialization)
 add_executable(subgroup_test subgroup_test.cpp initialize.cpp)
 target_link_libraries(subgroup_test derecho)
 
-# raw_send_test
-add_executable(raw_send_test raw_send_test.cpp block_size.cpp initialize.cpp)
-target_link_libraries(raw_send_test derecho mutils mutils-serialization)
-
-# ssd_bw_test
-add_executable(ssd_bw_test ssd_bw_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(ssd_bw_test derecho)
-
-# gms_test
-add_executable(gms_test gms_test.cpp block_size.cpp initialize.cpp)
-target_link_libraries(gms_test derecho)
-
-# gms_test
-add_executable(gms_test2 gms_test2.cpp block_size.cpp initialize.cpp)
-target_link_libraries(gms_test2 derecho)
-
-# gms_bw_test
-add_executable(gms_bw_test gms_bw_test.cpp initialize.cpp)
-target_link_libraries(gms_bw_test derecho)
-
-# window_size_test
-add_executable(window_size_test window_size_test.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(window_size_test derecho)
-
-# write_to_ssd
-add_executable(write_to_ssd write_to_ssd.cpp block_size.cpp aggregate_bandwidth.cpp initialize.cpp )
-target_link_libraries(write_to_ssd derecho)
-
-# timeline_test
-add_executable(timeline_test timeline_test.cpp initialize.cpp)
-target_link_libraries(timeline_test derecho)
-
-add_executable(viewchange_timeline viewchange_timeline.cpp initialize.cpp)
-target_link_libraries(viewchange_timeline derecho)
-
 # p2p_query_test
 add_executable(p2p_query_test p2p_query_test.cpp initialize.cpp)
 target_link_libraries(p2p_query_test derecho)
-
-add_executable(repeated_rpc_test repeated_rpc_test.cpp initialize.cpp)
-target_link_libraries(repeated_rpc_test derecho)
 
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp initialize.cpp)
@@ -158,10 +104,11 @@ target_link_libraries(persistent_typed_subgroup_test derecho)
 add_executable(persistent_vector persistent_vector.cpp initialize.cpp)
 target_link_libraries(persistent_vector derecho)
 
-#shard_iterator_p2p_test
+# shard_iterator_p2p_test
 add_executable(shard_iterator_p2p_test shard_iterator_p2p_test.cpp initialize.cpp)
 target_link_libraries(shard_iterator_p2p_test derecho)
 
+# persistent_rejoin_test
 add_executable(persistent_rejoin_test persistent_rejoin_test.cpp initialize.cpp)
 target_link_libraries(persistent_rejoin_test derecho)
 
