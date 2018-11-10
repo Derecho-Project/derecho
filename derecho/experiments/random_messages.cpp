@@ -24,8 +24,7 @@ int main(int argc, char *argv[]) {
       std::cout << "Usage: " << argv[0] << " <num_nodes> [configuration options...]" << std::endl;
       return -1;
     }
-    uint32_t num_nodes;
-    num_nodes = std::stoi(argv[1]);
+    const uint32_t num_nodes = std::stoi(argv[1]);
 
     Conf::initialize(argc, argv);
 

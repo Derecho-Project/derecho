@@ -3,7 +3,6 @@
 
 #include "conf/conf.hpp"
 #include "derecho/derecho.h"
-#include "initialize.h"
 
 using std::cout;
 using std::endl;
@@ -32,11 +31,8 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    node_id_t node_id;
-    ip_addr my_ip;
-    ip_addr leader_ip;
 
-    query_node_info(node_id, my_ip, leader_ip);
+    derecho::Conf::initialize(argc, argv);
 
     const uint32_t S = atoi(argv[1]);
     const uint32_t B = atoi(argv[2]);
@@ -71,14 +67,9 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    std::unique_ptr<Group<Server>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<Group<Server>>(node_id, my_ip, CallbackSet{{}, {}}, subgroup_info,
-                                                DerechoParams{B + R + 100, (B + R + 100 < 17000 ? B + R + 100 : 0), B + R + 100},
-						std::vector<view_upcall_t>{announce_groups_provisioned}, server_factory);
-    } else {
-        group = std::make_unique<Group<Server>>(node_id, my_ip, leader_ip, CallbackSet{{}, {}}, subgroup_info, std::vector<view_upcall_t>{announce_groups_provisioned}, server_factory);
-    }
+    Group<Server> group(CallbackSet{{}, {}}, subgroup_info,
+                        std::vector<view_upcall_t>{announce_groups_provisioned},
+                        server_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 
@@ -87,7 +78,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Subgroups provisioned" << std::endl;
 
     uint32_t node_rank = -1;
-    auto members = group->get_members();
+    auto members = group.get_members();
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     for(uint i = 0; i < members.size(); ++i) {
         if(members[i] == node_id) {
             node_rank = i;
@@ -96,7 +88,7 @@ int main(int argc, char* argv[]) {
 
     // client
     if(node_rank >= S) {
-        ExternalCaller<Server>& server_p2p_handle = group->get_nonmember_subgroup<Server>();
+        ExternalCaller<Server>& server_p2p_handle = group.get_nonmember_subgroup<Server>();
         int server = node_rank % S;
         string bytes(B, 'a');
         for(unsigned long long int i = 0;; i++) {
