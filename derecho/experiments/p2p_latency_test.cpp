@@ -1,6 +1,5 @@
 #include <iostream>
 
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 #include "conf/conf.hpp"

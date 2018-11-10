@@ -10,7 +10,6 @@
 #endif
 
 #include "aggregate_bandwidth.h"
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
 #include "rdmc/rdmc.h"

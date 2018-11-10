@@ -5,7 +5,6 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 #include "spdlog/spdlog.h"
