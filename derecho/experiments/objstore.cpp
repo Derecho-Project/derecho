@@ -7,9 +7,7 @@
 #include <string.h>
 #include <chrono>
 
-#include "block_size.h"
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include "conf/conf.hpp"
@@ -189,46 +187,30 @@ public:
 
 int main(int argc, char* argv[]) {
     if(argc < 2) {
-        std::cout << "usage:" << argv[0] << " <num_of_nodes> [window_size]" << std::endl;
+        std::cout << "usage:" << argv[0] << " <num_of_nodes>" << std::endl;
         return -1;
     }
+    derecho::Conf::initialize(argc,argv);
     int num_of_nodes = atoi(argv[1]);
 
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-    query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int max_msg_size = 10000;
-    long long unsigned int msg_size = 1000;
-    long long unsigned int block_size = get_block_size(msg_size);
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    unsigned int window_size = 3;
-    if (argc > 2) {
-        window_size = atoi(argv[2]);
-    }
-    if(argc >= 6) {
-        window_size = (unsigned int)atoi(argv[5]);
-    }
-    derecho::DerechoParams derecho_params{
-      max_msg_size,
-      sst_max_msg_size,
-      block_size,
-      window_size};
+    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    // uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     bool is_sending = true;
-    long count = 1;
-    long total_num_messages = num_of_nodes * count;
-    struct timespec t1,t3;
+    // long count = 1;
+    // long total_num_messages = num_of_nodes * count;
+    // struct timespec t1,t3;
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here
             // the persistence_callback either
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
+/*
                 if(ver == (total_num_messages - 1)) {
                     if(is_sending) {
                         clock_gettime(CLOCK_REALTIME, &t3);
                         int64_t nsec = ((int64_t)t3.tv_sec - t1.tv_sec) * 1000000000 + t3.tv_nsec - t1.tv_nsec;
                         double msec = (double)nsec / 1000000;
-                        double thp_gbps = ((double)count * msg_size * 8) / nsec;
+                        double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
                         double thp_ops = ((double)count * 1000000000) / nsec;
                         std::cout << "(pers)timespan:" << msec << " millisecond." << std::endl;
                         std::cout << "(pers)throughput:" << thp_gbps << "Gbit/s." << std::endl;
@@ -236,6 +218,7 @@ int main(int argc, char* argv[]) {
                         std::cout << std::flush;
                     }
                 }
+*/
             }};
 
     derecho::SubgroupInfo subgroup_info{
@@ -259,23 +242,15 @@ int main(int argc, char* argv[]) {
 
     auto store_factory = [](PersistentRegistry* pr) { return std::make_unique<ObjStore>(pr); };
 
-    std::unique_ptr<derecho::Group<ObjStore>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<ObjStore>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
+    derecho::Group<ObjStore> group{
+                callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{},
-                store_factory);
-    } else {
-        group = std::make_unique<derecho::Group<ObjStore>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                store_factory);
-    }
+                store_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     uint32_t node_rank = -1;
-    auto members_order = group->get_members();
+    auto members_order = group.get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
         cout << members_order[i] << " ";
@@ -290,7 +265,7 @@ int main(int argc, char* argv[]) {
     /* send operation */
     char data[256] = "Hello! My rank is: ";
     sprintf(data+strlen(data),"%d",node_rank);
-    derecho::Replicated<ObjStore> & handle = group->get_subgroup<ObjStore>();
+    derecho::Replicated<ObjStore> & handle = group.get_subgroup<ObjStore>();
     {
         // send
         OSObject obj{(uint64_t)node_rank,data,strlen(data)};

@@ -7,9 +7,7 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils-serialization/context_ptr.hpp>
 #include <persistent/Persistent.hpp>
@@ -175,11 +173,8 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-#ifndef NDEBUG
-   spdlog::set_level(spdlog::level::trace);  
-#endif
-    if(argc != 7) {
-        std::cout << "usage:" << argv[0] << "<shard_size> <num_of_shards> <ops_per_sec> <min_dur_sec> <msg_size> <query_cnt>" << std::endl;
+    if(argc != 6) {
+        std::cout << "usage:" << argv[0] << "<shard_size> <num_of_shards> <ops_per_sec> <min_dur_sec> <query_cnt>" << std::endl;
         return -1;
     }
     int shard_size = atoi(argv[1]);
@@ -188,18 +183,11 @@ int main(int argc, char *argv[]) {
     int num_of_nodes = (shard_size * num_of_shards + 1);
     int ops_per_sec = atoi(argv[3]);
     int min_dur_sec = atoi(argv[4]);
-    int msg_size = atoi(argv[5]);
-    int qcnt = atoi(argv[6]);
+    int qcnt = atoi(argv[5]);
     uint64_t si_us = (1000000l / ops_per_sec);
 
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-    query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int max_msg_size = msg_size;
-    long long unsigned int block_size = get_block_size(msg_size);
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
+    int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here
@@ -229,18 +217,10 @@ int main(int argc, char *argv[]) {
 
     auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
 
-    std::unique_ptr<derecho::Group<ByteArrayObject>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
+    derecho::Group<ByteArrayObject> group{
+                callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    } else {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    }
+                ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
@@ -264,7 +244,7 @@ int main(int argc, char *argv[]) {
 
 #define DELTA_T_US(t1, t2) ((double)(((t2).tv_sec - (t1).tv_sec) * 1e6 + ((t2).tv_nsec - (t1).tv_nsec) * 1e-3))
 
-            auto &handle = group->get_subgroup<ByteArrayObject>();
+            auto &handle = group.get_subgroup<ByteArrayObject>();
             while(DELTA_T_US(start, cur) / 1e6 < min_dur_sec) {
                 do {
                     pthread_yield();
@@ -288,7 +268,7 @@ int main(int argc, char *argv[]) {
         }
     }
     ///////////////////////////////////////////////////////////////////////////////
-    group->barrier_sync();
+    group.barrier_sync();
     usleep(min_dur_sec * 1e6);
     // query
     if(node_id == (uint32_t)(num_of_nodes - 1)) {
@@ -299,7 +279,7 @@ int main(int argc, char *argv[]) {
         while(qcnt--) {
             uint64_t query_ts_us = center_ts_us + random() % 2000000 - 1000000;
             clock_gettime(CLOCK_REALTIME, &tqs);
-            auto shard_iterator = group->get_shard_iterator<ByteArrayObject>();
+            auto shard_iterator = group.get_shard_iterator<ByteArrayObject>();
             // auto query_results_vec = shard_iterator.p2p_query<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
             clock_gettime(CLOCK_REALTIME, &tqm1);
             auto query_results_vec = shard_iterator.p2p_query<ByteArrayObject::QUERY_PERS_BYTES>(query_ts_us);
@@ -318,6 +298,6 @@ int main(int argc, char *argv[]) {
         }
     }
     std::cout << std::flush;
-    group->barrier_sync();
+    group.barrier_sync();
     exit(0);
 }

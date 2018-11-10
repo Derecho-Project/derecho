@@ -5,10 +5,8 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "bytes_object.h"
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include "conf/conf.hpp"
@@ -50,32 +48,21 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 5) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <msg_size> <count> [window_size=3]" << std::endl;
+    if(argc < 4) {
+        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <count>" << std::endl;
         return -1;
     }
+    derecho::Conf::initialize(argc, argv);
     int sender_selector = 0;  // 0 for all sender
     if(strcmp(argv[1], "half") == 0) sender_selector = 1;
     if(strcmp(argv[1], "one") == 0) sender_selector = 2;
     int num_of_nodes = atoi(argv[2]);
-    int msg_size = atoi(argv[3]);
-    int count = atoi(argv[4]);
+    int count = atoi(argv[3]);
     struct timespec t1, t2, t3;
 
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-    query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int max_msg_size = msg_size;
-    long long unsigned int block_size = get_block_size(msg_size);
-    unsigned int window_size = 3;
-    if(argc >= 6) {
-        window_size = (unsigned int)atoi(argv[5]);
-    }
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size, window_size};
+    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     bool is_sending = true;
-
     long total_num_messages;
     switch(sender_selector) {
         case 0:
@@ -98,7 +85,7 @@ int main(int argc, char* argv[]) {
                         clock_gettime(CLOCK_REALTIME, &t3);
                         int64_t nsec = ((int64_t)t3.tv_sec - t1.tv_sec) * 1000000000 + t3.tv_nsec - t1.tv_nsec;
                         double msec = (double)nsec / 1000000;
-                        double thp_gbps = ((double)count * msg_size * 8) / nsec;
+                        double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
                         double thp_ops = ((double)count * 1000000000) / nsec;
                         std::cout << "(pers)timespan:" << msec << " millisecond." << std::endl;
                         std::cout << "(pers)throughput:" << thp_gbps << "Gbit/s." << std::endl;
@@ -141,23 +128,14 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry* pr) { return std::make_unique<ByteArrayObject>(pr); };
 
-    std::unique_ptr<derecho::Group<ByteArrayObject>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
+    derecho::Group<ByteArrayObject> group{callback_set, subgroup_info,
                 std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    } else {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    }
+                ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     uint32_t node_rank = -1;
-    auto members_order = group->get_members();
+    auto members_order = group.get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
         cout << members_order[i] << " ";
@@ -184,10 +162,10 @@ int main(int argc, char* argv[]) {
 */
     // if (node_id == 0) {
     if(is_sending) {
-        derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
-        char* bbuf = new char[msg_size];
-        bzero(bbuf, msg_size);
-        derecho::Bytes bs(bbuf, msg_size);
+        derecho::Replicated<ByteArrayObject>& handle = group.get_subgroup<ByteArrayObject>();
+        char* bbuf = new char[max_msg_size];
+        bzero(bbuf, max_msg_size);
+        derecho::Bytes bs(bbuf, max_msg_size);
 
         try {
             clock_gettime(CLOCK_REALTIME, &t1);
@@ -206,7 +184,7 @@ int main(int argc, char* argv[]) {
         }
         int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
         double msec = (double)nsec / 1000000;
-        double thp_gbps = ((double)count * msg_size * 8) / nsec;
+        double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
         double thp_ops = ((double)count * 1000000000) / nsec;
         std::cout << "(send)timespan:" << msec << " millisecond." << std::endl;
         std::cout << "(send)throughput:" << thp_gbps << "Gbit/s." << std::endl;
