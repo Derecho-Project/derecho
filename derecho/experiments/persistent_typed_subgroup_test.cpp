@@ -1,10 +1,3 @@
-/**
- * @file typed_subgroup_test.cpp
- *
- * @date Mar 1, 2017
- * @author edward
- */
-
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -14,7 +7,6 @@
 #include <vector>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 
@@ -58,21 +50,8 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
+    derecho::Conf::initialize(argc, argv);
 
-    query_node_info(node_id, my_ip, leader_ip);
-
-    //Derecho message parameters
-    //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-
-    // derecho::message_callback_t stability_callback{};
-    // derecho::CallbackSet callback_set{stability_callback, {}};
     derecho::CallbackSet callback_set{
             nullptr,
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
@@ -94,29 +73,21 @@ int main(int argc, char** argv) {
 
     auto pfoo_factory = [](PersistentRegistry* pr) { return std::make_unique<PFoo>(pr); };
 
-    std::unique_ptr<derecho::Group<PFoo>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<PFoo>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                pfoo_factory);
-    } else {
-        group = std::make_unique<derecho::Group<PFoo>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                pfoo_factory);
-    }
+    derecho::Group<PFoo> group(callback_set, subgroup_info,
+                               std::vector<derecho::view_upcall_t>{},
+                               pfoo_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     if(node_id == 0) {
-        Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
+        Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
 
         cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
         pfoo_rpc_handle.ordered_query<PFoo::READ_STATE>();
     }
     if(node_id == 1) {
-        Replicated<PFoo>& pfoo_rpc_handle = group->get_subgroup<PFoo>();
+        Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
         int new_value = 3;
         cout << "Changing PFoo's state to " << new_value << endl;
         derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<PFoo::CHANGE_STATE>(new_value);
