@@ -5,7 +5,6 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "rdmc/util.h"
 #include "spdlog/spdlog.h"
@@ -19,8 +18,7 @@ using std::vector;
 using namespace std;
 using namespace mutils;
 
-using derecho::DerechoSST;
-using derecho::MulticastGroup;
+using namespace derecho;
 
 int count = 0;
 
@@ -41,7 +39,7 @@ struct test1_str {
 };
 
 template <typename T>
-void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
+void output_result(typename rpc::QueryResults<T>::ReplyMap& rmap) {
     cout << "Obtained a reply map" << endl;
     for(auto it = rmap.begin(); it != rmap.end(); ++it) {
         try {
@@ -54,38 +52,22 @@ void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
 }
 
 int main(int argc, char* argv[]) {
-    srand(time(NULL));
+    pthread_setname_np(pthread_self(), "derecho_caller");
     spdlog::set_level(spdlog::level::trace);
 
-    string leader_ip;
-    uint32_t my_id;
-    string my_ip;
-    cout << "Enter my id" << endl;
-    cin >> my_id;
-    cout << "Enter my ip" << endl;
-    cin >> my_ip;
-    cout << "Enter leader ip" << endl;
-    cin >> leader_ip;
-
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = get_block_size(max_msg_size);
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    // int num_messages = 10;
+    Conf::initialize(argc, argv);
 
     auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, char* buf,
                                  long long int msg_size) {};
 
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}},
-                                        {std::type_index(typeid(test1_str))}};
-    derecho::Group<test1_str>* managed_group;
-
-    auto new_view_callback = [](const derecho::View& new_view) {
-        std::vector<derecho::node_id_t> old_members;
+    SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &one_subgroup_entire_view}}};
+    
+    auto new_view_callback = [](const View& new_view) {
+        std::vector<node_id_t> old_members;
         old_members.insert(old_members.begin(), new_view.departed.begin(), new_view.departed.end());
         //"copy from members to old_members as long as members[i] is not in joined"
         std::copy_if(new_view.members.begin(), new_view.members.end(), std::back_inserter(old_members),
-                     [&new_view](const derecho::node_id_t& elem) {
+                     [&new_view](const node_id_t& elem) {
                          return std::find(new_view.joined.begin(), new_view.joined.end(), elem) == new_view.joined.end();
                      });
         cout << "New members are : " << endl;
@@ -100,36 +82,26 @@ int main(int argc, char* argv[]) {
         cout << endl;
     };
 
-    if(my_id == 0) {
-        managed_group = new derecho::Group<test1_str>(
-                my_id, my_ip, {stability_callback, {}}, subgroup_info,
-                derecho_params, {new_view_callback},
-                [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
-    }
-
-    else {
-        managed_group = new derecho::Group<test1_str>(
-                my_id, my_ip, leader_ip,
-                {stability_callback, {}}, subgroup_info,
-                {new_view_callback},
-		[](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
-    }
+    Group<test1_str> managed_group({stability_callback}, subgroup_info,
+                                   {new_view_callback},
+                                   [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
 
     cout << "Finished constructing/joining Group" << endl;
 
+    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     // other nodes (first two) change each other's state
     if(my_id != 2) {
         cout << "Changing other's state to " << 36 - my_id << endl;
-        derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
+        Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
         output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id}, 36 - my_id).get());
     }
 
-    while(managed_group->get_members().size() < 3) {
+    while(managed_group.get_members().size() < 3) {
     }
 
     // all members verify every node's state
     cout << "Reading everyone's state" << endl;
-    derecho::Replicated<test1_str>& rpc_handle = managed_group->get_subgroup<test1_str>(0);
+    Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
     output_result<int>(rpc_handle.ordered_query<RPC_NAME(read_state)>({}).get());
 
     cout << "Done" << endl;

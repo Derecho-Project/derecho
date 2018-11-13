@@ -5,10 +5,8 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "bytes_object.h"
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include "conf/conf.hpp"
@@ -58,30 +56,22 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 5) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <msg_size> <count> [window_size=3]" << std::endl;
+    if(argc < 4) {
+        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <count>" << std::endl;
         return -1;
     }
+
+    derecho::Conf::initialize(argc, argv);    
+
     int sender_selector = 0;  // 0 for all sender
     if(strcmp(argv[1], "half") == 0) sender_selector = 1;
     if(strcmp(argv[1], "one") == 0) sender_selector = 2;
     int num_of_nodes = atoi(argv[2]);
-    int msg_size = atoi(argv[3]);
-    int count = atoi(argv[4]);
+    int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    int count = atoi(argv[3]);
     struct timespec t1, t2, t3;
 
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-    query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int max_msg_size = msg_size;
-    long long unsigned int block_size = get_block_size(msg_size);
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    unsigned int window_size = 3;
-    if(argc >= 6) {
-        window_size = (unsigned int)atoi(argv[5]);
-    }
-    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size, window_size};
+    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     bool is_sending = true;
 
     long total_num_messages;
@@ -99,7 +89,6 @@ int main(int argc, char* argv[]) {
 
     derecho::CallbackSet callback_set{
             nullptr,  //we don't need the stability_callback here
-            // the persistence_callback either
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 if(ver == (total_num_messages - 1)) {
                     if(is_sending) {
@@ -149,23 +138,12 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry* pr) { return std::make_unique<ByteArrayObject>(pr); };
 
-    std::unique_ptr<derecho::Group<ByteArrayObject>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    } else {
-        group = std::make_unique<derecho::Group<ByteArrayObject>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    }
+    derecho::Group<ByteArrayObject> group{callback_set,subgroup_info,std::vector<derecho::view_upcall_t>{},ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     uint32_t node_rank = -1;
-    auto members_order = group->get_members();
+    auto members_order = group.get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
         cout << members_order[i] << " ";
@@ -192,7 +170,7 @@ int main(int argc, char* argv[]) {
 */
     // if (node_id == 0) {
     if(is_sending) {
-        derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
+        derecho::Replicated<ByteArrayObject>& handle = group.get_subgroup<ByteArrayObject>();
         char* bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
         derecho::Bytes bs(bbuf, msg_size);

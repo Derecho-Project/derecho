@@ -19,12 +19,12 @@ namespace tcp {
 
 using namespace std;
 
-socket::socket(string servername, int port) {
+socket::socket(string server_ip, uint16_t server_port) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure();
 
     hostent *server;
-    server = gethostbyname(servername.c_str());
+    server = gethostbyname(server_ip.c_str());
     if(server == nullptr) throw connection_failure();
 
     char server_ip_cstr[INET_ADDRSTRLEN];
@@ -34,7 +34,7 @@ socket::socket(string servername, int port) {
     sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
+    serv_addr.sin_port = htons(server_port);
     bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
           server->h_length);
 
@@ -208,7 +208,7 @@ std::string socket::get_self_ip() {
     return std::string(my_ip_cstr);
 }
 
-connection_listener::connection_listener(int port) {
+connection_listener::connection_listener(uint16_t port) {
     sockaddr_in serv_addr;
 
     int listenfd = ::socket(AF_INET, SOCK_STREAM, 0);

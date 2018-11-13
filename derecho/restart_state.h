@@ -84,6 +84,7 @@ private:
 
     std::unique_ptr<View> restart_view;
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
+    std::map<node_id_t, std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> rejoined_node_ips_and_ports;
     std::set<node_id_t> members_sent_restart_view;
     std::set<node_id_t> rejoined_node_ids;
     std::set<node_id_t> last_known_view_members;
@@ -143,8 +144,7 @@ public:
      * @param rejoined_node_ids The IDs of those nodes
      * @return The next view that will be installed if the restart continues at this point
      */
-    std::unique_ptr<View> update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
-                                                            const std::set<node_id_t>& rejoined_node_ids);
+    std::unique_ptr<View> update_curr_and_next_restart_view();
     /**
      * Constructs the next view from the current view and a list of joining
      * nodes, by ID and IP address. This version is only used by the restart
@@ -159,7 +159,7 @@ public:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<ip_addr>& joiner_ips whenlog(,
+                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports whenlog(,
                                                 std::shared_ptr<spdlog::logger> logger));
     /**
      * @return true if the set of node IDs includes at least one member of each

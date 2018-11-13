@@ -14,6 +14,8 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
+#include "mutils-serialization/SerializationSupport.hpp"
 #include "p2p_connections.h"
 #include "remote_invocable.h"
 #include "rpc_utils.h"
@@ -119,16 +121,18 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
-            : nid(node_id),
-              receivers(new std::decay_t<decltype(*receivers)>()),
-              whenlog(logger(spdlog::get("derecho_debug_log")),)
-              view_manager(group_view_manager),
-              connections(std::make_unique<sst::P2PConnections>(
-                      sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size,
-                        group_view_manager.derecho_params.max_payload_size})),
-              replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
-        rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
+  RPCManager(ViewManager &group_view_manager)
+    : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)), receivers(new std::decay_t<decltype(*receivers)>()),
+        whenlog(logger(spdlog::get("derecho_debug_log")), )
+            view_manager(group_view_manager),
+        connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{
+            nid,
+            {nid},
+            group_view_manager.derecho_params.window_size,
+            group_view_manager.derecho_params.max_payload_size})),
+        replySendBuffer(
+            new char[group_view_manager.derecho_params.max_payload_size]) {
+    rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
     ~RPCManager();

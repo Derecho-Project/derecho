@@ -1,6 +1,4 @@
 /**
- * @file persistent_rejoin_test.cpp
- *
  * An experiment that tests the log-appending mechanism for recovering nodes
  * with persistent state.
  */
@@ -8,7 +6,6 @@
 #include <iostream>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 
 /*
  * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS
@@ -67,18 +64,8 @@ public:
 };
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
+  derecho::Conf::initialize(argc, argv);
 
-    query_node_info(node_id, my_ip, leader_ip);
-
-    //Derecho message parameters
-    //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
     derecho::CallbackSet callback_set{
             nullptr,
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
@@ -90,21 +77,12 @@ int main(int argc, char** argv) {
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
     //    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
-    std::unique_ptr<derecho::Group<PersistentThing>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                thing_factory);
-    } else {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                thing_factory);
-    }
+    derecho::Group<PersistentThing> group(callback_set, subgroup_info,
+                                          std::vector<derecho::view_upcall_t>{},
+                                          thing_factory);
     std::cout << "Successfully joined group" << std::endl;
-    //    Replicated<TestThing>& thing_handle = group->get_subgroup<TestThing>();
-    Replicated<PersistentThing>& thing_handle = group->get_subgroup<PersistentThing>();
+    Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     //Node 3 will rejoin as node 4
     if(node_id == 4) {
         std::cout << "Printing initial Persistent log" << std::endl;

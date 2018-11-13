@@ -1,9 +1,3 @@
-/**
- * @file typed_subgroup_test.cpp
- *
- * @date Mar 1, 2017
- */
-
 #include <chrono>
 #include <iostream>
 #include <map>
@@ -13,7 +7,6 @@
 #include <vector>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include "test_objects.h"
 #include "conf/conf.hpp"
 
@@ -23,21 +16,7 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-
-    query_node_info(node_id, my_ip, leader_ip);
-
-    //Derecho message parameters
-    //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-
-    derecho::message_callback_t stability_callback{};
-    derecho::CallbackSet callback_set{stability_callback, {}};
+    derecho::Conf::initialize(argc, argv);
 
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
     //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
@@ -48,7 +27,7 @@ int main(int argc, char** argv) {
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
+                  std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
                   //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
                   subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
@@ -60,7 +39,7 @@ int main(int argc, char** argv) {
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<derecho::node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
+                  std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
                   subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
                   next_unassigned_rank = std::max(next_unassigned_rank, 3);
                   return subgroup_vector;
@@ -71,7 +50,7 @@ int main(int argc, char** argv) {
                       throw derecho::subgroup_provisioning_exception();
                   }
                   derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<derecho::node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
+                  std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
                   subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes));
                   next_unassigned_rank += 3;
                   return subgroup_vector;
@@ -84,32 +63,23 @@ int main(int argc, char** argv) {
     auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
-    std::unique_ptr<derecho::Group<Foo, Bar, Cache>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                foo_factory, bar_factory, cache_factory);
-    } else {
-        group = std::make_unique<derecho::Group<Foo, Bar, Cache>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                foo_factory, bar_factory, cache_factory);
-    }
-
+    derecho::Group<Foo, Bar, Cache> group({}, subgroup_info,
+                                          std::vector<derecho::view_upcall_t>{},
+                                          foo_factory, bar_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;
 
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     if(node_id == 0) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
     }
     if(node_id == 1) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
         derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
@@ -122,8 +92,8 @@ int main(int argc, char** argv) {
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
     }
     if(node_id == 2) {
-        Replicated<Foo>& foo_rpc_handle = group->get_subgroup<Foo>();
-        Replicated<Bar>& bar_rpc_handle = group->get_subgroup<Bar>();
+        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
+        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
@@ -141,7 +111,7 @@ int main(int argc, char** argv) {
     }
 
     if(node_id == 3) {
-        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
+        Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
@@ -163,26 +133,26 @@ int main(int argc, char** argv) {
         }
     }
     if(node_id == 4) {
-        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
+        Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-        derecho::node_id_t p2p_target = 2;
+        node_id_t p2p_target = 2;
         cout << "Reading Foo's state from node " << p2p_target << endl;
-        ExternalCaller<Foo>& p2p_foo_handle = group->get_nonmember_subgroup<Foo>();
+        ExternalCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
         derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<RPC_NAME(read_state)>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
     }
     if(node_id == 5) {
-        Replicated<Cache>& cache_rpc_handle = group->get_subgroup<Cache>();
+        Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
     }
 
-    cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+    cout << "Reached end of main(), entering infinite loop so program doesn't exit" << endl;
     while(true) {
     }
 }

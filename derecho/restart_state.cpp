@@ -192,7 +192,17 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 last_known_view_members.insert(curr_view->members.begin(), curr_view->members.end());
             }
 
-            waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
+            uint16_t joiner_gms_port = 0;
+            client_socket->read(joiner_gms_port);
+            uint16_t joiner_rpc_port = 0;
+            client_socket->read(joiner_rpc_port);
+            uint16_t joiner_sst_port = 0;
+            client_socket->read(joiner_sst_port);
+            uint16_t joiner_rdmc_port = 0;
+            client_socket->read(joiner_rdmc_port);
+            const ip_addr_t &joiner_ip = client_socket->get_remote_ip();
+	    waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
+	    rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
             //Compute the intersection of rejoined_node_ids and last_known_view_members
             //in the most clumsy, verbose, awkward way possible
             std::set<node_id_t> intersection_of_ids;
@@ -214,7 +224,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
 }
 
 bool RestartLeaderState::compute_restart_view() {
-    restart_view = update_curr_and_next_restart_view(waiting_join_sockets, rejoined_node_ids);
+    restart_view = update_curr_and_next_restart_view();
     restart_num_received_size = ViewManager::make_subgroup_maps(subgroup_info, curr_view, *restart_view, restart_subgroup_settings);
     if(restart_view->is_adequately_provisioned
             && contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
@@ -283,6 +293,7 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
             //All send failures will end up here.
             //Close the failed socket, delete it from rejoined_node_ids, and return the ID of the failed node.
             waiting_join_sockets.erase(waiting_sockets_iter);
+	    rejoined_node_ips_and_ports.erase(failed_node);
             rejoined_node_ids.erase(failed_node);
             return failed_node;
         }
@@ -334,17 +345,16 @@ void RestartLeaderState::print_longest_logs() const {
     whenlog(logger->debug("Restart subgroup/shard leaders: {}", leader_list.str());)
 }
 
-std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view(const std::map<node_id_t, tcp::socket>& waiting_join_sockets,
-                                                                            const std::set<node_id_t>& rejoined_node_ids) {
+std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     //Nodes that were not in the last view but have restarted will immediately "join" in the new view
     std::vector<node_id_t> nodes_to_add_in_next_view;
-    std::vector<ip_addr> ips_to_add_in_next_view;
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> ips_and_ports_to_add_in_next_view;
     for(const auto& id_socket_pair : waiting_join_sockets) {
         node_id_t joiner_id = id_socket_pair.first;
         int joiner_rank = curr_view->rank_of(joiner_id);
         if(joiner_rank == -1) {
             nodes_to_add_in_next_view.emplace_back(joiner_id);
-            ips_to_add_in_next_view.emplace_back(id_socket_pair.second.get_remote_ip());
+            ips_and_ports_to_add_in_next_view.emplace_back(rejoined_node_ips_and_ports.at(joiner_id));
             //If this node had been marked as failed, but was still in the view, un-fail it
         } else if(curr_view->failed[joiner_rank] == true) {
             curr_view->failed[joiner_rank] = false;
@@ -361,18 +371,18 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view(cons
     }
 
     //Compute the next view, which will include all the members currently rejoining and remove the failed ones
-    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_to_add_in_next_view whenlog(, logger));
+    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_and_ports_to_add_in_next_view whenlog(, logger));
 }
 
 
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const std::vector<node_id_t>& joiner_ids,
-                                                  const std::vector<ip_addr>& joiner_ips
+							 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
                                                   whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<ip_addr> member_ips(next_num_members);
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     std::set<int> leave_ranks;
     for(std::size_t rank = 0; rank < curr_view->failed.size(); ++rank) {
@@ -383,7 +393,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
     for(std::size_t i = 0; i < joiner_ids.size(); ++i) {
         int new_member_rank = curr_view->num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_ids[i];
-        member_ips[new_member_rank] = joiner_ips[i];
+        member_ips_and_ports[new_member_rank] = joiner_ips_and_ports[i];
         whenlog(logger->debug("Restarted next view will add new member with id {}", joiner_ids[i]);)
     }
     for(const auto& leaver_rank : leave_ranks) {
@@ -400,7 +410,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
         //This is why leave_ranks needs to be a set
         if(leave_ranks.find(old_rank) == leave_ranks.end()) {
             members[new_rank] = curr_view->members[old_rank];
-            member_ips[new_rank] = curr_view->member_ips[old_rank];
+            member_ips_and_ports[new_rank] = curr_view->member_ips_and_ports[old_rank];
             failed[new_rank] = curr_view->failed[old_rank];
             ++new_rank;
         }
@@ -420,7 +430,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
         throw derecho_exception("Recovery leader wasn't in the next view it computed?!?!");
     }
 
-    auto next_view = std::make_unique<View>(curr_view->vid + 1, members, member_ips, failed,
+    auto next_view = std::make_unique<View>(curr_view->vid + 1, members, member_ips_and_ports, failed,
                                             joiner_ids, departed, my_new_rank, next_unassigned_rank);
     next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
     return std::move(next_view);

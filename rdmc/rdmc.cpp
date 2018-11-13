@@ -21,6 +21,8 @@
 #include <utility>
 #include <vector>
 
+#include "derecho/derecho_type_definitions.h"
+
 using namespace std;
 using namespace rdma;
 
@@ -32,14 +34,14 @@ atomic<bool> shutdown_flag;
 map<uint16_t, shared_ptr<group>> groups;
 mutex groups_lock;
 
-bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
+  bool initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports, uint32_t _node_rank) {
     if(shutdown_flag) return false;
 
     node_rank = _node_rank;
 #ifdef USE_VERBS_API
-    if(!::rdma::impl::verbs_initialize(addresses, node_rank)) {
+    if(!::rdma::impl::verbs_initialize(ip_addrs_and_ports, node_rank)) {
 #else
-    if(!::rdma::impl::lf_initialize(addresses, node_rank)) {
+    if (!::rdma::impl::lf_initialize(ip_addrs_and_ports, node_rank)) {
 #endif
         return false;
     }
@@ -47,7 +49,7 @@ bool initialize(const map<uint32_t, string>& addresses, uint32_t _node_rank) {
     polling_group::initialize_message_types();
     return true;
 }
-void add_address(uint32_t index, const string& address) {
+void add_address(uint32_t index, const std::pair<ip_addr_t, uint16_t>& address) {
 #ifdef USE_VERBS_API
     ::rdma::impl::verbs_add_connection(index, address);
 #else
@@ -109,10 +111,10 @@ bool send(uint16_t group_number, shared_ptr<memory_region> mr, size_t offset,
     g->send_message(mr, offset, length);
     return true;
 }
-void query_addresses(std::map<uint32_t, std::string>& addresses,
-                     uint32_t& node_rank) {
-    query_peer_addresses(addresses, node_rank);
-}
+// void query_addresses(std::map<uint32_t, std::string>& addresses,
+//                      uint32_t& node_rank) {
+//     query_peer_addresses(addresses, node_rank);
+// }
 
 barrier_group::barrier_group(vector<uint32_t> members) {
     member_index = index_of(members, node_rank);

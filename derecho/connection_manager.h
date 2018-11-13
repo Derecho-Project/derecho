@@ -4,35 +4,31 @@
 #include <map>
 #include <mutex>
 
+#include "derecho/derecho_type_definitions.h"
 #include "locked_reference.h"
 #include "tcp/tcp.h"
 
 namespace tcp {
-using ip_addr_t = std::string;
-using node_id_t = uint32_t;
 class tcp_connections {
     std::mutex sockets_mutex;
 
     node_id_t my_id;
-    const uint32_t port;
     std::unique_ptr<connection_listener> conn_listener;
     std::map<node_id_t, socket> sockets;
     bool add_connection(const node_id_t other_id,
-                        const ip_addr_t& other_ip);
-    void establish_node_connections(const std::map<node_id_t, ip_addr_t>& ip_addrs);
+                        const std::pair<ip_addr_t, uint16_t>& other_ip_and_port);
+    void establish_node_connections(
+            const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports);
 
 public:
     /**
-     * Creates a TCP connection manager for a set of connections on the
-     * specified port, and sets up connections to all of the initial set of
-     * IP addresses.
+     * Creates a TCP connection manager for a set of connections
+     * to all of the initial set of addresses.
      * @param _my_id The ID of this node
-     * @param ip_addrs The list of IP addresses to connect to, indexed by node ID
-     * @param _port The port to use for all TCP connections
+     * @param ip_addrs_and_ports The map of IP address-port pairs to connect to, indexed by node ID
      */
-    tcp_connections(node_id_t _my_id,
-                    const std::map<node_id_t, ip_addr_t>& ip_addrs,
-                    uint32_t _port);
+    tcp_connections(node_id_t my_id,
+                    const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports);
     void destroy();
     /**
      * Writes size bytes from a buffer to the node with ID node_id, using the
@@ -44,7 +40,7 @@ public:
      * @return True if all bytes were written successfully, false if there was
      * an error.
      */
-    bool write(node_id_t node_id, char const* buffer, size_t size);
+    bool write(node_id_t node_id, char const *buffer, size_t size);
     /**
      * Writes size bytes from a buffer to all the other nodes currently
      * connected, in ascending order of node ID.
@@ -53,7 +49,7 @@ public:
      * @return True if all writes completed successfully, false if any of them
      * didn't.
      */
-    bool write_all(char const* buffer, size_t size);
+    bool write_all(char const *buffer, size_t size);
     /**
      * Receives size bytes from the node with ID node_id, over the TCP socket
      * connected to that node. Blocks until all the bytes have been received or
@@ -64,18 +60,19 @@ public:
      * @return True if all the bytes were read successfully, false if there was
      * an error.
      */
-    bool read(node_id_t node_id, char* buffer, size_t size);
+    bool read(node_id_t node_id, char *buffer, size_t size);
     /**
      * Adds a TCP connection to a new node. If the new node's ID is lower than
      * this node's ID, this function initiates a new TCP connection to it;
      * otherwise, this function listens on a TCP socket and waits for the new
      * node to make a connection.
      * @param new_id The ID of the new node
-     * @param new_ip_addr The IP address of the new node
+     * @param new_ip_addr_and_port The IP address and port number of the new node
      * @return True if the TCP connection was set up successfully, false if
      * there was an error.
      */
-    bool add_node(node_id_t new_id, const ip_addr_t new_ip_addr);
+    bool add_node(node_id_t new_id,
+                  const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
     /**
      * Removes a node from the managed set of TCP connections, closing the
      * socket connected to it.
@@ -84,9 +81,8 @@ public:
      * was not.
      */
     bool delete_node(node_id_t remove_id);
-
     template <class T>
-    bool exchange(node_id_t node_id, T local, T& remote) {
+    bool exchange(node_id_t node_id, T local, T &remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
         const auto it = sockets.find(node_id);
         assert(it != sockets.end());
@@ -101,6 +97,7 @@ public:
      * if no sockets are ready to read.
      */
     int32_t probe_all();
+    derecho::LockedReference<std::unique_lock<std::mutex>, socket>
     /**
      * Gets a locked reference to the TCP socket connected to a particular node.
      * While the caller holds the locked reference to the socket, no other
@@ -110,6 +107,6 @@ public:
      * @param node_id The ID of the desired node
      * @return A LockedReference to the TCP socket connected to that node.
      */
-    derecho::LockedReference<std::unique_lock<std::mutex>, socket> get_socket(node_id_t node_id);
+    get_socket(node_id_t node_id);
 };
 }  // namespace tcp

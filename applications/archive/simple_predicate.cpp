@@ -17,7 +17,7 @@ using std::vector;
 
 class mySST : public sst::SST<mySST> {
 public:
-    mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST<mySST>(this, sst::SSTParams{_members, my_id}) {
+    mySST(const vector<uint32_t>& _members, uint32_t my_rank) : SST<mySST>(this, sst::SSTParams{_members, my_rank}) {
         SSTInit(a);
     }
     sst::SSTField<int> a;
@@ -26,21 +26,27 @@ public:
 int main() {
     using namespace sst;
 
-    // input number of nodes and the local node id
-    uint32_t num_nodes, my_id;
-    cin >> num_nodes >> my_id;
+    // input number of nodes and the local node rank
+    std::cout << "Enter node_rank and num_nodes" << std::endl;
+    uint32_t node_rank, num_nodes;
+    cin >> node_rank >> num_nodes;
 
+    std::cout << "Input the IP addresses" << std::endl;
+    uint16_t port = 32567;
     // input the ip addresses
-    map<uint32_t, std::string> ip_addrs;
-    for(size_t i = 0; i < num_nodes; ++i) {
-        cin >> ip_addrs[i];
+    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
+    for(uint i = 0; i < num_nodes; ++i) {
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    sst::verbs_initialize(ip_addrs, my_id);
+    sst::verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    sst::lf_initialize(ip_addrs,my_id);
+    sst::lf_initialize(ip_addrs_and_ports,node_rank);
 #endif
 
     vector<uint32_t> members(num_nodes);
@@ -48,21 +54,21 @@ int main() {
         members[i] = i;
     }
 
-    mySST sst(members, my_id);
-    sst.a(my_id, 0);
+    mySST sst(members, node_rank);
+    sst.a(node_rank, 0);
     sst.put();
     // will add sync later
     cout << "First input" << endl;
     int n;
     cin >> n;
 
-    auto f = [my_id](const mySST& sst) {
-        return sst.a[1 - my_id] != 0;
+    auto f = [node_rank](const mySST& sst) {
+        return sst.a[1 - node_rank] != 0;
     };
 
-    if(my_id == 0) {
-        auto g = [my_id](mySST& sst) {
-            sst.a[my_id] = 1;
+    if(node_rank == 0) {
+        auto g = [node_rank](mySST& sst) {
+            sst.a[node_rank] = 1;
             sst.put();
             cout << "Exiting" << endl;
             exit(0);
@@ -72,7 +78,7 @@ int main() {
     }
 
     else {
-        auto g = [my_id](mySST& sst) {
+        auto g = [node_rank](mySST& sst) {
             cout << "Exiting" << endl;
             exit(0);
         };
@@ -82,7 +88,7 @@ int main() {
         cout << "Second input" << endl;
         int k;
         cin >> k;
-        sst.a(my_id, 1);
+        sst.a(node_rank, 1);
         sst.put();
     }
 

@@ -1,10 +1,3 @@
-/**
- * @file smart_membership_function_test.cpp
- *
- * @date May 9, 2017
- * @author edward
- */
-
 #include <algorithm>
 #include <iostream>
 #include <map>
@@ -15,7 +8,6 @@
 #include <vector>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include "conf/conf.hpp"
 
 /*
@@ -78,21 +70,7 @@ using std::cout;
 using std::endl;
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-
-    query_node_info(node_id, my_ip, leader_ip);
-
-    //Derecho message parameters
-    //Where do these come from? What do they mean? Does the user really need to supply them?
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-
-    derecho::message_callback_t stability_callback{};
-    derecho::CallbackSet callback_set{stability_callback, {}};
+    derecho::Conf::initialize(argc, argv);
 
     auto load_balancer_factory = [](PersistentRegistry*) { return std::make_unique<LoadBalancer>(); };
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
@@ -103,30 +81,23 @@ int main(int argc, char** argv) {
                                          {std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy)}},
                                         keys_as_list(subgroup_info.subgroup_membership_functions));
 
-    std::unique_ptr<derecho::Group<LoadBalancer, Cache>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<LoadBalancer, Cache>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                load_balancer_factory, cache_factory);
-    } else {
-        group = std::make_unique<derecho::Group<LoadBalancer, Cache>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                load_balancer_factory, cache_factory);
-    }
+    derecho::Group<LoadBalancer, Cache> group({},
+					      subgroup_info,
+					      std::vector<derecho::view_upcall_t> {},
+					      load_balancer_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;
 
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     if(node_id == 1) {
-        derecho::ExternalCaller<Cache>& cache_handle = group->get_nonmember_subgroup<Cache>();
-        derecho::node_id_t who = 3;
+        derecho::ExternalCaller<Cache>& cache_handle = group.get_nonmember_subgroup<Cache>();
+        node_id_t who = 3;
         std::this_thread::sleep_for(std::chrono::seconds(1));
         derecho::rpc::QueryResults<std::string> cache_results = cache_handle.p2p_query<RPC_NAME(get)>(who, "6");
         std::string response = cache_results.get().get(who);
         cout << " Response from node " << who << ":" << response << endl;
     }
     if(node_id > 2) {
-        derecho::Replicated<Cache>& cache_handle = group->get_subgroup<Cache>();
+        derecho::Replicated<Cache>& cache_handle = group.get_subgroup<Cache>();
         std::stringstream string_builder;
         string_builder << "Node " << node_id << "'s things";
         cache_handle.ordered_send<RPC_NAME(put)>(std::to_string(node_id), string_builder.str());

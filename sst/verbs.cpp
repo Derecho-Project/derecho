@@ -28,6 +28,8 @@
 #include "tcp/tcp.h"
 #include "verbs.h"
 
+#error "Verbs implementation is obsolete. Compilation stopped."
+
 using std::cout;
 using std::endl;
 
@@ -641,8 +643,8 @@ bool sync(uint32_t r_index) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs, uint32_t node_rank) {
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
+  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports, uint32_t node_rank) {
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
     // init all of the resources, so cleanup will be easy
     resources_init();

@@ -108,9 +108,6 @@ private:
 
     whenlog(std::shared_ptr<spdlog::logger> logger;)
 
-    /** The port that this instance of the GMS communicates on. */
-    const int gms_port;
-
     /** Controls access to curr_view. Read-only accesses should acquire a
      * shared_lock, while view changes acquire a unique_lock. */
     std::shared_timed_mutex view_mutex;
@@ -330,7 +327,6 @@ private:
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      */
     void construct_multicast_group(CallbackSet callbacks,
-                                   const DerechoParams& derecho_params,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size);
 
@@ -387,11 +383,22 @@ private:
      */
     static uint32_t compute_num_received_size(const View& view);
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
-    static std::map<node_id_t, ip_addr> make_member_ips_map(const View& view);
+    template <PORT_TYPE port_index>
+    static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+    make_member_ips_and_ports_map(const View &view) {
+      std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
+      size_t num_members = view.members.size();
+      for (uint i = 0; i < num_members; ++i) {
+        if (!view.failed[i]) {
+          member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{std::get<0>(view.member_ips_and_ports[i]), std::get<port_index>(view.member_ips_and_ports[i])};
+        }
+      }
+      return member_ips_and_ports_map;
+    }
     /**
-     * Constructs a map from subgroup type -> index -> shard -> node ID of that shard's leader.
-     * If a shard has no leader in the current view (because it has no members), the vector will
-     * contain -1 instead of a node ID
+     * Constructs a map from subgroup type -> index -> shard -> node ID of that
+     * shard's leader. If a shard has no leader in the current view (because it
+     * has no members), the vector will contain -1 instead of a node ID
      */
     static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
     /**
@@ -421,19 +428,13 @@ public:
      * @param _persistence_manager_callbacks The persistence manager callbacks.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
      */
-    ViewManager(const node_id_t my_id,
-                const ip_addr my_ip,
-                CallbackSet callbacks,
+    ViewManager(CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
-                const DerechoParams& derecho_params,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
+                std::vector<view_upcall_t> _view_upcalls = {});
 
     /**
      * Constructor for joining an existing group, assuming the caller has already
@@ -454,19 +455,14 @@ public:
      * @param _persistence_manager_callbacks The persistence manager callbacks
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
-     * @param gms_port The port to contact other group members on when sending
-     * group-management messages
      */
-    ViewManager(const node_id_t my_id,
-                tcp::socket& leader_connection,
+    ViewManager(tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {},
-                const int gms_port = derecho::getConfInt32(CONF_DERECHO_GMS_PORT));
-
+                std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();
 

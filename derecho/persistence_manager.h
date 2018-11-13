@@ -2,7 +2,6 @@
  * @file persistence_manager.h
  *
  * @date Jun 20, 2017
- * @author Weijia
  */
 #pragma once
 

@@ -5,10 +5,8 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
 #include "bytes_object.h"
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include <conf/conf.hpp>
@@ -34,26 +32,18 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    if(argc != 4) {
-        std::cout << "usage:" << argv[0] << " <num_of_nodes> <max_msg_size> <count>" << std::endl;
+    if(argc < 3) {
+        std::cout << "Usage:" << argv[0] << " <num_of_nodes> <count> [configuration options...]" << std::endl;
         return -1;
     }
-    int num_of_nodes = atoi(argv[1]);
-    long long unsigned int max_msg_size = atoi(argv[2]);
-    int count = atoi(argv[3]);
 
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-    query_node_info(node_id, my_ip, leader_ip);
-    long long unsigned int block_size = get_block_size(max_msg_size);
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size + 128, sst_max_msg_size + 128, block_size};
+    derecho::Conf::initialize(argc, argv);
 
-    derecho::CallbackSet callback_set{
-            nullptr,  //we don't need the stability_callback here
-            nullptr   //we don't need the persistence_callback either
-    };
+    int num_of_nodes = std::stoi(argv[1]);
+    uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    int count = std::stoi(argv[2]);
+
+    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(TestObject)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
@@ -76,22 +66,10 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry*) { return std::make_unique<TestObject>(); };
 
-    std::unique_ptr<derecho::Group<TestObject>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<TestObject>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    } else {
-        group = std::make_unique<derecho::Group<TestObject>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory);
-    }
-
+    derecho::Group<TestObject> group({},subgroup_info,std::vector<derecho::view_upcall_t>{},ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    derecho::Replicated<TestObject>& handle = group->get_subgroup<TestObject>();
+    derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
     //std::string str_1k(max_msg_size, 'x');
     char* bbuf = (char*)malloc(max_msg_size);
     bzero(bbuf, max_msg_size);

@@ -1,5 +1,4 @@
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include "conf/conf.hpp"
 
 using std::cout;
@@ -45,19 +44,7 @@ public:
 };
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-
-    query_node_info(node_id, my_ip, leader_ip);
-
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-
-    derecho::message_callback_t stability_callback{};
-    derecho::CallbackSet callback_set{stability_callback, {}};
+    derecho::Conf::initialize(argc, argv);
 
     const int32_t num_nodes = 7;
 
@@ -78,31 +65,24 @@ int main(int argc, char** argv) {
             {std::type_index(typeid(Foo))}};
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
-    std::unique_ptr<derecho::Group<Foo>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<Foo>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                foo_factory);
-    } else {
-        group = std::make_unique<derecho::Group<Foo>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                foo_factory);
-    }
+    derecho::Group<Foo> group({}, subgroup_info,
+                              std::vector<derecho::view_upcall_t>{},
+                              foo_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+
     // all shards change their state to a unique integer
     if(node_id < num_nodes - 1 && node_id % 2 == 0) {
-        auto& foo_handle = group->get_subgroup<Foo>();
+        auto& foo_handle = group.get_subgroup<Foo>();
         foo_handle.ordered_send<Foo::CHANGE_STATE>(node_id);
         std::cout << "Done calling ordered_send" << std::endl;
     }
-    group->barrier_sync();
+    group.barrier_sync();
     // node 13 queries for the state of each shard
     if(node_id == num_nodes - 1) {
-        auto shard_iterator = group->get_shard_iterator<Foo>();
+        auto shard_iterator = group.get_shard_iterator<Foo>();
         auto query_results_vec = shard_iterator.p2p_query<Foo::READ_STATE>();
         uint cnt = 0;
         for(auto& query_result : query_results_vec) {
@@ -111,6 +91,6 @@ int main(int argc, char** argv) {
         }
         std::cout << "Done getting the replies" << std::endl;
     }
-    group->barrier_sync();
+    group.barrier_sync();
     exit(0);
 }

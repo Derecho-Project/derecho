@@ -4,8 +4,6 @@
  *
  */
 #pragma once
-#ifndef DERECHO_INTERNAL_H
-#define DERECHO_INTERNAL_H
 
 #include <functional>
 #include <map>
@@ -13,6 +11,7 @@
 #include <sys/types.h>
 #include <cstdint>
 
+#include "derecho/derecho_type_definitions.h"
 #include "persistent/HLC.hpp"
 #include "persistent/PersistentTypenames.hpp"
 
@@ -30,10 +29,6 @@ using subgroup_id_t = uint32_t;
 /** Type alias for a message's unique "sequence number" or index.
  * This allows us to change exactly which numeric type we use to store it.*/
 using message_id_t = int32_t;
-/** Type alias for IP addresses, currently stored as strings. */
-using ip_addr = std::string;
-/** Type alias for Node IDs in a Derecho group. */
-using node_id_t = uint32_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
 using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int)>;
@@ -56,5 +51,3 @@ using persistence_manager_post_persist_func_t = std::function<void(
 using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t,
         persistence_manager_post_persist_func_t>;
 }  // namespace derecho
-
-#endif  //DERECHO_INTERNAL_H

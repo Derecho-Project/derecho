@@ -22,7 +22,7 @@ using namespace sst;
 
 class mySST : public SST<mySST> {
 public:
-    mySST(const vector<uint32_t>& _members, uint32_t my_id) : SST<mySST>(this, SSTParams{_members, my_id}) {
+    mySST(const vector<uint32_t>& _members, uint32_t my_rank) : SST<mySST>(this, SSTParams{_members, my_rank}) {
         SSTInit(a, heartbeat);
     }
     SSTField<int> a;
@@ -30,21 +30,27 @@ public:
 };
 
 int main() {
-    // input number of nodes and the local node id
+    // input number of nodes and the local node rank
+    std::cout << "Enter node_rank and num_nodes" << std::endl;
     uint32_t node_rank, num_nodes;
     cin >> node_rank >> num_nodes;
 
+    std::cout << "Input the IP addresses" << std::endl;
+    uint16_t port = 32567;
     // input the ip addresses
-    map<uint32_t, string> ip_addrs;
-    for(unsigned int i = 0; i < num_nodes; ++i) {
-        cin >> ip_addrs[i];
+    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
+    for(uint i = 0; i < num_nodes; ++i) {
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs, node_rank);
+    verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs, node_rank);
+    lf_initialize(ip_addrs_and_ports, node_rank);
 #endif
 
     // form a group with a subset of all the nodes

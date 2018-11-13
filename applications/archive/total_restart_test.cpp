@@ -9,7 +9,6 @@
 #include <iostream>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 
 /*
  * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS
@@ -53,17 +52,8 @@ public:
 };
 
 int main(int argc, char** argv) {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
+    derecho::Conf::initialize(argc, argv);
 
-    query_node_info(node_id, my_ip, leader_ip);
-
-    //Derecho message parameters
-    long long unsigned int max_msg_size = 100;
-    long long unsigned int block_size = 100000;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
     derecho::CallbackSet callback_set{
             nullptr,
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
@@ -74,39 +64,31 @@ int main(int argc, char** argv) {
     const int members_per_shard = 3;
     derecho::SubgroupInfo subgroup_info({{std::type_index(typeid(PersistentThing)),
                                           [&](const derecho::View& curr_view, int& next_unassigned_rank) {
-        if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
-            throw derecho::subgroup_provisioning_exception();
-        }
-        derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
-        int member_rank = 0;
-        for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
-            for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                std::vector<derecho::node_id_t> subview_members(&curr_view.members[member_rank],
-                                                                &curr_view.members[member_rank+members_per_shard]);
-                layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
-                member_rank += members_per_shard;
-            }
-        }
-        return layout_vector;
-    }}});
+                                              if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
+                                                  throw derecho::subgroup_provisioning_exception();
+                                              }
+                                              derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
+                                              int member_rank = 0;
+                                              for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+                                                  for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
+                                                      std::vector<node_id_t> subview_members(&curr_view.members[member_rank],
+                                                                                             &curr_view.members[member_rank + members_per_shard]);
+                                                      layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
+                                                      member_rank += members_per_shard;
+                                                  }
+                                              }
+                                              return layout_vector;
+                                          }}});
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
 
-    std::unique_ptr<derecho::Group<PersistentThing>> group;
-    if(my_ip == leader_ip) {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
-                node_id, my_ip, callback_set, subgroup_info, derecho_params,
-                std::vector<derecho::view_upcall_t>{},
-                thing_factory);
-    } else {
-        group = std::make_unique<derecho::Group<PersistentThing>>(
-                node_id, my_ip, leader_ip, callback_set, subgroup_info,
-                std::vector<derecho::view_upcall_t>{},
-                thing_factory);
-    }
+    derecho::Group<PersistentThing> group(callback_set, subgroup_info,
+                                          std::vector<derecho::view_upcall_t>{},
+                                          thing_factory);
     std::cout << "Successfully joined group" << std::endl;
-    Replicated<PersistentThing>& thing_handle = group->get_subgroup<PersistentThing>();
+    Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
     int num_updates = 1000;
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     for(int counter = 0; counter < num_updates; ++counter) {
         //This ensures the state changes with every update from every node
         int new_value = counter * 10 + node_id;

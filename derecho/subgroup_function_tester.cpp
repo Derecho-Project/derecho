@@ -11,12 +11,12 @@
 #include "derecho_internal.h"
 #include "subgroup_function_tester.h"
 
-std::string ip_generator() {
+std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> ip_and_ports_generator() {
     static int invocation_count = 0;
     std::stringstream string_generator;
     string_generator << "192.168.1." << invocation_count;
     ++invocation_count;
-    return string_generator.str();
+    return std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>{string_generator.str(), 35465, 35465, 35465, 35465};
 }
 
 struct TestType1 {};
@@ -58,12 +58,12 @@ int main(int argc, char* argv[]) {
             {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)), std::type_index(typeid(TestType3)),
              std::type_index(typeid(TestType4)), std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))}};
 
-    std::vector<derecho::node_id_t> members(100);
+    std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
-    std::vector<derecho::ip_addr> member_ips(100);
-    std::generate(member_ips.begin(), member_ips.end(), ip_generator);
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(100);
+    std::generate(member_ips_and_ports.begin(), member_ips_and_ports.end(), ip_and_ports_generator);
     std::vector<char> none_failed(100, 0);
-    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips, none_failed);
+    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed);
 
     std::cout << "TEST 1: Initial allocation" << std::endl;
     derecho::test_provision_subgroups(test_subgroups, nullptr, *curr_view);
@@ -92,13 +92,13 @@ int main(int argc, char* argv[]) {
 
     derecho::test_provision_subgroups(test_subgroups, prev_view, *curr_view);
 
-    std::vector<derecho::node_id_t> new_members(40);
+    std::vector<node_id_t> new_members(40);
     std::iota(new_members.begin(), new_members.end(), 100);
-    std::vector<derecho::ip_addr> new_member_ips(40);
-    std::generate(new_member_ips.begin(), new_member_ips.end(), ip_generator);
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> new_member_ips_and_ports(40);
+    std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
     std::cout << "TEST 5: Adding new members 100-140" << std::endl;
     prev_view.swap(curr_view);
-    curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips);
+    curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips_and_ports);
 
     derecho::test_provision_subgroups(test_subgroups, prev_view, *curr_view);
 
@@ -129,10 +129,10 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank);
             subgroup_shard_views = std::move(temp);
             std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
-            derecho::print_subgroup_layout(subgroup_shard_views);
+            print_subgroup_layout(subgroup_shard_views);
             std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl
                       << std::endl;
-        } catch(derecho::subgroup_provisioning_exception& ex) {
+        } catch(subgroup_provisioning_exception& ex) {
             curr_view.is_adequately_provisioned = false;
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
             curr_view.subgroup_shard_views.clear();
@@ -178,18 +178,18 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
 std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::set<int>& leave_ranks,
                                      const std::vector<node_id_t>& joiner_ids,
-                                     const std::vector<ip_addr>& joiner_ips) {
+                                     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports) {
     int next_num_members = curr_view.num_members - leave_ranks.size() + joiner_ids.size();
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<ip_addr> member_ips(next_num_members);
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view.next_unassigned_rank;
     for(std::size_t i = 0; i < joiner_ids.size(); ++i) {
         joined.emplace_back(joiner_ids[i]);
         //New members go at the end of the members list, but it may shrink in the new view
         int new_member_rank = curr_view.num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_ids[i];
-        member_ips[new_member_rank] = joiner_ips[i];
+        member_ips_and_ports[new_member_rank] = joiner_ips_and_ports[i];
     }
     for(const auto& leaver_rank : leave_ranks) {
         departed.emplace_back(curr_view.members[leaver_rank]);
@@ -204,7 +204,7 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
         //This is why leave_ranks needs to be a set
         if(leave_ranks.find(n) == leave_ranks.end()) {
             members[m] = curr_view.members[n];
-            member_ips[m] = curr_view.member_ips[n];
+            member_ips_and_ports[m] = curr_view.member_ips_and_ports[n];
             failed[m] = curr_view.failed[n];
             ++m;
         }
@@ -219,7 +219,7 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
             break;
         }
     }
-    return std::make_unique<View>(curr_view.vid + 1, members, member_ips, failed,
+    return std::make_unique<View>(curr_view.vid + 1, members, member_ips_and_ports, failed,
                                   joined, departed, my_new_rank, next_unassigned_rank);
 }
 

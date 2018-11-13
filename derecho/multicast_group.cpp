@@ -38,9 +38,11 @@ MulticastGroup::MulticastGroup(
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           block_size(derecho_params.block_size),
-          max_msg_size(compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size)),
-          sst_max_msg_size(derecho_params.sst_max_payload_size + sizeof(header)),
-          type(derecho_params.type),
+          max_msg_size(compute_max_msg_size(derecho_params.max_payload_size,
+                                            derecho_params.block_size,
+                                            derecho_params.max_payload_size > derecho_params.max_smc_payload_size)),
+          sst_max_msg_size(derecho_params.max_smc_payload_size + sizeof(header)),
+          rdmc_send_algorithm(derecho_params.rdmc_send_algorithm),
           window_size(derecho_params.window_size),
           callbacks(callbacks),
           total_num_subgroups(total_num_subgroups),
@@ -104,7 +106,7 @@ MulticastGroup::MulticastGroup(
           block_size(old_group.block_size),
           max_msg_size(old_group.max_msg_size),
           sst_max_msg_size(old_group.sst_max_msg_size),
-          type(old_group.type),
+          rdmc_send_algorithm(old_group.rdmc_send_algorithm),
           window_size(old_group.window_size),
           callbacks(old_group.callbacks),
           total_num_subgroups(total_num_subgroups),
@@ -322,7 +324,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                             char* buf = const_cast<char*>(msg.buf);
                             header* h = (header*)(buf);
-			    // no delivery callback for a NULL message
+                            // no delivery callback for a NULL message
                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                     msg.index, buf + h->header_size,
@@ -401,7 +403,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             if(node_id == members[member_index]) {
                 //Create a group in which this node is the sender, and only self-receives happen
                 if(!rdmc::create_group(
-                           rdmc_group_num_offset, rotated_shard_members, block_size, type,
+                           rdmc_group_num_offset, rotated_shard_members, block_size, rdmc_send_algorithm,
                            [this](size_t length) -> rdmc::receive_destination {
                                assert_always(false);
                                return {nullptr, 0};
@@ -414,7 +416,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 rdmc_group_num_offset++;
             } else {
                 if(!rdmc::create_group(
-                           rdmc_group_num_offset, rotated_shard_members, block_size, type,
+                           rdmc_group_num_offset, rotated_shard_members, block_size, rdmc_send_algorithm,
                            [this, subgroup_num, node_id, sender_rank, num_shard_senders](size_t length) {
                                std::lock_guard<std::mutex> lock(msg_state_mtx);
                                assert(!free_message_buffers[subgroup_num].empty());
@@ -964,10 +966,13 @@ MulticastGroup::~MulticastGroup() {
 
 long long unsigned int MulticastGroup::compute_max_msg_size(
         const long long unsigned int max_payload_size,
-        const long long unsigned int block_size) {
+        const long long unsigned int block_size,
+        bool using_rdmc) {
     auto max_msg_size = max_payload_size + sizeof(header);
-    if(max_msg_size % block_size != 0) {
-        max_msg_size = (max_msg_size / block_size + 1) * block_size;
+    if(using_rdmc) {
+        if(max_msg_size % block_size != 0) {
+            max_msg_size = (max_msg_size / block_size + 1) * block_size;
+        }
     }
     return max_msg_size;
 }

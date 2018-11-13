@@ -105,7 +105,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
                             throw subgroup_provisioning_exception();
                         }
                         (*next_assignment)[subgroup_num][shard_num].members[shard_rank] = curr_view.members[next_unassigned_rank];
-                        (*next_assignment)[subgroup_num][shard_num].member_ips[shard_rank] = curr_view.member_ips[next_unassigned_rank];
+                        (*next_assignment)[subgroup_num][shard_num].member_ips_and_ports[shard_rank] = curr_view.member_ips_and_ports[next_unassigned_rank];
                         next_unassigned_rank++;
                     }
                 }

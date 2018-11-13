@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils/macro_utils.hpp>
 

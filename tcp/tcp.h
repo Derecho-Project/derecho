@@ -29,12 +29,12 @@ public:
     /**
      * Constructs a socket connected to the specified address and port,
      * blocking until the connection succeeds.
-     * @param servername The IP address of the remote host, as a string
-     * @param port The port to connect to on the remote host
+     * @param server_ip The IP address of the remote host, as a string
+     * @param server_port The port to connect to on the remote host
      * @throws connection_failure if local socket construction or IP address
      * lookup fails.
      */
-    socket(std::string servername, int port);
+    socket(std::string server_ip, uint16_t server_port);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;
@@ -139,7 +139,7 @@ public:
      * given port of this machine's TCP interface.
      * @param port The port to listen on.
      */
-    explicit connection_listener(int port);
+    explicit connection_listener(uint16_t port);
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.

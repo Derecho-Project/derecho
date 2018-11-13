@@ -13,6 +13,8 @@
 #endif
 
 using namespace sst;
+using std::cin;
+using std::cout;
 
 class ResultSST : public SST<ResultSST> {
 public:
@@ -34,26 +36,31 @@ int main() {
     shutdown_polling_thread();
 
     // input number of nodes and the local node id
-    int num_nodes, node_rank;
-    std::cin >> node_rank;
-    std::cin >> num_nodes;
+    std::cout << "Enter node_rank and num_nodes" << std::endl;
+    uint32_t node_rank, num_nodes;
+    cin >> node_rank >> num_nodes;
 
+    std::cout << "Input the IP addresses" << std::endl;
+    uint16_t port = 32567;
     // input the ip addresses
-    std::map<uint32_t, std::string> ip_addrs;
-    for(int i = 0; i < num_nodes; ++i) {
-        std::cin >> ip_addrs[i];
+    std::map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
+    for(uint i = 0; i < num_nodes; ++i) {
+      std::string ip;
+      cin >> ip;
+      ip_addrs_and_ports[i] = {ip, port};
     }
+    std::cout << "Using the default port value of " << port << std::endl;
 
     std::vector<std::vector<double>> avg_times(num_nodes);
-    for(int i = 0; i < num_nodes; ++i) {
+    for(uint i = 0; i < num_nodes; ++i) {
         avg_times[i].resize(size_arr.size(), 0.0);
     }
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs, node_rank);
+    verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs, node_rank);
+    lf_initialize(ip_addrs_and_ports, node_rank);
 #endif
 
     auto nodes_list = compute_nodes_list(node_rank, num_nodes);
@@ -66,14 +73,14 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources res(remote_rank, read_buf, write_buf, size, size, remote_rank > node_rank);
+            resources res(remote_rank, read_buf, write_buf, size, size, (uint32_t) remote_rank > node_rank);
 
             // start the timing experiment
             struct timespec start_time;
             struct timespec end_time;
             long long int nanoseconds_elapsed;
 
-            if(node_rank < remote_rank) {
+            if(node_rank < (uint32_t) remote_rank) {
                 clock_gettime(CLOCK_REALTIME, &start_time);
                 for(int i = 0; i < num_reruns; ++i) {
                     // write the entire buffer
@@ -101,14 +108,14 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
-            resources res(remote_rank, read_buf, write_buf, size, size, remote_rank > node_rank);
+            resources res(remote_rank, read_buf, write_buf, size, size, (uint32_t) remote_rank > node_rank);
 
             // start the timing experiment
             struct timespec start_time;
             struct timespec end_time;
             long long int nanoseconds_elapsed;
 
-            if(remote_rank < node_rank) {
+            if((uint32_t)remote_rank < node_rank) {
                 clock_gettime(CLOCK_REALTIME, &start_time);
                 for(int i = 0; i < num_reruns; ++i) {
                     // write the entire buffer
@@ -130,7 +137,7 @@ int main() {
             sync(remote_rank);
         }
     }
-    for(int i = 0; i < num_nodes; ++i) {
+    for(uint i = 0; i < num_nodes; ++i) {
         if(i != node_rank) {
             sync(i);
         }
@@ -141,11 +148,11 @@ int main() {
         fout.open("data_write_avg_time");
     }
     std::vector<uint32_t> members(num_nodes);
-    for(int i = 0; i < num_nodes; ++i) {
+    for(uint i = 0; i < num_nodes; ++i) {
         members[i] = i;
     }
     std::cout << "Printing average times" << std::endl;
-    for(int i = 0; i < num_nodes; ++i) {
+    for(uint i = 0; i < num_nodes; ++i) {
         for(uint j = 0; j < size_arr.size(); ++j) {
             std::cout << avg_times[i][j] << " ";
         }
@@ -154,7 +161,7 @@ int main() {
     ResultSST sst(SSTParams(members, node_rank));
     for(uint k = 0; k < size_arr.size(); ++k) {
         int size = size_arr[k];
-        for(int j = 0; j < num_nodes; ++j) {
+        for(uint j = 0; j < num_nodes; ++j) {
             sst.avg_times[node_rank][j] = avg_times[j][k];
             std::cout << sst.avg_times[node_rank][j] << " ";
         }
@@ -164,8 +171,8 @@ int main() {
         if(node_rank == 0) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             fout << size << std::endl;
-            for(int i = 0; i < num_nodes; ++i) {
-                for(int j = 0; j < num_nodes; ++j) {
+            for(uint i = 0; i < num_nodes; ++i) {
+                for(uint j = 0; j < num_nodes; ++j) {
                     fout << sst.avg_times[i][j] << " ";
                 }
                 fout << std::endl;

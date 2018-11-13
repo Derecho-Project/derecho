@@ -2,7 +2,6 @@
 #include <map>
 
 #include "derecho/derecho.h"
-#include "initialize.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include "conf/conf.hpp"
 
@@ -64,19 +63,8 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(HashTable, table);
 };
 
-int main() {
-    derecho::node_id_t node_id;
-    derecho::ip_addr my_ip;
-    derecho::ip_addr leader_ip;
-
-    query_node_info(node_id, my_ip, leader_ip);
-
-    long long unsigned int max_msg_size = 10000;
-    long long unsigned int block_size = 10100;
-    const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-    derecho::DerechoParams derecho_params{max_msg_size, sst_max_msg_size, block_size};
-
-    derecho::CallbackSet callback_set{{}, {}};
+int main(int argc, char* argv[]) {
+    derecho::Conf::initialize(argc, argv);
 
     std::mutex main_mutex;
     std::condition_variable main_cv;
@@ -103,19 +91,17 @@ int main() {
                   return subgroup_vector;
               }}}};
 
-    derecho::Group<HashTable<std::string>>* group;
     auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
-
-    if(my_ip == leader_ip) {
-        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, callback_set, subgroup_info, derecho_params, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, HashTableGenerator);
-    } else {
-        group = new derecho::Group<HashTable<std::string>>(node_id, my_ip, leader_ip, callback_set, subgroup_info, std::vector<derecho::view_upcall_t>{announce_groups_provisioned}, HashTableGenerator);
-    }
+    derecho::Group<HashTable<std::string>> group({}, subgroup_info,
+                                                 std::vector<derecho::view_upcall_t>{announce_groups_provisioned},
+                                                 HashTableGenerator);
 
     std::unique_lock<std::mutex> main_lock(main_mutex);
     main_cv.wait(main_lock, [&groups_provisioned]() { return groups_provisioned; });
     std::cout << "Subgroups provisioned" << std::endl;
-    auto& subgroup_handle = group->get_subgroup<HashTable<std::string>>();
+    auto& subgroup_handle = group.get_subgroup<HashTable<std::string>>();
+
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     if(node_id == 0) {
         subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
     } else {

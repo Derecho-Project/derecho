@@ -10,7 +10,6 @@
 #include "rdmc/rdmc.h"
 #include "rdmc/util.h"
 
-#include "block_size.h"
 #include "derecho/derecho.h"
 #include "log_results.h"
 
@@ -18,22 +17,13 @@ using namespace std;
 
 unique_ptr<rdmc::barrier_group> universal_barrier_group;
 
-void query_node_info(derecho::node_id_t &node_id, derecho::ip_addr &node_ip, derecho::ip_addr &leader_ip) {
-    cout << "Please enter this node's ID: ";
-    cin >> node_id;
-    cout << "Please enter this node's IP address: ";
-    cin >> node_ip;
-    cout << "Please enter the leader node's IP address: ";
-    cin >> leader_ip;
-}
-
 struct exp_result {
     uint32_t num_nodes;
     long long unsigned int max_msg_size;
     unsigned int window_size;
     int num_messages;
     // int send_medium;
-    int raw_mode;
+    uint32_t delivery_mode;
     double latency;
     double stddev;
 
@@ -42,33 +32,24 @@ struct exp_result {
 	     << " " << window_size << " "
              // << num_messages << " " << send_medium << " "
              << num_messages << " "
-             << raw_mode << " " << latency << " "
+             << delivery_mode << " " << latency << " "
              << stddev << endl;
     }
 };
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 5) {
+        if(argc < 3) {
             cout << "Insufficient number of command line arguments" << endl;
-            cout << "Enter num_nodes, msg_size, window_size, raw_mode" << endl;
-            cout << "Thank you" << endl;
-            exit(1);
+            cout << "Enter num_nodes, delivery_mode" << endl;
+            return -1;
         }
-        uint32_t num_nodes = std::atoi(argv[1]);
-        unsigned int msg_size = std::atoi(argv[2]);
-        derecho::node_id_t node_id;
-        derecho::ip_addr my_ip;
-        derecho::node_id_t leader_id = 0;
-        derecho::ip_addr leader_ip;
-
-        query_node_info(node_id, my_ip, leader_ip);
-
-        const long long unsigned int max_msg_size = msg_size;
-        const long long unsigned int block_size = get_block_size(max_msg_size);
-        const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
-        const unsigned int window_size = atoi(argv[3]);
-        const int raw_mode = atoi(argv[4]);
+        uint32_t num_nodes = std::stoi(argv[1]);
+        derecho::Conf::initialize(argc,argv);
+        uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+        const uint64_t msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        const uint32_t window_size = derecho::getConfUInt64(CONF_DERECHO_WINDOW_SIZE);
+        const uint32_t delivery_mode = stoi(argv[2]);
 
         int num_messages = 1000;
 	// only used by node 0
@@ -91,7 +72,7 @@ int main(int argc, char *argv[]) {
 
         unique_ptr<derecho::SubgroupInfo> one_raw_group;
         std::map<std::type_index, derecho::shard_view_generator_t> membership_map;
-        if(raw_mode) {
+        if(delivery_mode) {
             membership_map = {{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}};
             one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
         } else {
@@ -99,31 +80,17 @@ int main(int argc, char *argv[]) {
             one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
         }
 
-        derecho::CallbackSet callbacks{stability_callback, nullptr};
-        derecho::DerechoParams param_object{max_msg_size, sst_max_msg_size, block_size, window_size};
-        std::unique_ptr<derecho::Group<>> managed_group;
+        derecho::CallbackSet callbacks{stability_callback};
 
-        if(node_id == leader_id) {
-            managed_group = std::make_unique<derecho::Group<>>(
-                    node_id, my_ip,
-                    callbacks,
-                    *one_raw_group,
-                    param_object);
-        } else {
-            managed_group = std::make_unique<derecho::Group<>>(
-                    node_id, my_ip,
-                    leader_ip,
-                    callbacks,
-                    *one_raw_group);
-        }
+        derecho::Group<> managed_group(callbacks,*one_raw_group);
 
-        while(managed_group->get_members().size() < num_nodes) {
+        while(managed_group.get_members().size() < num_nodes) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
         std::cout<<"All nodes joined."<<std::endl;
 
         int my_rank = 0;
-        auto group_members = managed_group->get_members();
+        auto group_members = managed_group.get_members();
         while(group_members[my_rank] != node_id) my_rank++;
 
         vector<uint32_t> members;
@@ -147,7 +114,7 @@ int main(int argc, char *argv[]) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
-        derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<derecho::RawObject>();
+        derecho::RawSubgroup &group_as_subgroup = managed_group.get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
             while(!buf) {
@@ -183,15 +150,15 @@ int main(int argc, char *argv[]) {
         double std = sqrt(sum_of_square / (num_messages - 1));
 
         if(node_id == 0) {
-	    log_results(exp_result{num_nodes, max_msg_size, window_size, num_messages, raw_mode, (average_time / 1000.0), (std / 1000.0)}, "data_latency");
+	    log_results(exp_result{num_nodes, msg_size, window_size, num_messages, delivery_mode, (average_time / 1000.0), (std / 1000.0)}, "data_latency");
         }
-        managed_group->barrier_sync();
+        managed_group.barrier_sync();
         flush_events();
         // for(int i = 100; i < num_messages - 100; i+= 5){
         // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
         // }
 
-        managed_group->barrier_sync();
+        managed_group.barrier_sync();
         // managed_group->leave();
         // sst::verbs_destroy();
         exit(0);
