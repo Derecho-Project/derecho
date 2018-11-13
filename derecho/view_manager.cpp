@@ -28,7 +28,7 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("derecho_debug_log")), )
-                  curr_view(persistent::loadObject<View>()),  //Attempt to load a saved View from disk, to see if one is there
+          curr_view(persistent::loadObject<View>()),  //Attempt to load a saved View from disk, to see if one is there
           server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -83,7 +83,8 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("derecho_debug_log")), )
-                  server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+          curr_view(persistent::loadObject<View>()),  //Attempt to load a saved View from disk, to see if one is there
+          server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
