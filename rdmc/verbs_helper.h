@@ -3,7 +3,7 @@
 #define VERBS_HELPER_H
 
 #include <cstdint>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
@@ -84,7 +84,7 @@ public:
     static constexpr unsigned int shift_bits = 64 - 8 * sizeof(tag_type);
 
 private:
-    std::experimental::optional<tag_type> tag;
+    std::optional<tag_type> tag;
     message_type(tag_type t) : tag(t) {}
 
     friend class queue_pair;
@@ -176,6 +176,7 @@ bool verbs_initialize(const std::map<uint32_t, std::string>& node_addresses,
                       uint32_t node_rank);
 bool verbs_add_connection(uint32_t index, const std::string& address,
                           uint32_t node_rank);
+bool verbs_remove_connection(uint32_t index);
 void verbs_destroy();
 // int poll_for_completions(int num, ibv_wc* wcs,
 //                          std::atomic<bool>& shutdown_flag);

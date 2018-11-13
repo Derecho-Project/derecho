@@ -461,6 +461,9 @@ bool verbs_add_connection(uint32_t index, const string &address,
 
     return false;  // we can't connect to ourselves...
 }
+bool verbs_remove_connection(uint32_t index) {
+    return sockets.erase(index) > 0;
+}
 bool set_interrupt_mode(bool enabled) {
     interrupt_mode = enabled;
     return true;

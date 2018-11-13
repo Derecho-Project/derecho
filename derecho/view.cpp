@@ -67,7 +67,10 @@ View::View(
     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> &member_ips_and_ports,
     const std::vector<char> &failed, const int32_t num_failed,
     const std::vector<node_id_t> &joined,
-    const std::vector<node_id_t> &departed, const int32_t num_members)
+    const std::vector<node_id_t> &departed, const int32_t num_members,
+           const std::map<std::type_index, std::vector<subgroup_id_t>>& subgroup_ids_by_type,
+           const std::vector<std::vector<SubView>>& subgroup_shard_views,
+           const std::map<subgroup_id_t, uint32_t>& my_subgroups)
     : vid(vid), members(members),
       member_ips_and_ports(member_ips_and_ports), failed(failed),
       num_failed(num_failed), joined(joined), departed(departed),
@@ -75,8 +78,11 @@ View::View(
       my_rank(0), // This will always get overwritten by the receiver after
                   // deserializing
       next_unassigned_rank(
-          0) { /* next_unassigned_rank should never be serialized, since each
+			   0), /* next_unassigned_rank should never be serialized, since each
                   node must re-run the allocation functions independently */
+          subgroup_ids_by_type(subgroup_ids_by_type),
+          subgroup_shard_views(subgroup_shard_views),
+          my_subgroups(my_subgroups) {      
   for (int rank = 0; rank < num_members; ++rank) {
     node_id_to_rank[members[rank]] = rank;
   }
@@ -254,138 +260,94 @@ void View::wedge() {
 }
 
 std::string View::debug_string() const {
-  // need to add member ips and ports and other fields
-  std::stringstream s;
-  s << "View " << vid << ": MyRank=" << my_rank << ". ";
-  s << "Members={ ";
-  for (int m = 0; m < num_members; m++) {
-    s << members[m] << "  ";
-  }
-  s << "}, ";
-  string fs = (" ");
-  for (int m = 0; m < num_members; m++) {
-    fs += failed[m] ? string(" T ") : string(" F ");
-  }
+    // need to add member ips and ports and other fields
+    std::stringstream s;
+    s << "View " << vid << ": MyRank=" << my_rank << ". ";
+    s << "Members={ ";
+    for(int m = 0; m < num_members; m++) {
+        s << members[m] << "  ";
+    }
+    s << "}, ";
+    string fs = (" ");
+    for(int m = 0; m < num_members; m++) {
+        fs += failed[m] ? string(" T ") : string(" F ");
+    }
 
-  s << "Failed={" << fs << " }, num_failed=" << num_failed;
-  s << ", Departed: { ";
-  for (uint i = 0; i < departed.size(); ++i) {
-    s << members[departed[i]] << " ";
-  }
-  s << "} , Joined: { ";
-  for (uint i = 0; i < joined.size(); ++i) {
-    s << members[joined[i]] << " ";
-  }
-  s << "}";
-  return s.str();
+    s << "Failed={" << fs << " }, num_failed=" << num_failed;
+    s << ", Departed: { ";
+    for(const node_id_t &departed_node : departed) {
+        s << departed_node << " ";
+    }
+    s << "} , Joined: { ";
+    for(const node_id_t &joined_node : joined) {
+        s << joined_node << " ";
+    }
+    s << "}" << std::endl;
+    s << "SubViews: ";
+    for(subgroup_id_t subgroup = 0; subgroup < subgroup_shard_views.size(); ++subgroup) {
+        for(uint32_t shard = 0; shard < subgroup_shard_views[subgroup].size(); ++shard) {
+            s << "Shard (" << subgroup << ", " << shard << "): Members={";
+            for(const node_id_t &member : subgroup_shard_views[subgroup][shard].members) {
+                s << member << " ";
+            }
+            s << "}, is_sender={";
+            for(uint i = 0; i < subgroup_shard_views[subgroup][shard].members.size(); ++i) {
+                if(subgroup_shard_views[subgroup][shard].is_sender[i]) {
+                    s << "T ";
+                } else {
+                    s << "F ";
+                }
+            }
+            s << "}.  ";
+        }
+    }
+    return s.str();
 }
 
-std::unique_ptr<View> load_view(const std::string &view_file_name) {
-  std::ifstream view_file(view_file_name);
-  std::ifstream view_file_swap(view_file_name + ".swp");
-  std::unique_ptr<View> view;
-  std::unique_ptr<View> swap_view;
-  // The expected view file might not exist, in which case we'll fall back to
-  // the swap file
-  if (view_file.good()) {
-    // Each file contains the size of the view (an int copied as bytes),
-    // followed by a serialized view
-    std::size_t size_of_view;
-    view_file.read((char *)&size_of_view, sizeof(size_of_view));
-    char buffer[size_of_view];
-    view_file.read(buffer, size_of_view);
-    // If the view file doesn't contain a complete view (due to a crash
-    // during writing), the read() call will set failbit
-    if (!view_file.fail()) {
-      view = mutils::from_bytes<View>(nullptr, buffer);
-    }
-  }
-  if (view_file_swap.good()) {
-    std::size_t size_of_view;
-    view_file_swap.read((char *)&size_of_view, sizeof(size_of_view));
-    char buffer[size_of_view];
-    view_file_swap.read(buffer, size_of_view);
-    if (!view_file_swap.fail()) {
-      swap_view = mutils::from_bytes<View>(nullptr, buffer);
-    }
-  }
-  if (swap_view == nullptr ||
-      (view != nullptr && view->vid >= swap_view->vid)) {
-    return view;
-  } else {
-    return swap_view;
-  }
+std::size_t StreamlinedView::bytes_size() const {
+    return mutils::bytes_size(wrapped_view.vid) + mutils::bytes_size(wrapped_view.members)
+    + mutils::bytes_size(wrapped_view.member_ips_and_ports) + mutils::bytes_size(wrapped_view.failed)
+    + mutils::bytes_size(wrapped_view.joined) + mutils::bytes_size(wrapped_view.departed)
+    + mutils::bytes_size(wrapped_view.num_members);
 }
 
-std::ostream &operator<<(std::ostream &stream, const View &view) {
-  stream << view.vid << std::endl;
-  std::copy(view.members.begin(), view.members.end(),
-            std::ostream_iterator<node_id_t>(stream, " "));
-  stream << std::endl;
-  for (auto &ip_ports : view.member_ips_and_ports) {
-    stream << std::get<0>(ip_ports) << " " << std::get<PORT_TYPE::GMS>(ip_ports) << " "
-           << std::get<PORT_TYPE::RPC>(ip_ports) << " " << std::get<PORT_TYPE::SST>(ip_ports) << " "
-           << std::get<PORT_TYPE::RDMC>(ip_ports) << " ";
-  }
-  // std::copy(view.member_ips_and_gms_ports.begin(),
-  // view.member_ips_and_gms_ports.end(),
-  // std::ostream_iterator<std::pair<ip_addr_t, uint16_t>>(stream, " "));
-  stream << std::endl;
-  for (const auto &fail_val : view.failed) {
-    stream << (fail_val ? "T" : "F") << " ";
-  }
-  stream << std::endl;
-  stream << view.my_rank << std::endl;
-  return stream;
+std::size_t StreamlinedView::to_bytes(char* buffer) const {
+    int bytes_written = mutils::to_bytes(wrapped_view.vid, buffer);
+    bytes_written += mutils::to_bytes(wrapped_view.members, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.member_ips_and_ports, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.failed, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.joined, buffer + bytes_written);
+    bytes_written += mutils::to_bytes(wrapped_view.departed, buffer + bytes_written);
+    return bytes_written + mutils::to_bytes(wrapped_view.num_members, buffer + bytes_written);
 }
 
-View parse_view(std::istream &stream) {
-  std::string line;
-  int32_t vid = 0;
-  if (std::getline(stream, line)) {
-    vid = std::stoi(line);
-  }
-  std::vector<node_id_t> members;
-  //"List of member IDs" line
-  if (std::getline(stream, line)) {
-    std::istringstream linestream(line);
-    std::copy(std::istream_iterator<node_id_t>(linestream),
-              std::istream_iterator<node_id_t>(), std::back_inserter(members));
-  }
-  std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports;
-  //"List of member IPs and ports" line
-  if (std::getline(stream, line)) {
-    std::istringstream linestream(line);
-    // std::copy(std::istream_iterator<std::pair<ip_addr_t,
-    // uint16_t>>(linestream), std::istream_iterator<std::pair<ip_addr_t,
-    // uint16_t>>(),
-    //           std::back_inserter(member_ips_and_ports));
-    while (!linestream.fail()) {
-      ip_addr_t ip_addr;
-      uint16_t gms_port;
-      uint16_t rpc_port;
-      uint16_t sst_port;
-      uint16_t rdmc_port;
-      linestream >> ip_addr;
-      linestream >> gms_port >> rpc_port >> sst_port >> rdmc_port;
-      member_ips_and_ports.emplace_back(
-          std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>{
-              ip_addr, gms_port, rpc_port, sst_port, rdmc_port});
-    }
-  }
-  std::vector<char> failed;
-  // Failures array line, which was printed as "T" or "F" strings
-  if (std::getline(stream, line)) {
-    std::istringstream linestream(line);
-    std::string fail_str;
-    while (linestream >> fail_str) {
-      failed.emplace_back(fail_str == "T" ? true : false);
-    }
-  }
-  int32_t my_rank = -1;
-  if (std::getline(stream, line)) {
-    my_rank = std::stoi(line);
-  }
-  return View(vid, members, member_ips_and_ports, failed, {}, {}, my_rank);
+void StreamlinedView::post_object(const std::function<void (char const * const, std::size_t)>& write_func) const {
+    mutils::post_object(write_func, wrapped_view.vid);
+    mutils::post_object(write_func, wrapped_view.members);
+    mutils::post_object(write_func, wrapped_view.member_ips_and_ports);
+    mutils::post_object(write_func, wrapped_view.failed);
+    mutils::post_object(write_func, wrapped_view.joined);
+    mutils::post_object(write_func, wrapped_view.departed);
+    mutils::post_object(write_func, wrapped_view.num_members);
 }
-} // namespace derecho
+
+std::unique_ptr<View> StreamlinedView::view_from_bytes(mutils::DeserializationManager* dsm, const char* buffer) {
+    auto temp_vid = mutils::from_bytes_noalloc<int32_t>(dsm, buffer);
+    std::size_t bytes_read = mutils::bytes_size(*temp_vid);
+    auto temp_members = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_members);
+    auto temp_member_ips_and_ports = mutils::from_bytes_noalloc<std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_member_ips_and_ports);
+    auto temp_failed = mutils::from_bytes_noalloc<std::vector<char>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_failed);
+    auto temp_joined = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_joined);
+    auto temp_departed = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
+    bytes_read += mutils::bytes_size(*temp_departed);
+    auto temp_num_members = mutils::from_bytes_noalloc<int32_t>(dsm, buffer + bytes_read);
+    //This constructor will copy all the vectors into the new View, which is why it's OK to use noalloc
+    return std::make_unique<View>(*temp_vid, *temp_members, *temp_member_ips_and_ports, *temp_failed,
+                                  *temp_joined, *temp_departed, *temp_num_members);
+}
+
+}  // namespace derecho

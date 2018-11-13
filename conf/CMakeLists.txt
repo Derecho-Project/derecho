@@ -18,3 +18,8 @@ add_library(conf SHARED conf.hpp conf.cpp)
 
 add_executable(conftst test.cpp)
 target_link_libraries(conftst conf pthread)
+
+add_custom_target(format_conf
+    COMMAND clang-format-3.8 -i *.cpp *.hpp
+    WORKING_DIRECTORY ${derecho_SOURCE_DIR}/conf
+)

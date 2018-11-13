@@ -15,11 +15,15 @@
 #include "derecho_sst.h"
 #include "multicast_group.h"
 #include "sst/sst.h"
+#include "type_index_serialization.h"
 #include <mutils-serialization/SerializationMacros.hpp>
 #include <mutils-serialization/SerializationSupport.hpp>
 
 namespace derecho {
-  enum PORT_TYPE { GMS=1, RPC, SST, RDMC };
+enum PORT_TYPE { GMS = 1,
+                 RPC,
+                 SST,
+                 RDMC };
 
 /**
  * The subset of a View associated with a single shard, or a single subgroup if
@@ -45,7 +49,7 @@ public:
     int32_t my_rank;
     /** Looks up the sub-view rank of a node ID. Returns -1 if
      * that node ID is not a member of this subgroup/shard. */
-    int rank_of(const node_id_t& who) const;
+    int rank_of(const node_id_t &who) const;
     /** Looks up the sender rank of a given member. Returns -1 if the member isn't a sender */
     int sender_rank_of(uint32_t rank) const;
     /** returns the number of senders in the subview */
@@ -59,19 +63,17 @@ public:
     SubView(Mode mode, const std::vector<node_id_t> &members,
             std::vector<int> is_sender,
             const std::vector<
-                std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
-                &member_ips_and_ports,
+                    std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
+                    &member_ips_and_ports,
             const std::vector<node_id_t> &joined,
             const std::vector<node_id_t> &departed)
-        : mode(mode), members(members), is_sender(is_sender),
-          member_ips_and_ports(member_ips_and_ports), joined(joined),
-          departed(departed), my_rank(-1) {}
+            : mode(mode), members(members), is_sender(is_sender), member_ips_and_ports(member_ips_and_ports), joined(joined), departed(departed), my_rank(-1) {}
 
     SubView(Mode mode, const std::vector<node_id_t> &members,
             std::vector<int> is_sender,
             const std::vector<
-                std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
-                &member_ips_and_ports);
+                    std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
+                    &member_ips_and_ports);
 };
 
 class View : public mutils::ByteRepresentable {
@@ -81,8 +83,8 @@ public:
     /** Node IDs of members in the current view, indexed by their SST rank. */
     const std::vector<node_id_t> members;
     /** IP addresses and ports (gms, rpc, sst, rdmc in order) of members in the current view, indexed by their SST rank. */
-  const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
-        member_ips_and_ports;
+    const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
+            member_ips_and_ports;
     /** failed[i] is true if members[i] is considered to have failed.
      * Once a member is failed, it will be removed from the members list in a future view. */
     std::vector<char> failed;  //Note: std::vector<bool> is broken, so we pretend these char values are C-style booleans
@@ -117,6 +119,8 @@ public:
      * Note that this contains an entry for every subgroup and shard, even those
      * that the current node does not belong to. */
     std::vector<std::vector<SubView>> subgroup_shard_views;
+    /** Lists the (subgroup ID, shard num) pairs that this node is a member of */
+    std::map<subgroup_id_t, uint32_t> my_subgroups;
     /** Reverse index of members[]; maps node ID -> SST rank */
     std::map<node_id_t, uint32_t> node_id_to_rank;
 
@@ -131,12 +135,12 @@ public:
      * @throws subgroup_provisioning_exception if any of the requested members
      * are not actually in this View's members vector.
      */
-    SubView make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
+    SubView make_subview(const std::vector<node_id_t> &with_members, const Mode mode = Mode::ORDERED, const std::vector<int> &is_sender = {}) const;
 
     /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
     int rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> &who) const;
     /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
-    int rank_of(const node_id_t& who) const;
+    int rank_of(const node_id_t &who) const;
     /** Returns the rank of this View's leader, based on failed[]. */
     int rank_of_leader() const;
     /** @return rank_of_leader() == my_rank */
@@ -159,7 +163,7 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_ports,
                                   failed, num_failed, joined, departed,
-                                  num_members);
+                                  num_members, subgroup_ids_by_type, subgroup_shard_views, my_subgroups);
 
     /** Constructor used by deserialization: constructs a View given the values of its serialized fields. */
     View(const int32_t vid, const std::vector<node_id_t> &members,
@@ -167,7 +171,10 @@ public:
                                       uint16_t>> &member_ips_and_ports,
          const std::vector<char> &failed, const int32_t num_failed,
          const std::vector<node_id_t> &joined,
-         const std::vector<node_id_t> &departed, const int32_t num_members);
+         const std::vector<node_id_t> &departed, const int32_t num_members,
+         const std::map<std::type_index, std::vector<subgroup_id_t>> &subgroup_ids_by_type,
+         const std::vector<std::vector<SubView>> &subgroup_shard_views,
+         const std::map<subgroup_id_t, uint32_t> &my_subgroups);
 
     /** Standard constructor for making a new View */
     View(const int32_t vid, const std::vector<node_id_t> &members,
@@ -180,26 +187,23 @@ public:
 };
 
 /**
- * Custom implementation of load_object for Views. The View from the swap file
- * will be used if it is newer than the View from view_file_name (according to
- * VID), since this means a crash occurred before the swap file could be renamed.
- * @param view_file_name The name of the file to read for a serialized View
- * @return A new View constructed with the data in the file
+ * Simple wrapper for View that implements alternate serialization methods, so
+ * that we can choose to send only a "streamlined" version of a View over the
+ * network (instead of all the state it normally serializes).
  */
-std::unique_ptr<View> load_view(const std::string& view_file_name);
+class StreamlinedView : public mutils::ByteRepresentable {
+private:
+    const View &wrapped_view;
 
-/**
- * Prints a plaintext representation of the View to an output stream. This is
- * not interchangeable with the serialization library, but can be used to create
- * a log file parseable by standard bash tools.
- * @param stream The output stream
- * @param view The View to print
- * @return The output stream
- */
-std::ostream& operator<<(std::ostream& stream, const View& view);
-/**
-   * Parses the plaintext representation created by operator<< and modifies the View
-   * argument to contain the view it represents.
-   */
-View parse_view(std::istream& stream);
+public:
+    StreamlinedView(const View &view) : wrapped_view(view) {}
+    std::size_t bytes_size() const;
+    void ensure_registered(mutils::DeserializationManager &){};
+    /** Serializes the wrapped View in a minimal, streamlined form */
+    std::size_t to_bytes(char *buffer) const;
+    void post_object(const std::function<void(char const *const, std::size_t)> &write_func) const;
+    /** A replacement for mutils's from_bytes that constructs a View instead of a StreamlinedView. */
+    static std::unique_ptr<View> view_from_bytes(mutils::DeserializationManager *dsm, char const *buffer);
+};
+
 }  // namespace derecho

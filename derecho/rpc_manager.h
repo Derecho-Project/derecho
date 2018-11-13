@@ -21,6 +21,7 @@
 #include "rpc_utils.h"
 #include "view.h"
 #include "view_manager.h"
+#include "mutils-serialization/SerializationSupport.hpp"
 
 namespace derecho {
 
@@ -54,8 +55,6 @@ class RPCManager {
     template <typename T>
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
-
-    tcp::tcp_connections tcp_connections;
 
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
@@ -124,12 +123,8 @@ class RPCManager {
 public:
   RPCManager(ViewManager &group_view_manager)
     : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)), receivers(new std::decay_t<decltype(*receivers)>()),
-        whenlog(logger(spdlog::get("debug_log")), )
+        whenlog(logger(spdlog::get("derecho_debug_log")), )
             view_manager(group_view_manager),
-        // Connections initially only contains the local node. Other nodes are
-        // added in the new view callback
-        tcp_connections(nid,
-                        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{nid, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}),
         connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{
             nid,
             {nid},
@@ -144,9 +139,7 @@ public:
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
-     * connections. This should only be called after Group's constructor has
-     * finished receiving Replicated Object state, since that process uses the
-     * same TCP sockets that this thread will use for RPC requests.
+     * connections.
      */
     void start_listening();
     /**
@@ -228,15 +221,6 @@ public:
      * @param payload_size The size of the message in the buffer, in bytes
      */
     void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size);
-
-    /**
-     * Returns a LockedReference to the TCP socket connected to the specified
-     * node. This allows other Derecho components to re-use RPCManager's
-     * connection pool without causing a race condition.
-     * @param node The ID of the node to get a TCP connection to
-     * @return A LockedReference containing a reference to that node's socket.
-     */
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> get_socket(node_id_t node);
 
     /**
      * Writes the "list of destination nodes" header field into the given

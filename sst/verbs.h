@@ -114,6 +114,7 @@ public:
 };
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr);
+bool remove_node(uint32_t node_id);
 bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,

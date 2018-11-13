@@ -6,6 +6,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -16,9 +17,9 @@
 #include "locked_reference.h"
 #include "multicast_group.h"
 #include "subgroup_info.h"
-#include "tcp/tcp.h"
 #include "view.h"
 #include "conf/conf.hpp"
+#include "restart_state.h"
 
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>
@@ -30,9 +31,12 @@ class Replicated;
 template <typename T>
 class ExternalCaller;
 
+class ReplicatedObject;
+
 namespace rpc {
 class RPCManager;
 }
+
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -59,16 +63,36 @@ public:
     }
 };
 
+/**
+ * A set of status codes the group leader can respond with upon initially
+ * receiving a connection request from a new node.
+ */
+enum class JoinResponseCode {
+    OK,            //!< OK The new member can proceed to join as normal.
+    TOTAL_RESTART, //!< TOTAL_RESTART The group is currently restarting from a total failure, so the new member should send its logged view and ragged trim
+    ID_IN_USE,     //!< ID_IN_USE The node's ID is already listed as a member of the current view, so it can't join.
+    LEADER_REDIRECT//!< LEADER_REDIRECT This node is not actually the leader and can't accept a join.
+};
+
+/**
+ * Bundles together a JoinResponseCode and the leader's node ID, which it also
+ * needs to send to the new node that wants to join.
+ */
+struct JoinResponse {
+    JoinResponseCode code;
+    node_id_t leader_id;
+};
+
 template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
 using view_upcall_t = std::function<void(const View&)>;
 
+
 class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
 
-    using send_object_upcall_t = std::function<void(subgroup_id_t, node_id_t)>;
     using initialize_rpc_objects_t = std::function<void(node_id_t, const View&, const std::vector<std::vector<int64_t>>&)>;
 
     //Allow RPCManager and Replicated to access curr_view and view_mutex directly
@@ -79,6 +103,8 @@ private:
     friend class ExternalCaller;
     template <typename... T>
     friend class PersistenceManager;
+
+    friend class RestartLeaderState;
 
     whenlog(std::shared_ptr<spdlog::logger> logger;)
 
@@ -121,6 +147,7 @@ private:
     //Handles for all the predicates the GMS registered with the current view's SST.
     pred_handle suspected_changed_handle;
     pred_handle start_join_handle;
+    pred_handle reject_join_handle;
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
@@ -128,18 +155,33 @@ private:
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
-    //Parameters stored here, in case we need them again after construction
+    /** The subgroup membership functions, which will be called whenever the view changes. */
     const SubgroupInfo subgroup_info;
+    //Parameters stored here, in case we need them again after construction
     DerechoParams derecho_params;
 
-    /** A function that will be called to send replicated objects to a new
-     * member of a subgroup after a view change. This abstracts away the RPC
-     * functionality, which ViewManager shouldn't need to know about. */
-    send_object_upcall_t send_subgroup_object;
+    /** The same set of TCP sockets used by Group and RPCManager. */
+    std::shared_ptr<tcp::tcp_connections> group_member_sockets;
+
+    using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
+    /**
+     * A type-erased list of references to the Replicated<T> objects in
+     * this group, indexed by their subgroup ID. The actual objects live in the
+     * Group<ReplicatedTypes...> that owns this ViewManager, and the abstract
+     * ReplicatedObject interface only provides functions for the object state
+     * management tasks that ViewManager needs to do. This list also lives in
+     * the Group, where it is updated as replicated objects are added and
+     * destroyed, so ViewManager has only a reference to it.
+     */
+    ReplicatedObjectReferenceMap& subgroup_objects;
     /** A function that will be called to initialize replicated objects
-     * after transitioning to a new view, in the case where the previous
-     * view was inadequately provisioned. */
+     * after transitioning to a new view. This transfers control back to
+     * Group because the objects' constructors are only known by Group. */
     initialize_rpc_objects_t initialize_subgroup_objects;
+
+    /** State related to restarting, such as the current logged ragged trim;
+     * null if this node is not currently doing a total restart. */
+    std::unique_ptr<RestartState> restart_state;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -147,11 +189,28 @@ private:
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
-    /** Assuming this node is the leader, handles a join request from a client.*/
-    void receive_join(tcp::socket& client_socket);
+    /**
+     * Assuming this node is the leader, handles a join request from a client.
+     * @return True if the join succeeded, false if it failed because the
+     *         client's ID was already in use.
+     */
+    bool receive_join(tcp::socket& client_socket);
 
-    /** Helper for joining an existing group; receives the View and parameters from the leader. */
-    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+    /**
+     * Helper for joining an existing group; receives the View and parameters from the leader.
+     * @return True if the leader informed this node that it is in total restart mode, false otherwise
+     */
+    bool receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+
+    /**
+     * Helper for total restart mode that re-initializes TCP connections (in the
+     * tcp_connections pool) to all of the "current" members of curr_view. This
+     * is needed because Group's update_tcp_connections_callback will only
+     * initialize TCP connections with nodes in the joiners list, but after
+     * total restart even nodes that are not "joining" the new view will need
+     * their TCP connections initialized.
+     */
+    void restart_existing_tcp_connections(node_id_t my_id);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
@@ -159,6 +218,8 @@ private:
     void new_suspicion(DerechoSST& gmsSST);
     /** Runs only on the group leader; proposes new views to include new members. */
     void leader_start_join(DerechoSST& gmsSST);
+    /** Runs on non-leaders to redirect confused new members to the current leader. */
+    void redirect_join_attempt(DerechoSST& gmsSST);
     /** Runs only on the group leader and updates num_committed when all non-failed
      * members have acked a proposed view change. */
     void leader_commit_change(DerechoSST& gmsSST);
@@ -176,13 +237,23 @@ private:
     void terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                          uint32_t next_num_received_size,
                          DerechoSST& gmsSST);
-    /**  and finishes installing the new view. */
+    /** Finishes installing the new view, assuming it is adequately provisioned.
+     * Sends the new view and necessary Replicated Object state to new members,
+     * sets up the new SST and MulticastGroup instances, and calls the new-view upcalls. */
     void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
                             std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
                             uint32_t next_num_received_size,
                             DerechoSST& gmsSST);
 
-    // Static helper methods that implement chunks of view-management functionality
+    /** Helper method for completing view changes; determines whether this node
+     * needs to send Replicated Object state to each node that just joined, and then
+     * sends the state if necessary. */
+    void send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders);
+
+    /** Sends a single subgroup's replicated object to a new member after a view change. */
+    void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
+
+    /* -- Static helper methods that implement chunks of view-management functionality -- */
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
                                  const std::vector<node_id_t>& shard_members, uint num_shard_senders
@@ -206,19 +277,45 @@ private:
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
 
+    /**
+     * Constructs the next view from the current view and the set of committed
+     * changes in the SST.
+     * @param curr_view The current view, which the proposed changes are relative to
+     * @param gmsSST The SST containing the proposed/committed changes
+     * @param logger A logger for printing out debug information
+     * @return A View object for the next view
+     */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const DerechoSST& gmsSST whenlog(,
                                                 std::shared_ptr<spdlog::logger> logger));
 
+
+    /* ---------------------------------------------------------------------------------- */
+
+    //Setup/constructor helpers
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
     void register_predicates();
+    /** Constructor helper that reads logged ragged trim information from disk,
+     * called only if there is also a logged view on disk from a previous failed group. */
+    void load_ragged_trim();
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
     void await_first_view(const node_id_t my_id,
                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                           uint32_t& num_received_size);
+    /** Constructor helper for the leader when it is restarting from complete failure;
+     * waits for a majority of nodes from the last known view to join. */
+    void await_rejoining_nodes(const node_id_t my_id,
+                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                               uint32_t& num_received_size);
+
+    /** Helper function for total restart mode: Uses the RaggedTrim values
+     * in logged_ragged_trim to truncate any persistent logs that have a
+     * persisted version later than the last committed version in the RaggedTrim. */
+    void truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim);
+
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
 
@@ -232,28 +329,59 @@ private:
     void construct_multicast_group(CallbackSet callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size);
+
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
      * and copies over the SST data from the current view. */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size);
     /**
-     * Initializes the current View with subgroup information, and creates the
-     * subgroup-settings map that MulticastGroup's constructor needs based on
-     * this information. If the current View is inadequate based on the subgroup
-     * allocation functions, it will be marked as inadequate and no subgroup
-     * settings will be provided.
-     * @param prev_view The previous View, which may be null if the current view is the first one
-     * @param curr_view A mutable reference to the current View, which will have its SubViews initialized
-     * @param subgroup_settings A mutable reference to the subgroup settings map, which will be filled out
+     * Initializes curr_view with subgroup information based on the membership
+     * functions in subgroup_info, and creates the subgroup-settings map that
+     * MulticastGroup's constructor needs based on this information. If curr_view
+     * would be inadequate based on the subgroup allocation functions, it will
+     * be marked as inadequate and no subgroup settings will be provided.
+     * @param subgroup_info The SubgroupInfo (containing subgroup membership
+     * functions) to use to provision subgroups
+     * @param prev_view The previous View, which may be null if the current view
+     * is the first one
+     * @param curr_view A mutable reference to the current View, which will have
+     * its SubViews initialized
+     * @param subgroup_settings A mutable reference to the subgroup settings map,
+     * which will be filled out
      * @return num_received_size for the SST based on the computed subgroup membership
      */
-    uint32_t make_subgroup_maps(const std::unique_ptr<View>& prev_view,
-                                View& curr_view,
-                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    static uint32_t make_subgroup_maps(const SubgroupInfo& subgroup_info,
+                                       const std::unique_ptr<View>& prev_view,
+                                       View& curr_view,
+                                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
+    /**
+     * Creates the subgroup-settings map that MulticastGroup's constructor needs
+     * (and the num_received_size for the SST) based on the subgroup information
+     * already in curr_view. Also reinitializes curr_view's my_subgroups to
+     * indicate which subgroups this node belongs to. This function is only used
+     * during total restart, when a joining node receives a View that already
+     * has subgroup_shard_views populated.
+     * @param curr_view A mutable reference to the current View, which will have its
+     * my_subgroups corrected
+     * @param subgroup_settings A mutable reference to the subgroup settings map,
+     * which will be filled in by this function
+     * @return num_received_size for the SST based on the current View's subgroup membership
+     */
+    static uint32_t derive_subgroup_settings(View& curr_view,
+                                             std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
+    /**
+     * Recomputes num_received_size (the length of the num_received column in
+     * the SST) for an existing provisioned View, without re-running the
+     * subgroup membership functions. Used in total restart to set up an SST
+     * when all you have is a logged View.
+     * @param view The View to compute num_received_size for, based on its SubViews
+     * @return The length to provide to DerechoSST for num_received_size
+     */
+    static uint32_t compute_num_received_size(const View& view);
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
@@ -282,6 +410,7 @@ private:
             const View& new_view);
 
 public:
+
     /**
      * Constructor for a new group where this node is the GMS leader.
      * @param my_ip The IP address of the node executing this code
@@ -291,12 +420,19 @@ public:
      * for this group.
      * @param derecho_params The assorted configuration parameters for this
      * Derecho group instance, such as message size and logfile name
+     * @param group_tcp_sockets The pool of TCP connections to each group member
+     * that is shared with Group.
+     * @param object_reference_map A mutable reference to the list of
+     * ReplicatedObject references in Group, so that ViewManager can access it
+     * while Group manages the list
      * @param _persistence_manager_callbacks The persistence manager callbacks.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
     ViewManager(CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
+                ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
@@ -311,6 +447,11 @@ public:
      * @param subgroup_info The set of functions defining subgroup membership
      * in this group. Must be the same as the SubgroupInfo used to set up the
      * leader.
+     * @param group_tcp_sockets The pool of TCP connections to each group member
+     * that is shared with Group.
+     * @param object_reference_map A mutable reference to the list of
+     * ReplicatedObject references in Group, so that ViewManager can access it
+     * while Group manages the list
      * @param _persistence_manager_callbacks The persistence manager callbacks
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
@@ -318,19 +459,38 @@ public:
     ViewManager(tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
+                ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();
 
-    /** Completes first-time setup of the ViewManager, including synchronizing
+    /**
+     * Completes first-time setup of the ViewManager, including synchronizing
      * the initial SST and delivering the first new-view upcalls. This must be
      * separate from the constructor to resolve the circular dependency of SST
-     * synchronization. */
-    void finish_setup();
+     * synchronization. This also provides a convenient way to give the
+     * constructor a "return value" to hand back to its caller.
+     * @return A copy of restart_shard_leaders, which was computed in the
+     * constructor if we're in total restart mode, or an empty vector if we're
+     * not in total restart mode. The Group leader constructor will need this information.
+     */
+    std::vector<std::vector<int64_t>> finish_setup();
+
+    /**
+     * An extra setup method only needed during total restart. Sends Replicated
+     * Object data (most importantly, the persistent logs) to all members of a
+     * shard if this node is listed as that shard's leader. This does nothing if
+     * the node is not in total restart mode, but it must be called anyway
+     * because only ViewManager knows if we are doing total restart.
+     * @param restart_shard_leaders The list of shard leaders for total restart
+     * received from the restart leader; these are the nodes with the longest logs.
+     */
+    void send_logs_if_total_restart(const std::unique_ptr<std::vector<std::vector<int64_t>>>& restart_shard_leaders);
 
     /** Starts predicate evaluation in the current view's SST. Call this only
-     * when all other setup has been done for the managed Derecho group. */
+     * when all other setup has been done for the Derecho group. */
     void start();
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
@@ -356,6 +516,10 @@ public:
      */
     SharedLockedReference<View> get_current_view();
 
+    /** Gets a read-only reference to the DerechoParams settings,
+     * in case other components need to see them after construction time. */
+    const DerechoParams& get_derecho_params() const { return derecho_params; }
+
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -364,16 +528,6 @@ public:
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
-
-    /**
-     * Registers a function that will send serializable object state from this node
-     * to a new node in a specified subgroup and shard. ViewManager will call it when
-     * it has installed a new view that adds a member to a shard for which this node
-     * is the leader.
-     */
-    void register_send_object_upcall(send_object_upcall_t upcall) {
-        send_subgroup_object = std::move(upcall);
-    }
 
     /**
      * Registers a function that will initialize all the RPC objects at this node,
@@ -387,32 +541,5 @@ public:
 
     void debug_print_status() const;
 };
-
-/**
- * Base case for functional_append, with one argument.
- */
-template <typename T>
-std::vector<T> functional_append(const std::vector<T>& original, const T& item) {
-    std::vector<T> appended_vec(original);
-    appended_vec.emplace_back(item);
-    return appended_vec;
-}
-
-/**
- * Returns a new std::vector value that is equal to the parameter std::vector
- * with the rest of the arguments appended. Adds some missing functionality to
- * std::vector: the ability to append to a const vector without taking a
- * several-line detour to call the void emplace_back() method.
- * @param original The vector that should be the prefix of the new vector
- * @param first_item The first element to append to the original vector
- * @param rest_items The rest of the elements to append to the original vector
- * @return A new vector (by value), containing a copy of original plus all the
- * elements given as arguments.
- */
-template <typename T, typename... RestArgs>
-std::vector<T> functional_append(const std::vector<T>& original, const T& first_item, RestArgs... rest_items) {
-    std::vector<T> appended_vec = functional_append(original, first_item);
-    return functional_append(appended_vec, rest_items...);
-}
 
 } /* namespace derecho */

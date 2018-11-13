@@ -155,6 +155,10 @@ public:
  * add a new node to sst_connection set.
  */
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+/**
+ * Removes a node from the SST TCP connections set
+ */
+bool remove_node(uint32_t node_id);
 /** sync
  * @param r_id - ID of the node to exchange data with.
  */

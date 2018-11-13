@@ -12,21 +12,22 @@
 #include <type_traits>
 #include <utility>
 
-#include "mutils-serialization/SerializationSupport.hpp"
-#include "persistent/Persistent.hpp"
-#include "tcp/tcp.h"
-
 #include "derecho_exception.h"
 #include "derecho_internal.h"
 #include "remote_invocable.h"
 #include "rpc_manager.h"
 #include "rpc_utils.h"
 
+#include "mutils-serialization/SerializationSupport.hpp"
+#include "persistent/Persistent.hpp"
+#include "tcp/tcp.h"
+
 using namespace persistent;
 
 namespace derecho {
 
 class _Group;
+class GroupReference;
 
 /**
  * This is a marker interface for user-defined Replicated Objects (i.e. objects
@@ -44,9 +45,6 @@ class PersistsFields {};
 template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
 
-template <typename T>
-//using Factory = std::function<std::unique_ptr<T>(void)>;
-using Factory = std::function<std::unique_ptr<T>(PersistentRegistry*)>;
 /**
  * Common interface for all types of Replicated<T>, specifying some methods for
  * state transfer and persistence. This allows non-templated Derecho components
@@ -62,8 +60,9 @@ public:
     virtual std::size_t receive_object(char* buffer) = 0;
     virtual bool is_persistent() const = 0;
     virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) = 0;
-    virtual const int64_t get_minimum_latest_persisted_version() noexcept(false) = 0;
+    virtual const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
+    virtual void truncate(const persistent::version_t& latest_version) = 0;
 };
 
 template <typename T>
@@ -72,7 +71,7 @@ private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<PersistentRegistry> persistent_registry_ptr;
-/** The user-provided state object with some RPC methods. Stored by
+    /** The user-provided state object with some RPC methods. Stored by
      * pointer-to-pointer because it must stay pinned at a specific location
      * in memory, and otherwise Replicated<T> would be unmoveable. */
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
@@ -173,7 +172,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -182,7 +181,8 @@ public:
               group_rpc_manager(group_rpc_manager),
               wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
               group(group) {
-        if constexpr(std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<GroupReference, T>) {
+            std::cout << "In replicated.h:186, group=" << group << std::endl;
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
     }
@@ -201,7 +201,7 @@ public:
      */
     Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, _Group* group)
-            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index)),
+            : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
               node_id(nid),
               subgroup_id(subgroup_id),
@@ -362,7 +362,7 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const int64_t get_minimum_latest_persisted_version() noexcept(false) {
+    const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) {
         return persistent_registry_ptr->getMinimumLatestPersistedVersion();
     }
 
@@ -426,7 +426,7 @@ public:
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-        if constexpr(std::is_base_of_v<_Group, T>) {
+        if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
         return mutils::bytes_size(**user_object_ptr);
@@ -459,12 +459,22 @@ public:
 
     /**
      * trim the logs to a version, inclusively.
-     * @param ver - the version number, before which, logs are going to be
-     * trimmed
+     * @param earliest_version - the version number, before which, logs are
+     * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& ver) noexcept(false) {
-        persistent_registry_ptr->trim(ver);
+    virtual void trim(const persistent::version_t& earliest_version) noexcept(false) {
+        persistent_registry_ptr->trim(earliest_version);
     };
+
+    /**
+     * Truncate the logs of all Persistent<T> members back to the version
+     * specified. This deletes recently-used data, so it should only be called
+     * during failure recovery when some versions must be rolled back.
+     * @param latest_version The latest version number that should remain in the logs
+     */
+    virtual void truncate(const persistent::version_t& latest_version) {
+        persistent_registry_ptr->truncate(latest_version);
+    }
 
     /**
      * Register a persistent member

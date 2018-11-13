@@ -9,7 +9,7 @@
 #endif
 
 #include <array>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
@@ -40,7 +40,7 @@ struct receive_destination {
 typedef std::function<receive_destination(size_t size)>
         incoming_message_callback_t;
 typedef std::function<void(char* buffer, size_t size)> completion_callback_t;
-typedef std::function<void(std::experimental::optional<uint32_t> suspected_victim)>
+typedef std::function<void(std::optional<uint32_t> suspected_victim)>
         failure_callback_t;
 
 bool initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& addresses,

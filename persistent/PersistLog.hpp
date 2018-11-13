@@ -1,73 +1,70 @@
 #ifndef PERSIST_LOG_HPP
-#define	PERSIST_LOG_HPP
+#define PERSIST_LOG_HPP
 
 #if !defined(__GNUG__) && !defined(__clang__)
-  #error PersistLog.hpp only works with clang and gnu compilers
+#error PersistLog.hpp only works with clang and gnu compilers
 #endif
 
-#include <stdio.h>
+#include "HLC.hpp"
+#include "PersistException.hpp"
+#include <functional>
 #include <inttypes.h>
 #include <map>
 #include <set>
+#include <stdio.h>
 #include <string>
-#include <functional>
-#include "PersistException.hpp"
-#include "HLC.hpp"
 
 namespace persistent {
 
-  // Storage type:
-  enum StorageType{
-    ST_FILE=0,
+// Storage type:
+enum StorageType {
+    ST_FILE = 0,
     ST_MEM,
     ST_3DXP
-  };
+};
 
-  //#define INVALID_VERSION ((__int128)-1L)
-  #define INVALID_VERSION ((int64_t)-1L)
-  #define INVALID_INDEX INT64_MAX
+//#define INVALID_VERSION ((__int128)-1L)
+#define INVALID_VERSION ((int64_t)-1L)
+#define INVALID_INDEX INT64_MAX
 
-  // index entry for the hlc index
-  struct hlc_index_entry {
+// index entry for the hlc index
+struct hlc_index_entry {
     HLC hlc;
     int64_t log_idx;
     //default constructor
-    hlc_index_entry():log_idx(-1){
+    hlc_index_entry() : log_idx(-1) {
     }
     // constructor with hlc and index.
-    hlc_index_entry(const HLC & _hlc, const int64_t &_log_idx):
-      hlc(_hlc),log_idx(_log_idx) {
+    hlc_index_entry(const HLC &_hlc, const int64_t &_log_idx) : hlc(_hlc), log_idx(_log_idx) {
     }
     // constructor with time stamp and index.
-    hlc_index_entry(const uint64_t &r, const uint64_t &l, const int64_t &_log_idx):
-      hlc(r,l),log_idx(_log_idx) {
+    hlc_index_entry(const uint64_t &r, const uint64_t &l, const int64_t &_log_idx) : hlc(r, l), log_idx(_log_idx) {
     }
     //copy constructor
-    hlc_index_entry(const struct hlc_index_entry &_entry):
-      hlc(_entry.hlc),log_idx(_entry.log_idx){
+    hlc_index_entry(const struct hlc_index_entry &_entry) : hlc(_entry.hlc), log_idx(_entry.log_idx) {
     }
-  };
-  // comparator for the hlc index
-  struct hlc_index_entry_comp {
-    bool operator () (const struct hlc_index_entry & e1, 
-      const struct hlc_index_entry & e2) const {
-      return e1.hlc < e2.hlc;
+};
+// comparator for the hlc index
+struct hlc_index_entry_comp {
+    bool operator()(const struct hlc_index_entry &e1,
+                    const struct hlc_index_entry &e2) const {
+        return e1.hlc < e2.hlc;
     }
-  };
+};
 
-  // Persistent log interfaces
-  class PersistLog{
-  public:
+// Persistent log interfaces
+class PersistLog {
+public:
     // LogName
     const std::string m_sName;
     // HLCIndex
-    std::set<hlc_index_entry,hlc_index_entry_comp> hidx;
+    std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
 #ifndef NDEBUG
     void dump_hidx();
-#endif//NDEBUG
+#endif  //NDEBUG
     // Constructor:
     // Remark: the constructor will check the persistent storage
-    // to make sure if this named log(by "name" in the template 
+    // to make sure if this named log(by "name" in the template
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
     PersistLog(const std::string &name) noexcept(true);
@@ -82,18 +79,19 @@ namespace persistent {
      * Note that the entry appended can only become persistent till the persist()
      * is called on that entry.
      */
-    virtual void append(const void * pdata, 
-      const uint64_t & size, const int64_t & ver, //const __int128 & ver, 
-      const HLC & mhlc) noexcept(false)=0;
+    virtual void append(const void *pdata,
+                        const uint64_t &size, const int64_t &ver,  //const __int128 & ver,
+                        const HLC &mhlc) noexcept(false)
+            = 0;
 
     /**
      * Advance the version number without appendding a log. This is useful
      * to create gap between versions.
      */
     // virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
-    virtual void advanceVersion(const int64_t & ver) noexcept(false) = 0;
+    virtual void advanceVersion(const int64_t &ver) noexcept(false) = 0;
 
-    // Get the length of the log 
+    // Get the length of the log
     virtual int64_t getLength() noexcept(false) = 0;
 
     // Get the Earliest Index
@@ -113,16 +111,16 @@ namespace persistent {
     virtual const int64_t getLastPersisted() noexcept(false) = 0;
 
     // Get a version by entry number
-    virtual const void* getEntryByIndex(const int64_t & eno) noexcept(false) = 0;
+    virtual const void *getEntryByIndex(const int64_t &eno) noexcept(false) = 0;
 
     // Get the latest version equal or earlier than ver.
     //virtual const void* getEntry(const __int128 & ver) noexcept(false) = 0;
-    virtual const void* getEntry(const int64_t & ver) noexcept(false) = 0;
+    virtual const void *getEntry(const int64_t &ver) noexcept(false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() noexcept(false) = 0;
     // Get a version specified by hlc
-    virtual const void* getEntry(const HLC & hlc) noexcept(false) = 0;
+    virtual const void *getEntry(const HLC &hlc) noexcept(false) = 0;
 
     /**
      * Persist the log till specified version
@@ -131,7 +129,7 @@ namespace persistent {
      * is lower than the log that has been actually persisted.
      */
     //virtual const __int128 persist() noexcept(false) = 0;
-    virtual const int64_t persist(const bool preLocked=false) noexcept(false) = 0;
+    virtual const int64_t persist(const bool preLocked = false) noexcept(false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
@@ -150,7 +148,7 @@ namespace persistent {
      * Trim the log till HLC clock, inclusively.
      * @param hlc - all log entry before hlc will be trimmed.
      */
-    virtual void trim(const HLC & hlc) noexcept(false) = 0;
+    virtual void trim(const HLC &hlc) noexcept(false) = 0;
 
     /**
      * Calculate the byte size required for serialization
@@ -165,7 +163,7 @@ namespace persistent {
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char* buf, const int64_t &ver) = 0;
+    virtual size_t to_bytes(char *buf, const int64_t &ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -173,8 +171,9 @@ namespace persistent {
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual void post_object(const std::function<void (char const *const, std::size_t)> &f,
-                             const int64_t &ver) = 0;
+    virtual void post_object(const std::function<void(char const *const, std::size_t)> &f,
+                             const int64_t &ver)
+            = 0;
 
     /**
      * Check/Merge the LogTail to the existing log.
@@ -183,13 +182,12 @@ namespace persistent {
      */
     virtual void applyLogTail(char const *v) = 0;
 
-
     /**
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strict after ver will be truncated.
      */
     virtual void truncate(const int64_t &ver) noexcept(false) = 0;
-  };
+};
 }
 
-#endif//PERSIST_LOG_HPP
+#endif  //PERSIST_LOG_HPP

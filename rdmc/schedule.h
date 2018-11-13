@@ -3,11 +3,11 @@
 #define SCHEDULE_H
 
 #include <cmath>
-#include <experimental/optional>
+#include <optional>
 #include <vector>
 
 using std::vector;
-using std::experimental::optional;
+using std::optional;
 
 class schedule {
 protected:

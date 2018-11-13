@@ -25,7 +25,7 @@ void PollingData::insert_completion_entry(uint32_t index, std::pair<int32_t, int
     completion_entries[index].push_back(ce);
 }
 
-std::experimental::optional<std::pair<int32_t, int32_t>> PollingData::get_completion_entry(const std::thread::id id) {
+std::optional<std::pair<int32_t, int32_t>> PollingData::get_completion_entry(const std::thread::id id) {
     std::lock_guard<std::mutex> lk(poll_mutex);
     auto index = tid_to_index[id];
     if(completion_entries[index].empty()) {

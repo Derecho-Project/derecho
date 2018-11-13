@@ -23,7 +23,7 @@
 #include "util.h"
 
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif
 
 /** From sst/verbs.cpp */
@@ -44,17 +44,30 @@ namespace rdma {
 
 /** Debugging tools from Weijia's sst code */  
 #ifndef NDEBUG
+    class RDMCLogger {
+        std::shared_ptr<spdlog::logger> spdlogger;
+    public:
+        RDMCLogger(spdlog::level::level_enum log_level)
+                : spdlogger(spdlog::stdout_color_mt("rdmc.lf")) {
+            spdlogger->set_level(log_level);
+            spdlogger->set_pattern("[%H:%M:%S.%f] [%n] [%^%l%$] %v");
+        }
+        std::shared_ptr<spdlog::logger> get_logger() {
+            return spdlogger;
+        }
+    };
+
     inline auto dbgConsole() {
-        static auto console = spdlog::stdout_color_mt("rdmc");
+        static auto console = RDMCLogger(spdlog::level::debug);
         return console;
     }
-    #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
-    #define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
-    #define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
-    #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
-    #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
-    #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
-    #define dbg_flush() dbgConsole()->flush()
+    #define dbg_trace(...) dbgConsole().get_logger()->trace(__VA_ARGS__)
+    #define dbg_debug(...) dbgConsole().get_logger()->debug(__VA_ARGS__)
+    #define dbg_info(...) dbgConsole().get_logger()->info(__VA_ARGS__)
+    #define dbg_warn(...) dbgConsole().get_logger()->warn(__VA_ARGS__)
+    #define dbg_error(...) dbgConsole().get_logger()->error(__VA_ARGS__)
+    #define dbg_crit(...) dbgConsole().get_logger()->critical(__VA_ARGS__)
+    #define dbg_flush() dbgConsole().get_logger()->flush()
 #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -591,6 +604,13 @@ bool lf_add_connection(
     uint32_t new_id,
     const std::pair<ip_addr_t, uint16_t> &new_ip_addr_and_port) {
   return rdmc_connections->add_node(new_id, new_ip_addr_and_port);
+}
+
+/**
+ * Removes a node's TCP connection, presumably because it has failed.
+ */
+bool lf_remove_connection(uint32_t node_id) {
+     return rdmc_connections->delete_node(node_id);
 }
 
 static atomic<bool> interrupt_mode;

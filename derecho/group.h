@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <ctime>
 #include <exception>
-#include <experimental/optional>
 #include <iostream>
 #include <list>
 #include <map>
@@ -15,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "tcp/tcp.h"
+#include <tcp/tcp.h>
 
 #include "derecho_exception.h"
 #include "derecho_internal.h"
@@ -101,8 +100,12 @@ private:
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
+    /** Contains a TCP connection to each member of the group, for the purpose
+     * of transferring state information to new members during a view change.
+     * This connection pool is shared between Group and ViewManager */
+    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
     /** Contains all state related to managing Views, including the
-     * ManagedGroup and SST (since those change when the view changes). */
+     * MulticastGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
     /** Contains all state related to receiving and handling RPC function
      * calls for any Replicated objects implemented by this group. */
@@ -168,6 +171,10 @@ private:
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
 
+    /** A new-view callback that adds and removes TCP connections from the pool
+     * of long-standing TCP connections to each member (used mostly by RPCManager). */
+    void update_tcp_connections_callback(const View& new_view);
+
     /**
      * Constructor helper that constructs RawSubgroup objects for each subgroup
      * of type RawObject; called to initialize the raw_subgroups map.
@@ -186,7 +193,7 @@ private:
      */
     template <typename... Empty>
     typename std::enable_if<0 == sizeof...(Empty), std::set<std::pair<subgroup_id_t, node_id_t>>>::type
-    construct_objects(const View&, const std::unique_ptr<vector_int64_2d>&) {
+    construct_objects(const View&, const vector_int64_2d&) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
 
@@ -201,15 +208,16 @@ private:
      * subgroup, since all object state will be received from the shard leader.
      *
      * @param curr_view A reference to the current view as reported by View_manager
-     * @param old_shard_leaders A pointer to the array of old shard leaders for
-     * each subgroup (indexed by subgroup ID), if one exists.
+     * @param old_shard_leaders The array of old shard leaders for each subgroup
+     * (indexed by subgroup ID), which will contain -1 if there is no previous
+     * leader for that shard.
      * @return The set of subgroup IDs that are un-initialized because this node is
      * joining an existing group and needs to receive initial object state, paired
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
-            const View& curr_view, const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
+            const View& curr_view, const vector_int64_2d& old_shard_leaders);
 
 public:
     /**
@@ -290,7 +298,7 @@ public:
 
 #ifndef NOLOG
     void log_event(const std::string& event_text) {
-        logger->debug(event_text);
+        SPDLOG_DEBUG(logger, event_text);
     }
 #endif
 };

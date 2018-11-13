@@ -202,7 +202,7 @@ void polling_group::receive_block(uint32_t send_imm, size_t received_block_size)
         LOG_EVENT(group_number, message_number, block_number, "received_block");
 
         // Figure out the next block to receive.
-        std::experimental::optional<schedule::block_transfer> transfer;
+        std::optional<schedule::block_transfer> transfer;
         while(!transfer && receive_step + 1 < transfer_schedule->get_total_steps(num_blocks)) {
             transfer = transfer_schedule->get_incoming_transfer(num_blocks, ++receive_step);
         }
@@ -390,7 +390,7 @@ void polling_group::complete_message() {
     //     memset(first_block_buffer, 1, block_size);
     //     memset(first_block_buffer, 0, block_size);
     // }
-    first_block_number = std::experimental::nullopt;
+    first_block_number = std::nullopt;
 
     if(member_index != 0) {
         num_received_blocks = 0;

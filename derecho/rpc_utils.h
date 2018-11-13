@@ -63,11 +63,11 @@ struct Opcode {
     FunctionTag function_id;
     bool is_reply;
 };
-bool operator<(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator<(const Opcode& lhs, const Opcode& rhs) {
     return std::tie(lhs.class_id, lhs.subgroup_id, lhs.function_id, lhs.is_reply)
            < std::tie(rhs.class_id, rhs.subgroup_id, rhs.function_id, rhs.is_reply);
 }
-bool operator==(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator==(const Opcode& lhs, const Opcode& rhs) {
     return lhs.class_id == rhs.class_id && lhs.subgroup_id == rhs.subgroup_id
            && lhs.function_id == rhs.function_id && lhs.is_reply == rhs.is_reply;
 }
@@ -282,7 +282,7 @@ private:
 
 public:
     PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()) whenlog(,
-                       logger(spdlog::get("debug_log"))) {
+                       logger(spdlog::get("derecho_debug_log"))) {
         whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name());)
     }
     /**
@@ -345,7 +345,7 @@ struct PendingResults<void> : public PendingBase {
     */
 
     void fulfill_map(const node_list_t&) {
-        spdlog::get("debug_log")->error("Got a call to fulfill_map in PendingResults<void>! Serious logic error!");
+        whenlog(spdlog::get("derecho_debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!");)
     }
     void set_exception_for_removed_node(const node_id_t&) {}
     QueryResults<void> get_future() { return QueryResults<void>{}; }
@@ -369,9 +369,13 @@ inline char* extra_alloc(int i) {
 inline void populate_header(char* reply_buf,
                             const std::size_t& payload_size,
                             const Opcode& op, const node_id_t& from) {
-    ((std::size_t*)reply_buf)[0] = payload_size;                                 // size
-    ((Opcode*)(sizeof(std::size_t) + reply_buf))[0] = op;                        // what
-    ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
+    std::size_t offset = 0;
+    static_assert(sizeof(op) == sizeof(Opcode), "Opcode& is not the same size as Opcode!");
+    ((std::size_t*)(reply_buf + offset))[0] = payload_size;           // size
+    offset += sizeof(payload_size);
+    ((Opcode*)(reply_buf + offset))[0] = op;                        // what
+    offset += sizeof(op);
+    ((node_id_t*)(reply_buf + offset))[0] = from;                   // from
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
@@ -379,9 +383,12 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {
-    payload_size = ((std::size_t const* const)reply_buf)[0];
-    op = ((Opcode const* const)(sizeof(std::size_t) + reply_buf))[0];
-    from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0];
+    std::size_t offset = 0;
+    payload_size = ((std::size_t const* const)(reply_buf + offset))[0];
+    offset += sizeof(payload_size);
+    op = ((Opcode const* const)(reply_buf + offset))[0];
+    offset += sizeof(op);
+    from = ((node_id_t const* const)(reply_buf + offset))[0];
 }
 }  // namespace remote_invocation_utilities
 

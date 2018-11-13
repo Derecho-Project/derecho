@@ -18,7 +18,6 @@ RPCManager::~RPCManager() {
     if(rpc_thread.joinable()) {
         rpc_thread.join();
     }
-    tcp_connections.destroy();
 }
 
 void RPCManager::start_listening() {
@@ -27,9 +26,6 @@ void RPCManager::start_listening() {
     thread_start_cv.notify_all();
 }
 
-LockedReference<std::unique_lock<std::mutex>, tcp::socket> RPCManager::get_socket(node_id_t node) {
-    return tcp_connections.get_socket(node);
-}
 
 std::exception_ptr RPCManager::receive_message(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
@@ -148,31 +144,9 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 }
 
 void RPCManager::new_view_callback(const View& new_view) {
-    if(std::find(new_view.joined.begin(), new_view.joined.end(), nid) != new_view.joined.end()) {
-        //If this node is in the joined list, we need to set up a connection to everyone
-        for(int i = 0; i < new_view.num_members; ++i) {
-            if(new_view.members[i] != nid) {
-	      tcp_connections.add_node(new_view.members[i], {std::get<0>(new_view.member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[i])});
-                whenlog(logger->debug("Established a TCP connection to node {}", new_view.members[i]);)
-            }
-        }
-    } else {
-        //This node is already a member, so we already have connections to the previous view's members
-        for(const node_id_t& joiner_id : new_view.joined) {
-            tcp_connections.add_node(joiner_id,
-                                     {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
-            whenlog(logger->debug("Established a TCP connection to node {}", joiner_id);)
-        }
-        for(const node_id_t& removed_id : new_view.departed) {
-            whenlog(logger->debug("Removing TCP connection for failed node {}", removed_id);)
-            tcp_connections.delete_node(removed_id);
-        }
-    }
-
     std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
     whenlog(logger->debug("Created new connections among the new view members");)
-
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
         for(auto removed_id : new_view.departed) {

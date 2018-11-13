@@ -3,41 +3,41 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif//NDEBUG
 
 namespace derecho {
 
-static const char * default_conf_file = "derecho.cfg";
+static const char* default_conf_file = "derecho.cfg";
 
 std::unique_ptr<Conf> Conf::singleton = nullptr;
 
 std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
-#define CONF_UNINITIALIZED      (0)
-#define CONF_INITIALIZING       (1)
-#define CONF_INITIALIZED        (2)
+#define CONF_UNINITIALIZED (0)
+#define CONF_INITIALIZING (1)
+#define CONF_INITIALIZED (2)
 
 #ifndef NDEBUG
-  inline auto dbgConsole() {
+inline auto dbgConsole() {
     static auto con = spdlog::stdout_color_mt("conf");
     return con;
-  }
-  #define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
-  #define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
-  #define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
-  #define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
-  #define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
-  #define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
-  #define dbg_flush() dbgConsole()->flush()
+}
+#define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
+#define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
+#define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
+#define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
+#define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
+#define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
+#define dbg_flush() dbgConsole()->flush()
 #else
-  #define dbg_trace(...)
-  #define dbg_debug(...)
-  #define dbg_info(...)
-  #define dbg_warn(...)
-  #define dbg_error(...)
-  #define dbg_crit(...)
-  #define dbg_flush()
-#endif //NDEBUG
+#define dbg_trace(...)
+#define dbg_debug(...)
+#define dbg_info(...)
+#define dbg_warn(...)
+#define dbg_error(...)
+#define dbg_crit(...)
+#define dbg_flush()
+#endif  //NDEBUG
 
 #define MAKE_LONG_OPT_ENTRY(x) \
     {x, required_argument, 0, 0 }
@@ -100,9 +100,9 @@ void Conf::initialize(int argc, char * argv[], const char * conf_file){
     Conf::singleton = std::make_unique<Conf>(argc,argv,cfg);
     delete cfg;
 
-    // 3 - set the flag to initialized
-    Conf::singleton_initialized_flag.store(CONF_INITIALIZED,std::memory_order_acq_rel);
-  }
+        // 3 - set the flag to initialized
+        Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
+    }
 }
 
 // should we force the user to call Conf::initialize() by throw an expcetion
@@ -113,12 +113,12 @@ const Conf* Conf::get() noexcept {
   return Conf::singleton.get();
 }
 
-const std::string & getConfString(const std::string & key){
-  return Conf::get()->getString(key);
+const std::string& getConfString(const std::string& key) {
+    return Conf::get()->getString(key);
 }
 
-const int32_t getConfInt32(const std::string & key){
-  return Conf::get()->getInt32(key);
+const int32_t getConfInt32(const std::string& key) {
+    return Conf::get()->getInt32(key);
 }
 
 const uint32_t getConfUInt32(const std::string & key){
@@ -145,8 +145,7 @@ const float getConfFloat(const std::string & key){
   return Conf::get()->getFloat(key);
 }
 
-const double getConfDouble(const std::string & key){
-  return Conf::get()->getDouble(key);
+const double getConfDouble(const std::string& key) {
+    return Conf::get()->getDouble(key);
 }
-
 }
