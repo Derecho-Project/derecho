@@ -1,15 +1,15 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
 #include <map>
-#include <string>
+#include <memory>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "derecho_internal.h"
-#include "view.h"
 #include "subgroup_info.h"
+#include "view.h"
 
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>
@@ -24,12 +24,11 @@ struct RaggedTrim : public mutils::ByteRepresentable {
     subgroup_id_t subgroup_id;
     uint32_t shard_num;
     int vid;
-    int32_t leader_id; //Signed instead of unsigned so it can have the special value -1
+    int32_t leader_id;  //Signed instead of unsigned so it can have the special value -1
     std::vector<int32_t> max_received_by_sender;
     RaggedTrim(subgroup_id_t subgroup_id, uint32_t shard_num, int vid,
                int32_t leader_id, std::vector<int32_t> max_received_by_sender)
-    : subgroup_id(subgroup_id), shard_num(shard_num), vid(vid),
-      leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
+            : subgroup_id(subgroup_id), shard_num(shard_num), vid(vid), leader_id(leader_id), max_received_by_sender(max_received_by_sender) {}
     DEFAULT_SERIALIZATION_SUPPORT(RaggedTrim, subgroup_id, shard_num, vid, leader_id, max_received_by_sender);
 };
 
@@ -70,7 +69,7 @@ struct RestartState {
 
 class RestartLeaderState {
 private:
-    whenlog(std::shared_ptr<spdlog::logger> logger;)
+    whenlog(std::shared_ptr<spdlog::logger> logger;);
     /** Takes ownership of ViewManager's curr_view pointer, because
      * await_quroum() might replace curr_view with a newer view discovered
      * on a restarting node. */
@@ -91,6 +90,16 @@ private:
     std::vector<std::vector<persistent::version_t>> longest_log_versions;
     std::vector<std::vector<int64_t>> nodes_with_longest_log;
     const node_id_t my_id;
+
+    /**
+     * Helper method for await_quorum that processes the logged View and
+     * RaggedTrims from a single rejoining node. This may update curr_view or
+     * logged_ragged_trim if the joiner has newer information.
+     * @param joiner_id The ID of the rejoining node
+     * @param client_socket The TCP socket connected to the rejoining node
+     */
+    void receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket);
+
 public:
     static const int RESTART_LEADER_TIMEOUT = 300000;
     RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
@@ -98,12 +107,19 @@ public:
                        uint32_t& num_received_size,
                        const SubgroupInfo& subgroup_info,
                        const node_id_t my_id);
+    /**
+     * Waits for nodes to rejoin at this node, updating the last known View and
+     * RaggedTrim (and corresponding longest-log information) as each node connects,
+     * until there is a quorum of nodes from the last known View and a new View
+     * can be installed that is adequately provisioned.
+     * @param server_socket The TCP socket to listen for rejoining nodes on
+     */
     void await_quorum(tcp::connection_listener& server_socket);
     /**
      * Recomputes the restart view based on the current set of nodes that have
      * rejoined (in waiting_join_sockets and rejoined_node_ids).
      * @return True if the group is now ready to restart, false if it is not
-     * (because, e.g. the restart view would be inadquate).
+     * (because, e.g. the restart view would be inadequate).
      */
     bool compute_restart_view();
     /**
@@ -159,8 +175,8 @@ public:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports whenlog(,
-                                                std::shared_ptr<spdlog::logger> logger));
+                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
+                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.
@@ -169,4 +185,3 @@ public:
 };
 
 } /* namespace derecho */
-
