@@ -51,14 +51,23 @@ public:
   //   return true;
   // }
 
-  bool verify_global_order (vector<pair<uint, uint>> v) {
+  bool verify_order (vector<pair<uint, uint>> v) {
+    uint order[counter] = {};
+    uint fst, snd;
     std::vector<pair<uint, uint>>::iterator a = msgs.begin();
     std::vector<pair<uint, uint>>::iterator b = v.begin();
     while(a != msgs.end() && b != v.end()){
+      fst = a->first;
+      snd = a->second;
       if(*a != *b){
         std::cout << "Global order error!" << std::endl;
         return false;
       }
+      else if(snd != order[fst] + 1){
+        std::cout << "Local order error!" << std::endl;
+        return false;
+      }
+      order[fst] = snd;
       ++a;
       ++b;
     }
@@ -70,30 +79,12 @@ public:
     return true;
   }
 
-  bool verify_local_order (){
-    uint order[counter] = {};
-    uint fst, snd;
-    for(std::vector<pair<uint, uint>>::iterator a = msgs.begin(); a != msgs.end(); ++a){
-      fst = a->first;
-      snd = a->second;
-      if(snd == order[fst] + 1){
-        order[fst] = snd;        
-      }
-      else{
-        std::cout << "Local order error!" << std::endl;
-        return false;
-      }
-    }
-    std::cout << "Pass" << std::endl;
-    return true;
-  }
-
 
   // default state
   DEFAULT_SERIALIZATION_SUPPORT(CookedMessages, msgs);
 
   // what operations you want as part of the subgroup
-  REGISTER_RPC_FUNCTIONS(CookedMessages, send, verify_global_order, verify_local_order);
+  REGISTER_RPC_FUNCTIONS(CookedMessages, send, verify_order);
   
 };
 uint CookedMessages::counter = 0;
