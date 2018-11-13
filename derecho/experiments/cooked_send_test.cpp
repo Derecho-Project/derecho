@@ -9,11 +9,10 @@ using std::vector;
 using std::pair;
 
 class CookedMessages : public mutils::ByteRepresentable {
-  // vector of maps <node_id, message>
   static uint counter;
   uint nodeid;
   vector<pair<uint, uint>> msgs; // vector of (nodeid, msg #)
-  uint msg = 0;
+  uint msg = 0; // replaces file input
 
 public:
   CookedMessages () : nodeid(counter){
@@ -23,57 +22,35 @@ public:
   }
   CookedMessages(const CookedMessages&) = default;
 
-  // pass in node's ID
-  // use std::accumulate to fold instead?
-
   void send(){
     msg++;
     msgs.push_back(std::make_pair(nodeid, msg));
     std::cout << "Node " << nodeid << " sent msg " << msg << std::endl;
   }
 
-  // bool verify_contents(uint id){
-  //   string line;
-  //   std::vector<pair<uint, string>>::iterator it = msgs.begin();
-  //   std::ifstream infile("node%d.txt", id);
-  //   while(std::getline(infile, line)){
-  //     for(it; it != msgs.end(); ++it){
-  //       if(it->first == id){
-  //         if(it->second != line){
-  //           std::cout << "Message content error!" << std::endl;
-  //           return false;
-  //         }
-  //         break;
-  //       }
-  //     }
-  //   }
-  //   std::cout << "Pass" << std::endl;
-  //   return true;
-  // }
-
   bool verify_order (vector<pair<uint, uint>> v) {
+    if(v.size() != msgs.size()){
+      std::cout << "State vector sizes differ" << std::endl;
+      return false;
+    }
     uint order[counter] = {};
     uint fst, snd;
     std::vector<pair<uint, uint>>::iterator a = msgs.begin();
     std::vector<pair<uint, uint>>::iterator b = v.begin();
-    while(a != msgs.end() && b != v.end()){
+    while(a != msgs.end()){
       fst = a->first;
       snd = a->second;
       if(*a != *b){
         std::cout << "Global order error!" << std::endl;
         return false;
       }
-      else if(snd != order[fst] + 1){
+      else if(snd != order[fst] + 1){ // may want to loosen to snd <= order[fst]
         std::cout << "Local order error!" << std::endl;
         return false;
       }
       order[fst] = snd;
       ++a;
       ++b;
-    }
-    if (a != msgs.end() || b != v.end()){
-      std::cout << "Global order error!" << std::endl;
-      return false;
     }
     std::cout << "Pass" << std::endl;
     return true;
