@@ -19,10 +19,7 @@ std::size_t to_bytes(const std::type_index& type_index, char* buffer) {
     return sizeof(type_index);
 }
 
-void post_object(const std::function<void (char const * const, std::size_t)>& f, const std::type_index& type_index) {
-    f(reinterpret_cast<char const * const>(&type_index), sizeof(type_index));
+void post_object(const std::function<void(char const* const, std::size_t)>& f, const std::type_index& type_index) {
+    f(reinterpret_cast<char const* const>(&type_index), sizeof(type_index));
 }
-
-}
-
-
+}  // namespace mutils

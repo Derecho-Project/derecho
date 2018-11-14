@@ -5,11 +5,11 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <string>
 #include <sys/types.h>
-#include <cstdint>
 
 #include "derecho/derecho_type_definitions.h"
 #include "persistent/HLC.hpp"
@@ -42,12 +42,12 @@ using Factory = std::function<std::unique_ptr<T>(persistent::PersistentRegistry*
 
 // for persistence manager
 using persistence_manager_make_version_func_t = std::function<void(
-        const subgroup_id_t &,
-        const persistent::version_t &,
-        const HLC &)>;
+        const subgroup_id_t&,
+        const persistent::version_t&,
+        const HLC&)>;
 using persistence_manager_post_persist_func_t = std::function<void(
-        const subgroup_id_t &,
-        const persistent::version_t &)>;
+        const subgroup_id_t&,
+        const persistent::version_t&)>;
 using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_version_func_t,
-        persistence_manager_post_persist_func_t>;
+                                                   persistence_manager_post_persist_func_t>;
 }  // namespace derecho

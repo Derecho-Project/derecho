@@ -13,13 +13,13 @@
 #include <thread>
 #include <vector>
 
+#include "conf/conf.hpp"
 #include "derecho_internal.h"
 #include "locked_reference.h"
 #include "multicast_group.h"
+#include "restart_state.h"
 #include "subgroup_info.h"
 #include "view.h"
-#include "conf/conf.hpp"
-#include "restart_state.h"
 
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>
@@ -36,7 +36,6 @@ class ReplicatedObject;
 namespace rpc {
 class RPCManager;
 }
-
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -68,10 +67,10 @@ public:
  * receiving a connection request from a new node.
  */
 enum class JoinResponseCode {
-    OK,            //!< OK The new member can proceed to join as normal.
-    TOTAL_RESTART, //!< TOTAL_RESTART The group is currently restarting from a total failure, so the new member should send its logged view and ragged trim
-    ID_IN_USE,     //!< ID_IN_USE The node's ID is already listed as a member of the current view, so it can't join.
-    LEADER_REDIRECT//!< LEADER_REDIRECT This node is not actually the leader and can't accept a join.
+    OK,              //!< OK The new member can proceed to join as normal.
+    TOTAL_RESTART,   //!< TOTAL_RESTART The group is currently restarting from a total failure, so the new member should send its logged view and ragged trim
+    ID_IN_USE,       //!< ID_IN_USE The node's ID is already listed as a member of the current view, so it can't join.
+    LEADER_REDIRECT  //!< LEADER_REDIRECT This node is not actually the leader and can't accept a join.
 };
 
 /**
@@ -87,7 +86,6 @@ template <typename T>
 using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed_mutex>, T>;
 
 using view_upcall_t = std::function<void(const View&)>;
-
 
 class ViewManager {
 private:
@@ -106,7 +104,7 @@ private:
 
     friend class RestartLeaderState;
 
-    whenlog(std::shared_ptr<spdlog::logger> logger;)
+    whenlog(std::shared_ptr<spdlog::logger> logger;);
 
     /** Controls access to curr_view. Read-only accesses should acquire a
      * shared_lock, while view changes acquire a unique_lock. */
@@ -257,20 +255,19 @@ private:
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
                                  const std::vector<node_id_t>& shard_members, uint num_shard_senders
-                                 whenlog(,
-                                 std::shared_ptr<spdlog::logger> logger));
+                                 whenlog(, std::shared_ptr<spdlog::logger> logger));
     static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
-                                           uint num_shard_senders ,
-                                           whenlog(std::shared_ptr<spdlog::logger> logger,)
+                                           uint num_shard_senders,
+                                           whenlog(std::shared_ptr<spdlog::logger> logger, )
                                            const std::vector<node_id_t>& next_view_members);
     static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members,
-                                             uint num_shard_senders whenlog(,
-                                             std::shared_ptr<spdlog::logger> logger));
+                                             uint num_shard_senders
+                                             whenlog(, std::shared_ptr<spdlog::logger> logger));
 
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -286,9 +283,8 @@ private:
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const DerechoSST& gmsSST whenlog(,
-                                                std::shared_ptr<spdlog::logger> logger));
-
+                                                const DerechoSST& gmsSST
+                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
 
     /* ---------------------------------------------------------------------------------- */
 
@@ -385,15 +381,15 @@ private:
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-    make_member_ips_and_ports_map(const View &view) {
-      std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
-      size_t num_members = view.members.size();
-      for (uint i = 0; i < num_members; ++i) {
-        if (!view.failed[i]) {
-          member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{std::get<0>(view.member_ips_and_ports[i]), std::get<port_index>(view.member_ips_and_ports[i])};
+    make_member_ips_and_ports_map(const View& view) {
+        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
+        size_t num_members = view.members.size();
+        for(uint i = 0; i < num_members; ++i) {
+            if(!view.failed[i]) {
+                member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{std::get<0>(view.member_ips_and_ports[i]), std::get<port_index>(view.member_ips_and_ports[i])};
+            }
         }
-      }
-      return member_ips_and_ports_map;
+        return member_ips_and_ports_map;
     }
     /**
      * Constructs a map from subgroup type -> index -> shard -> node ID of that
@@ -410,7 +406,6 @@ private:
             const View& new_view);
 
 public:
-
     /**
      * Constructor for a new group where this node is the GMS leader.
      * @param my_ip The IP address of the node executing this code

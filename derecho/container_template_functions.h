@@ -7,9 +7,9 @@
 
 #pragma once
 #include <map>
+#include <mutils-containers/KindMap.hpp>
 #include <set>
 #include <vector>
-#include <mutils-containers/KindMap.hpp>
 
 #include "derecho_internal.h"
 
@@ -94,7 +94,7 @@ std::vector<T> functional_append(const std::vector<T>& original, const T& first_
  * @return The total number of elements in the std::map, counting all the
  * elements in all the "inner" std::maps.
  */
-template<typename K1, typename K2, typename V>
+template <typename K1, typename K2, typename V>
 std::size_t multimap_size(const std::map<K1, std::map<K2, V>>& multimap) {
     std::size_t count = 0;
     for(const auto& map_pair : multimap) {
@@ -102,7 +102,4 @@ std::size_t multimap_size(const std::map<K1, std::map<K2, V>>& multimap) {
     }
     return count;
 }
-
-}
-
-
+}  // namespace derecho

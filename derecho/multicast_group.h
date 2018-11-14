@@ -2,18 +2,19 @@
 
 #include <assert.h>
 #include <condition_variable>
-#include <optional>
 #include <functional>
 #include <list>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <ostream>
 #include <queue>
 #include <set>
 #include <tuple>
 #include <vector>
 
+#include "conf/conf.hpp"
 #include "connection_manager.h"
 #include "derecho_internal.h"
 #include "derecho_modes.h"
@@ -25,10 +26,8 @@
 #include "sst/multicast.h"
 #include "sst/sst.h"
 #include "subgroup_info.h"
-#include "conf/conf.hpp"
 
 namespace derecho {
-
 
 /**
  * Bundles together a set of callback functions for message delivery events.
@@ -59,24 +58,24 @@ struct DerechoParams : public mutils::ByteRepresentable {
     uint32_t rpc_port;
 
     DerechoParams() {
-      max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-      max_smc_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE);
-      block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
-      window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
-      timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
-      std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
-      if (rdmc_send_algorithm_string == "binomial_send") {
-	rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
-      } else if (rdmc_send_algorithm_string == "chain_send") {
-	rdmc_send_algorithm = rdmc::send_algorithm::CHAIN_SEND;
-      } else if (rdmc_send_algorithm_string == "sequential_send") {
-	rdmc_send_algorithm = rdmc::send_algorithm::SEQUENTIAL_SEND;
-      } else if (rdmc_send_algorithm_string == "tree_send") {
-	rdmc_send_algorithm = rdmc::send_algorithm::TREE_SEND;
-      } else {
-	throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
-      }
-      rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
+        max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        max_smc_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE);
+        block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
+        window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
+        timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
+        std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
+        if(rdmc_send_algorithm_string == "binomial_send") {
+            rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
+        } else if(rdmc_send_algorithm_string == "chain_send") {
+            rdmc_send_algorithm = rdmc::send_algorithm::CHAIN_SEND;
+        } else if(rdmc_send_algorithm_string == "sequential_send") {
+            rdmc_send_algorithm = rdmc::send_algorithm::SEQUENTIAL_SEND;
+        } else if(rdmc_send_algorithm_string == "tree_send") {
+            rdmc_send_algorithm = rdmc::send_algorithm::TREE_SEND;
+        } else {
+            throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
+        }
+        rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
     }
 
     DerechoParams(long long unsigned int max_payload_size,
@@ -95,7 +94,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
               rpc_port(rpc_port) {
     }
 
-  DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**
@@ -192,8 +191,8 @@ class MulticastGroup {
 
 private:
     whenlog(std::shared_ptr<spdlog::logger> logger;)
-    /** vector of member id's */
-    std::vector<node_id_t> members;
+            /** vector of member id's */
+            std::vector<node_id_t> members;
     /** inverse map of node_ids to sst_row */
     std::map<node_id_t, uint32_t> node_id_to_sst_index;
     /**  number of members */

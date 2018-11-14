@@ -26,7 +26,6 @@ void RPCManager::start_listening() {
     thread_start_cv.notify_all();
 }
 
-
 std::exception_ptr RPCManager::receive_message(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
@@ -146,7 +145,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 void RPCManager::new_view_callback(const View& new_view) {
     std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
-    whenlog(logger->debug("Created new connections among the new view members");)
+    whenlog(logger->debug("Created new connections among the new view members"););
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
         for(auto removed_id : new_view.departed) {
@@ -215,7 +214,7 @@ void RPCManager::p2p_receive_loop() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
-    whenlog(logger->debug("P2P listening thread started");)
+    whenlog(logger->debug("P2P listening thread started"););
     while(!thread_shutdown) {
         std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();

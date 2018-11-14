@@ -1,17 +1,17 @@
 #pragma once
 
 #include <atomic>
-#include <optional>
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 
 #ifdef USE_VERBS_API
-  #include "sst/verbs.h"
+#include "sst/verbs.h"
 #else
-  #include "sst/lf.h"
+#include "sst/lf.h"
 #endif
 
 namespace sst {

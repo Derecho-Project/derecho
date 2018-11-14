@@ -9,7 +9,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
                                      const std::pair<ip_addr_t, uint16_t>& other_ip_and_port) {
     if(other_id < my_id) {
         try {
-	  sockets[other_id] = socket(other_ip_and_port.first, other_ip_and_port.second);
+            sockets[other_id] = socket(other_ip_and_port.first, other_ip_and_port.second);
         } catch(exception) {
             std::cerr << "WARNING: failed to connect to node " << other_id << " at "
                       << other_ip_and_port.first << ":" << other_ip_and_port.second << std::endl;
@@ -62,7 +62,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
 }
 
 void tcp_connections::establish_node_connections(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports) {
-  conn_listener = std::make_unique<connection_listener>(ip_addrs_and_ports.at(my_id).second);
+    conn_listener = std::make_unique<connection_listener>(ip_addrs_and_ports.at(my_id).second);
 
     for(auto it = ip_addrs_and_ports.begin(); it != ip_addrs_and_ports.end(); it++) {
         //Check that there isn't already a connection to this ID,
@@ -71,7 +71,7 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, std::
             if(!add_connection(it->first, it->second)) {
                 std::cerr << "WARNING: failed to connect to node " << it->first
                           << " at " << it->second.first
-			  << ":" << it->second.second << std::endl;
+                          << ":" << it->second.second << std::endl;
             }
         }
     }
@@ -79,7 +79,7 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, std::
 
 tcp_connections::tcp_connections(node_id_t my_id,
                                  const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports)
-        : my_id(my_id){
+        : my_id(my_id) {
     establish_node_connections(ip_addrs_and_ports);
 }
 

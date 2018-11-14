@@ -71,12 +71,12 @@ private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<PersistentRegistry> persistent_registry_ptr;
-    /** The user-provided state object with some RPC methods. Stored by
-     * pointer-to-pointer because it must stay pinned at a specific location
-     * in memory, and otherwise Replicated<T> would be unmoveable. */
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 public:
 #endif
+    /** The user-provided state object with some RPC methods. Stored by
+     * pointer-to-pointer because it must stay pinned at a specific location
+     * in memory, and otherwise Replicated<T> would be unmoveable. */
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 private:
@@ -513,7 +513,7 @@ private:
                     [this, &is_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
                         if(size <= max_payload_size) {
-			  return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, is_query ? sst::REQUEST_TYPE::P2P_QUERY : sst::REQUEST_TYPE::P2P_SEND);
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, is_query ? sst::REQUEST_TYPE::P2P_QUERY : sst::REQUEST_TYPE::P2P_SEND);
                         } else {
                             return nullptr;
                         }

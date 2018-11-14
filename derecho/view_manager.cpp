@@ -318,7 +318,7 @@ void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
      * other current member, so establish those TCP connections. */
     for(int i = 0; i < curr_view->num_members; ++i) {
         if(curr_view->members[i] != my_id) {
-	  group_member_sockets->add_node(curr_view->members[i], {std::get<0>(curr_view->member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(curr_view->member_ips_and_ports[i])});
+            group_member_sockets->add_node(curr_view->members[i], {std::get<0>(curr_view->member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(curr_view->member_ips_and_ports[i])});
             whendebug(logger->debug("Established a TCP connection to node {}", curr_view->members[i]);)
         }
     }
@@ -437,8 +437,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
             } catch(node_id_t failed_joiner_id) {
                 whenlog(logger->info("Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id););
                 //Remove the failed client and recompute the view
-                std::vector<node_id_t>
-                        filtered_members(curr_view->members.size() - 1);
+                std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
                 std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> filtered_ips_and_ports(curr_view->member_ips_and_ports.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
                 std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
@@ -467,8 +466,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
         //Tell each node whether to commit or abort the view they received, which is the opposite of joiner_failed
         for(const node_id_t& member_sent_view : members_sent_view) {
             whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, !joiner_failed););
-            waiting_join_sockets.at(member_sent_view)
-                    .write(!joiner_failed);
+            waiting_join_sockets.at(member_sent_view).write(!joiner_failed);
         }
         members_sent_view.clear();
     } while(joiner_failed);
@@ -537,8 +535,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
 void ViewManager::initialize_rdmc_sst() {
     whenlog(logger->debug("Starting global initialization of RDMC and SST, including internal TCP connection setup"););
     // construct member_ips
-    auto member_ips_and_rdmc_ports_map
-            = make_member_ips_and_ports_map<PORT_TYPE::RDMC>(*curr_view);
+    auto member_ips_and_rdmc_ports_map = make_member_ips_and_ports_map<PORT_TYPE::RDMC>(*curr_view);
     if(!rdmc::initialize(member_ips_and_rdmc_ports_map,
                          curr_view->members[curr_view->my_rank])) {
         std::cout << "Global setup failed" << std::endl;
@@ -561,8 +558,7 @@ void ViewManager::create_threads() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
             whenlog(logger->debug("Background thread got a client connection from {}", client_socket.get_remote_ip()););
-            pending_join_sockets.locked()
-                    .access.emplace_back(std::move(client_socket));
+            pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
         std::cout << "Connection listener thread shutting down." << std::endl;
     }};
@@ -651,8 +647,7 @@ void ViewManager::register_predicates() {
     }
 }
 
-/* ------------- 2. Predicate-Triggers That Implement View Management Logic
- * ---------- */
+/* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
 
 void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     whenlog(logger->debug("Suspected[] changed"););
@@ -675,8 +670,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             whenlog(logger->debug("Marking {} failed", Vc.members[q]););
 
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
-                throw derecho_exception("Majority of a Derecho group simultaneously "
-                                        "failed ... shutting down");
+                throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
             }
 
             whenlog(logger->debug("GMS telling SST to freeze row {}", q););
@@ -688,8 +682,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.num_failed++;
 
             if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
-                throw derecho_exception("Potential partitioning event: this node is no "
-                                        "longer in the majority and must shut down!");
+                throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
             // push change to gmsSST.suspected[myRank]
@@ -702,16 +695,14 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             {
                 const int next_change_index = gmsSST.num_changes[myRank] - gmsSST.num_installed[myRank];
                 if(next_change_index == (int)gmsSST.changes.size()) {
-                    throw derecho_exception(
-                            "Ran out of room in the pending changes list");
+                    throw derecho_exception("Ran out of room in the pending changes list");
                 }
 
                 gmssst::set(
                         gmsSST.changes[myRank][next_change_index],
                         Vc.members[q]);  // Reports the failure (note that q NotIn members)
                 gmssst::increment(gmsSST.num_changes[myRank]);
-                whenlog(logger->debug("Leader proposed a change to remove failed node {}",
-                                      Vc.members[q]););
+                whenlog(logger->debug("Leader proposed a change to remove failed node {}", Vc.members[q]););
                 gmsSST.put(
                         (char*)std::addressof(gmsSST.changes[0][next_change_index]) - gmsSST.getBaseAddress(),
                         sizeof(gmsSST.changes[0][next_change_index]));
@@ -752,11 +743,9 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
 }
 
 void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
-    gmssst::set(
-            gmsSST.num_committed[gmsSST.get_local_index()],
-            min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
-    whenlog(logger->debug("Leader committing change proposal #{}",
-                          gmsSST.num_committed[gmsSST.get_local_index()]););
+    gmssst::set(gmsSST.num_committed[gmsSST.get_local_index()],
+                min_acked(gmsSST, curr_view->failed));  // Leader commits a new request
+    whenlog(logger->debug("Leader committing change proposal #{}", gmsSST.num_committed[gmsSST.get_local_index()]););
     gmsSST.put(gmsSST.num_committed.get_base() - gmsSST.getBaseAddress(),
                sizeof(gmsSST.num_committed[0]));
 }
@@ -764,8 +753,7 @@ void ViewManager::leader_commit_change(DerechoSST& gmsSST) {
 void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
     int myRank = gmsSST.get_local_index();
     int leader = curr_view->rank_of_leader();
-    whenlog(logger->debug("Detected that leader proposed change #{}. Acknowledging.",
-                          gmsSST.num_changes[leader]););
+    whenlog(logger->debug("Detected that leader proposed change #{}. Acknowledging.", gmsSST.num_changes[leader]););
     if(myRank != leader) {
         // Echo the count
         gmssst::set(gmsSST.num_changes[myRank], gmsSST.num_changes[leader]);
@@ -859,8 +847,7 @@ void ViewManager::terminate_epoch(
     next_subgroup_settings->clear();
     next_num_received_size = make_subgroup_maps(subgroup_info, curr_view, *next_view, *next_subgroup_settings);
     if(!next_view->is_adequately_provisioned) {
-        whenlog(logger->debug("Next view would not be adequately provisioned, "
-                              "waiting for more joins."););
+        whenlog(logger->debug("Next view would not be adequately provisioned, waiting for more joins."););
         if(first_call) {
             // Re-register the predicates for accepting and acknowledging joins
             register_predicates();
@@ -884,8 +871,7 @@ void ViewManager::terminate_epoch(
     }
     // If execution reached here, we have a valid next view
 
-    // go through all subgroups first and acknowledge all messages received
-    // through SST
+    // go through all subgroups first and acknowledge all messages received through SST
     for(const auto& shard_settings_pair :
         curr_view->multicast_group->get_subgroup_settings()) {
         const subgroup_id_t subgroup_id = shard_settings_pair.first;
@@ -973,9 +959,7 @@ void ViewManager::terminate_epoch(
     auto global_min_ready_continuation =
             [this, follower_subgroups_and_shards, next_subgroup_settings,
              next_num_received_size](DerechoSST& gmsSST) {
-                whenlog(logger->debug("GlobalMins are ready for all {} subgroup "
-                                      "leaders this node is waiting on",
-                                      follower_subgroups_and_shards->size()););
+                whenlog(logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size()););
                 // Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
                     const subgroup_id_t subgroup_id = subgroup_shard_pair.first;
@@ -1029,25 +1013,21 @@ void ViewManager::terminate_epoch(
                                                gmsSST);
                         };
 
-                // Last statement in global_min_ready_continuation: register
-                // finish_view_change_trig
+                // Last statement in global_min_ready_continuation: register finish_view_change_trig
                 gmsSST.predicates.insert(persistence_finished_pred,
                                          finish_view_change_trig,
                                          sst::PredicateType::ONE_TIME);
             };
 
-    // Last statement in finish_view_change: register
-    // global_min_ready_continuation
+    // Last statement in finish_view_change: register global_min_ready_continuation
     gmsSST.predicates.insert(leader_global_mins_are_ready,
                              global_min_ready_continuation,
                              sst::PredicateType::ONE_TIME);
 }
 
 void ViewManager::finish_view_change(
-        std::shared_ptr<std::map<subgroup_id_t, uint32_t>>
-                follower_subgroups_and_shards,
-        std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>>
-                next_subgroup_settings,
+        std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
+        std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
         uint32_t next_num_received_size, DerechoSST& gmsSST) {
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
 
@@ -1076,8 +1056,7 @@ void ViewManager::finish_view_change(
     gmsSST.predicates.remove(suspected_changed_handle);
 
     node_id_t my_id = next_view->members[next_view->my_rank];
-    whenlog(logger->debug("Starting creation of new SST and DerechoGroup for view {}",
-                          next_view->vid););
+    whenlog(logger->debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid););
     for(const node_id_t failed_node_id : next_view->departed) {
         whenlog(logger->debug("Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id););
 #ifdef USE_VERBS_API
@@ -1137,8 +1116,7 @@ void ViewManager::finish_view_change(
     // New members can now proceed to view_manager.start(), which will call sync()
     next_view->gmsSST->put();
     next_view->gmsSST->sync_with_members();
-    whenlog(logger->debug("Done setting up SST and DerechoGroup for view {}",
-                          next_view->vid););
+    whenlog(logger->debug("Done setting up SST and DerechoGroup for view {}", next_view->vid););
     {
         lock_guard_t old_views_lock(old_views_mutex);
         old_views.push(std::move(curr_view));
@@ -1157,9 +1135,7 @@ void ViewManager::finish_view_change(
     register_predicates();
 
     // First task with my new view...
-    if(curr_view->i_am_new_leader())  // I'm the new leader and everyone who
-                                      // hasn't failed agrees
-    {
+    if(curr_view->i_am_new_leader()) {
         curr_view->merge_changes();  // Create a combined list of Changes
     }
 
@@ -1184,10 +1160,9 @@ void ViewManager::finish_view_change(
 /* ------------- 3. Helper Functions for Predicates and Triggers -------------
  */
 
-void ViewManager::construct_multicast_group(
-        CallbackSet callbacks,
-        const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-        const uint32_t num_received_size) {
+void ViewManager::construct_multicast_group(CallbackSet callbacks,
+                                            const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
+                                            const uint32_t num_received_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(
@@ -1369,13 +1344,11 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     curr_view.subgroup_ids_by_type.clear();
     for(const auto& subgroup_type : subgroup_info.membership_function_order) {
         subgroup_shard_layout_t curr_type_subviews;
-        // This is the only place the subgroup membership functions are called; the
-        // results are then saved in the View
+        // This is the only place the subgroup membership functions are called; the results are then saved in the View
         try {
             auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(
                     curr_view, curr_view.next_unassigned_rank);
-            // Hack to ensure RVO still works even though curr_type_subviews had to
-            // be declared outside this scope
+            // Hack to ensure RVO still works even though curr_type_subviews had to be declared outside this scope
             curr_type_subviews = std::move(temp);
         } catch(subgroup_provisioning_exception& ex) {
             // Mark the view as inadequate and roll back everything done by previous
@@ -1434,8 +1407,8 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
                 }
             }  // for (shard_num)
             /* Pull the shard->SubView mapping out of the subgroup membership list
-       * and save it under its subgroup ID (which was
-       * shard_views_by_subgroup.size()) */
+             * and save it under its subgroup ID (which was
+             * shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
                     std::move(curr_type_subviews[subgroup_index]));
             num_received_offset += max_shard_senders;
@@ -1480,16 +1453,15 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
     return num_received_offset;
 }
 
-std::unique_ptr<View> ViewManager::make_next_view(
-        const std::unique_ptr<View>& curr_view,
-        const DerechoSST& gmsSST whenlog(,
-                                         std::shared_ptr<spdlog::logger> logger)) {
+std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
+                                                  const DerechoSST& gmsSST
+                                                  whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;
-    // Look through pending changes up to num_committed and filter the joins and
-    // leaves
-    const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()] - gmsSST.num_installed[curr_view->rank_of_leader()];
+    // Look through pending changes up to num_committed and filter the joins and leaves
+    const int committed_count = gmsSST.num_committed[curr_view->rank_of_leader()]
+                                - gmsSST.num_installed[curr_view->rank_of_leader()];
     for(int change_index = 0; change_index < committed_count; change_index++) {
         node_id_t change_id = gmsSST.changes[myRank][change_index];
         int change_rank = curr_view->rank_of(change_id);
@@ -1505,8 +1477,7 @@ std::unique_ptr<View> ViewManager::make_next_view(
     // Initialize the next view
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>
-            member_ips_and_ports(next_num_members);
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     for(std::size_t i = 0; i < join_indexes.size(); ++i) {
         const int join_index = join_indexes[i];
@@ -1517,8 +1488,7 @@ std::unique_ptr<View> ViewManager::make_next_view(
         std::string joiner_ip(joiner_ip_cstr);
 
         joined.emplace_back(joiner_id);
-        // New members go at the end of the members list, but it may shrink in the
-        // new view
+        // New members go at the end of the members list, but it may shrink in the new view
         int new_member_rank = curr_view->num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_id;
         member_ips_and_ports[new_member_rank] = std::tuple{joiner_ip, gmsSST.joiner_gms_ports[myRank][join_index],
@@ -1570,10 +1540,8 @@ std::unique_ptr<View> ViewManager::make_next_view(
     return std::move(next_view);
 }
 
-std::map<std::type_index, std::vector<std::vector<int64_t>>>
-ViewManager::make_shard_leaders_map(const View& view) {
-    std::map<std::type_index, std::vector<std::vector<int64_t>>>
-            shard_leaders_by_type;
+std::map<std::type_index, std::vector<std::vector<int64_t>>> ViewManager::make_shard_leaders_map(const View& view) {
+    std::map<std::type_index, std::vector<std::vector<int64_t>>> shard_leaders_by_type;
     for(const auto& type_to_ids : view.subgroup_ids_by_type) {
         // Raw subgroups don't have any state to send to new members
         if(type_to_ids.first == std::type_index(typeid(RawObject))) {
@@ -1589,8 +1557,7 @@ ViewManager::make_shard_leaders_map(const View& view) {
             for(uint32_t shard = 0; shard < num_shards; ++shard) {
                 int shard_leader_rank = view.subview_rank_of_shard_leader(subgroup_id, shard);
                 if(shard_leader_rank >= 0) {
-                    shard_leaders_by_type[type_to_ids.first][subgroup_index][shard] = view.subgroup_shard_views[subgroup_id][shard]
-                                                                                              .members[shard_leader_rank];
+                    shard_leaders_by_type[type_to_ids.first][subgroup_index][shard] = view.subgroup_shard_views[subgroup_id][shard].members[shard_leader_rank];
                 }
             }
         }
@@ -1601,8 +1568,7 @@ ViewManager::make_shard_leaders_map(const View& view) {
 std::vector<std::vector<int64_t>> ViewManager::translate_types_to_ids(
         const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
         const View& new_view) {
-    std::vector<std::vector<int64_t>> old_shard_leaders_by_id(
-            new_view.subgroup_shard_views.size());
+    std::vector<std::vector<int64_t>> old_shard_leaders_by_id(new_view.subgroup_shard_views.size());
     assert(new_view.is_adequately_provisioned);
 
     for(const auto& type_vector_pair : old_shard_leaders_by_type) {
@@ -1700,7 +1666,7 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members, uint num_shard_senders,
                                              whenlog(std::shared_ptr<spdlog::logger> logger, )
-                                                     const std::vector<node_id_t>& next_view_members) {
+                                             const std::vector<node_id_t>& next_view_members) {
     whenlog(logger->debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num););
     int myRank = Vc.my_rank;
     bool found = false;
@@ -1729,9 +1695,7 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
         }
     }
 
-    whenlog(logger->debug(
-            "Shard leader for subgroup {} finished computing global_min",
-            subgroup_num););
+    whenlog(logger->debug("Shard leader for subgroup {} finished computing global_min", subgroup_num););
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
     Vc.gmsSST->put(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
@@ -1754,9 +1718,7 @@ void ViewManager::follower_ragged_edge_cleanup(
         uint num_shard_senders whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int myRank = Vc.my_rank;
     // Learn the leader's data and push it before acting upon it
-    whenlog(logger->debug("Running follower RaggedEdgeCleanup for subgroup {}; "
-                          "echoing leader's global_min",
-                          subgroup_num););
+    whenlog(logger->debug("Running follower RaggedEdgeCleanup for subgroup {}; echoing leader's global_min", subgroup_num););
     gmssst::set(Vc.gmsSST->global_min[myRank] + num_received_offset,
                 Vc.gmsSST->global_min[shard_leader_rank] + num_received_offset,
                 num_shard_senders);
@@ -1771,16 +1733,14 @@ void ViewManager::follower_ragged_edge_cleanup(
             sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
     deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset,
                      shard_members, num_shard_senders whenlog(, logger));
-    whenlog(logger->debug("Done with RaggedEdgeCleanup for subgroup {}",
-                          subgroup_num);)
+    whenlog(logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);)
 }
 
 /* ------------- 4. Public-Interface methods of ViewManager ------------- */
 
 void ViewManager::report_failure(const node_id_t who) {
     int r = curr_view->rank_of(who);
-    whenlog(logger->debug("Node ID {} failure reported; marking suspected[{}]",
-                          who, r););
+    whenlog(logger->debug("Node ID {} failure reported; marking suspected[{}]", who, r););
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
     int cnt = 0;
     for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
@@ -1790,8 +1750,7 @@ void ViewManager::report_failure(const node_id_t who) {
     }
 
     if(cnt >= (curr_view->num_members + 1) / 2) {
-        throw derecho_exception("Potential partitioning event: this node is no "
-                                "longer in the majority and must shut down!");
+        throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put(
             (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
@@ -1805,8 +1764,7 @@ void ViewManager::leave() {
     curr_view->gmsSST->predicates.clear();
     curr_view->gmsSST->suspected[curr_view->my_rank][curr_view->my_rank] = true;
     curr_view->gmsSST->put(
-            (char*)std::addressof(
-                    curr_view->gmsSST->suspected[0][curr_view->my_rank])
+            (char*)std::addressof(curr_view->gmsSST->suspected[0][curr_view->my_rank])
                     - curr_view->gmsSST->getBaseAddress(),
             sizeof(curr_view->gmsSST->suspected[0][curr_view->my_rank]));
     thread_shutdown = true;
@@ -1822,15 +1780,14 @@ char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 
 void ViewManager::send(subgroup_id_t subgroup_num) {
     shared_lock_t lock(view_mutex);
-    view_change_cv.wait(
-            lock, [&]() { return curr_view->multicast_group->send(subgroup_num); });
+    view_change_cv.wait(lock, [&]() {
+        return curr_view->multicast_group->send(subgroup_num);
+    });
 }
 
-const uint64_t
-ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
+const uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
     shared_lock_t lock(view_mutex);
-    return curr_view->multicast_group->compute_global_stability_frontier(
-            subgroup_num);
+    return curr_view->multicast_group->compute_global_stability_frontier(subgroup_num);
 }
 
 void ViewManager::add_view_upcall(const view_upcall_t& upcall) {

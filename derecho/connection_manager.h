@@ -40,7 +40,7 @@ public:
      * @return True if all bytes were written successfully, false if there was
      * an error.
      */
-    bool write(node_id_t node_id, char const *buffer, size_t size);
+    bool write(node_id_t node_id, char const* buffer, size_t size);
     /**
      * Writes size bytes from a buffer to all the other nodes currently
      * connected, in ascending order of node ID.
@@ -49,7 +49,7 @@ public:
      * @return True if all writes completed successfully, false if any of them
      * didn't.
      */
-    bool write_all(char const *buffer, size_t size);
+    bool write_all(char const* buffer, size_t size);
     /**
      * Receives size bytes from the node with ID node_id, over the TCP socket
      * connected to that node. Blocks until all the bytes have been received or
@@ -60,7 +60,7 @@ public:
      * @return True if all the bytes were read successfully, false if there was
      * an error.
      */
-    bool read(node_id_t node_id, char *buffer, size_t size);
+    bool read(node_id_t node_id, char* buffer, size_t size);
     /**
      * Adds a TCP connection to a new node. If the new node's ID is lower than
      * this node's ID, this function initiates a new TCP connection to it;
@@ -82,7 +82,7 @@ public:
      */
     bool delete_node(node_id_t remove_id);
     template <class T>
-    bool exchange(node_id_t node_id, T local, T &remote) {
+    bool exchange(node_id_t node_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
         const auto it = sockets.find(node_id);
         assert(it != sockets.end());
@@ -97,7 +97,7 @@ public:
      * if no sockets are ready to read.
      */
     int32_t probe_all();
-    derecho::LockedReference<std::unique_lock<std::mutex>, socket>
+
     /**
      * Gets a locked reference to the TCP socket connected to a particular node.
      * While the caller holds the locked reference to the socket, no other
@@ -107,6 +107,6 @@ public:
      * @param node_id The ID of the desired node
      * @return A LockedReference to the TCP socket connected to that node.
      */
-    get_socket(node_id_t node_id);
+    derecho::LockedReference<std::unique_lock<std::mutex>, socket> get_socket(node_id_t node_id);
 };
 }  // namespace tcp

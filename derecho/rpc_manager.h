@@ -21,7 +21,6 @@
 #include "rpc_utils.h"
 #include "view.h"
 #include "view_manager.h"
-#include "mutils-serialization/SerializationSupport.hpp"
 
 namespace derecho {
 
@@ -121,18 +120,14 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-  RPCManager(ViewManager &group_view_manager)
-    : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)), receivers(new std::decay_t<decltype(*receivers)>()),
-        whenlog(logger(spdlog::get("derecho_debug_log")), )
-            view_manager(group_view_manager),
-        connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{
-            nid,
-            {nid},
-            group_view_manager.derecho_params.window_size,
-            group_view_manager.derecho_params.max_payload_size})),
-        replySendBuffer(
-            new char[group_view_manager.derecho_params.max_payload_size]) {
-    rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
+    RPCManager(ViewManager& group_view_manager)
+            : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+              receivers(new std::decay_t<decltype(*receivers)>()),
+              whenlog(logger(spdlog::get("derecho_debug_log")), )
+                      view_manager(group_view_manager),
+              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
+              replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
+        rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
     ~RPCManager();
@@ -168,7 +163,7 @@ public:
             return build_remote_invocable_class<UserProvidedClass>(nid, instance_id, *receivers,
                                                                    bind_to_instance(cls, unpacked_functions)...);
         },
-                                funs);
+        funs);
     }
 
     /**
@@ -192,12 +187,11 @@ public:
             //Supply the template parameters for build_remote_invoker_for_class by
             //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
             return build_remote_invoker_for_class<UserProvidedClass,
-                                                  decltype(bind_to_instance(
-                                                          std::declval<std::unique_ptr<UserProvidedClass>*>(),
-                                                          unpacked_functions))...>(nid,
-                                                                                   instance_id, *receivers);
+                                                  decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
+                                                                            unpacked_functions))...>(nid,
+                                                                                                     instance_id, *receivers);
         },
-                                funs);
+        funs);
     }
 
     /**
@@ -248,8 +242,8 @@ public:
     bool finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
 
     /**
-   * called by replicated.h for sending a p2p send/query
-   */
+     * called by replicated.h for sending a p2p send/query
+     */
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
 
     /**
