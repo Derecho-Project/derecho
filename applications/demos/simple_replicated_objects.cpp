@@ -6,8 +6,8 @@
 #include <string>
 #include <vector>
 
-#include "derecho/derecho.h"
 #include "conf/conf.hpp"
+#include "derecho/derecho.h"
 #include "sample_objects.h"
 
 using derecho::ExternalCaller;
@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
     derecho::Group<Foo, Bar, Cache> group(derecho::CallbackSet{}, subgroup_info,
-					  std::vector<derecho::view_upcall_t>{},
+                                          std::vector<derecho::view_upcall_t>{},
                                           foo_factory, bar_factory, cache_factory);
 
     cout << "Finished constructing/joining Group" << endl;
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     std::vector<node_id_t> member_ids = group.get_members();
     // get my_node_id from Derecho's map storing the configuration
     uint32_t my_node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-      if(my_node_id == member_ids[0]) {
+    if(my_node_id == member_ids[0]) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         cout << "Appending to Bar" << endl;

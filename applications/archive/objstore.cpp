@@ -155,7 +155,7 @@ public:
 
     // This get is SUPER inefficient
     // Passing an output buffer??
-    const OSObject get(const uint64_t oid) {
+    const OSObject get(const uint64_t& oid) {
         for(OSObject & o : *objects) {
             if ( o.oid == oid ) {
                 return o;

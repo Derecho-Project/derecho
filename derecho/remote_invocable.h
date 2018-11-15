@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <numeric>
+#include <type_traits>
 
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
@@ -17,6 +18,15 @@
 #include "rpc_utils.h"
 
 namespace derecho {
+
+template <bool...>
+struct bool_pack;
+
+/** A clever trick copied from StackOverflow for generating a true value if all
+ * elements of a template parameter pack are true. This allows us to assert a
+ * type trait like std::is_reference for all types in a parameter pack. */
+template <bool... values>
+using all_true = std::is_same<bool_pack<true, values...>, bool_pack<values..., true>>;
 
 namespace rpc {
 
@@ -334,6 +344,7 @@ struct wrapped<Tag, std::function<Ret(Arguments...)>> {
     fun_t fun;
 };
 
+
 /**
  * Template that pairs a FunctionTag with a pointer-to-member-function. This is
  * an intermediate stage in constructing a wrapped<>, since wrapped<> uses a
@@ -343,6 +354,16 @@ struct wrapped<Tag, std::function<Ret(Arguments...)>> {
 template <FunctionTag Tag, typename Ret, typename Class, typename... Arguments>
 struct partial_wrapped {
     using fun_t = Ret (Class::*)(Arguments...);
+    fun_t fun;
+};
+
+/**
+ * Exactly the same as the partial_wrapped template, but
+ * for pointer-to-member-functions that are const.
+ */
+template <FunctionTag Tag, typename Ret, typename Class, typename... Arguments>
+struct const_partial_wrapped {
+    using fun_t = Ret (Class::*)(Arguments...) const;
     fun_t fun;
 };
 
@@ -362,10 +383,26 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
                                                            const partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
-            [_this, fun = partial.fun](Args... a) {
-                return ((_this->get())->*fun)(a...);
+            [_this, fun = partial.fun](Args... arguments) {
+                return (_this->get()->*fun)(arguments...);
             }};
 }
+
+/**
+ * Exactly the same as the bind_to_instance function above, but for
+ * pointer-to-member-functions that are const.
+ */
+template <typename NewClass, FunctionTag Tag, typename Ret, typename... Args>
+wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewClass>* _this,
+                                                           const const_partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
+    assert(_this);
+    return wrapped<Tag, std::function<Ret(Args...)>>{
+            [_this, fun = partial.fun](Args... arguments) {
+                return (_this->get()->*fun)(arguments...);
+            }};
+}
+
+
 
 /**
  * User-facing entry point for the series of functions that binds a FunctionTag
@@ -383,7 +420,17 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
  */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
 partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...)) {
+    static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
+    static_assert(all_true<std::is_lvalue_reference<Args>::value...>::value, "RPC-registered functions must take their arguments by reference!");
     return partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
+}
+
+/** Exactly the same as the above tag() function, but for const member functions. */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+const_partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...) const) {
+    static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
+    static_assert(all_true<std::is_lvalue_reference<Args>::value...>::value, "RPC-registered functions must take their arguments by reference!");
+    return const_partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
 }
 
 /* Technically, RemoteInvocablePairs specializes this template for the cases

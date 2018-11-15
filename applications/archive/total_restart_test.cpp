@@ -33,7 +33,7 @@ public:
     int read_state() {
         return *state;
     }
-    void change_state(int new_int) {
+    void change_state(const int& new_int) {
         *state = new_int;
     }
     void print_log() {
@@ -62,23 +62,24 @@ int main(int argc, char** argv) {
     const int num_subgroups = 1;
     const int num_shards = 2;
     const int members_per_shard = 3;
-    derecho::SubgroupInfo subgroup_info({{std::type_index(typeid(PersistentThing)),
-                                          [&](const derecho::View& curr_view, int& next_unassigned_rank) {
-                                              if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
-                                                  throw derecho::subgroup_provisioning_exception();
-                                              }
-                                              derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
-                                              int member_rank = 0;
-                                              for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
-                                                  for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                                                      std::vector<node_id_t> subview_members(&curr_view.members[member_rank],
-                                                                                             &curr_view.members[member_rank + members_per_shard]);
-                                                      layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
-                                                      member_rank += members_per_shard;
-                                                  }
-                                              }
-                                              return layout_vector;
-                                          }}});
+    derecho::SubgroupInfo subgroup_info(
+            {{std::type_index(typeid(PersistentThing)),
+              [&](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
+                      throw derecho::subgroup_provisioning_exception();
+                  }
+                  derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
+                  int member_rank = 0;
+                  for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+                      for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
+                          std::vector<node_id_t> subview_members(&curr_view.members[member_rank],
+                                                                 &curr_view.members[member_rank + members_per_shard]);
+                          layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
+                          member_rank += members_per_shard;
+                      }
+                  }
+                  return layout_vector;
+              }}});
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
 

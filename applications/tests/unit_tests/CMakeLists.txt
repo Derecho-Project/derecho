@@ -16,3 +16,5 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
+add_executable(rpc_function_types rpc_function_types.cpp)
+target_link_libraries(rpc_function_types derecho)
