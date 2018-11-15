@@ -19,15 +19,6 @@
 
 namespace derecho {
 
-template <bool...>
-struct bool_pack;
-
-/** A clever trick copied from StackOverflow for generating a true value if all
- * elements of a template parameter pack are true. This allows us to assert a
- * type trait like std::is_reference for all types in a parameter pack. */
-template <bool... values>
-using all_true = std::is_same<bool_pack<true, values...>, bool_pack<values..., true>>;
-
 namespace rpc {
 
 //Technically, RemoteInvocable "specializes" this template for the case where
@@ -421,7 +412,8 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
 partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...)) {
     static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
-    static_assert(all_true<std::is_lvalue_reference<Args>::value...>::value, "RPC-registered functions must take their arguments by reference!");
+    //Fold-expression asserts the boolean expression for all Args in the parameter pack
+    static_assert(((std::is_reference<Args>::value || sizeof(Args) < 2 * sizeof(void*)) && ...), "RPC-registered functions must take non-pointer-size arguments by reference to avoid extra copying.");
     return partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
 }
 
@@ -429,7 +421,7 @@ partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...)) 
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
 const_partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...) const) {
     static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
-    static_assert(all_true<std::is_lvalue_reference<Args>::value...>::value, "RPC-registered functions must take their arguments by reference!");
+    static_assert(((std::is_reference<Args>::value || sizeof(Args) < 2 * sizeof(void*)) &&...), "RPC-registered functions must take non-pointer-size arguments by reference to avoid extra copying.");
     return const_partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
 }
 

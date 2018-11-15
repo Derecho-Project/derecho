@@ -23,11 +23,11 @@ public:
         PRINT
     };
 
-    void put(const uint64_t& key, const DataType& value) {
+    void put(uint64_t key, const DataType& value) {
         table[key] = value;
     }
 
-    DataType get(const uint64_t& key) {
+    DataType get(uint64_t key) {
         // for now, create the entry if it doesn't exist
         return table[key];
     }

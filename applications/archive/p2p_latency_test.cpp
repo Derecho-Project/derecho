@@ -15,7 +15,7 @@ struct test1_str {
         // cout << "In the read state function" << endl;
         return state;
     }
-    bool change_state(const int& new_state) {
+    bool change_state(int new_state) {
         state = new_state;
         return true;
     }

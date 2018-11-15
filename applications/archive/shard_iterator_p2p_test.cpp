@@ -11,7 +11,7 @@ public:
     int read_state() {
         return state;
     }
-    bool change_state(const int& new_state) {
+    bool change_state(int new_state) {
         if(new_state == state) {
             return false;
         }

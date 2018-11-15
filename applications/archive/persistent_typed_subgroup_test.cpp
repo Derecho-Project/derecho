@@ -22,7 +22,7 @@ public:
     int read_state() {
         return *pint;
     }
-    bool change_state(const int& new_int) {
+    bool change_state(int new_int) {
         if(new_int == *pint) {
             return false;
         }

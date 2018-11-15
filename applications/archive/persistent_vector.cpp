@@ -26,10 +26,10 @@ class PFoo : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     virtual ~PFoo() noexcept(true) {
     }
-    int read_state(const int64_t& ver) {
+    int read_state(int64_t ver) {
         return *pint[ver];
     }
-    int read_state_by_time(const uint64_t& epoch_us) {
+    int read_state_by_time(uint64_t epoch_us) {
         int val = INVALID_VALUE;
         try {
             val = *pint[HLC(epoch_us,(uint64_t)0LLU)];
@@ -38,7 +38,7 @@ public:
         }
         return val;
     }
-    bool change_state(const int& new_int) {
+    bool change_state(int new_int) {
         if(new_int == *pint) {
             return false;
         }

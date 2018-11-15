@@ -28,7 +28,7 @@ struct test1_str {
         cout << "Returning state, it is: " << state << endl;
         return state;
     }
-    bool change_state(const int& new_state) {
+    bool change_state(int new_state) {
         cout << "Previous state was: " << state << endl;
         state = new_state;
         cout << "Current state is: " << state << endl;

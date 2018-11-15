@@ -24,7 +24,7 @@ public:
     void bytes_fun(const Bytes& bytes) {
     }
 
-    bool finishing_call(const int& x) {
+    bool finishing_call(int x) {
         return true;
     }
 

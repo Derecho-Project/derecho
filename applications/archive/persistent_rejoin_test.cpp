@@ -30,7 +30,7 @@ public:
     int read_state() {
         return *state;
     }
-    void change_state(const int& new_int) {
+    void change_state(int new_int) {
         *state = new_int;
     }
     void print_log() {
@@ -56,7 +56,7 @@ public:
     int read_state() {
         return state;
     }
-    void change_state(const int& new_int) {
+    void change_state(int new_int) {
         state = new_int;
     }
     DEFAULT_SERIALIZATION_SUPPORT(TestThing, state);
