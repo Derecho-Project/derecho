@@ -232,14 +232,11 @@ public:
      * Sends the next message in the MulticastGroup's send buffer (which is
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
-     * @param is_query True if this message represents a query (which expects replies),
-     * false if it repesents a send (which does not)
-     * @param dest_nodes The list of node IDs the message is being sent to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
+    bool finish_rpc_send(uint32_t subgroup_id, PendingBase& pending_results_handle);
 
     /**
      * called by replicated.h for sending a p2p send/query

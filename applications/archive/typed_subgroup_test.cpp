@@ -75,14 +75,14 @@ int main(int argc, char** argv) {
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
-        foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
     }
     if(node_id == 1) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
+        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         decltype(results)::ReplyMap& replies = results.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : replies) {
@@ -96,13 +96,13 @@ int main(int argc, char** argv) {
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 2...");
         cout << "Printing log from Bar" << endl;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();
         for(auto& reply_pair : bar_results.get()) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
-            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Ken");
+            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_send<RPC_NAME(contains)>("Ken");
             derecho::rpc::QueryResults<bool>::ReplyMap& replies = results.get();
             //Fold "&&" over the results to see if they're all true
             bool contains_accum = true;
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
             found = contains_accum;
         }
         cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<RPC_NAME(get)>("Ken");
+        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_send<RPC_NAME(get)>("Ken");
         for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }

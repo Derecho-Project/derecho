@@ -131,7 +131,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
-        assert(results_map.count(invocation_id));
+        assert(results_map.count(invocation_id) != 0);
         lock_t l{map_lock};
         // TODO: garbage collection for the responses.
         if(is_exception) {

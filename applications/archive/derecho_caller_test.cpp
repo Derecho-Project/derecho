@@ -93,7 +93,7 @@ int main(int argc, char* argv[]) {
     if(my_id != 2) {
         cout << "Changing other's state to " << 36 - my_id << endl;
         Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.ordered_query<RPC_NAME(change_state)>({1 - my_id}, 36 - my_id).get());
+        output_result<bool>(rpc_handle.p2p_query<RPC_NAME(change_state)>(1 - my_id, 36 - my_id).get());
     }
 
     while(managed_group.get_members().size() < 3) {
@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
     // all members verify every node's state
     cout << "Reading everyone's state" << endl;
     Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
-    output_result<int>(rpc_handle.ordered_query<RPC_NAME(read_state)>({}).get());
+    output_result<int>(rpc_handle.ordered_send<RPC_NAME(read_state)>().get());
 
     cout << "Done" << endl;
     cout << "Reached here" << endl;

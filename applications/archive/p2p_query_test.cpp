@@ -78,7 +78,7 @@ int main(int argc, char** argv) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         //Make sure Foo and Bar have some initial state before doing P2P
-        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(99);
+        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(99);
         bool results_total = true;
         for(auto& reply_pair : results.get()) {
             results_total = results_total && reply_pair.second.get();

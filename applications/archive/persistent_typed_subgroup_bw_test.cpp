@@ -160,7 +160,7 @@ int main(int argc, char* argv[]) {
   if (node_id == 0) {
     derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
     char my_array[1024];
-    derecho::rpc::QueryResults<bool> results = handle.ordered_query<ByteArrayObject<1024>::CHANGE_STATE>(my_array);
+    derecho::rpc::QueryResults<bool> results = handle.ordered_send<ByteArrayObject<1024>::CHANGE_STATE>(my_array);
     decltype(results)::ReplyMap& replies = results.get();
     std::cout<<"Got a reply map!"<<std::endl;
     for(auto& ritr:replies) {

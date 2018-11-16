@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
     Replicated<PFoo> & pfoo_rpc_handle = group.get_subgroup<PFoo>();
     int values[] = {(int)(1000 + node_id), (int)(2000 + node_id), (int)(3000 + node_id) };
     for (int i=0;i<3;i++) {
-        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<PFoo::CHANGE_STATE>(values[i]);
+        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_send<PFoo::CHANGE_STATE>(values[i]);
         decltype(resultx)::ReplyMap& repliex = resultx.get();
         cout << "Change state to " << values[i] << endl;
         for (auto& reply_pair : repliex) {
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
 
         // Query for latest version.
         int64_t lv = 0;
-        derecho::rpc::QueryResults<int64_t> resultx = pfoo_rpc_handle.ordered_query<PFoo::GET_LATEST_VERSION>();
+        derecho::rpc::QueryResults<int64_t> resultx = pfoo_rpc_handle.ordered_send<PFoo::GET_LATEST_VERSION>();
         decltype(resultx)::ReplyMap& repliex = resultx.get();
         cout << "Query the latest versions:" << endl;
         for (auto& reply_pair:repliex) {
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
 
         // Query all versions.
         for(int64_t ver = 0; ver <= lv ; ver ++) {
-            derecho::rpc::QueryResults<int> resultx = pfoo_rpc_handle.ordered_query<PFoo::READ_STATE>(ver);
+            derecho::rpc::QueryResults<int> resultx = pfoo_rpc_handle.ordered_send<PFoo::READ_STATE>(ver);
             cout << "Query the value of version:" << ver << endl;
             for (auto& reply_pair:resultx.get()) {
                 cout <<"\tnode[" << reply_pair.first << "]: v["<<ver<<"]="<<reply_pair.second.get()<<endl;
@@ -143,12 +143,12 @@ int main(int argc, char** argv) {
             uint64_t too_early = now - 5000000; // 5 second before
             // wait for the temporal frontier...
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            derecho::rpc::QueryResults<int> resultx = pfoo_rpc_handle.ordered_query<PFoo::READ_STATE_BY_TIME>(now);
+            derecho::rpc::QueryResults<int> resultx = pfoo_rpc_handle.ordered_send<PFoo::READ_STATE_BY_TIME>(now);
             cout << "Query for now: ts="<< now << "us" << endl;
             for (auto& reply_pair:resultx.get()) {
                 cout << "\tnode[" << reply_pair.first << "] replies with value:" << reply_pair.second.get() << endl;
             }
-           derecho::rpc::QueryResults<int> resulty = pfoo_rpc_handle.ordered_query<PFoo::READ_STATE_BY_TIME>(too_early);
+           derecho::rpc::QueryResults<int> resulty = pfoo_rpc_handle.ordered_send<PFoo::READ_STATE_BY_TIME>(too_early);
             cout << "Query for 5 sec before: ts="<< too_early << "us" <<endl;
             for (auto& reply_pair:resulty.get()) {
                 cout << "\tnode[" << reply_pair.first << "] replies with value:" << reply_pair.second.get() << endl;

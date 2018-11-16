@@ -97,43 +97,6 @@ private:
     _Group* group;
 
     template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_send_or_query(bool is_query, const std::vector<node_id_t>& destination_nodes,
-                               Args&&... args) {
-        if(is_valid()) {
-            // std::cout << "In ordered_send_or_query: T=" << typeid(T).name() << std::endl;
-            char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
-            };
-            // std::cout << "Obtained a buffer" << std::endl;
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-
-            std::size_t max_payload_size;
-            int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
-                                                                           buffer, max_payload_size);
-            buffer += buffer_offset;
-
-            auto send_return_struct = wrapped_this->template send<tag>(
-                    [&buffer, &max_payload_size](size_t size) -> char* {
-                        if(size <= max_payload_size) {
-                            return buffer;
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
-
-            // std::cout << "Done with serialization" << std::endl;
-            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
-                return group_rpc_manager.finish_rpc_send(is_query, subgroup_id, destination_nodes, send_return_struct.pending);
-            });
-            // std::cout << "Done with send" << std::endl;
-            return std::move(send_return_struct.results);
-        } else {
-            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
-        }
-    }
-
-    template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
@@ -249,48 +212,6 @@ public:
     }
 
     /**
-     * Sends a multicast to only some members of the subgroup that replicates this
-     * Replicated<T>, invoking the RPC function identified by the FunctionTag
-     * template parameter, but does not wait for a response. This should only be
-     * used for RPC functions whose return type is void.
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void ordered_send(const std::vector<node_id_t>& destination_nodes,
-                      Args&&... args) {
-        ordered_send_or_query<tag>(false, destination_nodes, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
-     * invoking the RPC function identified by the FunctionTag template parameter,
-     * but does not wait for a response. This should only be used for RPC functions
-     * whose return type is void.
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void ordered_send(Args&&... args) {
-        // empty nodes means that the destination is the entire group
-        ordered_send<tag>({}, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a multicast to only some members of the subgroup that replicates
-     * this Replicated<T>, invoking the RPC function identified by the
-     * FunctionTag template parameter.
-     * @param destination_nodes The IDs of the nodes that should be sent the
-     * RPC message
-     * @param args The arguments to the RPC function
-     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
-     * of the RPC function being invoked.
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_query(const std::vector<node_id_t>& destination_nodes,
-                       Args&&... args) {
-        return ordered_send_or_query<tag>(true, destination_nodes, std::forward<Args>(args)...);
-    }
-
-    /**
      * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
      * invoking the RPC function identified by the FunctionTag template parameter.
      * The caller must keep the returned QueryResults object in scope in order to
@@ -300,14 +221,42 @@ public:
      * of the RPC function being invoked.
      */
     template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_query(Args&&... args) {
-        // empty nodes means that the destination is the entire group
-        return ordered_query<tag>({}, std::forward<Args>(args)...);
+    auto ordered_send(Args&&... args) {
+        if(is_valid()) {
+            char* buffer;
+            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(
+                    subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
+            };
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+
+            std::size_t max_payload_size;
+            int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
+            buffer += buffer_offset;
+
+            auto send_return_struct = wrapped_this->template send<tag>(
+                    [&buffer, &max_payload_size](size_t size) -> char* {
+                        if(size <= max_payload_size) {
+                            return buffer;
+                        } else {
+                            return nullptr;
+                        }
+                    },
+                    std::forward<Args>(args)...);
+
+            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
+                return group_rpc_manager.finish_rpc_send(subgroup_id, send_return_struct.pending);
+            });
+            return std::move(send_return_struct.results);
+        } else {
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        }
     }
 
+
+
     /**
-     * Sends a peer-to-peer message over TCP to a single member of the subgroup
-     * that replicates this Replicated<T>, invoking the RPC function identified
+     * Sends a peer-to-peer message to a single member of the subgroup that
+     * replicates this Replicated<T>, invoking the RPC function identified
      * by the FunctionTag template parameter, but does not wait for a response.
      * This should only be used for RPC functions whose return type is void.
      * @param dest_node The ID of the node that the P2P message should be sent to

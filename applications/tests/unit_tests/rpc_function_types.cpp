@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
         derecho::Replicated<ConstTest>& const_test = group.get_subgroup<ConstTest>();
         uint32_t my_node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
         const_test.ordered_send<RPC_NAME(change_state)>(my_node_id);
-        derecho::rpc::QueryResults<int> results = const_test.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> results = const_test.ordered_send<RPC_NAME(read_state)>();
         decltype(results)::ReplyMap& replies = results.get();
         int curr_state = 0;
         for(auto& reply_pair : replies) {
@@ -97,12 +97,12 @@ int main(int argc, char** argv) {
                 std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
             }
         }
-        std::cout << "Current state according to ordered_query: " << curr_state << std::endl;
+        std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
     } else {
         derecho::Replicated<ReferenceTest>& reference_test = group.get_subgroup<ReferenceTest>();
         reference_test.ordered_send<RPC_NAME(set_state)>("Hello, testing.");
         reference_test.ordered_send<RPC_NAME(append_string)>(" Another string. ");
-        derecho::rpc::QueryResults<std::string> results = reference_test.ordered_query<RPC_NAME(get_state)>();
+        derecho::rpc::QueryResults<std::string> results = reference_test.ordered_send<RPC_NAME(get_state)>();
         decltype(results)::ReplyMap& replies = results.get();
         for(auto& reply_pair : replies) {
             try {

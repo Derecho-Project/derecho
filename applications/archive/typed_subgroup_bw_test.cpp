@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
     if(node_id == 0) {
-        derecho::rpc::QueryResults<bool> results = handle.ordered_query<RPC_NAME(finishing_call)>(0);
+        derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
         std::cout << "waiting for response..." << std::endl;
 #pragma GCC diagnostic ignored "-Wunused-variable"
         decltype(results)::ReplyMap& replies = results.get();

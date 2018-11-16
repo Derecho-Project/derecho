@@ -80,7 +80,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         }
     }
     if(in_dest || dest_size == 0) {
-        //Use the reply-buffer allocation lambda to detect whether handle_receive generated a reply
+        //Use the reply-buffer allocation lambda to detect whether parse_and_receive generated a reply
         size_t reply_size = 0;
         char* reply_buf;
         parse_and_receive(msg_buf, payload_size, [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
@@ -94,28 +94,27 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                 return nullptr;
             }
         });
-        if(reply_size > 0) {
-            if(sender_id == nid) {
-                //The RPC message expects replies, and I was the sender, so I might have a reply-map that needs fulfilling
-                if(dest_size == 0) {
-                    //Destination was "all nodes in my shard of the subgroup"
-                    int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
-                    std::lock_guard<std::mutex> lock(pending_results_mutex);
-                    assert(!toFulfillQueue.empty());
-                    // whenlog(logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());)
-                    toFulfillQueue.front().get().fulfill_map(
-                            view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
-                    fulfilledList.push_back(std::move(toFulfillQueue.front()));
-                    toFulfillQueue.pop();
-                    // whenlog(logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());)
-                }
-                //Immediately handle the reply to myself
+        if(sender_id == nid) {
+            //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
+            int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
+            std::lock_guard<std::mutex> lock(pending_results_mutex);
+            assert(!toFulfillQueue.empty());
+            // whenlog(logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());)
+            //We now know the membership of "all nodes in my shard of the subgroup" in the current view
+            toFulfillQueue.front().get().fulfill_map(
+                    view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
+            fulfilledList.push_back(std::move(toFulfillQueue.front()));
+            toFulfillQueue.pop();
+            // whenlog(logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());)
+            if(reply_size > 0) {
+                //Since this was a self-receive, the reply also goes to myself
                 parse_and_receive(
                         reply_buf, reply_size,
                         [](size_t size) -> char* { assert_always(false); });
-            } else {
-                connections->send(connections->get_node_rank(sender_id));
             }
+        } else if (reply_size > 0) {
+            //Otherwise, the only thing to do is send the reply (if there was one)
+            connections->send(connections->get_node_rank(sender_id));
         }
     }
 }
@@ -172,19 +171,12 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     return header_size;
 }
 
-bool RPCManager::finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle) {
+bool RPCManager::finish_rpc_send(uint32_t subgroup_id, PendingBase& pending_results_handle) {
     if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
         return false;
     }
-    if(is_query) {
-        std::lock_guard<std::mutex> lock(pending_results_mutex);
-        if(dest_nodes.size() != 0) {
-            pending_results_handle.fulfill_map(dest_nodes);
-            fulfilledList.push_back(pending_results_handle);
-        } else {
-            toFulfillQueue.push(pending_results_handle);
-        }
-    }
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    toFulfillQueue.push(pending_results_handle);
     return true;
 }
 
