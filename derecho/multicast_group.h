@@ -333,16 +333,20 @@ private:
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
+     * @return true if a new version was created
+     * false if the message is a null message
      */
-    void version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    bool version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
      * @param seq_num The sequence number of the message
+     * @return true if a new version was created
+     * false if the message is a null message
      */
-    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    bool version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;
