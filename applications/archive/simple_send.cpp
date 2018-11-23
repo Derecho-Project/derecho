@@ -74,16 +74,13 @@ int main(int argc, char *argv[]) {
 
     RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
     while(true) {
-	std::string msg_str;
-	std::getline(std::cin, msg_str);
-	if (!msg_str.size()) {
-	  continue;
-	}
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
-        while(!buf) {
-	  buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
+        std::string msg_str;
+        std::getline(std::cin, msg_str);
+        if(!msg_str.size()) {
+            continue;
         }
-	msg_str.copy(buf, msg_str.size());
-	group_as_subgroup.send();
+        group_as_subgroup.send(msg_str.size(), [&](char* buf) {
+            msg_str.copy(buf, msg_str.size());
+        });
     }
 }

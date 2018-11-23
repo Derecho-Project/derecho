@@ -1195,12 +1195,6 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
                                          long long unsigned int payload_size,
                                          bool cooked_send) {
-    std::lock_guard<std::mutex> lock(msg_state_mtx);
-
-    // if rdmc groups were not created because of failures, return NULL
-    if(!rdmc_sst_groups_created) {
-        return NULL;
-    }
     long long unsigned int msg_size = payload_size + sizeof(header);
     if(msg_size > max_msg_size) {
         std::cout << "Can't send messages of size larger than the maximum message "
@@ -1303,16 +1297,32 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     }
 }
 
-bool MulticastGroup::send(subgroup_id_t subgroup_num) {
+bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
+                          const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
     if(!rdmc_sst_groups_created) {
         return false;
     }
-    std::lock_guard<std::mutex> lock(msg_state_mtx);
-    if(last_transfer_medium[subgroup_num]) {
-        // check thread_shutdown only for RDMC sends
+    std::unique_lock<std::mutex> lock(msg_state_mtx);
+
+    char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
+    ;
+    while(!buf) {
+        // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
+        // but the SST detect thread cannot proceed (and deliver) because it requires the same lock
+        // do not use defer_lock in the unique_lock declaration above and move unlock to the end of the loop.
+        // That will cause a bug. We want to unlock only when we are sure that buf is nullptr.
+        lock.unlock();
         if(thread_shutdown) {
             return false;
         }
+        lock.lock();
+        buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
+    }
+
+    // call to the user supplied message generator
+    msg_generator(buf);
+
+    if(last_transfer_medium[subgroup_num]) {
         assert(next_sends[subgroup_num]);
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
         next_sends[subgroup_num] = std::nullopt;

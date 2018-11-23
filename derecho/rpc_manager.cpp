@@ -97,8 +97,12 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         if(sender_id == nid) {
             //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
             int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
-            std::lock_guard<std::mutex> lock(pending_results_mutex);
-            assert(!toFulfillQueue.empty());
+            std::unique_lock<std::mutex> lock(pending_results_mutex);
+            // because of a race condition, toFulfillQueue can genuinely be empty
+            // so we shouldn't assert that it is empty
+            // instead we should sleep on a condition variable and let the main thread that called the orderedSend signal us
+	    // although the race condition is infinitely rare
+            pending_results_cv.wait(lock, [&]() { return !toFulfillQueue.empty(); });
             // whenlog(logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());)
             //We now know the membership of "all nodes in my shard of the subgroup" in the current view
             toFulfillQueue.front().get().fulfill_map(
@@ -171,12 +175,10 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     return header_size;
 }
 
-bool RPCManager::finish_rpc_send(uint32_t subgroup_id, PendingBase& pending_results_handle) {
-    if(!view_manager.curr_view->multicast_group->send(subgroup_id)) {
-        return false;
-    }
+bool RPCManager::finish_rpc_send(PendingBase& pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     toFulfillQueue.push(pending_results_handle);
+    pending_results_cv.notify_all();
     return true;
 }
 

@@ -77,14 +77,11 @@ int main(int argc, char *argv[]) {
 
     RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
     for(uint i = 0; i < 10; ++i) {
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(10);
-        while(!buf) {
-            buf = group_as_subgroup.get_sendbuffer_ptr(10);
-        }
-        for(uint i = 0; i < 10; ++i) {
-            buf[i] = 'a' + rand() % 26;
-        }
-        group_as_subgroup.send();
+        group_as_subgroup.send(10, [](char* buf) {
+            for(uint i = 0; i < 10; ++i) {
+                buf[i] = 'a' + rand() % 26;
+            }
+        });
     }
 
     while(true) {

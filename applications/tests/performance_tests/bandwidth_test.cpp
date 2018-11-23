@@ -140,13 +140,7 @@ int main(int argc, char *argv[]) {
     auto send_all = [&]() {
         RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
         for(uint i = 0; i < num_messages; ++i) {
-            // cout << "Asking for a buffer" << endl;
-	  char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
-            while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
-            }
-            // cout << "Obtained a buffer, sending" << endl;
-            group_as_subgroup.send();
+            group_as_subgroup.send(max_msg_size, [](char* buf){});
         }
     };
 

@@ -223,30 +223,45 @@ public:
     template <rpc::FunctionTag tag, typename... Args>
     auto ordered_send(Args&&... args) {
         if(is_valid()) {
-            char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(
-                    subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
+            size_t msg_size = wrapped_this->template get_size<tag>(std::forward<Args>(args)...);
+            // // declare send_return_struct outside the lambda 'serializer'
+            // // serializer will be called inside multicast_group.cpp, in send
+            // // but we need the object after that, outside the lambda
+            // // it's a pointer because one of its members is a reference
+            // typename std::invoke_result<decltype (&rpc::RemoteInvocableOf<T>::template send<tag>)(rpc::RemoteInvocableOf<T>, std::function<char*(int)>&, Args...)>::type send_return_struct_ptr;
+
+            auto* dummy_send_return_ptr = wrapped_this->template getReturnType<tag>(std::forward<Args>(args)...);
+            decltype(dummy_send_return_ptr->results)* results_ptr;
+            typename std::remove_reference<decltype(dummy_send_return_ptr->pending)>::type* pending_ptr;
+
+            auto serializer = [&](char* buffer) {
+                std::size_t max_payload_size;
+                int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
+                buffer += buffer_offset;
+
+                auto send_return_struct = wrapped_this->template send<tag>(
+                        [&buffer, &max_payload_size](size_t size) -> char* {
+                            if(size <= max_payload_size) {
+                                return buffer;
+                            } else {
+                                return nullptr;
+                            }
+                        },
+                        std::forward<Args>(args)...);
+                results_ptr = new decltype(dummy_send_return_ptr->results)(std::move(send_return_struct.results));
+                pending_ptr = &send_return_struct.pending;
             };
+
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-
-            std::size_t max_payload_size;
-            int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
-            buffer += buffer_offset;
-
-            auto send_return_struct = wrapped_this->template send<tag>(
-                    [&buffer, &max_payload_size](size_t size) -> char* {
-                        if(size <= max_payload_size) {
-                            return buffer;
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
-
             group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
-                return group_rpc_manager.finish_rpc_send(subgroup_id, send_return_struct.pending);
+                if(!group_rpc_manager.view_manager.curr_view
+                            ->multicast_group->send(subgroup_id, msg_size, serializer, true)) {
+                    return false;
+                }
+                group_rpc_manager.finish_rpc_send(*pending_ptr);
+                return true;
             });
-            return std::move(send_return_struct.results);
+            return std::move(*results_ptr);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
         }
@@ -284,18 +299,6 @@ public:
         return p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
     }
 
-    /**
-     * Gets a pointer into the send buffer for this subgroup, for the purpose of
-     * doing a "raw send" (not an RPC send).
-     * @param payload_size The size of the payload that the caller intends to
-     * send, in bytes.
-     * @param pause_sending_turns
-     * @return
-     */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size) {
-        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
-    }
-
     const uint64_t compute_global_stability_frontier() {
         return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
     }
@@ -316,11 +319,13 @@ public:
     }
 
     /**
-     * Submits the contents of the send buffer to be multicast to the subgroup,
-     * assuming it has been previously filled with a call to get_sendbuffer_ptr().
+     * Submits a call to send to be multicast to the subgroup,
+     * with the message contents coming by invoking msg_generator inside the send function
+     * It was named raw_send to contrast with cooked_send, but now renaming it to send
+     * for a consistent API. There's no direct cooked send function anyway
      */
-    void raw_send() {
-        group_rpc_manager.view_manager.send(subgroup_id);
+    void send(unsigned long long int payload_size, const std::function<void(char* buf)>& msg_generator) {
+        group_rpc_manager.view_manager.send(subgroup_id, payload_size, msg_generator);
     }
 
     /**

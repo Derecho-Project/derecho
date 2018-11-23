@@ -61,6 +61,8 @@ class RPCManager {
     std::mutex p2p_connections_mutex;
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
+    /** This condition variable is to resolve a race condition in using ToFulfillQueue and fulfilledList */
+    std::condition_variable pending_results_cv;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;
 
@@ -236,7 +238,7 @@ public:
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(uint32_t subgroup_id, PendingBase& pending_results_handle);
+    bool finish_rpc_send(PendingBase& pending_results_handle);
 
     /**
      * called by replicated.h for sending a p2p send/query

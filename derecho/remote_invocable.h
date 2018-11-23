@@ -46,6 +46,10 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     const Opcode invoke_opcode;
     const Opcode reply_opcode;
 
+    Ret* returnRet() {
+        return 0;
+    }
+
     //Maps invocation-instance IDs to results sets
     std::map<std::size_t, PendingResults<Ret>> results_map;
     std::mutex map_lock;
@@ -558,6 +562,25 @@ public:
             size += std::accumulate(t.begin(), t.end(), 0);
         }
         return size;
+    }
+
+    template <FunctionTag Tag, typename... Args>
+    auto* getReturnType(Args&&... args) {
+        using namespace remote_invocation_utilities;
+
+        constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
+        auto& invoker = this->get_invoker(choice, args...);
+
+	auto* ret_ptr = invoker.returnRet();
+        using Ret = typename std::remove_pointer<decltype(ret_ptr)>::type;
+
+        struct send_return {
+            QueryResults<Ret> results;
+            PendingResults<Ret>& pending;
+        };
+
+	send_return* sr = nullptr;
+	return sr;
     }
 
     /**

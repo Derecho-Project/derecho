@@ -1773,18 +1773,12 @@ void ViewManager::leave() {
     thread_shutdown = true;
 }
 
-char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
-                                      unsigned long long int payload_size,
-                                      bool cooked_send) {
-    shared_lock_t lock(view_mutex);
-    return curr_view->multicast_group->get_sendbuffer_ptr(
-            subgroup_num, payload_size, cooked_send);
-}
-
-void ViewManager::send(subgroup_id_t subgroup_num) {
+void ViewManager::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
+                       const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
     shared_lock_t lock(view_mutex);
     view_change_cv.wait(lock, [&]() {
-        return curr_view->multicast_group->send(subgroup_num);
+        return curr_view->multicast_group->send(subgroup_num, payload_size,
+                                                msg_generator, cooked_send);
     });
 }
 

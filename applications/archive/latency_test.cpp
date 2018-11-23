@@ -116,17 +116,14 @@ int main(int argc, char *argv[]) {
 
         derecho::RawSubgroup &group_as_subgroup = managed_group.get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
-            char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
-            while(!buf) {
-                buf = group_as_subgroup.get_sendbuffer_ptr(msg_size);
-            }
-            for(unsigned int j = 0; j < msg_size - 1; ++j) {
-                buf[j] = 'a' + (i % 26);
-            }
-            buf[msg_size - 1] = 0;
-            start_times[i] = get_time();
-            DERECHO_LOG(my_rank, i, "start_send");
-            group_as_subgroup.send();
+            group_as_subgroup.send(msg_size, [&](char* buf) {
+                for(unsigned int j = 0; j < msg_size - 1; ++j) {
+                    buf[j] = 'a' + (i % 26);
+                }
+                buf[msg_size - 1] = 0;
+                start_times[i] = get_time();
+                DERECHO_LOG(my_rank, i, "start_send");
+            });
 
             if(node_id == 0) {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));

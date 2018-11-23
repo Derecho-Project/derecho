@@ -16,7 +16,7 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
-# subgroup_scaling
+# subgroup_scaling_test
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
 

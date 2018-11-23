@@ -27,6 +27,9 @@ OutputIt unordered_intersection(InputIt first, InputIt last, std::unordered_set<
 }
 
 int main(int argc, char* argv[]) {
+    pthread_setname_np(pthread_self(), "subgroup_test");
+    srand(time(NULL));
+
     if(argc < 2) {
         cout << "Error: Expected number of nodes in experiment as the first argument." << endl;
         return -1;
@@ -96,20 +99,17 @@ int main(int argc, char* argv[]) {
     }
     // all are senders except node id's 1 and 2 in shard 0 and nodes >= 9
     if(node_id != 1 && node_id != 2 && node_id <= 8) {
+        // random message size between 1 and 100
+        long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
+        derecho::RawSubgroup& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
         for(int i = 0; i < num_messages; ++i) {
-            // random message size between 1 and 100
-            long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-            unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-            derecho::RawSubgroup& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
-            char* buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
-            while(!buf) {
-                buf = subgroup_handle.get_sendbuffer_ptr(msg_size);
-            }
-            for(unsigned int k = 0; k < msg_size; ++k) {
-                buf[k] = 'a' + (rand() % 26);
-            }
-            buf[msg_size - 1] = 0;
-            subgroup_handle.send();
+            subgroup_handle.send(msg_size, [&](char* buf) {
+                for(unsigned int k = 0; k < msg_size; ++k) {
+                    buf[k] = 'a' + (rand() % 26);
+                }
+                buf[msg_size - 1] = 0;
+            });
         }
     }
     // everything that follows is rendered irrelevant

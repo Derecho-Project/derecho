@@ -139,12 +139,7 @@ int main(int argc, char *argv[]) {
             const auto num_subgroups_to_send = send_subgroup_indices.size();
             for(uint i = 0; i < num_subgroups * num_messages; ++i) {
                 uint j = i % num_subgroups_to_send;
-                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
-                while(!buf) {
-                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
-                }
-                buf[0] = '0' + i;
-                subgroups[j].send();
+                subgroups[j].send(max_msg_size, [](char* buf){});
             }
         };
 

@@ -492,15 +492,11 @@ public:
     void leave();
     /** Creates and returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
-    /** Gets a pointer into the managed DerechoGroup's send buffer, at a
-     * position where there are at least payload_size bytes remaining in the
-     * buffer. The returned pointer can be used to write a message into the
-     * buffer. */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num,
-                             long long unsigned int payload_size, bool cooked_send = false);
     /** Instructs the managed DerechoGroup's to send the next message. This
-     * returns immediately; the send is scheduled to happen some time in the future. */
-    void send(subgroup_id_t subgroup_num);
+     * returns immediately in sending through RDMC; the send is scheduled to happen some time in the future.
+     * if sending through SST, the RDMA write is issued in this call*/
+    void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
+              const std::function<void(char* buf)>& msg_generator, bool cooked_send = false);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 
