@@ -18,7 +18,7 @@ using namespace derecho;
 
 int main(int argc, char* argv[]) {
     pthread_setname_np(pthread_self(), "random_messages");
-    srand(time(0));
+    srand(getpid());
 
     if(argc < 2) {
         cout << "Usage: " << argv[0] << " <num_nodes> [configuration options...]" << endl;
