@@ -124,10 +124,6 @@ target_link_libraries(asynchronous_dht derecho)
 add_executable(simple_send simple_send.cpp)
 target_link_libraries(simple_send derecho)
 
-# random_messages
-add_executable(random_messages random_messages.cpp)
-target_link_libraries(random_messages derecho)
-
 # count_write
 add_executable(count_write count_write.cpp)
 target_link_libraries(count_write sst)

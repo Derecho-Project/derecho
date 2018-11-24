@@ -1,3 +1,10 @@
+/*
+ * This test creates three subgroups, one of each type Foo, Bar and Cache (defined in sample_objects.h).
+ * It requires at least 6 nodes to join the group, the first three are part of subgroups of Foo and Bar
+ * while the last three are part of Cache.
+ * Every node (identified by its node_id) makes some calls to ordered_send in their subgroup,
+ * some also call p2p_send. By these calls they verify that the state machine operations are executed properly.
+ */
 #include <cerrno>
 #include <cstdlib>
 #include <iostream>
@@ -25,6 +32,7 @@ int main(int argc, char** argv) {
     //while the Cache subgroup will reside on the second 3 nodes in the view.
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 3 nodes in the top-level group
                   if(curr_view.num_members < 3) {
                       throw derecho::subgroup_provisioning_exception();
                   }
@@ -36,6 +44,7 @@ int main(int argc, char** argv) {
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 3 nodes in the top-level group
                   if(curr_view.num_members < 3) {
                       throw derecho::subgroup_provisioning_exception();
                   }
@@ -46,6 +55,7 @@ int main(int argc, char** argv) {
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 6 nodes in the top-level group
                   if(curr_view.num_members < 6) {
                       throw derecho::subgroup_provisioning_exception();
                   }
