@@ -230,9 +230,9 @@ public:
             // // it's a pointer because one of its members is a reference
             // typename std::invoke_result<decltype (&rpc::RemoteInvocableOf<T>::template send<tag>)(rpc::RemoteInvocableOf<T>, std::function<char*(int)>&, Args...)>::type send_return_struct_ptr;
 
-            auto* dummy_send_return_ptr = wrapped_this->template getReturnType<tag>(std::forward<Args>(args)...);
-            decltype(dummy_send_return_ptr->results)* results_ptr;
-            typename std::remove_reference<decltype(dummy_send_return_ptr->pending)>::type* pending_ptr;
+            using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<tag>(std::forward<Args>(args)...))>::type;
+	    rpc::QueryResults<Ret>* results_ptr;
+	    rpc::PendingResults<Ret>* pending_ptr;
 
             auto serializer = [&](char* buffer) {
                 std::size_t max_payload_size;
@@ -248,7 +248,7 @@ public:
                             }
                         },
                         std::forward<Args>(args)...);
-                results_ptr = new decltype(dummy_send_return_ptr->results)(std::move(send_return_struct.results));
+                results_ptr = new rpc::QueryResults<Ret>(std::move(send_return_struct.results));
                 pending_ptr = &send_return_struct.pending;
             };
 

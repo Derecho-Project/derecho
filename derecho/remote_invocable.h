@@ -566,21 +566,8 @@ public:
 
     template <FunctionTag Tag, typename... Args>
     auto* getReturnType(Args&&... args) {
-        using namespace remote_invocation_utilities;
-
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
-        auto& invoker = this->get_invoker(choice, args...);
-
-	auto* ret_ptr = invoker.returnRet();
-        using Ret = typename std::remove_pointer<decltype(ret_ptr)>::type;
-
-        struct send_return {
-            QueryResults<Ret> results;
-            PendingResults<Ret>& pending;
-        };
-
-	send_return* sr = nullptr;
-	return sr;
+        return this->get_invoker(choice, args...).returnRet();
     }
 
     /**
