@@ -36,7 +36,8 @@ int main(int argc, char* argv[]) {
     auto stability_callback = [&done, num_nodes,
                                finished_nodes = std::set<uint32_t>()](uint32_t subgroup, int sender_id,
                                                                       long long int index, char* buf,
-                                                                      long long int msg_size) mutable {
+                                                                      long long int msg_size,
+                                                                      persistent::version_t ver) mutable {
         // terminal message is of size 1. This signals that the sender has finished sending
         if(msg_size == 1) {
             // add the sender to the list of finished nodes

@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
     Conf::initialize(argc, argv);
 
     auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, char* buf,
-                                 long long int msg_size) {};
+                                 long long int msg_size, persistent::version_t ver) {};
 
     SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &one_subgroup_entire_view}}};
     

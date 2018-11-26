@@ -28,7 +28,7 @@ int main(int argc, char *argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size, persistent::version_t ver) mutable {
         // null message filter
         if(msg_size == 0) {
             cout << "Received a null message from sender with id " << sender_id << endl;

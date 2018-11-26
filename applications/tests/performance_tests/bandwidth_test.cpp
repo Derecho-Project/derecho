@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
                                &done,
                                &num_nodes,
                                num_senders_selector,
-                               num_delivered = 0u](uint32_t subgroup, int sender_id, long long int index, char* buf, long long int msg_size) mutable {
+                               num_delivered = 0u](uint32_t subgroup, int sender_id, long long int index, char* buf, long long int msg_size, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
         if(num_senders_selector == 0) {

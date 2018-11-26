@@ -175,9 +175,6 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjStore, objects);
 
-    /*
-    **/
-
     // Only for test: persistent registry is null and we make a copy constructor move.
     ObjStore(Persistent<std::vector<OSObject>> & _objects) : objects(std::move(_objects)) {}
 
@@ -223,7 +220,9 @@ int main(int argc, char* argv[]) {
     struct timespec t1,t3;
 
     derecho::CallbackSet callback_set{
-            nullptr,  //we don't need the stability_callback here
+            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, char *buf, long long int ofst, persistent::version_t ver){
+                std::cout << "message is stable: (subgroup,node,message,version)=("<<subgroup<<","<<nid<<","<<mid<<","<<ver<<")" << std::endl;
+            },  //we don't need the stability_callback here
             nullptr,  // local persistent frontier
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 if( (((uint64_t)ver)&0xffffffff) == (total_num_messages - 1)) {

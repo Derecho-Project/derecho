@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
                                    &num_nodes,
                                    subgroup_to_local_index,
                                    &received_message_indices](uint32_t subgroup_num, int sender_id, long long int index,
-                                                              char *buf, long long int msg_size) mutable {
+                                                              char *buf, long long int msg_size, persistent::version_t ver) mutable {
             int sender_rank = (sender_id - subgroup_num + num_nodes) % num_nodes;
             received_message_indices[subgroup_to_local_index.at(subgroup_num)][sender_rank] = index;
         };
