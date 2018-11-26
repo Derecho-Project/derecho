@@ -906,17 +906,19 @@ void MulticastGroup::register_predicates() {
             auto persistence_pred = [this](const DerechoSST& sst) { return true; };
             auto persistence_trig = [this, subgroup_num, curr_subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
+                static persistent::version_t version_seen = INVALID_VERSION;
                 // compute the min of the persisted_num
                 persistent::version_t min_persisted_num
                         = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
-                for(uint i = 0; i < num_shard_members; ++i) {
+                for(uint i = 1; i < num_shard_members; ++i) {
                     if(sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_persisted_num) {
                         min_persisted_num = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
                     }
                 }
                 // callbacks
-                if(callbacks.global_persistence_callback) {
+                if( (version_seen < min_persisted_num) && callbacks.global_persistence_callback) {
                     callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+                    version_seen = min_persisted_num;
                 }
             };
 
