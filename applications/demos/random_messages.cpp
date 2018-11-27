@@ -58,23 +58,29 @@ int main(int argc, char* argv[]) {
         cout << endl;
     };
 
-    auto membership_function = [num_nodes](const View& curr_view,
-                                           int& next_unassigned_rank) {
-        subgroup_shard_layout_t subgroup_vector(1);
-        auto num_members = curr_view.members.size();
-	// wait for all nodes to join
-        if(num_members < num_nodes) {
-            throw subgroup_provisioning_exception();
-        }
-	// just one subgroup consisting of all the members of the top-level view
-        subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
-        next_unassigned_rank = curr_view.members.size();
-        return subgroup_vector;
-    };
+    // Use the standard layout manager provided by derecho
+    // allocate a single subgroup with a single shard consisting of all the nodes
+    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(derecho::even_sharding_policy(1, num_nodes));
+    SubgroupInfo one_raw_group ({{std::type_index(typeid(RawObject)), DefaultSubgroupAllocator(all_nodes_one_subgroup_policy)}});
 
-    std::map<std::type_index, shard_view_generator_t> subgroup_map = {
-            {std::type_index(typeid(RawObject)), membership_function}};
-    SubgroupInfo one_raw_group(subgroup_map);
+    // This is equivalent to the following manual layout function
+    // auto membership_function = [num_nodes](const View& curr_view,
+    //                                        int& next_unassigned_rank) {
+    //     subgroup_shard_layout_t subgroup_vector(1);
+    //     auto num_members = curr_view.members.size();
+    // 	// wait for all nodes to join
+    //     if(num_members < num_nodes) {
+    //         throw subgroup_provisioning_exception();
+    //     }
+    // 	// just one subgroup consisting of all the members of the top-level view
+    //     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
+    //     next_unassigned_rank = curr_view.members.size();
+    //     return subgroup_vector;
+    // };
+
+    // std::map<std::type_index, shard_view_generator_t> subgroup_map = {
+    //         {std::type_index(typeid(RawObject)), membership_function}};
+    // SubgroupInfo one_raw_group(subgroup_map);
 
     // join the group
     Group<> group(CallbackSet{stability_callback},
