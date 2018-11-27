@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -39,8 +40,9 @@ int main(int argc, char* argv[]) {
     int num_messages = 100;
 
     auto stability_callback = [&num_messages](
-                                      uint32_t subgroup_num, uint32_t sender_id, long long int index, char* buf,
-                                      long long int msg_size, persistent::version_t ver) {
+                                      uint32_t subgroup_num, uint32_t sender_id, long long int index,
+                                      std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) {
+        char* buf = data.value().first;
         if(index == num_messages - 1) {
             cout << "Received the last message in subgroup " << subgroup_num << " from sender " << sender_id << endl;
             cout << "The last message is: " << endl;

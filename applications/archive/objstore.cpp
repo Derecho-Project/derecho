@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
     persistent::version_t latest_version = INVALID_VERSION;
 
     derecho::CallbackSet callback_set{
-            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<char*, long long int>>, persistent::version_t ver){
+            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver){
                 msg_counter ++;
                 latest_version = ver;
                 if (msg_counter == (total_num_messages + num_of_nodes)) {

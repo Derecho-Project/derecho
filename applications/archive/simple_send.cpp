@@ -28,13 +28,10 @@ int main(int argc, char *argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size, persistent::version_t ver) mutable {
-        // null message filter
-        if(msg_size == 0) {
-            cout << "Received a null message from sender with id " << sender_id << endl;
-            return;
-        }
-
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
+        char* buf;
+        long long int msg_size;
+        std::tie(buf, msg_size) = data.value();
         cout << "=== Delivered a message from sender with id " << sender_id << endl;
         cout << "Message contents: " << endl;
         for(auto i = 0; i < msg_size; ++i) {

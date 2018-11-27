@@ -35,9 +35,12 @@ int main(int argc, char* argv[]) {
     // callback into the application code at each message delivery
     auto stability_callback = [&done, num_nodes,
                                finished_nodes = std::set<uint32_t>()](uint32_t subgroup, int sender_id,
-                                                                      long long int index, char* buf,
-                                                                      long long int msg_size,
+                                                                      long long int index,
+                                                                      std::optional<std::pair<char*, long long int>> data,
                                                                       persistent::version_t ver) mutable {
+        char* buf;
+        long long int msg_size;
+        std::tie(buf, msg_size) = data.value();
         // terminal message is of size 1. This signals that the sender has finished sending
         if(msg_size == 1) {
             // add the sender to the list of finished nodes
@@ -47,7 +50,7 @@ int main(int argc, char* argv[]) {
             }
             return;
         }
-	// print the sender id and message contents
+        // print the sender id and message contents
         cout << "sender id " << sender_id << ": ";
         for(auto i = 0; i < msg_size; ++i) {
             cout << buf[i];
