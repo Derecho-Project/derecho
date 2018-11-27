@@ -92,11 +92,11 @@ void dis_mem_layout(std::vector<SubView>& layout, const View& view) {
  * 
  * TODO: Refactor to return int vector of subgroup indexes instead of handles. (why?)
  */
-std::vector<Replicated<State>> get_subgroups(Group<State> *group) {
+std::vector<Replicated<State>> get_subgroups(Group<State>& group) {
   std::vector<Replicated<State>> subgroups;
   for (int i = 0; i < 4; i++) {
     try {
-      auto& handle = group->get_subgroup<State>(i);
+      auto& handle = group.get_subgroup<State>(i);
       subgroups.push_back(std::move(handle));
     }
     catch (const invalid_subgroup_exception e) {
@@ -114,7 +114,7 @@ std::vector<Replicated<State>> get_subgroups(Group<State> *group) {
  */
 int test_state(Replicated<State>& stateHandle, int prev_state) {
   // Read initial state
-  auto initial_results = stateHandle.ordered_query<RPC_NAME(read_value)>();
+  auto initial_results = stateHandle.ordered_send<RPC_NAME(read_value)>();
   auto& initial_replies = initial_results.get();
   for (auto& reply_pair : initial_replies) {
      auto other_state = reply_pair.second.get();
@@ -132,10 +132,10 @@ int test_state(Replicated<State>& stateHandle, int prev_state) {
   int new_state = rand() % 440;
   while (new_state == prev_state)
     new_state = rand() % 440;
-  stateHandle.ordered_query<RPC_NAME(change_value)>(new_state);
+  stateHandle.ordered_send<RPC_NAME(change_value)>(new_state);
 
   // Read new state
-  auto new_results = stateHandle.ordered_query<RPC_NAME(read_value)>();
+  auto new_results = stateHandle.ordered_send<RPC_NAME(read_value)>();
   auto& new_replies = new_results.get();
   for (auto& reply_pair : new_replies) {
     auto other_state = reply_pair.second.get();
@@ -170,7 +170,7 @@ int main(int argc, char* argv[])
 
     std::map<std::type_index, shard_view_generator_t>
             subgroup_membership_functions{{std::type_index(typeid(State)),
-                                           [tests](const View& view, int&, bool) {
+                                           [tests](const View& view, int&) {
                                                if(view.members.size() < 3) {
                                                    throw subgroup_provisioning_exception();
                                                }
@@ -207,7 +207,7 @@ int main(int argc, char* argv[])
     std::cout << "Waiting for input to start... " << std::endl;
     std::getline(std::cin, input);
 
-    int n = group.get_members().size();
+    int num_members = group.get_members().size();
     int test_idx = 0;
     auto subgroups = get_subgroups(group);
 
@@ -221,25 +221,25 @@ int main(int argc, char* argv[])
     }
 
     // if (my_rank == 0 || my_rank == 1) {
-    //   if (n == 3) {
+    //   if (num_members == 3) {
     //     if (tests[Tests::MIGRATION]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INTER_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::DISJOINT_MEM]) test_state(subgroups[test_idx++]);
-    //   } else if (n == 4 || n == 5) {
+    //   } else if (num_members == 4 || num_members == 5) {
     //     if (tests[Tests::MIGRATION]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INIT_EMPTY]) test_state(subgroups[test_idx++]);
     //   }
     // }
 
     // else if (my_rank == 2) {
-    //   if (n == 3) {
+    //   if (num_members == 3) {
     //     if (tests[Tests::MIGRATION]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INTER_EMPTY]) test_state(subgroups[test_idx++]);
-    //   } else if (n == 4) {
+    //   } else if (num_members == 4) {
     //     if (tests[Tests::MIGRATION]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INIT_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::DISJOINT_MEM]) test_state(subgroups[test_idx++]);
-    //   } else if (n == 5) {
+    //   } else if (num_members == 5) {
     //     if (tests[Tests::MIGRATION]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INIT_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INTER_EMPTY]) test_state(subgroups[test_idx++]);
@@ -248,10 +248,10 @@ int main(int argc, char* argv[])
     // }
 
     // else if (my_rank == 3) {
-    //   if (n == 4) {
+    //   if (num_members == 4) {
     //     if (tests[Tests::INIT_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::DISJOINT_MEM]) test_state(subgroups[test_idx++]);
-    //   } else if (n == 5) {
+    //   } else if (num_members == 5) {
     //     if (tests[Tests::INIT_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::INTER_EMPTY]) test_state(subgroups[test_idx++]);
     //     if (tests[Tests::DISJOINT_MEM]) test_state(subgroups[test_idx++]);
@@ -259,7 +259,7 @@ int main(int argc, char* argv[])
     // }
 
     // else if (my_rank == 4) {
-    //   if (n == 5) {
+    //   if (num_members == 5) {
 	  //     if (tests[Tests::INTER_EMPTY]) test_state(subgroups[test_idx++]);
     //   }
     // } 
