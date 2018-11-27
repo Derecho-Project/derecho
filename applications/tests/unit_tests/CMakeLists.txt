@@ -21,3 +21,6 @@ target_link_libraries(rpc_function_types derecho)
 
 add_executable(rpc_reply_maps rpc_reply_maps.cpp)
 target_link_libraries(rpc_reply_maps derecho)
+
+add_executable(membership_tests membership_tests.cpp)
+target_link_libraries(membership_tests derecho)
