@@ -904,9 +904,8 @@ void MulticastGroup::register_predicates() {
                                                                       sst::PredicateType::RECURRENT));
 
             auto persistence_pred = [this](const DerechoSST& sst) { return true; };
-            auto persistence_trig = [this, subgroup_num, curr_subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
+            auto persistence_trig = [this, subgroup_num, curr_subgroup_settings, num_shard_members, version_seen=(persistent::version_t)INVALID_VERSION](DerechoSST& sst) mutable {
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
-                static persistent::version_t version_seen = INVALID_VERSION;
                 // compute the min of the persisted_num
                 persistent::version_t min_persisted_num
                         = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
