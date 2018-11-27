@@ -325,8 +325,8 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             // no delivery callback for a NULL message
                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                    msg.index, buf + h->header_size,
-                                                                    msg.size - h->header_size,
+                                                                    msg.index, 
+                                                                    {{buf + h->header_size, msg.size - h->header_size}},
                                                                     INVALID_VERSION);
                             }
                             if(node_id == members[member_index]) {
@@ -343,8 +343,8 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             // no delivery for a NULL message
                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                    msg.index, buf + h->header_size,
-                                                                    msg.size - h->header_size,
+                                                                    msg.index,
+                                                                    {{buf + h->header_size, msg.size - h->header_size}},
                                                                     INVALID_VERSION);
                             }
                             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -470,12 +470,14 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
+        callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,{},
+                                            version);
     }
     // raw send
     // else {
     if(msg.size > h->header_size && callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-                                            buf + h->header_size, msg.size - h->header_size,
+                                            {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
     }
     // }
@@ -491,13 +493,15 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
+        callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,{},
+                                            version);
     }
     // both raw and cooked sends need stability callback
     // else {
     // DERECHO_LOG(-1, -1, "start_stability_callback");
     if(msg.size > h->header_size && callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
-                                            buf + h->header_size, msg.size - h->header_size,
+                                            {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
     }
     // DERECHO_LOG(-1, -1, "end_stability_callback");
@@ -689,8 +693,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                 header* h = (header*)(buf);
                 if(msg.size > h->header_size && callbacks.global_stability_callback) {
                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                        msg.index, buf + h->header_size,
-                                                        msg.size - h->header_size,
+                                                        msg.index, 
+                                                        {{buf + h->header_size, msg.size - h->header_size}},
                                                         INVALID_VERSION);
                 }
                 if(node_id == members[member_index]) {
@@ -706,8 +710,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                 header* h = (header*)(buf);
                 if(msg.size > h->header_size && callbacks.global_stability_callback) {
                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                        msg.index, buf + h->header_size,
-                                                        msg.size - h->header_size,
+                                                        msg.index, 
+                                                        {{buf + h->header_size, msg.size - h->header_size}},
                                                         INVALID_VERSION);
                 }
                 free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
