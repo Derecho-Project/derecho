@@ -125,15 +125,21 @@ public:
     /**
      * Constructs a Replicated<T> that enables sending and receiving RPC
      * function calls for an object of type T.
+     * @param type_id A unique ID for type T within the Group that owns this
+     * Replicated<T>
      * @param nid The ID of the node on which this Replicated<T> is running.
      * @param subgroup_id The internally-generated subgroup ID for the subgroup
      * that participates in replicating this object
+     * @param subgroup_index The index of the subgroup that replicates this object
+     * within (only) the set of subgroups that replicate type T; zero-indexed.
+     * @param shard_num The zero-indexed shard number of the shard (within subgroup
+     * subgroup_id) that participates in replicating this object
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
@@ -142,10 +148,9 @@ public:
               subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), type_id, subgroup_id, T::register_functions())),
               group(group) {
         if constexpr(std::is_base_of_v<GroupReference, T>) {
-            std::cout << "In replicated.h:186, group=" << group << std::endl;
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
     }
@@ -162,7 +167,7 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
@@ -171,7 +176,7 @@ public:
               subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), type_id, subgroup_id, T::register_functions())),
               group(group) {}
 
     // Replicated(Replicated&&) = default;
@@ -231,8 +236,8 @@ public:
             // typename std::invoke_result<decltype (&rpc::RemoteInvocableOf<T>::template send<tag>)(rpc::RemoteInvocableOf<T>, std::function<char*(int)>&, Args...)>::type send_return_struct_ptr;
 
             using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<tag>(std::forward<Args>(args)...))>::type;
-	    rpc::QueryResults<Ret>* results_ptr;
-	    rpc::PendingResults<Ret>* pending_ptr;
+            rpc::QueryResults<Ret>* results_ptr;
+            rpc::PendingResults<Ret>* pending_ptr;
 
             auto serializer = [&](char* buffer) {
                 std::size_t max_payload_size;
@@ -266,8 +271,6 @@ public:
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
         }
     }
-
-
 
     /**
      * Sends a peer-to-peer message to a single member of the subgroup that
@@ -481,11 +484,11 @@ private:
     }
 
 public:
-    ExternalCaller(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
+    ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
             : node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())) {}
+              wrapped_this(group_rpc_manager.make_remote_invoker<T>(type_id, subgroup_id, T::register_functions())) {}
 
     ExternalCaller(ExternalCaller&&) = default;
     ExternalCaller(const ExternalCaller&) = delete;

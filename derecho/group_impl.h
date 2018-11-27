@@ -163,11 +163,13 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                         /* Construct an "empty" Replicated<T>, since all of T's state will
                          * be received from the leader and there are no logs to update */
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index,
+                                subgroup_index, Replicated<FirstType>(index_of_type<FirstType, ReplicatedTypes...>, my_id,
+                                                                      subgroup_id, subgroup_index,
                                                                       shard_num, rpc_manager, this));
                     } else {
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(my_id, subgroup_id, subgroup_index, shard_num, rpc_manager,
+                                subgroup_index, Replicated<FirstType>(index_of_type<FirstType, ReplicatedTypes...>, my_id,
+                                                                      subgroup_id, subgroup_index, shard_num, rpc_manager,
                                                                       factories.template get<FirstType>(), this));
                     }
                     // Store a reference to the Replicated<T> just constructed
@@ -188,7 +190,8 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             }
             // Create an ExternalCaller for the subgroup if we don't already have one
             external_callers.template get<FirstType>().emplace(
-                    subgroup_index, ExternalCaller<FirstType>(my_id, subgroup_id, rpc_manager));
+                    subgroup_index, ExternalCaller<FirstType>(index_of_type<FirstType, ReplicatedTypes...>,
+                                                              my_id, subgroup_id, rpc_manager));
         }
     }
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders));
@@ -269,7 +272,7 @@ std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const
     log->set_pattern("[%H:%M:%S.%f] [%n] [Thread %t] [%^%l%$] %v");
     log->set_level(
             whendebug(spdlog::level::debug)
-            whenrelease(spdlog::level::off));
+                    whenrelease(spdlog::level::off));
     //    log->set_level(spdlog::level::off);
     auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch());
@@ -325,7 +328,7 @@ RawSubgroup& Group<ReplicatedTypes...>::get_subgroup(RawObject*,
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(SubgroupType*,
-                                        uint32_t subgroup_index) {
+                                                                  uint32_t subgroup_index) {
     return replicated_objects.template get<SubgroupType>().at(subgroup_index);
 }
 
