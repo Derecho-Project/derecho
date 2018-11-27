@@ -58,7 +58,7 @@ using FunctionTag = unsigned long long;
  * std::tuple.
  */
 struct Opcode {
-    std::type_index class_id = std::type_index(typeid(void));
+    uint32_t class_id;
     subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
@@ -193,8 +193,10 @@ public:
     };
 
     map_fut pending_rmap;
+
 private:
     ReplyMap replies{*this};
+
 public:
     QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
     QueryResults(QueryResults&& o)
@@ -250,6 +252,7 @@ public:
     class ReplyMap {
     private:
         QueryResults& parent;
+
     public:
         map rmap;
 
@@ -274,8 +277,10 @@ public:
     };
 
     map_fut pending_rmap;
+
 private:
     ReplyMap replies{*this};
+
 public:
     QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
     QueryResults(QueryResults&& o)
