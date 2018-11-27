@@ -57,8 +57,9 @@ int main(int argc, char *argv[]) {
 
         volatile bool done = false;
         auto stability_callback = [&num_messages, &done, &num_nodes, &end_times](
-                                          int32_t subgroup, int sender_id, long long int index, char *buf,
-                                          long long int msg_size, persistent::version_t ver) mutable {
+                                          int32_t subgroup, int sender_id, long long int index,
+                                          std::optional<std::pair<char*, long long int>> data,
+                                          persistent::version_t ver) mutable {
             // cout << buf << endl;
             // cout << "Delivered a message" << endl;
             DERECHO_LOG(sender_id, index, "complete_send");
