@@ -316,14 +316,16 @@ private:
      * an RPC function or by calling a global stability callback.
      * @param msg A reference to the message
      * @param subgroup_num The ID of the subgroup this message is in
+     * @param version The version assigned to the message
      */
-    void deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num);
+    void deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version);
     /**
      * Same as the other deliver_message, but for the SSTMessage type
      * @param msg A reference to the message to deliver
      * @param subgroup_num The ID of the subgroup this message is in
+     * @param version The version assigned to the message
      */
-    void deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num);
+    void deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version);
 
     /**
      * Enqueues a single message for persistence with the persistence manager.
@@ -332,17 +334,21 @@ private:
      * @param msg The message that should cause a new version to be registered
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
-     * @param seq_num The sequence number of the message
+     * @param version The version assigned to the message
+     * @return true if a new version was created
+     * false if the message is a null message
      */
-    void version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    bool version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
-     * @param seq_num The sequence number of the message
+     * @param version The version assigned to the message
+     * @return true if a new version was created
+     * false if the message is a null message
      */
-    void version_message(SSTMessage& msg, subgroup_id_t subgroup_num, message_id_t seq_num, uint64_t msg_timestamp);
+    bool version_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;
@@ -378,6 +384,9 @@ private:
 
     // Internally used to automatically send a NULL message
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
+    /* Get a pointer into the current buffer, to write data into it before sending
+     * Now this is a private function, called by send internally */
+    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
 
 public:
     /**
@@ -427,12 +436,10 @@ public:
     void register_rpc_callback(rpc_handler_t handler) { rpc_callback = std::move(handler); }
 
     void deliver_messages_upto(const std::vector<int32_t>& max_indices_for_senders, subgroup_id_t subgroup_num, uint32_t num_shard_senders);
-    /** Get a pointer into the current buffer, to write data into it before sending */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send = false);
-    /** Note that get_sendbuffer_ptr and send are called one after the another - regexp for using the two is (get_sendbuffer_ptr.send)*
-     * This still allows making multiple send calls without acknowledgement; at a single point in time, however,
-     * there is only one message per sender in the RDMC pipeline */
-    bool send(subgroup_id_t subgroup_num);
+    /** Send now internally calls get_sendbuffer_ptr.
+	The user function that generates the message is supplied to send */
+    bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
+              const std::function<void(char* buf)>& msg_generator, bool cooked_send);
     bool check_pending_sst_sends(subgroup_id_t subgroup_num);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);

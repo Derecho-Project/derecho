@@ -32,8 +32,8 @@ int main() {
 
     int num_messages = 1000;
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char *buf,
-                                 long long int msg_size) {
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index,
+                                 std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) {
         cout << "Sender: " << sender_id << ", index: " << index << endl;
     };
 

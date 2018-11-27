@@ -50,9 +50,9 @@ int main(int argc, char** argv) {
     if(node_id == 0) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
-        foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(0);
+        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(0);
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
@@ -64,9 +64,9 @@ int main(int argc, char** argv) {
     }
     if(node_id == 1) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
-        foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(node_id);
+        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_id);
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
@@ -75,9 +75,9 @@ int main(int argc, char** argv) {
     if(node_id == 2) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
-        foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(node_id);
+        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_id);
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
             text << "Node " << node_id << " update " << i;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(text.str());
         }
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();
         for(auto& reply_pair : bar_results.get()) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }
@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
             text << "Node " << node_id << " update " << i;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(text.str());
         }
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();
         for(auto& reply_pair : bar_results.get()) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }

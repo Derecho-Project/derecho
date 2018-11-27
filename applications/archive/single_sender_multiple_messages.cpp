@@ -30,8 +30,9 @@ int main() {
     long long unsigned int block_size = 10;
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char* buf,
-                                 long long int msg_size) {
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, 
+                                 std::optional<std::pair<char*, long long int>> data, 
+                                 persistent::version_t ver) {
         cout << "Message " << index << " by node " << sender_id << " of size "
              << msg_size << " is stable " << endl;
     };

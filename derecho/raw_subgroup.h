@@ -40,20 +40,12 @@ public:
      */
     bool is_valid() const { return valid; }
 
-    /**
-     * Gets a pointer into the send buffer for multicasts to this subgroup.
-     * @param payload_size The size of the payload that the caller intends to
-     * send, in bytes.
-     * @param pause_sending_turns
-     * @return
-     */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size);
     uint64_t compute_global_stability_frontier();
 
     /**
-     * Submits the contents of the send buffer to be sent on the next ordered
+     * Submits a call to send as the next ordered
      * multicast to the subgroup.
      */
-    void send();
+    void send(unsigned long long int payload_size, const std::function<void(char* buf)>& msg_generator);
 };
 }  // namespace derecho

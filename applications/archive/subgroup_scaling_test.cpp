@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
                                    &num_nodes,
                                    subgroup_to_local_index,
                                    &received_message_indices](uint32_t subgroup_num, int sender_id, long long int index,
-                                                              char *buf, long long int msg_size) mutable {
+                                                              std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
             int sender_rank = (sender_id - subgroup_num + num_nodes) % num_nodes;
             received_message_indices[subgroup_to_local_index.at(subgroup_num)][sender_rank] = index;
         };
@@ -139,12 +139,7 @@ int main(int argc, char *argv[]) {
             const auto num_subgroups_to_send = send_subgroup_indices.size();
             for(uint i = 0; i < num_subgroups * num_messages; ++i) {
                 uint j = i % num_subgroups_to_send;
-                char *buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
-                while(!buf) {
-                    buf = subgroups[j].get_sendbuffer_ptr(max_msg_size);
-                }
-                buf[0] = '0' + i;
-                subgroups[j].send();
+                subgroups[j].send(max_msg_size, [](char* buf){});
             }
         };
 

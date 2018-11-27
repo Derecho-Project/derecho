@@ -84,13 +84,13 @@ int main(int argc, char** argv) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
 
         cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
-        pfoo_rpc_handle.ordered_query<PFoo::READ_STATE>();
+        pfoo_rpc_handle.ordered_send<PFoo::READ_STATE>();
     }
     if(node_id == 1) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
         int new_value = 3;
         cout << "Changing PFoo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_query<PFoo::CHANGE_STATE>(new_value);
+        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_send<PFoo::CHANGE_STATE>(new_value);
         decltype(resultx)::ReplyMap& repliex = resultx.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : repliex) {

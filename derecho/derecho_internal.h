@@ -7,6 +7,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
+#include <utility>
 #include <map>
 #include <string>
 #include <sys/types.h>
@@ -31,7 +33,8 @@ using subgroup_id_t = uint32_t;
 using message_id_t = int32_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
-using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int)>;
+// using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int, persistent::version_t)>;
+using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, std::optional<std::pair<char*, long long int>>, persistent::version_t)>;
 using persistence_callback_t = std::function<void(subgroup_id_t, persistent::version_t)>;
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
 

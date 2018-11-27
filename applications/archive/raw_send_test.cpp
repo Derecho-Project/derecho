@@ -42,8 +42,11 @@ int main(int argc, char *argv[]) {
     uint num_messages_received = 0;
 
     auto stability_callback = [&num_messages_received](
-                                      uint32_t subgroup, int sender_id, long long int index, char *buf,
-                                      long long int msg_size) mutable {
+                                      uint32_t subgroup, int sender_id, std::optional<std::pair<char*, long long int>> data,
+                                      persistent::version_t ver) mutable {
+        char* buf;
+        long long int size;
+        std:tie(buf,size) = data.value();
         cout << "Here" << endl;
         cout << buf << endl;
         num_messages_received++;

@@ -1,3 +1,10 @@
+/*
+ * This test creates three subgroups, one of each type Foo, Bar and Cache (defined in sample_objects.h).
+ * It requires at least 6 nodes to join the group, the first three are part of subgroups of Foo and Bar
+ * while the last three are part of Cache.
+ * Every node (identified by its node_id) makes some calls to ordered_send in their subgroup,
+ * some also call p2p_send. By these calls they verify that the state machine operations are executed properly.
+ */
 #include <cerrno>
 #include <cstdlib>
 #include <iostream>
@@ -25,6 +32,7 @@ int main(int argc, char** argv) {
     //while the Cache subgroup will reside on the second 3 nodes in the view.
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 3 nodes in the top-level group
                   if(curr_view.num_members < 3) {
                       throw derecho::subgroup_provisioning_exception();
                   }
@@ -36,6 +44,7 @@ int main(int argc, char** argv) {
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 3 nodes in the top-level group
                   if(curr_view.num_members < 3) {
                       throw derecho::subgroup_provisioning_exception();
                   }
@@ -46,6 +55,7 @@ int main(int argc, char** argv) {
                   return subgroup_vector;
               }},
              {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
+                  // must have at least 6 nodes in the top-level group
                   if(curr_view.num_members < 6) {
                       throw derecho::subgroup_provisioning_exception();
                   }
@@ -79,17 +89,23 @@ int main(int argc, char** argv) {
     if(my_node_id == member_ids[0]) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
-        cout << "Appending to Bar" << endl;
-        bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
+        cout << "Appending to Bar." << endl;
+        derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 0...");
+        derecho::rpc::QueryResults<void>::ReplyMap& sent_nodes = void_future.get();
+        cout << "Append delivered to nodes: ";
+        for(const node_id_t& node : sent_nodes) {
+            cout << node << " ";
+        }
+        cout << endl;
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
-        foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
     }
     if(my_node_id == member_ids[1]) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int new_value = 3;
         cout << "Changing Foo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(new_value);
+        derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         decltype(results)::ReplyMap& replies = results.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : replies) {
@@ -103,18 +119,18 @@ int main(int argc, char** argv) {
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
         cout << "Reading Foo's state from the group" << endl;
-        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
             cout << "Node " << reply_pair.first << " says the state is: " << reply_pair.second.get() << endl;
         }
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 2...");
         cout << "Printing log from Bar" << endl;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_query<RPC_NAME(print)>();
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();
         for(auto& reply_pair : bar_results.get()) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }
         cout << "Clearing Bar's log" << endl;
-        bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
+        derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
     }
 
     if(my_node_id == member_ids[3]) {
@@ -122,7 +138,7 @@ int main(int argc, char** argv) {
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
         while(!found) {
-            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Ken");
+            derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_send<RPC_NAME(contains)>("Ken");
             derecho::rpc::QueryResults<bool>::ReplyMap& replies = results.get();
             //Fold "&&" over the results to see if they're all true
             bool contains_accum = true;
@@ -134,7 +150,7 @@ int main(int argc, char** argv) {
             found = contains_accum;
         }
         cout << "..found!" << endl;
-        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_query<RPC_NAME(get)>("Ken");
+        derecho::rpc::QueryResults<std::string> results = cache_rpc_handle.ordered_send<RPC_NAME(get)>("Ken");
         for(auto& reply_pair : results.get()) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }

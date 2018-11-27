@@ -27,7 +27,7 @@
  * Example replicated object, containing some serializable state and providing
  * two RPC methods.
  */
-struct Foo{
+struct Foo : public mutils::ByteRepresentable {
 
     int state;
 
@@ -47,7 +47,6 @@ struct Foo{
      * @param initial_state
      */
     Foo(int initial_state = 0) : state(initial_state) {}
-    Foo() = default;
     Foo(const Foo&) = default;
 
     DEFAULT_SERIALIZATION_SUPPORT(Foo, state);

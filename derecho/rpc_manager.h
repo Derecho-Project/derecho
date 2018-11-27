@@ -61,6 +61,8 @@ class RPCManager {
     std::mutex p2p_connections_mutex;
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
+    /** This condition variable is to resolve a race condition in using ToFulfillQueue and fulfilledList */
+    std::condition_variable pending_results_cv;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;
 
@@ -124,7 +126,7 @@ public:
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               whenlog(logger(spdlog::get("derecho_debug_log")), )
-                      view_manager(group_view_manager),
+              view_manager(group_view_manager),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
@@ -143,6 +145,9 @@ public:
      * registered to this RPCManager.
      * @param cls A raw pointer(??) to a pointer to the object being set up as
      * a RemoteInvocableClass
+     * @param type_id A number uniquely identifying the type of the object (in
+     * practice, this is the index of UserProvidedClass within the template
+     * parameters of the containing Group).
      * @param instance_id A number uniquely identifying the object, corresponding
      * to the subgroup that will be receiving RPC invocations for it (in practice,
      * this is the subgroup ID).
@@ -155,21 +160,24 @@ public:
      * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
      */
     template <typename UserProvidedClass, typename FunctionTuple>
-    auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t instance_id, FunctionTuple funs) {
+    auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
         //FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
         //which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
         //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
         return mutils::callFunc([&](const auto&... unpacked_functions) {
-            return build_remote_invocable_class<UserProvidedClass>(nid, instance_id, *receivers,
+            return build_remote_invocable_class<UserProvidedClass>(nid, type_id, instance_id, *receivers,
                                                                    bind_to_instance(cls, unpacked_functions)...);
         },
-        funs);
+                                funs);
     }
 
     /**
      * Given a subgroup ID and a list of functions, constructs a
      * RemoteInvokerForClass for the type of object given by the template
      * parameter, with its receive functions registered to this RPCManager.
+     * @param type_id A number uniquely identifying the type of the object (in
+     * practice, this is the index of UserProvidedClass within the template
+     * parameters of the containing Group).
      * @param instance_id A number uniquely identifying the subgroup to which
      * RPC invocations for this object should be sent.
      * @param funs A tuple of "partially wrapped" pointer-to-member-functions
@@ -182,16 +190,16 @@ public:
      * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
      */
     template <typename UserProvidedClass, typename FunctionTuple>
-    auto make_remote_invoker(uint32_t instance_id, FunctionTuple funs) {
+    auto make_remote_invoker(uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
         return mutils::callFunc([&](const auto&... unpacked_functions) {
             //Supply the template parameters for build_remote_invoker_for_class by
             //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
             return build_remote_invoker_for_class<UserProvidedClass,
                                                   decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
-                                                                            unpacked_functions))...>(nid,
+                                                                            unpacked_functions))...>(nid, type_id,
                                                                                                      instance_id, *receivers);
         },
-        funs);
+                                funs);
     }
 
     /**
@@ -232,14 +240,11 @@ public:
      * Sends the next message in the MulticastGroup's send buffer (which is
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
-     * @param is_query True if this message represents a query (which expects replies),
-     * false if it repesents a send (which does not)
-     * @param dest_nodes The list of node IDs the message is being sent to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
+    bool finish_rpc_send(PendingBase& pending_results_handle);
 
     /**
      * called by replicated.h for sending a p2p send/query
@@ -267,11 +272,13 @@ template <typename T>
 using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
                                                          .make_remote_invocable_class(std::declval<std::unique_ptr<T>*>(),
                                                                                       std::declval<uint32_t>(),
+                                                                                      std::declval<uint32_t>(),
                                                                                       T::register_functions()))>;
 
 template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
                                                         .make_remote_invoker<T>(std::declval<uint32_t>(),
+                                                                                std::declval<uint32_t>(),
                                                                                 T::register_functions()))>;
 }  // namespace rpc
 }  // namespace derecho

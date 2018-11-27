@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
         int new_value = counter * 10 + node_id;
         std::cout << "Updating state to " << new_value << std::endl;
         thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
-        derecho::rpc::QueryResults<int> results = thing_handle.ordered_query<RPC_NAME(read_state)>();
+        derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
         derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
         int curr_state = 0;
         for(auto& reply_pair : replies) {
@@ -108,7 +108,7 @@ int main(int argc, char** argv) {
                 std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
             }
         }
-        std::cout << "Current state according to ordered_query: " << curr_state << std::endl;
+        std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
     }
     if(node_id != 3) {
         std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

@@ -97,43 +97,6 @@ private:
     _Group* group;
 
     template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_send_or_query(bool is_query, const std::vector<node_id_t>& destination_nodes,
-                               Args&&... args) {
-        if(is_valid()) {
-            // std::cout << "In ordered_send_or_query: T=" << typeid(T).name() << std::endl;
-            char* buffer;
-            while(!(buffer = group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, wrapped_this->template get_size<tag>(std::forward<Args>(args)...), true))) {
-            };
-            // std::cout << "Obtained a buffer" << std::endl;
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-
-            std::size_t max_payload_size;
-            int buffer_offset = group_rpc_manager.populate_nodelist_header(destination_nodes,
-                                                                           buffer, max_payload_size);
-            buffer += buffer_offset;
-
-            auto send_return_struct = wrapped_this->template send<tag>(
-                    [&buffer, &max_payload_size](size_t size) -> char* {
-                        if(size <= max_payload_size) {
-                            return buffer;
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
-
-            // std::cout << "Done with serialization" << std::endl;
-            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
-                return group_rpc_manager.finish_rpc_send(is_query, subgroup_id, destination_nodes, send_return_struct.pending);
-            });
-            // std::cout << "Done with send" << std::endl;
-            return std::move(send_return_struct.results);
-        } else {
-            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
-        }
-    }
-
-    template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
             assert(dest_node != node_id);
@@ -162,15 +125,21 @@ public:
     /**
      * Constructs a Replicated<T> that enables sending and receiving RPC
      * function calls for an object of type T.
+     * @param type_id A unique ID for type T within the Group that owns this
+     * Replicated<T>
      * @param nid The ID of the node on which this Replicated<T> is running.
      * @param subgroup_id The internally-generated subgroup ID for the subgroup
      * that participates in replicating this object
+     * @param subgroup_index The index of the subgroup that replicates this object
+     * within (only) the set of subgroups that replicate type T; zero-indexed.
+     * @param shard_num The zero-indexed shard number of the shard (within subgroup
+     * subgroup_id) that participates in replicating this object
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
@@ -179,10 +148,9 @@ public:
               subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), type_id, subgroup_id, T::register_functions())),
               group(group) {
         if constexpr(std::is_base_of_v<GroupReference, T>) {
-            std::cout << "In replicated.h:186, group=" << group << std::endl;
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
     }
@@ -199,7 +167,7 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
@@ -208,7 +176,7 @@ public:
               subgroup_index(subgroup_index),
               shard_num(shard_num),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), subgroup_id, T::register_functions())),
+              wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(), type_id, subgroup_id, T::register_functions())),
               group(group) {}
 
     // Replicated(Replicated&&) = default;
@@ -249,48 +217,6 @@ public:
     }
 
     /**
-     * Sends a multicast to only some members of the subgroup that replicates this
-     * Replicated<T>, invoking the RPC function identified by the FunctionTag
-     * template parameter, but does not wait for a response. This should only be
-     * used for RPC functions whose return type is void.
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void ordered_send(const std::vector<node_id_t>& destination_nodes,
-                      Args&&... args) {
-        ordered_send_or_query<tag>(false, destination_nodes, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
-     * invoking the RPC function identified by the FunctionTag template parameter,
-     * but does not wait for a response. This should only be used for RPC functions
-     * whose return type is void.
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void ordered_send(Args&&... args) {
-        // empty nodes means that the destination is the entire group
-        ordered_send<tag>({}, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a multicast to only some members of the subgroup that replicates
-     * this Replicated<T>, invoking the RPC function identified by the
-     * FunctionTag template parameter.
-     * @param destination_nodes The IDs of the nodes that should be sent the
-     * RPC message
-     * @param args The arguments to the RPC function
-     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
-     * of the RPC function being invoked.
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_query(const std::vector<node_id_t>& destination_nodes,
-                       Args&&... args) {
-        return ordered_send_or_query<tag>(true, destination_nodes, std::forward<Args>(args)...);
-    }
-
-    /**
      * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
      * invoking the RPC function identified by the FunctionTag template parameter.
      * The caller must keep the returned QueryResults object in scope in order to
@@ -300,14 +226,55 @@ public:
      * of the RPC function being invoked.
      */
     template <rpc::FunctionTag tag, typename... Args>
-    auto ordered_query(Args&&... args) {
-        // empty nodes means that the destination is the entire group
-        return ordered_query<tag>({}, std::forward<Args>(args)...);
+    auto ordered_send(Args&&... args) {
+        if(is_valid()) {
+            size_t msg_size = wrapped_this->template get_size<tag>(std::forward<Args>(args)...);
+            // // declare send_return_struct outside the lambda 'serializer'
+            // // serializer will be called inside multicast_group.cpp, in send
+            // // but we need the object after that, outside the lambda
+            // // it's a pointer because one of its members is a reference
+            // typename std::invoke_result<decltype (&rpc::RemoteInvocableOf<T>::template send<tag>)(rpc::RemoteInvocableOf<T>, std::function<char*(int)>&, Args...)>::type send_return_struct_ptr;
+
+            using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<tag>(std::forward<Args>(args)...))>::type;
+            rpc::QueryResults<Ret>* results_ptr;
+            rpc::PendingResults<Ret>* pending_ptr;
+
+            auto serializer = [&](char* buffer) {
+                std::size_t max_payload_size;
+                int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
+                buffer += buffer_offset;
+
+                auto send_return_struct = wrapped_this->template send<tag>(
+                        [&buffer, &max_payload_size](size_t size) -> char* {
+                            if(size <= max_payload_size) {
+                                return buffer;
+                            } else {
+                                return nullptr;
+                            }
+                        },
+                        std::forward<Args>(args)...);
+                results_ptr = new rpc::QueryResults<Ret>(std::move(send_return_struct.results));
+                pending_ptr = &send_return_struct.pending;
+            };
+
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+            group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
+                if(!group_rpc_manager.view_manager.curr_view
+                            ->multicast_group->send(subgroup_id, msg_size, serializer, true)) {
+                    return false;
+                }
+                group_rpc_manager.finish_rpc_send(*pending_ptr);
+                return true;
+            });
+            return std::move(*results_ptr);
+        } else {
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        }
     }
 
     /**
-     * Sends a peer-to-peer message over TCP to a single member of the subgroup
-     * that replicates this Replicated<T>, invoking the RPC function identified
+     * Sends a peer-to-peer message to a single member of the subgroup that
+     * replicates this Replicated<T>, invoking the RPC function identified
      * by the FunctionTag template parameter, but does not wait for a response.
      * This should only be used for RPC functions whose return type is void.
      * @param dest_node The ID of the node that the P2P message should be sent to
@@ -335,18 +302,6 @@ public:
         return p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
     }
 
-    /**
-     * Gets a pointer into the send buffer for this subgroup, for the purpose of
-     * doing a "raw send" (not an RPC send).
-     * @param payload_size The size of the payload that the caller intends to
-     * send, in bytes.
-     * @param pause_sending_turns
-     * @return
-     */
-    char* get_sendbuffer_ptr(unsigned long long int payload_size) {
-        return group_rpc_manager.view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
-    }
-
     const uint64_t compute_global_stability_frontier() {
         return group_rpc_manager.view_manager.compute_global_stability_frontier(subgroup_id);
     }
@@ -367,11 +322,13 @@ public:
     }
 
     /**
-     * Submits the contents of the send buffer to be multicast to the subgroup,
-     * assuming it has been previously filled with a call to get_sendbuffer_ptr().
+     * Submits a call to send to be multicast to the subgroup,
+     * with the message contents coming by invoking msg_generator inside the send function
+     * It was named raw_send to contrast with cooked_send, but now renaming it to send
+     * for a consistent API. There's no direct cooked send function anyway
      */
-    void raw_send() {
-        group_rpc_manager.view_manager.send(subgroup_id);
+    void send(unsigned long long int payload_size, const std::function<void(char* buf)>& msg_generator) {
+        group_rpc_manager.view_manager.send(subgroup_id, payload_size, msg_generator);
     }
 
     /**
@@ -527,11 +484,11 @@ private:
     }
 
 public:
-    ExternalCaller(node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
+    ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
             : node_id(nid),
               subgroup_id(subgroup_id),
               group_rpc_manager(group_rpc_manager),
-              wrapped_this(group_rpc_manager.make_remote_invoker<T>(subgroup_id, T::register_functions())) {}
+              wrapped_this(group_rpc_manager.make_remote_invoker<T>(type_id, subgroup_id, T::register_functions())) {}
 
     ExternalCaller(ExternalCaller&&) = default;
     ExternalCaller(const ExternalCaller&) = delete;

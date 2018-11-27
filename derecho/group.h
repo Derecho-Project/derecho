@@ -31,6 +31,30 @@
 #include "spdlog/spdlog.h"
 
 namespace derecho {
+/**
+ * The function that implements index_of_type, which is separate to hide the
+ * "counter" template parameter (an implementation detail only used to maintain
+ * state across recursive calls).
+ */
+template <uint32_t counter, typename TargetType, typename FirstType, typename... RestTypes>
+constexpr uint32_t index_of_type_impl() {
+    if constexpr(std::is_same<TargetType, FirstType>::value)
+        return counter;
+    else
+        return index_of_type_impl<counter + 1, TargetType, RestTypes...>();
+}
+
+/**
+ * A compile-time "function" that computes the index of a type within a template
+ * parameter pack of types. The value of this constant is equal to the index of
+ * TargetType within TypePack. (Behavior is undefined if TargetType is not
+ * actually in TypePack).
+ * @tparam TargetType The type to search for in the parameter pack
+ * @tparam TypePack The template parameter pack that should be searched
+ */
+template <typename TargetType, typename... TypePack>
+constexpr inline uint32_t index_of_type = index_of_type_impl<0, TargetType, TypePack...>();
+
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
@@ -192,7 +216,8 @@ private:
      * template pack.
      */
     template <typename... Empty>
-    typename std::enable_if<0 == sizeof...(Empty), std::set<std::pair<subgroup_id_t, node_id_t>>>::type
+    std::enable_if_t<0 == sizeof...(Empty),
+                            std::set<std::pair<subgroup_id_t, node_id_t>>>
     construct_objects(const View&, const vector_int64_2d&) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }

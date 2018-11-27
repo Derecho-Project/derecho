@@ -1378,8 +1378,10 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
                 }
                 // Initialize my_rank in the SubView for this node's ID
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
-                // Save the settings for MulticastGroup
                 if(shard_view.my_rank != -1) {
+                    // Initialize my_subgroups
+                    curr_view.my_subgroups[curr_subgroup_num] = shard_num;
+                    // Save the settings for MulticastGroup
                     subgroup_settings[curr_subgroup_num] = {
                             shard_num,
                             (uint32_t)shard_view.my_rank,
@@ -1435,6 +1437,7 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
             //Initialize my_rank in the SubView for this node's ID
             shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
             if(shard_view.my_rank != -1) {
+                //Initialize my_subgroups
                 curr_view.my_subgroups[subgroup_id] = shard_num;
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
@@ -1770,18 +1773,12 @@ void ViewManager::leave() {
     thread_shutdown = true;
 }
 
-char* ViewManager::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
-                                      unsigned long long int payload_size,
-                                      bool cooked_send) {
-    shared_lock_t lock(view_mutex);
-    return curr_view->multicast_group->get_sendbuffer_ptr(
-            subgroup_num, payload_size, cooked_send);
-}
-
-void ViewManager::send(subgroup_id_t subgroup_num) {
+void ViewManager::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
+                       const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
     shared_lock_t lock(view_mutex);
     view_change_cv.wait(lock, [&]() {
-        return curr_view->multicast_group->send(subgroup_num);
+        return curr_view->multicast_group->send(subgroup_num, payload_size,
+                                                msg_generator, cooked_send);
     });
 }
 

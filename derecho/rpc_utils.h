@@ -58,7 +58,7 @@ using FunctionTag = unsigned long long;
  * std::tuple.
  */
 struct Opcode {
-    std::type_index class_id = std::type_index(typeid(void));
+    uint32_t class_id;
     subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
@@ -141,21 +141,20 @@ using reply_map = std::map<node_id_t, std::future<T>>;
  * function call; there is one future for each node contacted to make the
  * call, and it will eventually contain that node's reply. The futures are
  * actually stored inside an internal struct of type ReplyMap, which can be
- * retreived with the get() method. The ReplyMap will not be returned until
+ * retrieved with the get() method. The ReplyMap will not be returned until
  * it is "fulfilled" by the sender, which should happen when the RPC call
- * is actually sent over the network.
+ * is delivered in the current View (and thus, the current View is the set
+ * of nodes who should reply to the RPC).
  * @tparam Ret The return type of the RPC function that this query invoked
  */
 template <typename Ret>
-struct QueryResults {
+class QueryResults {
+public:
     using map_fut = std::future<std::unique_ptr<reply_map<Ret>>>;
     using map = reply_map<Ret>;
     using type = Ret;
 
-    map_fut pending_rmap;
-    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
-
-    struct ReplyMap {
+    class ReplyMap {
     private:
         QueryResults& parent;
 
@@ -167,7 +166,7 @@ struct QueryResults {
         ReplyMap(ReplyMap&& rm) : parent(rm.parent), rmap(std::move(rm.rmap)) {}
 
         bool valid(const node_id_t& nid) {
-            assert(rmap.size() == 0 || rmap.count(nid));
+            assert(rmap.size() == 0 || rmap.count(nid) != 0);
             return (rmap.size() > 0) && rmap.at(nid).valid();
         }
 
@@ -193,10 +192,13 @@ struct QueryResults {
         }
     };
 
+    map_fut pending_rmap;
+
 private:
     ReplyMap replies{*this};
 
 public:
+    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
               replies{std::move(o.replies)} {}
@@ -233,12 +235,88 @@ public:
     }
 };
 
+/**
+ * Specialization of QueryResults for void functions, which do not generate
+ * replies. Here the "reply map" is actually a set, and simply records the set
+ * of nodes to which the RPC was sent. The internal ReplyMap is fulfilled when
+ * the set of nodes that received the RPC is known, which is when the RPC
+ * message was delivered in the current View.
+ */
 template <>
-struct QueryResults<void> {
+class QueryResults<void> {
+public:
+    using map_fut = std::future<std::unique_ptr<std::set<node_id_t>>>;
+    using map = std::set<node_id_t>;
     using type = void;
-    /* This currently has no functionality; Ken suggested a "flush," which
-       we might want to have in both this and the non-void variant.
-    */
+
+    class ReplyMap {
+    private:
+        QueryResults& parent;
+
+    public:
+        map rmap;
+
+        ReplyMap(QueryResults& qr) : parent(qr){};
+        ReplyMap(const ReplyMap&) = delete;
+        ReplyMap(ReplyMap&& rm) : parent(rm.parent), rmap(std::move(rm.rmap)) {}
+
+        bool valid(const node_id_t& nid) {
+            assert(rmap.size() == 0 || rmap.count(nid) != 0);
+            return (rmap.size() > 0) && rmap.count(nid) > 0;
+        }
+
+        /*
+          returns true if we sent to this node,
+          regardless of whether this node has replied.
+        */
+        bool contains(const node_id_t& nid) { return rmap.count(nid); }
+
+        auto begin() { return std::begin(rmap); }
+
+        auto end() { return std::end(rmap); }
+    };
+
+    map_fut pending_rmap;
+
+private:
+    ReplyMap replies{*this};
+
+public:
+    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
+    QueryResults(QueryResults&& o)
+            : pending_rmap{std::move(o.pending_rmap)},
+              replies{std::move(o.replies)} {}
+    QueryResults(const QueryResults&) = delete;
+
+    /**
+     * Wait the specified duration; if a ReplyMap is available
+     * after that duration, return it. Otherwise return nullptr.
+     */
+    template <typename Time>
+    ReplyMap* wait(Time t) {
+        if(replies.rmap.size() == 0) {
+            if(pending_rmap.wait_for(t) == std::future_status::ready) {
+                replies.rmap = std::move(*pending_rmap.get());
+                return &replies;
+            } else
+                return nullptr;
+        } else
+            return &replies;
+    }
+
+    /**
+     * Block until the ReplyMap is fulfilled, then return the map by reference.
+     * The ReplyMap is only valid as long as this QueryResults remains in
+     * scope, and cannot be copied.
+     */
+    ReplyMap& get() {
+        using namespace std::chrono;
+        while(true) {
+            if(auto rmap = wait(5min)) {
+                return *rmap;
+            }
+        }
+    }
 };
 
 /**
@@ -262,7 +340,7 @@ public:
  * response's value.
  */
 template <typename Ret>
-struct PendingResults : public PendingBase {
+class PendingResults : public PendingBase {
 private:
     /** A promise for a map containing one future for each reply to the RPC function
      * call. The future end of this promise lives in QueryResults, and is fulfilled
@@ -339,17 +417,31 @@ public:
     }
 };
 
+/**
+ * Specialization of PendingResults for void functions, which do not generate
+ * replies. Its only functionality is to fulfill the "reply map" in the its
+ * corresponding QueryResults<void>, which is just a set of nodes to which the
+ * RPC message was delivered.
+ */
 template <>
-struct PendingResults<void> : public PendingBase {
-    /* This currently has no functionality; Ken suggested a "flush," which
-       we might want to have in both this and the non-void variant.
-    */
+class PendingResults<void> : public PendingBase {
+private:
+    std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
 
-    void fulfill_map(const node_list_t&) {
-        whenlog(spdlog::get("derecho_debug_log")->error("Got a call to fullfill_map in PendingResults<void>! Serious logic error!"););
+public:
+    void fulfill_map(const node_list_t& sent_nodes) {
+        auto nodes_sent_set = std::make_unique<std::set<node_id_t>>();
+        for(const node_id_t& node : sent_nodes) {
+            nodes_sent_set->emplace(node);
+        }
+        promise_for_pending_map.set_value(std::move(nodes_sent_set));
     }
+
     void set_exception_for_removed_node(const node_id_t&) {}
-    QueryResults<void> get_future() { return QueryResults<void>{}; }
+
+    QueryResults<void> get_future() {
+        return QueryResults<void>(promise_for_pending_map.get_future());
+    }
 };
 
 /**

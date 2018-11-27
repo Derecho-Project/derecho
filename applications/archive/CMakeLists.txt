@@ -16,7 +16,7 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
-# subgroup_scaling
+# subgroup_scaling_test
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
 
@@ -123,10 +123,6 @@ target_link_libraries(asynchronous_dht derecho)
 # simple_send
 add_executable(simple_send simple_send.cpp)
 target_link_libraries(simple_send derecho)
-
-# random_messages
-add_executable(random_messages random_messages.cpp)
-target_link_libraries(random_messages derecho)
 
 # count_write
 add_executable(count_write count_write.cpp)

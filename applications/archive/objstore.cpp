@@ -11,6 +11,7 @@
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <persistent/Persistent.hpp>
 #include "conf/conf.hpp"
+#include <optional>
 
 using std::cout;
 using std::endl;
@@ -175,9 +176,6 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjStore, objects);
 
-    /*
-    **/
-
     // Only for test: persistent registry is null and we make a copy constructor move.
     ObjStore(Persistent<std::vector<OSObject>> & _objects) : objects(std::move(_objects)) {}
 
@@ -185,40 +183,68 @@ public:
     ObjStore(PersistentRegistry* pr) : objects(nullptr, pr) {}
 };
 
+typedef OSObject * POSObject;
+OSObject **g_objs = nullptr;
+void initialize_objects(uint32_t num_of_objs) {
+  uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+  uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+  // We just reserved 128 bytes for the message header and serialization.
+#define VALUE_SIZE(x) ((x) - 128)
+  char default_value[VALUE_SIZE(max_msg_size)];
+  if (g_objs == nullptr) {
+    g_objs = new POSObject[num_of_objs];
+    uint32_t i;
+    for (i = 0; i < num_of_objs; i++) {
+      g_objs[i] = new OSObject{
+	(((uint64_t)node_id)<<32) + i,
+	default_value,VALUE_SIZE(max_msg_size)};
+    }
+  }
+}
+
 int main(int argc, char* argv[]) {
-    if(argc < 2) {
-        std::cout << "usage:" << argv[0] << " <num_of_nodes>" << std::endl;
+    if(argc < 3) {
+        std::cout << "usage:" << argv[0] << " <num_of_nodes> <num_of_objs>" << std::endl;
         return -1;
     }
     derecho::Conf::initialize(argc,argv);
-    int num_of_nodes = atoi(argv[1]);
+    int num_of_nodes = std::stoi(argv[1]);
+    int num_of_objs = std::stoi(argv[2]);
+
+    // create the key-value array
+    initialize_objects(num_of_objs);
 
     uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    // uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-    bool is_sending = true;
-    // long count = 1;
-    // long total_num_messages = num_of_nodes * count;
-    // struct timespec t1,t3;
+    uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t total_num_messages = num_of_nodes * num_of_objs;
+    struct timespec t_start,t_end;
+    std::atomic<bool> bReady = false;
+    uint32_t msg_counter = 0;
+    persistent::version_t latest_version = INVALID_VERSION;
 
     derecho::CallbackSet callback_set{
-            nullptr,  //we don't need the stability_callback here
-            [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-/*
-                if(ver == (total_num_messages - 1)) {
-                    if(is_sending) {
-                        clock_gettime(CLOCK_REALTIME, &t3);
-                        int64_t nsec = ((int64_t)t3.tv_sec - t1.tv_sec) * 1000000000 + t3.tv_nsec - t1.tv_nsec;
-                        double msec = (double)nsec / 1000000;
-                        double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
-                        double thp_ops = ((double)count * 1000000000) / nsec;
-                        std::cout << "(pers)timespan:" << msec << " millisecond." << std::endl;
-                        std::cout << "(pers)throughput:" << thp_gbps << "Gbit/s." << std::endl;
-                        std::cout << "(pers)throughput:" << thp_ops << "ops." << std::endl;
-                        std::cout << std::flush;
-                    }
+            [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver){
+                msg_counter ++;
+                latest_version = ver;
+                if (msg_counter == (total_num_messages + num_of_nodes)) {
+                    bReady = true;
                 }
-*/
-            }};
+            },  // using stability callback to match the version.
+            nullptr,  // local persistent frontier
+            [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
+                // std::cout << "in global persistent callback: ver = " << ver << std::endl;
+                if( bReady && (latest_version <= ver) ) {
+                    clock_gettime(CLOCK_REALTIME, &t_end);
+                    int64_t nsec = ((int64_t)t_end.tv_sec - t_start.tv_sec) * 1000000000 + t_end.tv_nsec - t_start.tv_nsec;
+                    double msec = (double)nsec / 1000000;
+                    double thp_gbps = ((double)num_of_objs * max_msg_size * 8) / nsec;
+                    double thp_ops = ((double)num_of_objs * 1000000000) / nsec;
+                    std::cout << "(pers)timespan:" << msec << " millisecond." << std::endl;
+                    std::cout << "(pers)throughput:" << thp_gbps << "Gbit/s." << std::endl;
+                    std::cout << "(pers)throughput:" << thp_ops << "ops." << std::endl;
+                    std::cout << std::flush;
+                }
+            }}; // global persistent frontier 
 
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(ObjStore)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
@@ -259,29 +285,26 @@ int main(int argc, char* argv[]) {
     }
     cout << endl;
 
-    std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
+    std::cout << "my rank is:" << node_rank << ", and I'm sending." << std::endl;
 
     /* send operation */
-    char data[256] = "Hello! My rank is: ";
-    sprintf(data+strlen(data),"%d",node_rank);
     derecho::Replicated<ObjStore> & handle = group.get_subgroup<ObjStore>();
     {
+        clock_gettime(CLOCK_REALTIME, &t_start);
         // send
-        OSObject obj{(uint64_t)node_rank,data,strlen(data)};
         try {
-            handle.ordered_send<ObjStore::PUT_OBJ>(obj);
+          for (uint32_t i=0;i<(uint32_t)num_of_objs;i++)
+            handle.ordered_send<ObjStore::PUT_OBJ>(*g_objs[i]);
         } catch (uint64_t exp) {
             std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
         }
     }
 
-    // std::this_thread::sleep_for(5s);
-
     /* query operation */
     {
         OSObject obj1;
         uint64_t key = num_of_nodes - node_rank - 1;
-        auto results = handle.ordered_query<ObjStore::GET_OBJ>(key);
+        auto results = handle.ordered_send<ObjStore::GET_OBJ>(key);
         decltype(results)::ReplyMap& replies = results.get();
         std::cout<<"Got a reply map!"<<std::endl;
         for (auto& ritr:replies) {
@@ -290,50 +313,6 @@ int main(int argc, char* argv[]) {
                 << obj.blob.size << std::endl;
         }
     }
-    /*
-  if (node_id == 0) {
-    derecho::Replicated<ByteArrayObject<1024>>& handle = group->get_subgroup<ByteArrayObject<1024>>();
-    char my_array[1024];
-    derecho::rpc::QueryResults<bool> results = handle.ordered_query<ByteArrayObject<1024>::CHANGE_STATE>(my_array);
-    decltype(results)::ReplyMap& replies = results.get();
-    std::cout<<"Got a reply map!"<<std::endl;
-    for(auto& ritr:replies) {
-      std::cout<<"Reply from node "<< ritr.first <<" was " << std::boolalpha << ritr.second.get()<<std::endl;
-    }
-  }
-*/
-    // if (node_id == 0) {
-
-/*
-    if(is_sending) {
-        derecho::Replicated<ByteArrayObject>& handle = group->get_subgroup<ByteArrayObject>();
-        char* bbuf = new char[msg_size];
-        bzero(bbuf, msg_size);
-        Bytes bs(bbuf, msg_size);
-
-        try {
-            clock_gettime(CLOCK_REALTIME, &t1);
-            for(int i = 0; i < count; i++) {
-                handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
-            }
-            clock_gettime(CLOCK_REALTIME, &t2);
-
-        } catch(uint64_t exp) {
-            std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
-            return -1;
-        }
-        int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
-        double msec = (double)nsec / 1000000;
-        double thp_gbps = ((double)count * msg_size * 8) / nsec;
-        double thp_ops = ((double)count * 1000000000) / nsec;
-        std::cout << "(send)timespan:" << msec << " millisecond." << std::endl;
-        std::cout << "(send)throughput:" << thp_gbps << "Gbit/s." << std::endl;
-        std::cout << "(send)throughput:" << thp_ops << "ops." << std::endl;
-#ifdef _PERFORMANCE_DEBUG
-        (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
-#endif  //_PERFORMANCE_DEBUG
-    }
-*/
 
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {

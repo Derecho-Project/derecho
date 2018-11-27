@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
         int trials = 1000;
         cout << "Changing Foo's state " << trials << " times" << endl;
         for(int count = 0; count < trials; ++count) {
-            derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_query<RPC_NAME(change_state)>(count);
+            derecho::rpc::QueryResults<bool> results = foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(count);
             bool results_total = true;
             for(auto& reply_pair : results.get()) {
                 results_total = results_total && reply_pair.second.get();

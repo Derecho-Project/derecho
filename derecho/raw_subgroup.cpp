@@ -7,18 +7,10 @@
 #include "raw_subgroup.h"
 
 namespace derecho {
-
-char* RawSubgroup::get_sendbuffer_ptr(unsigned long long int payload_size) {
+void RawSubgroup::send(unsigned long long int payload_size,
+                       const std::function<void(char* buf)>& msg_generator) {
     if(is_valid()) {
-        return group_view_manager.get_sendbuffer_ptr(subgroup_id, payload_size);
-    } else {
-        throw derecho::empty_reference_exception{"Attempted to use an empty RawSubgroup"};
-    }
-}
-
-void RawSubgroup::send() {
-    if(is_valid()) {
-        group_view_manager.send(subgroup_id);
+        group_view_manager.send(subgroup_id, payload_size, msg_generator);
     } else {
         throw derecho::empty_reference_exception{"Attempted to use an empty RawSubgroup"};
     }

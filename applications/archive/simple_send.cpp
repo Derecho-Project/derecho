@@ -28,13 +28,10 @@ int main(int argc, char *argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, char *buf, long long int msg_size) mutable {
-        // null message filter
-        if(msg_size == 0) {
-            cout << "Received a null message from sender with id " << sender_id << endl;
-            return;
-        }
-
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
+        char* buf;
+        long long int msg_size;
+        std::tie(buf, msg_size) = data.value();
         cout << "=== Delivered a message from sender with id " << sender_id << endl;
         cout << "Message contents: " << endl;
         for(auto i = 0; i < msg_size; ++i) {
@@ -74,16 +71,13 @@ int main(int argc, char *argv[]) {
 
     RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
     while(true) {
-	std::string msg_str;
-	std::getline(std::cin, msg_str);
-	if (!msg_str.size()) {
-	  continue;
-	}
-        char *buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
-        while(!buf) {
-	  buf = group_as_subgroup.get_sendbuffer_ptr(msg_str.size());
+        std::string msg_str;
+        std::getline(std::cin, msg_str);
+        if(!msg_str.size()) {
+            continue;
         }
-	msg_str.copy(buf, msg_str.size());
-	group_as_subgroup.send();
+        group_as_subgroup.send(msg_str.size(), [&](char* buf) {
+            msg_str.copy(buf, msg_str.size());
+        });
     }
 }
