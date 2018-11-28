@@ -7,6 +7,7 @@
 
 #include "HLC.hpp"
 #include "PersistException.hpp"
+#include "PersistentTypenames.hpp"
 #include <functional>
 #include <inttypes.h>
 #include <map>
@@ -80,7 +81,7 @@ public:
      * is called on that entry.
      */
     virtual void append(const void *pdata,
-                        const uint64_t &size, const int64_t &ver,  //const __int128 & ver,
+                        const uint64_t &size, const version_t &ver,  
                         const HLC &mhlc) noexcept(false)
             = 0;
 
@@ -89,7 +90,7 @@ public:
      * to create gap between versions.
      */
     // virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
-    virtual void advanceVersion(const int64_t &ver) noexcept(false) = 0;
+    virtual void advanceVersion(const version_t &ver) noexcept(false) = 0;
 
     // Get the length of the log
     virtual int64_t getLength() noexcept(false) = 0;
@@ -100,22 +101,23 @@ public:
     // Get the Latest Index
     virtual int64_t getLatestIndex() noexcept(false) = 0;
 
+    // Get the Index corresponding to a version
+    virtual int64_t getVersionIndex(const version_t &ver) = 0;
+
     // Get the Earlist version
-    virtual int64_t getEarliestVersion() noexcept(false) = 0;
+    virtual version_t getEarliestVersion() noexcept(false) = 0;
 
     // Get the Latest version
-    virtual int64_t getLatestVersion() noexcept(false) = 0;
+    virtual version_t getLatestVersion() noexcept(false) = 0;
 
     // return the last persisted value
-    // virtual const __int128 getLastPersisted() noexcept(false) = 0;
-    virtual const int64_t getLastPersisted() noexcept(false) = 0;
+    virtual const version_t getLastPersisted() noexcept(false) = 0;
 
-    // Get a version by entry number
+    // Get a version by entry number return both length and buffer
     virtual const void *getEntryByIndex(const int64_t &eno) noexcept(false) = 0;
 
     // Get the latest version equal or earlier than ver.
-    //virtual const void* getEntry(const __int128 & ver) noexcept(false) = 0;
-    virtual const void *getEntry(const int64_t &ver) noexcept(false) = 0;
+    virtual const void *getEntry(const version_t &ver) noexcept(false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() noexcept(false) = 0;
@@ -128,8 +130,7 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    //virtual const __int128 persist() noexcept(false) = 0;
-    virtual const int64_t persist(const bool preLocked = false) noexcept(false) = 0;
+    virtual const version_t persist(const bool preLocked = false) noexcept(false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
@@ -142,7 +143,7 @@ public:
      * Trim the log till version, inclusively.
      * @param ver - all log entry before ver will be trimmed.
      */
-    virtual void trim(const int64_t &ver) noexcept(false) = 0;
+    virtual void trim(const version_t &ver) noexcept(false) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
@@ -155,7 +156,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log) 
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t bytes_size(const int64_t &ver) = 0;
+    virtual size_t bytes_size(const version_t &ver) = 0;
 
     /**
      * Write the serialized log bytes to the given buffer
@@ -163,7 +164,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char *buf, const int64_t &ver) = 0;
+    virtual size_t to_bytes(char *buf, const version_t &ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -172,7 +173,7 @@ public:
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual void post_object(const std::function<void(char const *const, std::size_t)> &f,
-                             const int64_t &ver)
+                             const version_t &ver)
             = 0;
 
     /**
@@ -186,7 +187,7 @@ public:
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strict after ver will be truncated.
      */
-    virtual void truncate(const int64_t &ver) noexcept(false) = 0;
+    virtual void truncate(const version_t &ver) noexcept(false) = 0;
 };
 }
 
