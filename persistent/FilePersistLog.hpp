@@ -175,22 +175,22 @@ public:
     virtual int64_t getLength() noexcept(false);
     virtual int64_t getEarliestIndex() noexcept(false);
     virtual int64_t getLatestIndex() noexcept(false);
-    virtual int64_t getEarliestVersion() noexcept(false);
-    virtual int64_t getLatestVersion() noexcept(false);
-    virtual const int64_t getLastPersisted() noexcept(false);
+    virtual int64_t getVersionIndex(const version_t &ver) noexcept(false);
+    virtual version_t getEarliestVersion() noexcept(false);
+    virtual version_t getLatestVersion() noexcept(false);
+    virtual const version_t getLastPersisted() noexcept(false);
     virtual const void *getEntryByIndex(const int64_t &eno) noexcept(false);
-    virtual const void *getEntry(const int64_t &ver) noexcept(false);
+    virtual const void *getEntry(const version_t &ver) noexcept(false);
     virtual const void *getEntry(const HLC &hlc) noexcept(false);
-    //virtual const __int128 persist(const __int128 & ver = -1) noexcept(false);
-    virtual const int64_t persist(const bool preLocked = false) noexcept(false);
+    virtual const version_t persist(const bool preLocked = false) noexcept(false);
     virtual void trimByIndex(const int64_t &eno) noexcept(false);
-    virtual void trim(const int64_t &ver) noexcept(false);
+    virtual void trim(const version_t &ver) noexcept(false);
     virtual void trim(const HLC &hlc) noexcept(false);
-    virtual void truncate(const int64_t &ver) noexcept(false);
-    virtual size_t bytes_size(const int64_t &ver) noexcept(false);
-    virtual size_t to_bytes(char *buf, const int64_t &ver) noexcept(false);
+    virtual void truncate(const version_t &ver) noexcept(false);
+    virtual size_t bytes_size(const version_t &ver) noexcept(false);
+    virtual size_t to_bytes(char *buf, const version_t &ver) noexcept(false);
     virtual void post_object(const std::function<void(char const *const, std::size_t)> &f,
-                             const int64_t &ver) noexcept(false);
+                             const version_t &ver) noexcept(false);
     virtual void applyLogTail(char const *v) noexcept(false);
 
     template <typename TKey, typename KeyGetter>

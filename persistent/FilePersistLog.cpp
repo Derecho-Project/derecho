@@ -365,24 +365,24 @@ int64_t FilePersistLog::getLatestIndex() noexcept(false) {
     return idx;
 }
 
-int64_t FilePersistLog::getEarliestVersion() noexcept(false) {
+version_t FilePersistLog::getEarliestVersion() noexcept(false) {
     FPL_RDLOCK;
     int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.head;
-    int64_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
+    version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
     FPL_UNLOCK;
     return ver;
 }
 
-int64_t FilePersistLog::getLatestVersion() noexcept(false) {
+version_t FilePersistLog::getLatestVersion() noexcept(false) {
     FPL_RDLOCK;
     int64_t idx = CURR_LOG_IDX;
-    int64_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
+    version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
     FPL_UNLOCK;
     return ver;
 }
 
-const int64_t FilePersistLog::getLastPersisted() noexcept(false) {
-    int64_t last_persisted = INVALID_VERSION;
+const version_t FilePersistLog::getLastPersisted() noexcept(false) {
+    version_t last_persisted = INVALID_VERSION;
     ;
     FPL_PERS_LOCK;
 
@@ -390,6 +390,27 @@ const int64_t FilePersistLog::getLastPersisted() noexcept(false) {
 
     FPL_PERS_UNLOCK;
     return last_persisted;
+}
+
+int64_t FilePersistLog::getVersionIndex(const version_t &ver) {
+    FPL_RDLOCK;
+
+    //binary search
+    dbg_trace("{0} - begin binary search.", this->m_sName);
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry *ple) {
+                return ple->fields.ver;
+            },
+            ver,
+            META_HEADER->fields.head,
+            META_HEADER->fields.tail);
+    dbg_trace("{0} - end binary search.", this->m_sName);
+
+    FPL_UNLOCK;
+
+    dbg_trace("{0} getVersionIndex({1}) at index {2}", this->m_sName,ver,l_idx);
+
+    return l_idx;
 }
 
 const void *FilePersistLog::getEntryByIndex(const int64_t &eidx) noexcept(false) {

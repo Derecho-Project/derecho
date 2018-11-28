@@ -32,7 +32,7 @@ public:
 class ReplicatedT {
 };
 
-PersistentRegistry pr(nullptr,typeid(ReplicatedT),123,321);
+PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
 
 // A variable that can change the length of its value
 class VariableBytes : public ByteRepresentable {
@@ -44,12 +44,12 @@ public:
         data_len = MAX_DATA_SIZE;
     }
 
-    virtual std::size_t to_bytes(char *v) const {
+    virtual std::size_t to_bytes(char* v) const {
         memcpy(v, buf, this->data_len);
         return data_len;
     };
 
-    virtual void post_object(const std::function<void(char const *const, std::size_t)> &func) const {
+    virtual void post_object(const std::function<void(char const* const, std::size_t)>& func) const {
         func(this->buf, this->data_len);
     };
 
@@ -57,15 +57,15 @@ public:
         return this->data_len;
     };
 
-    virtual void ensure_registered(DeserializationManager &dsm){
+    virtual void ensure_registered(DeserializationManager& dsm){
             // do nothing, we don't need DSM.
     };
 
-    virtual const char *to_string() {
-        return buf;
+    virtual std::string to_string() {
+        return std::string{buf};
     };
 
-    static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager *dsm, char const *const v) {
+    static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager* dsm, char const* const v) {
         VariableBytes vb;
         std::unique_ptr<VariableBytes> pvb = std::make_unique<VariableBytes>();
         strcpy(pvb->buf, v);
@@ -74,7 +74,44 @@ public:
     };
 };
 
-static void printhelp() {
+///////////////////////////////////////////////////////////////////////////////
+// test delta
+class IntegerWithDelta : public ByteRepresentable, IDeltaSupport {
+public:
+    int value;
+    int delta;
+    IntegerWithDelta (int v):value(v),delta(0) {}
+    IntegerWithDelta (): value(0),delta(0) {}
+    int add(int op){
+        this->value += op;
+        this->delta += op;
+        return this->value;
+    }
+    int sub(int op){
+        this->value -= op;
+        this->delta -= op;
+        return this->value;
+    }
+    virtual void processDelta(const DeltaProcessor& dp) {
+        // process delta
+        dp((char const* const)&(this->delta),sizeof(this->delta));
+        // clear delta
+        this->delta = 0;
+    }
+    virtual void applyDelta(char const * const pdat) {
+        // apply delta
+        this->value += *((const int * const)pdat);
+    }
+    virtual const std::string to_string() {
+        return std::to_string(this->value);
+    };
+
+    DEFAULT_SERIALIZATION_SUPPORT(IntegerWithDelta,value);
+};
+///////////////////////////////////////////////////////////////////////////////
+
+static void
+printhelp() {
     cout << "usage:" << endl;
     cout << "\tgetbyidx <index>" << endl;
     cout << "\tgetbyver <version>" << endl;
@@ -95,26 +132,32 @@ static void printhelp() {
     cout << "\tlogtail-serialize [since-ver]" << endl;
     cout << "\tlogtail-trim <version>" << endl;
     cout << "\tlogtail-apply" << endl;
+    cout << "\tdelta-list" << endl;
+    cout << "\tdelta-add <op> <version>" << endl;
+    cout << "\tdelta-sub <op> <version>" << endl;
+    cout << "\tdelta-getbyidx <index>" << endl;
+    cout << "\tdelta-getbyver <version>" << endl;
     cout << "NOTICE: test can crash if <datasize> is too large(>8MB).\n"
          << "This is probably due to the stack size is limited. Try \n"
          << "  \"ulimit -s unlimited\"\n"
          << "to remove this limitation." << endl;
 }
 
-Persistent<X> px1(nullptr,&pr);
+Persistent<X> px1(nullptr, &pr);
 //Persistent<X> px1;
-Persistent<VariableBytes> npx(nullptr,&pr),npx_logtail;
-//Persistent<X,ST_MEM> px2; 
-Volatile<X> px2; 
-Persistent<X> pxarr[3]; //unused
+Persistent<VariableBytes> npx(nullptr, &pr), npx_logtail;
+//Persistent<X,ST_MEM> px2;
+Volatile<X> px2;
+Persistent<X> pxarr[3];  //unused
+Persistent<IntegerWithDelta> dx(nullptr, &pr);
 
-template <typename OT, StorageType st=ST_FILE>
-void listvar(Persistent<OT,st> &var){
+template <typename OT, StorageType st = ST_FILE>
+void listvar(Persistent<OT, st>& var) {
     int64_t nv = var.getNumOfVersions();
     int64_t idx = var.getEarliestIndex();
-    cout<<"Number of Versions:\t"<<nv<<endl;
-    while (nv--) {
-/*
+    cout << "Number of Versions:\t" << nv << endl;
+    while(nv--) {
+        /*
     // by lambda
     var.getByIndex(nv,
       [&](OT& x) {
@@ -126,7 +169,7 @@ void listvar(Persistent<OT,st> &var){
         idx++;
     }
     // list minimum latest persisted version:
-    cout<<"list minimum latest persisted version:"<<getMinimumLatestPersistedVersion(typeid(ReplicatedT),123,321)<<endl;
+    cout << "list minimum latest persisted version:" << getMinimumLatestPersistedVersion(typeid(ReplicatedT), 123, 321) << endl;
 }
 
 static void nologsave(int value) {
@@ -173,7 +216,7 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
     cout << "latency:\t" << lat_us << " microseconds" << endl;
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     spdlog::set_level(spdlog::level::trace);
 
     signal(SIGSEGV, sig_handler);
@@ -249,14 +292,14 @@ int main(int argc, char **argv) {
             npx.persist();
             cout << "trim till time " << hlc.m_rtc_us << " successfully" << endl;
         } else if(strcmp(argv[1], "set") == 0) {
-            char *v = argv[2];
+            char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx).buf, "%s", v);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
             npx.persist();
         } else if(strcmp(argv[1], "logtail-set") == 0) {
-            char *v = argv[2];
+            char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx_logtail).buf, "%s", v);
             (*npx_logtail).data_len = strlen(v) + 1;
@@ -272,7 +315,7 @@ int main(int argc, char **argv) {
             PersistentRegistry::setEarliestVersionToSerialize(ver);
             ssize_t ds1 = npx_logtail.bytes_size();
             ssize_t prefix = mutils::bytes_size(npx_logtail.getObjectName()) + mutils::bytes_size(*npx_logtail);
-            char *buf = (char *)malloc(ds1);
+            char* buf = (char*)malloc(ds1);
             if(buf == NULL) {
                 cerr << "faile to allocate " << ds1 << " bytes for serialized data. prefix=" << prefix << " bytes" << endl;
                 return -1;
@@ -284,7 +327,7 @@ int main(int argc, char **argv) {
                 cerr << "failed to open file " << LOGTAIL_FILE << endl;
                 return -1;
             }
-            ssize_t ds3 = write(fd, (void *)((uint64_t)buf + prefix), ds2 - prefix);
+            ssize_t ds3 = write(fd, (void*)((uint64_t)buf + prefix), ds2 - prefix);
             if(ds3 == -1) {
                 cerr << "failed to write the buffer to file " << LOGTAIL_FILE << endl;
                 free(buf);
@@ -308,14 +351,14 @@ int main(int argc, char **argv) {
             off_t fsize = lseek(fd, 0, SEEK_END);
             lseek(fd, 0, SEEK_CUR);
 
-            void *buf = mmap(NULL, (size_t)fsize, PROT_READ, MAP_SHARED, fd, 0);
+            void* buf = mmap(NULL, (size_t)fsize, PROT_READ, MAP_SHARED, fd, 0);
             if(buf == MAP_FAILED) {
                 cerr << "failed to map buffer." << endl;
                 return -1;
             }
 
             cout << "before applyLogTail." << endl;
-            npx_logtail.applyLogTail(nullptr, (char *)buf);
+            npx_logtail.applyLogTail(nullptr, (char*)buf);
             cout << "after applyLogTail." << endl;
 
             munmap(buf, (size_t)fsize);
@@ -363,6 +406,27 @@ int main(int argc, char **argv) {
             } else {
                 cout << "unknown storage type:" << argv[2] << endl;
             }
+        } else if (strcmp(argv[1], "delta-add") == 0) {
+            int op = std::stoi(argv[2]);
+            int64_t ver = (int64_t)atoi(argv[3]);
+            cout << "add(" << op << ") = " << (*dx).add(op) << endl;
+            dx.version(ver);
+            dx.persist();
+        } else if (strcmp(argv[1], "delta-sub") == 0) {
+            int op = std::stoi(argv[2]);
+            int64_t ver = (int64_t)atoi(argv[3]);
+            cout << "sub(" << op << ") = " << (*dx).sub(op) << endl;
+            dx.version(ver);
+            dx.persist();
+        } else if (strcmp(argv[1], "delta-list") == 0) {
+            cout << "Persistent<IntegerWithDelta>:" << endl;
+            listvar<IntegerWithDelta>(dx);
+        } else if (strcmp(argv[1], "delta-getbyidx") == 0) {
+            int64_t index = std::stoi(argv[1]);
+            cout << "dx[idx:" << index << "] = " << dx.getByIndex(index)->value << endl;
+        } else if (strcmp(argv[1], "delta-getbyver") == 0) {
+            int64_t version = std::stoi(argv[1]);
+            cout << "dx[idx:" << version << "] = " << dx[version]->value << endl;
         } else {
             cout << "unknown command: " << argv[1] << endl;
             printhelp();
@@ -375,7 +439,7 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-static inline void print_hlc(const char *name, const HLC &hlc) {
+static inline void print_hlc(const char* name, const HLC& hlc) {
     cout << "HLC\t" << name << "(" << hlc.m_rtc_us << "," << hlc.m_logic << ")" << endl;
 }
 
