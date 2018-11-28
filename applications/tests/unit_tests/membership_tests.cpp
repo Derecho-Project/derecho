@@ -147,11 +147,10 @@ int test_state(Replicated<State>& stateHandle, int prev_state) {
       
     else {
       std::cout << "Reply from node " << reply_pair.first << ": " << other_state << std::endl;
-      return new_state;
     }
   }
 
-  return -1;
+  return new_state;
 }
 
 /**
