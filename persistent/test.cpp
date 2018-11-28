@@ -92,8 +92,8 @@ public:
         this->delta -= op;
         return this->value;
     }
-    virtual void processDelta(const DeltaProcessor& dp) {
-        // process delta
+    virtual void finalizeCurrentDelta(const DeltaFinalizer& dp) {
+        // finalize current delta
         dp((char const* const)&(this->delta),sizeof(this->delta));
         // clear delta
         this->delta = 0;

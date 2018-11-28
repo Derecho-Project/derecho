@@ -288,13 +288,13 @@ protected:
 // log entries are applied in order. TODO: use checkpointing to accelerate it!
 //
 // There are two method included in this interface:
-// - 'processDelta'     This method is called when Persistent<T> trying to
+// - 'finalizeCurrentDelta'     This method is called when Persistent<T> trying to
 //   make a version. Once done, the delta needs to be cleared.
 // - 'applyDelta'       This method is called on object construction from the disk
-using DeltaProcessor = std::function<void(char const* const, std::size_t)>;
+using DeltaFinalizer = std::function<void(char const* const, std::size_t)>;
 class IDeltaSupport {
 public:
-    virtual void processDelta(const DeltaProcessor&) = 0;
+    virtual void finalizeCurrentDelta(const DeltaFinalizer&) = 0;
     virtual void applyDelta(char const* const) = 0;
 };
 
@@ -711,7 +711,7 @@ public:
         dbg_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
         if
             constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
-                v.processDelta([&](char const* const buf, size_t len) {
+                v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
                     this->m_pLog->append((const void* const)buf, len, ver, mhlc);
                 });
             }
