@@ -470,8 +470,10 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
-        callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,{},
-                                            version);
+        if(callbacks.global_stability_callback) {
+            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
+                                                version);
+        }
     }
     // raw send
     // else {
@@ -493,8 +495,10 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
-        callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,{},
-                                            version);
+        if(callbacks.global_stability_callback) {
+            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
+                                                version);
+        }
     }
     // both raw and cooked sends need stability callback
     // else {
