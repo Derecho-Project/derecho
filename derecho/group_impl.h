@@ -232,8 +232,8 @@ std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(cons
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     //Give PersistenceManager some pointers
-    persistence_manager.set_objects(std::addressof(replicated_objects));
-    persistence_manager.set_view_manager(std::addressof(view_manager));
+    persistence_manager.set_objects(replicated_objects);
+    persistence_manager.set_view_manager(view_manager);
     //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {

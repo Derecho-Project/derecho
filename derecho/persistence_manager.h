@@ -89,19 +89,19 @@ public:
      */
     template <typename... Types>
     typename std::enable_if<0 == sizeof...(Types), void>::type
-    set_objects(mutils::KindMap<replicated_index_map>* pro) {
+    set_objects(mutils::KindMap<replicated_index_map>& ro) {
         //we don't need it for Raw Subgroups.
         this->replicated_objects = nullptr;
     }
 
     template <typename... Types>
     typename std::enable_if<!(0 == sizeof...(Types)), void>::type
-    set_objects(mutils::KindMap<replicated_index_map, Types...>* pro) {
-        this->replicated_objects = pro;
+    set_objects(mutils::KindMap<replicated_index_map, Types...>& ro) {
+        this->replicated_objects = &ro;
     }
 
-    void set_view_manager(ViewManager* view_manager) {
-        this->view_manager = view_manager;
+    void set_view_manager(ViewManager& view_manager) {
+        this->view_manager = &view_manager;
     }
 
     /** Start the persistent thread. */
