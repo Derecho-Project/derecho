@@ -24,3 +24,6 @@ target_link_libraries(rpc_reply_maps derecho)
 
 add_executable(membership_tests membership_tests.cpp)
 target_link_libraries(membership_tests derecho)
+
+add_executable(cooked_send_test cooked_send_test.cpp)
+target_link_libraries(cooked_send_test derecho)
