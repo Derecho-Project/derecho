@@ -312,6 +312,11 @@ std::size_t bytes_size(const std::tuple<T...>& t) {
     return std::apply(bytes_size_helper<T...>, t);
 }
 
+template<typename T>
+std::size_t bytes_size(const std::unique_ptr<T>& ptr) {
+    return 1 + (ptr ? bytes_size(*ptr) : 0);
+}
+
 /**
  * In-place serialization is also sometimes possible.
  * This will take a function that expects buffers to be posted,
@@ -366,6 +371,8 @@ template <typename T>
 std::enable_if_t<std::is_base_of<ByteRepresentable CMA T>::value,
                  std::unique_ptr<T>>
 from_bytes(DeserializationManager* ctx, uint8_t const* buffer) {
+    static_assert(!std::is_same<std::decay_t<T>, ByteRepresentable>::value,
+                  "Error: must deserialize as implementing type, not as ByteRepresentable");
     return T::from_bytes(ctx, buffer);
 }
 
@@ -780,6 +787,16 @@ void post_object(const std::function<void(uint8_t const* const, std::size_t)>& c
     }
 }
 
+template <typename T>
+void post_object(const std::function<void(uint8_t const *const, std::size_t)>& f,
+                 const std::unique_ptr<T>& ptr){
+    bool has_value(ptr);
+    f((uint8_t*)&has_value, sizeof(has_value));
+    if(has_value) {
+        post_object(f, *ptr);
+    }
+}
+
 // end post_object section
 
 // Implementation of to_bytes functions for STL types
@@ -875,6 +892,13 @@ std::size_t to_bytes(const std::unordered_map<K, V>& m, uint8_t* buffer) {
     return bsize;
 }
 
+template<typename T>
+std::size_t to_bytes(const std::unique_ptr<T>& ptr, uint8_t* buffer) {
+    std::size_t index = 0;
+    post_object(post_to_buffer(index, buffer), ptr);
+    return bytes_size(ptr);
+}
+
 // end to_bytes section
 
 #ifdef MUTILS_DEBUG
@@ -903,6 +927,12 @@ template <typename T>
 void ensure_registered(const std::list<T>& v, DeserializationManager& dm) {
     for(auto& e : v)
         ensure_registered(e, dm);
+}
+
+template<typename T>
+void ensure_registered(const std::unique_ptr<T>& ptr, DeserializationManager& dm) {
+    if(ptr)
+        ensure_registered(*ptr, dm);
 }
 // end ensure_registered section
 #endif
@@ -1170,6 +1200,38 @@ std::enable_if_t<is_unordered_map<std::remove_cv_t<T>>::value, context_ptr<const
 from_bytes_noalloc(DeserializationManager* ctx, uint8_t const* const buffer,
                    context_ptr<const T>) {
     return context_ptr<const T>{from_bytes<T>(ctx, buffer).release()};
+}
+
+/* Note that from_bytes<unique_ptr<X>> will return a unique_ptr<unique_ptr<X>>,
+ * which is probably not what you want. This is necessary to maintain compatibility
+ * with the std::set and std::map deserializers, which dereference each
+ * from_bytes<value_t> before inserting it. */
+template<typename T>
+std::unique_ptr<type_check<is_unique_ptr, T>> from_bytes(DeserializationManager* ctx, char const* buffer) {
+    using value_t = typename T::element_type;
+    bool is_valid = ((bool *)buffer)[0];
+    const char* buf_ptr = buffer + sizeof(bool);
+    if(is_valid) {
+        return std::make_unique<T>(from_bytes<value_t>(ctx, buf_ptr));
+    } else {
+        return std::make_unique<T>();
+    }
+}
+
+template<typename T>
+context_ptr<type_check<is_unique_ptr, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* buffer,
+                   context_ptr<T> = context_ptr<T>{}) {
+    using value_t = typename T::element_type;
+    bool is_valid = ((bool *)buffer)[0];
+    const char* buf_ptr = buffer + sizeof(bool);
+    context_ptr<T> ret{new T()};
+    if(is_valid) {
+        *ret = from_bytes<value_t>(ctx, buf_ptr);
+    } else {
+        *ret = std::make_unique<value_t>();
+    }
+    return ret;
 }
 
 /**
