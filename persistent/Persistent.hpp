@@ -584,7 +584,7 @@ public:
         }
         if
             constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
-// "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
+                // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
                 return f(*this->get(ver, dm));
             }
         else {
@@ -1026,7 +1026,22 @@ std::unique_ptr<ObjectType> loadObject(const char* object_name = nullptr) noexce
 /// @param subgroup_index
 /// @param shard_num
 /// @return The minimum latest persisted version across the Replicated's Persistent<T> fields, as a version number
-const version_t getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
+template <StorageType storageType = ST_FILE>
+const typename std::enable_if<(storageType == ST_FILE || storageType == ST_MEM), version_t>::type getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) {
+    // All persistent log implementation MUST implement getMinimumLatestPersistedVersion()
+    // All of them need to be checked here
+    // NOTE: we assume that an application will only use ONE type of PERSISTED LOG (ST_FILE or ST_NVM, ...). Otherwise,
+    // if some persistentlog returns INVALID_VERSION, it is ambiguous for the following two case:
+    // 1) the subgroup/shard has some persistent<T> member storing data in corresponding persisted log but the log is empty.
+    // 2) the subgroup/shard has no persistent<T> member storing data in corresponding persisted log.
+    // In case we get a valid version from log stored in other storage type, we should return INVALID_VERSION for 1)
+    // but return the valid version for 2).
+    version_t mlpv = INVALID_VERSION;
+    mlpv = FilePersistLog::getMinimumLatestPersistedVersion(PersistentRegistry::generate_prefix(subgroup_type, subgroup_index, shard_num));
+    return mlpv;
+}
+
+///
 }
 
 #endif  //PERSIST_VAR_H
