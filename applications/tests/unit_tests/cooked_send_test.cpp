@@ -22,8 +22,11 @@ public:
         std::cout << "Node " << nodeid << " sent msg " << msg << std::endl;
     }
 
-    vector<pair<uint, uint>> get_msgs() {
-        return msgs;
+    vector<pair<uint, uint>> get_msgs(uint start_index, uint end_index) {
+        if(end_index > msgs.size()) {
+            end_index = msgs.size();
+        }
+        return vector<pair<uint, uint>>(msgs.begin() + start_index, msgs.begin() + end_index);
     }
 
     // default state
@@ -45,25 +48,13 @@ bool verify_local_order(vector<pair<uint, uint>> msgs) {
 }
 
 int main(int argc, char* argv[]) {
+    pthread_setname_np(pthread_self(), "cooked_send");
     if(argc < 2) {
         std::cout << "Error: Provide the number of nodes as a command line argument!!!" << std::endl;
         exit(1);
     }
     const uint32_t num_nodes = atoi(argv[1]);
-
-    node_id_t my_id;
-    ip_addr_t leader_ip, my_ip;
-
-    std::cout << "Enter my id: " << std::endl;
-    std::cin >> my_id;
-
-    std::cout << "Enter my ip: " << std::endl;
-    std::cin >> my_ip;
-
-    std::cout << "Enter leader's ip: " << std::endl;
-    std::cin >> leader_ip;
-
-    Group<CookedMessages>* group;
+    Conf::initialize(argc, argv);
     std::map<std::type_index, shard_view_generator_t>
             subgroup_membership_functions{
                     {std::type_index(typeid(CookedMessages)),
@@ -80,14 +71,13 @@ int main(int argc, char* argv[]) {
 
     auto cooked_subgroup_factory = [](PersistentRegistry*) { return std::make_unique<CookedMessages>(); };
 
-    const unsigned long long int max_msg_size = 20000;
-
     SubgroupInfo subgroup_info(subgroup_membership_functions);
 
-        group = new Group<CookedMessages>({}, subgroup_info, {}, cooked_subgroup_factory);
+    Group<CookedMessages> group({}, subgroup_info, {}, cooked_subgroup_factory);
 
     std::cout << "Finished constructing/joining the group" << std::endl;
-    auto group_members = group->get_members();
+    auto group_members = group.get_members();
+    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     uint32_t my_rank = -1;
     std::cout << "Members are" << std::endl;
     for(uint i = 0; i < group_members.size(); ++i) {
@@ -102,38 +92,45 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    Replicated<CookedMessages>& cookedMessagesHandle = group->get_subgroup<CookedMessages>();
+    Replicated<CookedMessages>& cookedMessagesHandle = group.get_subgroup<CookedMessages>();
     uint32_t num_msgs = 500;
     for(uint i = 1; i < num_msgs + 1; ++i) {
         cookedMessagesHandle.ordered_send<RPC_NAME(send)>(my_rank, i);
     }
 
     if(my_rank == 0) {
-        auto&& results = cookedMessagesHandle.ordered_send<RPC_NAME(get_msgs)>();
-        auto& replies = results.get();
-        bool is_first_reply = true;
-        vector<pair<uint, uint>> first_reply;
-        for(auto& reply_pair : replies) {
-            vector<pair<uint, uint>> v = reply_pair.second.get();
-            if(is_first_reply) {
-                if(!verify_local_order(v)) {
-                    std::cout << "Error: Violation of local order!!!" << std::endl;
-                    exit(1);
-                }
-                std::cout << "Local ordering test successful!" << std::endl;
-                first_reply = v;
-                is_first_reply = false;
-            } else {
-                if(first_reply != v) {
-                    std::cout << "Error: Violation of global order!!!" << std::endl;
-                    exit(1);
-                }
+        uint32_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        uint32_t num_entries = max_msg_size / sizeof(pair<uint, uint>) - 5;
+        if(num_entries < 0) {
+            std::cout << "Error: Maximum message size too small!" << std::endl;
+            exit(1);
+        }
+        map<node_id_t, vector<pair<uint, uint>>> msgs_map;
+        for(uint i = 0; i < num_msgs * num_nodes; i += num_entries) {
+            auto&& results = cookedMessagesHandle.ordered_send<RPC_NAME(get_msgs)>(i, i + num_entries);
+            auto& replies = results.get();
+            for(auto& reply_pair : replies) {
+                vector<pair<uint, uint>> v = reply_pair.second.get();
+                msgs_map[reply_pair.first].insert(msgs_map[reply_pair.first].end(), v.begin(), v.end());
+            }
+        }
+        vector<pair<uint, uint>> first_reply = msgs_map.begin()->second;
+        if(!verify_local_order(first_reply)) {
+            std::cout << "Error: Violation of local order!!!" << std::endl;
+            exit(1);
+        }
+        std::cout << "Local ordering test successful!" << std::endl;
+        for(auto& msgs_map_entry : msgs_map) {
+            vector<pair<uint, uint>>& v = msgs_map_entry.second;
+            if(first_reply != v) {
+                std::cout << "Error: Violation of global order!!!" << std::endl;
+                exit(1);
             }
         }
         std::cout << "Global ordering test successful!" << std::endl;
     }
 
-    group->barrier_sync();
-    group->leave();
+    group.barrier_sync();
+    group.leave();
     return 0;
 }
