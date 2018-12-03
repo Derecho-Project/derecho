@@ -45,9 +45,9 @@ int main(int argc, char** argv) {
                                    foo_factory, bar_factory);
 
     cout << "Finished constructing/joining Group" << endl;
+    uint32_t node_rank = group.get_my_rank();
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id == 0) {
+    if(node_rank == 0) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
         foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(0);
@@ -62,9 +62,9 @@ int main(int argc, char** argv) {
         std::string response = bar_results.get().get(p2p_target);
         cout << "Node " << p2p_target << "'s state for Bar: " << response << endl;
     }
-    if(node_id == 1) {
+    if(node_rank == 1) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
-        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_id);
+        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_rank);
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
@@ -72,10 +72,10 @@ int main(int argc, char** argv) {
         }
         cout << endl;
     }
-    if(node_id == 2) {
+    if(node_rank == 2) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         ExternalCaller<Bar>& bar_rpc_handle = group.get_nonmember_subgroup<Bar>();
-        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_id);
+        foo_rpc_handle.ordered_send<RPC_NAME(change_state)>(node_rank);
         cout << "Reading Foo's state from the group" << endl;
         derecho::rpc::QueryResults<int> foo_results = foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
         for(auto& reply_pair : foo_results.get()) {
@@ -87,13 +87,13 @@ int main(int argc, char** argv) {
         std::string response = bar_results.get().get(p2p_target);
         cout << "Node " << p2p_target << "'s state for Bar: " << response << endl;
     }
-    if(node_id > 2 && node_id < 6) {
+    if(node_rank > 2 && node_rank < 6) {
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>(0);
         ExternalCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
         cout << "Sending updates to Bar object, subgroup 0" << endl;
         for(int i = 0; i < 10; ++i) {
             std::stringstream text;
-            text << "Node " << node_id << " update " << i;
+            text << "Node " << node_rank << " update " << i;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(text.str());
         }
         derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();
@@ -105,12 +105,12 @@ int main(int argc, char** argv) {
         int response = foo_results.get().get(p2p_target);
         cout << "Node " << p2p_target << " says Foo's state is " << response << endl;
     }
-    if(node_id > 5) {
+    if(node_rank > 5) {
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>(1);
         cout << "Sending updates to Bar object, subgroup 1" << endl;
         for(int i = 0; i < 10; ++i) {
             std::stringstream text;
-            text << "Node " << node_id << " update " << i;
+            text << "Node " << node_rank << " update " << i;
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(text.str());
         }
         derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.ordered_send<RPC_NAME(print)>();

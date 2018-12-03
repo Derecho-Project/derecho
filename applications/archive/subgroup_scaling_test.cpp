@@ -119,17 +119,9 @@ int main(int argc, char *argv[]) {
 
         while(managed_group.get_members().size() < num_nodes) {
         }
-        uint32_t node_rank = -1;
         auto members_order = managed_group.get_members();
-        cout << "The order of members is :" << endl;
-        for(uint i = 0; i < num_nodes; ++i) {
-            cout << members_order[i] << " ";
-            if(members_order[i] == node_id) {
-                node_rank = i;
-            }
-        }
-        cout << endl;
-
+	auto node_rank = managed_group.get_my_rank();
+	
         vector<RawSubgroup> subgroups;
         for(uint i = 0; i < subgroup_size; ++i) {
             subgroups.emplace_back(managed_group.get_subgroup<RawObject>((node_id - i + num_nodes) % num_nodes));

@@ -66,14 +66,7 @@ int main(int argc, char** argv) {
 
     cout << "Finished constructing/joining Group" << endl;
 
-    std::vector<node_id_t> members = group.get_members();
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    uint my_rank;
-    for(my_rank = 0; my_rank < members.size(); ++my_rank) {
-        if(members[my_rank] == node_id) {
-            break;
-        }
-    }
+    uint32_t my_rank = group.get_my_rank();
     if(my_rank < 3) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
@@ -95,6 +88,7 @@ int main(int argc, char** argv) {
         //Make sure Cache has some initial state
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Stuff", "Things");
         //This will wait for the Foo and Bar nodes
+        const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
         if(node_id != 7) {
             group.barrier_sync();
         }

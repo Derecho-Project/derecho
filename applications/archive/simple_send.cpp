@@ -60,8 +60,6 @@ int main(int argc, char *argv[]) {
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    while(managed_group.get_members().size() < num_nodes) {
-    }
     auto members_order = managed_group.get_members();
     cout << "The order of members is :" << endl;
     for(uint i = 0; i < num_nodes; ++i) {

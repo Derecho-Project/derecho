@@ -187,7 +187,6 @@ int main(int argc, char *argv[]) {
     uint64_t si_us = (1000000l / ops_per_sec);
 
     int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(ByteArrayObject)), [shard_size, num_of_shards, num_of_nodes](const derecho::View &curr_view, int &next_unassigned_rank) {
@@ -215,10 +214,11 @@ int main(int argc, char *argv[]) {
     derecho::Group<ByteArrayObject> group{{}, subgroup_info, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
+    int32_t node_rank = group.get_my_rank();
 
     ///////////////////////////////////////////////////////////////////////////////
     // ordered send.
-    if(node_id < (uint32_t)(num_of_nodes - 1)) {
+    if(node_rank < (num_of_nodes - 1)) {
         dbg_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
         char *bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
                 } while(DELTA_T_US(last, cur) < (double)si_us);
 
                 {
-                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_id;
+                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_rank;
                     ((PayLoad *)bs.bytes)->msg_seqno = (uint32_t)seqno++;
                     ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
                     ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
@@ -263,7 +263,7 @@ int main(int argc, char *argv[]) {
     group.barrier_sync();
     usleep(min_dur_sec * 1e6);
     // query
-    if(node_id == (uint32_t)(num_of_nodes - 1)) {
+    if(node_rank == (num_of_nodes - 1)) {
         struct timespec cur, tqs, tqm, tqm1, tqe;
         clock_gettime(CLOCK_REALTIME, &cur);
         uint64_t center_ts_us = (cur.tv_sec - min_dur_sec - min_dur_sec / 2) * 1e6;

@@ -1796,6 +1796,11 @@ std::vector<node_id_t> ViewManager::get_members() {
     return curr_view->members;
 }
 
+int32_t ViewManager::get_my_rank() {
+    shared_lock_t read_lock(view_mutex);
+    return curr_view->my_rank;
+}
+
 void ViewManager::barrier_sync() {
     shared_lock_t read_lock(view_mutex);
     curr_view->gmsSST->sync_with_members();

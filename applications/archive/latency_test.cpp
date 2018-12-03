@@ -46,7 +46,6 @@ int main(int argc, char *argv[]) {
         }
         uint32_t num_nodes = std::stoi(argv[1]);
         derecho::Conf::initialize(argc,argv);
-        uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
         const uint64_t msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
         const uint32_t window_size = derecho::getConfUInt64(CONF_DERECHO_WINDOW_SIZE);
         const uint32_t delivery_mode = stoi(argv[2]);
@@ -90,9 +89,8 @@ int main(int argc, char *argv[]) {
         }
         std::cout<<"All nodes joined."<<std::endl;
 
-        int my_rank = 0;
         auto group_members = managed_group.get_members();
-        while(group_members[my_rank] != node_id) my_rank++;
+        int my_rank = managed_group.get_my_rank();
 
         vector<uint32_t> members;
         for(uint32_t i = 0; i < num_nodes; i++) members.push_back(i);
@@ -111,7 +109,7 @@ int main(int argc, char *argv[]) {
                 (t3 - t1) * 1e-3f, max(t2 - t1, t3 - t2) * 1e-3f);
         fflush(stdout);
 
-        if(node_id == 0) {
+        if(my_rank == 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
@@ -126,7 +124,7 @@ int main(int argc, char *argv[]) {
                 DERECHO_LOG(my_rank, i, "start_send");
             });
 
-            if(node_id == 0) {
+            if(my_rank == 0) {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
             }
         }
@@ -147,7 +145,7 @@ int main(int argc, char *argv[]) {
         }
         double std = sqrt(sum_of_square / (num_messages - 1));
 
-        if(node_id == 0) {
+        if(my_rank == 0) {
 	    log_results(exp_result{num_nodes, msg_size, window_size, num_messages, delivery_mode, (average_time / 1000.0), (std / 1000.0)}, "data_latency");
         }
         managed_group.barrier_sync();

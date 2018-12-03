@@ -85,8 +85,8 @@ int main(int argc, char** argv) {
     }
     if(in_const_test_group) {
         derecho::Replicated<ConstTest>& const_test = group.get_subgroup<ConstTest>();
-        uint32_t my_node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-        const_test.ordered_send<RPC_NAME(change_state)>(my_node_id);
+        uint32_t my_node_rank = group.get_my_rank();
+        const_test.ordered_send<RPC_NAME(change_state)>(my_node_rank);
         derecho::rpc::QueryResults<int> results = const_test.ordered_send<RPC_NAME(read_state)>();
         decltype(results)::ReplyMap& replies = results.get();
         int curr_state = 0;

@@ -69,7 +69,6 @@ int main(int argc, char *argv[]) {
     uint64_t si_us = (1000000l / max_ops);
     int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
 
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     bool is_sending = true;
 
     derecho::SubgroupInfo subgroup_info{
@@ -107,17 +106,8 @@ int main(int argc, char *argv[]) {
     derecho::Group<ByteArrayObject> group{{}, subgroup_info, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
+    uint32_t node_rank = group.get_my_rank();
 
-    uint32_t node_rank = -1;
-    auto members_order = group.get_members();
-    cout << "The order of members is :" << endl;
-    for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
-        cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
-    }
-    cout << endl;
     if((sender_selector == 1) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) is_sending = false;
     if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes - 1)) is_sending = false;
 
@@ -225,7 +215,7 @@ int main(int argc, char *argv[]) {
                     clock_gettime(CLOCK_REALTIME, &cur);
                 } while(DELTA_T_US(start, cur) < i * (double)si_us);
                 {
-                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_id;
+                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_rank;
                     ((PayLoad *)bs.bytes)->msg_seqno = (uint32_t)i;
                     ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
                     ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;

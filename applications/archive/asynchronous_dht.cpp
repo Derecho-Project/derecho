@@ -100,9 +100,9 @@ int main(int argc, char* argv[]) {
     main_cv.wait(main_lock, [&groups_provisioned]() { return groups_provisioned; });
     std::cout << "Subgroups provisioned" << std::endl;
     auto& subgroup_handle = group.get_subgroup<HashTable<std::string>>();
+    uint32_t node_rank = group.get_my_rank();
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id == 0) {
+    if(node_rank == 0) {
         subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
     } else {
         subgroup_handle.ordered_send<HashTable<std::string>::PRINT>();

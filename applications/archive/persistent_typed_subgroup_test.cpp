@@ -78,15 +78,15 @@ int main(int argc, char** argv) {
                                pfoo_factory);
 
     cout << "Finished constructing/joining Group" << endl;
+    uint32_t node_rank = group.get_my_rank();
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id == 0) {
+    if(node_rank == 0) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
 
         cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
         pfoo_rpc_handle.ordered_send<PFoo::READ_STATE>();
     }
-    if(node_id == 1) {
+    if(node_rank == 1) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
         int new_value = 3;
         cout << "Changing PFoo's state to " << new_value << endl;
@@ -97,14 +97,14 @@ int main(int argc, char** argv) {
             cout << "Replyx from node " << reply_pair.first << " was " << std::boolalpha << reply_pair.second.get() << endl;
         }
     }
-    if(node_id == 2) {
+    if(node_rank == 2) {
     }
 
-    if(node_id == 3) {
+    if(node_rank == 3) {
     }
-    if(node_id == 4) {
+    if(node_rank == 4) {
     }
-    if(node_id == 5) {
+    if(node_rank == 5) {
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

@@ -97,12 +97,11 @@ int main(int argc, char** argv) {
                                pfoo_factory);
 
     cout << "Finished constructing/joining Group" << endl;
-
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t node_rank = group.get_my_rank();
 
     // Update the states:
     Replicated<PFoo> & pfoo_rpc_handle = group.get_subgroup<PFoo>();
-    int values[] = {(int)(1000 + node_id), (int)(2000 + node_id), (int)(3000 + node_id) };
+    int values[] = {(int)(1000 + node_rank), (int)(2000 + node_rank), (int)(3000 + node_rank) };
     for (int i=0;i<3;i++) {
         derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_send<PFoo::CHANGE_STATE>(values[i]);
         decltype(resultx)::ReplyMap& repliex = resultx.get();
@@ -112,7 +111,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if(node_id == 0) {
+    if(node_rank == 0) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         // Query for latest version.

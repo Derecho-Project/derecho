@@ -43,8 +43,6 @@ int main(int argc, char* argv[]) {
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     int count = std::stoi(argv[2]);
 
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-
     derecho::SubgroupInfo subgroup_info{
             {{std::type_index(typeid(TestObject)), [num_of_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.num_members < num_of_nodes) {
@@ -82,7 +80,9 @@ int main(int argc, char* argv[]) {
         //handle.ordered_send<RPC_NAME(fun)>(str_1k);
         handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
-    if(node_id == 0) {
+
+    uint32_t node_rank = group.get_my_rank();
+    if(node_rank == 0) {
         derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
         std::cout << "waiting for response..." << std::endl;
 #pragma GCC diagnostic ignored "-Wunused-variable"

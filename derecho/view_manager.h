@@ -490,8 +490,10 @@ public:
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
-    /** Creates and returns a vector listing the nodes that are currently members of the group. */
+    /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
+    /** Returns the order of this node in the sequence of members of the group */
+    int32_t get_my_rank();
     /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately in sending through RDMC; the send is scheduled to happen some time in the future.
      * if sending through SST, the RDMA write is issued in this call*/

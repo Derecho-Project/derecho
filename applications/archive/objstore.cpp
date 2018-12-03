@@ -214,7 +214,6 @@ int main(int argc, char* argv[]) {
     // create the key-value array
     initialize_objects(num_of_objs);
 
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     uint64_t total_num_messages = num_of_nodes * num_of_objs;
     struct timespec t_start,t_end;
@@ -274,16 +273,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    uint32_t node_rank = -1;
-    auto members_order = group.get_members();
-    cout << "The order of members is :" << endl;
-    for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
-        cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
-    }
-    cout << endl;
+    uint32_t node_rank = group.get_my_rank();
 
     std::cout << "my rank is:" << node_rank << ", and I'm sending." << std::endl;
 

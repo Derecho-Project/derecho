@@ -86,9 +86,9 @@ int main(int argc, char** argv) {
 					      std::vector<derecho::view_upcall_t> {},
 					      load_balancer_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;
+    uint32_t node_rank = group.get_my_rank();
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id == 1) {
+    if(node_rank == 1) {
         derecho::ExternalCaller<Cache>& cache_handle = group.get_nonmember_subgroup<Cache>();
         node_id_t who = 3;
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -96,11 +96,11 @@ int main(int argc, char** argv) {
         std::string response = cache_results.get().get(who);
         cout << " Response from node " << who << ":" << response << endl;
     }
-    if(node_id > 2) {
+    if(node_rank > 2) {
         derecho::Replicated<Cache>& cache_handle = group.get_subgroup<Cache>();
         std::stringstream string_builder;
-        string_builder << "Node " << node_id << "'s things";
-        cache_handle.ordered_send<RPC_NAME(put)>(std::to_string(node_id), string_builder.str());
+        string_builder << "Node " << node_rank << "'s things";
+        cache_handle.ordered_send<RPC_NAME(put)>(std::to_string(node_rank), string_builder.str());
     }
 
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

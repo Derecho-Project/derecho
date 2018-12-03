@@ -312,9 +312,10 @@ public:
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
-    /** Creates and returns a vector listing the nodes that are currently members of the group. */
+    /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
-
+    /** Returns the order of this node in the sequence of members of the group */
+    std::int32_t get_my_rank();
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);
     /** Waits until all members of the group have called this function. */

@@ -718,13 +718,16 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
         for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
             auto num_received = sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + sender_count] + 1;
             uint32_t slot = num_received % window_size;
-            message_id_t next_seq = (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot + 1) - sizeof(uint64_t)];
+            message_id_t next_seq = (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+                                                        [(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot + 1) - sizeof(uint64_t)];
             if(next_seq == num_received / static_cast<int32_t>(window_size) + 1) {
                 whenlog(logger->trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
                                       next_seq, num_received, sender_count, node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]), (subgroup_num * window_size + slot)););
                 sst_receive_handler_lambda(sender_count,
-                                           &sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot)],
-                                           (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot + 1) - 2 * sizeof(uint64_t)]);
+                                           &sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+                                                     [(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot)],
+                                           (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+                                                               [(sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * window_size + slot + 1) - 2 * sizeof(uint64_t)]);
                 sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + sender_count] = num_received;
             }
         }
@@ -1287,7 +1290,6 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     std::unique_lock<std::mutex> lock(msg_state_mtx);
 
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
-    ;
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
         // but the SST detect thread cannot proceed (and deliver) because it requires the same lock

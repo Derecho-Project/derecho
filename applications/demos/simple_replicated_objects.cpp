@@ -84,9 +84,9 @@ int main(int argc, char** argv) {
     //The code must be different depending on which subgroup this node is in,
     //which we can determine based on its position in the members list
     std::vector<node_id_t> member_ids = group.get_members();
-    // get my_node_id from Derecho's map storing the configuration
-    uint32_t my_node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(my_node_id == member_ids[0]) {
+    // get my_node_rank from the Derecho group
+    int32_t my_node_rank = group.get_my_rank();
+    if(my_node_rank == 0) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         cout << "Appending to Bar." << endl;
@@ -100,7 +100,7 @@ int main(int argc, char** argv) {
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
     }
-    if(my_node_id == member_ids[1]) {
+    if(my_node_rank == 1) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int new_value = 3;
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
     }
-    if(my_node_id == member_ids[2]) {
+    if(my_node_rank == 2) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
         derecho::rpc::QueryResults<void> void_future = bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
     }
 
-    if(my_node_id == member_ids[3]) {
+    if(my_node_rank == 3) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
@@ -155,20 +155,20 @@ int main(int argc, char** argv) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }
     }
-    if(my_node_id == member_ids[4]) {
+    if(my_node_rank == 4) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-        node_id_t p2p_target = 2;
+        node_id_t p2p_target = member_ids[2];
         cout << "Reading Foo's state from node " << p2p_target << endl;
         ExternalCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
         derecho::rpc::QueryResults<int> foo_results = p2p_foo_handle.p2p_query<RPC_NAME(read_state)>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
     }
-    if(my_node_id == member_ids[5]) {
+    if(my_node_rank == 5) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");

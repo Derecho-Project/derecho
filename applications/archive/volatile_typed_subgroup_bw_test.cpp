@@ -60,7 +60,6 @@ int main(int argc, char* argv[]) {
     int count = atoi(argv[3]);
     struct timespec t1, t2, t3;
 
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     bool is_sending = true;
     long total_num_messages;
@@ -133,16 +132,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 
-    uint32_t node_rank = -1;
-    auto members_order = group.get_members();
-    cout << "The order of members is :" << endl;
-    for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
-        cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
-    }
-    cout << endl;
+    uint32_t node_rank = group.get_my_rank();
     if((sender_selector == 1) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) is_sending = false;
     if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes - 1)) is_sending = false;
 

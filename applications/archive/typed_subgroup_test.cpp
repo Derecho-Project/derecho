@@ -68,8 +68,8 @@ int main(int argc, char** argv) {
                                           foo_factory, bar_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id == 0) {
+    const uint32_t node_rank = group.get_my_rank();
+    if(node_rank == 0) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         cout << "Appending to Bar" << endl;
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
         cout << "Reading Foo's state just to allow node 1's message to be delivered" << endl;
         foo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
     }
-    if(node_id == 1) {
+    if(node_rank == 1) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int new_value = 3;
@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         cout << "Appending to Bar" << endl;
         bar_rpc_handle.ordered_send<RPC_NAME(append)>("Write from 1...");
     }
-    if(node_id == 2) {
+    if(node_rank == 2) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -110,7 +110,7 @@ int main(int argc, char** argv) {
         bar_rpc_handle.ordered_send<RPC_NAME(clear)>();
     }
 
-    if(node_id == 3) {
+    if(node_rank == 3) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Waiting for a 'Ken' value to appear in the cache..." << endl;
         bool found = false;
@@ -132,12 +132,14 @@ int main(int argc, char** argv) {
             cout << "Node " << reply_pair.first << " had Ken = " << reply_pair.second.get() << endl;
         }
     }
-    if(node_id == 4) {
+    if(node_rank == 4) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
+	// this ASSUMES that node id 2 is part of this subgroup
+	// this will be true if rank is equal to id
         node_id_t p2p_target = 2;
         cout << "Reading Foo's state from node " << p2p_target << endl;
         ExternalCaller<Foo>& p2p_foo_handle = group.get_nonmember_subgroup<Foo>();
@@ -145,7 +147,7 @@ int main(int argc, char** argv) {
         int response = foo_results.get().get(p2p_target);
         cout << "  Response: " << response << endl;
     }
-    if(node_id == 5) {
+    if(node_rank == 5) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");

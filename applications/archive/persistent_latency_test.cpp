@@ -70,7 +70,6 @@ int main(int argc, char *argv[]) {
     int max_ops = atoi(argv[4]);
     uint64_t si_us = (1000000l / max_ops);
     uint64_t msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-    uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     bool is_sending = true;
     uint32_t node_rank = -1;
     // message_pers_ts_us[] is the time when a message with version 'ver' is persisted.
@@ -164,16 +163,8 @@ int main(int argc, char *argv[]) {
                 ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
+    node_rank = group.get_my_rank();
 
-    auto members_order = group.get_members();
-    cout << "The order of members is :" << endl;
-    for(uint i = 0; i < (uint32_t)num_of_nodes; ++i) {
-        cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
-    }
-    cout << endl;
     if((sender_selector == 1) && (node_rank <= (uint32_t)(num_of_nodes - 1) / 2)) is_sending = false;
     if((sender_selector == 2) && (node_rank != (uint32_t)num_of_nodes - 1)) is_sending = false;
 

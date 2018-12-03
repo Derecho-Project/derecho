@@ -76,15 +76,7 @@ int main(int argc, char* argv[]) {
     std::unique_lock<std::mutex> main_lock(main_mutex);
     main_cv.wait(main_lock, [&groups_provisioned]() { return groups_provisioned; });
     std::cout << "Subgroups provisioned" << std::endl;
-
-    uint32_t node_rank = -1;
-    auto members = group.get_members();
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    for(uint i = 0; i < members.size(); ++i) {
-        if(members[i] == node_id) {
-            node_rank = i;
-        }
-    }
+    uint32_t node_rank = group.get_my_rank();
 
     // client
     if(node_rank >= S) {

@@ -416,6 +416,11 @@ std::vector<node_id_t> Group<ReplicatedTypes...>::get_members() {
 }
 
 template <typename... ReplicatedTypes>
+int32_t Group<ReplicatedTypes...>::get_my_rank() {
+    return view_manager.get_my_rank();
+}
+
+template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::barrier_sync() {
     view_manager.barrier_sync();
 }

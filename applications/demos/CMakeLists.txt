@@ -20,5 +20,6 @@ link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 add_executable(random_messages random_messages.cpp)
 target_link_libraries(random_messages derecho)
 
+# simple_replicated_objects
 add_executable(simple_replicated_objects simple_replicated_objects.cpp)
 target_link_libraries(simple_replicated_objects derecho)

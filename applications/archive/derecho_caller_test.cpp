@@ -89,12 +89,12 @@ int main(int argc, char* argv[]) {
 
     cout << "Finished constructing/joining Group" << endl;
 
-    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    auto my_rank = managed_group.get_my_rank();
     // other nodes (first two) change each other's state
-    if(my_id != 2) {
-        cout << "Changing other's state to " << 36 - my_id << endl;
+    if(my_rank != 2) {
+        cout << "Changing other's state to " << 36 - my_rank << endl;
         Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.p2p_query<RPC_NAME(change_state)>(1 - my_id, 36 - my_id).get());
+        output_result<bool>(rpc_handle.p2p_query<RPC_NAME(change_state)>(1 - my_rank, 36 - my_rank).get());
     }
 
     while(managed_group.get_members().size() < 3) {

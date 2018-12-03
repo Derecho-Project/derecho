@@ -70,18 +70,17 @@ int main(int argc, char** argv) {
                               foo_factory);
 
     cout << "Finished constructing/joining Group" << endl;
-
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    uint32_t node_rank = group.get_my_rank();
 
     // all shards change their state to a unique integer
-    if(node_id < num_nodes - 1 && node_id % 2 == 0) {
+    if(node_rank < num_nodes - 1 && node_rank % 2 == 0) {
         auto& foo_handle = group.get_subgroup<Foo>();
-        foo_handle.ordered_send<Foo::CHANGE_STATE>(node_id);
+        foo_handle.ordered_send<Foo::CHANGE_STATE>(node_rank);
         std::cout << "Done calling ordered_send" << std::endl;
     }
     group.barrier_sync();
     // node 13 queries for the state of each shard
-    if(node_id == num_nodes - 1) {
+    if(node_rank == num_nodes - 1) {
         auto shard_iterator = group.get_shard_iterator<Foo>();
         auto query_results_vec = shard_iterator.p2p_query<Foo::READ_STATE>();
         uint cnt = 0;

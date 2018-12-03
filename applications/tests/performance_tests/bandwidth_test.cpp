@@ -134,18 +134,8 @@ int main(int argc, char* argv[]) {
                   one_raw_group);
 
     cout << "Finished constructing/joining Group" << endl;
-    // figure out the node's rank in the group to decide if it needs to send messages or not
-    uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    uint32_t node_rank = -1;
     auto members_order = group.get_members();
-    cout << "The order of members is :" << endl;
-    for(uint i = 0; i < num_nodes; ++i) {
-        cout << members_order[i] << " ";
-        if(members_order[i] == node_id) {
-            node_rank = i;
-        }
-    }
-    cout << endl;
+    uint32_t node_rank = group.get_my_rank();
 
     long long unsigned int max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
 
@@ -191,7 +181,7 @@ int main(int argc, char* argv[]) {
         bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
     }
     // aggregate bandwidth from all nodes
-    double avg_bw = aggregate_bandwidth(members_order, node_id, bw);
+    double avg_bw = aggregate_bandwidth(members_order, members_order[node_rank], bw);
     // log the result at the leader node
     if(node_rank == 0) {
         log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,
