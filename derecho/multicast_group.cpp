@@ -467,9 +467,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
         }
-    }
-    // raw send
-    if(msg.size > h->header_size && callbacks.global_stability_callback) {
+    } else if(msg.size > h->header_size && callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
@@ -488,9 +486,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
         }
-    }
-    // raw send
-    if(msg.size > h->header_size && callbacks.global_stability_callback) {
+    } else if(msg.size > h->header_size && callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
