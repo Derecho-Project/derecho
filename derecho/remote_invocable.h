@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <numeric>
+#include <type_traits>
 
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "mutils/FunctionalMap.hpp"
@@ -44,6 +45,10 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     using remote_function_type = std::function<Ret(Args...)>;
     const Opcode invoke_opcode;
     const Opcode reply_opcode;
+
+    Ret* returnRet() {
+        return 0;
+    }
 
     //Maps invocation-instance IDs to results sets
     std::map<std::size_t, PendingResults<Ret>> results_map;
@@ -130,7 +135,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
-        assert(results_map.count(invocation_id));
+        assert(results_map.count(invocation_id) != 0);
         lock_t l{map_lock};
         // TODO: garbage collection for the responses.
         if(is_exception) {
@@ -195,7 +200,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      * @param receivers A map from RPC message opcodes to handler functions,
      * which this RemoteInvoker should add its functions to.
      */
-    RemoteInvoker(const std::type_index& class_id, uint32_t instance_id,
+    RemoteInvoker(uint32_t class_id, uint32_t instance_id,
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true} {
@@ -304,7 +309,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      * @param f The actual function that should be called when an RPC call
      * arrives.
      */
-    RemoteInvocable(const std::type_index& class_id, uint32_t instance_id,
+    RemoteInvocable(uint32_t class_id, uint32_t instance_id,
                     std::map<Opcode, receive_fun_t>& receivers,
                     std::function<Ret(Args...)> f)
             : remote_invocable_function(f),
@@ -347,6 +352,16 @@ struct partial_wrapped {
 };
 
 /**
+ * Exactly the same as the partial_wrapped template, but
+ * for pointer-to-member-functions that are const.
+ */
+template <FunctionTag Tag, typename Ret, typename Class, typename... Arguments>
+struct const_partial_wrapped {
+    using fun_t = Ret (Class::*)(Arguments...) const;
+    fun_t fun;
+};
+
+/**
  * Converts a partial_wrapped<> containing a pointer-to-member-function to a
  * wrapped<> containing the same function as a std::function. It does this by
  * constructing a lambda that captures an instance of the function's class and
@@ -362,8 +377,22 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
                                                            const partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
-            [_this, fun = partial.fun](Args... a) {
-                return ((_this->get())->*fun)(a...);
+            [_this, fun = partial.fun](Args... arguments) {
+                return (_this->get()->*fun)(arguments...);
+            }};
+}
+
+/**
+ * Exactly the same as the bind_to_instance function above, but for
+ * pointer-to-member-functions that are const.
+ */
+template <typename NewClass, FunctionTag Tag, typename Ret, typename... Args>
+wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewClass>* _this,
+                                                           const const_partial_wrapped<Tag, Ret, NewClass, Args...>& partial) {
+    assert(_this);
+    return wrapped<Tag, std::function<Ret(Args...)>>{
+            [_this, fun = partial.fun](Args... arguments) {
+                return (_this->get()->*fun)(arguments...);
             }};
 }
 
@@ -383,7 +412,18 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
  */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
 partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...)) {
+    static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
+    //Fold-expression asserts the boolean expression for all Args in the parameter pack
+    static_assert(((std::is_reference<Args>::value || sizeof(Args) < 2 * sizeof(void*)) && ...), "RPC-registered functions must take non-pointer-size arguments by reference to avoid extra copying.");
     return partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
+}
+
+/** Exactly the same as the above tag() function, but for const member functions. */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+const_partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args...) const) {
+    static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
+    static_assert(((std::is_reference<Args>::value || sizeof(Args) < 2 * sizeof(void*)) && ...), "RPC-registered functions must take non-pointer-size arguments by reference to avoid extra copying.");
+    return const_partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
 }
 
 /* Technically, RemoteInvocablePairs specializes this template for the cases
@@ -401,7 +441,7 @@ struct RemoteInvocablePairs;
 template <FunctionTag id, typename FunType>
 struct RemoteInvocablePairs<wrapped<id, FunType>>
         : public RemoteInvoker<id, FunType>, public RemoteInvocable<id, FunType> {
-    RemoteInvocablePairs(const std::type_index& class_id,
+    RemoteInvocablePairs(uint32_t class_id,
                          uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& receivers, FunType function_ptr)
             : RemoteInvoker<id, FunType>(class_id, instance_id, receivers),
@@ -427,7 +467,7 @@ template <FunctionTag id, typename FunType, typename... rest>
 struct RemoteInvocablePairs<wrapped<id, FunType>, rest...>
         : public RemoteInvoker<id, FunType>, public RemoteInvocable<id, FunType>, public RemoteInvocablePairs<rest...> {
     template <typename... RestFunTypes>
-    RemoteInvocablePairs(const std::type_index& class_id,
+    RemoteInvocablePairs(uint32_t class_id,
                          uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& receivers,
                          FunType function_ptr,
@@ -456,7 +496,7 @@ struct RemoteInvokers;
  */
 template <FunctionTag Tag, typename FunType>
 struct RemoteInvokers<wrapped<Tag, FunType>> : public RemoteInvoker<Tag, FunType> {
-    RemoteInvokers(const std::type_index& class_id,
+    RemoteInvokers(uint32_t class_id,
                    uint32_t instance_id,
                    std::map<Opcode, receive_fun_t>& receivers)
             : RemoteInvoker<Tag, FunType>(class_id, instance_id, receivers) {}
@@ -477,7 +517,7 @@ struct RemoteInvokers<wrapped<Tag, FunType>> : public RemoteInvoker<Tag, FunType
 template <FunctionTag Tag, typename FunType, typename... RestWrapped>
 struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
         : public RemoteInvoker<Tag, FunType>, public RemoteInvokers<RestWrapped...> {
-    RemoteInvokers(const std::type_index& class_id,
+    RemoteInvokers(uint32_t class_id,
                    uint32_t instance_id,
                    std::map<Opcode, receive_fun_t>& receivers)
             : RemoteInvoker<Tag, FunType>(class_id, instance_id, receivers),
@@ -504,10 +544,10 @@ class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
 public:
     const node_id_t nid;
 
-    RemoteInvocableClass(node_id_t nid, uint32_t instance_id,
+    RemoteInvocableClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
-            : RemoteInvocablePairs<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs, fs.fun...),
-              logger(spdlog::get("debug_log")),
+            : RemoteInvocablePairs<WrappedFuns...>(type_id, instance_id, rvrs, fs.fun...),
+              logger(spdlog::get("derecho_debug_log")),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
@@ -519,6 +559,12 @@ public:
             size += std::accumulate(t.begin(), t.end(), 0);
         }
         return size;
+    }
+
+    template <FunctionTag Tag, typename... Args>
+    auto* getReturnType(Args&&... args) {
+        constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
+        return this->get_invoker(choice, args...).returnRet();
     }
 
     /**
@@ -569,10 +615,13 @@ public:
 
 /**
  * Constructs a RemoteInvocableClass instance that proxies for an instance of
- * the class in the template parameter.
+ * the class in the template parameter (IdentifyingClass).
  * @param nid The Node ID of the node running this code
- * @param instance_id A number uniquely identifying this instance of the
- * template-parameter class; in practice, the ID of the subgroup that will be
+ * @param type_id A number uniquely identifying the type of IdentifyingClass;
+ * in practice, the index of IdentifyingClass within the template parameters
+ * of the Group that contains this replicated object.
+ * @param instance_id A number uniquely identifying this instance of
+ * IdentifyingClass; in practice, the ID of the subgroup that will be
  * replicating this object.
  * @param rvrs A map from RPC opcodes to RPC message handler functions, into
  * which new handlers will be added for this RemoteInvocableClass
@@ -581,10 +630,10 @@ public:
  * @return A unique_ptr to a RemoteInvocableClass of type IdentifyingClass.
  */
 template <class IdentifyingClass, typename... WrappedFuns>
-auto build_remote_invocable_class(const node_id_t nid, const uint32_t instance_id,
+auto build_remote_invocable_class(const node_id_t nid, const uint32_t type_id, const uint32_t instance_id,
                                   std::map<Opcode, receive_fun_t>& rvrs,
                                   const WrappedFuns&... fs) {
-    return std::make_unique<RemoteInvocableClass<IdentifyingClass, WrappedFuns...>>(nid, instance_id, rvrs, fs...);
+    return std::make_unique<RemoteInvocableClass<IdentifyingClass, WrappedFuns...>>(nid, type_id, instance_id, rvrs, fs...);
 }
 
 /**
@@ -603,9 +652,9 @@ class RemoteInvokerForClass : private RemoteInvokers<WrappedFuns...> {
 public:
     const node_id_t nid;
 
-    RemoteInvokerForClass(node_id_t nid, uint32_t instance_id,
+    RemoteInvokerForClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
                           std::map<Opcode, receive_fun_t>& rvrs)
-            : RemoteInvokers<WrappedFuns...>(std::type_index(typeid(IdentifyingClass)), instance_id, rvrs),
+            : RemoteInvokers<WrappedFuns...>(type_id, instance_id, rvrs),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
@@ -641,8 +690,11 @@ public:
 
 /**
  * Constructs a RemoteInvokerForClass that can act as a client for the class in
- * the template parameter.
+ * the template parameter (IdentifyingClass).
  * @param nid The Node ID of the node running this code
+ * @param type_id A number uniquely identifying the type of IdentifyingClass;
+ * in practice, the index of IdentifyingClass within the template parameters
+ * of the Group that contains that replicated object.
  * @param instance_id A number identifying the servers that should be contacted
  * when calling RPC methods on this class (since more than one instance of the
  * template-parameter class could be running as a RemoteInvocableClass); in
@@ -652,9 +704,9 @@ public:
  * @return A unique_ptr to a RemoteInvokerForClass of type IdentifyingClass
  */
 template <class IdentifyingClass, typename... WrappedFuns>
-auto build_remote_invoker_for_class(const node_id_t nid, const uint32_t instance_id,
+auto build_remote_invoker_for_class(const node_id_t nid, const uint32_t type_id, const uint32_t instance_id,
                                     std::map<Opcode, receive_fun_t>& rvrs) {
-    return std::make_unique<RemoteInvokerForClass<IdentifyingClass, WrappedFuns...>>(nid, instance_id, rvrs);
+    return std::make_unique<RemoteInvokerForClass<IdentifyingClass, WrappedFuns...>>(nid, type_id, instance_id, rvrs);
 }
 }  // namespace rpc
 }  // namespace derecho

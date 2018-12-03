@@ -11,6 +11,8 @@
 #include <thread>
 #include <rdma/fabric.h>
 
+#include "derecho/derecho_type_definitions.h"
+
 #define LF_VERSION FI_VERSION(1,5)
 
 namespace sst {
@@ -152,7 +154,11 @@ public:
 /**
  * add a new node to sst_connection set.
  */
-bool add_node(uint32_t new_id, const std::string new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+/**
+ * Removes a node from the SST TCP connections set
+ */
+bool remove_node(uint32_t node_id);
 /** sync
  * @param r_id - ID of the node to exchange data with.
  */
@@ -164,7 +170,7 @@ bool sync(uint32_t r_id);
  * @param ip_addres A map from rank to string??
  * @param node_rank rank of this node.
  */
-void lf_initialize(const std::map<uint32_t, std::string> &ip_addrs,
+  void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports,
                       uint32_t node_rank);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion(); 

@@ -18,7 +18,7 @@
 #include <conf/conf.hpp>
 
 #ifndef NDEBUG
-#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #endif//NDEBUG
 
 #include "derecho/connection_manager.h"
@@ -55,7 +55,18 @@ __LITTLE_ENDIAN nor __BIG_ENDIAN
 namespace sst{
 #ifndef NDEBUG
   /* log infrastructure */
-  static auto console = spdlog::stdout_color_mt("sst");
+  /** This tiny wrapper class for spdlog::logger allows the log level to be set
+   * in the constructor, which is the only way to initialize it statically. */
+  class SSTLogger {
+      std::shared_ptr<spdlog::logger> spdlogger;
+  public:
+      SSTLogger(spdlog::level::level_enum log_level)
+          : spdlogger(spdlog::stdout_color_mt("sst.lf")) {
+          spdlogger->set_level(log_level);
+      }
+      std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }
+  };
+  static auto console = SSTLogger(spdlog::level::debug);
 #endif//NDEBUG
   /**
    * passive endpoint info to be exchanged.
@@ -112,13 +123,13 @@ namespace sst{
    */
   // Debug tools
   #ifndef NDEBUG
-    #define dbg_trace(...) console->trace(__VA_ARGS__)
-    #define dbg_debug(...) console->debug(__VA_ARGS__)
-    #define dbg_info(...) console->info(__VA_ARGS__)
-    #define dbg_warn(...) console->warn(__VA_ARGS__)
-    #define dbg_error(...) console->error(__VA_ARGS__)
-    #define dbg_crit(...) console->critical(__VA_ARGS__)
-    #define dbg_flush() console->flush()
+    #define dbg_trace(...) console.get_logger()->trace(__VA_ARGS__)
+    #define dbg_debug(...) console.get_logger()->debug(__VA_ARGS__)
+    #define dbg_info(...) console.get_logger()->info(__VA_ARGS__)
+    #define dbg_warn(...) console.get_logger()->warn(__VA_ARGS__)
+    #define dbg_error(...) console.get_logger()->error(__VA_ARGS__)
+    #define dbg_crit(...) console.get_logger()->critical(__VA_ARGS__)
+    #define dbg_flush() console.get_logger()->flush()
   #else
     #define dbg_trace(...)
     #define dbg_debug(...)
@@ -575,8 +586,12 @@ namespace sst{
       return ret;
   }
 
-  bool add_node(uint32_t new_id, const std::string new_ip_addr) {
-    return sst_connections->add_node(new_id, new_ip_addr);
+  bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return sst_connections->add_node(new_id, new_ip_addr_and_port);
+  }
+
+  bool remove_node(uint32_t node_id) {
+      return sst_connections->delete_node(node_id);
   }
 
   bool sync(uint32_t r_id) {
@@ -637,7 +652,9 @@ namespace sst{
       if (eentry.op_context == NULL) {
         dbg_error("\top_context:NULL");
       } else {
+#ifndef NDEBUG
         struct lf_sender_ctxt *sctxt = (struct lf_sender_ctxt *)eentry.op_context;
+#endif
         dbg_error("\top_context:ce_idx={},remote_id={}",sctxt->ce_idx,sctxt->remote_id);
       }
 #ifdef DEBUG_FOR_RELEASE
@@ -656,7 +673,9 @@ namespace sst{
       dbg_error("\ttag={}",eentry.tag);
       dbg_error("\tolen={}",eentry.olen);
       dbg_error("\terr={}",eentry.err);
+#ifndef NDEBUG
       char errbuf[1024];
+#endif
       dbg_error("\tprov_errno={}:{}",eentry.prov_errno,
         fi_cq_strerror(g_ctxt.cq,eentry.prov_errno,eentry.err_data,errbuf,1024));
 #ifdef DEBUG_FOR_RELEASE
@@ -684,7 +703,7 @@ namespace sst{
         dbg_debug("WEIRD: we get an entry with op_context = NULL.");
         return {0xFFFFFFFFu,{0,0}}; // return a bad entry: weird!!!!
       } else {
-        dbg_debug("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+        dbg_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
         return {sctxt->ce_idx, {sctxt->remote_id, 1}};
       }
     } else { // shutdown return a bad entry
@@ -692,13 +711,12 @@ namespace sst{
     }
   }
 
-
-  void lf_initialize(
-    const std::map<uint32_t, std::string> &ip_addrs,
-    uint32_t node_rank){
+  void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                         &ip_addrs_and_ports,
+                     uint32_t node_rank) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::getConfInt32(CONF_SST_TCP_PORT));
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
     // initialize global resources:
     // STEP 1: initialize with configuration.

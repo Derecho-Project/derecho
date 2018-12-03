@@ -204,7 +204,7 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 
     // poll for surviving number of rows
     for(unsigned int index = 0; index < num_writes_posted; ++index) {
-        std::experimental::optional<std::pair<int32_t, int32_t>> ce;
+        std::optional<std::pair<int32_t, int32_t>> ce;
 
         while(true) {
             // check if polling result is available

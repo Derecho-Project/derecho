@@ -28,6 +28,8 @@
 #include "tcp/tcp.h"
 #include "verbs.h"
 
+#error "Verbs implementation is obsolete. Compilation stopped."
+
 using std::cout;
 using std::endl;
 
@@ -625,6 +627,9 @@ void resources_create() {
 bool add_node(uint32_t new_id, const std::string new_ip_addr) {
     return sst_connections->add_node(new_id, new_ip_addr);
 }
+bool remove_node(uint32_t node_id) {
+    return sst_connections->delete_node(node_id);
+}
 
 /**
 *@param r_index The node rank of the node to exchange data with.
@@ -638,8 +643,8 @@ bool sync(uint32_t r_index) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs, uint32_t node_rank) {
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs, derecho::sst_tcp_port);
+  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports, uint32_t node_rank) {
+    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
     // init all of the resources, so cleanup will be easy
     resources_init();
@@ -679,8 +684,8 @@ void verbs_destroy() {
     //         cout << "Could not close RDMA device" << endl;
     //     }
     // }
-
-    cout << "Shutting down" << endl;
+    delete sst_connections;
+    cout << "SST Verbs shutting down" << endl;
 }
 
 }  // namespace sst

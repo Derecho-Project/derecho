@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <iostream>
+#include <dirent.h>
 #include <string.h>
 #include <string>
 #include <sys/mman.h>
@@ -39,9 +40,6 @@ FilePersistLog::FilePersistLog(const string &name, const string &dataPath) noexc
                                                                                              m_iDataFileDesc(-1),
                                                                                              m_pLog(MAP_FAILED),
                                                                                              m_pData(MAP_FAILED) {
-#ifndef NDEBUG
-    spdlog::set_level(spdlog::level::trace);
-#endif
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -78,29 +76,29 @@ void FilePersistLog::load() noexcept(false) {
     //// [1][2][3][4][5][6][1][2][3][4][5][6]
     this->m_pLog = mmap(NULL, MAX_LOG_SIZE << 1, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(this->m_pLog == MAP_FAILED) {
-        dbg_trace("{0}:reserve map space for log failed.", this->m_sName);
+        dbg_error("{0}:reserve map space for log failed.", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap(this->m_pLog, MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
-        dbg_trace("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
+        dbg_error("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap((void *)((uint64_t) this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
-        dbg_trace("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
+        dbg_error("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     //// data ringbuffer
     this->m_pData = mmap(NULL, (size_t)(MAX_DATA_SIZE << 1), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(this->m_pData == MAP_FAILED) {
-        dbg_trace("{0}:reserve map space for data failed.", this->m_sName);
+        dbg_error("{0}:reserve map space for data failed.", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap(this->m_pData, (size_t)(MAX_DATA_SIZE), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
-        dbg_trace("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
+        dbg_error("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     if(mmap((void *)((uint64_t) this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
-        dbg_trace("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
+        dbg_error("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
     dbg_trace("{0}:data/meta file mapped to memory", this->m_sName);
@@ -195,14 +193,14 @@ void FilePersistLog::append(const void *pdat, const uint64_t &size, const int64_
 #define __DO_VALIDATION                                                                            \
     do {                                                                                           \
         if(NUM_FREE_SLOTS < 1) {                                                                   \
-            dbg_trace("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",             \
+            dbg_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",             \
                       this->m_sName, NUM_FREE_SLOTS);                                              \
             dbg_flush();                                                                           \
             FPL_UNLOCK;                                                                            \
             throw PERSIST_EXP_NOSPACE_LOG;                                                         \
         }                                                                                          \
         if(NUM_FREE_BYTES < size) {                                                                \
-            dbg_trace("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",      \
+            dbg_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",      \
                       this->m_sName, NUM_FREE_BYTES, size);                                        \
             dbg_flush();                                                                           \
             FPL_UNLOCK;                                                                            \
@@ -210,7 +208,7 @@ void FilePersistLog::append(const void *pdat, const uint64_t &size, const int64_
         }                                                                                          \
         if((CURR_LOG_IDX != -1) && (META_HEADER->fields.ver >= ver)) {                             \
             int64_t cver = META_HEADER->fields.ver;                                                \
-            dbg_trace("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
+            dbg_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
                       (int64_t)cver, (int64_t)ver);                                                \
             dbg_flush();                                                                           \
             FPL_UNLOCK;                                                                            \
@@ -260,7 +258,7 @@ void FilePersistLog::append(const void *pdat, const uint64_t &size, const int64_
       throw PERSIST_EXP_MSYNC(errno);
     }
 */
-    dbg_trace("{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
+    dbg_debug("{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
               ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
 }
@@ -890,4 +888,47 @@ void FilePersistLog::truncate(const int64_t &ver) noexcept(false) {
     FPL_UNLOCK;
     dbg_trace("{0} truncate at version: {1}....done", this->m_sName, ver);
 }
+
+  const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::string & prefix) {
+    // STEP 1: list all meta files in the path
+    DIR *dir = opendir(getPersFilePath().c_str());
+    if (dir == NULL) {
+      // We cannot open the persistent directory, so just return error.
+      dbg_error("{}:{} failed to open the directory. errno={}, err={}.",
+        __FILE__,__func__,errno,strerror(errno));
+      return INVALID_VERSION;
+    }
+    // STEP 2: get through the meta header for the minimum
+    struct dirent *dent;
+    bool found = false;
+    int64_t ver = INVALID_VERSION;
+    while ((dent=readdir(dir))!=NULL) {
+      uint32_t name_len = strlen(dent->d_name);
+      if (name_len > prefix.length() && 
+          strncmp(prefix.c_str(),dent->d_name,prefix.length()) == 0 &&
+          strncmp("." META_FILE_SUFFIX,dent->d_name+name_len-strlen(META_FILE_SUFFIX)-1,strlen(META_FILE_SUFFIX)+1) == 0
+      ) {
+        MetaHeader mh;
+        char fn[1024];
+        sprintf(fn,"%s/%s",getPersFilePath().c_str(),dent->d_name);
+        int fd = open(fn,O_RDONLY);
+        if (fd < 0) {
+          dbg_warn("{}:{} cannot read file:{}, errno={}, err={}.",
+            __FILE__,__func__,errno,strerror(errno));
+          continue;
+        }
+        int nRead = read(fd,(void*)&mh,sizeof(mh));
+        if (nRead != sizeof(mh)) {
+          dbg_warn("{}:{} cannot load meta header from file:{}, errno={}, err={}",
+            __FILE__,__func__,errno,strerror(errno));
+          close(fd);
+          continue;
+        }
+        close(fd);
+        if (!found || ver > mh.fields.ver)
+          ver = mh.fields.ver;
+      }
+    }
+    return ver;
+  }
 }

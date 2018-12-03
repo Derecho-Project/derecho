@@ -14,6 +14,7 @@
 #include <set>
 #include <vector>
 
+#include "derecho_type_definitions.h"
 #include "subgroup_functions.h"
 #include "subgroup_info.h"
 #include "view.h"
@@ -52,7 +53,7 @@ namespace derecho {
 std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::set<int>& leave_ranks,
                                      const std::vector<node_id_t>& joiner_ids,
-                                     const std::vector<ip_addr>& joiner_ips);
+                                     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports);
 
 /**
  * Prints the membership of a subgroup/shard layout to stdout

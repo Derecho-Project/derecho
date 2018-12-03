@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils/macro_utils.hpp>
 
@@ -57,16 +58,16 @@ using FunctionTag = unsigned long long;
  * std::tuple.
  */
 struct Opcode {
-    std::type_index class_id = std::type_index(typeid(void));
+    uint32_t class_id;
     subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
 };
-bool operator<(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator<(const Opcode& lhs, const Opcode& rhs) {
     return std::tie(lhs.class_id, lhs.subgroup_id, lhs.function_id, lhs.is_reply)
            < std::tie(rhs.class_id, rhs.subgroup_id, rhs.function_id, rhs.is_reply);
 }
-bool operator==(const Opcode& lhs, const Opcode& rhs) {
+inline bool operator==(const Opcode& lhs, const Opcode& rhs) {
     return lhs.class_id == rhs.class_id && lhs.subgroup_id == rhs.subgroup_id
            && lhs.function_id == rhs.function_id && lhs.is_reply == rhs.is_reply;
 }
@@ -140,21 +141,20 @@ using reply_map = std::map<node_id_t, std::future<T>>;
  * function call; there is one future for each node contacted to make the
  * call, and it will eventually contain that node's reply. The futures are
  * actually stored inside an internal struct of type ReplyMap, which can be
- * retreived with the get() method. The ReplyMap will not be returned until
+ * retrieved with the get() method. The ReplyMap will not be returned until
  * it is "fulfilled" by the sender, which should happen when the RPC call
- * is actually sent over the network.
+ * is delivered in the current View (and thus, the current View is the set
+ * of nodes who should reply to the RPC).
  * @tparam Ret The return type of the RPC function that this query invoked
  */
 template <typename Ret>
-struct QueryResults {
+class QueryResults {
+public:
     using map_fut = std::future<std::unique_ptr<reply_map<Ret>>>;
     using map = reply_map<Ret>;
     using type = Ret;
 
-    map_fut pending_rmap;
-    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
-
-    struct ReplyMap {
+    class ReplyMap {
     private:
         QueryResults& parent;
 
@@ -166,7 +166,7 @@ struct QueryResults {
         ReplyMap(ReplyMap&& rm) : parent(rm.parent), rmap(std::move(rm.rmap)) {}
 
         bool valid(const node_id_t& nid) {
-            assert(rmap.size() == 0 || rmap.count(nid));
+            assert(rmap.size() == 0 || rmap.count(nid) != 0);
             return (rmap.size() > 0) && rmap.at(nid).valid();
         }
 
@@ -192,10 +192,13 @@ struct QueryResults {
         }
     };
 
+    map_fut pending_rmap;
+
 private:
     ReplyMap replies{*this};
 
 public:
+    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
               replies{std::move(o.replies)} {}
@@ -232,12 +235,88 @@ public:
     }
 };
 
+/**
+ * Specialization of QueryResults for void functions, which do not generate
+ * replies. Here the "reply map" is actually a set, and simply records the set
+ * of nodes to which the RPC was sent. The internal ReplyMap is fulfilled when
+ * the set of nodes that received the RPC is known, which is when the RPC
+ * message was delivered in the current View.
+ */
 template <>
-struct QueryResults<void> {
+class QueryResults<void> {
+public:
+    using map_fut = std::future<std::unique_ptr<std::set<node_id_t>>>;
+    using map = std::set<node_id_t>;
     using type = void;
-    /* This currently has no functionality; Ken suggested a "flush," which
-       we might want to have in both this and the non-void variant.
-    */
+
+    class ReplyMap {
+    private:
+        QueryResults& parent;
+
+    public:
+        map rmap;
+
+        ReplyMap(QueryResults& qr) : parent(qr){};
+        ReplyMap(const ReplyMap&) = delete;
+        ReplyMap(ReplyMap&& rm) : parent(rm.parent), rmap(std::move(rm.rmap)) {}
+
+        bool valid(const node_id_t& nid) {
+            assert(rmap.size() == 0 || rmap.count(nid) != 0);
+            return (rmap.size() > 0) && rmap.count(nid) > 0;
+        }
+
+        /*
+          returns true if we sent to this node,
+          regardless of whether this node has replied.
+        */
+        bool contains(const node_id_t& nid) { return rmap.count(nid); }
+
+        auto begin() { return std::begin(rmap); }
+
+        auto end() { return std::end(rmap); }
+    };
+
+    map_fut pending_rmap;
+
+private:
+    ReplyMap replies{*this};
+
+public:
+    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
+    QueryResults(QueryResults&& o)
+            : pending_rmap{std::move(o.pending_rmap)},
+              replies{std::move(o.replies)} {}
+    QueryResults(const QueryResults&) = delete;
+
+    /**
+     * Wait the specified duration; if a ReplyMap is available
+     * after that duration, return it. Otherwise return nullptr.
+     */
+    template <typename Time>
+    ReplyMap* wait(Time t) {
+        if(replies.rmap.size() == 0) {
+            if(pending_rmap.wait_for(t) == std::future_status::ready) {
+                replies.rmap = std::move(*pending_rmap.get());
+                return &replies;
+            } else
+                return nullptr;
+        } else
+            return &replies;
+    }
+
+    /**
+     * Block until the ReplyMap is fulfilled, then return the map by reference.
+     * The ReplyMap is only valid as long as this QueryResults remains in
+     * scope, and cannot be copied.
+     */
+    ReplyMap& get() {
+        using namespace std::chrono;
+        while(true) {
+            if(auto rmap = wait(5min)) {
+                return *rmap;
+            }
+        }
+    }
 };
 
 /**
@@ -261,7 +340,7 @@ public:
  * response's value.
  */
 template <typename Ret>
-struct PendingResults : public PendingBase {
+class PendingResults : public PendingBase {
 private:
     /** A promise for a map containing one future for each reply to the RPC function
      * call. The future end of this promise lives in QueryResults, and is fulfilled
@@ -277,12 +356,13 @@ private:
 
     bool map_fulfilled = false;
     std::set<node_id_t> dest_nodes, responded_nodes;
-    whenlog(std::shared_ptr<spdlog::logger> logger;)
+    whenlog(std::shared_ptr<spdlog::logger> logger;);
 
 public:
-    PendingResults() : reply_promises_are_ready(promise_for_reply_promises.get_future()) whenlog(,
-                       logger(spdlog::get("debug_log"))) {
-        whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name());)
+    PendingResults()
+            : reply_promises_are_ready(promise_for_reply_promises.get_future())
+              whenlog(, logger(spdlog::get("derecho_debug_log"))) {
+        whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name()););
     }
     /**
      * Fill pending_map and reply_promises with one promise/future pair for
@@ -290,8 +370,8 @@ public:
      * @param who A list of nodes from which to expect responses.
      */
     void fulfill_map(const node_list_t& who) {
-        whenlog(logger->trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());)
-        whenlog(logger->flush();)
+        whenlog(logger->trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name()););
+        whenlog(logger->flush(););
         map_fulfilled = true;
         std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises_map;
@@ -299,7 +379,7 @@ public:
             futures_map->emplace(e, promises_map[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
-        whenlog(logger->trace("Setting a value for reply_promises_are_ready");)
+        whenlog(logger->trace("Setting a value for reply_promises_are_ready"););
         promise_for_reply_promises.set_value(std::move(promises_map));
         promise_for_pending_map.set_value(std::move(futures_map));
     }
@@ -317,8 +397,8 @@ public:
     void set_value(const node_id_t& nid, const Ret& v) {
         responded_nodes.insert(nid);
         if(reply_promises.size() == 0) {
-            whenlog(logger->trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name());)
-            whenlog(logger->flush();)
+            whenlog(logger->trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name()););
+            whenlog(logger->flush(););
             reply_promises = std::move(reply_promises_are_ready.get());
         }
         reply_promises.at(nid).set_value(v);
@@ -337,17 +417,31 @@ public:
     }
 };
 
+/**
+ * Specialization of PendingResults for void functions, which do not generate
+ * replies. Its only functionality is to fulfill the "reply map" in the its
+ * corresponding QueryResults<void>, which is just a set of nodes to which the
+ * RPC message was delivered.
+ */
 template <>
-struct PendingResults<void> : public PendingBase {
-    /* This currently has no functionality; Ken suggested a "flush," which
-       we might want to have in both this and the non-void variant.
-    */
+class PendingResults<void> : public PendingBase {
+private:
+    std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
 
-    void fulfill_map(const node_list_t&) {
-        spdlog::get("debug_log")->error("Got a call to fulfill_map in PendingResults<void>! Serious logic error!");
+public:
+    void fulfill_map(const node_list_t& sent_nodes) {
+        auto nodes_sent_set = std::make_unique<std::set<node_id_t>>();
+        for(const node_id_t& node : sent_nodes) {
+            nodes_sent_set->emplace(node);
+        }
+        promise_for_pending_map.set_value(std::move(nodes_sent_set));
     }
+
     void set_exception_for_removed_node(const node_id_t&) {}
-    QueryResults<void> get_future() { return QueryResults<void>{}; }
+
+    QueryResults<void> get_future() {
+        return QueryResults<void>(promise_for_pending_map.get_future());
+    }
 };
 
 /**
@@ -368,9 +462,13 @@ inline char* extra_alloc(int i) {
 inline void populate_header(char* reply_buf,
                             const std::size_t& payload_size,
                             const Opcode& op, const node_id_t& from) {
-    ((std::size_t*)reply_buf)[0] = payload_size;                                 // size
-    ((Opcode*)(sizeof(std::size_t) + reply_buf))[0] = op;                        // what
-    ((node_id_t*)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0] = from;  // from
+    std::size_t offset = 0;
+    static_assert(sizeof(op) == sizeof(Opcode), "Opcode& is not the same size as Opcode!");
+    ((std::size_t*)(reply_buf + offset))[0] = payload_size;  // size
+    offset += sizeof(payload_size);
+    ((Opcode*)(reply_buf + offset))[0] = op;  // what
+    offset += sizeof(op);
+    ((node_id_t*)(reply_buf + offset))[0] = from;  // from
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
@@ -378,9 +476,12 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from) {
-    payload_size = ((std::size_t const* const)reply_buf)[0];
-    op = ((Opcode const* const)(sizeof(std::size_t) + reply_buf))[0];
-    from = ((node_id_t const* const)(sizeof(std::size_t) + sizeof(Opcode) + reply_buf))[0];
+    std::size_t offset = 0;
+    payload_size = ((std::size_t const* const)(reply_buf + offset))[0];
+    offset += sizeof(payload_size);
+    op = ((Opcode const* const)(reply_buf + offset))[0];
+    offset += sizeof(op);
+    from = ((node_id_t const* const)(reply_buf + offset))[0];
 }
 }  // namespace remote_invocation_utilities
 

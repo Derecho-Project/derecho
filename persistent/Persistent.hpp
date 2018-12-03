@@ -4,6 +4,7 @@
 
 #include "FilePersistLog.hpp"
 #include "HLC.hpp"
+#include "PersistentTypenames.hpp"
 #include "PersistException.hpp"
 #include "PersistLog.hpp"
 #include "PersistNoLog.hpp"
@@ -30,7 +31,6 @@
 
 namespace persistent {
 
-using version_t = int64_t;
 // #define DEFINE_PERSIST_VAR(_t,_n) DEFINE_PERSIST_VAR(_t,_n,ST_FILE)
 #define DEFINE_PERSIST_VAR(_t, _n, _s) \
     Persistent<_t, _s> _n(#_n)
@@ -55,15 +55,6 @@ public:
     virtual const HLC getFrontier() = 0;
 };
 
-// function types to be registered for create version
-// , persist version, and trim a version
-using VersionFunc = std::function<void(const version_t &, const HLC &)>;
-using PersistFunc = std::function<const version_t(void)>;
-using TrimFunc = std::function<void(const version_t &)>;
-using LatestPersistedGetterFunc = std::function<const version_t(void)>;
-using TruncateFunc = std::function<void(const int64_t &)>;
-// this function is obsolete, now we use a shared pointer to persistence registry
-// using PersistentCallbackRegisterFunc = std::function<void(const char*,VersionFunc,PersistFunc,TrimFunc)>;
 
 /**
    * Helper function for creating Persistent version numbers out of MulticastGroup
@@ -95,7 +86,7 @@ std::pair<int_type, int_type> unpack_version(const version_t packed_int) {
     return std::make_pair(static_cast<int_type>(packed_int >> 32), static_cast<int_type>(0xffffffffll & packed_int));
 }
 
-/*
+  /**
    * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
    * variables. Replicated<T> class should maintain such a registry to perform
    * the following operations:
@@ -103,10 +94,13 @@ std::pair<int_type, int_type> unpack_version(const version_t packed_int) {
    * - persist(): persist the existing versions
    * - trim(const int64_t & ver): trim all versions earlier than ver
    */
-class PersistentRegistry : public mutils::RemoteDeserializationContext {
+class PersistentRegistry:public mutils::RemoteDeserializationContext{
 public:
-    PersistentRegistry(ITemporalQueryFrontierProvider *tqfp, const std::type_index &subgroup_type, uint32_t subgroup_index) : _subgroup_prefix(std::string(subgroup_type.name()) + std::to_string(subgroup_index)),
-                                                                                                                              _temporal_query_frontier_provider(tqfp){};
+    // TODO: take the subgroup_type,shubgroup_index,shard_num
+    PersistentRegistry(ITemporalQueryFrontierProvider * tqfp, const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num):
+        _subgroup_prefix(generate_prefix(subgroup_type,subgroup_index,shard_num)),
+        _temporal_query_frontier_provider(tqfp){
+    };
     virtual ~PersistentRegistry() {
         dbg_warn("PersistentRegistry@{} has been deallocated!", (void *)this);
         this->_registry.clear();
@@ -116,27 +110,29 @@ public:
 #define TRIM_FUNC_IDX (2)
 #define GET_ML_PERSISTED_VER (3)
 #define TRUNCATE_FUNC_IDX (4)
-    // make a version
+    /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t &ver, const HLC &mhlc) noexcept(false) {
         callFunc<VERSION_FUNC_IDX>(ver, mhlc);
     };
 
-    // persist data
+    /** (attempt to) Persist all existing versions
+     * @return The newest version number that was actually persisted. */
     const int64_t persist() noexcept(false) {
         return callFuncMin<PERSIST_FUNC_IDX, int64_t>();
     };
 
-    // trim the log
-    void trim(const int64_t &ver) noexcept(false) {
-        callFunc<TRIM_FUNC_IDX>(ver);
+    /** Trims the log of all versions earlier than the argument. */
+    void trim(const int64_t & earliest_version) noexcept(false) {
+        callFunc<TRIM_FUNC_IDX>(earliest_version);
     };
 
-    // get the minimum latest version persisted
+    /** Returns the minimum of the latest persisted versions among all Persistent fields. */
     const int64_t getMinimumLatestPersistedVersion() noexcept(false) {
         return callFuncMin<GET_ML_PERSISTED_VER, int64_t>();
     }
 
-    /** Set the earliest version for serialization, exclusive. This version will
+    /**
+     * Set the earliest version for serialization, exclusive. This version will
      * be stored in a thread-local variable. When to_bytes() is next called on
      * Persistent<T>, it will serialize the logs starting after that version
      * (so the serialized logs exclude version ver).
@@ -146,14 +142,23 @@ public:
         PersistentRegistry::earliest_version_to_serialize = ver;
     }
 
-    // reset the earliest version for serialization.
+    /** Reset the earliest version for serialization to an invalid "uninitialized" state */
     static void resetEarliestVersionToSerialize() noexcept(true) {
         PersistentRegistry::earliest_version_to_serialize = INVALID_VERSION;
     }
 
-    // get the earliest version for serialization.
+    /** Returns the earliest version for serialization. */
     static int64_t getEarliestVersionToSerialize() noexcept(true) {
         return PersistentRegistry::earliest_version_to_serialize;
+    }
+
+    /**
+     * Truncates the log, deleting all versions newer than the provided argument.
+     * Since this throws away recently-used data, it should only be used during
+     * failure recovery when those versions must be rolled back.
+     */
+    void truncate(const int64_t& last_version) {
+        callFunc<TRUNCATE_FUNC_IDX>(last_version);
     }
 
     // set the latest version for serialization
@@ -205,10 +210,43 @@ public:
     }
     PersistentRegistry(PersistentRegistry &&) = default;
     PersistentRegistry(const PersistentRegistry &) = delete;
-
     // get prefix for subgroup, this will appear in the file name of Persistent<T>
     const char *get_subgroup_prefix() {
         return this->_subgroup_prefix.c_str();
+    }
+    /** prefix generator
+     * prefix format: [hex of subgroup_type]-[subgroup_index]-[shard_num]
+     * @param subgroup_type, the type information of a subgroup
+     * @param subgroup_index, the index of a subgroup
+     * @param shard_num, the shard number of a subgroup
+     * @return a std::string representation of the prefix
+     */
+    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true) {
+        const char* subgroup_type_name = subgroup_type.name();
+        char prefix[strlen(subgroup_type_name)*2+32];
+        uint32_t i=0;
+        for(i=0;i<strlen(subgroup_type.name());i++) {
+            sprintf(prefix+2*i,"%02x",subgroup_type_name[i]);
+        }
+        sprintf(prefix+2*i,"-%u-%u",subgroup_index,shard_num);
+        return std::string(prefix);
+    }
+    /** match prefix
+     * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
+     * @param subgroup_type, the type information of a subgroup
+     * @param subgroup_index, the index of a subgroup
+     * @param shard_num, the shard number of a subgroup
+     * @return true if the prefix match the subgroup type,index, and shard_num; otherwise, false.
+     */
+    static bool match_prefix(const std::string str,const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true) {
+        std::string prefix = generate_prefix(subgroup_type,subgroup_index,shard_num);
+        try {
+            if (prefix == str.substr(0,prefix.length()))
+                return true;
+        } catch (const std::out_of_range& ) {
+            // str is shorter than prefix, just return false.
+        }
+        return false;
     }
 
 protected:
@@ -334,8 +372,9 @@ public:
        * @param persistent_registry A normal pointer to the registry.
        */
     Persistent(
-            const char *object_name = nullptr,
-            PersistentRegistry *persistent_registry = nullptr) noexcept(false)
+            const char * object_name = nullptr,
+            PersistentRegistry * persistent_registry = nullptr) // TODO: get the subgroup_type,subgroup_id,shard_num to intialize Persistent<T>
+            noexcept(false)
             : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
@@ -718,7 +757,7 @@ protected:
     // Persistence Registry
     PersistentRegistry *m_pRegistry;
     // get the static name maker.
-    static _NameMaker &getNameMaker();
+    static _NameMaker &getNameMaker(const std::string & prefix = std::string(""));
 
     //serialization supports
 public:
@@ -745,7 +784,8 @@ public:
         return sz;
     }
     std::size_t bytes_size() const {
-        return mutils::bytes_size(this->m_pLog->m_sName) + mutils::bytes_size(*this->m_pWrappedObject) + this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
+        return mutils::bytes_size(this->m_pLog->m_sName) + mutils::bytes_size(*this->m_pWrappedObject) +
+                this->m_pLog->bytes_size(PersistentRegistry::getEarliestVersionToSerialize());
     }
     void post_object(const std::function<void(char const *const, std::size_t)> &f)
             const {
@@ -818,9 +858,15 @@ public:
 // How many times the constructor was called.
 template <typename ObjectType, StorageType storageType>
 typename Persistent<ObjectType, storageType>::_NameMaker &
-Persistent<ObjectType, storageType>::getNameMaker() noexcept(false) {
-    static Persistent<ObjectType, storageType>::_NameMaker nameMaker;
-    return nameMaker;
+Persistent<ObjectType, storageType>::getNameMaker(const std::string & prefix) noexcept(false) {
+    static std::map<std::string,Persistent<ObjectType,storageType>::_NameMaker> name_makers;
+    // make sure prefix does exist.
+    auto search = name_makers.find(prefix);
+    if (search == name_makers.end()) {
+        name_makers.emplace(std::make_pair(std::string(prefix),Persistent<ObjectType,storageType>::_NameMaker()));
+    }
+
+    return name_makers[prefix];
 }
 
 template <typename ObjectType>
@@ -913,6 +959,15 @@ std::unique_ptr<ObjectType> loadObject(const char *object_name = nullptr) noexce
             throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
     }
 }
+
+  /// get the minmum latest persisted version for a Replicated<T>
+  /// identified by
+  /// @param subgroup_type
+  /// @param subgroup_index
+  /// @param shard_num
+  /// @return The minimum latest persisted version across the Replicated's Persistent<T> fields, as a version number
+  const version_t getMinimumLatestPersistedVersion(const std::type_index &subgroup_type,uint32_t subgroup_index,uint32_t shard_num);
+
 }
 
 #endif  //PERSIST_VAR_H

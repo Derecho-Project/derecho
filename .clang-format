@@ -18,7 +18,6 @@ BreakConstructorInitializersBeforeComma: false
 BinPackParameters: true
 ColumnLimit:     0
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
-DerivePointerAlignment: true
 ExperimentalAutoDetectBinPacking: false
 IndentCaseLabels: true
 IndentWrappedFunctionNames: false

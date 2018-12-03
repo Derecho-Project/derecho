@@ -13,13 +13,13 @@
 
 namespace derecho {
 
-subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank) {
     subgroup_shard_layout_t subgroup_vector(1);
     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
     next_unassigned_rank = curr_view.members.size();
     return subgroup_vector;
 }
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank, bool previous_was_successful) {
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank) {
     subgroup_shard_layout_t subgroup_vector(1);
     subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, Mode::UNORDERED));
     next_unassigned_rank = curr_view.members.size();
@@ -57,18 +57,20 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
  * @param next_unassigned_rank A reference to the same next_unassigned_rank
  * "cursor" passed to operator()
  * @param subgroup_policy The ShardAllocationPolicy to use for this subgroup
+ * @return True if the subgroup was assigned successfully, false if the View
+ * ran out of nodes and the subgroup could not be fully populated.
  */
-void DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy) {
+bool DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy) {
     if(subgroup_policy.even_shards) {
         if(static_cast<int>(curr_view.members.size()) - next_unassigned_rank
            < subgroup_policy.num_shards * subgroup_policy.nodes_per_shard) {
-            throw subgroup_provisioning_exception();
+            return false;
         }
     }
     previous_assignment->emplace_back(std::vector<SubView>());
     for(int shard_num = 0; shard_num < subgroup_policy.num_shards; ++shard_num) {
         if(!subgroup_policy.even_shards && next_unassigned_rank + subgroup_policy.num_nodes_by_shard[shard_num] >= (int)curr_view.members.size()) {
-            throw subgroup_provisioning_exception();
+            return false;
         }
         int nodes_needed = subgroup_policy.even_shards ? subgroup_policy.nodes_per_shard : subgroup_policy.num_nodes_by_shard[shard_num];
         std::vector<node_id_t> desired_nodes(&curr_view.members[next_unassigned_rank],
@@ -77,19 +79,14 @@ void DefaultSubgroupAllocator::assign_subgroup(const View& curr_view, int& next_
         Mode delivery_mode = subgroup_policy.even_shards ? subgroup_policy.shards_mode : subgroup_policy.modes_by_shard[shard_num];
         (*previous_assignment).back().emplace_back(curr_view.make_subview(desired_nodes, delivery_mode));
     }
+    return true;
 }
 
 subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_view,
-                                                             int& next_unassigned_rank,
-                                                             bool previous_was_successful) {
-    if(previous_was_successful) {
-        //Save the previous assignment since it was successful
-        last_good_assignment = deep_pointer_copy(previous_assignment);
-    } else {
-        //Overwrite previous_assignment with the one before that, if it exists
-        previous_assignment = deep_pointer_copy(last_good_assignment);
-    }
+                                                             int& next_unassigned_rank) {
     if(previous_assignment) {
+        //Assume the new assignment will be the same as the previous except for a few changes
+        auto next_assignment = std::make_unique<subgroup_shard_layout_t>(*previous_assignment);
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
             int num_shards_in_subgroup;
             if(policy.identical_subgroups) {
@@ -104,27 +101,34 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
                     ++shard_rank) {
                     if(curr_view.rank_of((*previous_assignment)[subgroup_num][shard_num].members[shard_rank]) == -1) {
                         //This node is not in the current view, so take the next available one
-                        if(next_unassigned_rank >= (int)curr_view.members.size()) {
+                        if(next_unassigned_rank >= static_cast<int>(curr_view.members.size())) {
                             throw subgroup_provisioning_exception();
                         }
-                        (*previous_assignment)[subgroup_num][shard_num].members[shard_rank] = curr_view.members[next_unassigned_rank];
-                        (*previous_assignment)[subgroup_num][shard_num].member_ips[shard_rank] = curr_view.member_ips[next_unassigned_rank];
+                        (*next_assignment)[subgroup_num][shard_num].members[shard_rank] = curr_view.members[next_unassigned_rank];
+                        (*next_assignment)[subgroup_num][shard_num].member_ips_and_ports[shard_rank] = curr_view.member_ips_and_ports[next_unassigned_rank];
                         next_unassigned_rank++;
-                    } else {
                     }
                 }
                 //These will be initialized from scratch by the calling ViewManager
-                (*previous_assignment)[subgroup_num][shard_num].joined.clear();
-                (*previous_assignment)[subgroup_num][shard_num].departed.clear();
+                (*next_assignment)[subgroup_num][shard_num].joined.clear();
+                (*next_assignment)[subgroup_num][shard_num].departed.clear();
             }
         }
+        //If we reached this point without throwing an exception, the new assignment is adequate and can be saved
+        previous_assignment = std::move(next_assignment);
     } else {
         previous_assignment = std::make_unique<subgroup_shard_layout_t>();
         for(int subgroup_num = 0; subgroup_num < policy.num_subgroups; ++subgroup_num) {
+            bool assignment_success;
             if(policy.identical_subgroups) {
-                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[0]);
+                assignment_success = assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[0]);
             } else {
-                assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[subgroup_num]);
+                assignment_success = assign_subgroup(curr_view, next_unassigned_rank, policy.shard_policy_by_subgroup[subgroup_num]);
+            }
+            if(!assignment_success) {
+                //Delete the partially-created "previous assignment," since it won't be installed
+                previous_assignment.reset();
+                throw subgroup_provisioning_exception();
             }
         }
     }
@@ -132,10 +136,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::operator()(const View& curr_vi
 }
 
 subgroup_shard_layout_t CrossProductAllocator::operator()(const View& curr_view,
-                                                          int& next_unassigned_rank,
-                                                          bool previous_was_successful) {
-    /* Ignore previous_was_successful and next_unassigned_rank, because this subgroup's assignment
-     * is based entirely on the source and target subgroups, and doesn't provision any new nodes. */
+                                                          int& next_unassigned_rank) {
+    /* Ignore next_unassigned_rank, because this subgroup's assignment is based entirely
+     * on the source and target subgroups, and doesn't provision any new nodes. */
     subgroup_id_t source_subgroup_id = curr_view.subgroup_ids_by_type.at(policy.source_subgroup.first)
                                                .at(policy.source_subgroup.second);
     subgroup_id_t target_subgroup_id = curr_view.subgroup_ids_by_type.at(policy.target_subgroup.first)

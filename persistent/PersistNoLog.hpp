@@ -26,7 +26,7 @@ void saveNoLogObjectInFile(
         ObjectType &obj,
         const char *object_name) noexcept(false) {
     char filepath[256];
-    char tmpfilepath[256];
+    char tmpfilepath[260];
 
     // 0 - create dir
     checkOrCreateDir(std::string(_NOLOG_OBJECT_DIR_));

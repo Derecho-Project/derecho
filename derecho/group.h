@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <ctime>
 #include <exception>
-#include <experimental/optional>
 #include <iostream>
 #include <list>
 #include <map>
@@ -15,7 +14,7 @@
 #include <utility>
 #include <vector>
 
-#include "tcp/tcp.h"
+#include <tcp/tcp.h>
 
 #include "derecho_exception.h"
 #include "derecho_internal.h"
@@ -32,6 +31,30 @@
 #include "spdlog/spdlog.h"
 
 namespace derecho {
+/**
+ * The function that implements index_of_type, which is separate to hide the
+ * "counter" template parameter (an implementation detail only used to maintain
+ * state across recursive calls).
+ */
+template <uint32_t counter, typename TargetType, typename FirstType, typename... RestTypes>
+constexpr uint32_t index_of_type_impl() {
+    if constexpr(std::is_same<TargetType, FirstType>::value)
+        return counter;
+    else
+        return index_of_type_impl<counter + 1, TargetType, RestTypes...>();
+}
+
+/**
+ * A compile-time "function" that computes the index of a type within a template
+ * parameter pack of types. The value of this constant is equal to the index of
+ * TargetType within TypePack. (Behavior is undefined if TargetType is not
+ * actually in TypePack).
+ * @tparam TargetType The type to search for in the parameter pack
+ * @tparam TypePack The template parameter pack that should be searched
+ */
+template <typename TargetType, typename... TypePack>
+constexpr inline uint32_t index_of_type = index_of_type_impl<0, TargetType, TypePack...>();
+
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
 using replicated_index_map = std::map<uint32_t, Replicated<T>>;
@@ -96,11 +119,17 @@ private:
 #endif
 
     const node_id_t my_id;
+    bool is_starting_leader;
+    std::optional<tcp::socket> leader_connection;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
+    /** Contains a TCP connection to each member of the group, for the purpose
+     * of transferring state information to new members during a view change.
+     * This connection pool is shared between Group and ViewManager */
+    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
     /** Contains all state related to managing Views, including the
-     * ManagedGroup and SST (since those change when the view changes). */
+     * MulticastGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
     /** Contains all state related to receiving and handling RPC function
      * calls for any Replicated objects implemented by this group. */
@@ -166,6 +195,10 @@ private:
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
 
+    /** A new-view callback that adds and removes TCP connections from the pool
+     * of long-standing TCP connections to each member (used mostly by RPCManager). */
+    void update_tcp_connections_callback(const View& new_view);
+
     /**
      * Constructor helper that constructs RawSubgroup objects for each subgroup
      * of type RawObject; called to initialize the raw_subgroups map.
@@ -183,8 +216,9 @@ private:
      * template pack.
      */
     template <typename... Empty>
-    typename std::enable_if<0 == sizeof...(Empty), std::set<std::pair<subgroup_id_t, node_id_t>>>::type
-    construct_objects(const View&, const std::unique_ptr<vector_int64_2d>&) {
+    std::enable_if_t<0 == sizeof...(Empty),
+                            std::set<std::pair<subgroup_id_t, node_id_t>>>
+    construct_objects(const View&, const vector_int64_2d&) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
 
@@ -199,32 +233,16 @@ private:
      * subgroup, since all object state will be received from the shard leader.
      *
      * @param curr_view A reference to the current view as reported by View_manager
-     * @param old_shard_leaders A pointer to the array of old shard leaders for
-     * each subgroup (indexed by subgroup ID), if one exists.
+     * @param old_shard_leaders The array of old shard leaders for each subgroup
+     * (indexed by subgroup ID), which will contain -1 if there is no previous
+     * leader for that shard.
      * @return The set of subgroup IDs that are un-initialized because this node is
      * joining an existing group and needs to receive initial object state, paired
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
-            const View& curr_view, const std::unique_ptr<vector_int64_2d>& old_shard_leaders);
-
-    /**
-     * Delegate constructor for joining an existing managed group, called after
-     * the entry-point constructor constructs a socket that connects to the leader.
-     * @param my_id The node ID of the node running this code
-     * @param leader_connection A socket connected to the existing group's leader
-     * @param callbacks
-     * @param subgroup_info
-     * @param _view_upcalls
-     * @param factories
-     */
-    Group(const node_id_t my_id,
-          tcp::socket leader_connection,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          std::vector<view_upcall_t> _view_upcalls,
-          Factory<ReplicatedTypes>... factories);
+            const View& curr_view, const vector_int64_2d& old_shard_leaders);
 
 public:
     /**
@@ -233,52 +251,17 @@ public:
      * the underlying DerechoGroup. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
      *
-     * @param my_id The node ID of the node executing this code
-     * @param my_ip The IP address of the node executing this code
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
-     * @param derecho_params The assorted configuration parameters for this
-     * Derecho group instance, such as message size and logfile name
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
      * template parameter of Group, providing a way to construct instances of
      * each Replicated Object
      */
-    Group(const node_id_t my_id,
-          const ip_addr my_ip,
-          const CallbackSet& callbacks,
-          const SubgroupInfo& subgroup_info,
-          const DerechoParams& derecho_params,
-          std::vector<view_upcall_t> _view_upcalls = {},
-          Factory<ReplicatedTypes>... factories);
-
-    /**
-     * Constructor that joins an existing managed Derecho group. The parameters
-     * normally set by DerechoParams will be initialized by copying them from
-     * the existing group's leader.
-     *
-     * @param my_id The node ID of the node running this code
-     * @param my_ip The IP address of the node running this code
-     * @param leader_id The node ID of the existing group's leader
-     * @param leader_ip The IP address of the existing group's leader
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
-     * @param subgroup_info The set of functions that define how membership in
-     * each subgroup and shard will be determined in this group. Must be the
-     * same as the SubgroupInfo that was used to configure the group's leader.
-     * @param _view_upcalls A list of functions to be called when the group
-     * experiences a View-Change event (optional).
-     * @param factories A variable number of Factory functions, one for each
-     * template parameter of Group, providing a way to construct instances of
-     * each Replicated Object
-     */
-    Group(const node_id_t my_id,
-          const ip_addr my_ip,
-          const ip_addr leader_ip,
-          const CallbackSet& callbacks,
+    Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
@@ -340,7 +323,7 @@ public:
 
 #ifndef NOLOG
     void log_event(const std::string& event_text) {
-        logger->debug(event_text);
+        SPDLOG_DEBUG(logger, event_text);
     }
 #endif
 };

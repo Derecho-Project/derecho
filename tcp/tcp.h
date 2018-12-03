@@ -1,10 +1,9 @@
-
-#ifndef CONNECTION_H
-#define CONNECTION_H
+#pragma once
 
 #include <functional>
 #include <memory>
 #include <string>
+#include <optional>
 
 namespace tcp {
 
@@ -19,12 +18,23 @@ class socket {
             : sock(_sock), remote_ip(remote_ip) {}
 
     friend class connection_listener;
-
-public:
     std::string remote_ip;
 
+public:
+
+    /**
+     * Constructs an empty, unconnected socket.
+     */
     socket() : sock(-1), remote_ip() {}
-    socket(std::string servername, int port);
+    /**
+     * Constructs a socket connected to the specified address and port,
+     * blocking until the connection succeeds.
+     * @param server_ip The IP address of the remote host, as a string
+     * @param server_port The port to connect to on the remote host
+     * @throws connection_failure if local socket construction or IP address
+     * lookup fails.
+     */
+    socket(std::string server_ip, uint16_t server_port);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;
@@ -32,8 +42,24 @@ public:
 
     ~socket();
 
-    bool is_empty();
+    bool is_empty() const;
     std::string get_self_ip();
+    std::string get_remote_ip() const { return remote_ip; }
+
+    /**
+     * Attempts to connect the socket to the specified address and port, but
+     * returns promptly with an error code if the connection attempt fails.
+     * Also allows the caller to specify the timeout after which the connection
+     * attempt will give up and return ETIMEDOUT.
+     * @param servername The IP address of the remote host, as a string
+     * @param port The port to connect to on the remote host
+     * @param timeout_ms The number of milliseconds to wait for the remote host
+     * to accept the connection; default is 20 seconds.
+     * @return Zero if the connection was successful, or the error code (from
+     * the set defined in sys/socket.h) that resulted from a failed connect()
+     * system call.
+     */
+    int try_connect(std::string servername, int port, int timeout_ms = 20000);
 
     /**
      * Reads size bytes from the socket and writes them to the given buffer.
@@ -113,14 +139,24 @@ public:
      * given port of this machine's TCP interface.
      * @param port The port to listen on.
      */
-    explicit connection_listener(int port);
+    explicit connection_listener(uint16_t port);
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.
      * @return A socket connected to a remote client.
      */
     socket accept();
+
+    /**
+     * Waits the specified number of milliseconds for a remote client to
+     * connect to this connection listener, then either returns a new socket
+     * connected to the client, or nullopt if no client connected before
+     * the timeout.
+     * @param timeout_ms The time to wait for a new connection
+     * @return A socket connected to a remote client, or nullopt if the
+     * timeout expired
+     */
+    std::optional<socket> try_accept(int timeout_ms);
 };
 }  // namespace tcp
 
-#endif /* CONNECTION_H */

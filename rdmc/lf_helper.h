@@ -2,13 +2,15 @@
 #define LF_HELPER_H
 
 #include <cstdint>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 #include <rdma/fabric.h>
+
+#include "derecho/derecho_type_definitions.h"
 
 #define LF_VERSION FI_VERSION(1,5)
 
@@ -132,7 +134,7 @@ public:
     static constexpr unsigned int shift_bits = 64 - 8 * sizeof(tag_type);
 
 private:
-    std::experimental::optional<tag_type> tag;
+    std::optional<tag_type> tag;
     message_type(tag_type t) : tag(t) {}
 
     friend class endpoint;
@@ -286,9 +288,10 @@ public:
 };
 
 namespace impl {
-bool lf_initialize(const std::map<uint32_t, std::string>& node_addresses,
+  bool lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
                    uint32_t node_rank);
-bool lf_add_connection(uint32_t new_id, const std::string new_ip_addr);
+bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t> &new_ip_addr_and_port);
+bool lf_remove_connection(uint32_t node_id);
 bool lf_destroy();
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(

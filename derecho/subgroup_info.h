@@ -49,7 +49,7 @@ using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
 /** The type of a lambda function that generates subgroup and shard views
  * for a specific subgroup type. This is a function that takes the current View
  * as input and outputs a vector-of-vectors representing subgroups and shards. */
-using shard_view_generator_t = std::function<subgroup_shard_layout_t(const View&, int&, bool)>;
+using shard_view_generator_t = std::function<subgroup_shard_layout_t(const View&, int&)>;
 
 /**
  * Container for whatever information is needed to describe a Group's subgroups

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
 #include "mutils-serialization/SerializationSupport.hpp"
 #include "p2p_connections.h"
 #include "remote_invocable.h"
@@ -54,14 +55,14 @@ class RPCManager {
     friend class ::derecho::ExternalCaller;
     ViewManager& view_manager;
 
-    tcp::tcp_connections tcp_connections;
-
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
 
     std::mutex p2p_connections_mutex;
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
+    /** This condition variable is to resolve a race condition in using ToFulfillQueue and fulfilledList */
+    std::condition_variable pending_results_cv;
     std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
     std::list<std::reference_wrapper<PendingBase>> fulfilledList;
 
@@ -121,15 +122,12 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(node_id_t node_id, ViewManager& group_view_manager)
-            : nid(node_id),
+    RPCManager(ViewManager& group_view_manager)
+            : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              whenlog(logger(spdlog::get("debug_log")),)
+              whenlog(logger(spdlog::get("derecho_debug_log")), )
               view_manager(group_view_manager),
-              //Connections initially only contains the local node. Other nodes are added in the new view callback
-              tcp_connections(node_id, std::map<node_id_t, ip_addr>(),
-                              group_view_manager.derecho_params.rpc_port),
-              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{node_id, {node_id}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
+              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
@@ -138,9 +136,7 @@ public:
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
-     * connections. This should only be called after Group's constructor has
-     * finished receiving Replicated Object state, since that process uses the
-     * same TCP sockets that this thread will use for RPC requests.
+     * connections.
      */
     void start_listening();
     /**
@@ -149,6 +145,9 @@ public:
      * registered to this RPCManager.
      * @param cls A raw pointer(??) to a pointer to the object being set up as
      * a RemoteInvocableClass
+     * @param type_id A number uniquely identifying the type of the object (in
+     * practice, this is the index of UserProvidedClass within the template
+     * parameters of the containing Group).
      * @param instance_id A number uniquely identifying the object, corresponding
      * to the subgroup that will be receiving RPC invocations for it (in practice,
      * this is the subgroup ID).
@@ -161,12 +160,12 @@ public:
      * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
      */
     template <typename UserProvidedClass, typename FunctionTuple>
-    auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t instance_id, FunctionTuple funs) {
+    auto make_remote_invocable_class(std::unique_ptr<UserProvidedClass>* cls, uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
         //FunctionTuple is a std::tuple of partial_wrapped<Tag, Ret, UserProvidedClass, Args>,
         //which is the result of the user calling tag<Tag>(&UserProvidedClass::method) on each RPC method
         //Use callFunc to unpack the tuple into a variadic parameter pack for build_remoteinvocableclass
         return mutils::callFunc([&](const auto&... unpacked_functions) {
-            return build_remote_invocable_class<UserProvidedClass>(nid, instance_id, *receivers,
+            return build_remote_invocable_class<UserProvidedClass>(nid, type_id, instance_id, *receivers,
                                                                    bind_to_instance(cls, unpacked_functions)...);
         },
                                 funs);
@@ -176,6 +175,9 @@ public:
      * Given a subgroup ID and a list of functions, constructs a
      * RemoteInvokerForClass for the type of object given by the template
      * parameter, with its receive functions registered to this RPCManager.
+     * @param type_id A number uniquely identifying the type of the object (in
+     * practice, this is the index of UserProvidedClass within the template
+     * parameters of the containing Group).
      * @param instance_id A number uniquely identifying the subgroup to which
      * RPC invocations for this object should be sent.
      * @param funs A tuple of "partially wrapped" pointer-to-member-functions
@@ -188,15 +190,14 @@ public:
      * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
      */
     template <typename UserProvidedClass, typename FunctionTuple>
-    auto make_remote_invoker(uint32_t instance_id, FunctionTuple funs) {
+    auto make_remote_invoker(uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
         return mutils::callFunc([&](const auto&... unpacked_functions) {
             //Supply the template parameters for build_remote_invoker_for_class by
             //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
             return build_remote_invoker_for_class<UserProvidedClass,
-                                                  decltype(bind_to_instance(
-                                                          std::declval<std::unique_ptr<UserProvidedClass>*>(),
-                                                          unpacked_functions))...>(nid,
-                                                                                   instance_id, *receivers);
+                                                  decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
+                                                                            unpacked_functions))...>(nid, type_id,
+                                                                                                     instance_id, *receivers);
         },
                                 funs);
     }
@@ -224,15 +225,6 @@ public:
     void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size);
 
     /**
-     * Returns a LockedReference to the TCP socket connected to the specified
-     * node. This allows other Derecho components to re-use RPCManager's
-     * connection pool without causing a race condition.
-     * @param node The ID of the node to get a TCP connection to
-     * @return A LockedReference containing a reference to that node's socket.
-     */
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> get_socket(node_id_t node);
-
-    /**
      * Writes the "list of destination nodes" header field into the given
      * buffer, in preparation for sending an RPC message.
      * @param dest_nodes The list of destination nodes
@@ -248,18 +240,15 @@ public:
      * Sends the next message in the MulticastGroup's send buffer (which is
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
-     * @param is_query True if this message represents a query (which expects replies),
-     * false if it repesents a send (which does not)
-     * @param dest_nodes The list of node IDs the message is being sent to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(bool is_query, uint32_t subgroup_id, const std::vector<node_id_t>& dest_nodes, PendingBase& pending_results_handle);
+    bool finish_rpc_send(PendingBase& pending_results_handle);
 
     /**
-   * called by replicated.h for sending a p2p send/query
-   */
+     * called by replicated.h for sending a p2p send/query
+     */
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
 
     /**
@@ -283,11 +272,13 @@ template <typename T>
 using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
                                                          .make_remote_invocable_class(std::declval<std::unique_ptr<T>*>(),
                                                                                       std::declval<uint32_t>(),
+                                                                                      std::declval<uint32_t>(),
                                                                                       T::register_functions()))>;
 
 template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
                                                         .make_remote_invoker<T>(std::declval<uint32_t>(),
+                                                                                std::declval<uint32_t>(),
                                                                                 T::register_functions()))>;
 }  // namespace rpc
 }  // namespace derecho

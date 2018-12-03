@@ -9,7 +9,7 @@
 #endif
 
 #include <array>
-#include <experimental/optional>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
@@ -40,12 +40,12 @@ struct receive_destination {
 typedef std::function<receive_destination(size_t size)>
         incoming_message_callback_t;
 typedef std::function<void(char* buffer, size_t size)> completion_callback_t;
-typedef std::function<void(std::experimental::optional<uint32_t> suspected_victim)>
+typedef std::function<void(std::optional<uint32_t> suspected_victim)>
         failure_callback_t;
 
-bool initialize(const std::map<uint32_t, std::string>& addresses,
+bool initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& addresses,
                 uint32_t node_rank) __attribute__((warn_unused_result));
-void add_address(uint32_t index, const std::string& address);
+void add_address(uint32_t index, const std::pair<ip_addr_t, uint16_t>& address);
 void shutdown();
 
 /**
@@ -78,8 +78,8 @@ bool send(uint16_t group_number, std::shared_ptr<rdma::memory_region> mr,
 
 // Convenience function to obtain the addresses of other nodes that might be
 // part of group communication.
-void query_addresses(std::map<uint32_t, std::string>& addresses,
-                     uint32_t& node_rank);
+// void query_addresses(std::map<uint32_t, std::string>& addresses,
+//                      uint32_t& node_rank);
 
 class barrier_group {
     // Queue Pairs and associated remote memory regions used for performing a

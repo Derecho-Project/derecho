@@ -8,6 +8,7 @@
 #include <string>
 
 #include "derecho_internal.h"
+#include "derecho_type_definitions.h"
 #include "sst/sst.h"
 
 namespace derecho {
@@ -65,6 +66,12 @@ public:
      *  representation is necessary because SST doesn't support variable-length
      *  strings. */
     SSTFieldVector<uint32_t> joiner_ips;
+    /** joiner_xxx_ports are the port numbers for the joining nodes.
+      * */
+    SSTFieldVector<uint16_t> joiner_gms_ports;
+    SSTFieldVector<uint16_t> joiner_rpc_ports;
+    SSTFieldVector<uint16_t> joiner_sst_ports;
+    SSTFieldVector<uint16_t> joiner_rdmc_ports;
     /** How many changes to the view have been proposed. Monotonically increases.
      * num_changes - num_committed is the number of pending changes, which should never
      * exceed the number of members in the current view. If num_changes == num_committed
@@ -111,6 +118,10 @@ public:
               suspected(parameters.members.size()),
               changes(100 + parameters.members.size()),
               joiner_ips(100 + parameters.members.size()),
+              joiner_gms_ports(100 + parameters.members.size()),
+              joiner_rpc_ports(100 + parameters.members.size()),
+              joiner_sst_ports(100 + parameters.members.size()),
+              joiner_rdmc_ports(100 + parameters.members.size()),
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
@@ -119,6 +130,7 @@ public:
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, stable_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
+                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier);
@@ -138,6 +150,10 @@ public:
                 global_min[row][i] = 0;
             }
             memset(const_cast<uint32_t*>(joiner_ips[row]), 0, joiner_ips.size());
+            memset(const_cast<uint16_t*>(joiner_gms_ports[row]), 0, joiner_gms_ports.size());
+            memset(const_cast<uint16_t*>(joiner_rpc_ports[row]), 0, joiner_rpc_ports.size());
+            memset(const_cast<uint16_t*>(joiner_sst_ports[row]), 0, joiner_sst_ports.size());
+            memset(const_cast<uint16_t*>(joiner_rdmc_ports[row]), 0, joiner_rdmc_ports.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_installed[row] = 0;
