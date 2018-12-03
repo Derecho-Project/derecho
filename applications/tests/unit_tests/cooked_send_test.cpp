@@ -23,8 +23,10 @@ public:
     }
 
     vector<pair<uint, uint>> get_msgs(uint start_index, uint end_index) {
-        if(end_index > msgs.size()) {
-            end_index = msgs.size();
+        num_msgs = msgs.size();
+        if(end_index > num_msgs) {
+            end_index = num_msgs;
+            std::cout << "Msgs size: " << num_msgs << std::endl;
         }
         return vector<pair<uint, uint>>(msgs.begin() + start_index, msgs.begin() + end_index);
     }
