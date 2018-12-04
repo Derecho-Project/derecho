@@ -529,7 +529,7 @@ bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
         clock_gettime(CLOCK_REALTIME, &now);
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
-    // std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
+    std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;
 }
 
@@ -550,7 +550,7 @@ bool MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num
         clock_gettime(CLOCK_REALTIME, &now);
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
-    // std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
+    std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;
 }
 
@@ -603,7 +603,7 @@ void MulticastGroup::deliver_messages_upto(
              sizeof(decltype(sst->delivered_num)::value_type));
     if(non_null_msgs_delivered) {
         //Call the persistence_manager_post_persist_func
-        // std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
+        std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
     }
 }
 
@@ -835,7 +835,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                 sizeof(decltype(sst.delivered_num)::value_type));
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
-            // std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
+            std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
         }
     }
 }
