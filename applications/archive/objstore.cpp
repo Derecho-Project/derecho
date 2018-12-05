@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
             [&](derecho::subgroup_id_t subgroup, uint32_t nid, int32_t mid, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver){
                 msg_counter ++;
                 latest_version = ver;
-                if (msg_counter == (total_num_messages * num_of_nodes)) {
+                if (msg_counter == (total_num_messages + num_of_nodes)) {
                     bReady = true;
                 }
             },  // using stability callback to match the version.
