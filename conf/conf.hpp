@@ -39,6 +39,7 @@ private:
 #define CONF_RDMA_RX_DEPTH "RDMA/rx_depth"
 #define CONF_PERS_FILE_PATH "PERS/file_path"
 #define CONF_PERS_RAMDISK_PATH "PERS/ramdisk_path"
+#define CONF_PERS_RESET "PERS/reset"
 
   std::map<const std::string, std::string> config = {
       // [DERECHO]
@@ -63,7 +64,8 @@ private:
       {CONF_RDMA_RX_DEPTH, "256"},
       // [PERS]
       {CONF_PERS_FILE_PATH, ".plog"},
-      {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"}};
+      {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
+      {CONF_PERS_RESET, "false"}};
 
 public:
   // the option for parsing command line with getopt(not GetPot!!!)
@@ -136,6 +138,11 @@ public:
   const double getDouble(const std::string &key) const {
     return (const float)std::stod(this->config.at(key));
   }
+  const bool getBoolean(const std::string &key) const {
+    return (this->config.at(key) == "true") ||
+      (this->config.at(key) == "yes" ) ||
+      (this->config.at(key) == "1");
+  }
   // Initialize the singleton from the command line and the configuration file.
   // The command line has higher priority than the configuration file
   // The process we find the configuration file:
@@ -165,5 +172,6 @@ const int64_t getConfInt64(const std::string &key);
 const uint64_t getConfUInt64(const std::string &key);
 const float getConfFloat(const std::string &key);
 const double getConfDouble(const std::string &key);
+const bool getConfBoolean(const std::string &key);
 } // namespace derecho
 #endif // CONF_HPP

@@ -65,6 +65,7 @@ struct option Conf::long_options[] = {
       // [PERS]
       MAKE_LONG_OPT_ENTRY(CONF_PERS_FILE_PATH),
       MAKE_LONG_OPT_ENTRY(CONF_PERS_RAMDISK_PATH),
+      MAKE_LONG_OPT_ENTRY(CONF_PERS_RESET),
       {0,0,0,0}
 };
 
@@ -147,5 +148,9 @@ const float getConfFloat(const std::string & key){
 
 const double getConfDouble(const std::string& key) {
     return Conf::get()->getDouble(key);
+}
+
+const bool getConfBoolean(const std::string& key) {
+    return Conf::get()->getBoolean(key);
 }
 }
