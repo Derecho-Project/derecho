@@ -1,14 +1,22 @@
 #include "FilePersistLog.hpp"
 #include "util.hpp"
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <iostream>
-#include <dirent.h>
 #include <string.h>
 #include <string>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#if __GNUC__ > 7
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif
 
 using namespace std;
 
@@ -19,19 +27,19 @@ namespace persistent {
 /////////////////////////
 
 // verify the existence of the meta file
-static bool checkOrCreateMetaFile(const string &metaFile) noexcept(false);
+static bool checkOrCreateMetaFile(const string& metaFile) noexcept(false);
 
 // verify the existence of the log file
-static bool checkOrCreateLogFile(const string &logFile) noexcept(false);
+static bool checkOrCreateLogFile(const string& logFile) noexcept(false);
 
 // verify the existence of the data file
-static bool checkOrCreateDataFile(const string &dataFile) noexcept(false);
+static bool checkOrCreateDataFile(const string& dataFile) noexcept(false);
 
 ////////////////////////
 // visible to outside //
 ////////////////////////
 
-FilePersistLog::FilePersistLog(const string &name, const string &dataPath) noexcept(false) : PersistLog(name),
+FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexcept(false) : PersistLog(name),
                                                                                              m_sDataPath(dataPath),
                                                                                              m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
                                                                                              m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
@@ -47,8 +55,30 @@ FilePersistLog::FilePersistLog(const string &name, const string &dataPath) noexc
         throw PERSIST_EXP_MUTEX_INIT(errno);
     }
     dbg_trace("{0} constructor: before load()", name);
+    if(derecho::getConfBoolean(CONF_PERS_RESET)) {
+        reset();
+    }
     load();
     dbg_trace("{0} constructor: after load()", name);
+}
+
+void FilePersistLog::reset() noexcept(false) {
+    dbg_trace("{0} reset state...begin", this->m_sName);
+    if(fs::exists(this->m_sMetaFile)) {
+        if(!fs::remove(this->m_sMetaFile)) {
+            dbg_error("{0} reset failed to remove the file:{1}", this->m_sName, this->m_sMetaFile);
+            throw PERSIST_EXP_REMOVE_FILE(errno);
+        }
+        if(!fs::remove(this->m_sLogFile)) {
+            dbg_error("{0} reset failed to remove the file:{1}", this->m_sName, this->m_sLogFile);
+            throw PERSIST_EXP_REMOVE_FILE(errno);
+        }
+        if(!fs::remove(this->m_sDataFile)) {
+            dbg_error("{0} reset failed to remove the file:{1}", this->m_sName, this->m_sDataFile);
+            throw PERSIST_EXP_REMOVE_FILE(errno);
+        }
+    }
+    dbg_trace("{0} reset state...done", this->m_sName);
 }
 
 void FilePersistLog::load() noexcept(false) {
@@ -83,7 +113,7 @@ void FilePersistLog::load() noexcept(false) {
         dbg_error("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap((void *)((uint64_t) this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
+    if(mmap((void*)((uint64_t) this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
         dbg_error("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
@@ -97,7 +127,7 @@ void FilePersistLog::load() noexcept(false) {
         dbg_error("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap((void *)((uint64_t) this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
+    if(mmap((void*)((uint64_t) this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
         dbg_error("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
@@ -132,7 +162,7 @@ void FilePersistLog::load() noexcept(false) {
             if(fd == -1) {
                 throw PERSIST_EXP_OPEN_FILE(errno);
             }
-            ssize_t nRead = read(fd, (void *)META_HEADER_PERS, sizeof(MetaHeader));
+            ssize_t nRead = read(fd, (void*)META_HEADER_PERS, sizeof(MetaHeader));
             if(nRead != sizeof(MetaHeader)) {
                 close(fd);
                 throw PERSIST_EXP_READ_FILE(errno);
@@ -186,7 +216,7 @@ FilePersistLog::~FilePersistLog() noexcept(true) {
     }
 }
 
-void FilePersistLog::append(const void *pdat, const uint64_t &size, const int64_t &ver, const HLC &mhlc) noexcept(false) {
+void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_t& ver, const HLC& mhlc) noexcept(false) {
     dbg_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
@@ -263,7 +293,7 @@ void FilePersistLog::append(const void *pdat, const uint64_t &size, const int64_
     FPL_UNLOCK;
 }
 
-void FilePersistLog::advanceVersion(const int64_t &ver) noexcept(false) {
+void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     FPL_WRLOCK;
     if(META_HEADER->fields.ver < ver) {
         META_HEADER->fields.ver = ver;
@@ -392,13 +422,13 @@ const version_t FilePersistLog::getLastPersisted() noexcept(false) {
     return last_persisted;
 }
 
-int64_t FilePersistLog::getVersionIndex(const version_t &ver) {
+int64_t FilePersistLog::getVersionIndex(const version_t& ver) {
     FPL_RDLOCK;
 
     //binary search
     dbg_trace("{0} - begin binary search.", this->m_sName);
     int64_t l_idx = binarySearch<int64_t>(
-            [&](const LogEntry *ple) {
+            [&](const LogEntry* ple) {
                 return ple->fields.ver;
             },
             ver,
@@ -408,12 +438,12 @@ int64_t FilePersistLog::getVersionIndex(const version_t &ver) {
 
     FPL_UNLOCK;
 
-    dbg_trace("{0} getVersionIndex({1}) at index {2}", this->m_sName,ver,l_idx);
+    dbg_trace("{0} getVersionIndex({1}) at index {2}", this->m_sName, ver, l_idx);
 
     return l_idx;
 }
 
-const void *FilePersistLog::getEntryByIndex(const int64_t &eidx) noexcept(false) {
+const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false) {
     FPL_RDLOCK;
     dbg_trace("{0}-getEntryByIndex-head:{1},tail:{2},eidx:{3}",
               this->m_sName, META_HEADER->fields.head, META_HEADER->fields.tail, eidx);
@@ -484,15 +514,15 @@ const void *FilePersistLog::getEntryByIndex(const int64_t &eidx) noexcept(false)
   }
 */
 
-const void *FilePersistLog::getEntry(const int64_t &ver) noexcept(false) {
-    LogEntry *ple = nullptr;
+const void* FilePersistLog::getEntry(const int64_t& ver) noexcept(false) {
+    LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
 
     //binary search
     dbg_trace("{0} - begin binary search.", this->m_sName);
     int64_t l_idx = binarySearch<int64_t>(
-            [&](const LogEntry *ple) {
+            [&](const LogEntry* ple) {
                 return ple->fields.ver;
             },
             ver,
@@ -513,8 +543,8 @@ const void *FilePersistLog::getEntry(const int64_t &ver) noexcept(false) {
     return LOG_ENTRY_DATA(ple);
 }
 
-const void *FilePersistLog::getEntry(const HLC &rhlc) noexcept(false) {
-    LogEntry *ple = nullptr;
+const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
+    LogEntry* ple = nullptr;
     //    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
 
     FPL_RDLOCK;
@@ -562,7 +592,7 @@ const void *FilePersistLog::getEntry(const HLC &rhlc) noexcept(false) {
 }
 
 // trim by index
-void FilePersistLog::trimByIndex(const int64_t &idx) noexcept(false) {
+void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
     dbg_trace("{0} trim at index: {1}", this->m_sName, idx);
     FPL_RDLOCK;
     // validate check
@@ -596,14 +626,14 @@ void FilePersistLog::trimByIndex(const int64_t &idx) noexcept(false) {
     dbg_trace("{0} trim at index: {1}...done", this->m_sName, idx);
 }
 
-void FilePersistLog::trim(const int64_t &ver) noexcept(false) {
+void FilePersistLog::trim(const int64_t& ver) noexcept(false) {
     dbg_trace("{0} trim at version: {1}", this->m_sName, ver);
     this->trim<int64_t>(ver,
-                        [&](const LogEntry *ple) { return ple->fields.ver; });
+                        [&](const LogEntry* ple) { return ple->fields.ver; });
     dbg_trace("{0} trim at version: {1}...done", this->m_sName, ver);
 }
 
-void FilePersistLog::trim(const HLC &hlc) noexcept(false) {
+void FilePersistLog::trim(const HLC& hlc) noexcept(false) {
     dbg_trace("{0} trim at time: {1}.{2}", this->m_sName, hlc.m_rtc_us, hlc.m_logic);
     //    this->trim<unsigned __int128>(
     //      ((((const unsigned __int128)hlc.m_rtc_us)<<64) | hlc.m_logic),
@@ -616,7 +646,7 @@ void FilePersistLog::trim(const HLC &hlc) noexcept(false) {
     dbg_trace("{0} trim at time: {1}.{2}...done", this->m_sName, hlc.m_rtc_us, hlc.m_logic);
 }
 
-void FilePersistLog::persistMetaHeaderAtomically(MetaHeader *pShadowHeader) noexcept(false) {
+void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) noexcept(false) {
     // STEP 1: get file name
     const string swpFile = this->m_sMetaFile + "." + SWAP_FILE_SUFFIX;
 
@@ -640,7 +670,7 @@ void FilePersistLog::persistMetaHeaderAtomically(MetaHeader *pShadowHeader) noex
     *META_HEADER_PERS = *pShadowHeader;
 }
 
-int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t &ver) noexcept(false) {
+int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false) {
     int64_t rIndex = INVALID_INDEX;
 
     dbg_trace("{0}[{1}] - request version {2}", this->m_sName, __func__, ver);
@@ -659,7 +689,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t &ver) noexcep
     // binary search
     dbg_trace("{0}[{1}] - begin binary search.", this->m_sName, __func__);
     int64_t l_idx = binarySearch<int64_t>(
-            [&](const LogEntry *ple) {
+            [&](const LogEntry* ple) {
                 return ple->fields.ver;
             },
             ver,
@@ -693,7 +723,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t &ver) noexcep
 // 2) size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba);
 // 3) size_t postLogEntry(const std::function<void (char const *const, std::size_t)> f, const LogEntry *ple);
 // 4) size_t mergeLogEntryFromByteArray(const char * ba);
-size_t FilePersistLog::bytes_size(const int64_t &ver) noexcept(false) {
+size_t FilePersistLog::bytes_size(const int64_t& ver) noexcept(false) {
     size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     if(idx != INVALID_INDEX) {
@@ -705,15 +735,15 @@ size_t FilePersistLog::bytes_size(const int64_t &ver) noexcept(false) {
     return bsize;
 }
 
-size_t FilePersistLog::to_bytes(char *buf, const int64_t &ver) noexcept(false) {
+size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) noexcept(false) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest_version
     int64_t latest_version = this->getLatestVersion();
-    *(int64_t *)(buf + ofst) = latest_version;
+    *(int64_t*)(buf + ofst) = latest_version;
     ofst += sizeof(int64_t);
     // nr_log_entry
-    *(int64_t *)(buf + ofst) = (idx == INVALID_INDEX) ? 0 : (META_HEADER->fields.tail - idx);
+    *(int64_t*)(buf + ofst) = (idx == INVALID_INDEX) ? 0 : (META_HEADER->fields.tail - idx);
     ofst += sizeof(int64_t);
     // log_entries
     if(idx != INVALID_INDEX) {
@@ -725,15 +755,15 @@ size_t FilePersistLog::to_bytes(char *buf, const int64_t &ver) noexcept(false) {
     return ofst;
 }
 
-void FilePersistLog::post_object(const std::function<void(char const *const, std::size_t)> &f,
-                                 const int64_t &ver) noexcept(false) {
+void FilePersistLog::post_object(const std::function<void(char const* const, std::size_t)>& f,
+                                 const int64_t& ver) noexcept(false) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     // latest_version
     int64_t latest_version = this->getLatestVersion();
-    f((char *)&latest_version, sizeof(int64_t));
+    f((char*)&latest_version, sizeof(int64_t));
     // nr_log_entry
     int64_t nr_log_entry = (idx == INVALID_INDEX) ? 0 : (META_HEADER->fields.tail - idx);
-    f((char *)&nr_log_entry, sizeof(int64_t));
+    f((char*)&nr_log_entry, sizeof(int64_t));
     // log_entries
     if(idx != INVALID_INDEX) {
         while(idx < META_HEADER->fields.tail) {
@@ -743,13 +773,13 @@ void FilePersistLog::post_object(const std::function<void(char const *const, std
     }
 }
 
-void FilePersistLog::applyLogTail(char const *v) noexcept(false) {
+void FilePersistLog::applyLogTail(char const* v) noexcept(false) {
     size_t ofst = 0;
     // latest_version
-    int64_t latest_version = *(const int64_t *)(v + ofst);
+    int64_t latest_version = *(const int64_t*)(v + ofst);
     ofst += sizeof(int64_t);
     // nr_log_entry
-    int64_t nr_log_entry = *(const int64_t *)(v + ofst);
+    int64_t nr_log_entry = *(const int64_t*)(v + ofst);
     ofst += sizeof(int64_t);
     // log_entries
     while(nr_log_entry--) {
@@ -759,34 +789,34 @@ void FilePersistLog::applyLogTail(char const *v) noexcept(false) {
     META_HEADER->fields.ver = latest_version;
 }
 
-size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry *ple) noexcept(false) {
+size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) noexcept(false) {
     return sizeof(LogEntry) + ple->fields.dlen;
 }
 
-size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry *ple, char *ba) noexcept(false) {
+size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) noexcept(false) {
     size_t nr_written = 0;
     memcpy(ba, ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
     if(ple->fields.dlen > 0) {
-        memcpy((void *)(ba + nr_written), (void *)LOG_ENTRY_DATA(ple), ple->fields.dlen);
+        memcpy((void*)(ba + nr_written), (void*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
         nr_written += ple->fields.dlen;
     }
     return nr_written;
 }
 
-size_t FilePersistLog::postLogEntry(const std::function<void(char const *const, std::size_t)> &f, const LogEntry *ple) noexcept(false) {
+size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple) noexcept(false) {
     size_t nr_written = 0;
-    f((const char *)ple, sizeof(LogEntry));
+    f((const char*)ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
     if(ple->fields.dlen > 0) {
-        f((const char *)LOG_ENTRY_DATA(ple), ple->fields.dlen);
+        f((const char*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
         nr_written += ple->fields.dlen;
     }
     return nr_written;
 }
 
-size_t FilePersistLog::mergeLogEntryFromByteArray(const char *ba) noexcept(false) {
-    const LogEntry *cple = (const LogEntry *)ba;
+size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false) {
+    const LogEntry* cple = (const LogEntry*)ba;
     // valid check
     // 0) version grows monotonically.
     if(cple->fields.ver <= META_HEADER->fields.ver) {
@@ -803,7 +833,7 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char *ba) noexcept(false
         throw PERSIST_EXP_NOSPACE_DATA;
     }
     // 2) merge it!
-    memcpy(NEXT_DATA, (const void *)(ba + sizeof(LogEntry)), cple->fields.dlen);
+    memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.dlen);
     memcpy(NEXT_LOG_ENTRY, cple, sizeof(LogEntry));
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r, cple->fields.hlc_l}, META_HEADER->fields.tail});
@@ -858,19 +888,19 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char *ba) noexcept(false
     return bCreate;
   }
 */
-bool checkOrCreateMetaFile(const string &metaFile) noexcept(false) {
+bool checkOrCreateMetaFile(const string& metaFile) noexcept(false) {
     return checkOrCreateFileWithSize(metaFile, META_SIZE);
 }
 
-bool checkOrCreateLogFile(const string &logFile) noexcept(false) {
+bool checkOrCreateLogFile(const string& logFile) noexcept(false) {
     return checkOrCreateFileWithSize(logFile, MAX_LOG_SIZE);
 }
 
-bool checkOrCreateDataFile(const string &dataFile) noexcept(false) {
+bool checkOrCreateDataFile(const string& dataFile) noexcept(false) {
     return checkOrCreateFileWithSize(dataFile, MAX_DATA_SIZE);
 }
 
-void FilePersistLog::truncate(const int64_t &ver) noexcept(false) {
+void FilePersistLog::truncate(const int64_t& ver) noexcept(false) {
     dbg_trace("{0} truncate at version: {1}.", this->m_sName, ver);
     FPL_WRLOCK;
     // STEP 1: search for the log entry
@@ -881,7 +911,7 @@ void FilePersistLog::truncate(const int64_t &ver) noexcept(false) {
     if(tail < head) tail += MAX_LOG_ENTRY;
     dbg_trace("{0} - begin binary search.", this->m_sName);
     int64_t l_idx = binarySearch<int64_t>(
-            [&](const LogEntry *ple) {
+            [&](const LogEntry* ple) {
                 return ple->fields.ver;
             },
             ver, head, tail);
@@ -910,46 +940,43 @@ void FilePersistLog::truncate(const int64_t &ver) noexcept(false) {
     dbg_trace("{0} truncate at version: {1}....done", this->m_sName, ver);
 }
 
-  const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::string & prefix) {
+const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::string& prefix) {
     // STEP 1: list all meta files in the path
-    DIR *dir = opendir(getPersFilePath().c_str());
-    if (dir == NULL) {
-      // We cannot open the persistent directory, so just return error.
-      dbg_error("{}:{} failed to open the directory. errno={}, err={}.",
-        __FILE__,__func__,errno,strerror(errno));
-      return INVALID_VERSION;
+    DIR* dir = opendir(getPersFilePath().c_str());
+    if(dir == NULL) {
+        // We cannot open the persistent directory, so just return error.
+        dbg_error("{}:{} failed to open the directory. errno={}, err={}.",
+                  __FILE__, __func__, errno, strerror(errno));
+        return INVALID_VERSION;
     }
     // STEP 2: get through the meta header for the minimum
-    struct dirent *dent;
+    struct dirent* dent;
     bool found = false;
     int64_t ver = INVALID_VERSION;
-    while ((dent=readdir(dir))!=NULL) {
-      uint32_t name_len = strlen(dent->d_name);
-      if (name_len > prefix.length() && 
-          strncmp(prefix.c_str(),dent->d_name,prefix.length()) == 0 &&
-          strncmp("." META_FILE_SUFFIX,dent->d_name+name_len-strlen(META_FILE_SUFFIX)-1,strlen(META_FILE_SUFFIX)+1) == 0
-      ) {
-        MetaHeader mh;
-        char fn[1024];
-        sprintf(fn,"%s/%s",getPersFilePath().c_str(),dent->d_name);
-        int fd = open(fn,O_RDONLY);
-        if (fd < 0) {
-          dbg_warn("{}:{} cannot read file:{}, errno={}, err={}.",
-            __FILE__,__func__,errno,strerror(errno));
-          continue;
+    while((dent = readdir(dir)) != NULL) {
+        uint32_t name_len = strlen(dent->d_name);
+        if(name_len > prefix.length() && strncmp(prefix.c_str(), dent->d_name, prefix.length()) == 0 && strncmp("." META_FILE_SUFFIX, dent->d_name + name_len - strlen(META_FILE_SUFFIX) - 1, strlen(META_FILE_SUFFIX) + 1) == 0) {
+            MetaHeader mh;
+            char fn[1024];
+            sprintf(fn, "%s/%s", getPersFilePath().c_str(), dent->d_name);
+            int fd = open(fn, O_RDONLY);
+            if(fd < 0) {
+                dbg_warn("{}:{} cannot read file:{}, errno={}, err={}.",
+                         __FILE__, __func__, errno, strerror(errno));
+                continue;
+            }
+            int nRead = read(fd, (void*)&mh, sizeof(mh));
+            if(nRead != sizeof(mh)) {
+                dbg_warn("{}:{} cannot load meta header from file:{}, errno={}, err={}",
+                         __FILE__, __func__, errno, strerror(errno));
+                close(fd);
+                continue;
+            }
+            close(fd);
+            if(!found || ver > mh.fields.ver)
+                ver = mh.fields.ver;
         }
-        int nRead = read(fd,(void*)&mh,sizeof(mh));
-        if (nRead != sizeof(mh)) {
-          dbg_warn("{}:{} cannot load meta header from file:{}, errno={}, err={}",
-            __FILE__,__func__,errno,strerror(errno));
-          close(fd);
-          continue;
-        }
-        close(fd);
-        if (!found || ver > mh.fields.ver)
-          ver = mh.fields.ver;
-      }
     }
     return ver;
-  }
+}
 }

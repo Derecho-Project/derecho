@@ -13,6 +13,14 @@
 #include <stdio.h>
 #include <string>
 
+#if __GNUC__ > 7
+#include <filesystem>
+namespace fs = std::filesystem;
+#else
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#endif
+
 namespace persistent {
 
 #define _NOLOG_OBJECT_DIR_ ((storageType == ST_MEM) ? getPersRamdiskPath().c_str() : getPersFilePath().c_str())
@@ -23,8 +31,8 @@ namespace persistent {
    */
 template <typename ObjectType, StorageType storageType = ST_FILE>
 void saveNoLogObjectInFile(
-        ObjectType &obj,
-        const char *object_name) noexcept(false) {
+        ObjectType& obj,
+        const char* object_name) noexcept(false) {
     char filepath[256];
     char tmpfilepath[260];
 
@@ -35,7 +43,7 @@ void saveNoLogObjectInFile(
     sprintf(tmpfilepath, "%s.tmp", filepath);
     // 2 - serialize
     auto size = mutils::bytes_size(obj);
-    char *buf = new char[size];
+    char* buf = new char[size];
     bzero(buf, size);
     mutils::to_bytes(obj, buf);
     // 3 - write to tmp file
@@ -56,7 +64,7 @@ void saveNoLogObjectInFile(
 }
 
 template <typename ObjectType>
-void saveNoLogObjectInMem(ObjectType &obj, const char *object_name) noexcept(false) {
+void saveNoLogObjectInMem(ObjectType& obj, const char* object_name) noexcept(false) {
     saveNoLogObjectInFile<ObjectType, ST_MEM>(obj, object_name);
 }
 
@@ -66,12 +74,22 @@ void saveNoLogObjectInMem(ObjectType &obj, const char *object_name) noexcept(fal
    */
 template <typename ObjectType, StorageType storageType = ST_FILE>
 std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
-        const char *object_name,
-        mutils::DeserializationManager *dm = nullptr) noexcept(false) {
+        const char* object_name,
+        mutils::DeserializationManager* dm = nullptr) noexcept(false) {
     char filepath[256];
 
     // 0 - get object file name
     sprintf(filepath, "%s/%d-%s-nolog", _NOLOG_OBJECT_DIR_, storageType, _NOLOG_OBJECT_NAME_);
+
+    // 0.5 - object file
+    if(derecho::getConfBoolean(CONF_PERS_RESET)) {
+        if(fs::exists(filepath)) {
+            if(!fs::remove(filepath)) {
+                dbg_error("{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
+                throw PERSIST_EXP_REMOVE_FILE(errno);
+            }
+        }
+    }
 
     // 1 - load file
     checkOrCreateDir(std::string(_NOLOG_OBJECT_DIR_));
@@ -84,7 +102,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         throw PERSIST_EXP_READ_FILE(errno);
     }
 
-    char *buf = new char[stat_buf.st_size];
+    char* buf = new char[stat_buf.st_size];
     if(!buf) {
         close(fd);
         throw PERSIST_EXP_OOM(errno);
@@ -104,8 +122,8 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
 
 template <typename ObjectType>
 std::unique_ptr<ObjectType> loadNoLogObjectFromMem(
-        const char *object_name,
-        mutils::DeserializationManager *dm = nullptr) noexcept(false) {
+        const char* object_name,
+        mutils::DeserializationManager* dm = nullptr) noexcept(false) {
     return loadNoLogObjectFromFile<ObjectType, ST_MEM>(object_name, dm);
 }
 }
