@@ -203,13 +203,13 @@ void initialize_objects(uint32_t num_of_objs) {
 }
 
 int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        std::cout << "usage:" << argv[0] << " <num_of_nodes> <num_of_objs>" << std::endl;
+    if(argc < 3 || (argc >3 && strcmp(argv[argc-3],"--"))) {
+        std::cout << "usage:" << argv[0] << " [ derecho-config-list -- ] <num_of_nodes> <num_of_objs>" << std::endl;
         return -1;
     }
     derecho::Conf::initialize(argc,argv);
-    int num_of_nodes = std::stoi(argv[1]);
-    int num_of_objs = std::stoi(argv[2]);
+    int num_of_nodes = std::stoi(argv[argc-2]);
+    int num_of_objs = std::stoi(argv[argc-1]);
 
     // create the key-value array
     initialize_objects(num_of_objs);
