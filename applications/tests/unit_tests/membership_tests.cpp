@@ -174,7 +174,6 @@ int main(int argc, char* argv[]) {
 
     srand(time(NULL));
     node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    ;
 
     // could take these from command line
     std::map<Tests, bool> tests = {{Tests::MIGRATION, true},
@@ -199,8 +198,8 @@ int main(int argc, char* argv[]) {
                                                return layout_vec;
                                            }}};
 
-    int prev_state = 100;
-    auto state_subgroup_factory = [prev_state](PersistentRegistry*) { return std::make_unique<State>(prev_state); };
+    const int INIT_STATE = 100;
+    auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*) { return std::make_unique<State>(INIT_STATE); };
     SubgroupInfo subgroup_info{subgroup_membership_functions};
 
     Group<State> group({}, subgroup_info, {}, state_subgroup_factory);
@@ -213,6 +212,19 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::map<Tests, int> prev_states;
+    for(auto t : AllTests) {
+      prev_states[t] = INIT_STATE;
+    }
+
+    auto run_test = [&](Tests t, Replicated<State>& subgroup){
+                      if (tests[t]) {
+                        prev_states[t] = test_state(subgroup, prev_states[t]);
+                        if(prev_states[t] == -1) {
+                          exit(1);
+                        }
+                      }
+                    };
     while(true) {
         // stupid hack to wait for user to prompt start of each test
         std::string input;
@@ -220,14 +232,31 @@ int main(int argc, char* argv[]) {
         std::getline(std::cin, input);
 
         auto subgroups = get_subgroups(group, tests);
+        int num_members = group.get_members().size();
 
-        if(my_rank == 0) {
-            if(tests[Tests::MIGRATION]) {
-                prev_state = test_state(subgroups.at(Tests::MIGRATION), prev_state);
-                if(prev_state == -1) {
-                    return -1;
-                }
-            }
+        switch (my_rank) {
+        case 0:
+          run_test(Tests::MIGRATION, subgroups.at(Tests::MIGRATION));
+          if (num_members == 3) {
+            run_test(Tests::DISJOINT_MEM, subgroups.at(Tests::DISJOINT_MEM));
+          }
+          break;
+        case 1:
+          if (num_members >= 4) {
+            run_test(Tests::INIT_EMPTY, subgroups.at(Tests::INIT_EMPTY));
+          }
+          break;
+        case 2:
+          if (num_members != 4) {
+            run_test(Tests::INTER_EMPTY, subgroups.at(Tests::INTER_EMPTY));
+            prev_states[Tests::INTER_EMPTY] = INIT_STATE;
+          }
+          break;
+        case 3:
+          if (num_members >= 4) {
+            run_test(Tests::DISJOINT_MEM, subgroups.at(Tests::DISJOINT_MEM));
+          }
+          break;
         }
     }
 }
