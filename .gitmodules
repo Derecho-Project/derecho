@@ -14,3 +14,6 @@
 [submodule "third_party/libfabric"]
 	path = third_party/libfabric
 	url = https://github.com/ofiwg/libfabric.git
+[submodule "third_party/mutils-tasks"]
+	path = third_party/mutils-tasks
+	url = https://github.com/mpmilano/mutils-tasks
