@@ -25,3 +25,7 @@ target_link_libraries(rpc_reply_maps derecho)
 # cooked_send_test
 add_executable(cooked_send_test cooked_send_test.cpp)
 target_link_libraries(cooked_send_test derecho)
+
+# delivery_order_test
+add_executable(delivery_order_test delivery_order_test.cpp)
+target_link_libraries(delivery_order_test derecho)
