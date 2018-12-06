@@ -22,12 +22,10 @@ target_link_libraries(rpc_function_types derecho)
 add_executable(rpc_reply_maps rpc_reply_maps.cpp)
 target_link_libraries(rpc_reply_maps derecho)
 
-add_executable(membership_tests membership_tests.cpp)
-target_link_libraries(membership_tests derecho)
-
 # cooked_send_test
 add_executable(cooked_send_test cooked_send_test.cpp)
 target_link_libraries(cooked_send_test derecho)
 
+# delivery_order_test
 add_executable(delivery_order_test delivery_order_test.cpp)
 target_link_libraries(delivery_order_test derecho)
