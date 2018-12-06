@@ -4,6 +4,7 @@
 #include <chrono>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -50,7 +51,7 @@ int main(int argc, char* argv[]) {
 	exit(1);
     };
 
-    Group<>* group;
+    std::unique_ptr<Group<>> group;
     uint32_t my_rank;
     uint32_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     volatile bool done = false;
@@ -167,7 +168,7 @@ int main(int argc, char* argv[]) {
         num_received_msgs_map[sender_id] = num_received_msgs_map[sender_id] + 1;
     };
 
-    group = new Group<>(CallbackSet{delivery_callback}, subgroup_info);
+    group = std::make_unique<Group<>>(CallbackSet{delivery_callback}, subgroup_info);
     std::cout << "Finished constructing/joining Group" << std::endl;
     RawSubgroup& group_as_subgroup = group->get_subgroup<RawObject>();
     // my_rank = group_as_subgroup.get_my_rank();
