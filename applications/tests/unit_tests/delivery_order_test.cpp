@@ -11,6 +11,8 @@
 #include <algorithm>
 
 using namespace derecho;
+using std::cout;
+using std::endl;
 using std::ifstream;
 using std::string;
 using std::vector;
@@ -18,6 +20,7 @@ using std::vector;
 int main(int argc, char* argv[]) {
     if (argc < 5) {
       // Print out error message
+      cout << "Usage: " << argv[0] << " <input_file_path> <num_nodes> <num_msgs> <msg_size> [configuration options...]" << endl;
       exit(1);
     }
     
@@ -34,7 +37,6 @@ int main(int argc, char* argv[]) {
     SubgroupInfo subgroup_info(
             {{std::type_index(typeid(RawObject)), [num_nodes](const View& curr_view, int& next_unassigned_rank) {
                   if(curr_view.members.size() < num_nodes) {
-                      std::cout << "Waiting for all nodes to join. Throwing subgroup provisioning exception!" << std::endl;
                       throw subgroup_provisioning_exception();
                   }
                   return one_subgroup_entire_view(curr_view, next_unassigned_rank);
@@ -47,13 +49,13 @@ int main(int argc, char* argv[]) {
             getline(*(input_file_map.at(sender_id)), line);
             return line;
         }
-        std::cout << "Error: Input file not open!!!" << std::endl;
+        cout << "Error: Input file not open!!!" << endl;
 	exit(1);
     };
 
     std::unique_ptr<Group<>> group;
     uint32_t my_rank;
-    uint32_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     volatile bool done = false;
     auto delivery_callback = [&, num_received_msgs_map = std::map<node_id_t, uint32_t>(),
 			      received_msgs_index_map = std::map<node_id_t, uint32_t>(),
@@ -68,134 +70,89 @@ int main(int argc, char* argv[]) {
 	std::tie(buf, size) = data.value();
 	
         if(num_received_msgs_map[sender_id] == 0) {
-	  std::cout << "Received input file name for node " << sender_id << std::endl;
             ifstream* input_file = new ifstream(buf);
             if(input_file->is_open()) {
                 input_file_map[sender_id] = input_file;
             } else {
-                std::cout << "Unable to open input file!" << std::endl;
+                cout << "Unable to open input file!" << endl;
                 exit(1);
             }
         } else if(num_received_msgs_map[sender_id] <= num_msgs) {
-	    //std::cout << "Receiving random message from node " << sender_id << std::endl;
-	    //std::cout << "Num received messages is: " << num_received_msgs_map[sender_id] << std::endl;
             received_msgs.push_back(sender_id);
-	    string line = get_next_line(sender_id);
-	    string msg_received(buf, size);
+            string line = get_next_line(sender_id);
+            string msg_received(buf, size);
             if(line != msg_received) {
-                std::cout << "Error: Message contents mismatch or violation of local order!!!" << std::endl;
+                cout << "Error: Message contents mismatch or violation of local order!!!" << endl;
                 exit(1);
             }
-	    if(received_msgs.size() == num_msgs * num_nodes) {//sender_id == node_id && num_received_msgs_map[sender_id] == num_msgs) {
-                std::cout << "Local ordering test successful!" << std::endl;
+	    if(received_msgs.size() == num_msgs * num_nodes) {
+                cout << "Local ordering test successful!" << endl;
                 if(my_rank != 0) {
-		    std::cout << "Sending my received messages to leader" << std::endl;
                     std::thread temp([&]() {
-			uint32_t num_msgs_sent = 0;
-                        uint32_t num_entries;
-			RawSubgroup& group_as_subgroup = group->get_subgroup<RawObject>();
-			while (num_msgs_sent < received_msgs.size()) {
-			  num_entries = std::min(received_msgs.size() - num_msgs_sent, max_msg_size / sizeof(node_id_t) - 50);
-			  group_as_subgroup.send(num_entries * sizeof(node_id_t), [&received_msgs, &num_msgs_sent, &num_entries](char* buf){
-			     for(uint i = 0; i < num_entries; i++) {
-			         if (num_msgs_sent + i >= received_msgs.size()) {
-				     break;
-				 }
-                                 (node_id_t&)buf[sizeof(node_id_t) * i] = received_msgs[num_msgs_sent + i];
-                             } 
-			  });
-			  num_msgs_sent = num_msgs_sent + num_entries;
-			}
-			    //group_as_subgroup.send(received_msgs.size() * sizeof(node_id_t), [received_msgs](char* buf) {
-			    //for(uint i = 0; i < received_msgs.size(); i++) {
-                            //    (node_id_t&)buf[sizeof(node_id_t) * i] = received_msgs[i];
-                            //}            
-			    //});
+                        RawSubgroup& group_as_subgroup = group->get_subgroup<RawObject>();
+                        for(uint64_t num_entries_sent = 0; num_entries_sent < received_msgs.size();) {
+                            uint64_t num_entries = std::min(received_msgs.size() - num_entries_sent, max_msg_size / sizeof(node_id_t) - 50);
+                            group_as_subgroup.send(num_entries * sizeof(node_id_t),
+                                                   [&received_msgs, &num_entries_sent, &num_entries](char* buf) {
+                                                       for(uint i = 0; i < num_entries; i++) {
+                                                           (node_id_t&)buf[sizeof(node_id_t) * i] = received_msgs[num_entries_sent + i];
+                                                       }
+                                                   });
+                            num_entries_sent += num_entries;
+                        }
                     });
                     temp.detach();
                 }
             }
         } else {
             if(my_rank == 0) {
-	        long long int curr_size = 0;
-		std::cout << "Received node " << sender_id << "'s received_msgs" << std::endl;
-		std::cout << "Size is: " << size << std::endl;
-	        while (curr_size < size) {
-		    //std::cout << "curr size is: " << curr_size << std::endl;
-		    node_id_t val = *((node_id_t*)buf);
+                long long int curr_size = 0;
+                while(curr_size < size) {
+                    node_id_t val = *((node_id_t*)buf);
                     buf += sizeof(node_id_t);
-		    curr_size += sizeof(node_id_t);
-		    //std::cout << "Received messages index for sender id " << sender_id << " is " << received_msgs_index_map[sender_id] << std::endl;
+                    curr_size += sizeof(node_id_t);
                     node_id_t node = received_msgs[received_msgs_index_map[sender_id]];
-		    //std::cout << "Node is: " << node << std::endl;
-		    //std::cout << "Val is: " << val << std::endl;    
-		    if(node != val) {
-		        std::cout << "Error: Violation of global order!!!" << std::endl;
+                    if(node != val) {
+                        cout << "Error: Violation of global order!!!" << endl;
                         exit(1);
                     }
-		    received_msgs_index_map[sender_id] += 1;
-		}
-                //std::cout << "Testing for global ordering" << std::endl;
-                // verify the message against received_msgs
-                //for(auto node : received_msgs) {
-                //    node_id_t val = *((node_id_t*)buf);
-                //    buf += sizeof(node_id_t);
-                //    if(node != val) {
-                //        std::cout << "Error: Violation of global order!!!" << std::endl;
-                //        exit(1);
-                //    }
-                //}
-		std::cout << "Received msgs size is: " << received_msgs.size() << std::endl;
-		std::cout << "Received msgs index map entry for " << sender_id << std::endl;
-		std::cout << received_msgs_index_map[sender_id] << std::endl;
-		if (received_msgs_index_map[sender_id] == received_msgs.size()) {
-		  finished_nodes.insert(sender_id);
+                    received_msgs_index_map[sender_id] += 1;
+                }
+                if(received_msgs_index_map[sender_id] == received_msgs.size()) {
+                    finished_nodes.insert(sender_id);
 		}
 		if(finished_nodes.size() == num_nodes - 1) {
 		  done = true;
 		}
             }
-	    //std::cout << "Received msgs size is: " << received_msgs.size() << std::endl;
-	    //std::cout << "Received msgs index map entry for " << sender_id << std::endl;
-	    //std::cout << received_msgs_index_map[sender_id] << std::endl;
-	    //if (received_msgs_index_map[sender_id] == received_msgs.size()) {
-	    //    finished_nodes.insert(sender_id);
-	    //}
-            //if(finished_nodes.size() == num_nodes - 1) {
-            //    done = true;
-            //}
         }
         num_received_msgs_map[sender_id] = num_received_msgs_map[sender_id] + 1;
     };
 
     group = std::make_unique<Group<>>(CallbackSet{delivery_callback}, subgroup_info);
-    std::cout << "Finished constructing/joining Group" << std::endl;
+    cout << "Finished constructing/joining Group" << endl;
     RawSubgroup& group_as_subgroup = group->get_subgroup<RawObject>();
     // my_rank = group_as_subgroup.get_my_rank();
     my_rank = -1;
     auto members_order = group->get_members();
-    std::cout << "The order of members is :" << std::endl;
+    cout << "The order of members is :" << endl;
     for(uint i = 0; i < num_nodes; ++i) {
-      std::cout << members_order[i] << " ";
+      cout << members_order[i] << " ";
       if(members_order[i] == node_id) {
 	my_rank = i;
       }
     }
-    std::cout << std::endl;
+    cout << endl;
     
     ifstream input_file(my_input_file);
-    std::cout << "Constructed file handler" << std::endl;
     group_as_subgroup.send(my_input_file.size(), [my_input_file](char* buf){
 	my_input_file.copy(buf, my_input_file.size());
     });
 
     string line;
     uint32_t msg_counter = 0;
-    std::cout << "Attempting to send messages" << std::endl;
     while(msg_counter < num_msgs) {
         getline(input_file, line);
-        //std::cout << "Sending message: " << line << std::endl;
-	//std::cout << "Message size is: " << line.size() << std::endl;
 	group_as_subgroup.send(msg_size, [line](char* buf){
 	    line.copy(buf, line.size());
 	});
@@ -207,7 +164,7 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     if (my_rank == 0) {
-        std::cout << "Global ordering test successful!" << std::endl;
+        cout << "Global ordering test successful!" << endl;
     }
     group->barrier_sync();
     group->leave();
