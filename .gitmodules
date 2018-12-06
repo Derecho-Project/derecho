@@ -11,3 +11,6 @@
 [submodule "third_party/spdlog"]
 	path = third_party/spdlog
 	url = https://github.com/gabime/spdlog.git
+[submodule "third_party/mutils-tasks"]
+	path = third_party/mutils-tasks
+	url = https://github.com/mpmilano/mutils-tasks
