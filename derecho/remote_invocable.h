@@ -47,7 +47,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     const Opcode reply_opcode;
 
     Ret* returnRet() {
-        return 0;
+        return nullptr;
     }
 
     //Maps invocation-instance IDs to results sets
@@ -614,6 +614,44 @@ public:
 };
 
 /**
+ * Specialization of RemoteInvocableClass for classes that have no RPC methods
+ */
+template <class IdentifyingClass>
+class RemoteInvocableClass<IdentifyingClass> {
+    std::shared_ptr<spdlog::logger> logger;
+
+public:
+    const node_id_t nid;
+
+    RemoteInvocableClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
+                         std::map<Opcode, receive_fun_t>& rvrs)
+            : logger(spdlog::get("derecho_debug_log")),
+              nid(nid) {}
+
+    template <FunctionTag Tag, typename... Args>
+    std::size_t get_size(Args&&... a) {
+        auto invocation_id = mutils::long_rand();
+        std::size_t size = mutils::bytes_size(invocation_id);
+        {
+            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            size += std::accumulate(t.begin(), t.end(), 0);
+        }
+        return size;
+    }
+
+    template <FunctionTag Tag, typename... Args>
+    auto* getReturnType(Args&&... args) {
+        void* null_and_void(nullptr);
+        return null_and_void;
+    }
+
+    using specialized_to = IdentifyingClass;
+    RemoteInvocableClass& for_class(IdentifyingClass*) {
+        return *this;
+    }
+};
+
+/**
  * Constructs a RemoteInvocableClass instance that proxies for an instance of
  * the class in the template parameter (IdentifyingClass).
  * @param nid The Node ID of the node running this code
@@ -686,6 +724,19 @@ public:
         return send_return{std::move(sent_return.results),
                            sent_return.pending};
     }
+};
+
+/**
+ * Specialization of RemoteInvokerForClass for classes that have no RPC methods
+ */
+template <class IdentifyingClass>
+class RemoteInvokerForClass<IdentifyingClass> {
+public:
+    const node_id_t nid;
+
+    RemoteInvokerForClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
+                          std::map<Opcode, receive_fun_t>& rvrs)
+            : nid(nid) {}
 };
 
 /**

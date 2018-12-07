@@ -1,51 +1,18 @@
 /**
  * @file container_template_functions.h
  *
- * @date Jun 12, 2018
- * @author edward
+ * Contains implementations of some useful functions on STL containers, most of
+ * which add standard-but-missing functionality.
  */
 
 #pragma once
+#include <algorithm>
+#include <list>
 #include <map>
-#include <mutils-containers/KindMap.hpp>
 #include <set>
 #include <vector>
 
-#include "derecho_internal.h"
-
 namespace derecho {
-template <typename MapType>
-void kind_map_builder(MapType&){};
-
-/**
- * Actual implementation of make_kind_map; needs to be a separate function
- * because the only way to build a KindMap is with a void mutator function.
- * @param map A mutable reference to the KindMap being constructed
- * @param curr_factory The first factory in the parameter pack of factories
- * @param rest_factories The rest of the parameter pack
- */
-template <typename MapType, typename FirstType, typename... RestTypes>
-void kind_map_builder(MapType& map, Factory<FirstType> curr_factory,
-                      Factory<RestTypes>... rest_factories) {
-    map.template get<FirstType>() = std::move(curr_factory);
-    kind_map_builder<MapType, RestTypes...>(map, rest_factories...);
-}
-
-/**
- * Constructs a KindMap<Factory, Types...> from a list of factories of those
- * types. Could probably be made even more generic, to construct a KindMap of
- * any template given a list of objects that match that template, but that would
- * involve writing a template template parameter, which is too much black magic
- * for me to understand.
- * @param factories One instance of Factory<T> for each T in the type list
- * @return A KindMap of factories, mapping each type to a Factory for that type.
- */
-template <typename... Types>
-mutils::KindMap<Factory, Types...> make_kind_map(Factory<Types>... factories) {
-    mutils::KindMap<Factory, Types...> factories_map;
-    kind_map_builder<decltype(factories_map), Types...>(factories_map, factories...);
-    return factories_map;
-}
 
 /**
  * Inserts set b into set a and returns the modified a. Hack to get around the
@@ -102,4 +69,37 @@ std::size_t multimap_size(const std::map<K1, std::map<K2, V>>& multimap) {
     }
     return count;
 }
+
+/**
+ * Constructs a std::list of the keys in a std::map, in the same order as they
+ * appear in the std::map.
+ * @param map A std::map
+ * @return A std::list containing a copy of each key in the map, in the same order
+ */
+template <typename K, typename V>
+std::list<K> keys_as_list(const std::map<K, V>& map) {
+    std::list<K> keys;
+    for(const auto& pair : map) {
+        keys.emplace_back(pair.first);
+    }
+    return keys;
+}
+
+/**
+ * Finds a value in a STL container, and returns the index of that value in the
+ * container. This simply combines std::find (which returns an opaque pointer to
+ * the found value) with std::distance (which converts the pointer to a numeric
+ * index).
+ * @param container An STL container, which must provide a member type value_type
+ * @param elem An element of type value_type to search for in the container
+ * @return The index of the element within the container, or 1 greater than the
+ * size of the container if the element was not found.
+ */
+template <typename Container>
+std::size_t index_of(const Container& container, const typename Container::value_type& elem) {
+    return std::distance(std::begin(container),
+                         std::find(std::begin(container),
+                                   std::end(container), elem));
+}
+
 }  // namespace derecho

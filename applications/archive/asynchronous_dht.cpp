@@ -78,21 +78,21 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(HashTable<std::string>)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < 2) {
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  for(uint i = 0; i < (uint32_t)curr_view.num_members / 2; ++i) {
-                      subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
-                  }
-                  next_unassigned_rank = curr_view.num_members;
-                  return subgroup_vector;
-              }}}};
+    derecho::SubgroupInfo subgroup_function{[](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(curr_view.num_members < 2) {
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        for(uint i = 0; i < (uint32_t)curr_view.num_members / 2; ++i) {
+            subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
+        }
+        curr_view.next_unassigned_rank = curr_view.num_members;
+        return subgroup_vector;
+    }};
 
     auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
-    derecho::Group<HashTable<std::string>> group({}, subgroup_info,
+    derecho::Group<HashTable<std::string>> group({}, subgroup_function,
                                                  std::vector<derecho::view_upcall_t>{announce_groups_provisioned},
                                                  HashTableGenerator);
 

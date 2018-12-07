@@ -101,7 +101,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             // because of a race condition, toFulfillQueue can genuinely be empty
             // so we shouldn't assert that it is empty
             // instead we should sleep on a condition variable and let the main thread that called the orderedSend signal us
-	    // although the race condition is infinitely rare
+            // although the race condition is infinitely rare
             pending_results_cv.wait(lock, [&]() { return !toFulfillQueue.empty(); });
             // whenlog(logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());)
             //We now know the membership of "all nodes in my shard of the subgroup" in the current view
@@ -116,7 +116,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                         reply_buf, reply_size,
                         [](size_t size) -> char* { assert_always(false); });
             }
-        } else if (reply_size > 0) {
+        } else if(reply_size > 0) {
             //Otherwise, the only thing to do is send the reply (if there was one)
             connections->send(connections->get_node_rank(sender_id));
         }
@@ -171,7 +171,7 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     }
     //Two return values: the size of the header we just created,
     //and the maximum payload size based on that
-    max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(derecho::header) - header_size;
+    max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE) - header_size;
     return header_size;
 }
 
@@ -203,7 +203,7 @@ void RPCManager::finish_p2p_send(bool is_query, node_id_t dest_id, PendingBase& 
 
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
-    auto max_payload_size = view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+    uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     while(!thread_start) {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });

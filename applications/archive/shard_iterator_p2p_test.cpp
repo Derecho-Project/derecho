@@ -48,21 +48,19 @@ int main(int argc, char** argv) {
 
     const int32_t num_nodes = 7;
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [num_nodes](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < num_nodes) {
-                      std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  // only one subgroup of type Foo, shards of size 'Too' D:
-                  for(uint i = 0; i < (uint32_t)num_nodes / 2; ++i) {
-                      subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
-                  }
-                  next_unassigned_rank = std::max(next_unassigned_rank, num_nodes - 1);
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Foo))}};
+    derecho::SubgroupInfo subgroup_info{[num_nodes](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(curr_view.num_members < num_nodes) {
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        // only one subgroup of type Foo, shards of size 'Too' D:
+        for(uint i = 0; i < (uint32_t)num_nodes / 2; ++i) {
+            subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
+        }
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes - 1);
+        return subgroup_vector;
+    }};
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
     derecho::Group<Foo> group({}, subgroup_info,

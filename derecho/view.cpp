@@ -76,7 +76,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t num_members,
-           const std::map<std::type_index, std::vector<subgroup_id_t>>& subgroup_ids_by_type,
+           const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
            const std::vector<std::vector<SubView>>& subgroup_shard_views,
            const std::map<subgroup_id_t, uint32_t>& my_subgroups)
         : vid(vid),
@@ -90,7 +90,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           my_rank(0),              // This will always get overwritten by the receiver after deserializing
           next_unassigned_rank(0), /* next_unassigned_rank should never be serialized, since each
                                     * node must re-run the allocation functions independently */
-          subgroup_ids_by_type(subgroup_ids_by_type),
+          subgroup_ids_by_type_id(subgroup_ids_by_type_id),
           subgroup_shard_views(subgroup_shard_views),
           my_subgroups(my_subgroups) {
     for(int rank = 0; rank < num_members; ++rank) {
@@ -112,7 +112,8 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<char>& failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t my_rank,
-           const int32_t next_unassigned_rank)
+           const int32_t next_unassigned_rank,
+           const std::vector<std::type_index>& subgroup_type_order)
         : vid(vid),
           members(members),
           member_ips_and_ports(member_ips_and_ports),
@@ -122,7 +123,8 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           departed(departed),
           num_members(members.size()),
           my_rank(my_rank),
-          next_unassigned_rank(next_unassigned_rank) {
+          next_unassigned_rank(next_unassigned_rank),
+          subgroup_type_order(subgroup_type_order) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;
     }
@@ -169,7 +171,10 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
 }
 
 int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id,
-                                       int shard_index) const {
+                                       uint32_t shard_index) const {
+    if(shard_index >= subgroup_shard_views.at(subgroup_id).size()) {
+        return -1;
+    }
     const SubView& shard_view = subgroup_shard_views.at(subgroup_id).at(shard_index);
     for(std::size_t rank = 0; rank < shard_view.members.size(); ++rank) {
         // Inefficient to call rank_of every time, but no guarantee the subgroup
@@ -304,52 +309,6 @@ std::string View::debug_string() const {
         }
     }
     return s.str();
-}
-
-std::size_t StreamlinedView::bytes_size() const {
-    return mutils::bytes_size(wrapped_view.vid) + mutils::bytes_size(wrapped_view.members)
-           + mutils::bytes_size(wrapped_view.member_ips_and_ports) + mutils::bytes_size(wrapped_view.failed)
-           + mutils::bytes_size(wrapped_view.joined) + mutils::bytes_size(wrapped_view.departed)
-           + mutils::bytes_size(wrapped_view.num_members);
-}
-
-std::size_t StreamlinedView::to_bytes(char* buffer) const {
-    int bytes_written = mutils::to_bytes(wrapped_view.vid, buffer);
-    bytes_written += mutils::to_bytes(wrapped_view.members, buffer + bytes_written);
-    bytes_written += mutils::to_bytes(wrapped_view.member_ips_and_ports, buffer + bytes_written);
-    bytes_written += mutils::to_bytes(wrapped_view.failed, buffer + bytes_written);
-    bytes_written += mutils::to_bytes(wrapped_view.joined, buffer + bytes_written);
-    bytes_written += mutils::to_bytes(wrapped_view.departed, buffer + bytes_written);
-    return bytes_written + mutils::to_bytes(wrapped_view.num_members, buffer + bytes_written);
-}
-
-void StreamlinedView::post_object(const std::function<void(char const* const, std::size_t)>& write_func) const {
-    mutils::post_object(write_func, wrapped_view.vid);
-    mutils::post_object(write_func, wrapped_view.members);
-    mutils::post_object(write_func, wrapped_view.member_ips_and_ports);
-    mutils::post_object(write_func, wrapped_view.failed);
-    mutils::post_object(write_func, wrapped_view.joined);
-    mutils::post_object(write_func, wrapped_view.departed);
-    mutils::post_object(write_func, wrapped_view.num_members);
-}
-
-std::unique_ptr<View> StreamlinedView::view_from_bytes(mutils::DeserializationManager* dsm, const char* buffer) {
-    auto temp_vid = mutils::from_bytes_noalloc<int32_t>(dsm, buffer);
-    std::size_t bytes_read = mutils::bytes_size(*temp_vid);
-    auto temp_members = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
-    bytes_read += mutils::bytes_size(*temp_members);
-    auto temp_member_ips_and_ports = mutils::from_bytes_noalloc<std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>>(dsm, buffer + bytes_read);
-    bytes_read += mutils::bytes_size(*temp_member_ips_and_ports);
-    auto temp_failed = mutils::from_bytes_noalloc<std::vector<char>>(dsm, buffer + bytes_read);
-    bytes_read += mutils::bytes_size(*temp_failed);
-    auto temp_joined = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
-    bytes_read += mutils::bytes_size(*temp_joined);
-    auto temp_departed = mutils::from_bytes_noalloc<std::vector<node_id_t>>(dsm, buffer + bytes_read);
-    bytes_read += mutils::bytes_size(*temp_departed);
-    auto temp_num_members = mutils::from_bytes_noalloc<int32_t>(dsm, buffer + bytes_read);
-    //This constructor will copy all the vectors into the new View, which is why it's OK to use noalloc
-    return std::make_unique<View>(*temp_vid, *temp_members, *temp_member_ips_and_ports, *temp_failed,
-                                  *temp_joined, *temp_departed, *temp_num_members);
 }
 
 }  // namespace derecho

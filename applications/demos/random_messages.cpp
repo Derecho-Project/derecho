@@ -60,8 +60,10 @@ int main(int argc, char* argv[]) {
 
     // Use the standard layout manager provided by derecho
     // allocate a single subgroup with a single shard consisting of all the nodes
-    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(derecho::even_sharding_policy(1, num_nodes));
-    SubgroupInfo one_raw_group ({{std::type_index(typeid(RawObject)), DefaultSubgroupAllocator(all_nodes_one_subgroup_policy)}});
+    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(even_sharding_policy(1, num_nodes));
+    SubgroupInfo one_raw_group (DefaultSubgroupAllocator({
+        {std::type_index(typeid(RawObject)), all_nodes_one_subgroup_policy}
+    }));
 
     // This is equivalent to the following manual layout function
     // auto membership_function = [num_nodes](const View& curr_view,
@@ -83,8 +85,9 @@ int main(int argc, char* argv[]) {
     // SubgroupInfo one_raw_group(subgroup_map);
 
     // join the group
-    Group<> group(CallbackSet{stability_callback},
-                          one_raw_group);
+    Group<RawObject> group(CallbackSet{stability_callback},
+                          one_raw_group, std::vector<view_upcall_t>{},
+                          &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
 
@@ -95,7 +98,7 @@ int main(int argc, char* argv[]) {
     }
     cout << endl;
 
-    RawSubgroup& raw_subgroup = group.get_subgroup<RawObject>();
+    Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
     uint32_t num_msgs = 10;
     uint32_t msg_size = 10;
     for(uint i = 0; i < num_msgs; ++i) {

@@ -12,22 +12,24 @@ namespace derecho {
 void RestartState::load_ragged_trim(const View& curr_view) {
     whenlog(auto logger = spdlog::get("derecho_debug_log"););
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
-     * so that I have access to the type_index. This wastes time, but I don't have a map
-     * from subgroup ID to type_index within curr_view. */
-    for(const auto& type_and_indices : curr_view.subgroup_ids_by_type) {
-        for(uint32_t subgroup_index = 0; subgroup_index < type_and_indices.second.size(); ++subgroup_index) {
-            subgroup_id_t subgroup_id = type_and_indices.second.at(subgroup_index);
+     * so that I have access to the type ID. This wastes time, but I don't have a map
+     * from subgroup ID to subgroup_type_id within curr_view. */
+    for(const auto& type_id_and_indices : curr_view.subgroup_ids_by_type_id) {
+        for(uint32_t subgroup_index = 0; subgroup_index < type_id_and_indices.second.size(); ++subgroup_index) {
+            subgroup_id_t subgroup_id = type_id_and_indices.second.at(subgroup_index);
             //We only care if the subgroup's ID is in my_subgroups
             auto subgroup_shard_ptr = curr_view.my_subgroups.find(subgroup_id);
             if(subgroup_shard_ptr != curr_view.my_subgroups.end()) {
                 //If the subgroup ID is in my_subgroups, its value is this node's shard number
                 uint32_t shard_num = subgroup_shard_ptr->second;
-                std::unique_ptr<RaggedTrim> ragged_trim = persistent::loadObject<RaggedTrim>(ragged_trim_filename(subgroup_id, shard_num).c_str());
+                std::unique_ptr<RaggedTrim> ragged_trim = persistent::loadObject<RaggedTrim>(
+                        ragged_trim_filename(subgroup_id, shard_num).c_str());
                 //If there was a logged ragged trim from an obsolete View, it's the same as not having a logged ragged trim
                 if(ragged_trim == nullptr || ragged_trim->vid < curr_view.vid) {
                     whenlog(logger->debug("No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id););
                     //Get the latest persisted version number from this subgroup's object's log
-                    persistent::version_t last_persisted_version = persistent::getMinimumLatestPersistedVersion(type_and_indices.first,
+                    //(this requires converting the type ID to a std::type_index
+                    persistent::version_t last_persisted_version = persistent::getMinimumLatestPersistedVersion(curr_view.subgroup_type_order.at(type_id_and_indices.first),
                                                                                                                 subgroup_index, shard_num);
                     int32_t last_vid, last_seq_num;
                     std::tie(last_vid, last_seq_num) = persistent::unpack_version<int32_t>(last_persisted_version);
@@ -159,7 +161,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     client_socket.read(size_of_view);
     char view_buffer[size_of_view];
     client_socket.read(view_buffer, size_of_view);
-    auto client_view = mutils::from_bytes<View>(nullptr, view_buffer);
+    std::unique_ptr<View> client_view = mutils::from_bytes<View>(nullptr, view_buffer);
 
     if(client_view->vid > curr_view->vid) {
         whenlog(logger->trace("Node {} had newer view {}, replacing view {} and discarding ragged trim", joiner_id, client_view->vid, curr_view->vid););
@@ -217,6 +219,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     }
     //Replace curr_view if the client's view was newer
     if(client_view->vid > curr_view->vid) {
+        client_view->subgroup_type_order = curr_view->subgroup_type_order;
         curr_view.swap(client_view);
         //Remake the std::set version of curr_view->members
         last_known_view_members.clear();
@@ -377,7 +380,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
                                                          const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                                 whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
@@ -430,7 +433,8 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
     }
 
     auto next_view = std::make_unique<View>(curr_view->vid + 1, members, member_ips_and_ports, failed,
-                                            joiner_ids, departed, my_new_rank, next_unassigned_rank);
+                                            joiner_ids, departed, my_new_rank, next_unassigned_rank,
+                                            curr_view->subgroup_type_order);
     next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
     return std::move(next_view);
 }

@@ -58,7 +58,7 @@ using FunctionTag = unsigned long long;
  * std::tuple.
  */
 struct Opcode {
-    uint32_t class_id;
+    subgroup_type_id_t class_id;
     subgroup_id_t subgroup_id;
     FunctionTag function_id;
     bool is_reply;
@@ -361,7 +361,7 @@ private:
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future())
-              whenlog(, logger(spdlog::get("derecho_debug_log"))) {
+                      whenlog(, logger(spdlog::get("derecho_debug_log"))) {
         whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name()););
     }
     /**

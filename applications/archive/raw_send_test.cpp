@@ -55,22 +55,14 @@ int main(int argc, char *argv[]) {
     derecho::CallbackSet callbacks{stability_callback, nullptr};
     derecho::DerechoParams parameters{max_msg_size, sst_max_msg_size, block_size};
 
-    derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},
-                                        {std::type_index(typeid(RawObject))}};
+    derecho::SubgroupInfo one_raw_group{&derecho::one_subgroup_entire_view};
 
-    std::unique_ptr<derecho::Group<>> managed_group;
+    std::unique_ptr<derecho::Group<RawObject>> managed_group;
 
-    if(node_rank == server_rank) {
-        managed_group = std::make_unique<derecho::Group<>>(
-                node_rank, node_addresses[node_rank],
-                callbacks, one_raw_group, parameters);
-    } else {
-        managed_group = std::make_unique<derecho::Group<>>(
-                node_rank, node_addresses[node_rank],
-                node_addresses[server_rank],
-                callbacks,
-                one_raw_group);
-    }
+    managed_group = std::make_unique<derecho::Group<RawObject>>(
+            callbacks, one_raw_group,
+            std::vector<derecho::view_upcall_t>{},
+            &derecho::raw_object_factory);
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
@@ -82,7 +74,7 @@ int main(int argc, char *argv[]) {
         cout << id << " ";
     }
     cout << endl;
-    derecho::RawSubgroup &group_as_subgroup = managed_group->get_subgroup<RawObject>();
+    derecho::Replicated<RawObject> &group_as_subgroup = managed_group->get_subgroup<RawObject>();
     for(int i = 0; i < num_messages; ++i) {
         char *buf = group_as_subgroup.get_sendbuffer_ptr(max_msg_size);
         while(!buf) {

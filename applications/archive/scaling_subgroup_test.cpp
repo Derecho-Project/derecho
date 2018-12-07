@@ -15,32 +15,42 @@ using std::endl;
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3)))},
-             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members - next_unassigned_rank < 3) {
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> first_3_nodes(&curr_view.members[next_unassigned_rank],
-                                                                &curr_view.members[next_unassigned_rank] + 3);
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-                  next_unassigned_rank += 3;
-                  //If there are at least 3 more nodes left, make a second subgroup
-                  if(curr_view.num_members - next_unassigned_rank >= 3) {
-                      std::vector<node_id_t> next_3_nodes(&curr_view.members[next_unassigned_rank],
-                                                                   &curr_view.members[next_unassigned_rank] + 3);
-                      subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
-                      next_unassigned_rank += 3;
-                  }
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar))}};
+    derecho::SubgroupInfo subgroup_function{[](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(subgroup_type == std::type_index(typeid(Foo))) {
+            if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
+                throw derecho::subgroup_provisioning_exception();
+            }
+            derecho::subgroup_shard_layout_t subgroup_vector(1);
+            std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                 &curr_view.members[curr_view.next_unassigned_rank] + 3);
+            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+            curr_view.next_unassigned_rank += 3;
+            return subgroup_vector;
+        } else { // subgroup_type == std::type_index(typeid(Bar))
+            if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
+                throw derecho::subgroup_provisioning_exception();
+            }
+            derecho::subgroup_shard_layout_t subgroup_vector(1);
+            std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                 &curr_view.members[curr_view.next_unassigned_rank] + 3);
+            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+            curr_view.next_unassigned_rank += 3;
+            //If there are at least 3 more nodes left, make a second subgroup
+            if(curr_view.num_members - curr_view.next_unassigned_rank >= 3) {
+                std::vector<node_id_t> next_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                    &curr_view.members[curr_view.next_unassigned_rank] + 3);
+                subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
+                curr_view.next_unassigned_rank += 3;
+            }
+            return subgroup_vector;
+        }
+    }};
 
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
     auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
 
-    derecho::Group<Foo, Bar> group({}, subgroup_info,
+    derecho::Group<Foo, Bar> group({}, subgroup_function,
                                    std::vector<derecho::view_upcall_t>{},
                                    foo_factory, bar_factory);
 

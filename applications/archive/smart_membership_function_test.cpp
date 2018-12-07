@@ -77,9 +77,10 @@ int main(int argc, char** argv) {
 
     derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3));
     derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(3, 3));
-    derecho::SubgroupInfo subgroup_info({{std::type_index(typeid(LoadBalancer)), derecho::DefaultSubgroupAllocator(load_balancer_policy)},
-                                         {std::type_index(typeid(Cache)), derecho::DefaultSubgroupAllocator(cache_policy)}},
-                                        keys_as_list(subgroup_info.subgroup_membership_functions));
+    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
+        {std::type_index(typeid(LoadBalancer)), load_balancer_policy},
+        {std::type_index(typeid(Cache)), cache_policy}
+    }));
 
     derecho::Group<LoadBalancer, Cache> group({},
 					      subgroup_info,

@@ -91,7 +91,8 @@ int main(int argc, char *argv[]) {
             received_message_indices[subgroup_to_local_index.at(subgroup_num)][sender_rank] = index;
         };
 
-        auto membership_function = [num_nodes, subgroup_size](const View &curr_view, int &next_unassigned_rank) {
+        auto membership_function = [num_nodes, subgroup_size](const std::type_index& subgroup_type,
+            const std::unique_ptr<View>& prev_view, View& curr_view) {
             auto num_members = curr_view.members.size();
             if(num_members < num_nodes) {
                 throw subgroup_provisioning_exception();
@@ -104,16 +105,16 @@ int main(int argc, char *argv[]) {
                 }
                 subgroup_vector[i].emplace_back(curr_view.make_subview(members));
             }
-            next_unassigned_rank = curr_view.members.size();
+            curr_view.next_unassigned_rank = curr_view.members.size();
 
             return subgroup_vector;
         };
 
-        std::map<std::type_index, shard_view_generator_t> subgroup_map = {{std::type_index(typeid(RawObject)), membership_function}};
-        SubgroupInfo raw_groups(subgroup_map);
+        SubgroupInfo raw_groups(membership_function);
 
-        Group<> managed_group(CallbackSet{stability_callback},
-                              raw_groups);
+        Group<RawObject> managed_group(CallbackSet{stability_callback},
+                              raw_groups, std::vector<view_upcall_t>{},
+                              &raw_object_factory);
 
 	cout << "Finished constructing/joining ManagedGroup" << endl;
 
@@ -130,7 +131,7 @@ int main(int argc, char *argv[]) {
         }
         cout << endl;
 
-        vector<RawSubgroup> subgroups;
+        vector<std::reference_wrapper<Replicated<RawObject>>> subgroups;
         for(uint i = 0; i < subgroup_size; ++i) {
             subgroups.emplace_back(managed_group.get_subgroup<RawObject>((node_id - i + num_nodes) % num_nodes));
         }
@@ -139,7 +140,7 @@ int main(int argc, char *argv[]) {
             const auto num_subgroups_to_send = send_subgroup_indices.size();
             for(uint i = 0; i < num_subgroups * num_messages; ++i) {
                 uint j = i % num_subgroups_to_send;
-                subgroups[j].send(max_msg_size, [](char* buf){});
+                subgroups[j].get().send(max_msg_size, [](char* buf){});
             }
         };
 

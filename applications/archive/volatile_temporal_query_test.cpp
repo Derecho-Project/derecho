@@ -176,26 +176,25 @@ int main(int argc, char *argv[]) {
 
     uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ByteArrayObject)), [shard_size, num_of_shards, num_of_nodes](const derecho::View &curr_view, int &next_unassigned_rank) {
-                  if(curr_view.num_members < num_of_nodes) {
-                      std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+    derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(curr_view.num_members < num_of_nodes) {
+            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_vector(1);
 
-                  std::vector<uint32_t> members(shard_size);
-                  for(int i = 0; i < num_of_shards; i++) {
-                      for(int j = 0; j < shard_size; j++) {
-                          members[j] = (uint32_t)i * shard_size + j;
-                      }
-                      subgroup_vector[0].emplace_back(curr_view.make_subview(members));
-                  }
+        std::vector<uint32_t> members(shard_size);
+        for(int i = 0; i < num_of_shards; i++) {
+            for(int j = 0; j < shard_size; j++) {
+                members[j] = (uint32_t)i * shard_size + j;
+            }
+            subgroup_vector[0].emplace_back(curr_view.make_subview(members));
+        }
 
-                  next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes - 1);
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(ByteArrayObject))}};
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_of_nodes - 1);
+        return subgroup_vector;
+    }};
 
     auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
 

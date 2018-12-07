@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         const uint32_t delivery_mode = stoi(argv[2]);
 
         int num_messages = 1000;
-	// only used by node 0
+        // only used by node 0
         vector<uint64_t> start_times(num_messages), end_times(num_messages);
 
         volatile bool done = false;
@@ -72,18 +72,17 @@ int main(int argc, char *argv[]) {
         };
 
         unique_ptr<derecho::SubgroupInfo> one_raw_group;
-        std::map<std::type_index, derecho::shard_view_generator_t> membership_map;
         if(delivery_mode) {
-            membership_map = {{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view_raw}};
-            one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
+            one_raw_group = make_unique<derecho::SubgroupInfo>(&derecho::one_subgroup_entire_view_raw);
         } else {
-            membership_map = {{std::type_index(typeid(derecho::RawObject)), derecho::one_subgroup_entire_view}};
-            one_raw_group = make_unique<derecho::SubgroupInfo>(membership_map);
+            one_raw_group = make_unique<derecho::SubgroupInfo>(&derecho::one_subgroup_entire_view);
         }
 
         derecho::CallbackSet callbacks{stability_callback};
 
-        derecho::Group<> managed_group(callbacks,*one_raw_group);
+        derecho::Group<derecho::RawObject> managed_group(callbacks,*one_raw_group,
+                                                         std::vector<derecho::view_upcall_t>{},
+                                                         &derecho::raw_object_factory);
 
         while(managed_group.get_members().size() < num_nodes) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -115,7 +114,7 @@ int main(int argc, char *argv[]) {
             std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
-        derecho::RawSubgroup &group_as_subgroup = managed_group.get_subgroup<derecho::RawObject>();
+        derecho::Replicated<derecho::RawObject> &group_as_subgroup = managed_group.get_subgroup<derecho::RawObject>();
         for(int i = 0; i < num_messages; ++i) {
             group_as_subgroup.send(msg_size, [&](char* buf) {
                 for(unsigned int j = 0; j < msg_size - 1; ++j) {

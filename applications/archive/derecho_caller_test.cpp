@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
                                  std::optional<std::pair<char*, long long int>>,
                                  persistent::version_t ver) {};
 
-    SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &one_subgroup_entire_view}}};
+    SubgroupInfo subgroup_info{&one_subgroup_entire_view};
     
     auto new_view_callback = [](const View& new_view) {
         std::vector<node_id_t> old_members;
