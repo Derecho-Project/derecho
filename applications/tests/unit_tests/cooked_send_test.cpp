@@ -57,23 +57,21 @@ int main(int argc, char* argv[]) {
     }
     const uint32_t num_nodes = atoi(argv[1]);
     Conf::initialize(argc, argv);
-    map<std::type_index, shard_view_generator_t>
-            subgroup_membership_functions{
-                    {std::type_index(typeid(CookedMessages)),
-                     [num_nodes](const View& view, int&) {
-                         auto& members = view.members;
-                         auto num_members = members.size();
-                         if(num_members < num_nodes) {
-                             throw subgroup_provisioning_exception();
-                         }
-                         subgroup_shard_layout_t layout(num_members);
-                         layout[0].push_back(view.make_subview(vector<uint32_t>(members)));
-                         return layout;
-                     }}};
+    auto subgroup_membership_function = [num_nodes](const std::type_index& subgroup_type,
+                                                    const std::unique_ptr<View>& prev_view, View& curr_view) {
+        auto& members = curr_view.members;
+        auto num_members = members.size();
+        if(num_members < num_nodes) {
+            throw subgroup_provisioning_exception();
+        }
+        subgroup_shard_layout_t layout(num_members);
+        layout[0].push_back(curr_view.make_subview(vector<uint32_t>(members)));
+        return layout;
+    };
 
     auto cooked_subgroup_factory = [](PersistentRegistry*) { return std::make_unique<CookedMessages>(); };
 
-    SubgroupInfo subgroup_info(subgroup_membership_functions);
+    SubgroupInfo subgroup_info(subgroup_membership_function);
     volatile bool done = false;
     uint32_t num_msgs = 500;
     auto stability_callback = [num_msgs, num_nodes, &done, counter = (uint)0](subgroup_id_t, node_id_t sender_id, message_id_t index, std::optional<std::pair<char*, long long int>>, persistent::version_t) mutable {

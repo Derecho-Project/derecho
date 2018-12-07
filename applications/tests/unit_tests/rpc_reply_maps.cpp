@@ -4,8 +4,8 @@
  * @date Nov 16, 2018
  * @author edward
  */
-#include <string>
 #include <iostream>
+#include <string>
 
 #include "derecho/derecho.h"
 #include <mutils-serialization/SerializationSupport.hpp>
@@ -15,7 +15,6 @@
 #define RPC_NAME(...) 0ULL
 #endif
 
-
 class StringObject : public mutils::ByteRepresentable {
     std::string log;
 
@@ -24,7 +23,7 @@ public:
         log += words;
         //Intentionally delay the RPC processing thread to slow down updates
         //This will allow the user to watch them get applied to different views
-//        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        //        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     void clear() {
         log.clear();

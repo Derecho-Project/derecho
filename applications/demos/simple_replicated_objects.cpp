@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
     //The Foo and Bar subgroups will both reside on the first 3 nodes in the view,
     //while the Cache subgroup will reside on the second 3 nodes in the view.
     derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                           const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(subgroup_type == std::type_index(typeid(Foo)) || subgroup_type == std::type_index(typeid(Bar))) {
             // must have at least 3 nodes in the top-level group
             if(curr_view.num_members < 3) {

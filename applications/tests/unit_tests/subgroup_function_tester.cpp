@@ -58,8 +58,8 @@ int main(int argc, char* argv[]) {
     }));
 
     std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
-                                                      std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4)),
-                                                      std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))};
+                                                        std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4)),
+                                                        std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))};
     std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(100);

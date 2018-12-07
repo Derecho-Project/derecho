@@ -27,7 +27,6 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(ConstTest, state);
     REGISTER_RPC_FUNCTIONS(ConstTest, read_state, change_state);
-
 };
 
 class ReferenceTest : public mutils::ByteRepresentable {
@@ -35,14 +34,14 @@ class ReferenceTest : public mutils::ByteRepresentable {
 
 public:
     //Causes a compile error: you can't return a reference from an RPC function
-//    std::string& get_state() {
+    //    std::string& get_state() {
     //Correct version:
     std::string get_state() {
         return state;
     }
 
     //Causes a compile error: RPC functions must pass arguments by reference
-//    void set_state(std::string new_state) {
+    //    void set_state(std::string new_state) {
     //Correct version:
     void set_state(const std::string& new_state) {
         state = new_state;
@@ -58,19 +57,17 @@ public:
     REGISTER_RPC_FUNCTIONS(ReferenceTest, get_state, set_state, append_string);
 };
 
-using derecho::one_subgroup_policy;
 using derecho::even_sharding_policy;
+using derecho::one_subgroup_policy;
 
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
-        {std::type_index(typeid(ConstTest)), one_subgroup_policy(even_sharding_policy(1,3))},
-        {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(even_sharding_policy(1,3))}
-    }));
+    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({{std::type_index(typeid(ConstTest)), one_subgroup_policy(even_sharding_policy(1, 3))},
+                                                                           {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(even_sharding_policy(1, 3))}}));
     auto const_test_factory = [](PersistentRegistry*) { return std::make_unique<ConstTest>(); };
-    auto reference_test_factory = [](PersistentRegistry*) {return std::make_unique<ReferenceTest>(); };
+    auto reference_test_factory = [](PersistentRegistry*) { return std::make_unique<ReferenceTest>(); };
 
     derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_info,
                                                    std::vector<derecho::view_upcall_t>{},
@@ -80,7 +77,7 @@ int main(int argc, char** argv) {
     try {
         group.get_subgroup<ConstTest>();
         in_const_test_group = true;
-    } catch (derecho::invalid_subgroup_exception& ex) {
+    } catch(derecho::invalid_subgroup_exception& ex) {
         in_const_test_group = false;
     }
     if(in_const_test_group) {
@@ -113,9 +110,3 @@ int main(int argc, char** argv) {
         }
     }
 }
-
-
-
-
-
-
