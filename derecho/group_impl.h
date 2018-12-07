@@ -12,6 +12,7 @@
 #include "container_template_functions.h"
 #include "derecho_internal.h"
 #include "group.h"
+#include "make_kind_map.h"
 
 namespace derecho {
 
@@ -30,25 +31,14 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
     return *((Replicated<ReplicatedType>*)ret);
 }
 
-RawSubgroup& GroupProjection<RawObject>::get_subgroup(uint32_t subgroup_num) {
-    void* ret{nullptr};
-    set_replicated_pointer(std::type_index{typeid(RawObject)}, subgroup_num,
-                           &ret);
-    return *((RawSubgroup*)ret);
-}
-
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
                                                        uint32_t subgroup_num,
                                                        void** ret) {
-    if(type == std::type_index{typeid(RawObject)}) {
-        *ret = &get_subgroup<RawObject>(subgroup_num);
-    } else {
-        ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
-                          ? &get_subgroup<ReplicatedTypes>(subgroup_num)
-                          : *ret)),
-         ...);
-    }
+    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+                      ? &get_subgroup<ReplicatedTypes>(subgroup_num)
+                      : *ret)),
+     ...);
 }
 
 /* Leader constructor */
@@ -58,7 +48,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : whenlog(logger(create_logger()), )
-          my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+                  my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           is_starting_leader((getConfString(CONF_DERECHO_LOCAL_IP) == getConfString(CONF_DERECHO_LEADER_IP))
                              && (getConfUInt16(CONF_DERECHO_GMS_PORT) == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))),
           leader_connection([&]() -> std::optional<tcp::socket> {
@@ -73,20 +63,21 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
           view_manager([&]() {
               if(is_starting_leader) {
                   return ViewManager(callbacks, subgroup_info,
+                                     {std::type_index(typeid(ReplicatedTypes))...},
                                      tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);
               } else {
                   return ViewManager(leader_connection.value(), callbacks,
-                                     subgroup_info, tcp_sockets,
-                                     objects_by_subgroup_id,
+                                     subgroup_info,
+                                     {std::type_index(typeid(ReplicatedTypes))...},
+                                     tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);
               }
           }()),
           rpc_manager(view_manager),
-          factories(make_kind_map(factories...)),
-          raw_subgroups(construct_raw_subgroups(view_manager.get_current_view().get())) {
+          factories(make_kind_map(factories...)) {
     set_up_components();
     vector_int64_2d restart_shard_leaders = view_manager.finish_setup();
     std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive;
@@ -131,7 +122,9 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
     }
-    const auto& subgroup_ids = curr_view.subgroup_ids_by_type.at(std::type_index(typeid(FirstType)));
+    //The numeric type ID of this subgroup type is its position in the ordered list of subgroup types
+    const subgroup_type_id_t subgroup_type_id = index_of_type<FirstType, ReplicatedTypes...>;
+    const auto& subgroup_ids = curr_view.subgroup_ids_by_type_id.at(subgroup_type_id);
     for(uint32_t subgroup_index = 0; subgroup_index < subgroup_ids.size(); ++subgroup_index) {
         subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
         // Find out if this node is in any shard of this subgroup
@@ -163,12 +156,12 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                         /* Construct an "empty" Replicated<T>, since all of T's state will
                          * be received from the leader and there are no logs to update */
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(index_of_type<FirstType, ReplicatedTypes...>, my_id,
+                                subgroup_index, Replicated<FirstType>(subgroup_type_id, my_id,
                                                                       subgroup_id, subgroup_index,
                                                                       shard_num, rpc_manager, this));
                     } else {
                         replicated_objects.template get<FirstType>().emplace(
-                                subgroup_index, Replicated<FirstType>(index_of_type<FirstType, ReplicatedTypes...>, my_id,
+                                subgroup_index, Replicated<FirstType>(subgroup_type_id, my_id,
                                                                       subgroup_id, subgroup_index, shard_num, rpc_manager,
                                                                       factories.template get<FirstType>(), this));
                     }
@@ -190,43 +183,11 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
             }
             // Create an ExternalCaller for the subgroup if we don't already have one
             external_callers.template get<FirstType>().emplace(
-                    subgroup_index, ExternalCaller<FirstType>(index_of_type<FirstType, ReplicatedTypes...>,
+                    subgroup_index, ExternalCaller<FirstType>(subgroup_type_id,
                                                               my_id, subgroup_id, rpc_manager));
         }
     }
     return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders));
-}
-
-template <typename... ReplicatedTypes>
-std::vector<RawSubgroup> Group<ReplicatedTypes...>::construct_raw_subgroups(const View& curr_view) {
-    std::vector<RawSubgroup> raw_subgroup_vector;
-    std::type_index raw_object_type(typeid(RawObject));
-    auto ids_entry = curr_view.subgroup_ids_by_type.find(raw_object_type);
-    if(ids_entry != curr_view.subgroup_ids_by_type.end()) {
-        for(uint32_t index = 0; index < ids_entry->second.size(); ++index) {
-            subgroup_id_t subgroup_id = ids_entry->second.at(index);
-            uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
-            bool in_subgroup = false;
-            for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-                const std::vector<node_id_t>& members = curr_view.subgroup_shard_views.at(subgroup_id)
-                                                                .at(shard_num)
-                                                                .members;
-                //"If this node is in subview->members for this shard"
-                if(std::find(members.begin(), members.end(), my_id) != members.end()) {
-                    in_subgroup = true;
-                    raw_subgroup_vector.emplace_back(
-                            RawSubgroup(my_id, subgroup_id, view_manager));
-                    break;
-                }
-            }
-            if(!in_subgroup) {
-                // Put an empty RawObject in the vector, so there's something at this
-                // index
-                raw_subgroup_vector.emplace_back(RawSubgroup(my_id, view_manager));
-            }
-        }
-    }
-    return raw_subgroup_vector;
 }
 
 template <typename... ReplicatedTypes>
@@ -253,7 +214,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
                 = construct_objects<ReplicatedTypes...>(view, old_shard_leaders);
         receive_objects(subgroups_and_leaders);
-        raw_subgroups = construct_raw_subgroups(view);
     });
 }
 
@@ -320,27 +280,13 @@ std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::re
 }
 
 template <typename... ReplicatedTypes>
-RawSubgroup& Group<ReplicatedTypes...>::get_subgroup(RawObject*,
-                                                     uint32_t subgroup_index) {
-    return raw_subgroups.at(subgroup_index);
-}
-
-template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(SubgroupType*,
-                                                                  uint32_t subgroup_index) {
-    return replicated_objects.template get<SubgroupType>().at(subgroup_index);
-}
-
-template <typename... ReplicatedTypes>
-template <typename SubgroupType>
-auto& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
+Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
     if(!view_manager.get_current_view().get().is_adequately_provisioned) {
         throw subgroup_provisioning_exception("View is inadequately provisioned because subgroup provisioning failed!");
     }
-    SubgroupType* overload_selector = nullptr;
     try {
-        return get_subgroup(overload_selector, subgroup_index);
+        return replicated_objects.template get<SubgroupType>().at(subgroup_index);
     } catch(std::out_of_range& ex) {
         throw invalid_subgroup_exception("Not a member of the requested subgroup.");
     }
@@ -362,7 +308,7 @@ ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32
     try {
         auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
         View& curr_view = view_manager.get_current_view().get();
-        auto subgroup_id = curr_view.subgroup_ids_by_type.at(typeid(SubgroupType))
+        auto subgroup_id = curr_view.subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>)
                                    .at(subgroup_index);
         const auto& shard_subviews = curr_view.subgroup_shard_views.at(subgroup_id);
         std::vector<node_id_t> shard_reps(shard_subviews.size());

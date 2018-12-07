@@ -34,8 +34,7 @@ void output_result(typename derecho::rpc::QueryResults<T>::ReplyMap& rmap) {
 int main(int argc, char* argv[]) {
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(test1_str)), &derecho::one_subgroup_entire_view}},
-                                        {std::type_index(typeid(test1_str))}};
+    derecho::SubgroupInfo subgroup_info{&derecho::one_subgroup_entire_view};
     derecho::Group<test1_str> managed_group({}, subgroup_info, {},
                                             [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
     if(derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID) == 0) {

@@ -71,8 +71,8 @@ int main(int argc, char *argv[]) {
 
     bool is_sending = true;
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ByteArrayObject)), [num_of_nodes, sender_selector](const derecho::View &curr_view, int &next_unassigned_rank) {
+    derecho::SubgroupInfo subgroup_info{[num_of_nodes, sender_selector](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View &curr_view) {
                   if(curr_view.num_members < num_of_nodes) {
                       std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
                       throw derecho::subgroup_provisioning_exception();
@@ -96,10 +96,9 @@ int main(int argc, char *argv[]) {
                   }
 
                   subgroup_vector[0].emplace_back(curr_view.make_subview(members, derecho::Mode::ORDERED, senders));
-                  next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes);
+                  curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_of_nodes);
                   return subgroup_vector;
-              }}},
-            {std::type_index(typeid(ByteArrayObject))}};
+    }};
 
     auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
 

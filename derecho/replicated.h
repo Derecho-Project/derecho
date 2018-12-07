@@ -46,6 +46,24 @@ template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
 
 /**
+ * An empty class to be used as the "replicated type" for a subgroup that
+ * doesn't implement a Replicated Object. Subgroups of type RawObject will
+ * have no replicated state or RPC functions and can only be used to send raw
+ * (byte-buffer) multicasts.
+ */
+struct RawObject {
+    static auto register_functions() { return std::tuple<>(); };
+};
+
+/**
+ * An implementation of Factory<T> for RawObject, which is trivial because
+ * RawObjects have no state.
+ */
+std::unique_ptr<RawObject> raw_object_factory(PersistentRegistry*) {
+    return std::make_unique<RawObject>();
+}
+
+/**
  * Common interface for all types of Replicated<T>, specifying some methods for
  * state transfer and persistence. This allows non-templated Derecho components
  * like ViewManager to take these actions without knowing the full type of a subgroup.
@@ -139,7 +157,7 @@ public:
      * @param client_object_factory A factory functor that can create instances
      * of T.
      */
-    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(client_object_factory(persistent_registry_ptr.get()))),
@@ -167,7 +185,7 @@ public:
      * @param group_rpc_manager A reference to the RPCManager for the Group
      * that owns this Replicated<T>
      */
-    Replicated(std::size_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
+    Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, uint32_t subgroup_index, uint32_t shard_num,
                rpc::RPCManager& group_rpc_manager, _Group* group)
             : persistent_registry_ptr(std::make_unique<PersistentRegistry>(this, std::type_index(typeid(T)), subgroup_index, shard_num)),
               user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
@@ -199,7 +217,7 @@ public:
      * template parameter. This is true if any field of the user object T is
      * persistent.
      */
-    bool is_persistent() const {
+    constexpr bool is_persistent() const {
         return has_persistent_fields<T>::value;
     }
 
@@ -259,13 +277,10 @@ public:
 
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
-                if(!group_rpc_manager.view_manager.curr_view
-                            ->multicast_group->send(subgroup_id, msg_size, serializer, true)) {
-                    return false;
-                }
-                group_rpc_manager.finish_rpc_send(*pending_ptr);
-                return true;
+                return group_rpc_manager.view_manager.curr_view
+                        ->multicast_group->send(subgroup_id, msg_size, serializer, true);
             });
+            group_rpc_manager.finish_rpc_send(*pending_ptr);
             return std::move(*results_ptr);
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};

@@ -7,18 +7,16 @@
 
 #include <cstdint>
 #include <functional>
-#include <optional>
-#include <utility>
 #include <map>
+#include <memory>
+#include <optional>
 #include <string>
 #include <sys/types.h>
+#include <utility>
 
 #include "derecho/derecho_type_definitions.h"
 #include "persistent/HLC.hpp"
 #include "persistent/PersistentTypenames.hpp"
-
-//This must be included before the mutils-serialization library is loaded
-#include "type_index_serialization.h"
 
 namespace persistent {
 class PersistentRegistry;
@@ -31,6 +29,12 @@ using subgroup_id_t = uint32_t;
 /** Type alias for a message's unique "sequence number" or index.
  * This allows us to change exactly which numeric type we use to store it.*/
 using message_id_t = int32_t;
+/**
+ * Type of the numeric ID used to refer to subgroup types within a Group; this is
+ * currently computed as the index of the subgroup type within Group's template
+ * parameters.
+ */
+using subgroup_type_id_t = uint32_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
 // using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int, persistent::version_t)>;

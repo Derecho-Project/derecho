@@ -29,3 +29,6 @@ target_link_libraries(cooked_send_test derecho)
 # delivery_order_test
 add_executable(delivery_order_test delivery_order_test.cpp)
 target_link_libraries(delivery_order_test derecho)
+
+add_executable(subgroup_function_tester subgroup_function_tester.cpp)
+target_link_libraries(subgroup_function_tester derecho conf)

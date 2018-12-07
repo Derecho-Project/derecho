@@ -105,35 +105,34 @@ int main(int argc, char* argv[]) {
                 }
             }};
 
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(ByteArrayObject)), [num_of_nodes, sender_selector](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < num_of_nodes) {
-                      std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
+    derecho::SubgroupInfo subgroup_info{[num_of_nodes, sender_selector](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View &curr_view) {
+        if(curr_view.num_members < num_of_nodes) {
+            std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_vector(1);
 
-                  std::vector<uint32_t> members(num_of_nodes);
-                  std::vector<int> senders(num_of_nodes, 1);
-                  for(int i = 0; i < num_of_nodes; i++) {
-                      members[i] = i;
-                      switch(sender_selector) {
-                          case 0:  // all senders
-                              break;
-                          case 1:  // half senders
-                              if(i <= (num_of_nodes - 1) / 2) senders[i] = 0;
-                              break;
-                          case 2:  // one senders
-                              if(i != (num_of_nodes - 1)) senders[i] = 0;
-                              break;
-                      }
-                  }
+        std::vector<uint32_t> members(num_of_nodes);
+        std::vector<int> senders(num_of_nodes, 1);
+        for(int i = 0; i < num_of_nodes; i++) {
+            members[i] = i;
+            switch(sender_selector) {
+            case 0:  // all senders
+            break;
+            case 1:  // half senders
+                if(i <= (num_of_nodes - 1) / 2) senders[i] = 0;
+                break;
+            case 2:  // one senders
+                if(i != (num_of_nodes - 1)) senders[i] = 0;
+                break;
+            }
+        }
 
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(members, derecho::Mode::ORDERED, senders));
-                  next_unassigned_rank = std::max(next_unassigned_rank, num_of_nodes);
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(ByteArrayObject))}};
+        subgroup_vector[0].emplace_back(curr_view.make_subview(members, derecho::Mode::ORDERED, senders));
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_of_nodes);
+        return subgroup_vector;
+    }};
 
     auto ba_factory = [](PersistentRegistry* pr) { return std::make_unique<ByteArrayObject>(pr); };
 

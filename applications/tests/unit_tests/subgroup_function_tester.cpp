@@ -8,7 +8,7 @@
 #include <iostream>
 #include <vector>
 
-#include "derecho_internal.h"
+#include "derecho/derecho_internal.h"
 #include "subgroup_function_tester.h"
 
 std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> ip_and_ports_generator() {
@@ -48,22 +48,26 @@ int main(int argc, char* argv[]) {
             {std::type_index(typeid(TestType1)), 0}};
 
     //We're really just testing the allocation functions, so assign each one to a dummy Replicated type
-    derecho::SubgroupInfo test_subgroups{
-            {{std::type_index(typeid(TestType1)), DefaultSubgroupAllocator(sharded_policy)},
-             {std::type_index(typeid(TestType2)), DefaultSubgroupAllocator(unsharded_policy)},
-             {std::type_index(typeid(TestType3)), DefaultSubgroupAllocator(uneven_sharded_policy)},
-             {std::type_index(typeid(TestType4)), DefaultSubgroupAllocator(multiple_copies_policy)},
-             {std::type_index(typeid(TestType5)), DefaultSubgroupAllocator(multiple_subgroups_policy)},
-             {std::type_index(typeid(TestType6)), CrossProductAllocator(uneven_to_even_cp)}},
-            {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)), std::type_index(typeid(TestType3)),
-             std::type_index(typeid(TestType4)), std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))}};
+    derecho::SubgroupInfo test_subgroups(DefaultSubgroupAllocator({
+        {std::type_index(typeid(TestType1)), sharded_policy},
+        {std::type_index(typeid(TestType2)), unsharded_policy},
+        {std::type_index(typeid(TestType3)), uneven_sharded_policy},
+        {std::type_index(typeid(TestType4)), multiple_copies_policy},
+        {std::type_index(typeid(TestType5)), multiple_subgroups_policy},
+        {std::type_index(typeid(TestType6)), uneven_to_even_cp}
+    }));
 
+    std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
+                                                      std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4)),
+                                                      std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))};
     std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(100);
     std::generate(member_ips_and_ports.begin(), member_ips_and_ports.end(), ip_and_ports_generator);
     std::vector<char> none_failed(100, 0);
-    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed);
+    auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
+                                                     std::vector<node_id_t>{}, std::vector<node_id_t>{},
+                                                     0, 0, subgroup_type_order);
 
     std::cout << "TEST 1: Initial allocation" << std::endl;
     derecho::test_provision_subgroups(test_subgroups, nullptr, *curr_view);
@@ -123,38 +127,43 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
                               View& curr_view) {
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     std::cout << "View has these members: " << curr_view.members << std::endl;
-    for(const auto& subgroup_type : subgroup_info.membership_function_order) {
-        subgroup_shard_layout_t subgroup_shard_views;
+    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
+        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
+        subgroup_shard_layout_t curr_type_subviews;
         try {
-            auto temp = subgroup_info.subgroup_membership_functions.at(subgroup_type)(curr_view, curr_view.next_unassigned_rank);
-            subgroup_shard_views = std::move(temp);
+            auto temp = subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view);
+            curr_type_subviews = std::move(temp);
             std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
-            print_subgroup_layout(subgroup_shard_views);
+            print_subgroup_layout(curr_type_subviews);
             std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl
                       << std::endl;
         } catch(subgroup_provisioning_exception& ex) {
             curr_view.is_adequately_provisioned = false;
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
             curr_view.subgroup_shard_views.clear();
+            curr_view.subgroup_ids_by_type_id.clear();
             std::cout << "Subgroup type " << subgroup_type.name() << " failed to provision, marking View inadequate" << std::endl
                       << std::endl;
             return;
         }
-        std::size_t num_subgroups = subgroup_shard_views.size();
-        curr_view.subgroup_ids_by_type[subgroup_type] = std::vector<subgroup_id_t>(num_subgroups);
+        std::size_t num_subgroups = curr_type_subviews.size();
+        curr_view.subgroup_ids_by_type_id[subgroup_type_id] = std::vector<subgroup_id_t>(num_subgroups);
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             //Assign this (type, index) pair a new unique subgroup ID
-            subgroup_id_t next_subgroup_number = curr_view.subgroup_shard_views.size();
-            curr_view.subgroup_ids_by_type[subgroup_type][subgroup_index] = next_subgroup_number;
-            uint32_t num_shards = subgroup_shard_views.at(subgroup_index).size();
+            subgroup_id_t curr_subgroup_num = curr_view.subgroup_shard_views.size();
+            curr_view.subgroup_ids_by_type_id[subgroup_type_id][subgroup_index] = curr_subgroup_num;
+            uint32_t num_shards = curr_type_subviews.at(subgroup_index).size();
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                SubView& shard_view = subgroup_shard_views.at(subgroup_index).at(shard_num);
+                SubView& shard_view = curr_type_subviews.at(subgroup_index).at(shard_num);
                 //Initialize my_rank in the SubView for this node's ID
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
-                if(prev_view && prev_view->is_adequately_provisioned) {
+                if(shard_view.my_rank != -1) {
+                    // Initialize my_subgroups
+                    curr_view.my_subgroups[curr_subgroup_num] = shard_num;
+                }
+                if(prev_view) {
                     //Initialize this shard's SubView.joined and SubView.departed
-                    subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type
-                                                             .at(subgroup_type)
+                    subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)
                                                              .at(subgroup_index);
                     SubView& prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
                     std::set<node_id_t> prev_members(prev_shard_view.members.begin(), prev_shard_view.members.end());
@@ -170,7 +179,7 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
             /* Pull the shard->SubView mapping out of the subgroup membership list
              * and save it under its subgroup ID (which was shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
-                    std::move(subgroup_shard_views[subgroup_index]));
+                    std::move(curr_type_subviews[subgroup_index]));
         }
     }
 }
@@ -220,7 +229,8 @@ std::unique_ptr<View> make_next_view(const View& curr_view,
         }
     }
     return std::make_unique<View>(curr_view.vid + 1, members, member_ips_and_ports, failed,
-                                  joined, departed, my_new_rank, next_unassigned_rank);
+                                  joined, departed, my_new_rank, next_unassigned_rank,
+                                  curr_view.subgroup_type_order);
 }
 
 } /* namespace derecho */

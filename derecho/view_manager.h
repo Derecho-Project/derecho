@@ -153,8 +153,11 @@ private:
     /** Functions to be called whenever the view changes, to report the
      * new view to some other component. */
     std::vector<view_upcall_t> view_upcalls;
-    /** The subgroup membership functions, which will be called whenever the view changes. */
+    /** The subgroup membership function, which will be called whenever the view changes. */
     const SubgroupInfo subgroup_info;
+    /** Indicates the order that the subgroups should be provisioned;
+     * set by Group to be the same order as its template parameters. */
+    std::vector<std::type_index> subgroup_type_order;
     //Parameters stored here, in case we need them again after construction
     DerechoParams derecho_params;
 
@@ -180,6 +183,9 @@ private:
     /** State related to restarting, such as the current logged ragged trim;
      * null if this node is not currently doing a total restart. */
     std::unique_ptr<RestartState> restart_state;
+
+    /** The persistence request func is from persistence manager*/
+    persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view,
@@ -254,8 +260,7 @@ private:
     /* -- Static helper methods that implement chunks of view-management functionality -- */
     static void deliver_in_order(const View& Vc, const int shard_leader_rank,
                                  const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders
-                                 whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders whenlog(, std::shared_ptr<spdlog::logger> logger));
     static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
@@ -366,8 +371,6 @@ private:
      */
     static uint32_t derive_subgroup_settings(View& curr_view,
                                              std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
-    /** The persistence request func is from persistence manager*/
-    persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -378,6 +381,7 @@ private:
      * @return The length to provide to DerechoSST for num_received_size
      */
     static uint32_t compute_num_received_size(const View& view);
+
     /** Constructs a map from node ID -> IP address from the parallel vectors in the given View. */
     template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
@@ -392,18 +396,12 @@ private:
         return member_ips_and_ports_map;
     }
     /**
-     * Constructs a map from subgroup type -> index -> shard -> node ID of that
-     * shard's leader. If a shard has no leader in the current view (because it
-     * has no members), the vector will contain -1 instead of a node ID
+     * Constructs a vector mapping subgroup ID in the new view -> shard number
+     * -> node ID of that shard's leader in the old view. If a shard had no
+     * leader in the old view, or is a RawObject shard (which does not do state
+     * transfer), the "node ID" for that shard will be -1.
      */
-    static std::map<std::type_index, std::vector<std::vector<int64_t>>> make_shard_leaders_map(const View& view);
-    /**
-     * Translates the old shard leaders' indices from (type, index) pairs to new subgroup IDs.
-     * An entry in this vector will have value -1 if there was no old leader for that shard.
-     */
-    static std::vector<std::vector<int64_t>> translate_types_to_ids(
-            const std::map<std::type_index, std::vector<std::vector<int64_t>>>& old_shard_leaders_by_type,
-            const View& new_view);
+    static std::vector<std::vector<int64_t>> old_shard_leaders_by_new_ids(const View& curr_view, const View& next_view);
 
 public:
     /**
@@ -426,6 +424,7 @@ public:
      */
     ViewManager(CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                const std::vector<std::type_index>& subgroup_type_order,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
@@ -454,6 +453,7 @@ public:
     ViewManager(tcp::socket& leader_connection,
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
+                const std::vector<std::type_index>& subgroup_type_order,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,

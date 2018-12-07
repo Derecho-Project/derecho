@@ -20,42 +20,30 @@ int main(int argc, char** argv) {
 
     //Since this is just a test, assume there will always be 6 members with IDs 0-5
     //Assign Foo and Bar to a subgroup containing 0, 1, and 2, and Cache to a subgroup containing 3, 4, and 5
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < 3) {
-                      std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
-                  //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-                  next_unassigned_rank = std::max(next_unassigned_rank, 3);
-                  return subgroup_vector;
-              }},
-             {std::type_index(typeid(Bar)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < 3) {
-                      std::cout << "Bar function throwing subgroup_provisioning_exception" << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-                  next_unassigned_rank = std::max(next_unassigned_rank, 3);
-                  return subgroup_vector;
-              }},
-             {std::type_index(typeid(Cache)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < 6) {
-                      std::cout << "Cache function throwing subgroup_provisioning_exception" << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes));
-                  next_unassigned_rank += 3;
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Foo)), std::type_index(typeid(Bar)), std::type_index(typeid(Cache))}};
+    derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(subgroup_type == std::type_index(typeid(Foo)) || subgroup_type == std::type_index(typeid(Bar))) {
+            if(curr_view.num_members < 3) {
+                throw derecho::subgroup_provisioning_exception();
+            }
+            derecho::subgroup_shard_layout_t subgroup_vector(1);
+            std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
+            //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
+            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+            curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 3);
+            return subgroup_vector;
+        } else { /* subgroup_type == std::type_index(typeid(Cache)) */
+            if(curr_view.num_members < 6) {
+                throw derecho::subgroup_provisioning_exception();
+            }
+            derecho::subgroup_shard_layout_t subgroup_vector(1);
+            std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
+            subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes));
+            curr_view.next_unassigned_rank += 3;
+            return subgroup_vector;
+        }
+    }};
+
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state

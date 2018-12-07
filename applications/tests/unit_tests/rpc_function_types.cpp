@@ -58,17 +58,17 @@ public:
     REGISTER_RPC_FUNCTIONS(ReferenceTest, get_state, set_state, append_string);
 };
 
+using derecho::one_subgroup_policy;
+using derecho::even_sharding_policy;
+
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info(
-            {{std::type_index(typeid(ConstTest)),
-                derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3))) },
-            {std::type_index(typeid(ReferenceTest)),
-                derecho::DefaultSubgroupAllocator(derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3))) }}
-    );
-
+    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
+        {std::type_index(typeid(ConstTest)), one_subgroup_policy(even_sharding_policy(1,3))},
+        {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(even_sharding_policy(1,3))}
+    }));
     auto const_test_factory = [](PersistentRegistry*) { return std::make_unique<ConstTest>(); };
     auto reference_test_factory = [](PersistentRegistry*) {return std::make_unique<ReferenceTest>(); };
 

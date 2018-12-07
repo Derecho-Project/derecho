@@ -71,8 +71,7 @@ int main(int argc, char** argv) {
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
-    derecho::SubgroupInfo subgroup_info{{{std::type_index(typeid(PersistentThing)), &derecho::one_subgroup_entire_view}},
-                                        {std::type_index(typeid(PersistentThing))}};
+    derecho::SubgroupInfo subgroup_info{&derecho::one_subgroup_entire_view};
 
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
     //    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };

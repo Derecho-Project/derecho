@@ -10,6 +10,7 @@
 #include <mutex>
 #include <queue>
 #include <string>
+#include <type_traits>
 #include <typeindex>
 #include <utility>
 #include <vector>
@@ -19,7 +20,6 @@
 #include "derecho_exception.h"
 #include "derecho_internal.h"
 #include "persistence_manager.h"
-#include "raw_subgroup.h"
 #include "replicated.h"
 #include "rpc_manager.h"
 #include "subgroup_info.h"
@@ -47,13 +47,21 @@ constexpr uint32_t index_of_type_impl() {
 /**
  * A compile-time "function" that computes the index of a type within a template
  * parameter pack of types. The value of this constant is equal to the index of
- * TargetType within TypePack. (Behavior is undefined if TargetType is not
- * actually in TypePack).
+ * TargetType within TypePack. (The compiler will spew template errors if
+ * TargetType is not actually in TypePack).
  * @tparam TargetType The type to search for in the parameter pack
  * @tparam TypePack The template parameter pack that should be searched
  */
 template <typename TargetType, typename... TypePack>
 constexpr inline uint32_t index_of_type = index_of_type_impl<0, TargetType, TypePack...>();
+
+/**
+ * A type-trait-like template that provides a True member "value" if TargetType
+ * matches some type in TypePack (according to std::is_same), or provides a
+ * False member "value" if TargetType does not match anything in TypePack.
+ */
+template <typename TargetType, typename... TypePack>
+using contains = std::integral_constant<bool, (std::is_same<TargetType, TypePack>::value || ...)>;
 
 //Type alias for a sparse-vector of Replicated, otherwise KindMap can't understand it's a template
 template <typename T>
@@ -76,15 +84,6 @@ public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
 };
 
-template <>
-class GroupProjection<RawObject> : public virtual _Group {
-protected:
-    virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
-
-public:
-    RawSubgroup& get_subgroup(uint32_t subgroup_num = 0);
-};
-
 class GroupReference {
 public:
     _Group* group;
@@ -103,7 +102,7 @@ public:
  * state and RPC functions for subgroups of this group.
  */
 template <typename... ReplicatedTypes>
-class Group : public virtual _Group, public GroupProjection<RawObject>, public GroupProjection<ReplicatedTypes>... {
+class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
     void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
 
@@ -143,11 +142,6 @@ private:
      * of a subgroup, the Replicated<T> will refer to the one shard that this
      * node belongs to. */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> replicated_objects;
-    /** Maps subgroup index -> RawSubgroup for the subgroups of type RawObject.
-     * If this node is not a member of RawObject subgroup i, the RawSubgroup at
-     * index i will be invalid; otherwise, the RawObject will refer to the one
-     * shard of that subgroup that this node belongs to. */
-    std::vector<RawSubgroup> raw_subgroups;
     /** Maps each type T to a map of (index -> ExternalCaller<T>) for the
      * subgroup(s) of that type that this node is not a member of. The
      * ExternalCaller for subgroup i of type T can be used to contact any member
@@ -160,13 +154,6 @@ private:
      * Note that this is a std::map solely so that we can initialize it out-of-order;
      * its keys are continuous integers starting at 0 and it should be a std::vector. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
-
-    /* get_subgroup is actually implemented in these two methods. This is an
-     * ugly hack to allow us to specialize get_subgroup<RawObject> to behave differently than
-     * get_subgroup<T>. The unnecessary unused parameter is for overload selection. */
-    template <typename SubgroupType>
-    Replicated<SubgroupType>& get_subgroup(SubgroupType*, uint32_t subgroup_index);
-    RawSubgroup& get_subgroup(RawObject*, uint32_t subgroup_index);
 
     /** Type of a 2-dimensional vector used to store potential node IDs, or -1 */
     using vector_int64_2d = std::vector<std::vector<int64_t>>;
@@ -200,15 +187,6 @@ private:
     void update_tcp_connections_callback(const View& new_view);
 
     /**
-     * Constructor helper that constructs RawSubgroup objects for each subgroup
-     * of type RawObject; called to initialize the raw_subgroups map.
-     * @param curr_view A reference to the current view as reported by View_manager
-     * @return A vector containing a RawSubgroup for each "raw" subgroup the user
-     * requested, at the index corresponding to that subgroup's index.
-     */
-    std::vector<RawSubgroup> construct_raw_subgroups(const View& curr_view);
-
-    /**
      * Base case for the construct_objects template. Note that the neat "varargs
      * trick" (defining construct_objects(...) as the base case) doesn't work
      * because varargs can't match const references, and will force a copy
@@ -217,7 +195,7 @@ private:
      */
     template <typename... Empty>
     std::enable_if_t<0 == sizeof...(Empty),
-                            std::set<std::pair<subgroup_id_t, node_id_t>>>
+                     std::set<std::pair<subgroup_id_t, node_id_t>>>
     construct_objects(const View&, const vector_int64_2d&) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
@@ -269,27 +247,25 @@ public:
     ~Group();
 
     /**
-     * Gets the "handle" for the subgroup of the specified type and index (which
-     * is either a Replicated<T> or a RawSubgroup) assuming this node is a
-     * member of the desired subgroup. If the subgroup has type RawObject, the
-     * return value will be a RawSubgroup; otherwise it will be a Replicated<T>.
-     * The Replicated<T> will contain the replicated state of an object of type
-     * T and be usable to send multicasts to this node's shard of the subgroup.
+     * Gets the "handle" for the subgroup of the specified type and index,
+     * which is a Replicated<T>, assuming this node is a member of the desired
+     * subgroup. The Replicated<T> will contain the replicated state of an
+     * object of type T (if it has any state) and be usable to send multicasts
+     * to this node's shard of the subgroup.
      *
      * @param subgroup_index The index of the subgroup within the set of
      * subgroups that replicate the same type of object. Defaults to 0, so
      * if there is only one subgroup of type T, it can be retrieved with
      * get_subgroup<T>();
      * @tparam SubgroupType The object type identifying the subgroup
-     * @return A reference to either a Replicated<SubgroupType> or a RawSubgroup
-     * for this subgroup
+     * @return A reference to a Replicated<SubgroupType>
      * @throws subgroup_provisioning_exception If there are no subgroups because
      * the current View is inadequately provisioned
      * @throws invalid_subgroup_exception If this node is not a member of the
      * requested subgroup.
      */
     template <typename SubgroupType>
-    auto& get_subgroup(uint32_t subgroup_index = 0);
+    Replicated<SubgroupType>& get_subgroup(uint32_t subgroup_index = 0);
 
     /**
      * Gets the "handle" for a subgroup of the specified type and index,

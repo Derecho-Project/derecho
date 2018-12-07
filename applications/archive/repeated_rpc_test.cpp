@@ -22,21 +22,19 @@ int main(int argc, char** argv) {
     derecho::CallbackSet callback_set{};
 
     const int num_nodes_in_test = 3;
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Foo)), [](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if(curr_view.num_members < num_nodes_in_test) {
-                      std::cout << "Foo function throwing subgroup_provisioning_exception" << std::endl;
-                      throw derecho::subgroup_provisioning_exception();
-                  }
-                  derecho::subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> node_list(&curr_view.members[0], &curr_view.members[0] + num_nodes_in_test);
-                  //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(node_list));
-                  next_unassigned_rank = std::max(next_unassigned_rank, num_nodes_in_test);
-                  cout << "Foo function setting next_unassigned_rank to " << next_unassigned_rank << endl;
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Foo))}};
+    derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if(curr_view.num_members < num_nodes_in_test) {
+            throw derecho::subgroup_provisioning_exception();
+        }
+        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        std::vector<node_id_t> node_list(&curr_view.members[0], &curr_view.members[0] + num_nodes_in_test);
+        //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
+        subgroup_vector[0].emplace_back(curr_view.make_subview(node_list));
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes_in_test);
+        cout << "Foo function setting next_unassigned_rank to " << curr_view.next_unassigned_rank << endl;
+        return subgroup_vector;
+    }};
 
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 

@@ -40,23 +40,24 @@ int main(int argc, char *argv[]) {
         cout << endl << endl;
     };
 
-    auto membership_function = [num_nodes](const View &curr_view, int &next_unassigned_rank) {
+    auto membership_function = [num_nodes](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         if(num_members < num_nodes) {
             throw subgroup_provisioning_exception();
         }
         subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
-        next_unassigned_rank = curr_view.members.size();
+        curr_view.next_unassigned_rank = curr_view.members.size();
         return subgroup_vector;
     };
 
-    std::map<std::type_index, shard_view_generator_t> subgroup_map = {{std::type_index(typeid(RawObject)), membership_function}};
-    SubgroupInfo one_raw_group(subgroup_map);
+    SubgroupInfo one_raw_group(membership_function);
 
-    Group<> managed_group = Group<>(
+    Group<RawObject> managed_group(
             CallbackSet{stability_callback},
-            one_raw_group);
+            one_raw_group, std::vector<view_upcall_t>{},
+            &raw_object_factory);
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
@@ -67,7 +68,7 @@ int main(int argc, char *argv[]) {
     }
     cout << endl;
 
-    RawSubgroup &group_as_subgroup = managed_group.get_subgroup<RawObject>();
+    Replicated<RawObject> &group_as_subgroup = managed_group.get_subgroup<RawObject>();
     while(true) {
         std::string msg_str;
         std::getline(std::cin, msg_str);

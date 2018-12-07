@@ -7,6 +7,7 @@
 #pragma once
 
 #include <memory>
+#include <variant>
 
 #include "derecho_internal.h"
 #include "derecho_modes.h"
@@ -30,8 +31,20 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
     }
 }
 
-subgroup_shard_layout_t one_subgroup_entire_view(const View& curr_view, int& next_unassigned_rank);
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const View& curr_view, int& next_unassigned_rank);
+/**
+ * A simple implementation of shard_view_generator_t that returns a single,
+ * un-sharded subgroup containing all the members of curr_view, regardless of
+ * what subgroup type is supplied. This is best used when there is only one
+ * subgroup type.
+ */
+subgroup_shard_layout_t one_subgroup_entire_view(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
+/**
+ * A simple implementation of shard_view_generator_t that returns a single,
+ * un-sharded subgroup in Unordered (Raw) mode containing all the members of
+ * curr_view, regardless of what subgroup type is supplied. This is best used
+ * when there is only one subgroup type.
+ */
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
 
 struct ShardAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */
@@ -54,6 +67,10 @@ struct ShardAllocationPolicy {
     std::vector<Mode> modes_by_shard;
 };
 
+/**
+ * A data structure defining the parameters of the default subgroup allocation
+ * function for a single subgroup type.
+ */
 struct SubgroupAllocationPolicy {
     /** The number of subgroups of the same Replicated type to create */
     int num_subgroups;
@@ -65,6 +82,20 @@ struct SubgroupAllocationPolicy {
     std::vector<ShardAllocationPolicy> shard_policy_by_subgroup;
 };
 
+/**
+ * An alternate type of subgroup allocation policy for subgroup types whose
+ * membership will be defined as a cross-product of other subgroups.
+ */
+struct CrossProductPolicy {
+    /** The (type, index) pair identifying the "source" subgroup of the cross-product.
+     * Each member of this subgroup will be a sender in T subgroups, where T is the
+     * number of shards in the target subgroup. */
+    std::pair<std::type_index, uint32_t> source_subgroup;
+    /** The (type, index) pair identifying the "target" subgroup of the cross-product.
+     * Each shard in this subgroup will have all of its members assigned to S subgroups
+     * as receivers, where S is the number of members in the source subgroup. */
+    std::pair<std::type_index, uint32_t> target_subgroup;
+};
 /* Helper functions that construct ShardAllocationPolicy values for common cases. */
 
 /**
@@ -118,37 +149,37 @@ SubgroupAllocationPolicy identical_subgroups_policy(int num_subgroups, const Sha
 
 /**
  * Functor of type shard_view_generator_t that implements the default subgroup
- * allocation algorithm, parameterized based on a SubgroupAllocationPolicy. Its
- * operator() will throw a subgroup_provisioning_exception if there are not
- * enough nodes in the current view to populate all of the subgroups and shards.
+ * allocation algorithm, parameterized based on a policy for each subgroup type
+ * (i.e. Replicated Object type). Its operator() will throw a
+ * subgroup_provisioning_exception if there are not enough nodes in the current
+ * view to populate all of the subgroups and shards.
  */
 class DefaultSubgroupAllocator {
 protected:
-    std::unique_ptr<subgroup_shard_layout_t> previous_assignment;
-    const SubgroupAllocationPolicy policy;
+    /**
+     * The entry for each type of subgroup is either a SubgroupAllocationPolicy
+     * if that type should use the standard "partitioning" allocator, or a
+     * CrossProductPolicy if that type should use the "cross-product" allocator
+     * instead.
+     */
+    const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
-    bool assign_subgroup(const View& curr_view, int& next_unassigned_rank, const ShardAllocationPolicy& subgroup_policy);
+    std::vector<SubView> assign_subgroup(const std::unique_ptr<View>& prev_view, View& curr_view,
+                                         const ShardAllocationPolicy& subgroup_policy) const;
+    subgroup_shard_layout_t compute_standard_membership(const std::type_index& subgroup_type,
+                                                        const std::unique_ptr<View>& prev_view, View& curr_view) const;
+    subgroup_shard_layout_t compute_cross_product_membership(const std::type_index& subgroup_type,
+                                                             const std::unique_ptr<View>& prev_view, View& curr_view) const;
 
 public:
-    DefaultSubgroupAllocator(const SubgroupAllocationPolicy& allocation_policy)
-            : policy(allocation_policy) {}
+    DefaultSubgroupAllocator(const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& policies_by_subgroup_type)
+            : policies(policies_by_subgroup_type) {}
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
-            : previous_assignment(deep_pointer_copy(to_copy.previous_assignment)),
-              policy(to_copy.policy) {}
+            : policies(to_copy.policies) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
-    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank);
-};
-
-struct CrossProductPolicy {
-    /** The (type, index) pair identifying the "source" subgroup of the cross-product.
-     * Each member of this subgroup will be a sender in T subgroups, where T is the
-     * number of shards in the target subgroup. */
-    std::pair<std::type_index, uint32_t> source_subgroup;
-    /** The (type, index) pair identifying the "target" subgroup of the cross-product.
-     * Each shard in this subgroup will have all of its members assigned to S subgroups
-     * as receivers, where S is the number of members in the source subgroup. */
-    std::pair<std::type_index, uint32_t> target_subgroup;
+    subgroup_shard_layout_t operator()(const std::type_index& subgroup_type,
+                                       const std::unique_ptr<View>& prev_view, View& curr_view) const;
 };
 
 /**
@@ -170,6 +201,6 @@ public:
     CrossProductAllocator(const CrossProductAllocator& to_copy) : policy(to_copy.policy) {}
     CrossProductAllocator(CrossProductAllocator&&) = default;
 
-    subgroup_shard_layout_t operator()(const View& curr_view, int& next_unassigned_rank);
+    subgroup_shard_layout_t operator()(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
 };
 }  // namespace derecho

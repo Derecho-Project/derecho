@@ -59,31 +59,33 @@ int main(int argc, char* argv[]) {
     std::unordered_set<node_id_t> group_0_members{0, 1, 2};
     std::unordered_set<node_id_t> group_1_members{3, 4, 5};
     std::unordered_set<node_id_t> group_2_members{6, 7, 8};
-    derecho::SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(RawObject)),
-              [group_0_members, group_1_members, group_2_members](const derecho::View& curr_view, int& next_unassigned_rank) {
-            std::vector<node_id_t> subgroup_0_members;
-            std::vector<node_id_t> subgroup_1_members;
-            std::vector<node_id_t> subgroup_2_members;
-	    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                   group_0_members, std::back_inserter(subgroup_0_members));
-	    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                   group_1_members, std::back_inserter(subgroup_1_members));
-	    unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
-                                   group_2_members, std::back_inserter(subgroup_2_members));
-            derecho::subgroup_shard_layout_t subgroup_vector(3);
-            std::vector<int> subgroup_0_senders(subgroup_0_members.size());
-            if(subgroup_0_senders.size()) {
-                subgroup_0_senders[0] = 1;
-            }
-            subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
-            subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
-            subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
-            next_unassigned_rank = std::max(next_unassigned_rank, 9);
-            return subgroup_vector; }}},
-            {std::type_index(typeid(RawObject))}};
+    derecho::SubgroupInfo subgroup_info{[group_0_members, group_1_members, group_2_members](
+            const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        std::vector<node_id_t> subgroup_0_members;
+        std::vector<node_id_t> subgroup_1_members;
+        std::vector<node_id_t> subgroup_2_members;
+        unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                               group_0_members, std::back_inserter(subgroup_0_members));
+        unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                               group_1_members, std::back_inserter(subgroup_1_members));
+        unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
+                               group_2_members, std::back_inserter(subgroup_2_members));
+        derecho::subgroup_shard_layout_t subgroup_vector(3);
+        std::vector<int> subgroup_0_senders(subgroup_0_members.size());
+        if(subgroup_0_senders.size()) {
+            subgroup_0_senders[0] = 1;
+        }
+        subgroup_vector[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
+        subgroup_vector[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
+        subgroup_vector[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 9);
+        return subgroup_vector;
+    }};
 
-    derecho::Group<> managed_group(callbacks, subgroup_info);
+    derecho::Group<RawObject> managed_group(callbacks, subgroup_info,
+                                            std::vector<derecho::view_upcall_t>{},
+                                            &derecho::raw_object_factory);
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
@@ -104,7 +106,7 @@ int main(int argc, char* argv[]) {
         // random message size between 1 and 100
         long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
         unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
-        derecho::RawSubgroup& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
+        derecho::Replicated<RawObject>& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
         for(int i = 0; i < num_messages; ++i) {
             subgroup_handle.send(msg_size, [&](char* buf) {
                 for(unsigned int k = 0; k < msg_size; ++k) {

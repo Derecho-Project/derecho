@@ -38,18 +38,17 @@ int main(int argc, char* argv[]) {
     const uint32_t B = atoi(argv[2]);
     const uint32_t R = atoi(argv[3]);
 
-    SubgroupInfo subgroup_info{
-            {{std::type_index(typeid(Server)), [S](const derecho::View& curr_view, int& next_unassigned_rank) {
-                  if((uint32_t)curr_view.num_members < S) {
-                      throw subgroup_provisioning_exception();
-                  }
-                  subgroup_shard_layout_t subgroup_vector(1);
-                  std::vector<node_id_t> first_S_nodes(&curr_view.members[0], &curr_view.members[0] + S);
-                  subgroup_vector[0].emplace_back(curr_view.make_subview(first_S_nodes));
-                  next_unassigned_rank = std::max(next_unassigned_rank, (int)S);
-                  return subgroup_vector;
-              }}},
-            {std::type_index(typeid(Server))}};
+    SubgroupInfo subgroup_info{[S](const std::type_index& subgroup_type,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+        if((uint32_t)curr_view.num_members < S) {
+            throw subgroup_provisioning_exception();
+        }
+        subgroup_shard_layout_t subgroup_vector(1);
+        std::vector<node_id_t> first_S_nodes(&curr_view.members[0], &curr_view.members[0] + S);
+        subgroup_vector[0].emplace_back(curr_view.make_subview(first_S_nodes));
+        curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, (int)S);
+        return subgroup_vector;
+    }};
 
     auto server_factory = [R](PersistentRegistry*) {
         return std::make_unique<Server>(string(R, 'a'));

@@ -43,9 +43,7 @@ int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info(
-            {{std::type_index(typeid(StringObject)), &derecho::one_subgroup_entire_view }}
-    );
+    derecho::SubgroupInfo subgroup_info(&derecho::one_subgroup_entire_view);
 
     auto string_object_factory = [](PersistentRegistry*) { return std::make_unique<StringObject>(); };
 

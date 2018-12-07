@@ -91,7 +91,9 @@ int main(int argc, char* argv[]) {
         mode = Mode::UNORDERED;
     }
 
-    auto membership_function = [num_senders_selector, mode, num_nodes](const View& curr_view, int& next_unassigned_rank) {
+    auto membership_function = [num_senders_selector, mode, num_nodes](const std::type_index& subgroup_type,
+            const std::unique_ptr<View>& prev_view, View& curr_view) {
+        //There will be only one subgroup (of type RawObject), so no need to check subgroup_type
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         // wait for all nodes to join the group
@@ -121,17 +123,17 @@ int main(int argc, char* argv[]) {
             // provide the sender information in a call to make_subview
             subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
         }
-        next_unassigned_rank = curr_view.members.size();
+        curr_view.next_unassigned_rank = curr_view.members.size();
         return subgroup_vector;
     };
 
-    // Create just one subgroup of type RawObject
-    map<std::type_index, shard_view_generator_t> subgroup_map = {{std::type_index(typeid(RawObject)), membership_function}};
-    SubgroupInfo one_raw_group(subgroup_map);
+    //Wrap the membership function in a SubgroupInfo
+    SubgroupInfo one_raw_group(membership_function);
 
     // join the group
-    Group<> group(CallbackSet{stability_callback},
-                  one_raw_group);
+    Group<RawObject> group(CallbackSet{stability_callback},
+                  one_raw_group, std::vector<view_upcall_t>{},
+                  &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
     auto members_order = group.get_members();
@@ -141,7 +143,7 @@ int main(int argc, char* argv[]) {
 
     // this function sends all the messages
     auto send_all = [&]() {
-        RawSubgroup& raw_subgroup = group.get_subgroup<RawObject>();
+        Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
