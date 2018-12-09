@@ -44,7 +44,7 @@ struct exp_result {
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 5 || (argc > 5 && strcmp("--",argv[argc-5]))) {
+    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
         cout << "Invalid command line arguments." << endl;
         cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
         cout << "Thank you" << endl;
@@ -53,10 +53,10 @@ int main(int argc, char* argv[]) {
     pthread_setname_np(pthread_self(), "bw_test");
 
     // initialize the special arguments for this test
-    const uint num_nodes = std::stoi(argv[argc-4]);
-    const uint num_senders_selector = std::stoi(argv[argc-3]);
-    const uint num_messages = std::stoi(argv[argc-2]);
-    const uint delivery_mode = std::stoi(argv[argc-1]);
+    const uint num_nodes = std::stoi(argv[argc - 4]);
+    const uint num_senders_selector = std::stoi(argv[argc - 3]);
+    const uint num_messages = std::stoi(argv[argc - 2]);
+    const uint delivery_mode = std::stoi(argv[argc - 1]);
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto membership_function = [num_senders_selector, mode, num_nodes](const std::type_index& subgroup_type,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
+                                                                       const std::unique_ptr<View>& prev_view, View& curr_view) {
         //There will be only one subgroup (of type RawObject), so no need to check subgroup_type
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
@@ -132,8 +132,8 @@ int main(int argc, char* argv[]) {
 
     // join the group
     Group<RawObject> group(CallbackSet{stability_callback},
-                  one_raw_group, std::vector<view_upcall_t>{},
-                  &raw_object_factory);
+                           one_raw_group, std::vector<view_upcall_t>{},
+                           &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
     auto members_order = group.get_members();

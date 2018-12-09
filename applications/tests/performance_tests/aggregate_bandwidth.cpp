@@ -2,10 +2,10 @@
 
 #include "aggregate_bandwidth.h"
 
-double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,
+double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_id,
                            double bw) {
-    ResultSST sst(sst::SSTParams(members, node_rank));
-    sst.bw[node_rank] = bw;
+    ResultSST sst(sst::SSTParams(members, node_id));
+    sst.bw[sst.get_local_index()] = bw;
     sst.put();
     sst.sync_with_members();
     double total_bw = 0.0;
