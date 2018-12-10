@@ -45,10 +45,23 @@ To add your own executable (that uses Derecho) to the build system, simply add a
 
 To use Derecho in your code, you simply need to 
 - include the header `derecho/derecho.h` in your \*.h or \*.cpp files, and
-- specify a configuration file, either by setting environment vairable DERECHO_CONF_FILE or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along the explanation can be found in `conf/derecho-default.cfg`. The most important configuration entries are **provider** and **domain**. The **provider** entry specifies the type of RDMA device and the **domain** entry specifies the device (you can also understand it as NIC). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
+- specify a configuration file, either by setting environment vairable DERECHO_CONF_FILE or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along the explanation can be found in `conf/derecho-default.cfg`. 
 
+The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes the core configurations which every application needs to customize. The **RDMA** section includes the options for RDMA hardware specification. The **PERS** section controls the persistent layer behavior. 
 
-**Configuration Examples**
+#### Configure Core Derecho
+Applications need to tell Derecho library who is the leader (at starting time) with options **leader_ip** and **leader_gms_port**; it then specifies its own id (**local_id**) and ip/ports for setting up derecho (**local_ip**, **gms_port**, **rpc_port**, **sst_port**, and **rdmc_port**). 
+
+The other important parameters are the message sizes. Since derecho pre-allocates the buffers for RDMC communication, application should decide on the optimized buffer size. If the buffer size is too large than the messages, Derecho will pin a lot of memory and leave the underutilized. If the buffer size is too small, application has to split messages into smaller ones with unecessary overhead.
+
+There are three options to control the size of messages: **max_payload_size**, **max_smc_payload_size**, and **block_size**.
+No message bigger than **max_payload_size** will be sent by Derecho. Messages equal to or smaller than **max_smc_payload_size** will be sent through SST multicast (SMC), which is more suitable than RDMC for small messages. **block_size** defines the size of unit sent in RDMC (messages bigger than **block_size** will be splited and sent in a pipeline).
+
+Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho-unified/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+
+#### Configure RDMA Device
+The most important configuration entries are **provider** and **domain**. The **provider** option specifies the type of RDMA device and the **domain** option specifies the device (you can also understand it as NIC). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
+
 Configuration 1: run Derecho over TCP/IP with ethernet port 'eth0':
 
 ```
@@ -72,7 +85,33 @@ tx_depth = 4096
 rx_depth = 4096
 ...
 ```
+
 The **tx_depth** and **rx_depth** configure the maximum of pending requests that can be waiting for acknowledgement before communication blocks. Those numbers can be different from one device to another. We recommend setting them as large as possible.
+
+#### Configure Persistent Behavior
+The application can specify the location for persistent state in the file system by **file_path**, which is defaulted to `.plog` folder in the working directory. **ramdisk_path** controls the location of states for `Volatile<T>`, which is defaulted to tmpfs (ramdisk). **reset** controls weather to clean up the persisted state. We default this to true. **Please set `reset` to `false` for normal use of `Persistent\<T\>`.**
+
+#### Specify Configuration with Command Line Argument
+We allow the application to specify configurations by command line. The command line configurations overrides the optioin in configuration file. To enable this feature, we sugguest using the following code:
+```cpp
+#define NUM_OF_APP_ARGS () // specify the number of application arguments.
+int main(int argc, char* argv[]) {
+    if((argc < (NUM_OF_APP_ARGS+1)) || 
+       ((argc > (NUM_OF_APP_ARGS+1)) && strcmp("--", argv[argc - NUM_OF_APP_ARGS - 1]))) {
+        cout << "Invalid command line arguments." << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] application-argument-list" << endl;
+        return -1;
+    }
+    Conf::initialize(argc, argv); // pick up the command line argument 
+    // pick up application argument list and continue ...
+    ...
+}
+```
+Then, call application as following, assume the application name is `app`:
+```bash
+# app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
+```
+Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho-unified/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
 
 ### Setup and Testing
 There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
