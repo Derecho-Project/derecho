@@ -1775,6 +1775,17 @@ std::vector<std::vector<node_id_t>> ViewManager::get_subgroup_members(subgroup_t
     return subgroup_members;
 }
 
+int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    auto find_id_result = curr_view->my_subgroups.find(subgroup_id);
+    if(find_id_result == curr_view->my_subgroups.end()) {
+        return -1;
+    } else {
+        return find_id_result->second;
+    }
+}
+
 void ViewManager::barrier_sync() {
     shared_lock_t read_lock(view_mutex);
     curr_view->gmsSST->sync_with_members();
