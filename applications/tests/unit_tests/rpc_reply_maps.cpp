@@ -21,9 +21,6 @@ class StringObject : public mutils::ByteRepresentable {
 public:
     void append(const std::string& words) {
         log += words;
-        //Intentionally delay the RPC processing thread to slow down updates
-        //This will allow the user to watch them get applied to different views
-        //        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
     void clear() {
         log.clear();
@@ -42,12 +39,12 @@ int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info(&derecho::one_subgroup_entire_view);
+    derecho::SubgroupInfo subgroup_function(&derecho::one_subgroup_entire_view);
 
     auto string_object_factory = [](PersistentRegistry*) { return std::make_unique<StringObject>(); };
 
     derecho::Group<StringObject> group(derecho::CallbackSet{},
-                                       subgroup_info,
+                                       subgroup_function,
                                        std::vector<derecho::view_upcall_t>{},
                                        string_object_factory);
 

@@ -494,6 +494,9 @@ public:
     std::vector<node_id_t> get_members();
     /** Returns the order of this node in the sequence of members of the group */
     int32_t get_my_rank();
+    /** Returns a vector of vectors listing the members of a single subgroup
+     * (identified by type and index), organized by shard number. */
+    std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     /** Instructs the managed DerechoGroup's to send the next message. This
      * returns immediately in sending through RDMC; the send is scheduled to happen some time in the future.
      * if sending through SST, the RDMA write is issued in this call*/

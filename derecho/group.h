@@ -290,6 +290,14 @@ public:
     void leave();
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
+    /**
+     * Gets a list of the nodes currently assigned to the subgroup of the
+     * specified type and index, organized by shard. The outer vector has an
+     * entry for each shard in the subgroup, and the vector at each position
+     * contains the IDs of the nodes in that shard.
+     */
+    template<typename SubgroupType>
+    std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     /** Returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
     /** Reports to the GMS that the given node has failed. */

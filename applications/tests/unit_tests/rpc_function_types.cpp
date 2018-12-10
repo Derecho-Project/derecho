@@ -64,22 +64,21 @@ int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({{std::type_index(typeid(ConstTest)), one_subgroup_policy(even_sharding_policy(1, 3))},
-                                                                           {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(even_sharding_policy(1, 3))}}));
+    derecho::SubgroupInfo subgroup_function(derecho::DefaultSubgroupAllocator({
+        {std::type_index(typeid(ConstTest)), one_subgroup_policy(even_sharding_policy(1, 3))},
+        {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(even_sharding_policy(1, 3))}
+    }));
     auto const_test_factory = [](PersistentRegistry*) { return std::make_unique<ConstTest>(); };
     auto reference_test_factory = [](PersistentRegistry*) { return std::make_unique<ReferenceTest>(); };
 
-    derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_info,
+    derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_function,
                                                    std::vector<derecho::view_upcall_t>{},
                                                    const_test_factory, reference_test_factory);
-
-    bool in_const_test_group;
-    try {
-        group.get_subgroup<ConstTest>();
-        in_const_test_group = true;
-    } catch(derecho::invalid_subgroup_exception& ex) {
-        in_const_test_group = false;
-    }
+    int my_id = derecho::getConfInt32(CONF_DERECHO_LOCAL_ID);
+    const std::vector<node_id_t>& const_test_group_members = group.get_subgroup_members<ConstTest>()[0];
+    bool in_const_test_group = std::find(const_test_group_members.begin(),
+                                         const_test_group_members.end(), my_id) !=
+                                                 const_test_group_members.end();
     if(in_const_test_group) {
         derecho::Replicated<ConstTest>& const_test = group.get_subgroup<ConstTest>();
         uint32_t my_node_rank = group.get_my_rank();

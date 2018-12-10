@@ -1765,6 +1765,16 @@ int32_t ViewManager::get_my_rank() {
     return curr_view->my_rank;
 }
 
+std::vector<std::vector<node_id_t>> ViewManager::get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    std::vector<std::vector<node_id_t>> subgroup_members;
+    for(const auto& shard_view : curr_view->subgroup_shard_views.at(subgroup_id)) {
+        subgroup_members.push_back(shard_view.members);
+    }
+    return subgroup_members;
+}
+
 void ViewManager::barrier_sync() {
     shared_lock_t read_lock(view_mutex);
     curr_view->gmsSST->sync_with_members();

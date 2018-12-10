@@ -362,6 +362,12 @@ std::vector<node_id_t> Group<ReplicatedTypes...>::get_members() {
 }
 
 template <typename... ReplicatedTypes>
+template <typename SubgroupType>
+std::vector<std::vector<node_id_t>> Group<ReplicatedTypes...>::get_subgroup_members(uint32_t subgroup_index) {
+    return view_manager.get_subgroup_members(index_of_type<SubgroupType, ReplicatedTypes...>, subgroup_index);
+}
+
+template <typename... ReplicatedTypes>
 int32_t Group<ReplicatedTypes...>::get_my_rank() {
     return view_manager.get_my_rank();
 }
