@@ -89,7 +89,7 @@ rx_depth = 4096
 The **tx_depth** and **rx_depth** configure the maximum of pending requests that can be waiting for acknowledgement before communication blocks. Those numbers can be different from one device to another. We recommend setting them as large as possible.
 
 #### Configure Persistent Behavior
-The application can specify the location for persistent state in the file system by **file_path**, which is defaulted to `.plog` folder in the working directory. **ramdisk_path** controls the location of states for `Volatile<T>`, which is defaulted to tmpfs (ramdisk). **reset** controls weather to clean up the persisted state. We default this to true. **Please set `reset` to `false` for normal use of `Persistent\<T\>`.**
+The application can specify the location for persistent state in the file system by **file_path**, which is defaulted to `.plog` folder in the working directory. **ramdisk_path** controls the location of states for `Volatile<T>`, which is defaulted to tmpfs (ramdisk). **reset** controls weather to clean up the persisted state. We default this to true. **Please set `reset` to `false` for normal use of `Persistent<T>`.**
 
 #### Specify Configuration with Command Line Argument
 We allow the application to specify configurations by command line. The command line configurations overrides the optioin in configuration file. To enable this feature, we sugguest using the following code:
@@ -102,8 +102,8 @@ int main(int argc, char* argv[]) {
         cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] application-argument-list" << endl;
         return -1;
     }
-    Conf::initialize(argc, argv); // pick up the command line argument 
-    // pick up application argument list and continue ...
+    Conf::initialize(argc, argv); // pick up configurations in the command line list
+    // pick up the application argument list and continue ...
     ...
 }
 ```
