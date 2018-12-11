@@ -285,8 +285,8 @@ As an example, this code waits for the responses from each node and combines the
 derecho::rpc::QueryResults<bool> results = cache_rpc_handle.ordered_query<RPC_NAME(contains)>("Stuff");
 bool contains_accum = true;
 for(auto& reply_pair : results.get()) {
-	bool contains_result = reply_pair.second.get();
-	contains_accum = contains_accum && contains_result;
+    bool contains_result = reply_pair.second.get();
+    contains_accum = contains_accum && contains_result;
 }
 ```
 
@@ -300,28 +300,28 @@ Derecho allows tracking data update history with a version vector in memory or p
 /**
  * Example for replicated object with Persistent<T>
  */
- class PFoo : public mutils::ByteRepresentable {
-  Persistent<int> pint;
- public:
-  virtual ~PFoo() noexcept (true) {}
-  int read_state() {
-    return *pint; 
-  }
-  bool change_state(int new_int) {
-    if(new_int == *pint) {
-      return false;
+class PFoo : public mutils::ByteRepresentable {
+    Persistent<int> pint;
+public:
+    virtual ~PFoo() noexcept (true) {}
+    int read_state() {
+        return *pint; 
     }
- 
-    *pint = new_int;
-    return true;
-  }
-   
-  // constructor with PersistentRegistry
-  PFoo(PersistentRegistry * pr) : pint(nullptr,pr) {}
-  PFoo(Persistent<int> & init_pint) : pint(std::move(init_pint)) {}
-  DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
-  REGISTER_RPC_FUNCTIONS(PFoo, read_state, change_state);
- };
+    bool change_state(int new_int) {
+         if(new_int == *pint) {
+           return false;
+         }
+
+         *pint = new_int;
+         return true;
+    }
+     
+    // constructor with PersistentRegistry
+    PFoo(PersistentRegistry * pr) : pint(nullptr,pr) {}
+    PFoo(Persistent<int> & init_pint) : pint(std::move(init_pint)) {}
+    DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
+    REGISTER_RPC_FUNCTIONS(PFoo, read_state, change_state);
+};
 ```
 	
 For simplicity, the versioned type is int in this example. You set it up in the same way as a non-versioned member of a replicated object, except that you need to pass the PersistentRegistry from the constructor of the replicated object to the constructor of the `Persistent<T>`. Derecho uses PersistentRegistry to keep track of all the Persistent<T> objects in a single Replicated Object so that it can create versions on updates. The Persistent<T> constructor registers itself in the registry.
