@@ -206,7 +206,7 @@ derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
 ```
 Based on the policies constructed for the constructor argument of DefaultSubgroupAllocator, when the function is called for subgroup Foo, it will create one subgroup, with two shards of 3 members each. When the function is called for subgroup Bar, it will create two subgroups of type Bar, each of which has only one shard of size 3. Note that the order in which subgroups are allocated is the order in which their Replicated Object types are listed in the Group's template parameters, so this instance of the default subgroup allocator will assign the first 6 nodes to the Foo subgroup and the second 6 nodes to the Bar subgroups the first time it runs.
 
-More advanced users may, of course, want to define their own subgroup membership functions. The demo program `simple_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
+More advanced users may, of course, want to define their own subgroup membership functions. The demo program `overlapping_replicated_objects.cpp` shows a relatively simple example of a user-defined membership function. In this program, the SubgroupInfo contains a C++ lambda function that implements the `shard_view_generator_t` type signature and handles subgroup assignment for Replicated Objects of type Foo, Bar, and Cache:
 
 ```cpp
 [](const std::type_index& subgroup_type,
