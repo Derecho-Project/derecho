@@ -1,4 +1,6 @@
-/*
+/**
+ * @file simple_replicated_objects.cpp
+ *
  * This test creates two subgroups, one of each type Foo and Bar (defined in sample_objects.h).
  * It requires at least 6 nodes to join the group; the first three are part of the Foo subgroup,
  * while the next three are part of the Bar subgroup.

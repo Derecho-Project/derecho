@@ -308,6 +308,7 @@ void _resources::connect_qp() {
 /**
  * This is used for both reads and writes.
  *
+ * @param id
  * @param offset The offset within the remote buffer to start the operation at.
  * @param size The number of bytes to read or write.
  * @param op The operation mode; 0 is for read, 1 is for write.
@@ -631,9 +632,6 @@ bool remove_node(uint32_t node_id) {
     return sst_connections->delete_node(node_id);
 }
 
-/**
-*@param r_index The node rank of the node to exchange data with.
-*/
 bool sync(uint32_t r_index) {
     int s = 0, t = 0;
     return sst_connections->exchange(r_index, s, t);

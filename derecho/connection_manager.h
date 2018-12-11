@@ -24,7 +24,7 @@ public:
     /**
      * Creates a TCP connection manager for a set of connections
      * to all of the initial set of addresses.
-     * @param _my_id The ID of this node
+     * @param my_id The ID of this node
      * @param ip_addrs_and_ports The map of IP address-port pairs to connect to, indexed by node ID
      */
     tcp_connections(node_id_t my_id,

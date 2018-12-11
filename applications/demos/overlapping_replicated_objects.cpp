@@ -1,9 +1,12 @@
-/*
+/**
+ * @file overlapping_replicated_objects.cpp
+ *
  * This test creates three subgroups, one of each type Foo, Bar and Cache (defined in sample_objects.h).
- * It requires at least 6 nodes to join the group, the first three are part of subgroups of Foo and Bar
+ * It requires at least 6 nodes to join the group; the first three are part of subgroups of Foo and Bar
  * while the last three are part of Cache.
- * Every node (identified by its node_id) makes some calls to ordered_send in their subgroup,
- * some also call p2p_send. By these calls they verify that the state machine operations are executed properly.
+ * Every node (identified by its node_id) makes some calls to ordered_send in their subgroup;
+ * some also call p2p_send. By these calls they verify that the state machine operations are
+ * executed properly.
  */
 #include <cerrno>
 #include <cstdlib>

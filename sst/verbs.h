@@ -115,6 +115,11 @@ public:
 
 bool add_node(uint32_t new_id, const std::string new_ip_addr);
 bool remove_node(uint32_t node_id);
+/**
+ * Blocks the current thread until both this node and a remote node reach this
+ * function, which exchanges some trivial data over a TCP connection.
+ * @param r_index The node rank of the node to exchange data with.
+ */
 bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,

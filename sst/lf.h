@@ -8,18 +8,18 @@
  */
 
 #include <map>
-#include <thread>
 #include <rdma/fabric.h>
+#include <thread>
 
 #include "derecho/derecho_type_definitions.h"
 
-#define LF_VERSION FI_VERSION(1,5)
+#define LF_VERSION FI_VERSION(1, 5)
 
 namespace sst {
 
 struct lf_sender_ctxt {
-  uint32_t      ce_idx; // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
-  uint32_t      remote_id; // thread id of the sender
+    uint32_t ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
+    uint32_t remote_id;  // thread id of the sender
 };
 
 /**
@@ -40,7 +40,7 @@ private:
      * @param fi The fi_info object
      * @return 0 for success.
      */
-    int init_endpoint(struct fi_info *fi);
+    int init_endpoint(struct fi_info* fi);
 
 protected:
     /** 
@@ -53,23 +53,24 @@ protected:
      * @param op - 0 for read and 1 for write
      * @param return the return code for operation.
      */
-    int post_remote_send(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size,
+    int post_remote_send(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
                          const int op, const bool completion);
+
 public:
     /** ID of the remote node. */
     int remote_id;
     /** tx/rx completion queue */
     // struct fid_cq *txcq, *rxcq; - moved to g_ctxt
     /** Handle for the LibFabric endpoint. */
-    struct fid_ep *ep;
+    struct fid_ep* ep;
     /** memory region for remote writer */
-    struct fid_mr *write_mr;
+    struct fid_mr* write_mr;
     /** memory region for remote writer */
-    struct fid_mr *read_mr;
+    struct fid_mr* read_mr;
     /** Pointer to the memory buffer used for local writes.*/
-    char *write_buf;
+    char* write_buf;
     /** Pointer to the memory buffer used for the results of RDMA remote reads. */
-    char *read_buf;
+    char* read_buf;
     /** key for local read buffer */
     uint64_t mr_lrkey;
     /** key for local write buffer */
@@ -79,7 +80,7 @@ public:
     /** remote write memory address */
     fi_addr_t remote_fi_addr;
     /** the event queue */
-    struct fid_eq * eq;
+    struct fid_eq* eq;
 
     /**
      * Constructor
@@ -99,18 +100,21 @@ public:
      *         node, while a libfabric server waiting for the conneciton using its
      *         local passive endpoint.
      */
-    _resources(int r_id, char *write_addr, char *read_addr, int size_w,
-              int size_r, int is_lf_server);
+    _resources(int r_id, char* write_addr, char* read_addr, int size_w,
+               int size_r, int is_lf_server);
     /** Destroys the resources. */
     virtual ~_resources();
 };
 
+/**
+ * A public-facing version of the internal _resources class that extends it
+ * with more convenient functions.
+ */
 class resources : public _resources {
-  public:
-    /** constructor */
-    resources(int r_id, char *write_addr, char *read_addr, int size_w,
-              int size_r, int is_lf_server) : 
-      _resources(r_id,write_addr,read_addr,size_w,size_r,is_lf_server) {
+public:
+    /** Constructor: simply forwards to _resources::_resources */
+    resources(int r_id, char* write_addr, char* read_addr, int size_w,
+              int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
 
     /*
@@ -126,40 +130,45 @@ class resources : public _resources {
     void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
-    void post_remote_write_with_completion(struct lf_sender_ctxt *ctxt, const long long int size);
+    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
+/**
+ * A public-facing version of the internal _resources class that extends it
+ * with functions that support two-sided sends and receives.
+ */
 class resources_two_sided : public _resources {
-    int post_receive(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size);
+    int post_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 
 public:
-    /** constructor */
-    resources_two_sided(int r_id, char *write_addr, char *read_addr, int size_w,
-              int size_r, int is_lf_server) : 
-      _resources(r_id,write_addr,read_addr,size_w,size_r,is_lf_server) {
+    /** constructor: simply forwards to _resources::_resources */
+    resources_two_sided(int r_id, char* write_addr, char* read_addr, int size_w,
+                        int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
 
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt *ctxt, const long long int size);
+    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt *ctxt, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**
- * add a new node to sst_connection set.
+ * Adds a new node to the SST TPC connections set.
  */
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 /**
  * Removes a node from the SST TCP connections set
  */
 bool remove_node(uint32_t node_id);
-/** sync
+/**
+ * Blocks the current thread until both this node and a remote node reach this
+ * function, which exchanges some trivial data over a TCP connection.
  * @param r_id - ID of the node to exchange data with.
  */
 bool sync(uint32_t r_id);
@@ -167,13 +176,13 @@ bool sync(uint32_t r_id);
  * Initializes the global libfabric resources. Must be called before creating
  * or using any SST instance. 
  * 
- * @param ip_addres A map from rank to string??
+ * @param ip_addrs_and_ports A map from rank to (IP address, port) pairs
  * @param node_rank rank of this node.
  */
-  void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports,
-                      uint32_t node_rank);
+void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
+                   uint32_t node_rank);
 /** Polls for completion of a single posted remote write. */
-std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion(); 
+std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 /** Shutdown the polling thread. */
 void shutdown_polling_thread();
 /** Destroys the global libfabric resources. */

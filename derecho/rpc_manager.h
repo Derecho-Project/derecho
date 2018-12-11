@@ -247,19 +247,20 @@ public:
     bool finish_rpc_send(PendingBase& pending_results_handle);
 
     /**
-     * called by replicated.h for sending a p2p send/query
+     * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
+     * P2P RDMA connections. After filling it with data, the next call to
+     * finish_p2p_send will send it.
+     * @param dest_id The ID of the node that the P2P message will be sent to
+     * @param type The type of P2P message that will be sent
      */
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
 
     /**
-     * Sends the message in msg_buf to the node identified by dest_node over a
-     * dedicated P2P connection, and registers the "promise object" in
-     * pending_results_handle to await its reply.
+     * Sends the next P2P message buffer over an RDMA connection to the specified node,
+     * and registers the "promise object" in pending_results_handle to await its reply.
      * @param is_query True if this message represents a query (which expects replies),
      * false if it repesents a send (which does not)
      * @param dest_node The node to send the message to
-     * @param msg_buf A buffer containing the message
-     * @param size The size of the message, in bytes
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
