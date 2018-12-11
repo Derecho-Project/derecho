@@ -111,7 +111,7 @@ int main(int argc, char* argv[]) {
     ...
 }
 ```
-Then, call application as following, assume the application name is `app`:
+Then, call the application as follows, assuming the application's name is `app`:
 
 ```bash
 $ app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
@@ -119,7 +119,7 @@ $ app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
 Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho-unified/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
 
 ### Setup and Testing
-There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
+There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance\_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
 
 ```
 sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
@@ -170,9 +170,8 @@ public:
     bool invalidate(const std::string& key);
     Cache() : cache_map() {}
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
-
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
-	REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
+    REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
 };
 ```
 
