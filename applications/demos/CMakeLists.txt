@@ -23,3 +23,8 @@ target_link_libraries(random_messages derecho)
 # simple_replicated_objects
 add_executable(simple_replicated_objects simple_replicated_objects.cpp)
 target_link_libraries(simple_replicated_objects derecho)
+
+# overlapping_replicated_objects
+add_executable(overlapping_replicated_objects overlapping_replicated_objects.cpp)
+target_link_libraries(overlapping_replicated_objects derecho)
+
