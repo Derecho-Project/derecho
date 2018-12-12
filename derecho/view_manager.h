@@ -179,6 +179,11 @@ private:
      * after transitioning to a new view. This transfers control back to
      * Group because the objects' constructors are only known by Group. */
     initialize_rpc_objects_t initialize_subgroup_objects;
+    /**
+     * True if any of the Replicated<T> objects in this group have a Persistent<T>
+     * field, false if none of them do
+     */
+    const bool any_persistent_objects;
 
     /** State related to restarting, such as the current logged ragged trim;
      * null if this node is not currently doing a total restart. */
@@ -188,8 +193,7 @@ private:
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
-    void commit_join(const View& new_view,
-                     tcp::socket& client_socket);
+    void commit_join(const View& new_view, tcp::socket& client_socket);
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
@@ -257,23 +261,61 @@ private:
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
 
-    /* -- Static helper methods that implement chunks of view-management functionality -- */
-    static void deliver_in_order(const View& Vc, const int shard_leader_rank,
-                                 const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
-                                 const std::vector<node_id_t>& shard_members, uint num_shard_senders whenlog(, std::shared_ptr<spdlog::logger> logger));
-    static void leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+    /**
+     * Reads the global_min for the specified subgroup from the SST (assuming it
+     * has been computed already) and tells the current View's MulticastGroup to
+     * deliver messages up to the global_min (i.e. the computed ragged trim).
+     * @param shard_leader_rank The rank of the leader node in this node's shard
+     * of the specified subgroup
+     * @param subgroup_num The subgroup ID to deliver messages in
+     * @param nReceived_offset The offset into the SST's num_received field
+     * that corresponds to the specified subgroup's entries in it
+     * @param shard_members The IDs of the members of this node's shard in the
+     * specified subgroup
+     * @param num_shard_senders The number of nodes in that shard that are active
+     * senders in the current epoch
+     */
+    void deliver_in_order(const int shard_leader_rank,
+                          const subgroup_id_t subgroup_num, const uint32_t nReceived_offset,
+                          const std::vector<node_id_t>& shard_members, uint num_shard_senders);
+    /**
+     * Implements the Ragged Edge Cleanup algorithm for a subgroup/shard leader,
+     * operating on the shard that this node is a member of. This computes the
+     * last safely-deliverable message from each sender in the shard and places
+     * it in this node's SST row in the global_min field.
+     * @param subgroup_num The subgroup ID of the subgroup to do cleanup on
+     * @param num_received_offset The offset into the SST's num_received field
+     * that corresponds to the specified subgroup's entries in it
+     * @param shard_members The IDs of the members of this node's shard in the
+     * specified subgroup
+     * @param num_shard_senders The number of nodes in that shard that are active
+     * senders in the current epoch
+     */
+    void leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                            const uint32_t num_received_offset,
                                            const std::vector<node_id_t>& shard_members,
-                                           uint num_shard_senders,
-                                           whenlog(std::shared_ptr<spdlog::logger> logger, )
-                                           const std::vector<node_id_t>& next_view_members);
-    static void follower_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+                                           uint num_shard_senders);
+    /**
+     * Implements the Ragged Edge Cleanup algorithm for a non-leader node in a
+     * subgroup. This simply waits for the leader to write a value to global_min
+     * and then copies and uses it.
+     * @param subgroup_num The subgroup ID of the subgroup to do cleanup on
+     * @param shard_leader_rank The rank of the leader node in this node's shard
+     * of the specified subgroup
+     * @param num_received_offset The offset into the SST's num_received field
+     * that corresponds to the specified subgroup's entries in it
+     * @param shard_members The IDs of the members of this node's shard in the
+     * specified subgroup
+     * @param num_shard_senders The number of nodes in that shard that are active
+     * senders in the current epoch
+     */
+    void follower_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                              uint shard_leader_rank,
                                              const uint32_t num_received_offset,
                                              const std::vector<node_id_t>& shard_members,
-                                             uint num_shard_senders
-                                             whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                             uint num_shard_senders);
 
+    /* -- Static helper methods that implement chunks of view-management functionality -- */
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
@@ -425,6 +467,7 @@ public:
     ViewManager(CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
+                const bool any_persistent_objects,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
@@ -454,6 +497,7 @@ public:
                 CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
+                const bool any_persistent_objects,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,

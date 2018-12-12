@@ -64,6 +64,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
               if(is_starting_leader) {
                   return ViewManager(callbacks, subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
+                                     std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                                      tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);
@@ -71,6 +72,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                   return ViewManager(leader_connection.value(), callbacks,
                                      subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
+                                     std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                                      tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);

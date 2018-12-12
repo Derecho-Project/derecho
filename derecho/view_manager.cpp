@@ -24,12 +24,12 @@ using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 ViewManager::ViewManager(
         CallbackSet callbacks, const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
+        const bool any_persistent_objects,
         const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
         ReplicatedObjectReferenceMap& object_reference_map,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("derecho_debug_log")), )
-          curr_view(persistent::loadObject<View>()),  //Attempt to load a saved View from disk, to see if one is there
           server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -38,7 +38,12 @@ ViewManager::ViewManager(
           derecho_params(),
           group_member_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
+          any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    if(any_persistent_objects) {
+        //Attempt to load a saved View from disk, to see if one is there
+        curr_view = persistent::loadObject<View>();
+    }
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = 0;
     bool is_total_restart;
@@ -69,7 +74,9 @@ ViewManager::ViewManager(
     }
     curr_view->my_rank = curr_view->rank_of(my_id);
     last_suspected = std::vector<bool>(curr_view->members.size());
-    persistent::saveObject(*curr_view);
+    if(any_persistent_objects) {
+        persistent::saveObject(*curr_view);
+    }
     initialize_rdmc_sst();
     whenlog(logger->debug("Initializing SST and RDMC for the first time."););
     construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
@@ -84,12 +91,12 @@ ViewManager::ViewManager(
         tcp::socket& leader_connection, CallbackSet callbacks,
         const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
+        const bool any_persistent_objects,
         const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
         ReplicatedObjectReferenceMap& object_reference_map,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(spdlog::get("derecho_debug_log")), )
-          curr_view(persistent::loadObject<View>()),  //Attempt to load a saved View from disk, to see if one is there
           server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -98,6 +105,7 @@ ViewManager::ViewManager(
           derecho_params(),
           group_member_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
+          any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     //First, receive the view and parameters over the given socket
     uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
@@ -111,8 +119,10 @@ ViewManager::ViewManager(
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     uint32_t num_received_size = derive_subgroup_settings(*curr_view, subgroup_settings_map);
     whenlog(logger->trace("Received initial view: {}", curr_view->debug_string()););
-    //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
-    persistent::saveObject(*curr_view);
+    if(any_persistent_objects) {
+        //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
+        persistent::saveObject(*curr_view);
+    }
 
     whenlog(logger->debug("Initializing SST and RDMC for the first time."););
     construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
@@ -169,6 +179,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
 
     bool is_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
     if(is_total_restart) {
+        curr_view = persistent::loadObject<View>();
         whenlog(logger->debug("In restart mode, sending view {} to leader", curr_view->vid););
         bool success = leader_connection.write(mutils::bytes_size(*curr_view));
         if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
@@ -925,9 +936,9 @@ void ViewManager::terminate_epoch(
         if(num_shard_senders) {
             if(shard_view.my_rank == curr_view->subview_rank_of_shard_leader(subgroup_id, shard_num)) {
                 leader_ragged_edge_cleanup(
-                        *curr_view, subgroup_id,
+                        subgroup_id,
                         shard_settings_pair.second.num_received_offset, shard_view.members,
-                        num_shard_senders, whenlog(logger, ) next_view->members);
+                        num_shard_senders);
             } else {
                 // Keep track of which subgroups I'm a non-leader in, and what my
                 // corresponding shard ID is
@@ -971,12 +982,12 @@ void ViewManager::terminate_epoch(
                     node_id_t shard_leader = shard_view.members[curr_view->subview_rank_of_shard_leader(
                             subgroup_id, shard_num)];
                     follower_ragged_edge_cleanup(
-                            *curr_view, subgroup_id,
+                            subgroup_id,
                             curr_view->rank_of(shard_leader),
                             curr_view->multicast_group->get_subgroup_settings()
                                     .at(subgroup_id)
                                     .num_received_offset,
-                            shard_view.members, num_shard_senders whenlog(, logger));
+                            shard_view.members, num_shard_senders);
                 }
 
                 // Wait for persistence to finish for messages delivered in RaggedEdgeCleanup
@@ -1117,8 +1128,10 @@ void ViewManager::finish_view_change(
     }
     curr_view = std::move(next_view);
 
-    // Write the new view to disk before using it
-    persistent::saveObject(*curr_view);
+    if(any_persistent_objects) {
+        // Write the new view to disk before using it
+        persistent::saveObject(*curr_view);
+    }
 
     // Re-initialize last_suspected (suspected[] has been reset to all false in the new view)
     last_suspected.assign(curr_view->members.size(), false);
@@ -1604,11 +1617,11 @@ int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& fa
     return min;
 }
 
-void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
+void ViewManager::deliver_in_order(const int shard_leader_rank,
                                    const uint32_t subgroup_num, const uint32_t num_received_offset,
-                                   const std::vector<node_id_t>& shard_members, uint num_shard_senders
-                                   whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                   const std::vector<node_id_t>& shard_members, uint num_shard_senders) {
     // Ragged cleanup is finished, deliver in the implied order
+    const View& Vc = *curr_view;
     std::vector<int32_t> max_received_indices(num_shard_senders);
     std::stringstream delivery_order;
     for(uint sender_rank = 0; sender_rank < num_shard_senders; sender_rank++) {
@@ -1623,21 +1636,23 @@ void ViewManager::deliver_in_order(const View& Vc, const int shard_leader_rank,
         max_received_indices[sender_rank]
                 = Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank];
     }
-    uint32_t shard_num = Vc.my_subgroups.at(subgroup_num);
-    RaggedTrim trim_log{subgroup_num, shard_num, Vc.vid,
-                        static_cast<int32_t>(Vc.members[Vc.rank_of_leader()]), max_received_indices};
-    whenlog(logger->debug("Logging ragged trim to disk"););
-    persistent::saveObject(trim_log, ragged_trim_filename(subgroup_num, shard_num).c_str());
+    if(any_persistent_objects) {
+        uint32_t shard_num = Vc.my_subgroups.at(subgroup_num);
+        RaggedTrim trim_log{subgroup_num, shard_num, Vc.vid,
+            static_cast<int32_t>(Vc.members[Vc.rank_of_leader()]), max_received_indices};
+        whenlog(logger->debug("Logging ragged trim to disk"););
+        persistent::saveObject(trim_log, ragged_trim_filename(subgroup_num, shard_num).c_str());
+    }
     whenlog(logger->debug("Delivering ragged-edge messages in order: {}", delivery_order.str()););
     Vc.multicast_group->deliver_messages_upto(max_received_indices, subgroup_num, num_shard_senders);
 }
 
-void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgroup_num,
+void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                              const uint32_t num_received_offset,
-                                             const std::vector<node_id_t>& shard_members, uint num_shard_senders,
-                                             whenlog(std::shared_ptr<spdlog::logger> logger, )
-                                             const std::vector<node_id_t>& next_view_members) {
+                                             const std::vector<node_id_t>& shard_members,
+                                             uint num_shard_senders) {
     whenlog(logger->debug("Running leader RaggedEdgeCleanup for subgroup {}", subgroup_num););
+    View& Vc = *curr_view;
     int myRank = Vc.my_rank;
     bool found = false;
     for(uint n = 0; n < shard_members.size() && !found; n++) {
@@ -1676,16 +1691,17 @@ void ViewManager::leader_ragged_edge_cleanup(View& Vc, const subgroup_id_t subgr
             (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
 
-    deliver_in_order(Vc, myRank, subgroup_num, num_received_offset, shard_members,
-                     num_shard_senders whenlog(, logger));
+    deliver_in_order(myRank, subgroup_num, num_received_offset, shard_members,
+                     num_shard_senders);
     whenlog(logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num););
 }
 
 void ViewManager::follower_ragged_edge_cleanup(
-        View& Vc, const subgroup_id_t subgroup_num, uint shard_leader_rank,
+        const subgroup_id_t subgroup_num, uint shard_leader_rank,
         const uint32_t num_received_offset,
         const std::vector<node_id_t>& shard_members,
-        uint num_shard_senders whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+        uint num_shard_senders) {
+    const View& Vc = *curr_view;
     int myRank = Vc.my_rank;
     // Learn the leader's data and push it before acting upon it
     whenlog(logger->debug("Running follower RaggedEdgeCleanup for subgroup {}; echoing leader's global_min", subgroup_num););
@@ -1701,8 +1717,8 @@ void ViewManager::follower_ragged_edge_cleanup(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
-    deliver_in_order(Vc, shard_leader_rank, subgroup_num, num_received_offset,
-                     shard_members, num_shard_senders whenlog(, logger));
+    deliver_in_order(shard_leader_rank, subgroup_num, num_received_offset,
+                     shard_members, num_shard_senders);
     whenlog(logger->debug("Done with RaggedEdgeCleanup for subgroup {}", subgroup_num);)
 }
 
