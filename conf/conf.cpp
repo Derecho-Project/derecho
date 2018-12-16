@@ -153,4 +153,8 @@ const double getConfDouble(const std::string& key) {
 const bool getConfBoolean(const std::string& key) {
     return Conf::get()->getBoolean(key);
 }
+
+const bool hasCustomizedConfKey(const std::string& key) {
+    return Conf::get()->hasCustomizedKey(key);
+}
 }
