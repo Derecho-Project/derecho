@@ -151,5 +151,25 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(Object, oid, blob);
 };
 
+std::ostream& operator << (std::ostream &out, const Blob &b) {
+    out << "[size:" << b.size << ", data:" << std::hex;
+    if (b.size > 0) {
+        int i = 0;
+        for (i = 0;i<8 && i<b.size; i++) {
+            out << " " << b.bytes[i];
+        }
+        if (i < b.size) {
+            out << "...";
+        }
+    }
+    out << std::dec << "]";
+    return out;
+}
+
+std::ostream& operator << (std::ostream &out, const Object &o) {
+    out << "Object{id:" << o.oid << ", data:" << o.blob << "}";
+    return out;
+}
+
 }  // namespace objectstore
 #endif  //OBJECT_HPP
