@@ -108,7 +108,7 @@ public:
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
-        this->objects.erase(oid);
+        return (bool)this->objects.erase(oid);
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
@@ -358,7 +358,7 @@ public:
                                                  for(node_id_t& id : replicas) {
                                                      replica_ready_map[id] = false;
                                                  }
-                                                 int counter = 0;
+                                                 uint32_t counter = 0;
                                                  for(const node_id_t& id : curr_view.members) {
                                                      if(replica_ready_map.find(id) != replica_ready_map.end()) {
                                                          replica_ready_map[id] = true;

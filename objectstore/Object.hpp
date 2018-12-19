@@ -154,7 +154,7 @@ public:
 std::ostream& operator << (std::ostream &out, const Blob &b) {
     out << "[size:" << b.size << ", data:" << std::hex;
     if (b.size > 0) {
-        int i = 0;
+        uint32_t i = 0;
         for (i = 0;i<8 && i<b.size; i++) {
             out << " " << b.bytes[i];
         }
