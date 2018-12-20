@@ -31,6 +31,7 @@ std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
     return log;
 }
 
+// re-entrant and idempotent initializer.
 void LoggerFactory::_initialize() {
     // static initialization
     uint32_t expected = LOGGER_FACTORY_UNINITIALIZED;
@@ -45,21 +46,23 @@ void LoggerFactory::_initialize() {
             spdlog::level::from_str(default_log_level));
         // 3 - change state to initialized
         _initialize_state.store(LOGGER_FACTORY_INITIALIZED,std::memory_order_acq_rel);
+        auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch());
+        _default_logger->debug("Program start time (microseconds): {}", start_ms.count());
     }
     // make sure initialization finished by concurrent callers
-    while (_initialize_state.load(std::memory_order_acquire)!=LOGGER_FACTORY_INITIALIZED) {
+    while (_initialize_state.load(std::memory_order_acquire)!=LOGGER_FACTORY_UNINITIALIZED) {
     }
-    auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch());
-    _default_logger->debug("Program start time (microseconds): {}", start_ms.count());
 }
 
 std::shared_ptr<spdlog::logger> LoggerFactory::createLogger(
     const std::string &logger_name,
     spdlog::level::level_enum log_level) {
+    _initialize();
     return _create_logger(logger_name,log_level);
 }
 
 std::shared_ptr<spdlog::logger>& LoggerFactory::getDefaultLogger() {
+    _initialize();
     return _default_logger;
 }
