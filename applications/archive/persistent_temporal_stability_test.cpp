@@ -133,7 +133,7 @@ int main(int argc, char *argv[]) {
         std::cerr << "allocate memory error!" << std::endl;
         return -1;
     }
-    dbg_debug("about to start the querying thread.");
+    dbg_default_debug("about to start the querying thread.");
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
     int num_datapoints = 0;     // number of data points
     pqt = std::make_unique<std::thread>([&]() {
@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
         tqhlc.m_logic = 0;
         uint32_t msg_seqno_seen = 0xffffffff;
         uint32_t node_rank_seen = 0xffffffff;
-        dbg_debug("query thread is running.");
+        dbg_default_debug("query thread is running.");
         bool bQuit = false;
         while(!bQuit) {
             clock_gettime(CLOCK_REALTIME, &tqt);
@@ -166,28 +166,28 @@ int main(int argc, char *argv[]) {
                         node_rank_seen = pl->node_rank;
                     }
 
-                    dbg_trace("msg_seqno_seen={},count={},num_datapoints={}", msg_seqno_seen, count, num_datapoints);
+                    dbg_default_trace("msg_seqno_seen={},count={},num_datapoints={}", msg_seqno_seen, count, num_datapoints);
                     if(msg_seqno_seen == (uint32_t)(count - 1)) {
                         std::cout << "query(us)\tappear(us)\tmessage(us)" << std::endl;
                         for(int i = 0; i < num_datapoints; i++) {
                             std::cout << query_time_us[i] << "\t" << appear_time_us[i] << "\t" << message_time_us[i] << std::endl;
                         }
-                        dbg_trace("quitting...");
+                        dbg_default_trace("quitting...");
                         bQuit = true;
                     }
                     break;
                 } catch(unsigned long long exp) {
-                    dbg_debug("query thread return:{0:x}", exp);
+                    dbg_default_debug("query thread return:{0:x}", exp);
                     // query time is too late or too early:
                     if(exp == PERSIST_EXP_BEYOND_GSF) {
                         usleep(10);  // sleep for 10 microseconds.
                     } else if(exp == PERSIST_EXP_INV_HLC) {
                         usleep(10);
                         pthread_yield();
-                        dbg_trace("give up query with hlc({},{}) because it is too early.", tqhlc.m_rtc_us, tqhlc.m_logic);
+                        dbg_default_trace("give up query with hlc({},{}) because it is too early.", tqhlc.m_rtc_us, tqhlc.m_logic);
                         break;
                     } else {
-                        dbg_warn("unexpected exception({:x})", exp);
+                        dbg_default_warn("unexpected exception({:x})", exp);
                     }
                 }
             }
@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
         exit(0);
     });
 #endif  //_PERFORMANCE_DEBUG || _DEBUG
-    dbg_debug("querying thread started.");
+    dbg_default_debug("querying thread started.");
 
     if(is_sending) {
         char *bbuf = new char[msg_size];

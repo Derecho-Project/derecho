@@ -40,6 +40,8 @@ private:
 #define CONF_PERS_FILE_PATH "PERS/file_path"
 #define CONF_PERS_RAMDISK_PATH "PERS/ramdisk_path"
 #define CONF_PERS_RESET "PERS/reset"
+#define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
+#define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
 
     std::map<const std::string, std::string> config = {
             // [DERECHO]
@@ -65,7 +67,10 @@ private:
             // [PERS]
             {CONF_PERS_FILE_PATH, ".plog"},
             {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
-            {CONF_PERS_RESET, "false"}};
+            {CONF_PERS_RESET, "false"},
+            // [LOGGER]
+            {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
+            {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};
 
 public:
     // the option for parsing command line with getopt(not GetPot!!!)

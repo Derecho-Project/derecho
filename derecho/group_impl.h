@@ -9,6 +9,7 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
+#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "derecho_internal.h"
 #include "group.h"
@@ -57,7 +58,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
-        : whenlog(logger(create_logger()), )
+        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
           my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           is_starting_leader((getConfString(CONF_DERECHO_LOCAL_IP) == getConfString(CONF_DERECHO_LEADER_IP))
                              && (getConfUInt16(CONF_DERECHO_GMS_PORT) == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))),
