@@ -14,7 +14,7 @@
 #include "mutils/FunctionalMap.hpp"
 #include "mutils/tuple_extras.hpp"
 #include <spdlog/spdlog.h>
-
+#include "utils/logger.hpp"
 #include "rpc_utils.h"
 
 namespace derecho {
@@ -547,7 +547,7 @@ public:
     RemoteInvocableClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
             : RemoteInvocablePairs<WrappedFuns...>(type_id, instance_id, rvrs, fs.fun...),
-              logger(spdlog::get("derecho_debug_log")),
+              logger(LoggerFactory::getDefaultLogger()),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>

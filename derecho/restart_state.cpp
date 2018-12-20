@@ -1,16 +1,17 @@
 #include <optional>
 
+#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "restart_state.h"
 //This code needs access to ViewManager's static methods
 #include "view_manager.h"
 
-#include <persistent/Persistent.hpp>
+#include "persistent/Persistent.hpp"
 
 namespace derecho {
 
 void RestartState::load_ragged_trim(const View& curr_view) {
-    whenlog(auto logger = spdlog::get("derecho_debug_log"););
+    whenlog(auto logger = LoggerFactory::getDefaultLogger(););
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
      * so that I have access to the type_index. This wastes time, but I don't have a map
      * from subgroup ID to type_index within curr_view. */
@@ -73,7 +74,7 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
                                        uint32_t& num_received_size,
                                        const SubgroupInfo& subgroup_info,
                                        const node_id_t my_id)
-        : whenlog(logger(spdlog::get("derecho_debug_log")), )
+        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
                   curr_view(std::move(_curr_view)),
           restart_state(restart_state),
           restart_subgroup_settings(subgroup_settings_map),

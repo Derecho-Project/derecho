@@ -15,10 +15,10 @@
 #include "derecho_internal.h"
 #include "replicated.h"
 #include "view_manager.h"
+#include "utils/logger.hpp"
 
 #include "mutils-containers/KindMap.hpp"
 #include "persistent/Persistent.hpp"
-#include "spdlog/spdlog.h"
 
 namespace derecho {
 
@@ -62,7 +62,7 @@ public:
     PersistenceManager(
             mutils::KindMap<replicated_index_map, ReplicatedTypes...>* pro,
             const persistence_callback_t& _persistence_callback)
-            : whenlog(logger(spdlog::get("derecho_debug_log")), )
+            : whenlog(logger(LoggerFactory::getDefaultLogger()), )
               thread_shutdown(false),
               persistence_callback(_persistence_callback),
               replicated_objects(pro) {

@@ -25,6 +25,7 @@
 #include "derecho_type_definitions.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 #include <mutils/macro_utils.hpp>
+#include "utils/logger.hpp"
 
 namespace derecho {
 
@@ -361,7 +362,7 @@ private:
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future())
-              whenlog(, logger(spdlog::get("derecho_debug_log"))) {
+              whenlog(, logger(LoggerFactory::getDefaultLogger())) {
         whenlog(logger->trace("Created a PendingResults<{}>", typeid(Ret).name()););
     }
     /**
