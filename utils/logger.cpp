@@ -10,7 +10,9 @@
 #define LOGGER_FACTORY_INITIALIZED	(2)
 
 std::atomic<uint32_t> LoggerFactory::_initialize_state = LOGGER_FACTORY_UNINITIALIZED;
+std::shared_ptr<spdlog::details::thread_pool> LoggerFactory::_thread_pool_holder;
 std::shared_ptr<spdlog::logger> LoggerFactory::_default_logger;
+
 
 std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
     const std::string &logger_name,
@@ -23,7 +25,7 @@ std::shared_ptr<spdlog::logger> LoggerFactory::_create_logger(
         logger_name,
         log_sinks.begin(),
         log_sinks.end(),
-        spdlog::thread_pool(),
+        _thread_pool_holder,
         spdlog::async_overflow_policy::block);
     spdlog::register_logger(log);
     log->set_pattern("[%H:%M:%S.%f] [%n] [Thread %t] [%^%l%$] %v");
@@ -39,6 +41,7 @@ void LoggerFactory::_initialize() {
         expected,LOGGER_FACTORY_INITIALIZING,std::memory_order_acq_rel)){
         // 1 - initialize the thread pool
         spdlog::init_thread_pool(1L<<20, 1); // 1MB buffer, 1 thread
+        _thread_pool_holder = spdlog::thread_pool();
         // 2 - initialize the default Logger
         std::string default_logger_name = derecho::getConfString(CONF_LOGGER_DEFAULT_LOG_NAME);
         std::string default_log_level = derecho::getConfString(CONF_LOGGER_DEFAULT_LOG_LEVEL);

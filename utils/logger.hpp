@@ -7,7 +7,9 @@
 
 
 class LoggerFactory {
+private:
     static std::atomic<uint32_t> _initialize_state;
+    static std::shared_ptr<spdlog::details::thread_pool> _thread_pool_holder;
     static std::shared_ptr<spdlog::logger> _default_logger;
     static void _initialize();
     static std::shared_ptr<spdlog::logger> _create_logger(
