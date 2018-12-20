@@ -51,7 +51,7 @@ void LoggerFactory::_initialize() {
         _default_logger->debug("Program start time (microseconds): {}", start_ms.count());
     }
     // make sure initialization finished by concurrent callers
-    while (_initialize_state.load(std::memory_order_acquire)!=LOGGER_FACTORY_UNINITIALIZED) {
+    while (_initialize_state.load(std::memory_order_acquire)!=LOGGER_FACTORY_INITIALIZED) {
     }
 }
 
