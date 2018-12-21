@@ -41,7 +41,7 @@ public:
     Blob(const Blob& other) : bytes(nullptr),
                               size(0) {
         if(other.size > 0) {
-            bytes = new char[size];
+            bytes = new char[other.size];
             memcpy(bytes, other.bytes, other.size);
             size = other.size;
         }
