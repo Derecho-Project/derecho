@@ -207,7 +207,7 @@ int main(int argc, char *argv[]) {
     ///////////////////////////////////////////////////////////////////////////////
     // ordered send.
     if(node_rank < (uint32_t)(num_of_nodes - 1)) {
-        dbg_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
+        dbg_default_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
         char *bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
         Bytes bs(bbuf, msg_size);
@@ -270,10 +270,10 @@ int main(int argc, char *argv[]) {
                 volatile uint32_t seq = pl->msg_seqno;
                 seq = seq;
                 // volatile int x = reply_map.begin()->second.get();
-                //dbg_trace("reply from shard {} received. message id = {}",cnt++,pl->msg_seqno);
+                //dbg_default_trace("reply from shard {} received. message id = {}",cnt++,pl->msg_seqno);
             }
             clock_gettime(CLOCK_REALTIME, &tqe);
-            dbg_trace("get all replies.");
+            dbg_default_trace("get all replies.");
             std::cout << "query " << DELTA_T_US(tqs, tqe) << " us send " << DELTA_T_US(tqs, tqm1) << " " << DELTA_T_US(tqm1, tqm) << " us" << std::endl;
         }
     }

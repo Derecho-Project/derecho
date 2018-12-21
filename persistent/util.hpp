@@ -10,45 +10,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifndef NDEBUG
-#include <spdlog/sinks/stdout_color_sinks.h>
-#endif//NDEBUG
-
-#ifndef NDEBUG
-/** This tiny wrapper class for spdlog::logger allows the log level to be set
- * in the constructor, which is the only way to initialize it statically. */
-class PersistentLogger {
-    std::shared_ptr<spdlog::logger> spdlogger;
-public:
-    PersistentLogger(spdlog::level::level_enum log_level)
-: spdlogger(spdlog::stdout_color_mt("persistent")) {
-        spdlogger->set_level(log_level);
-        spdlogger->set_pattern("[%H:%M:%S.%f] [%n] [%^%l%$] %v");
-    }
-    std::shared_ptr<spdlog::logger> get_logger() { return spdlogger; }
-};
-
-inline auto dbgConsole() {
-    static auto console = PersistentLogger(spdlog::level::debug);
-    return console.get_logger();
-}
-#define dbg_trace(...) dbgConsole()->trace(__VA_ARGS__)
-#define dbg_debug(...) dbgConsole()->debug(__VA_ARGS__)
-#define dbg_info(...) dbgConsole()->info(__VA_ARGS__)
-#define dbg_warn(...) dbgConsole()->warn(__VA_ARGS__)
-#define dbg_error(...) dbgConsole()->error(__VA_ARGS__)
-#define dbg_crit(...) dbgConsole()->critical(__VA_ARGS__)
-#define dbg_flush() dbgConsole()->flush()
-#else
-#define dbg_trace(...)
-#define dbg_debug(...)
-#define dbg_info(...)
-#define dbg_warn(...)
-#define dbg_error(...)
-#define dbg_crit(...)
-#define dbg_flush()
-#endif  //NDEBUG
-
 #define MAX(a, b) \
     ({ __typeof__ (a) _a = (a); \
     __typeof__ (b) _b = (b); \

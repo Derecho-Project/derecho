@@ -9,6 +9,7 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
+#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "derecho_internal.h"
 #include "group.h"
@@ -47,8 +48,8 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
-        : whenlog(logger(create_logger()), )
-                  my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
+        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
+          my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           is_starting_leader((getConfString(CONF_DERECHO_LOCAL_IP) == getConfString(CONF_DERECHO_LEADER_IP))
                              && (getConfUInt16(CONF_DERECHO_GMS_PORT) == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))),
           leader_connection([&]() -> std::optional<tcp::socket> {
@@ -216,30 +217,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
         receive_objects(subgroups_and_leaders);
     });
 }
-
-#ifndef NOLOG
-template <typename... ReplicatedTypes>
-std::shared_ptr<spdlog::logger> Group<ReplicatedTypes...>::create_logger() const {
-    spdlog::init_thread_pool(1048576, 1);
-    std::vector<spdlog::sink_ptr> log_sinks;
-    log_sinks.push_back(std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            "derecho_debug_log", 1024 * 1024 * 5, 3));
-    // Uncomment this to get debugging output printed to the terminal
-    log_sinks.push_back(std::make_shared<spdlog::sinks::stdout_color_sink_mt>());
-    std::shared_ptr<spdlog::logger> log = std::make_shared<spdlog::async_logger>(
-            "derecho_debug_log", log_sinks.begin(), log_sinks.end(), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
-    spdlog::register_logger(log);
-    log->set_pattern("[%H:%M:%S.%f] [%n] [Thread %t] [%^%l%$] %v");
-    log->set_level(
-            whendebug(spdlog::level::debug)
-                    whenrelease(spdlog::level::off));
-    //    log->set_level(spdlog::level::off);
-    auto start_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch());
-    log->debug("Program start time (microseconds): {}", start_ms.count());
-    return log;
-}
-#endif
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::update_tcp_connections_callback(const View& new_view) {

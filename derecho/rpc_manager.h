@@ -21,6 +21,7 @@
 #include "rpc_utils.h"
 #include "view.h"
 #include "view_manager.h"
+#include "utils/logger.hpp"
 
 namespace derecho {
 
@@ -125,8 +126,8 @@ public:
     RPCManager(ViewManager& group_view_manager)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              whenlog(logger(spdlog::get("derecho_debug_log")), )
-                      view_manager(group_view_manager),
+              whenlog(logger(LoggerFactory::getDefaultLogger()), )
+              view_manager(group_view_manager),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
