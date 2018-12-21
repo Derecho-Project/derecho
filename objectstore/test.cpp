@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
     while (bNextCommand) {
         std::string line;
         std::cout << "cmd>";
-        std::cin >> line;
+        std::getline(std::cin,line);
         std::string::size_type first_space_pos = line.find(' ');
         std::string command;
         std::string arguments;
