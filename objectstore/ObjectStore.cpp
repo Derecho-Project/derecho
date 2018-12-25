@@ -91,6 +91,7 @@ class ObjectStore : public mutils::ByteRepresentable,
 public:
     using derecho::GroupReference::group;
     std::map<OID, Object> objects;
+    const ObjectWatcher& object_watcher;
     const Object inv_obj;
 
     REGISTER_RPC_FUNCTIONS(ObjectStore,
@@ -147,11 +148,28 @@ public:
         return replies.begin()->second.get();
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, objects);
+    // DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, objects);
+
+    DEFAULT_SERIALIZE(objects);
+
+    static std::unique_ptr<ObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
+        return std::make_unique<ObjectStore>(
+            std::move(*mutils::from_bytes<decltype(objects)>(dsm,buf).get()),
+            dsm->mgr<IObjectStoreService>().getObjectWatcher());
+    }
+
+    DEFAULT_DESERIALIZE_NOALLOC(ObjectStore);
+
+    void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructors
-    ObjectStore() {}
-    ObjectStore(std::map<OID, Object>& _objects) : objects(_objects) {}
+    ObjectStore(const ObjectWatcher& ow) : object_watcher(ow) {}
+    ObjectStore(std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
+        objects(_objects),
+        object_watcher(ow) {}
+    ObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
+        objects(_objects),
+        object_watcher(ow) {}
 };
 
 // Enable the Delta feature
@@ -282,13 +300,31 @@ public:
     // Not going to register them as RPC functions because DeltaObjectStore
     // works with PersistedObjectStore instead of the type for Replicated<T>.
     // REGISTER_RPC_FUNCTIONS(ObjectStore, put, remove, get);
-    DEFAULT_SERIALIZATION_SUPPORT(DeltaObjectStore, objects);
+
+    // DEFAULT_SERIALIZATION_SUPPORT(DeltaObjectStore, objects);
+
+    DEFAULT_SERIALIZE(objects);
+
+    static std::unique_ptr<ObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
+        return std::make_unique<ObjectStore>(
+            std::move(*mutils::from_bytes<decltype(objects)>(dsm,buf).get()),
+            dsm->mgr<IObjectStoreService>().getObjectWatcher());
+    }
+
+    DEFAULT_DESERIALIZE_NOALLOC(DeltaObjectStore);
+
+    void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructor
-    DeltaObjectStore() : ObjectStore() {
+    DeltaObjectStore(const ObjectWatcher& ow) : ObjectStore(ow) {
         initialize_delta();
     }
-    DeltaObjectStore(std::map<OID, Object>& _objects) : ObjectStore(_objects) {
+    DeltaObjectStore(std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
+        ObjectStore(_objects, ow) {
+        initialize_delta();
+    }
+    DeltaObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
+        ObjectStore(_objects, ow) {
         initialize_delta();
     }
     virtual ~DeltaObjectStore() {
@@ -335,8 +371,10 @@ static std::vector<node_id_t> parseReplicaList(
     return std::move(replicas);
 }
 
-class ObjectStoreService : public IObjectStoreService {
+class ObjectStoreService : public IObjectStoreService,
+                           public derecho::IDeserializationContext {
 private:
+    const ObjectWatcher& object_watcher;
     std::vector<node_id_t> replicas;
     const bool bReplica;
     const node_id_t myid;
@@ -344,69 +382,48 @@ private:
 
 public:
     // constructor
-    ObjectStoreService() : replicas(parseReplicaList(derecho::getConfString(CONF_OBJECTSTORE_REPLICAS))),
-                           bReplica(std::find(replicas.begin(), replicas.end(),
-                               derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID)) != replicas.end()),
-                           myid(derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID)),
-                           group(
-                                   {},  // callback set
-                                   // derecho::SubgroupInfo
-                                   {
-                                       [this](const std::type_index& subgroup_type,
-                                              const std::unique_ptr<derecho::View>& prev_view,
-                                              derecho::View& curr_view) {
-                                           if (subgroup_type == std::type_index(typeid(ObjectStore))) {
-                                               std::map<node_id_t, bool> replica_ready_map;
-                                               for(node_id_t& id : replicas) {
-                                                   replica_ready_map[id] = false;
-                                               }
-                                               uint32_t counter = 0;
-                                               for(const node_id_t& id : curr_view.members) {
-                                                   if(replica_ready_map.find(id) != replica_ready_map.end()) {
-                                                       replica_ready_map[id] = true;
-                                                       counter++;
-                                                   }
-                                               }
-                                               if(counter < replicas.size()) {
-                                                   throw derecho::subgroup_provisioning_exception();
-                                               }
+    ObjectStoreService(const ObjectWatcher& ow) : 
+        object_watcher(ow),
+        replicas(parseReplicaList(derecho::getConfString(CONF_OBJECTSTORE_REPLICAS))),
+        bReplica(std::find(replicas.begin(), replicas.end(),
+            derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID)) != replicas.end()),
+        myid(derecho::getConfUInt64(CONF_DERECHO_LOCAL_ID)),
+        group(
+                {},  // callback set
+                // derecho::SubgroupInfo
+                {
+                    [this](const std::type_index& subgroup_type,
+                           const std::unique_ptr<derecho::View>& prev_view,
+                           derecho::View& curr_view) {
+                        if (subgroup_type == std::type_index(typeid(ObjectStore))) {
+                            std::map<node_id_t, bool> replica_ready_map;
+                            for(node_id_t& id : replicas) {
+                                replica_ready_map[id] = false;
+                            }
+                            uint32_t counter = 0;
+                            for(const node_id_t& id : curr_view.members) {
+                                if(replica_ready_map.find(id) != replica_ready_map.end()) {
+                                    replica_ready_map[id] = true;
+                                    counter++;
+                                }
+                            }
+                            if(counter < replicas.size()) {
+                                throw derecho::subgroup_provisioning_exception();
+                            }
     
-                                               derecho::subgroup_shard_layout_t subgroup_vector(1);
-                                               subgroup_vector[0].emplace_back(curr_view.make_subview(replicas));
-                                               curr_view.next_unassigned_rank += replicas.size();
-                                               return subgroup_vector;
-                                           }
-                                       }
-                                   }, 
-/*
-                                   {
-                                           {{std::type_index(typeid(ObjectStore)),
-                                             [this](const derecho::View& curr_view, int& next_unassigned_rank) {
-                                                 std::map<node_id_t, bool> replica_ready_map;
-                                                 for(node_id_t& id : replicas) {
-                                                     replica_ready_map[id] = false;
-                                                 }
-                                                 uint32_t counter = 0;
-                                                 for(const node_id_t& id : curr_view.members) {
-                                                     if(replica_ready_map.find(id) != replica_ready_map.end()) {
-                                                         replica_ready_map[id] = true;
-                                                         counter++;
-                                                     }
-                                                 }
-                                                 if(counter < replicas.size()) {
-                                                     throw derecho::subgroup_provisioning_exception();
-                                                 }
-
-                                                 derecho::subgroup_shard_layout_t subgroup_vector(1);
-                                                 subgroup_vector[0].emplace_back(curr_view.make_subview(replicas));
-                                                 next_unassigned_rank += replicas.size();
-                                                 return subgroup_vector;
-                                             }}},
-                                           {std::type_index(typeid(ObjectStore))}},                     // subgroup info
-*/
-                                   std::vector<derecho::view_upcall_t>{},                               // view up-calls
-                                   [](PersistentRegistry*) { return std::make_unique<ObjectStore>(); }  // factories ...
-                           ) {}
+                            derecho::subgroup_shard_layout_t subgroup_vector(1);
+                            subgroup_vector[0].emplace_back(curr_view.make_subview(replicas));
+                            curr_view.next_unassigned_rank += replicas.size();
+                            return subgroup_vector;
+                        } else {
+                            return derecho::subgroup_shard_layout_t{};
+                        }
+                    }
+                }, 
+                std::shared_ptr<derecho::IDeserializationContext>{this},
+                std::vector<derecho::view_upcall_t>{},                               // view up-calls
+                [this](PersistentRegistry*) { return std::make_unique<ObjectStore>(object_watcher); }  // factories ...
+        ) {}
 
     virtual const bool isReplica() {
         return bReplica;
@@ -465,6 +482,10 @@ public:
         group.leave();
     }
 
+    virtual const ObjectWatcher& getObjectWatcher() {
+        return this->object_watcher;
+    }
+
     // get singleton
     static IObjectStoreService& get(int argc, char** argv, const ObjectWatcher& ow = {});
 };
@@ -481,7 +502,7 @@ IObjectStoreService& IObjectStoreService::get(int argc, char** argv, const Objec
         // step 1: initialize the configuration
         derecho::Conf::initialize(argc, argv);
         // step 2: create the group resources
-        IObjectStoreService::singleton = std::make_unique<ObjectStoreService>();
+        IObjectStoreService::singleton = std::make_unique<ObjectStoreService>(ow);
     }
 
     return *IObjectStoreService::singleton.get();

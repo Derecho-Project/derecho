@@ -30,6 +30,11 @@ class Replicated;
 template <typename T>
 class ExternalCaller;
 
+/**
+ * The Deserialization Interface to be implemented by user applications.
+ */
+struct IDeserializationContext : public mutils::RemoteDeserializationContext {};
+
 namespace rpc {
 
 class RPCManager {
@@ -44,7 +49,7 @@ class RPCManager {
     /** An emtpy DeserializationManager, in case we need it later. */
     // mutils::DeserializationManager dsm{{}};
     // Weijia: I prefer the deserialization context vector.
-    mutils::RemoteDeserialization_v rdv{};
+    mutils::RemoteDeserialization_v rdv;
 
 #ifndef NOLOG
     std::shared_ptr<spdlog::logger> logger;
@@ -123,13 +128,18 @@ class RPCManager {
                                          const std::function<char*(int)>& out_alloc);
 
 public:
-    RPCManager(ViewManager& group_view_manager)
+    RPCManager(ViewManager& group_view_manager,
+               IDeserializationContext * deserialization_context_ptr)
+               // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               whenlog(logger(LoggerFactory::getDefaultLogger()), )
               view_manager(group_view_manager),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
+        if (deserialization_context_ptr != nullptr) {
+            rdv.push_back(deserialization_context_ptr);
+        }
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
