@@ -106,10 +106,18 @@ public:
     virtual void orderedPut(const Object& object) {
         this->objects.erase(object.oid);
         this->objects.emplace(object.oid, object);  // copy constructor
+        // call object watcher
+        if (object_watcher) {
+            object_watcher(object.oid,object);
+        }
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
-        return (bool)this->objects.erase(oid);
+        if (this->objects.erase(oid)) {
+            object_watcher(oid,inv_obj);
+            return true;
+        }
+        return false; 
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
@@ -175,12 +183,11 @@ public:
 // Enable the Delta feature
 class DeltaObjectStore : public ObjectStore,
                          public persistent::IDeltaSupport {
+#define DEFAULT_DELTA_BUFFER_CAPACITY (4096)
     enum _OPID {
         PUT,
         REMOVE
     };
-#define DEFAULT_DELTA_BUFFER_CAPACITY (4096)
-
     struct {
         size_t capacity;
         size_t len;
@@ -496,7 +503,7 @@ std::unique_ptr<IObjectStoreService> IObjectStoreService::singleton;
 // get the singleton
 // NOTE: caller only get access to this member object. The ownership of this
 // object is NOT transferred.
-IObjectStoreService& IObjectStoreService::get(int argc, char** argv, const ObjectWatcher& ow) {
+IObjectStoreService& IObjectStoreService::getObjectStoreService(int argc, char** argv, const ObjectWatcher& ow) {
 
     if(IObjectStoreService::singleton.get() == nullptr) {
         // step 1: initialize the configuration

@@ -23,7 +23,7 @@ public:
     virtual const ObjectWatcher& getObjectWatcher() = 0;
 
     // get singleton
-    static IObjectStoreService& get(int argc, char ** argv, const ObjectWatcher& ow = {});
+    static IObjectStoreService& getObjectStoreService(int argc, char ** argv, const ObjectWatcher& ow = {});
 };
 
 }  // namespace objectstore
