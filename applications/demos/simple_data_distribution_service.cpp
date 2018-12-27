@@ -79,7 +79,9 @@ public:
     MessageProducer(std::string _topic, objectstore::IObjectStoreService& _oss):
         IMessageProducer(_topic),
         oid(std::hash<std::string>{}(_topic)),
-        oss(_oss) {}
+        oss(_oss) {
+        std::cout << "producer@"<<_topic<<",oid="<<oid<<std::endl;
+    }
     virtual bool write(const char* data, size_t len) {
         objectstore::Object object(this->oid,data,len);
         oss.put(object);
@@ -124,9 +126,10 @@ public:
 
 class DataDistributionService: public IConnection {
 private:
-    std::shared_mutex consumer_table_mutex;
+    mutable std::shared_mutex consumer_table_mutex;
     std::map<objectstore::OID,MessageConsumer> consumers;
     objectstore::IObjectStoreService &oss;
+
     // Constructor
     DataDistributionService(int argc, char ** argv):
         oss(objectstore::IObjectStoreService::getObjectStoreService(
@@ -159,15 +162,12 @@ public:
             throw std::invalid_argument("Consumer on client node is not supported yet.");
         }
         objectstore::OID hash_oid = std::hash<std::string>{}(topic);
-        std::shared_lock read_lock(consumer_table_mutex); // read lock
+        std::unique_lock write_lock(consumer_table_mutex); // write lock
+        std::cout <<"consumer@"<<topic<<",oid="<<hash_oid<<std::endl;
         if (consumers.find(hash_oid)==consumers.end()) {
-            read_lock.release();
-            std::unique_lock write_lock(consumer_table_mutex); // write lock
             consumers.emplace(hash_oid,MessageConsumer(topic));
-            return consumers.at(hash_oid);
-        } else {
-            return consumers.at(hash_oid);
-        }
+        } 
+        return consumers.at(hash_oid);
     }
     virtual std::unique_ptr<IMessageProducer> createProducer(const std::string & topic) {
         std::unique_ptr<IMessageProducer> producer_ptr(new MessageProducer(topic,oss));
@@ -238,7 +238,7 @@ int main (int argc, char **argv) {
     if (!consumer_topics.empty()) {
         std::istringstream iss(consumer_topics);
         std::string topic;
-        while(std::getline(iss,topic,';')) {
+        while(std::getline(iss,topic,',')) {
             IMessageConsumer &c = DataDistributionService::getDDS().createConsumer(topic);
             c.setDataHandler(std::make_shared<ConsoleLogger>("consumer@"+topic));
         }
@@ -246,7 +246,7 @@ int main (int argc, char **argv) {
     if (!producer_topics.empty()) {
         std::istringstream iss(producer_topics);
         std::string topic;
-        while(std::getline(iss,topic,';')) {
+        while(std::getline(iss,topic,',')) {
             std::unique_ptr<IMessageProducer> producer_ptr = DataDistributionService::getDDS().createProducer(topic);
             producer_threads.emplace_back(std::thread([&](std::unique_ptr<IMessageProducer> p,std::string topic)->void{
                     std::chrono::milliseconds interval((int)(1000.0/producer_msg_freq));
@@ -260,6 +260,7 @@ int main (int argc, char **argv) {
                         std::cout << "producer@" << topic << " " << data << std::endl;
                         std::this_thread::sleep_until(wake_time);
                         wake_time += interval;
+                        counter ++;
                     }
                 },std::move(producer_ptr),topic));
         }

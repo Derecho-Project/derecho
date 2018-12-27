@@ -91,7 +91,7 @@ class ObjectStore : public mutils::ByteRepresentable,
 public:
     using derecho::GroupReference::group;
     std::map<OID, Object> objects;
-    const ObjectWatcher& object_watcher;
+    const ObjectWatcher object_watcher;
     const Object inv_obj;
 
     REGISTER_RPC_FUNCTIONS(ObjectStore,
