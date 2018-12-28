@@ -80,7 +80,7 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    Group<CookedMessages> group({stability_callback}, subgroup_info, {}, cooked_subgroup_factory);
+    Group<CookedMessages> group({stability_callback}, subgroup_info, nullptr, {}, cooked_subgroup_factory);
 
     cout << "Finished constructing/joining the group" << endl;
     auto group_members = group.get_members();

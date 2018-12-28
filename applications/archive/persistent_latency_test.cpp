@@ -157,7 +157,7 @@ int main(int argc, char *argv[]) {
     auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group {
-                callback_set, subgroup_info,
+                callback_set, subgroup_info, nullptr,
                 std::vector<derecho::view_upcall_t>{},
                 ba_factory};
 

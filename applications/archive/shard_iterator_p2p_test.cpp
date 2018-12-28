@@ -63,7 +63,7 @@ int main(int argc, char** argv) {
     }};
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
-    derecho::Group<Foo> group({}, subgroup_info,
+    derecho::Group<Foo> group({}, subgroup_info, nullptr,
                               std::vector<derecho::view_upcall_t>{},
                               foo_factory);
 
