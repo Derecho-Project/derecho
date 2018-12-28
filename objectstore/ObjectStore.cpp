@@ -127,6 +127,7 @@ public:
             return this->inv_obj;
         }
     }
+
     // @override IObjectStoreAPI::put
     virtual void put(const Object& object) {
         derecho::Replicated<ObjectStore>& subgroup_handle = group->template get_subgroup<ObjectStore>();
@@ -386,6 +387,7 @@ private:
     const bool bReplica;
     const node_id_t myid;
     derecho::Group<ObjectStore> group;
+    std::mutex write_mutex;
 
 public:
     // constructor
@@ -437,6 +439,7 @@ public:
     }
 
     virtual void put(const Object& object) {
+        std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
             derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
@@ -451,6 +454,7 @@ public:
 
     virtual bool remove(const OID& oid) {
         bool bRet;
+        std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
             derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
@@ -469,6 +473,7 @@ public:
     }
 
     virtual Object get(const OID& oid) {
+        std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
             derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
