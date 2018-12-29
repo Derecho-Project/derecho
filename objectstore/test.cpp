@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
     derecho::Conf::initialize(argc,argv);
     std::cout << "Starting object store service..." << std::endl;
     // oss - objectstore service
-    auto& oss = objectstore::IObjectStoreService::get(argc, argv, 
+    auto& oss = objectstore::IObjectStoreService::getObjectStoreService(argc, argv, 
         [&](const objectstore::OID& oid, const objectstore::Object& object){
             std::cout << "watcher: " << oid << "->" << object << std::endl;
         });

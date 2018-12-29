@@ -46,6 +46,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
+                                 std::shared_ptr<IDeserializationContext> deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
@@ -58,6 +59,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
               }
               return std::nullopt;
           }()),
+          user_deserialization_context(deserialization_context),
           persistence_manager(callbacks.local_persistence_callback),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
@@ -77,7 +79,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager),
+          rpc_manager(view_manager,deserialization_context.get()),
           factories(make_kind_map(factories...)) {
     set_up_components();
     vector_int64_2d restart_shard_leaders = view_manager.finish_setup();

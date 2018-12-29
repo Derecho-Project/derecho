@@ -151,7 +151,7 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(Object, oid, blob);
 };
 
-std::ostream& operator << (std::ostream &out, const Blob &b) {
+inline std::ostream& operator << (std::ostream &out, const Blob &b) {
     out << "[size:" << b.size << ", data:" << std::hex;
     if (b.size > 0) {
         uint32_t i = 0;
@@ -166,7 +166,7 @@ std::ostream& operator << (std::ostream &out, const Blob &b) {
     return out;
 }
 
-std::ostream& operator << (std::ostream &out, const Object &o) {
+inline std::ostream& operator << (std::ostream &out, const Object &o) {
     out << "Object{id:" << o.oid << ", data:" << o.blob << "}";
     return out;
 }

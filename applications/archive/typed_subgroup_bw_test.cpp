@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry*) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group({},subgroup_info,std::vector<derecho::view_upcall_t>{},ba_factory);
+    derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();

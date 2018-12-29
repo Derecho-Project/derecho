@@ -20,9 +20,10 @@ public:
     virtual bool remove(const OID& oid) = 0;
     virtual Object get(const OID& oid) = 0;
     virtual void leave() = 0; // leave gracefully
+    virtual const ObjectWatcher& getObjectWatcher() = 0;
 
     // get singleton
-    static IObjectStoreService& get(int argc, char ** argv, const ObjectWatcher& ow = {});
+    static IObjectStoreService& getObjectStoreService(int argc, char ** argv, const ObjectWatcher& ow = {});
 };
 
 }  // namespace objectstore
