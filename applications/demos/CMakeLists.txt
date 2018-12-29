@@ -29,5 +29,5 @@ add_executable(overlapping_replicated_objects overlapping_replicated_objects.cpp
 target_link_libraries(overlapping_replicated_objects derecho)
 
 # simple_data_distribution_service (dds)
-add_executable(simple_data_distribution_service simple_data_distribution_service.cpp)
-target_link_libraries(simple_data_distribution_service objectstore)
+add_executable(dds_demo simple_data_distribution_service.cpp dds_demo.cpp)
+target_link_libraries(dds_demo objectstore)
