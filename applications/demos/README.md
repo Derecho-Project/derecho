@@ -23,7 +23,7 @@ replicas = 0-2
 persisted = false
 logged = false
 ```
-The most important option in `OBJECTSTORE` section is `replicas`, the nodes, designated by their derecho node IDs, that will retain the data, and hence be able to create consumers. (Yes, only the replica nodes can start consumers. This is a limitation we are going to remove later in the object store.) The `persisted` and `logged` options need to be set to `false` so far (to be supported later.)
+The most important option in `OBJECTSTORE` section is `replicas`, which designates a set of nodes by IDs to keep the data, and hence be able to create consumers. (Yes, only the replica nodes can start consumers. This is a limitation we are going to remove later in the object store.) The `persisted` and `logged` options need to be set to `false` so far (to be supported later.)
 
 Let's assume we have three nodes A(ID=0), B(ID=1), and C(ID=2). A publishes to `topic1`, B publishes to `topic2`, and C publishes to `topic3`; and they send a message per second. A, B, and C are all subscribe to all three topics. Then A's confiugration should look like this:
 ```
@@ -76,7 +76,7 @@ consumer@topic3 msg-1
 ...
 ```
 ### Future Features
-This is a simple demo to be extended with more features we plan to supports
+This is a simple demo to be extended with more features we plan to support
 * Message persistence
 * Logged messages that can be retrieved with temporal queries
 * External consumers that need not to be an object store replica
