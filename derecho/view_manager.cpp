@@ -12,7 +12,8 @@
 #include "replicated.h"  //Needed for the ReplicatedObject interface
 #include "view_manager.h"
 
-#include <persistent/Persistent.hpp>
+#include "persistent/Persistent.hpp"
+#include "utils/logger.hpp"
 
 namespace derecho {
 
@@ -29,7 +30,7 @@ ViewManager::ViewManager(
         ReplicatedObjectReferenceMap& object_reference_map,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
-        : whenlog(logger(spdlog::get("derecho_debug_log")), )
+        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
           server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
@@ -96,7 +97,7 @@ ViewManager::ViewManager(
         ReplicatedObjectReferenceMap& object_reference_map,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
-        : whenlog(logger(spdlog::get("derecho_debug_log")), )
+        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
           server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),

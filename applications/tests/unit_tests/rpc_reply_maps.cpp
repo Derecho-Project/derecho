@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     auto string_object_factory = [](PersistentRegistry*) { return std::make_unique<StringObject>(); };
 
     derecho::Group<StringObject> group(derecho::CallbackSet{},
-                                       subgroup_function,
+                                       subgroup_function, nullptr,
                                        std::vector<derecho::view_upcall_t>{},
                                        string_object_factory);
 

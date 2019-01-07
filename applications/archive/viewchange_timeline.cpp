@@ -12,7 +12,7 @@
 #include "derecho/derecho.h"
 #include "initialize.h"
 #include "rdmc/util.h"
-#include "time/time.h"
+#include "utils/time.h"
 
 using namespace std;
 using namespace std::chrono_literals;

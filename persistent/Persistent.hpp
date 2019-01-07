@@ -20,6 +20,8 @@
 #include <time.h>
 #include <typeindex>
 
+#include <utils/logger.hpp>
+
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
 #include "time.h"
 #endif  //_PERFORMANCE_DEBUG
@@ -185,7 +187,7 @@ public:
         if(_temporal_query_frontier_provider != nullptr) {
 #ifndef NDEBUG
             const HLC r = _temporal_query_frontier_provider->getFrontier();
-            dbg_warn("temporal_query_frontier=HLC({},{})", r.m_rtc_us, r.m_logic);
+            dbg_default_warn("temporal_query_frontier=HLC({},{})", r.m_rtc_us, r.m_logic);
             return r;
 #else
             return _temporal_query_frontier_provider->getFrontier();
@@ -613,18 +615,18 @@ public:
 
     template <typename TKey>
     void trim(const TKey& k) noexcept(false) {
-        dbg_trace("trim.");
+        dbg_default_trace("trim.");
         this->m_pLog->trim(k);
-        dbg_trace("trim...done");
+        dbg_default_trace("trim...done");
     }
 
     // truncate the log
     // @param ver: all versions strictly newer than 'ver' will be truncated.
     //
     void truncate(const int64_t& ver) {
-        dbg_trace("truncate.");
+        dbg_default_trace("truncate.");
         this->m_pLog->truncate(ver);
-        dbg_trace("truncate...done");
+        dbg_default_trace("truncate...done");
     }
 
     // get a version of Value T, specified by HLC clock. the user lambda will be fed with
@@ -708,7 +710,7 @@ public:
 
     // make a version with version and mhlc clock
     virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false) {
-        dbg_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
+        dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
         if
             constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
                 v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
@@ -745,7 +747,7 @@ public:
     // make a version
     virtual void version(const version_t& ver) noexcept(false) {
         //TODO: compare if value has been changed?
-        dbg_trace("In Persistent<T>: make version {}.", ver);
+        dbg_default_trace("In Persistent<T>: make version {}.", ver);
         this->set(*this->m_pWrappedObject, ver);
     }
 
@@ -834,13 +836,13 @@ public:
     std::size_t to_bytes(char* ret) const {
         std::size_t sz = 0;
         // object name
-        dbg_trace("{0}[{1}] object_name starts at {2}", this->m_pLog->m_sName, __func__, sz);
+        dbg_default_trace("{0}[{1}] object_name starts at {2}", this->m_pLog->m_sName, __func__, sz);
         sz += mutils::to_bytes(this->m_pLog->m_sName, ret + sz);
         // wrapped object
-        dbg_trace("{0}[{1}] wrapped_object starts at {2}", this->m_pLog->m_sName, __func__, sz);
+        dbg_default_trace("{0}[{1}] wrapped_object starts at {2}", this->m_pLog->m_sName, __func__, sz);
         sz += mutils::to_bytes(*this->m_pWrappedObject, ret + sz);
         // and the log
-        dbg_trace("{0}[{1}] log starts at {2}", this->m_pLog->m_sName, __func__, sz);
+        dbg_default_trace("{0}[{1}] log starts at {2}", this->m_pLog->m_sName, __func__, sz);
         sz += this->m_pLog->to_bytes(ret + sz, PersistentRegistry::getEarliestVersionToSerialize());
         return sz;
     }
@@ -857,20 +859,20 @@ public:
     // construction of Replicated<T>
     static std::unique_ptr<Persistent> from_bytes(mutils::DeserializationManager* dsm, char const* v) {
         size_t ofst = 0;
-        dbg_trace("{0} object_name is loaded at {1}", __func__, ofst);
+        dbg_default_trace("{0} object_name is loaded at {1}", __func__, ofst);
         auto obj_name = mutils::from_bytes<std::string>(dsm, v);
         ofst += mutils::bytes_size(*obj_name);
 
-        dbg_trace("{0} wrapped_obj is loaded at {1}", __func__, ofst);
+        dbg_default_trace("{0} wrapped_obj is loaded at {1}", __func__, ofst);
         auto wrapped_obj = mutils::from_bytes<ObjectType>(dsm, v + ofst);
         ofst += mutils::bytes_size(*wrapped_obj);
 
-        dbg_trace("{0} log is loaded at {1}", __func__, ofst);
+        dbg_default_trace("{0} log is loaded at {1}", __func__, ofst);
         PersistentRegistry* pr = nullptr;
         if(dsm != nullptr) {
             pr = &dsm->mgr<PersistentRegistry>();
         }
-        dbg_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__);
+        dbg_default_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__);
         return std::make_unique<Persistent>(obj_name->data(), wrapped_obj, v + ofst, pr);
     }
     // derived from ByteRepresentable
@@ -885,7 +887,7 @@ public:
         auto obj_name = mutils::from_bytes<std::string>(dsm,v);
         ofst += mutils::bytes_size(*obj_name);
         if (obj_name->compare(this->m_pLog->m_sName)!=0) {
-          dbg_warn("{0}: trying to merge local object {1} with tail log from {2}.", __func__, *obj_name, this->m_pLog->m_sName);
+          dbg_default_warn("{0}: trying to merge local object {1} with tail log from {2}.", __func__, *obj_name, this->m_pLog->m_sName);
           throw PERSIST_EXP_INV_OBJNAME;
         }
         // Step 1: update the current state

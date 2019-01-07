@@ -208,7 +208,7 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
     clock_gettime(CLOCK_REALTIME, &te);
     long sec = (te.tv_sec - ts.tv_sec);
     long nsec = sec * 1000000000 + te.tv_nsec - ts.tv_nsec;
-    dbg_warn("nanosecond={}\n", nsec);
+    dbg_default_warn("nanosecond={}\n", nsec);
     double thp_MBPS = (double)osize * nops / (double)nsec * 1000;
     double lat_us = (double)nsec / nops / 1000;
     cout << "WRITE TEST(st=" << st << ", size=" << osize << " byte, ops=" << nops << ")" << endl;

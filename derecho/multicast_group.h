@@ -59,7 +59,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
 
     DerechoParams() {
         max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-        max_smc_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE);
+        max_smc_payload_size = std::min((uint64_t)max_payload_size, derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE));
         block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
         window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
         timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);

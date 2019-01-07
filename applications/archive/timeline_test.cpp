@@ -14,7 +14,7 @@ int main(){}
 #include "rdmc/util.h"
 
 #include "initialize.h"
-#include "time/time.h"
+#include "utils/time.h"
 
 using namespace std;
 using namespace std::chrono_literals;

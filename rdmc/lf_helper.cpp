@@ -21,10 +21,7 @@
 #include "lf_helper.h"
 #include "tcp/tcp.h"
 #include "util.h"
-
-#ifndef NDEBUG
-#include <spdlog/sinks/stdout_color_sinks.h>
-#endif
+#include "utils/logger.hpp"
 
 /** From sst/verbs.cpp */
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -42,41 +39,6 @@ using namespace std;
 
 namespace rdma {
 
-/** Debugging tools from Weijia's sst code */  
-#ifndef NDEBUG
-    class RDMCLogger {
-        std::shared_ptr<spdlog::logger> spdlogger;
-    public:
-        RDMCLogger(spdlog::level::level_enum log_level)
-                : spdlogger(spdlog::stdout_color_mt("rdmc.lf")) {
-            spdlogger->set_level(log_level);
-            spdlogger->set_pattern("[%H:%M:%S.%f] [%n] [%^%l%$] %v");
-        }
-        std::shared_ptr<spdlog::logger> get_logger() {
-            return spdlogger;
-        }
-    };
-
-    inline auto dbgConsole() {
-        static auto console = RDMCLogger(spdlog::level::debug);
-        return console;
-    }
-    #define dbg_trace(...) dbgConsole().get_logger()->trace(__VA_ARGS__)
-    #define dbg_debug(...) dbgConsole().get_logger()->debug(__VA_ARGS__)
-    #define dbg_info(...) dbgConsole().get_logger()->info(__VA_ARGS__)
-    #define dbg_warn(...) dbgConsole().get_logger()->warn(__VA_ARGS__)
-    #define dbg_error(...) dbgConsole().get_logger()->error(__VA_ARGS__)
-    #define dbg_crit(...) dbgConsole().get_logger()->critical(__VA_ARGS__)
-    #define dbg_flush() dbgConsole().get_logger()->flush()
-#else
-    #define dbg_trace(...)
-    #define dbg_debug(...)
-    #define dbg_info(...)
-    #define dbg_warn(...)
-    #define dbg_error(...)
-    #define dbg_crit(...)
-    #define dbg_flush()
-#endif//!NDEBUG
 #define CRASH_WITH_MESSAGE(...) \
 do { \
     fprintf(stderr,__VA_ARGS__); \
@@ -93,7 +55,7 @@ enum NextOnFailure{
     do { \
         int64_t _int64_r_ = (int64_t)(x); \
         if (_int64_r_ != 0) { \
-            dbg_error("{}:{},ret={},{}",__FILE__,__LINE__,_int64_r_,desc); \
+            dbg_default_error("{}:{},ret={},{}",__FILE__,__LINE__,_int64_r_,desc); \
             fprintf(stderr,"%s:%d,ret=%ld,%s\n",__FILE__,__LINE__,_int64_r_,desc); \
             if (next == CRASH_ON_FAILURE) { \
                 fflush(stderr); \
@@ -105,7 +67,7 @@ enum NextOnFailure{
     do { \
         int64_t _int64_r_ = (int64_t)(x); \
         if (_int64_r_ == 0) { \
-            dbg_error("{}:{},{}",__FILE__,__LINE__,desc); \
+            dbg_default_error("{}:{},{}",__FILE__,__LINE__,desc); \
             fprintf(stderr,"%s:%d,%s\n",__FILE__,__LINE__,desc); \
             if (next == CRASH_ON_FAILURE) { \
                 fflush(stderr); \
@@ -293,8 +255,8 @@ int endpoint::init(struct fi_info *fi) {
         "Failed to open endpoint", REPORT_ON_FAILURE
     );
     if(ret) return ret;
-    dbg_info("{}:{} created rdmc endpoint: {}",__FILE__,__func__,(void*)&raw_ep->fid);
-    dbg_flush();
+    dbg_default_info("{}:{} created rdmc endpoint: {}",__FILE__,__func__,(void*)&raw_ep->fid);
+    dbg_default_flush();
     /** Construct the smart pointer to manage the endpoint */ 
     ep = unique_ptr<fid_ep, std::function<void(fid_ep *)>>(
         raw_ep,
@@ -704,7 +666,7 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
   default_context();
   // load_configuration();
 
-  dbg_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
+  dbg_default_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
   /** Initialize the fabric, domain and completion queue */
   FAIL_IF_NONZERO(
       fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),

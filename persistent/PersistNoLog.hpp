@@ -13,6 +13,8 @@
 #include <stdio.h>
 #include <string>
 
+#include "utils/logger.hpp"
+
 #if __GNUC__ > 7
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -85,7 +87,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
     if(derecho::getConfBoolean(CONF_PERS_RESET)) {
         if(fs::exists(filepath)) {
             if(!fs::remove(filepath)) {
-                dbg_error("{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
+                dbg_default_error("{} loadNoLogObjectFromFile failed to remove file {}.", _NOLOG_OBJECT_NAME_, filepath);
                 throw PERSIST_EXP_REMOVE_FILE(errno);
             }
         }

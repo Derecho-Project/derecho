@@ -8,11 +8,13 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DN
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
 add_subdirectory(conf)
+add_subdirectory(utils)
 add_subdirectory(derecho)
 add_subdirectory(rdmc)
 add_subdirectory(sst)
 add_subdirectory(tcp)
 add_subdirectory(persistent)
+add_subdirectory(objectstore)
 add_subdirectory(applications)
 
 add_custom_target(

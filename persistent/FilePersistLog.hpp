@@ -3,6 +3,7 @@
 
 #include "PersistLog.hpp"
 #include "util.hpp"
+#include "utils/logger.hpp"
 #include <pthread.h>
 #include <string>
 
@@ -117,7 +118,7 @@ protected:
         if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
         }                                                 \
-        dbg_trace("FPL_WRLOCK");                          \
+        dbg_default_trace("FPL_WRLOCK");                          \
     } while(0)
 
 #define FPL_RDLOCK                                        \
@@ -125,7 +126,7 @@ protected:
         if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
         }                                                 \
-        dbg_trace("FPL_RDLOCK");                          \
+        dbg_default_trace("FPL_RDLOCK");                          \
     } while(0)
 
 #define FPL_UNLOCK                                        \
@@ -133,7 +134,7 @@ protected:
         if(pthread_rwlock_unlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_UNLOCK(errno);       \
         }                                                 \
-        dbg_trace("FPL_UNLOCK");                          \
+        dbg_default_trace("FPL_UNLOCK");                          \
     } while(0)
 
 #define FPL_PERS_LOCK                                    \
@@ -141,7 +142,7 @@ protected:
         if(pthread_mutex_lock(&this->m_perslock) != 0) { \
             throw PERSIST_EXP_MUTEX_LOCK(errno);         \
         }                                                \
-        dbg_trace("PERS_LOCK");                          \
+        dbg_default_trace("PERS_LOCK");                          \
     } while(0)
 
 #define FPL_PERS_UNLOCK                                    \
@@ -149,7 +150,7 @@ protected:
         if(pthread_mutex_unlock(&this->m_perslock) != 0) { \
             throw PERSIST_EXP_MUTEX_UNLOCK(errno);         \
         }                                                  \
-        dbg_trace("PERS_UNLOCK");                          \
+        dbg_default_trace("PERS_UNLOCK");                          \
     } while(0)
 
     // load the log from files. This method may through exceptions if read from
@@ -296,14 +297,14 @@ private:
     int64_t binarySearch(const KeyGetter& keyGetter, const TKey& key,
                          const int64_t& logHead, const int64_t& logTail) noexcept(false) {
         if(logTail <= logHead) {
-            dbg_trace("binary Search failed...EMPTY LOG");
+            dbg_default_trace("binary Search failed...EMPTY LOG");
             return (int64_t)-1L;
         }
         int64_t head = logHead, tail = logTail - 1;
         int64_t pivot = 0;
         while(head <= tail) {
             pivot = (head + tail) / 2;
-            dbg_trace("Search range: {0}->[{1},{2}]", pivot, head, tail);
+            dbg_default_trace("Search range: {0}->[{1},{2}]", pivot, head, tail);
             const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
             if(p_key == key) {
                 break;  // found
@@ -318,7 +319,7 @@ private:
             } else {  // search left
                 tail = pivot - 1;
                 if(head > tail) {
-                    dbg_trace("binary Search failed...Object does not exist.");
+                    dbg_default_trace("binary Search failed...Object does not exist.");
                     return (int64_t)-1L;
                 }
             }
@@ -329,10 +330,10 @@ private:
 #ifndef NDEBUG
     //dbg functions
     void dbgDumpMeta() {
-        dbg_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
-        dbg_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)META_HEADER->fields.head, (int64_t)META_HEADER->fields.tail);
-        dbg_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
-        dbg_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
+        dbg_default_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
+        dbg_default_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)META_HEADER->fields.head, (int64_t)META_HEADER->fields.tail);
+        dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
+        dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
     }
 #endif  //NDEBUG
 };

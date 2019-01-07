@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     auto const_test_factory = [](PersistentRegistry*) { return std::make_unique<ConstTest>(); };
     auto reference_test_factory = [](PersistentRegistry*) { return std::make_unique<ReferenceTest>(); };
 
-    derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_function,
+    derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_function, nullptr,
                                                    std::vector<derecho::view_upcall_t>{},
                                                    const_test_factory, reference_test_factory);
     int my_id = derecho::getConfInt32(CONF_DERECHO_LOCAL_ID);

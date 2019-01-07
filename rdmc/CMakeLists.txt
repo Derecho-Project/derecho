@@ -13,7 +13,7 @@ include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
 ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp schedule.cpp lf_helper.cpp)
-TARGET_LINK_LIBRARIES(rdmc conf tcp rdmacm ibverbs rt pthread fabric)
+TARGET_LINK_LIBRARIES(rdmc conf tcp rdmacm ibverbs rt pthread fabric utils)
 
 find_library(SLURM_FOUND slurm)
 if (SLURM_FOUND)
@@ -23,6 +23,6 @@ endif (SLURM_FOUND)
 
 #ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 #TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
-add_dependencies(rdmc libfabric_target)
+add_dependencies(rdmc libfabric_target conf utils)
 
 add_custom_target(format_rdmc clang-format-3.8 -i *.cpp *.h)
