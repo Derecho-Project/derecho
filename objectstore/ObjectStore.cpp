@@ -40,6 +40,7 @@ namespace objectstore {
 /*
     Object store configurations.
  */
+#define CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR "OBJECTSTORE/min_replication_factor"
 #define CONF_OBJECTSTORE_REPLICAS "OBJECTSTORE/replicas"
 #define CONF_OBJECTSTORE_PERSISTED "OBJECTSTORE/persisted"
 #define CONF_OBJECTSTORE_LOGGED "OBJECTSTORE/logged"
@@ -405,24 +406,19 @@ public:
                            const std::unique_ptr<derecho::View>& prev_view,
                            derecho::View& curr_view) {
                         if (subgroup_type == std::type_index(typeid(ObjectStore))) {
-                            std::map<node_id_t, bool> replica_ready_map;
-                            for(node_id_t& id : replicas) {
-                                replica_ready_map[id] = false;
-                            }
-                            uint32_t counter = 0;
+                            std::vector<node_id_t> active_replicas;
                             for(const node_id_t& id : curr_view.members) {
-                                if(replica_ready_map.find(id) != replica_ready_map.end()) {
-                                    replica_ready_map[id] = true;
-                                    counter++;
+                                if(std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
+                                    active_replicas.push_back(id);
                                 }
                             }
-                            if(counter < replicas.size()) {
+                            if(active_replicas.size() < derecho::getConfUInt32(CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR)) {
                                 throw derecho::subgroup_provisioning_exception();
                             }
     
                             derecho::subgroup_shard_layout_t subgroup_vector(1);
-                            subgroup_vector[0].emplace_back(curr_view.make_subview(replicas));
-                            curr_view.next_unassigned_rank += replicas.size();
+                            subgroup_vector[0].emplace_back(curr_view.make_subview(active_replicas));
+                            curr_view.next_unassigned_rank += active_replicas.size();
                             return subgroup_vector;
                         } else {
                             return derecho::subgroup_shard_layout_t{};
