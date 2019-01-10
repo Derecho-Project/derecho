@@ -25,7 +25,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev 1.0.21`), and `ibverbs` (packaged for Ubuntu as `libibverbs-dev 1.1.8`).
+* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`), `autoconf`, and `libtool`. The last two are required in order to build the LibFabrics library, which is bundled with Derecho under the `third_party` directory.
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
 
 ### Getting Started
@@ -123,11 +123,10 @@ $ app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
 Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho-unified/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
 
 ### Setup and Testing
-There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance\_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules:
+There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance\_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules for using RDMA hardware:
 
 ```
-sudo apt-get install rdmacm-utils rdmacm-utils librdmacm-dev libibverbs-dev ibutils libmlx4-1
-infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
+sudo apt-get install rdmacm-utils ibutils libmlx4-1 infiniband-diags libmthca-dev opensm ibverbs-utils libibverbs1 libibcm1 libibcommon1
 sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw_nes iw_c2 ib_mthca
 ```
 Depending on your system, some of the modules might not load which is fine.
