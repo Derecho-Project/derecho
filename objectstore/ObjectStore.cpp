@@ -407,8 +407,9 @@ public:
                            derecho::View& curr_view) {
                         if (subgroup_type == std::type_index(typeid(ObjectStore))) {
                             std::vector<node_id_t> active_replicas;
-                            for(const node_id_t& id : curr_view.members) {
-                                if(std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
+                            for(uint32_t i = 0; i < curr_view.members.size(); i++){
+                                const node_id_t id = curr_view.members[i];
+                                if(!curr_view.failed[i] && std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
                                     active_replicas.push_back(id);
                                 }
                             }
