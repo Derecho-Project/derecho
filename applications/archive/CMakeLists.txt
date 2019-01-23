@@ -21,7 +21,7 @@ add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwid
 target_link_libraries(subgroup_scaling_test derecho)
 
 # latency_test
-add_executable(latency_test latency_test.cpp)
+add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
 target_link_libraries(latency_test derecho)
 
 # derecho_caller_test

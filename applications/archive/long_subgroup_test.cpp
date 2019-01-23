@@ -46,14 +46,17 @@ int main(int argc, char** argv) {
     auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
-    derecho::Group<Foo, Bar, Cache> group({}, subgroup_info,
+    derecho::Group<Foo, Bar, Cache> group({}, subgroup_info, nullptr,
                                            std::vector<derecho::view_upcall_t>{},
                                            foo_factory, bar_factory, cache_factory);
     
     cout << "Finished constructing/joining Group" << endl;
 
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    if(node_id < 3) {
+    const uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    std::vector<node_id_t> foo_members = group.get_subgroup_members<Foo>(0)[0];
+    std::vector<node_id_t> cache_members = group.get_subgroup_members<Cache>(0)[0];
+    auto find_in_foo_results = std::find(foo_members.begin(), foo_members.end(), my_id);
+    if(find_in_foo_results != foo_members.end()) {
         Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         int trials = 1000;
@@ -69,7 +72,7 @@ int main(int argc, char** argv) {
         cout << "Changing Bar's state " << trials << " times" << endl;
         for(int count = 0; count < trials; ++count) {
             std::stringstream string_builder;
-            string_builder << "Node " << node_id << " Update " << count << "  ";
+            string_builder << "Node " << my_id << " Update " << count << "  ";
             bar_rpc_handle.ordered_send<RPC_NAME(append)>(string_builder.str());
         }
         ExternalCaller<Cache>& cache_p2p_handle = group.get_nonmember_subgroup<Cache>();
@@ -80,15 +83,15 @@ int main(int argc, char** argv) {
     } else {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         int trials = 1000;
-        if(node_id == 7) {
+        if(my_id == 7) {
             trials -= 100;
         }
         cout << "Changing Cache's state " << trials << " times" << endl;
         for(int count = 0; count < trials; ++count) {
             std::stringstream string_builder;
-            string_builder << "Node " << node_id << " update " << count;
+            string_builder << "Node " << my_id << " update " << count;
             cache_rpc_handle.ordered_send<RPC_NAME(put)>("Stuff", string_builder.str());
-            if(node_id == 5 && count == 100) {
+            if(my_id == 5 && count == 100) {
                 //I want to test this node crashing and re-joining with a different ID
                 std::this_thread::sleep_for(std::chrono::seconds(1));
                 return 0;
@@ -96,11 +99,11 @@ int main(int argc, char** argv) {
         }
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExternalCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
-        int foo_p2p_target = 1;
+        node_id_t foo_p2p_target = foo_members[1];
         derecho::rpc::QueryResults<int> foo_result = foo_p2p_handle.p2p_query<RPC_NAME(read_state)>(foo_p2p_target);
         cout << "Node " << foo_p2p_target << " returned Foo state = " << foo_result.get().get(foo_p2p_target) << endl;
         ExternalCaller<Bar>& bar_p2p_handle = group.get_nonmember_subgroup<Bar>();
-        int bar_p2p_target = 0;
+        node_id_t bar_p2p_target = foo_members[0];
         derecho::rpc::QueryResults<std::string> bar_result = bar_p2p_handle.p2p_query<RPC_NAME(print)>(bar_p2p_target);
     }
 

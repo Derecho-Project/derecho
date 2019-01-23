@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
     auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
     //    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
-    derecho::Group<PersistentThing> group(callback_set, subgroup_info,
+    derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
     std::cout << "Successfully joined group" << std::endl;

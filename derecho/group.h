@@ -120,6 +120,10 @@ private:
     const node_id_t my_id;
     bool is_starting_leader;
     std::optional<tcp::socket> leader_connection;
+    /** The user deserialization context for all objects serialized and 
+     * deserialized.
+     */
+    std::shared_ptr<IDeserializationContext> user_deserialization_context;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager<ReplicatedTypes...> persistence_manager;
@@ -161,15 +165,6 @@ private:
     /** Deserializes a vector of shard leader IDs sent over the given socket. */
     static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
 
-#ifndef NOLOG
-    /**
-     * Constructs a spdlog::logger instance and registers it in spdlog's global
-     * registry, so that dependent objects like ViewManager can retrieve a
-     * pointer to the same logger without needing to pass it around.
-     * @return A pointer to the logger that was created.
-     */
-    std::shared_ptr<spdlog::logger> create_logger() const;
-#endif
     /**
      * Updates the state of the replicated objects that correspond to subgroups
      * identified in the provided map, by receiving serialized state from the
@@ -241,6 +236,7 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
+          std::shared_ptr<IDeserializationContext> deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 

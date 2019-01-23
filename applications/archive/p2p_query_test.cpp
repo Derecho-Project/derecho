@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
     derecho::Group<Foo, Bar, Cache> group(
-            {}, subgroup_info,
+            {}, subgroup_info, nullptr,
             std::vector<derecho::view_upcall_t>{},
             foo_factory, bar_factory, cache_factory);
 

@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
                                &done,
                                &num_nodes,
                                num_senders_selector,
-                               num_delivered = 0u](uint32_t subgroup, int sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
+                               num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
         if(num_senders_selector == 0) {
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
 
     // join the group
     Group<RawObject> group(CallbackSet{stability_callback},
-                           one_raw_group, std::vector<view_upcall_t>{},
+                           one_raw_group, nullptr, std::vector<view_upcall_t>{},
                            &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;

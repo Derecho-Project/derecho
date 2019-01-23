@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         return subgroup_vector;
     }};
 
-    derecho::Group<RawObject> managed_group(callbacks, subgroup_info,
+    derecho::Group<RawObject> managed_group(callbacks, subgroup_info, nullptr,
                                             std::vector<derecho::view_upcall_t>{},
                                             &derecho::raw_object_factory);
 

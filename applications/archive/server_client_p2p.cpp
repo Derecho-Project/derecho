@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    Group<Server> group({}, subgroup_info,
+    Group<Server> group({}, subgroup_info, nullptr,
                         std::vector<view_upcall_t>{announce_groups_provisioned},
                         server_factory);
 

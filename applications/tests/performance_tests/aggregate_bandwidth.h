@@ -1,5 +1,4 @@
-#ifndef AGGREGATE_BANDWIDTH_H
-#define AGGREGATE_BANDWIDTH_H
+#pragma once
 
 #include "sst/sst.h"
 #include <vector>
@@ -14,4 +13,3 @@ public:
 };
 double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,
                            double bw);
-#endif

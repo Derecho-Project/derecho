@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
     };
 
     group = std::make_unique<Group<RawObject>>(CallbackSet{delivery_callback}, subgroup_info,
-            std::vector<view_upcall_t>{}, &raw_object_factory);
+                nullptr, std::vector<view_upcall_t>{}, &raw_object_factory);
     cout << "Finished constructing/joining Group" << endl;
     Replicated<RawObject>& group_as_subgroup = group->get_subgroup<RawObject>();
     // my_rank = group_as_subgroup.get_my_rank();

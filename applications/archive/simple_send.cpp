@@ -56,7 +56,8 @@ int main(int argc, char *argv[]) {
 
     Group<RawObject> managed_group(
             CallbackSet{stability_callback},
-            one_raw_group, std::vector<view_upcall_t>{},
+            one_raw_group, nullptr, 
+            std::vector<view_upcall_t>{},
             &raw_object_factory);
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
