@@ -154,7 +154,7 @@ public:
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry *pr) :  //    pers_bytes(nullptr,pr) {
-                                              vola_bytes(nullptr, pr) {
+                                              vola_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
     }
 };
 

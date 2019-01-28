@@ -180,7 +180,7 @@ public:
     ObjStore(Persistent<std::vector<OSObject>> & _objects) : objects(std::move(_objects)) {}
 
     // Working with derecho.
-    ObjStore(PersistentRegistry* pr) : objects(nullptr, pr) {}
+    ObjStore(PersistentRegistry* pr) : objects([](){return std::make_unique<std::vector<OSObject>>();}, nullptr, pr) {}
 };
 
 typedef OSObject * POSObject;

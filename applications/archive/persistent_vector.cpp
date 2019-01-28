@@ -62,7 +62,7 @@ public:
     }
 
     // constructor for PersistentRegistry
-    PFoo(PersistentRegistry* pr) : pint(nullptr, pr) {}
+    PFoo(PersistentRegistry* pr) : pint([](){return std::make_unique<int>(0);}, nullptr, pr) {}
     PFoo(Persistent<int>& init_pint) : pint(std::move(init_pint)) {}
     DEFAULT_SERIALIZATION_SUPPORT(PFoo, pint);
 };
