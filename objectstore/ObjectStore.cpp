@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include "utils/logger.hpp"
 
 namespace objectstore {
 
@@ -514,16 +515,30 @@ static std::vector<node_id_t> parseReplicaList(
 
 class ObjectStoreService : public IObjectStoreService { 
 private:
+    enum OSSMode {
+        VOLATILE_UNLOGGED,
+        VOLATILE_LOGGED,
+        PERSISTENT_UNLOGGED,
+        PERSISTENT_LOGGED
+    };
+    OSSMode mode;
     const ObjectWatcher& object_watcher;
     std::vector<node_id_t> replicas;
     const bool bReplica;
     const node_id_t myid;
-    derecho::Group<VolatileUnloggedObjectStore> group;
+    derecho::Group<VolatileUnloggedObjectStore,PersistentLoggedObjectStore> group;
     std::mutex write_mutex;
 
 public:
     // constructor
     ObjectStoreService(const ObjectWatcher& ow) : 
+        mode(
+            derecho::getConfBoolean(CONF_OBJECTSTORE_PERSISTED) ?
+            (derecho::getConfBoolean(CONF_OBJECTSTORE_LOGGED) ?
+                PERSISTENT_LOGGED : PERSISTENT_UNLOGGED) :
+            (derecho::getConfBoolean(CONF_OBJECTSTORE_LOGGED) ?
+                VOLATILE_LOGGED : VOLATILE_UNLOGGED)
+        ),
         object_watcher(ow),
         replicas(parseReplicaList(derecho::getConfString(CONF_OBJECTSTORE_REPLICAS))),
         bReplica(std::find(replicas.begin(), replicas.end(),
@@ -536,7 +551,8 @@ public:
                     [this](const std::type_index& subgroup_type,
                            const std::unique_ptr<derecho::View>& prev_view,
                            derecho::View& curr_view) {
-                        if (subgroup_type == std::type_index(typeid(VolatileUnloggedObjectStore))) {
+                        if (subgroup_type == std::type_index(typeid(VolatileUnloggedObjectStore)) || 
+                            subgroup_type == std::type_index(typeid(PersistentLoggedObjectStore))) {
                             std::vector<node_id_t> active_replicas;
                             for(uint32_t i = 0; i < curr_view.members.size(); i++){
                                 const node_id_t id = curr_view.members[i];
@@ -559,62 +575,110 @@ public:
                 }, 
                 std::shared_ptr<derecho::IDeserializationContext>{this},
                 std::vector<derecho::view_upcall_t>{},                               // view up-calls
-                [this](PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); }  // factories ...
-        ) {}
+                // factories ...
+                [this](PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
+                [this](PersistentRegistry* pr) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }
+        ) {
+        // Unimplemented yet:
+        if (mode == PERSISTENT_UNLOGGED || mode == VOLATILE_LOGGED) {
+            // log it
+            dbg_default_error("ObjectStoreService mode {} is not supported yet.");
+            throw derecho::derecho_exception("Unimplmented ObjectStoreService mode: persistent_unlogged/volatile_logged.");
+        }
+    }
 
     virtual const bool isReplica() {
         return bReplica;
     }
 
-    virtual void put(const Object& object) {
+
+    template <typename T>
+    void _put(const Object& object) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<VolatileUnloggedObjectStore>& os_rpc_handle = group.get_subgroup<VolatileUnloggedObjectStore>();
-            os_rpc_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<VolatileUnloggedObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<VolatileUnloggedObjectStore>();
-            os_p2p_handle.p2p_send<RPC_NAME(put)>(target, object);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
+            os_p2p_handle.template p2p_send<RPC_NAME(put)>(target, object);
         }
     }
 
-    virtual bool remove(const OID& oid) {
+    virtual void put(const Object& object) {
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            this->template _put<VolatileUnloggedObjectStore>(object);
+            break;
+        case PERSISTENT_LOGGED:
+            this->template _put<PersistentLoggedObjectStore>(object);
+            break;
+        default:
+            dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
+        }
+    }
+
+    template <typename T>
+    bool _remove(const OID& oid) {
         bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<VolatileUnloggedObjectStore>& os_rpc_handle = group.get_subgroup<VolatileUnloggedObjectStore>();
-            derecho::rpc::QueryResults<bool> results = os_rpc_handle.ordered_send<RPC_NAME(orderedRemove)>(oid);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
             decltype(results)::ReplyMap& replies = results.get();
             // should we check reply consistency?
             bRet = replies.begin()->second.get();
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<VolatileUnloggedObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<VolatileUnloggedObjectStore>();
-            derecho::rpc::QueryResults<bool> results = os_p2p_handle.p2p_query<RPC_NAME(remove)>(target, oid);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
+            derecho::rpc::QueryResults<bool> results = os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid);
             bRet = results.get().get(target);
         }
         return bRet;
     }
 
-    virtual Object get(const OID& oid) {
+    virtual bool remove(const OID& oid) {
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return this->template _remove<VolatileUnloggedObjectStore>(oid);
+        case PERSISTENT_LOGGED:
+            return this->template _remove<PersistentLoggedObjectStore>(oid);
+        default:
+            dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
+        }
+    }
+
+    template <typename T>
+    Object _get(const OID& oid) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<VolatileUnloggedObjectStore>& os_rpc_handle = group.get_subgroup<VolatileUnloggedObjectStore>();
-            derecho::rpc::QueryResults<const Object> results = os_rpc_handle.ordered_send<RPC_NAME(orderedGet)>(oid);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            derecho::rpc::QueryResults<const Object> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
             decltype(results)::ReplyMap& replies = results.get();
             // should we check reply consistency?
             return std::move(replies.begin()->second.get());
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<VolatileUnloggedObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<VolatileUnloggedObjectStore>();
-            derecho::rpc::QueryResults<const Object> results = os_p2p_handle.p2p_query<RPC_NAME(get)>(target, oid);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
+            derecho::rpc::QueryResults<const Object> results = os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid);
             return std::move(results.get().get(target));
+        }
+    }
+
+    virtual Object get(const OID& oid) {
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return std::move(this->template _get<VolatileUnloggedObjectStore>(oid));
+        case PERSISTENT_LOGGED:
+            return std::move(this->template _get<PersistentLoggedObjectStore>(oid));
+        default:
+            dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
         }
     }
 
