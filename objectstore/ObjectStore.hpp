@@ -4,7 +4,6 @@
 #include <optional>
 
 #include "Object.hpp"
-#include "ObjectStoreException.hpp"
 
 namespace objectstore {
 // if object is valid, this is a PUT operation; otherwise, a REMOVE operation.

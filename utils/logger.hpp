@@ -43,7 +43,7 @@ public:
   #define dbg_default_warn(...) dbg_warn(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
   #define dbg_error(logger, ...) logger->error(__VA_ARGS__)
   #define dbg_default_error(...) dbg_error(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
-  #define dbg_crit(logger, ...) logger->crit(__VA_ARGS__)
+  #define dbg_crit(logger, ...) logger->critical(__VA_ARGS__)
   #define dbg_default_crit(...) dbg_crit(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
   #define dbg_flush(logger) logger->flush()
   #define dbg_default_flush() LoggerFactory::getDefaultLogger()->flush()

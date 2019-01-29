@@ -261,9 +261,8 @@ class DeltaObjectStoreCore : public ObjectStoreCore,
             // resize
             this->buffer = (char*)realloc(buffer, new_cap);
             if(this->buffer == nullptr) {
-                std::cerr << __FILE__ << ":" << __LINE__ << " Fail to allocate delta buffer." << std::endl
-                          << std::flush;
-                throw OBJECTSTORE_EXP_MALLOC(errno);
+                dbg_default_crit("{}:{} Failed to allocate delta buffer. errno={}", __FILE__, __LINE__,errno);
+                throw derecho::derecho_exception("Failed to allocate delta buffer.");
             } else {
                 this->capacity = new_cap;
             }
@@ -284,9 +283,8 @@ class DeltaObjectStoreCore : public ObjectStoreCore,
     void initialize_delta() {
         delta.buffer = (char*)malloc(DEFAULT_DELTA_BUFFER_CAPACITY);
         if(delta.buffer == nullptr) {
-            std::cerr << __FILE__ << ":" << __LINE__ << " Fail to allocate delta buffer." << std::endl
-                      << std::flush;
-            throw OBJECTSTORE_EXP_MALLOC(errno);
+            dbg_default_crit("{}:{} Failed to allocate delta buffer. errno={}", __FILE__, __LINE__,errno);
+            throw derecho::derecho_exception("Failed to allocate delta buffer.");
         }
         delta.len = DEFAULT_DELTA_BUFFER_CAPACITY;
     }
