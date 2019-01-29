@@ -460,6 +460,8 @@ public:
 
     DEFAULT_DESERIALIZE_NOALLOC(PersistentLoggedObjectStore);
 
+    void ensure_registered(mutils::DeserializationManager&) {}
+
     // constructors TODO: how to pass ObjectWatcher to Persistent? ==>
     PersistentLoggedObjectStore(PersistentRegistry* pr, IObjectStoreService &oss) : 
         persistent_objectstore(
@@ -649,6 +651,7 @@ public:
             return this->template _remove<PersistentLoggedObjectStore>(oid);
         default:
             dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
         }
     }
 
@@ -679,6 +682,7 @@ public:
             return std::move(this->template _get<PersistentLoggedObjectStore>(oid));
         default:
             dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
         }
     }
 
