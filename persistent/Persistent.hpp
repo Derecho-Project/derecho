@@ -454,7 +454,7 @@ public:
             this->m_pLog->applyLogTail(log_tail);
         }
         // Initialize Wrapped Object
-        assert(this->m_pWrappedObject != nullptr);
+        assert(wrapped_obj_ptr != nullptr);
         this->m_pWrappedObject = std::move(wrapped_obj_ptr);
         // Register callbacks
         register_callbacks();
