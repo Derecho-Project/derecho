@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <optional>
+#include "utils/logger.hpp"
 
 namespace objectstore {
 
@@ -16,12 +17,22 @@ namespace objectstore {
 
     A short summary of the classes:
 
-    - ObjectStore
-    The basic implementation of the object store functionality, where 'basic'
-    means absence of persistence and log.
+    - ObjectStoreCore
+    The core functions of a object store.
 
-    - DeltaObjectStore
-    Delta feature is enabled based on ObjectStore.
+    - DeltaObjectStoreCore
+    Delta feature is enabled based on ObjectStoreCore.
+
+    - VolatileUnloggedObjectStore (Type for a derecho subgroup)
+    The implementation of an object store with out persistence and log.
+
+    - PersistentUnloggedObjectStore (Type for a derecho subgroup)
+    The implementation of an object store with persistence. Operations are
+    unlogged.
+
+    - PersistentLoggedObjectStore (Type for a derecho subgroup)
+    The implementation of an object store with both persistence and log. We
+    do not explicitly support a "VolatileLoggedObjectStore" Type right now.
 
     - IObjectStoreAPI
     The interface for p2p_query between clients and replicas.
@@ -40,6 +51,7 @@ namespace objectstore {
 /*
     Object store configurations.
  */
+#define CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR "OBJECTSTORE/min_replication_factor"
 #define CONF_OBJECTSTORE_REPLICAS "OBJECTSTORE/replicas"
 #define CONF_OBJECTSTORE_PERSISTED "OBJECTSTORE/persisted"
 #define CONF_OBJECTSTORE_LOGGED "OBJECTSTORE/logged"
@@ -84,23 +96,11 @@ public:
     virtual const Object orderedGet(const OID& oid) = 0;
 };
 
-class ObjectStore : public mutils::ByteRepresentable,
-                    public derecho::GroupReference,
-                    public IObjectStoreAPI,
-                    public IReplica {
+class ObjectStoreCore : public IReplica {
 public:
-    using derecho::GroupReference::group;
     std::map<OID, Object> objects;
     const ObjectWatcher object_watcher;
     const Object inv_obj;
-
-    REGISTER_RPC_FUNCTIONS(ObjectStore,
-                           orderedPut,
-                           orderedRemove,
-                           orderedGet,
-                           put,
-                           remove,
-                           get);
 
     // @override IReplica::orderedPut
     virtual void orderedPut(const Object& object) {
@@ -128,14 +128,40 @@ public:
         }
     }
 
+    // constructors
+    ObjectStoreCore(const ObjectWatcher& ow) : object_watcher(ow) {}
+    ObjectStoreCore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
+        objects(_objects),
+        object_watcher(ow) {}
+    ObjectStoreCore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
+        objects(_objects),
+        object_watcher(ow) {}
+};
+
+class VolatileUnloggedObjectStore : public ObjectStoreCore,
+                                    public mutils::ByteRepresentable,
+                                    public derecho::GroupReference,
+                                    public IObjectStoreAPI {
+public:
+    using derecho::GroupReference::group;
+
+    REGISTER_RPC_FUNCTIONS(VolatileUnloggedObjectStore,
+                           orderedPut,
+                           orderedRemove,
+                           orderedGet,
+                           put,
+                           remove,
+                           get);
+
     // @override IObjectStoreAPI::put
     virtual void put(const Object& object) {
-        derecho::Replicated<ObjectStore>& subgroup_handle = group->template get_subgroup<ObjectStore>();
+        derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template
+        get_subgroup<VolatileUnloggedObjectStore>();
         subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
     }
     // @override IObjectStoreAPI::remove
     virtual bool remove(const OID& oid) {
-        auto& subgroup_handle = group->template get_subgroup<ObjectStore>();
+        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         derecho::rpc::QueryResults<bool> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
         bool bRet = true;
@@ -150,45 +176,57 @@ public:
     }
     // @override IObjectStoreAPI::get
     virtual const Object get(const OID& oid) {
-        auto& subgroup_handle = group->template get_subgroup<ObjectStore>();
+        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
         // Should we verify the consistency of replies?
         return replies.begin()->second.get();
     }
 
-    // DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, objects);
+    // This is for REGISTER_RPC_FUNCTIONS
+    // @override IReplica::orderedPut
+    virtual void orderedPut(const Object& object) {
+        ObjectStoreCore::orderedPut(object);
+    }
+    // @override IReplica::orderedRemove:
+    virtual bool orderedRemove(const OID& oid) {
+        return ObjectStoreCore::orderedRemove(oid);
+    }
+    // @override IReplica::orderedGet
+    virtual const Object orderedGet(const OID& oid) {
+        return ObjectStoreCore::orderedGet(oid);
+    }
 
     DEFAULT_SERIALIZE(objects);
 
-    static std::unique_ptr<ObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
-        return std::make_unique<ObjectStore>(
+    static std::unique_ptr<VolatileUnloggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
+        return std::make_unique<VolatileUnloggedObjectStore>(
             std::move(*mutils::from_bytes<decltype(objects)>(dsm,buf).get()),
             dsm->mgr<IObjectStoreService>().getObjectWatcher());
     }
 
-    DEFAULT_DESERIALIZE_NOALLOC(ObjectStore);
+    DEFAULT_DESERIALIZE_NOALLOC(VolatileUnloggedObjectStore);
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructors
-    ObjectStore(const ObjectWatcher& ow) : object_watcher(ow) {}
-    ObjectStore(std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
-        objects(_objects),
-        object_watcher(ow) {}
-    ObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
-        objects(_objects),
-        object_watcher(ow) {}
+    VolatileUnloggedObjectStore(const ObjectWatcher& ow) : ObjectStoreCore(ow) {}
+    VolatileUnloggedObjectStore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
+        ObjectStoreCore(_objects,ow) {}
+    VolatileUnloggedObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
+        ObjectStoreCore(std::move(_objects),ow) {}
 };
 
 // Enable the Delta feature
-class DeltaObjectStore : public ObjectStore,
-                         public persistent::IDeltaSupport {
+class DeltaObjectStoreCore : public ObjectStoreCore,
+                             public mutils::ByteRepresentable,
+                             public persistent::IDeltaSupport<DeltaObjectStoreCore> {
 #define DEFAULT_DELTA_BUFFER_CAPACITY (4096)
     enum _OPID {
         PUT,
         REMOVE
     };
+    // _dosc_delta is a name used only for struct constructor.
     struct {
         size_t capacity;
         size_t len;
@@ -224,9 +262,8 @@ class DeltaObjectStore : public ObjectStore,
             // resize
             this->buffer = (char*)realloc(buffer, new_cap);
             if(this->buffer == nullptr) {
-                std::cerr << __FILE__ << ":" << __LINE__ << " Fail to allocate delta buffer." << std::endl
-                          << std::flush;
-                throw OBJECTSTORE_EXP_MALLOC(errno);
+                dbg_default_crit("{}:{} Failed to allocate delta buffer. errno={}", __FILE__, __LINE__,errno);
+                throw derecho::derecho_exception("Failed to allocate delta buffer.");
             } else {
                 this->capacity = new_cap;
             }
@@ -247,11 +284,11 @@ class DeltaObjectStore : public ObjectStore,
     void initialize_delta() {
         delta.buffer = (char*)malloc(DEFAULT_DELTA_BUFFER_CAPACITY);
         if(delta.buffer == nullptr) {
-            std::cerr << __FILE__ << ":" << __LINE__ << " Fail to allocate delta buffer." << std::endl
-                      << std::flush;
-            throw OBJECTSTORE_EXP_MALLOC(errno);
+            dbg_default_crit("{}:{} Failed to allocate delta buffer. errno={}", __FILE__, __LINE__,errno);
+            throw derecho::derecho_exception("Failed to allocate delta buffer.");
         }
-        delta.len = DEFAULT_DELTA_BUFFER_CAPACITY;
+        delta.capacity = DEFAULT_DELTA_BUFFER_CAPACITY;
+        delta.len = 0;
     }
 
 public:
@@ -265,23 +302,31 @@ public:
     // 3) get(const OID& oid)
     // no need to prepare a delta
     ///////////////////////////////////////////////////////////////////////////
+    // @override IDeltaSupport::finalizeCurrentDelta()
     virtual void finalizeCurrentDelta(const DeltaFinalizer& df) {
         df(this->delta.buffer, this->delta.len);
         this->delta.clean();
     }
+    // @override IDeltaSupport::applyDelta()
     virtual void applyDelta(char const* const delta) {
         const char* data = (delta + sizeof(const uint32_t));
         switch(*(const uint32_t*)delta) {
             case PUT:
-                ObjectStore::orderedPut(*mutils::from_bytes<Object>(nullptr, data));
+                ObjectStoreCore::orderedPut(*mutils::from_bytes<Object>(nullptr, data));
                 break;
             case REMOVE:
-                ObjectStore::orderedRemove(*(const OID*)data);
+                ObjectStoreCore::orderedRemove(*(const OID*)data);
                 break;
             default:
                 std::cerr << __FILE__ << ":" << __LINE__ << ":" << __func__ << " " << std::endl;
         };
     }
+
+    // @override IDeltaSupport::create()
+    static std::unique_ptr<DeltaObjectStoreCore> create(mutils::DeserializationManager *dm) {
+        return std::make_unique<DeltaObjectStoreCore>(dm->mgr<IObjectStoreService>().getObjectWatcher());
+    }
+
     // Can we get the serialized operation representation from Derecho?
     virtual void orderedPut(const Object& object) {
         // create delta.
@@ -291,7 +336,7 @@ public:
         this->delta.setDataLen(object.bytes_size());
         this->delta.setOpid(PUT);
         // put
-        ObjectStore::orderedPut(object);
+        ObjectStoreCore::orderedPut(object);
     }
     // Can we get the serialized operation representation from Derecho?
     virtual bool orderedRemove(const OID& oid) {
@@ -302,44 +347,135 @@ public:
         this->delta.setDataLen(sizeof(OID));
         this->delta.setOpid(REMOVE);
         // remove
-        return ObjectStore::orderedRemove(oid);
+        return ObjectStoreCore::orderedRemove(oid);
     }
 
-    // Not going to register them as RPC functions because DeltaObjectStore
+    // Not going to register them as RPC functions because DeltaObjectStoreCore
     // works with PersistedObjectStore instead of the type for Replicated<T>.
     // REGISTER_RPC_FUNCTIONS(ObjectStore, put, remove, get);
 
-    // DEFAULT_SERIALIZATION_SUPPORT(DeltaObjectStore, objects);
+    // DEFAULT_SERIALIZATION_SUPPORT(DeltaObjectStoreCore, objects);
 
     DEFAULT_SERIALIZE(objects);
 
-    static std::unique_ptr<ObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
-        return std::make_unique<ObjectStore>(
+    static std::unique_ptr<DeltaObjectStoreCore> from_bytes(mutils::DeserializationManager* dsm, char const * buf) {
+        return std::make_unique<DeltaObjectStoreCore>(
             std::move(*mutils::from_bytes<decltype(objects)>(dsm,buf).get()),
             dsm->mgr<IObjectStoreService>().getObjectWatcher());
     }
 
-    DEFAULT_DESERIALIZE_NOALLOC(DeltaObjectStore);
+    DEFAULT_DESERIALIZE_NOALLOC(DeltaObjectStoreCore);
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructor
-    DeltaObjectStore(const ObjectWatcher& ow) : ObjectStore(ow) {
+    DeltaObjectStoreCore(const ObjectWatcher& ow) : ObjectStoreCore(ow) {
         initialize_delta();
     }
-    DeltaObjectStore(std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
-        ObjectStore(_objects, ow) {
+    DeltaObjectStoreCore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
+        ObjectStoreCore(_objects, ow) {
         initialize_delta();
     }
-    DeltaObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
-        ObjectStore(_objects, ow) {
+    DeltaObjectStoreCore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
+        ObjectStoreCore(_objects, ow) {
         initialize_delta();
     }
-    virtual ~DeltaObjectStore() {
+    virtual ~DeltaObjectStoreCore() {
         if(delta.buffer != nullptr) {
             free(delta.buffer);
         }
     }
+};
+
+class PersistentLoggedObjectStore: public mutils::ByteRepresentable,
+                                   public derecho::PersistsFields,
+                                   public derecho::GroupReference,
+                                   public IObjectStoreAPI,
+                                   public IReplica {
+public:
+    using derecho::GroupReference::group;
+    Persistent<DeltaObjectStoreCore> persistent_objectstore;
+
+    REGISTER_RPC_FUNCTIONS(PersistentLoggedObjectStore,
+                           orderedPut,
+                           orderedRemove,
+                           orderedGet,
+                           put,
+                           remove,
+                           get);
+
+
+    // @override IReplica::orderedPut
+    virtual void orderedPut(const Object& object) {
+        this->persistent_objectstore->orderedPut(object);
+    }
+    // @override IReplica::orderedRemove
+    virtual bool orderedRemove(const OID& oid) {
+        return this->persistent_objectstore->orderedRemove(oid);
+    }
+    // @override IReplica::orderedGet
+    virtual const Object orderedGet(const OID& oid) {
+        return this->persistent_objectstore->orderedGet(oid);
+    }
+    // @override IObjectStoreAPI::put
+    virtual void put(const Object& object) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+    }
+    // @override IObjectStoreAPI::remove
+    virtual bool remove(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        derecho::rpc::QueryResults<bool> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
+        decltype(results)::ReplyMap& replies = results.get();
+        bool bRet = true;
+        for(auto& reply_pair : replies) {
+            if(!reply_pair.second.get()) {
+                bRet = false;
+                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << 
+                "returned false" << std::endl;
+                break;
+            }
+        }
+        return bRet;
+    }
+    // @override IObjectStoreAPI::get
+    virtual const Object get(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
+
+        decltype(results)::ReplyMap& replies = results.get();
+        // Should we verify the consistency of replies?
+        return replies.begin()->second.get();
+    }
+
+    // DEFAULT_SERIALIZATION_SUPPORT(PersistentLoggedObjectStore,persistent_objectstore);
+
+    DEFAULT_SERIALIZE(persistent_objectstore);
+
+    static std::unique_ptr<PersistentLoggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const *
+    buf) {
+        return std::make_unique<PersistentLoggedObjectStore>(
+            std::move(*mutils::from_bytes<decltype(persistent_objectstore)>(dsm,buf).get()));
+    }
+
+    DEFAULT_DESERIALIZE_NOALLOC(PersistentLoggedObjectStore);
+
+    void ensure_registered(mutils::DeserializationManager&) {}
+
+    // constructors TODO: how to pass ObjectWatcher to Persistent? ==>
+    PersistentLoggedObjectStore(PersistentRegistry* pr, IObjectStoreService &oss) : 
+        persistent_objectstore(
+                               [&](){
+                                   return std::make_unique<DeltaObjectStoreCore>(oss.getObjectWatcher());
+                               },
+                               nullptr, 
+                               pr, 
+                               mutils::DeserializationManager({&oss})) {}
+    // Persistent<T> does not allow copy constructor.
+    // PersistentLoggedObjectStore(Persistent<DeltaObjectStoreCore>& _persistent_objectstore) :
+    //    persistent_objectstore(_persistent_objectstore) {}
+    PersistentLoggedObjectStore(Persistent<DeltaObjectStoreCore>&& _persistent_objectstore) :
+        persistent_objectstore(std::move(_persistent_objectstore)) {}
 };
 
 // ==============================================================
@@ -379,19 +515,32 @@ static std::vector<node_id_t> parseReplicaList(
     return std::move(replicas);
 }
 
-class ObjectStoreService : public IObjectStoreService,
-                           public derecho::IDeserializationContext {
+class ObjectStoreService : public IObjectStoreService { 
 private:
+    enum OSSMode {
+        VOLATILE_UNLOGGED,
+        VOLATILE_LOGGED,
+        PERSISTENT_UNLOGGED,
+        PERSISTENT_LOGGED
+    };
+    OSSMode mode;
     const ObjectWatcher& object_watcher;
     std::vector<node_id_t> replicas;
     const bool bReplica;
     const node_id_t myid;
-    derecho::Group<ObjectStore> group;
+    derecho::Group<VolatileUnloggedObjectStore,PersistentLoggedObjectStore> group;
     std::mutex write_mutex;
 
 public:
     // constructor
     ObjectStoreService(const ObjectWatcher& ow) : 
+        mode(
+            derecho::getConfBoolean(CONF_OBJECTSTORE_PERSISTED) ?
+            (derecho::getConfBoolean(CONF_OBJECTSTORE_LOGGED) ?
+                PERSISTENT_LOGGED : PERSISTENT_UNLOGGED) :
+            (derecho::getConfBoolean(CONF_OBJECTSTORE_LOGGED) ?
+                VOLATILE_LOGGED : VOLATILE_UNLOGGED)
+        ),
         object_watcher(ow),
         replicas(parseReplicaList(derecho::getConfString(CONF_OBJECTSTORE_REPLICAS))),
         bReplica(std::find(replicas.begin(), replicas.end(),
@@ -404,25 +553,22 @@ public:
                     [this](const std::type_index& subgroup_type,
                            const std::unique_ptr<derecho::View>& prev_view,
                            derecho::View& curr_view) {
-                        if (subgroup_type == std::type_index(typeid(ObjectStore))) {
-                            std::map<node_id_t, bool> replica_ready_map;
-                            for(node_id_t& id : replicas) {
-                                replica_ready_map[id] = false;
-                            }
-                            uint32_t counter = 0;
-                            for(const node_id_t& id : curr_view.members) {
-                                if(replica_ready_map.find(id) != replica_ready_map.end()) {
-                                    replica_ready_map[id] = true;
-                                    counter++;
+                        if (subgroup_type == std::type_index(typeid(VolatileUnloggedObjectStore)) || 
+                            subgroup_type == std::type_index(typeid(PersistentLoggedObjectStore))) {
+                            std::vector<node_id_t> active_replicas;
+                            for(uint32_t i = 0; i < curr_view.members.size(); i++){
+                                const node_id_t id = curr_view.members[i];
+                                if(!curr_view.failed[i] && std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
+                                    active_replicas.push_back(id);
                                 }
                             }
-                            if(counter < replicas.size()) {
+                            if(active_replicas.size() < derecho::getConfUInt32(CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR)) {
                                 throw derecho::subgroup_provisioning_exception();
                             }
     
                             derecho::subgroup_shard_layout_t subgroup_vector(1);
-                            subgroup_vector[0].emplace_back(curr_view.make_subview(replicas));
-                            curr_view.next_unassigned_rank += replicas.size();
+                            subgroup_vector[0].emplace_back(curr_view.make_subview(active_replicas));
+                            curr_view.next_unassigned_rank += active_replicas.size();
                             return subgroup_vector;
                         } else {
                             return derecho::subgroup_shard_layout_t{};
@@ -431,62 +577,115 @@ public:
                 }, 
                 std::shared_ptr<derecho::IDeserializationContext>{this},
                 std::vector<derecho::view_upcall_t>{},                               // view up-calls
-                [this](PersistentRegistry*) { return std::make_unique<ObjectStore>(object_watcher); }  // factories ...
-        ) {}
+                // factories ...
+                [this](PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
+                [this](PersistentRegistry* pr) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }
+        ) {
+        // Unimplemented yet:
+        if (mode == PERSISTENT_UNLOGGED || mode == VOLATILE_LOGGED) {
+            // log it
+            dbg_default_error("ObjectStoreService mode {} is not supported yet.");
+            throw derecho::derecho_exception("Unimplmented ObjectStoreService mode: persistent_unlogged/volatile_logged.");
+        }
+    }
 
     virtual const bool isReplica() {
         return bReplica;
     }
 
-    virtual void put(const Object& object) {
+
+    template <typename T>
+    void _put(const Object& object) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
-            os_rpc_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<ObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<ObjectStore>();
-            os_p2p_handle.p2p_send<RPC_NAME(put)>(target, object);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
+            os_p2p_handle.template p2p_send<RPC_NAME(put)>(target, object);
         }
     }
 
-    virtual bool remove(const OID& oid) {
+    virtual void put(const Object& object) {
+        dbg_default_debug("put object id={}, mode={}",object.oid,mode);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            this->template _put<VolatileUnloggedObjectStore>(object);
+            break;
+        case PERSISTENT_LOGGED:
+            this->template _put<PersistentLoggedObjectStore>(object);
+            break;
+        default:
+            dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
+        }
+    }
+
+    template <typename T>
+    bool _remove(const OID& oid) {
         bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
-            derecho::rpc::QueryResults<bool> results = os_rpc_handle.ordered_send<RPC_NAME(orderedRemove)>(oid);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
             decltype(results)::ReplyMap& replies = results.get();
             // should we check reply consistency?
             bRet = replies.begin()->second.get();
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<ObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<ObjectStore>();
-            derecho::rpc::QueryResults<bool> results = os_p2p_handle.p2p_query<RPC_NAME(remove)>(target, oid);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
+            derecho::rpc::QueryResults<bool> results = os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid);
             bRet = results.get().get(target);
         }
         return bRet;
     }
 
-    virtual Object get(const OID& oid) {
+    virtual bool remove(const OID& oid) {
+        dbg_default_debug("remove object id={}, mode={}",oid,mode);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return this->template _remove<VolatileUnloggedObjectStore>(oid);
+        case PERSISTENT_LOGGED:
+            return this->template _remove<PersistentLoggedObjectStore>(oid);
+        default:
+            dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
+        }
+    }
+
+    template <typename T>
+    Object _get(const OID& oid) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
-            derecho::Replicated<ObjectStore>& os_rpc_handle = group.get_subgroup<ObjectStore>();
-            derecho::rpc::QueryResults<const Object> results = os_rpc_handle.ordered_send<RPC_NAME(orderedGet)>(oid);
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            derecho::rpc::QueryResults<const Object> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
             decltype(results)::ReplyMap& replies = results.get();
             // should we check reply consistency?
             return std::move(replies.begin()->second.get());
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<ObjectStore>& os_p2p_handle = group.get_nonmember_subgroup<ObjectStore>();
-            derecho::rpc::QueryResults<const Object> results = os_p2p_handle.p2p_query<RPC_NAME(get)>(target, oid);
+            derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
+            derecho::rpc::QueryResults<const Object> results = os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid);
             return std::move(results.get().get(target));
+        }
+    }
+
+    virtual Object get(const OID& oid) {
+        dbg_default_debug("get object id={}, mode={}",oid,mode);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return std::move(this->template _get<VolatileUnloggedObjectStore>(oid));
+        case PERSISTENT_LOGGED:
+            return std::move(this->template _get<PersistentLoggedObjectStore>(oid));
+        default:
+            dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
         }
     }
 

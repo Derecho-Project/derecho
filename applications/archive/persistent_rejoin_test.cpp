@@ -26,7 +26,7 @@ class PersistentThing : public mutils::ByteRepresentable, public derecho::Persis
 
 public:
     PersistentThing(Persistent<int>& init_state) : state(std::move(init_state)) {}
-    PersistentThing(PersistentRegistry* registry) : state(nullptr, registry) {}
+    PersistentThing(PersistentRegistry* registry) : state([](){return std::make_unique<int>(0);}, nullptr, registry) {}
     int read_state() {
         return *state;
     }

@@ -52,7 +52,7 @@ public:
     ByteArrayObject(Persistent<Bytes> &_p_bytes) : pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
-    ByteArrayObject(PersistentRegistry *pr) : pers_bytes(nullptr, pr) {
+    ByteArrayObject(PersistentRegistry *pr) : pers_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
     }
 };
 

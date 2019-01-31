@@ -126,7 +126,7 @@ private:
     std::shared_ptr<IDeserializationContext> user_deserialization_context;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
-    PersistenceManager<ReplicatedTypes...> persistence_manager;
+    PersistenceManager persistence_manager;
     /** Contains a TCP connection to each member of the group, for the purpose
      * of transferring state information to new members during a view change.
      * This connection pool is shared between Group and ViewManager */

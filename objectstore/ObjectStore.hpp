@@ -4,14 +4,13 @@
 #include <optional>
 
 #include "Object.hpp"
-#include "ObjectStoreException.hpp"
 
 namespace objectstore {
 // if object is valid, this is a PUT operation; otherwise, a REMOVE operation.
 using ObjectWatcher = std::function<void(const OID&,const Object&)>;
 
 // The core API. See `test.cpp` for how to use it.
-class IObjectStoreService {
+class IObjectStoreService : public derecho::IDeserializationContext {
 private:
     static std::unique_ptr<IObjectStoreService> singleton;
 public:

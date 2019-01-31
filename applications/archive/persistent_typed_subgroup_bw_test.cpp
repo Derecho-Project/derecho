@@ -50,7 +50,7 @@ public:
         //    vola_bytes(std::move(_v_bytes)) {
     }
     // the default constructor
-    ByteArrayObject(PersistentRegistry* pr) : pers_bytes(nullptr, pr) {
+    ByteArrayObject(PersistentRegistry* pr) : pers_bytes([](){return std::make_unique<derecho::Bytes>();}, nullptr, pr) {
         //    vola_bytes(nullptr,pr) {
     }
 };

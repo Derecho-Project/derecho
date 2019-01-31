@@ -289,12 +289,23 @@ protected:
 // it to the log. On reloading data from persistent storage, the DELTAs in the
 // log entries are applied in order. TODO: use checkpointing to accelerate it!
 //
-// There are two method included in this interface:
+// There are three method included in this interface:
 // - 'finalizeCurrentDelta'     This method is called when Persistent<T> trying to
 //   make a version. Once done, the delta needs to be cleared.
-// - 'applyDelta'       This method is called on object construction from the disk
+// - 'applyDelta' This method is called on object construction from the disk
+// - 'create' This static method is used to create an empty object from deserialization
+//   manager.
 using DeltaFinalizer = std::function<void(char const* const, std::size_t)>;
-class IDeltaSupport {
+template<typename DeltaObjectType>
+class IDeltaObjectFactory {
+public:
+    static std::unique_ptr<DeltaObjectType> create(mutils::DeserializationManager *dm){
+        return DeltaObjectType::create(dm);
+    }
+};
+
+template<typename ObjectType>
+class IDeltaSupport: public IDeltaObjectFactory<ObjectType> {
 public:
     virtual void finalizeCurrentDelta(const DeltaFinalizer&) = 0;
     virtual void applyDelta(char const* const) = 0;
@@ -358,12 +369,13 @@ protected:
     }
     /** initialize the object from log
        */
-    inline void initialize_object_from_log() {
+    inline void initialize_object_from_log(const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
+    mutils::DeserializationManager* dm) {
         if(this->getNumOfVersions() > 0) {
             // load the object from log.
-            this->m_pWrappedObject = std::move(this->getByIndex(this->getLatestIndex()));
+            this->m_pWrappedObject = this->getByIndex(this->getLatestIndex(),dm);
         } else {  // create a new one;
-            this->m_pWrappedObject = std::make_unique<ObjectType>();
+            this->m_pWrappedObject = object_factory();
         }
     }
     /** register the callbacks.
@@ -389,18 +401,22 @@ protected:
 public:
     /** constructor 1 is for building a persistent<T> locally, load/create a
        * log and register itself to a persistent registry.
+       * @param object_factory A factory to create an empty Object.
        * @param object_name This name is used for persistent data in file.
        * @param persistent_registry A normal pointer to the registry.
+       * @param dm The deserialization manager for deserializing local log entries.
        */
     Persistent(
+            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
             const char* object_name = nullptr,
-            PersistentRegistry* persistent_registry = nullptr)  // TODO: get the subgroup_type,subgroup_id,shard_num to intialize Persistent<T>
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}})  
             noexcept(false)
             : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
         // Initialize object
-        initialize_object_from_log();
+        initialize_object_from_log(object_factory,&dm);
         // Register Callbacks
         register_callbacks();
     }
@@ -422,38 +438,14 @@ public:
        * @param object_name The name is used for persistent data in file.
        * @param wrapped_obj_ptr A unique pointer to the wrapped object.
        * @param log_ptr A unique pointer to the log.
-       * @param persistent_registry A normal pointer to the registry.
+       * @param dm The deserialization manager for deserializing local log entries.
        */
-    /*
-      Persistent(
-        const char * object_name,
-        std::unique_ptr<ObjectType> & wrapped_obj_ptr,
-        std::unique_ptr<PersistLog> & log_ptr = nullptr,
-        PersistentRegistry * persistent_registry = nullptr)
-        noexcept(false)
-        : m_pRegistry(persistent_registry) {
-        // Initialize log
-        if ( log_ptr == nullptr ) {
-          initialize_log((object_name==nullptr)?
-            (*Persistent::getNameMaker().make(persistent_registry?persistent_registry->get_subgroup_prefix():nullptr)).c_str() : object_name);
-        } else {
-          this->m_pLog = std::move(log_ptr);
-        }
-        // Initialize Warpped Object
-        if ( wrapped_obj_ptr == nullptr ) {
-          initialize_object_from_log();
-        } else {
-          this->m_pWrappedObject = std::move(wrapped_obj_ptr);
-        }
-        // Register callbacks
-        register_callbacks();
-      }
-*/
     Persistent(
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
             const char* log_tail = nullptr,
-            PersistentRegistry* persistent_registry = nullptr) noexcept(false)
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}}) noexcept(false)
             : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log(object_name);
@@ -462,11 +454,8 @@ public:
             this->m_pLog->applyLogTail(log_tail);
         }
         // Initialize Wrapped Object
-        if(wrapped_obj_ptr == nullptr) {
-            initialize_object_from_log();
-        } else {
-            this->m_pWrappedObject = std::move(wrapped_obj_ptr);
-        }
+        assert(wrapped_obj_ptr != nullptr);
+        this->m_pWrappedObject = std::move(wrapped_obj_ptr);
         // Register callbacks
         register_callbacks();
     }
@@ -542,7 +531,7 @@ public:
             const Func& fun,
             mutils::DeserializationManager* dm = nullptr) noexcept(false) {
         if
-            constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
+            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
                 return f(*this->getByIndex(idx, dm));
             }
         else {
@@ -555,15 +544,15 @@ public:
             int64_t idx,
             mutils::DeserializationManager* dm = nullptr) noexcept(false) {
         if
-            constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
-                ObjectType* ot = new ObjectType{};
+            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+                // ObjectType* ot = new ObjectType{};
+                std::unique_ptr<ObjectType> p = ObjectType::create(dm);
                 // TODO: accelerate this by checkpointing
                 for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
                     const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-                    ot->applyDelta(entry_data);
+                    p->applyDelta(entry_data);
                 }
 
-                std::unique_ptr<ObjectType> p(ot);
                 return p;
             }
         else {
@@ -585,7 +574,7 @@ public:
             throw PERSIST_EXP_INV_VERSION;
         }
         if
-            constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
+            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
                 // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
                 return f(*this->get(ver, dm));
             }
@@ -605,7 +594,7 @@ public:
         }
 
         if
-            constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
+            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
                 return getByIndex(idx, dm);
             }
         else {
@@ -712,7 +701,7 @@ public:
     virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false) {
         dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
         if
-            constexpr(std::is_base_of<IDeltaSupport, ObjectType>::value) {
+            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
                 v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
                     this->m_pLog->append((const void* const)buf, len, ver, mhlc);
                 });
@@ -936,13 +925,17 @@ class Volatile : public Persistent<ObjectType, ST_MEM> {
 public:
     /** constructor 1 is for building a persistent<T> locally, load/create a
      * log and register itself to a persistent registry.
+     * @param object_factory factory for ObjectType
      * @param object_name This name is used for persistent data in file.
      * @param persistent_registry A normal pointer to the registry.
+     * @param dm DeserializationManager for deserializing logged object.
      */
     Volatile(
+            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
             const char* object_name = nullptr,
-            PersistentRegistry* persistent_registry = nullptr) noexcept(false)
-            : Persistent<ObjectType, ST_MEM>(object_name, persistent_registry) {}
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}}) noexcept(false)
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry) {}
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
@@ -954,17 +947,21 @@ public:
     /** constructor 3 is for deserialization. It builds a Persistent<T> from
      * the object name, a unique_ptr to the wrapped object, a unique_ptr to
      * the log.
+     * @param object_factory factory for ObjectType
      * @param object_name The name is used for persistent data in file.
      * @param wrapped_obj_ptr A unique pointer to the wrapped object.
      * @param log_ptr A unique pointer to the log.
      * @param persistent_registry A normal pointer to the registry.
+     * @param dm DeserializationManager for deserializing logged object.
      */
     Volatile(
+            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
             std::unique_ptr<PersistLog>& log_ptr = nullptr,
-            PersistentRegistry* persistent_registry = nullptr) noexcept(false)
-            : Persistent<ObjectType, ST_MEM>(object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}}) noexcept(false)
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}
 
     /** constructor 4, the default copy constructor, is disabled
      */

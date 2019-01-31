@@ -99,7 +99,7 @@ private:
     friend class Replicated;
     template <typename T>
     friend class ExternalCaller;
-    template <typename... T>
+
     friend class PersistenceManager;
 
     friend class RestartLeaderState;

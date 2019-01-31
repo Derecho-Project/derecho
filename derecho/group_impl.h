@@ -198,7 +198,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     //Give PersistenceManager some pointers
-    persistence_manager.set_objects(replicated_objects);
+    persistence_manager.set_objects(objects_by_subgroup_id);
     persistence_manager.set_view_manager(view_manager);
     //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();

@@ -76,7 +76,7 @@ public:
 
 ///////////////////////////////////////////////////////////////////////////////
 // test delta
-class IntegerWithDelta : public ByteRepresentable, IDeltaSupport {
+class IntegerWithDelta : public ByteRepresentable, IDeltaSupport<IntegerWithDelta> {
 public:
     int value;
     int delta;
@@ -102,6 +102,11 @@ public:
         // apply delta
         this->value += *((const int * const)pdat);
     }
+    static std::unique_ptr<IntegerWithDelta> create(mutils::DeserializationManager *dm) {
+        // create
+        return std::make_unique<IntegerWithDelta>();
+    }
+
     virtual const std::string to_string() {
         return std::to_string(this->value);
     };
@@ -143,13 +148,13 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
-Persistent<X> px1(nullptr, &pr);
+Persistent<X> px1([](){return std::make_unique<X>();},nullptr, &pr);
 //Persistent<X> px1;
-Persistent<VariableBytes> npx(nullptr, &pr), npx_logtail;
+Persistent<VariableBytes> npx([](){return std::make_unique<VariableBytes>();},nullptr, &pr), 
+                          npx_logtail([](){return std::make_unique<VariableBytes>();});
 //Persistent<X,ST_MEM> px2;
-Volatile<X> px2;
-Persistent<X> pxarr[3];  //unused
-Persistent<IntegerWithDelta> dx(nullptr, &pr);
+Volatile<X> px2([](){return std::make_unique<X>();});
+Persistent<IntegerWithDelta> dx([](){return std::make_unique<IntegerWithDelta>();},nullptr, &pr);
 
 template <typename OT, StorageType st = ST_FILE>
 void listvar(Persistent<OT, st>& var) {
@@ -186,7 +191,7 @@ static void test_hlc();
 template <StorageType st = ST_FILE>
 static void eval_write(std::size_t osize, int nops, bool batch) {
     VariableBytes writeMe;
-    Persistent<VariableBytes, st> pvar;
+    Persistent<VariableBytes, st> pvar([](){return std::make_unique<VariableBytes>();});
     writeMe.data_len = osize;
     struct timespec ts, te;
     int cnt = nops;
