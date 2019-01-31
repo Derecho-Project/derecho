@@ -18,16 +18,16 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
            (old_sst.joiner_ips.size() - num_changes_installed) * sizeof(uint32_t));
     memcpy(const_cast<uint16_t*>(joiner_gms_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_gms_ports[row] + num_changes_installed),
-           (old_sst.joiner_gms_ports.size() - num_changes_installed) * sizeof(uint32_t));
+           (old_sst.joiner_gms_ports.size() - num_changes_installed) * sizeof(uint16_t));
     memcpy(const_cast<uint16_t*>(joiner_rpc_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_rpc_ports[row] + num_changes_installed),
-           (old_sst.joiner_rpc_ports.size() - num_changes_installed) * sizeof(uint32_t));
+           (old_sst.joiner_rpc_ports.size() - num_changes_installed) * sizeof(uint16_t));
     memcpy(const_cast<uint16_t*>(joiner_sst_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_sst_ports[row] + num_changes_installed),
-           (old_sst.joiner_sst_ports.size() - num_changes_installed) * sizeof(uint32_t));
+           (old_sst.joiner_sst_ports.size() - num_changes_installed) * sizeof(uint16_t));
     memcpy(const_cast<uint16_t*>(joiner_rdmc_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_rdmc_ports[row] + num_changes_installed),
-           (old_sst.joiner_rdmc_ports.size() - num_changes_installed) * sizeof(uint32_t));
+           (old_sst.joiner_rdmc_ports.size() - num_changes_installed) * sizeof(uint16_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }

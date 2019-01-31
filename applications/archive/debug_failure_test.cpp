@@ -14,11 +14,9 @@ using namespace derecho;
 int main(int argc, char *argv[]) {
     pthread_setname_np(pthread_self(), "failure_test");
 
-    const uint32_t num_nodes = 3;
-
     Conf::initialize(argc, argv);
 
-    auto membership_function = [num_nodes](const std::type_index& subgroup_type,
+    auto membership_function = [](const std::type_index& subgroup_type,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
@@ -34,10 +32,10 @@ int main(int argc, char *argv[]) {
 
     cout << "Finished constructing/joining ManagedGroup" << endl;
 
-    auto members_order = managed_group.get_members();
+    auto members = managed_group.get_members();
     cout << "The order of members is :" << endl;
-    for(uint i = 0; i < num_nodes; ++i) {
-        cout << members_order[i] << " ";
+    for(auto m : members) {
+        cout << m << " ";
     }
     cout << endl;
 
