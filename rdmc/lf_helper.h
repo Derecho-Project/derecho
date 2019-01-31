@@ -12,7 +12,9 @@
 
 #include "derecho/derecho_type_definitions.h"
 
+#ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1,5)
+#endif
 
 struct fid_mr;
 struct fid_ep;
