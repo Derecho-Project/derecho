@@ -226,6 +226,7 @@ class DeltaObjectStoreCore : public ObjectStoreCore,
         PUT,
         REMOVE
     };
+    // _dosc_delta is a name used only for struct constructor.
     struct {
         size_t capacity;
         size_t len;
@@ -286,7 +287,8 @@ class DeltaObjectStoreCore : public ObjectStoreCore,
             dbg_default_crit("{}:{} Failed to allocate delta buffer. errno={}", __FILE__, __LINE__,errno);
             throw derecho::derecho_exception("Failed to allocate delta buffer.");
         }
-        delta.len = DEFAULT_DELTA_BUFFER_CAPACITY;
+        delta.capacity = DEFAULT_DELTA_BUFFER_CAPACITY;
+        delta.len = 0;
     }
 
 public:
@@ -608,6 +610,7 @@ public:
     }
 
     virtual void put(const Object& object) {
+        dbg_default_debug("put object id={}, mode={}",object.oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
             this->template _put<VolatileUnloggedObjectStore>(object);
@@ -642,6 +645,7 @@ public:
     }
 
     virtual bool remove(const OID& oid) {
+        dbg_default_debug("remove object id={}, mode={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
             return this->template _remove<VolatileUnloggedObjectStore>(oid);
@@ -673,6 +677,7 @@ public:
     }
 
     virtual Object get(const OID& oid) {
+        dbg_default_debug("get object id={}, mode={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
             return std::move(this->template _get<VolatileUnloggedObjectStore>(oid));
