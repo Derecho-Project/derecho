@@ -124,6 +124,10 @@ target_link_libraries(asynchronous_dht derecho)
 add_executable(simple_send simple_send.cpp)
 target_link_libraries(simple_send derecho)
 
+# debug_failure_test
+add_executable(debug_failure_test debug_failure_test.cpp)
+target_link_libraries(debug_failure_test derecho)
+
 # count_write
 add_executable(count_write count_write.cpp)
 target_link_libraries(count_write sst)
