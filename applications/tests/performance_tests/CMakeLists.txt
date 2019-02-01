@@ -16,5 +16,10 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
+# bandwidth_test
 add_executable(bandwidth_test bandwidth_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(bandwidth_test derecho)
+
+# latency_test
+add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
+target_link_libraries(latency_test derecho)

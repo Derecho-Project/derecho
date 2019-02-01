@@ -1,3 +1,12 @@
+/*
+ * This test measures the latency of Derecho raw (uncooked) sends in microseconds as a function of
+ * 1. the number of nodes 2. message size
+ * 3. the number of senders (all sending, half nodes sending, one sending)
+ * 4. delivery mode (atomic multicast or unordered)
+ * The test waits for every node to join and then each sender starts sending messages continuously
+ * in the only subgroup that consists of all the nodes
+ * Upon completion, the results are appended to file data_latency on the leader
+ */
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -44,25 +53,33 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     pthread_setname_np(pthread_self(), "latency_test");
-    
+
+    // initialize the special arguments for this test
     uint32_t num_nodes = std::stoi(argv[argc - 3]);
     const uint32_t num_senders_selector = std::stoi(argv[argc - 2]);
     const uint32_t delivery_mode = std::stoi(argv[argc - 1]);
+
+    // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
+
     const uint64_t msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
 
     uint32_t num_messages = 1000;
-    // only used by node 0
+    // used by the sending nodes to track time of delivery of messages
     vector<uint64_t> start_times(num_messages), end_times(num_messages);
 
+    // variable 'done' tracks the end of the test
     volatile bool done = false;
     uint32_t my_id;
-    auto stability_callback = [&, num_delivered = 0u, time_index=0u](
+    // callback into the application code at each message delivery
+    auto stability_callback = [&, num_delivered = 0u, time_index = 0u](
                                       int32_t subgroup, uint32_t sender_id, long long int index,
                                       std::optional<std::pair<char*, long long int>> data,
                                       persistent::version_t ver) mutable {
+        // increment the total number of messages delivered
         ++num_delivered;
         if(sender_id == my_id) {
+	  // if I am the sender for this message, measure the time of delivery
             end_times[time_index++] = get_time();
         }
         if(num_senders_selector == 0) {
@@ -136,11 +153,15 @@ int main(int argc, char* argv[]) {
     Replicated<RawObject>& group_as_subgroup = managed_group.get_subgroup<RawObject>();
     auto send_all = [&]() {
         for(uint i = 0; i < num_messages; ++i) {
+            // the lambda function writes the message contents into the provided memory buffer
+            // in this case, we do not touch the memory region
             group_as_subgroup.send(msg_size, [&](char* buf) {
+                // measure the time of starting the send
                 start_times[i] = get_time();
             });
         }
     };
+    // send all messages or skip if not a sender
     if(num_senders_selector == 0) {
         send_all();
     } else if(num_senders_selector == 1) {
@@ -153,35 +174,35 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // wait for the test to finish
     while(!done) {
     }
 
     double avg_latency, avg_std_dev;
+    // the if loop selects the senders
     if(num_senders_selector == 0 || (num_senders_selector == 1 && my_rank > (num_nodes - 1) / 2) || (num_senders_selector == 2 && my_rank == num_nodes - 1)) {
         uint64_t total_time = 0;
         double sum_of_square = 0.0f;
         double average_time = 0.0f;
         for(uint i = 0; i < num_messages; ++i) {
             total_time += end_times[i] - start_times[i];
-            // cout << ((end_times[i] - start_times[i])/1000.0) << "us" << std::endl;
         }
-        average_time = (total_time / num_messages);  // in nano seconds
-        // calculate the standard deviation:
+	// average latency in nano seconds
+        average_time = (total_time / num_messages);
+        // calculate the standard deviation
         for(uint i = 0; i < num_messages; ++i) {
             sum_of_square += (double)(end_times[i] - start_times[i] - average_time) * (end_times[i] - start_times[i] - average_time);
         }
         double std_dev = sqrt(sum_of_square / (num_messages - 1));
-	// cout << "Average latency is: " << (average_time)/1000.0 << endl;
+	// aggregate latency values from all senders
 	std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, (average_time / 1000.0), (std_dev / 1000.0));
-
-    // for(uint i = 100; i < num_messages - 100; i += 5) {
-    //     cout << (end_times[i] - start_times[i]) / 1000.0 << endl;
-    // }
     }
     else {
+        // if not a sender, then pass 0 as the latency (not counted)
         std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, 0.0, 0.0);
     }
-    
+
+    // log the result at the leader node
     if(my_rank == 0) {
         log_results(exp_result{num_nodes, msg_size, num_senders_selector, delivery_mode, avg_latency, avg_std_dev}, "data_latency");
     }

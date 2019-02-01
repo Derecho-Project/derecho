@@ -20,10 +20,6 @@ link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
 
-# latency_test
-add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
-target_link_libraries(latency_test derecho)
-
 # derecho_caller_test
 add_executable(derecho_caller_test derecho_caller_test.cpp)
 target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
