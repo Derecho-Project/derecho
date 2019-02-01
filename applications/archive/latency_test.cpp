@@ -61,8 +61,6 @@ int main(int argc, char* argv[]) {
                                       int32_t subgroup, uint32_t sender_id, long long int index,
                                       std::optional<std::pair<char*, long long int>> data,
                                       persistent::version_t ver) mutable {
-        // DERECHO_LOG(sender_id, index, "complete_send");
-        // cout << "Delivered a message: " << endl;
         ++num_delivered;
         if(sender_id == my_id) {
             end_times[time_index++] = get_time();
@@ -139,12 +137,7 @@ int main(int argc, char* argv[]) {
     auto send_all = [&]() {
         for(uint i = 0; i < num_messages; ++i) {
             group_as_subgroup.send(msg_size, [&](char* buf) {
-                for(unsigned int j = 0; j < msg_size - 1; ++j) {
-                    buf[j] = 'a' + (i % 26);
-                }
-                buf[msg_size - 1] = 0;
                 start_times[i] = get_time();
-                // DERECHO_LOG(my_rank, i, "start_send");
             });
         }
     };
@@ -180,6 +173,10 @@ int main(int argc, char* argv[]) {
         double std_dev = sqrt(sum_of_square / (num_messages - 1));
 	// cout << "Average latency is: " << (average_time)/1000.0 << endl;
 	std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, (average_time / 1000.0), (std_dev / 1000.0));
+
+    // for(uint i = 100; i < num_messages - 100; i += 5) {
+    //     cout << (end_times[i] - start_times[i]) / 1000.0 << endl;
+    // }
     }
     else {
         std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, 0.0, 0.0);
@@ -189,9 +186,5 @@ int main(int argc, char* argv[]) {
         log_results(exp_result{num_nodes, msg_size, num_senders_selector, delivery_mode, avg_latency, avg_std_dev}, "data_latency");
     }
     managed_group.barrier_sync();
-    // flush_events();
-    // for(int i = 100; i < num_messages - 100; i+= 5){
-    // 	printf("%5.3f\n", (end_times[my_rank][i] - start_times[i]) * 1e-3);
-    // }
     managed_group.leave();
 }

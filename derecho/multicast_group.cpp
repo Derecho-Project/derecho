@@ -1274,7 +1274,6 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         whenlog(logger->trace("Subgroup {}: get_sendbuffer_ptr increased future_message_indices to {}", subgroup_num, future_message_indices[subgroup_num]););
 
         last_transfer_medium[subgroup_num] = false;
-        // DERECHO_LOG(-1, -1, "provided a buffer");
         return buf + sizeof(header);
     }
 }
