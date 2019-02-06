@@ -447,7 +447,6 @@ void MulticastGroup::initialize_sst_row() {
         }
         for(uint j = 0; j < seq_num_size; ++j) {
             sst->seq_num[i][j] = -1;
-            sst->stable_num[i][j] = -1;
             sst->delivered_num[i][j] = -1;
             sst->persisted_num[i][j] = -1;
         }
@@ -749,12 +748,12 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
 void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
     std::lock_guard<std::mutex> lock(msg_state_mtx);
-    // compute the min of the stable_num
+    // compute the min of the seq_num
     message_id_t min_stable_num
-            = sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
+            = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
     for(uint i = 0; i < num_shard_members; ++i) {
-        if(sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_stable_num) {
-            min_stable_num = sst.stable_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
+        if(sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_stable_num) {
+            min_stable_num = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
         }
     }
 
@@ -851,28 +850,6 @@ void MulticastGroup::register_predicates() {
                                                                   sst::PredicateType::RECURRENT));
 
         if(curr_subgroup_settings.mode != Mode::UNORDERED) {
-            auto stability_pred = [this](const DerechoSST& sst) { return true; };
-            auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
-            auto stability_trig = [this, subgroup_num, curr_subgroup_settings,
-                                   num_shard_members, shard_sst_indices](DerechoSST& sst) mutable {
-                // compute the min of the seq_num
-                message_id_t min_seq_num = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
-                for(uint i = 0; i < num_shard_members; ++i) {
-                    if(sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_seq_num) {
-                        min_seq_num = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
-                    }
-                }
-                if(min_seq_num > sst.stable_num[member_index][subgroup_num]) {
-                    whenlog(logger->trace("Subgroup {}, updating stable_num to {}", subgroup_num, min_seq_num););
-                    sst.stable_num[member_index][subgroup_num] = min_seq_num;
-                    sst.put(shard_sst_indices,
-                            (char*)std::addressof(sst.stable_num[0][subgroup_num]) - sst.getBaseAddress(),
-                            sizeof(decltype(sst.stable_num)::value_type));
-                }
-            };
-            stability_pred_handles.emplace_back(sst->predicates.insert(
-                    stability_pred, stability_trig, sst::PredicateType::RECURRENT));
-
             auto delivery_pred = [this](const DerechoSST& sst) { return true; };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
                 delivery_trigger(subgroup_num, curr_subgroup_settings, num_shard_members, sst);
@@ -976,10 +953,6 @@ void MulticastGroup::wedge() {
     for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
         handle_iter = receiver_pred_handles.erase(handle_iter);
-    }
-    for(auto handle_iter = stability_pred_handles.begin(); handle_iter != stability_pred_handles.end();) {
-        sst->predicates.remove(*handle_iter);
-        handle_iter = stability_pred_handles.erase(handle_iter);
     }
     for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end();) {
         sst->predicates.remove(*handle_iter);
@@ -1339,9 +1312,9 @@ void MulticastGroup::debug_print() {
     cout << "Printing SST" << endl;
     for(uint subgroup_num = 0; subgroup_num < total_num_subgroups; ++subgroup_num) {
         cout << "Subgroup " << subgroup_num << endl;
-        cout << "Printing seq_num, stable_num, delivered_num" << endl;
+        cout << "Printing seq_num, delivered_num" << endl;
         for(uint i = 0; i < num_members; ++i) {
-            cout << sst->seq_num[i][subgroup_num] << " " << sst->stable_num[i][subgroup_num] << " " << sst->delivered_num[i][subgroup_num] << endl;
+            cout << sst->seq_num[i][subgroup_num] << " " << sst->delivered_num[i][subgroup_num] << endl;
         }
         cout << endl;
 

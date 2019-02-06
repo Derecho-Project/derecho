@@ -118,11 +118,6 @@ std::string DerechoSST::to_string() const {
             s << seq_num[row][n] << " ";
         }
         s << "}"
-          << ", stable_num={ ";
-        for(unsigned int n = 0; n < stable_num.size(); n++) {
-            s << stable_num[row][n] << " ";
-        }
-        s << "}"
           << ", delivered_num={ ";
         for(unsigned int n = 0; n < delivered_num.size(); n++) {
             s << delivered_num[row][n] << " ";

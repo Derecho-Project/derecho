@@ -34,14 +34,9 @@ public:
      * in-order by this node; if a node updates seq_num, it has received all
      * messages up to seq_num in the global round-robin order. */
     SSTFieldVector<message_id_t> seq_num;
-    /** This represents the highest sequence number that has been received
-     * by every node, as observed by this node. If a node updates stable_num,
-     * then it believes that all messages up to stable_num in the global
-     * round-robin order have been received by every node. */
-    SSTFieldVector<message_id_t> stable_num;
     /** This represents the highest sequence number that has been delivered
-     * at this node. Messages are only delievered once stable, so it must be
-     * at least stable_num. */
+     * at this node. Messages are only delievered once stable (received by all),
+     * so it must be at least stable_num. */
     SSTFieldVector<message_id_t> delivered_num;
     /** This represents the highest persistent version number that has been
      * persisted to disk at this node, if persistence is enabled. This is
@@ -112,7 +107,6 @@ public:
     DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t num_received_size, uint32_t window_size, uint64_t sst_max_msg_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
-              stable_num(num_subgroups),
               delivered_num(num_subgroups),
               persisted_num(num_subgroups),
               suspected(parameters.members.size()),
@@ -128,7 +122,7 @@ public:
               slots((sst_max_msg_size)*window_size * num_subgroups),
               num_received_sst(num_received_size),
               local_stability_frontier(num_subgroups) {
-        SSTInit(seq_num, stable_num, delivered_num,
+        SSTInit(seq_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
                 joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
                 num_changes, num_committed, num_acked, num_installed,
