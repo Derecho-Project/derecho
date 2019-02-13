@@ -28,8 +28,5 @@ set_property(TARGET oss-jni PROPERTY POSITION_INDEPENDENT_CODE ON)
 # java ObjectStoreService
 find_package(Java REQUIRED)
 include(UseJava)
-#set(CMAKE_JNI_TARGET TRUE)
 add_jar(oss ObjectStoreService.java)
-#install_jar(oss ${LIB_INSTALL_DIR}/oss)
-#install_jni_symlink(oss .)
 add_jar(OSSTest OSSTest.java INCLUDE_JARS oss)

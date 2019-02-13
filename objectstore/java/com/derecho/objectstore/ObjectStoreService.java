@@ -1,3 +1,5 @@
+package com.derecho.objectstore;
+
 /**
  * @author xinzheyang
  * ObjectStoreService is a wrapper class for the C++ native ObjectStore
@@ -37,11 +39,11 @@ public class ObjectStoreService {
 	private native void initialize(String argv);
 	
 	/**
-	 * @param oid the object id in the storage, must be able to be cast to a long
+	 * @param oid the object id in the storage
 	 * @param data the data to be put 
 	 * the put operation
 	 */
-	public native void put(String oid, String data);
+	public native void put(long oid, String data);
 	
 	
 	/**
@@ -49,7 +51,7 @@ public class ObjectStoreService {
 	 * @return true if the operation succeeds, false otherwise
 	 * the remove operation
 	 */
-	public native boolean remove(String oid);
+	public native boolean remove(long oid);
 	
 	
 	/**
@@ -57,7 +59,7 @@ public class ObjectStoreService {
 	 * @return the data whose object id is oid
 	 * the get operation
 	 */
-	public native String get(String oid);
+	public native String get(long oid);
 	
 	
 	/**
