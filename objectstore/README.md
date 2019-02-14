@@ -9,7 +9,10 @@ There are three kinds of members (processes) in a dPods Store deployment: The *r
 dPODS also supports cput (conditional put). This allows the caller to do a put if the object still has some expected version number, but fails if the version has changed, enabling lock-free updates.
 
 ## dPods Getting Started
-The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/ObjectStore.hpp). A dPods *replica* or *client* node needs to start the service and get a handle to it as following:
+
+To access the dPods service, a process need either start a dPods node as *replica* or *client*, or access those service as an *external client*. In this document, we only talk about the former method. We are going to add the latter one later.
+
+A dPods *replica* or *client* node needs to start the service and get a handle to it as following:
 ```cpp
     // oss - objectstore service
     auto& oss = objectstore::IObjectStoreService::getObjectStoreService(argc, argv,
@@ -75,4 +78,9 @@ On application shutdown, the application can close the local store service by ca
     oss.leave();
 ```
 
-Please check the example application code at [test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/test.cpp).
+Please check the example application code in [test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/test.cpp).
+
+## The dPods API
+The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/ObjectStore.hpp). TODO: explaining the normal put/get/remove as well as temporal query, conditional-put.
+## TODO: More on the dPods versions
+
