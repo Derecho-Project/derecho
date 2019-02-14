@@ -10,7 +10,7 @@ dPODS also supports cput (conditional put). This allows the caller to do a put i
 
 ## dPods Getting Started
 
-To access the dPods service, a process need either start a dPods node as *replica* or *client*, or access those service as an *external client*. In this document, we only talk about the former method. We are going to add the latter one later.
+To access the dPods service, a process need either start a dPods node as *replica* or *client*, or access those service as an *external client*. In this document, we only talk about the former method. We plan to add the latter soon.
 
 A dPods *replica* or *client* node needs to start the service and get a handle to it as following:
 ```cpp
