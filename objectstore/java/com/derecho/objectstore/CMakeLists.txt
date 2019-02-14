@@ -5,8 +5,6 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwa
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
-add_subdirectory(java/com/derecho/objectstore)
-
 include_directories(${derecho_SOURCE_DIR})
 include_directories(${derecho_SOURCE_DIR}/third_party)
 include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
@@ -18,12 +16,17 @@ link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
 link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
 
-# objectstore library
-add_library(objectstore SHARED ObjectStore.cpp)
-target_link_libraries(objectstore derecho)
-add_dependencies(objectstore derecho)
+# objectstore jni
+include_directories($ENV{JAVA_HOME}/include)
+include_directories($ENV{JAVA_HOME}/include/linux)
+find_package(JNI REQUIRED)
+add_library(oss-jni SHARED ObjectStoreService.cpp)
+target_link_libraries(oss-jni objectstore)
+add_dependencies(oss-jni objectstore)
+set_property(TARGET oss-jni PROPERTY POSITION_INDEPENDENT_CODE ON)
 
-# objectstore tester
-add_executable(objectstore_test test.cpp)
-target_link_libraries(objectstore_test objectstore)
-add_dependencies(objectstore_test objectstore)
+# java ObjectStoreService
+find_package(Java REQUIRED)
+include(UseJava)
+add_jar(oss ObjectStoreService.java)
+add_jar(OSSTest OSSTest.java INCLUDE_JARS oss)
