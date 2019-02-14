@@ -1,10 +1,12 @@
 # dPods: The Derecho Plain-Old-Data Store
 
-dPods is a high-performant, replicated, and fault-tolerant objectstore service built upon the core functionalities of the Derecho library. We design dPods with the following objectives in mind:
-1. Temporal Queries: We logged the operating time of each operation to allow go back to any consistent time cut of the history. **Currently, the time-query API is to be added yet.**
-2. Zero-copy: We use RDMA to move data around for replication or between the server and clients. We try best to avoid unecessary memory copy which eats up performance when handling large data objects. **We are working on a slab allocator to allow the application to manage the objects in *RDMA-ready* memory regions meaning the objects are accessible to RDMA devices and ready to be transferred to remote nodes without any local memory copy.**
+dPods is a high-performant, replicated, and fault-tolerant objectstore service built upon the core functionalities of the Derecho library. We designed dPods with the following objectives in mind:
+1. Temporal Queries: We log the time of occurence for each operation.  In versioned mode, this allows queries against any stable time in the past.  Queries with the same time that access a set of distinct objects or distinct replicas will be satisfied of a consistent cut across the history. **NOTE: the time-query API has not yet been added.**
+2. Zero-copy: We use RDMA to move data around for replication or between the server and clients. We try our best to avoid unecessary memory copies, which eat up performance when handling large data objects. **We are working on a slab allocator to allow the application to manage the objects in *RDMA-ready* memory regions, meaning the objects are accessible to RDMA devices and ready to be transferred to remote nodes without any local memory copy.  This should help users design zero-copy objects.**
 
-There are three kinds of nodes in dPods Store: The *replicas*, *clients*, and *external clients*. *replicas* store the data and keep a log of all the operations. *clients* put/get/remove the object by issuing Derecho P2P calls to *replicas*. Both *replicas* and *clients* are in the top level derecho group and *replicas* are in the subgroup managing all dPods data and operations. *External clients* are nodes that talk to *replicas* through some relay services (e.g. RESTful API). The *external clients* focus on language compatibility rather than performance. In the [current version](f379c6eef813c073c28b803c99ab441ea4002975), we didn't provide an implementation of an external client.
+There are three kinds of members (processes) in a dPods Store deployment: The *replicas*, *clients*, and *external clients*. *replicas* store the data and keep a log of all the operations. *clients* put/get/remove the object by issuing Derecho P2P calls to *replicas*. Both *replicas* and *clients* are members of the top level derecho group, and *replicas* are also me,bers of the subgroup managing dPods data and carrying out operations on the data. *External clients* are nodes that talk to *replicas* through some relay services (e.g. RESTful API). The *external clients* focus on language compatibility rather than performance. In the [current version](f379c6eef813c073c28b803c99ab441ea4002975), we haven't provided a demo implementation illustrating this style of using REST from an external client.
+
+dPODS also supports cput (conditional put). This allows the caller to do a put if the object still has some expected version number, but fails if the version has changed, enabling lock-free updates.
 
 ## dPods Getting Started
 The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/ObjectStore.hpp). A dPods *replica* or *client* node needs to start the service and get a handle to it as following:
@@ -17,7 +19,7 @@ The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/d
 ```
 The `argc` and `argv` are command line arguments carrying derecho configurations to be passed to the derecho core. The third argument is a callable object watching on the updates. For example, in a pub/sub system, a consumer is hoping to be notified of incoming data, which can be handled here. Please note that only the replica nodes will be notified. The client nodes can register a watch but to be ignored.
 
-Careful readers may wondering what determines if a node is replica and client. We defined this in derecho configuration file. dPods rely on the new options in the `[OBJECTSTORE]` section.
+Careful readers may wondering what determines whether a node is a replica,as opposed to a client. We defined this in derecho configuration file. dPods rely on the new options in the `[OBJECTSTORE]` section.
 ```
 [OBJECTSTORE]
 # 'min_replication_factor' is the minimum number of replicas required to run
