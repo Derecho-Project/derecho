@@ -12,11 +12,10 @@ In the same directory, a Java jar called `oss.jar`. This is the Java API for Obj
 * The Java system library path needs to be specified as the directory containing `liboss-jni.so` mentioned above. This can be done by setting the environment variable `LD_LIBRARY_PATH`.
 For example,
 ```
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/derecho-unified/Release/objectstore/java/com/derecho/objectstore/
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/liboss-jni.so
 ```
 
 `OSSTest.java` is a simple demo illustrating how to call ObjectStoreService from Java.
-Since `cmake` doesn't support packaging Java files into runnable jar, this demo be run by specifying the classpath
 ```
-java -cp ".:oss.jar:OSSTest.jar" com.derecho.objectstore.OSSTest
+java -jar com.derecho.objectstore.OSSTest
 ```
