@@ -15,9 +15,17 @@ private:
     static std::unique_ptr<IObjectStoreService> singleton;
 public:
     virtual const bool isReplica() = 0;
-    virtual void put(const Object& object) = 0;
-    virtual bool remove(const OID& oid) = 0;
-    virtual Object get(const OID& oid) = 0;
+    // blocking operations
+    virtual bool bio_put(const Object& object, bool use_replica_api=false) = 0;
+    virtual bool bio_remove(const OID& oid, bool use_replica_api=false) = 0;
+    virtual Object bio_get(const OID& oid, bool use_replica_api=false) = 0;
+    // non blocking operations
+    /*** TODO
+    virtual derecho::rpc::QueryResults<bool> aio_put(const OBject& object, bool use_replica_api) = 0;
+    virtual derecho::rpc::QueryResults<bool> bio_remove(const OID& oid, bool use_replica_api) = 0;
+    virtual derecho::rpc::QueryResults<Object> bio_get(const OID& oid, bool use_replica_api) = 0;
+     ***/
+
     virtual void leave() = 0; // leave gracefully
     virtual const ObjectWatcher& getObjectWatcher() = 0;
 
