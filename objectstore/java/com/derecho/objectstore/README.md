@@ -17,5 +17,5 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/path/to/liboss-jni.so
 
 `OSSTest.java` is a simple demo illustrating how to call ObjectStoreService from Java.
 ```
-java -jar com.derecho.objectstore.OSSTest
+java -jar OSSTest.jar
 ```
