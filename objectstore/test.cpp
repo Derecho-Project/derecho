@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
                     ss >> oid >> odata;
                     objectstore::Object object(std::stol(oid),odata.c_str(),odata.length()+1);
                     try{
-                        oss.put(object);
+                        oss.bio_put(object);
                     } catch (...) {
                         return false;
                     }
@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
                 "get <oid>", // help info
                 [&oss](std::string& args)->bool {
                     try{
-                        objectstore::Object obj = oss.get(std::stol(args));
+                        objectstore::Object obj = oss.bio_get(std::stol(args));
                         std::cout << obj << std::endl;
                     } catch (...) {
                         return false;
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
                 "remove <oid>", // help info
                 [&oss](std::string& args)->bool {
                     try{
-                        return oss.remove(std::stol(args));
+                        return oss.bio_remove(std::stol(args));
                     } catch (...) {
                         return false;
                     }
