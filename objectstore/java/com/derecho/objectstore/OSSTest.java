@@ -69,7 +69,7 @@ public class OSSTest {
 				} else if (command.equals("leave")) {
 					try {
 						oss.leave();
-						success = false;
+						success = true;
 					} catch (Exception e) {
 					}
 				}
