@@ -659,12 +659,16 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     whenlog(logger->debug("Suspected[] changed"););
     View& Vc = *curr_view;
     int myRank = curr_view->my_rank;
+    int num_left = 0;
     // Aggregate suspicions into gmsSST[myRank].Suspected;
     for(int r = 0; r < Vc.num_members; r++) {
         for(int who = 0; who < Vc.num_members; who++) {
             gmssst::set(gmsSST.suspected[myRank][who],
                         gmsSST.suspected[myRank][who] || gmsSST.suspected[r][who]);
         }
+	if (gmsSST.rip[r]) {
+	  num_left++;
+	}
     }
 
     for(int q = 0; q < Vc.num_members; q++) {
@@ -673,9 +677,9 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             // This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[q] = gmsSST.suspected[myRank][q];
             whenlog(logger->debug("Marking {} failed", Vc.members[q]););
-
-            if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
-                throw derecho_exception("Majority of a Derecho group simultaneously failed ... shutting down");
+	    
+            if(Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
+	      throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
             whenlog(logger->debug("GMS telling SST to freeze row {}", q););
@@ -685,7 +689,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.failed[q] = true;
             Vc.num_failed++;
 
-            if(Vc.num_failed >= (Vc.num_members + 1) / 2) {
+            if(Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
@@ -1729,15 +1733,19 @@ void ViewManager::report_failure(const node_id_t who) {
     int r = curr_view->rank_of(who);
     whenlog(logger->debug("Node ID {} failure reported; marking suspected[{}]", who, r););
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
-    int cnt = 0;
+    int failed_cnt = 0;
+    int rip_cnt = 0;
     for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
-        if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
-            ++cnt;
+	if(curr_view->gmsSST->rip[r]) {
+	  ++rip_cnt;
+	}
+        else if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
+	  ++failed_cnt;
         }
     }
 
-    if(cnt >= (curr_view->num_members + 1) / 2) {
-        throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+    if(failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
+      throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put(
             (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
@@ -1754,6 +1762,9 @@ void ViewManager::leave() {
             (char*)std::addressof(curr_view->gmsSST->suspected[0][curr_view->my_rank])
                     - curr_view->gmsSST->getBaseAddress(),
             sizeof(curr_view->gmsSST->suspected[0][curr_view->my_rank]));
+    curr_view->gmsSST->rip[curr_view->my_rank] = true;
+    curr_view->gmsSST->put_with_completion(curr_view->gmsSST->rip.get_base() - curr_view->gmsSST->getBaseAddress(),
+               sizeof(curr_view->gmsSST->rip[0]));
     thread_shutdown = true;
 }
 

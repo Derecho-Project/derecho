@@ -226,8 +226,8 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
                     continue;
                 }
 
-                std::cout << "Reporting failure on row " << index2
-                          << " due to a missing poll completion" << std::endl;
+                /* std::cout << "Reporting failure on row " << index2 */
+                /*           << " due to a missing poll completion" << std::endl; */
                 failed_node_indexes.push_back(index2);
             }
             continue;

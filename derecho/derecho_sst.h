@@ -98,6 +98,9 @@ public:
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
+
+    /** to signal a graceful exit */
+    SSTField<bool> rip;
     /**
      * Constructs an SST, and initializes the GMS fields to "safe" initial values
      * (0, false, etc.). Initializing the MulticastGroup fields is left to MulticastGroup.
@@ -127,7 +130,7 @@ public:
                 joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-                slots, num_received_sst, local_stability_frontier);
+                slots, num_received_sst, local_stability_frontier, rip);
         //Once superclass constructor has finished, table entries can be initialized
         for(unsigned int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
@@ -160,6 +163,7 @@ public:
             for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
                 local_stability_frontier[row][i] = current_time;
             }
+            rip[row] = false;
         }
     }
 
