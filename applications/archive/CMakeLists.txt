@@ -148,3 +148,6 @@ target_link_libraries(write_avg_time sst)
 add_executable(rdma_two_sided rdma_two_sided.cpp)
 target_link_libraries(rdma_two_sided sst)
 
+# membership_tests
+add_executable(membership_tests membership_tests.cpp)
+target_link_libraries(membership_tests derecho)
