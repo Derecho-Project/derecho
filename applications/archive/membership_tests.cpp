@@ -43,6 +43,7 @@ public:
 };
 
 /**
+ * sub_tests, table
  * Helpers to generate layouts, according to the following configurations:
                        n=3     |     n=4      |     n=5
    ------------------------------------------------------
@@ -182,8 +183,8 @@ int main(int argc, char* argv[]) {
     std::cout << ">>> ID is " << my_id << std::endl;
 
     // could take these from command line
-    std::map<Tests, bool> tests = {{Tests::MIGRATION, false},
-                                   {Tests::INIT_EMPTY, true},
+    std::map<Tests, bool> tests = {{Tests::MIGRATION, true},
+                                   {Tests::INIT_EMPTY, false},
                                    {Tests::INTER_EMPTY, false},
                                    {Tests::DISJOINT_MEM, false}};
     std::cout << ">>> tests initialized " << std::endl;
