@@ -146,6 +146,8 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                 if(old_object != replicated_objects.template get<FirstType>().end() && old_object->second.get_shard_num() != shard_num) {
                     whenlog(logger->debug("Deleting old Replicated Object state for type {}; I was reassigned from shard {} to shard {}", typeid(FirstType).name(), old_object->second.get_shard_num(), shard_num));
                     replicated_objects.template get<FirstType>().erase(old_object);
+                    // also erase from objects_by_subgroup_id
+                    objects_by_subgroup_id.erase(subgroup_id);
                 }
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
