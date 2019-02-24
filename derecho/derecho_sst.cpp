@@ -132,7 +132,8 @@ std::string DerechoSST::to_string() const {
         for(uint n = 0; n < global_min_ready.size(); n++) {
             s << global_min_ready[row] << " ";
         }
-        s << "}" << std::endl;
+        s << "}"
+	  << ", rip = " << rip[row] << std::endl;
     }
     return s.str();
 }
