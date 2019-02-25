@@ -2,6 +2,8 @@
 #include <derecho/derecho.h>
 #include <derecho/view.h>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
 
 using namespace derecho;
 
@@ -130,7 +132,7 @@ std::map<Tests, Replicated<State>&> get_subgroups(Group<State>& group, std::map<
  * Tests membership by reading initial state, changing it, and reading again.
  */
 int test_state(Replicated<State>& stateHandle, int prev_state) {
-  std::cout << "In test state" << std::endl;
+    std::cout << "In test state" << std::endl;
     // Read initial state
     auto initial_results = stateHandle.ordered_send<RPC_NAME(read_value)>();
     auto& initial_replies = initial_results.get();
@@ -190,30 +192,41 @@ int main(int argc, char* argv[]) {
     std::cout << ">>> tests initialized " << std::endl;
 
     auto state_membership_function = [&tests](const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view) {
-                                               if(curr_view.members.size() < 3) {
-                                                   throw subgroup_provisioning_exception();
-                                               }
+        if(curr_view.members.size() < 3) {
+            throw subgroup_provisioning_exception();
+        }
 
-                                               std::cout << ">>> Enough members present" << std::endl;
+        std::cout << ">>> Enough members present" << std::endl;
 
-                                               subgroup_shard_layout_t layout_vec(std::count_if(tests.begin(), tests.end(), [](auto& p) { return p.second; }));
+        subgroup_shard_layout_t layout_vec(std::count_if(tests.begin(), tests.end(), [](auto& p) { return p.second; }));
 
-                                               // TODO: Fix this!
-                                               if(tests[Tests::MIGRATION]) migration_layout(layout_vec[Tests::MIGRATION], curr_view);
-                                               if(tests[Tests::INIT_EMPTY]) init_empty_layout(layout_vec[Tests::INIT_EMPTY], curr_view);
-                                               if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[Tests::INTER_EMPTY], curr_view);
-                                               if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[Tests::DISJOINT_MEM], curr_view);
+        // TODO: Fix this!
+        if(tests[Tests::MIGRATION]) migration_layout(layout_vec[Tests::MIGRATION], curr_view);
+        if(tests[Tests::INIT_EMPTY]) init_empty_layout(layout_vec[Tests::INIT_EMPTY], curr_view);
+        if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[Tests::INTER_EMPTY], curr_view);
+        if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[Tests::DISJOINT_MEM], curr_view);
 
-                                               std::cout << ">>> Created layouts" << std::endl;
+        std::cout << ">>> Created layouts" << std::endl;
 
-                                               return layout_vec;
-                                           };
+        return layout_vec;
+    };
 
     const int INIT_STATE = 100;
     auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*) { return std::make_unique<State>(INIT_STATE); };
     SubgroupInfo subgroup_info{state_membership_function};
 
-    Group<State> group({}, subgroup_info, nullptr, {}, state_subgroup_factory);
+    std::mutex main_mutex;
+    std::condition_variable main_cv;
+    volatile bool new_view_installed = false;
+
+    auto announce_view_changed = [&new_view_installed, &main_cv, &main_mutex](const derecho::View& view) {
+        std::cout << "number of members: " << view.members.size() << std::endl;
+        std::unique_lock<std::mutex> lock(main_mutex);
+        new_view_installed = true;
+        main_cv.notify_all();
+    };
+
+    Group<State> group({}, subgroup_info, nullptr, {announce_view_changed}, state_subgroup_factory);
 
     std::cout << ">>> Created group" << std::endl;
 
@@ -229,52 +242,54 @@ int main(int argc, char* argv[]) {
 
     std::map<Tests, int> prev_states;
     for(auto t : AllTests) {
-      prev_states[t] = INIT_STATE;
+        prev_states[t] = INIT_STATE;
     }
 
     std::cout << ">>> Initialized prev_states" << std::endl;
 
-    auto run_test = [&](Tests t, std::map<Tests, Replicated<State>&> subgroups){
-                      if (tests[t]) {
-                        prev_states[t] = test_state(subgroups.at(t), prev_states[t]);
-                        if(prev_states[t] == -1) {
-                          exit(1);
-                        }
-                      }
-                    };
-    
-    while(true) {
-        // stupid hack to wait for user to prompt start of each test
-        std::string input;
-        std::cout << "Waiting for input to start... " << std::endl;
-        std::getline(std::cin, input);
+    auto run_test = [&](Tests t, std::map<Tests, Replicated<State>&> subgroups) {
+        if(tests[t]) {
+            prev_states[t] = test_state(subgroups.at(t), prev_states[t]);
+            if(prev_states[t] == -1) {
+                exit(1);
+            }
+        }
+    };
 
+    for (int i=0; i < 3 - std::max((int) my_rank - 3, 0); i++) {
+        std::unique_lock<std::mutex> main_lock(main_mutex);
+        main_cv.wait(main_lock, [&new_view_installed]() { return new_view_installed; });
+        new_view_installed = false;
+
+        std::cout << "i is " << i << std::endl;
         auto subgroups = get_subgroups(group, tests);
         int num_members = group.get_members().size();
 
-        switch (my_rank) {
-        case 0:
-          run_test(Tests::MIGRATION, subgroups);
-          if (num_members == 3) {
-            run_test(Tests::DISJOINT_MEM, subgroups);
-          }
-          break;
-        case 1:
-          if (num_members >= 4) {
-            run_test(Tests::INIT_EMPTY, subgroups);
-          }
-          break;
-        case 2:
-          if (num_members != 4) {
-            run_test(Tests::INTER_EMPTY, subgroups);
-            prev_states[Tests::INTER_EMPTY] = INIT_STATE;
-          }
-          break;
-        case 3:
-          if (num_members >= 4) {
-            run_test(Tests::DISJOINT_MEM, subgroups);
-          }
-          break;
+        switch(my_rank) {
+            case 0:
+                run_test(Tests::MIGRATION, subgroups);
+                if(num_members == 3) {
+                    run_test(Tests::DISJOINT_MEM, subgroups);
+                }
+                break;
+            case 1:
+                if(num_members >= 4) {
+                    run_test(Tests::INIT_EMPTY, subgroups);
+                }
+                break;
+            case 2:
+                if(num_members != 4) {
+                    run_test(Tests::INTER_EMPTY, subgroups);
+                    prev_states[Tests::INTER_EMPTY] = INIT_STATE;
+                }
+                break;
+            case 3:
+                if(num_members >= 4) {
+                    run_test(Tests::DISJOINT_MEM, subgroups);
+                }
+                break;
         }
     }
+    group.barrier_sync();
+    group.leave();
 }
