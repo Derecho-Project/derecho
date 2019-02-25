@@ -60,7 +60,9 @@ class IObjectStoreAPI {
 public:
     // insert or update a new object
     // @PARAM oid
-    virtual void put(const Object& object) = 0;
+    // @RETURN
+    //     return true if oid removed successfully, false if no object is found.
+    virtual bool put(const Object& object) = 0;
     // remove an object
     // @PARAM oid
     //     the object id
@@ -80,7 +82,9 @@ class IReplica {
 public:
     // Perform an ordered 'put' in the subgroup
     // @PARAM oid
-    virtual void orderedPut(const Object& object) = 0;
+    // @RETURN
+    //     return true if oid removed successfully, false if no object is found.
+    virtual bool orderedPut(const Object& object) = 0;
     // Perform an ordered 'remove' in the subgroup
     // @PARAM oid
     //     the object id
@@ -103,13 +107,14 @@ public:
     const Object inv_obj;
 
     // @override IReplica::orderedPut
-    virtual void orderedPut(const Object& object) {
+    virtual bool orderedPut(const Object& object) {
         this->objects.erase(object.oid);
         this->objects.emplace(object.oid, object);  // copy constructor
         // call object watcher
         if (object_watcher) {
             object_watcher(object.oid,object);
         }
+        return true;
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
@@ -154,10 +159,20 @@ public:
                            get);
 
     // @override IObjectStoreAPI::put
-    virtual void put(const Object& object) {
+    virtual bool put(const Object& object) {
         derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template
         get_subgroup<VolatileUnloggedObjectStore>();
-        subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+        auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+        decltype(results)::ReplyMap& replies = results.get();
+        bool bRet = true;
+        for(auto& reply_pair : replies) {
+            if(!reply_pair.second.get()) {
+                bRet = false;
+                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << " returned false" << std::endl;
+                break;
+            }
+        }
+        return bRet;
     }
     // @override IObjectStoreAPI::remove
     virtual bool remove(const OID& oid) {
@@ -185,8 +200,8 @@ public:
 
     // This is for REGISTER_RPC_FUNCTIONS
     // @override IReplica::orderedPut
-    virtual void orderedPut(const Object& object) {
-        ObjectStoreCore::orderedPut(object);
+    virtual bool orderedPut(const Object& object) {
+        return ObjectStoreCore::orderedPut(object);
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
@@ -328,7 +343,7 @@ public:
     }
 
     // Can we get the serialized operation representation from Derecho?
-    virtual void orderedPut(const Object& object) {
+    virtual bool orderedPut(const Object& object) {
         // create delta.
         assert(this->delta.isEmpty());
         this->delta.calibrate(object.bytes_size());
@@ -336,7 +351,7 @@ public:
         this->delta.setDataLen(object.bytes_size());
         this->delta.setOpid(PUT);
         // put
-        ObjectStoreCore::orderedPut(object);
+        return ObjectStoreCore::orderedPut(object);
     }
     // Can we get the serialized operation representation from Derecho?
     virtual bool orderedRemove(const OID& oid) {
@@ -406,8 +421,8 @@ public:
 
 
     // @override IReplica::orderedPut
-    virtual void orderedPut(const Object& object) {
-        this->persistent_objectstore->orderedPut(object);
+    virtual bool orderedPut(const Object& object) {
+        return this->persistent_objectstore->orderedPut(object);
     }
     // @override IReplica::orderedRemove
     virtual bool orderedRemove(const OID& oid) {
@@ -418,9 +433,20 @@ public:
         return this->persistent_objectstore->orderedGet(oid);
     }
     // @override IObjectStoreAPI::put
-    virtual void put(const Object& object) {
+    virtual bool put(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-        subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+        auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
+        decltype(results)::ReplyMap& replies = results.get();
+        bool bRet = true;
+        for(auto& reply_pair : replies) {
+            if(!reply_pair.second.get()) {
+                bRet = false;
+                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << 
+                "returned false" << std::endl;
+                break;
+            }
+        }
+        return bRet;
     }
     // @override IObjectStoreAPI::remove
     virtual bool remove(const OID& oid) {
@@ -595,36 +621,44 @@ public:
 
 
     template <typename T>
-    void _put(const Object& object) {
+    bool _bio_put(const Object& object) {
+        bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
-            os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
+            derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
+            decltype(results)::ReplyMap& replies = results.get();
+            // should we check reply consistency?
+            bRet = replies.begin()->second.get();
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = myid % replicas.size();
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            os_p2p_handle.template p2p_send<RPC_NAME(put)>(target, object);
+            derecho::rpc::QueryResults<bool> results = os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object);
+            bRet = results.get().get(target);
         }
+        return bRet;
     }
 
-    virtual void put(const Object& object) {
-        dbg_default_debug("put object id={}, mode={}",object.oid,mode);
+    virtual bool bio_put(const Object& object, bool use_replica_api) {
+        dbg_default_debug("bio_put object id={}, mode={}",object.oid,mode);
+        bool bRet = false;
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            this->template _put<VolatileUnloggedObjectStore>(object);
+            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object);
             break;
         case PERSISTENT_LOGGED:
-            this->template _put<PersistentLoggedObjectStore>(object);
+            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object);
             break;
         default:
             dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
         }
+        return bRet;
     }
 
     template <typename T>
-    bool _remove(const OID& oid) {
+    bool _bio_remove(const OID& oid) {
         bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
@@ -644,13 +678,13 @@ public:
         return bRet;
     }
 
-    virtual bool remove(const OID& oid) {
-        dbg_default_debug("remove object id={}, mode={}",oid,mode);
+    virtual bool bio_remove(const OID& oid, bool use_replica_api) {
+        dbg_default_debug("bio_remove object id={}, mode={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return this->template _remove<VolatileUnloggedObjectStore>(oid);
+            return this->template _bio_remove<VolatileUnloggedObjectStore>(oid);
         case PERSISTENT_LOGGED:
-            return this->template _remove<PersistentLoggedObjectStore>(oid);
+            return this->template _bio_remove<PersistentLoggedObjectStore>(oid);
         default:
             dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
@@ -658,7 +692,7 @@ public:
     }
 
     template <typename T>
-    Object _get(const OID& oid) {
+    Object _bio_get(const OID& oid) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica) {
             // replica server can do ordered send
@@ -676,13 +710,13 @@ public:
         }
     }
 
-    virtual Object get(const OID& oid) {
-        dbg_default_debug("get object id={}, mode={}",oid,mode);
+    virtual Object bio_get(const OID& oid, bool use_replica_api) {
+        dbg_default_debug("bio_get object id={}, mode={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return std::move(this->template _get<VolatileUnloggedObjectStore>(oid));
+            return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid));
         case PERSISTENT_LOGGED:
-            return std::move(this->template _get<PersistentLoggedObjectStore>(oid));
+            return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid));
         default:
             dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");

@@ -52,6 +52,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
     //Maps invocation-instance IDs to results sets
     std::map<std::size_t, PendingResults<Ret>> results_map;
+    std::atomic<short> invocation_id_sequencer;
     std::mutex map_lock;
     using lock_t = std::unique_lock<std::mutex>;
 
@@ -100,7 +101,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
      */
     send_return send(const std::function<char*(int)>& out_alloc,
                      const std::decay_t<Args>&... remote_args) {
-        auto invocation_id = mutils::long_rand();
+        // auto invocation_id = mutils::long_rand();
+        std::size_t invocation_id = invocation_id_sequencer ++;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
             auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(remote_args)...};
@@ -115,6 +117,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
         lock_t l{map_lock};
         // default-initialize the maps
+        results_map.erase(invocation_id); // TODO:release it as soon as possible
         PendingResults<Ret>& pending_results = results_map[invocation_id];
 
         return send_return{size, serialized_args, pending_results.get_future(),
@@ -135,8 +138,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const std::function<definitely_char*(int)>&) {
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
-        assert(results_map.count(invocation_id) != 0);
         lock_t l{map_lock};
+        assert(results_map.count(invocation_id) != 0);
         // TODO: garbage collection for the responses.
         if(is_exception) {
             results_map.at(invocation_id).set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
@@ -203,7 +206,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     RemoteInvoker(uint32_t class_id, uint32_t instance_id,
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
-              reply_opcode{class_id, instance_id, Tag, true} {
+              reply_opcode{class_id, instance_id, Tag, true},
+              invocation_id_sequencer(0){
         receivers.emplace(reply_opcode, [this](auto... a) {
             return this->receive_response(a...);
         });

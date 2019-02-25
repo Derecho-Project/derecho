@@ -21,7 +21,7 @@ Java_com_derecho_objectstore_ObjectStoreService_put(JNIEnv* env, jobject obj, jl
                                                                             [&](const objectstore::OID& oid, const objectstore::Object& object) {
                                                                                 std::cout << "watcher: " << oid << "->" << object << std::endl;
                                                                             });
-        oss.put(object);
+        oss.bio_put(object);
     } catch(std::exception& ex) {
         throwJavaException(env, ex.what());
     } catch(...) {
@@ -35,7 +35,7 @@ JNIEXPORT jboolean JNICALL Java_com_derecho_objectstore_ObjectStoreService_remov
                                                                             std::cout << "watcher: " << oid << "->" << object << std::endl;
                                                                         });
     try {
-        return oss.remove(oid);
+        return oss.bio_remove(oid);
     } catch(...) {
         std::cout << "error in remove" << std::endl;
         return false;
@@ -48,7 +48,7 @@ JNIEXPORT jstring JNICALL Java_com_derecho_objectstore_ObjectStoreService_get(JN
                                                                             [&](const objectstore::OID& oid, const objectstore::Object& object) {
                                                                                 std::cout << "watcher: " << oid << "->" << object << std::endl;
                                                                             });
-        objectstore::Object obj = oss.get(oid);
+        objectstore::Object obj = oss.bio_get(oid);
         std::cout << obj;
         std::stringstream ss;
         ss << std::cout.rdbuf();

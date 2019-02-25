@@ -677,9 +677,9 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             // This is safer than copy_suspected, since suspected[] might change during this loop
             last_suspected[q] = gmsSST.suspected[myRank][q];
             whenlog(logger->debug("Marking {} failed", Vc.members[q]););
-	    
-            if(Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
-	      throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+
+            if(!gmsSST.rip[myRank] && Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
+                throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
             whenlog(logger->debug("GMS telling SST to freeze row {}", q););
@@ -689,7 +689,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.failed[q] = true;
             Vc.num_failed++;
 
-            if(Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
+            if(!gmsSST.rip[myRank] && Vc.num_failed != 0 && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
 
@@ -1744,8 +1744,8 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
 
-    if(failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
-      throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+    if(!curr_view->gmsSST->rip[curr_view->my_rank] && failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
+        throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put(
             (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
