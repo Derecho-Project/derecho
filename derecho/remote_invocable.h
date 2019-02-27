@@ -136,6 +136,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             mutils::DeserializationManager* dsm,
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
+        //note: find where this exception is set on the sending side!
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
         lock_t l{map_lock};
@@ -556,11 +557,13 @@ public:
 
     template <FunctionTag Tag, typename... Args>
     std::size_t get_size(Args&&... a) {
-        auto invocation_id = mutils::long_rand();
+      //only used for size calculation
+      long int invocation_id = 0;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
-            size += std::accumulate(t.begin(), t.end(), 0);
+	  //auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            //size += std::accumulate(t.begin(), t.end(), 0);
+	    size += (0 + ... + mutils::bytes_size(a));
         }
         return size;
     }
@@ -606,6 +609,17 @@ public:
         struct send_return {
             QueryResults<Ret> results;
             PendingResults<Ret>& pending;
+	  //LifeTracker
+	  /*
+class LifeTracker {
+std::function<void () > deleter;
+~LifeTraker(){
+deleter();
+}
+};
+
+LifeTracker{[invocation_id, &map](){map.erase(invocation_id);}};
+	   */
         };
         return send_return{std::move(sent_return.results),
                            sent_return.pending};
