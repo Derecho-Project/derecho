@@ -621,10 +621,10 @@ public:
 
 
     template <typename T>
-    bool _bio_put(const Object& object) {
+    bool _bio_put(const Object& object, bool force_client) {
         bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
+        if ( bReplica && !force_client ) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
             derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
@@ -641,15 +641,16 @@ public:
         return bRet;
     }
 
-    virtual bool bio_put(const Object& object, bool use_replica_api) {
-        dbg_default_debug("bio_put object id={}, mode={}",object.oid,mode);
+    // blocking put
+    virtual bool bio_put(const Object& object, bool force_client) {
+        dbg_default_debug("bio_put object id={}, mode={}, force_client={}",object.oid,mode,force_client);
         bool bRet = false;
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object);
+            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object,force_client);
             break;
         case PERSISTENT_LOGGED:
-            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object);
+            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object,force_client);
             break;
         default:
             dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
@@ -658,10 +659,10 @@ public:
     }
 
     template <typename T>
-    bool _bio_remove(const OID& oid) {
+    bool _bio_remove(const OID& oid, bool force_client) {
         bool bRet;
         std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
+        if( bReplica && !force_client ) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
             derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
@@ -678,13 +679,13 @@ public:
         return bRet;
     }
 
-    virtual bool bio_remove(const OID& oid, bool use_replica_api) {
-        dbg_default_debug("bio_remove object id={}, mode={}",oid,mode);
+    virtual bool bio_remove(const OID& oid, bool force_client) {
+        dbg_default_debug("bio_remove object id={}, mode={}, force_client={}",oid,mode,force_client);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return this->template _bio_remove<VolatileUnloggedObjectStore>(oid);
+            return this->template _bio_remove<VolatileUnloggedObjectStore>(oid, force_client);
         case PERSISTENT_LOGGED:
-            return this->template _bio_remove<PersistentLoggedObjectStore>(oid);
+            return this->template _bio_remove<PersistentLoggedObjectStore>(oid, force_client);
         default:
             dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
@@ -692,9 +693,9 @@ public:
     }
 
     template <typename T>
-    Object _bio_get(const OID& oid) {
+    Object _bio_get(const OID& oid, bool force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
+        if( bReplica && !force_client ) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
             derecho::rpc::QueryResults<const Object> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
@@ -710,13 +711,13 @@ public:
         }
     }
 
-    virtual Object bio_get(const OID& oid, bool use_replica_api) {
-        dbg_default_debug("bio_get object id={}, mode={}",oid,mode);
+    virtual Object bio_get(const OID& oid, bool force_client) {
+        dbg_default_debug("bio_get object id={}, mode={}, force_client={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid));
+            return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, force_client));
         case PERSISTENT_LOGGED:
-            return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid));
+            return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, force_client));
         default:
             dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
