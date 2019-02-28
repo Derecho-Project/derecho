@@ -194,7 +194,8 @@ public:
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        // Should we verify the consistency of replies?
+        // here we only check the first reply.
+        // Should we verify the consistency of all replies?
         return replies.begin()->second.get();
     }
 
@@ -470,6 +471,7 @@ public:
         derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
 
         decltype(results)::ReplyMap& replies = results.get();
+        // Here we only wait for the first reply.
         // Should we verify the consistency of replies?
         return replies.begin()->second.get();
     }
@@ -630,7 +632,7 @@ public:
             return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object));
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
+            node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
             return std::move(os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object));
         }
@@ -641,8 +643,15 @@ public:
     bool _bio_put(const Object& object, bool force_client) {
         derecho::rpc::QueryResults<bool> results = this->template _aio_put<T>(object, force_client);
         decltype(results)::ReplyMap& replies = results.get();
-        // TODO: Should we check reply consistency in case (bReplica && !force_client) ?
-        return replies.begin()->second.get();
+
+        for ( auto& reply_pair: replies) {
+           if ( !reply_pair.second.get() ) {
+               dbg_default_warn("{}:{} _bio_put(object={},force_client={}) failed with false from"
+               "node:{}",__FILE__,__LINE__,object,force_client,reply_pair.first);
+               return false;
+           }
+        }
+        return true;
     }
 
     // blocking put
@@ -685,7 +694,7 @@ public:
             return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid));
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
+            node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
             return std::move(os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid));
         }
@@ -694,9 +703,16 @@ public:
     template <typename T>
     bool _bio_remove(const OID& oid, bool force_client) {
         derecho::rpc::QueryResults<bool> results = this->template _aio_remove<T>(oid,force_client);
-        // TODO: Should we check reply consistency in case (bReplica && !force_client) ?
         decltype(results)::ReplyMap& replies = results.get();
-        return replies.begin()->second.get();
+
+        for ( auto& reply_pair: replies) {
+           if ( !reply_pair.second.get() ) {
+               dbg_default_warn("{}:{} _bio_remove(object={},force_client={}) failed with false from"
+               "node:{}",__FILE__,__LINE__,object,force_client,reply_pair.first);
+               return false;
+           }
+        }
+        return true;
     }
 
     // blocking remove
@@ -736,7 +752,7 @@ public:
             return std::move( os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid) );
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
+            node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
             return std::move( os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid) );
         }
