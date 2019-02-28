@@ -47,9 +47,9 @@ public:
 
     // non blocking operations: the operations will return a future.
     // The arguments align to the blocking apis.
-//    virtual derecho::rpc::QueryResults<bool> aio_put(const Object& object, bool false_client = false) = 0;
-//    virtual derecho::rpc::QueryResults<bool> aio_remove(const OID& oid, bool false_client = false) = 0;
-//    virtual derecho::rpc::QueryResults<Object> aio_get(const OID& oid, bool false_client = false) = 0;
+    virtual derecho::rpc::QueryResults<bool> aio_put(const Object& object, bool force_client = false) = 0;
+    virtual derecho::rpc::QueryResults<bool> aio_remove(const OID& oid, bool force_client = false) = 0;
+    virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, bool force_client = false) = 0;
 
     virtual void leave() = 0; // leave gracefully
     virtual const ObjectWatcher& getObjectWatcher() = 0;
