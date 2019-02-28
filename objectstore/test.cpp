@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
     }
 
     bool use_aio = true;
-    if ( !strcmp("aio",argv[1]) ) {
+    if ( strcmp("aio",argv[1]) != 0 ) {
         use_aio = false;
     }
 
