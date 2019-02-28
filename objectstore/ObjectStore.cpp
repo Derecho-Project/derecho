@@ -646,8 +646,8 @@ public:
 
         for ( auto& reply_pair: replies) {
            if ( !reply_pair.second.get() ) {
-               dbg_default_warn("{}:{} _bio_put(object={},force_client={}) failed with false from"
-               "node:{}",__FILE__,__LINE__,object,force_client,reply_pair.first);
+               dbg_default_warn("{}:{} _bio_put(object id={},force_client={}) failed with false from"
+               "node:{}",__FILE__,__LINE__,object.oid,force_client,reply_pair.first);
                return false;
            }
         }
@@ -708,7 +708,7 @@ public:
         for ( auto& reply_pair: replies) {
            if ( !reply_pair.second.get() ) {
                dbg_default_warn("{}:{} _bio_remove(object={},force_client={}) failed with false from"
-               "node:{}",__FILE__,__LINE__,object,force_client,reply_pair.first);
+               "node:{}",__FILE__,__LINE__,oid,force_client,reply_pair.first);
                return false;
            }
         }
