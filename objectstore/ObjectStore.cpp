@@ -194,7 +194,8 @@ public:
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        // Should we verify the consistency of replies?
+        // here we only check the first reply.
+        // Should we verify the consistency of all replies?
         return replies.begin()->second.get();
     }
 
@@ -470,6 +471,7 @@ public:
         derecho::rpc::QueryResults<const Object> results = subgroup_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
 
         decltype(results)::ReplyMap& replies = results.get();
+        // Here we only wait for the first reply.
         // Should we verify the consistency of replies?
         return replies.begin()->second.get();
     }
@@ -555,6 +557,8 @@ private:
     const bool bReplica;
     const node_id_t myid;
     derecho::Group<VolatileUnloggedObjectStore,PersistentLoggedObjectStore> group;
+    // TODO: WHY do I need "write_mutex"? I should be able to update the data 
+    // concurrently from multiple threads. Right?  
     std::mutex write_mutex;
 
 public:
@@ -619,37 +623,47 @@ public:
         return bReplica;
     }
 
-
     template <typename T>
-    bool _bio_put(const Object& object) {
-        bool bRet;
+    derecho::rpc::QueryResults<bool> _aio_put(const Object& object, bool force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
+        if ( bReplica && !force_client ) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
-            derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object);
-            decltype(results)::ReplyMap& replies = results.get();
-            // should we check reply consistency?
-            bRet = replies.begin()->second.get();
+            return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedPut)>(object));
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
+            node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            derecho::rpc::QueryResults<bool> results = os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object);
-            bRet = results.get().get(target);
+            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object));
         }
-        return bRet;
     }
 
-    virtual bool bio_put(const Object& object, bool use_replica_api) {
-        dbg_default_debug("bio_put object id={}, mode={}",object.oid,mode);
+
+    template <typename T>
+    bool _bio_put(const Object& object, bool force_client) {
+        derecho::rpc::QueryResults<bool> results = this->template _aio_put<T>(object, force_client);
+        decltype(results)::ReplyMap& replies = results.get();
+
+        for ( auto& reply_pair: replies) {
+           if ( !reply_pair.second.get() ) {
+               dbg_default_warn("{}:{} _bio_put(object id={},force_client={}) failed with false from"
+               "node:{}",__FILE__,__LINE__,object.oid,force_client,reply_pair.first);
+               return false;
+           }
+        }
+        return true;
+    }
+
+    // blocking put
+    virtual bool bio_put(const Object& object, bool force_client) {
+        dbg_default_debug("bio_put object id={}, mode={}, force_client={}",object.oid,mode,force_client);
         bool bRet = false;
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object);
+            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object,force_client);
             break;
         case PERSISTENT_LOGGED:
-            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object);
+            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object,force_client);
             break;
         default:
             dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
@@ -657,34 +671,72 @@ public:
         return bRet;
     }
 
-    template <typename T>
-    bool _bio_remove(const OID& oid) {
-        bool bRet;
-        std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
-            // replica server can do ordered send
-            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
-            derecho::rpc::QueryResults<bool> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
-            decltype(results)::ReplyMap& replies = results.get();
-            // should we check reply consistency?
-            bRet = replies.begin()->second.get();
-        } else {
-            // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
-            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            derecho::rpc::QueryResults<bool> results = os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid);
-            bRet = results.get().get(target);
-        }
-        return bRet;
-    }
-
-    virtual bool bio_remove(const OID& oid, bool use_replica_api) {
-        dbg_default_debug("bio_remove object id={}, mode={}",oid,mode);
+    // non-blocking put
+    virtual derecho::rpc::QueryResults<bool> aio_put(const Object& object, bool force_client) {
+        dbg_default_debug("aio_put object id={}, mode={}, force_client={}",object.oid,mode,force_client);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return this->template _bio_remove<VolatileUnloggedObjectStore>(oid);
+            return std::move(this->template _aio_put<VolatileUnloggedObjectStore>(object,force_client));
         case PERSISTENT_LOGGED:
-            return this->template _bio_remove<PersistentLoggedObjectStore>(oid);
+            return std::move(this->template _aio_put<PersistentLoggedObjectStore>(object,force_client));
+        default:
+            dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'put' in unsupported mode");
+        }
+    }
+
+    template <typename T>
+    derecho::rpc::QueryResults<bool> _aio_remove(const OID& oid, bool force_client) {
+        std::lock_guard<std::mutex> guard(write_mutex);
+        if( bReplica && !force_client ) {
+            // replica server can do ordered send
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid));
+        } else {
+            // send request to a static mapped replica. Use random mapping for load-balance?
+            node_id_t target = replicas[myid % replicas.size()];
+            derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
+            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid));
+        }
+    }
+
+    template <typename T>
+    bool _bio_remove(const OID& oid, bool force_client) {
+        derecho::rpc::QueryResults<bool> results = this->template _aio_remove<T>(oid,force_client);
+        decltype(results)::ReplyMap& replies = results.get();
+
+        for ( auto& reply_pair: replies) {
+           if ( !reply_pair.second.get() ) {
+               dbg_default_warn("{}:{} _bio_remove(object={},force_client={}) failed with false from"
+               "node:{}",__FILE__,__LINE__,oid,force_client,reply_pair.first);
+               return false;
+           }
+        }
+        return true;
+    }
+
+    // blocking remove
+    virtual bool bio_remove(const OID& oid, bool force_client) {
+        dbg_default_debug("bio_remove object id={}, mode={}, force_client={}",oid,mode,force_client);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return this->template _bio_remove<VolatileUnloggedObjectStore>(oid, force_client);
+        case PERSISTENT_LOGGED:
+            return this->template _bio_remove<PersistentLoggedObjectStore>(oid, force_client);
+        default:
+            dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
+        }
+    }
+
+    // non-blocking remove
+    virtual derecho::rpc::QueryResults<bool> aio_remove(const OID& oid, bool force_client) {
+        dbg_default_debug("aio_remove object id={}, mode={}, force_client={}",oid,mode,force_client);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return this->template _aio_remove<VolatileUnloggedObjectStore>(oid, force_client);
+        case PERSISTENT_LOGGED:
+            return this->template _aio_remove<PersistentLoggedObjectStore>(oid, force_client);
         default:
             dbg_default_error("Cannot execute 'remove' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'remove' in unsupported mode {}.'");
@@ -692,31 +744,48 @@ public:
     }
 
     template <typename T>
-    Object _bio_get(const OID& oid) {
+    derecho::rpc::QueryResults<const Object> _aio_get(const OID& oid, bool force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
-        if(bReplica) {
+        if( bReplica && !force_client ) {
             // replica server can do ordered send
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
-            derecho::rpc::QueryResults<const Object> results = os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid);
-            decltype(results)::ReplyMap& replies = results.get();
-            // should we check reply consistency?
-            return std::move(replies.begin()->second.get());
+            return std::move( os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid) );
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
-            node_id_t target = myid % replicas.size();
+            node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
-            derecho::rpc::QueryResults<const Object> results = os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid);
-            return std::move(results.get().get(target));
+            return std::move( os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid) );
         }
     }
 
-    virtual Object bio_get(const OID& oid, bool use_replica_api) {
-        dbg_default_debug("bio_get object id={}, mode={}",oid,mode);
+    template <typename T>
+    Object _bio_get(const OID& oid, bool force_client) {
+        derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid,force_client);
+        decltype(results)::ReplyMap& replies = results.get();
+        // should we check reply consistency?
+        return std::move(replies.begin()->second.get());
+    }
+
+    virtual Object bio_get(const OID& oid, bool force_client) {
+        dbg_default_debug("bio_get object id={}, mode={}, force_client={}",oid,mode);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid));
+            return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, force_client));
         case PERSISTENT_LOGGED:
-            return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid));
+            return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, force_client));
+        default:
+            dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
+            throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
+        }
+    }
+
+    virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, bool force_client) {
+        dbg_default_debug("aio_get object id={}, mode={}, force_client={}",oid,mode);
+        switch(this->mode) {
+        case VOLATILE_UNLOGGED:
+            return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, force_client));
+        case PERSISTENT_LOGGED:
+            return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, force_client));
         default:
             dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
             throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
