@@ -7,9 +7,12 @@
 #include <unistd.h>
 #include <vector>
 
+#include "derecho/derecho.h"
+
 #include "sst/poll_utils.h"
 #include "sst/sst.h"
 
+using namespace derecho;
 using namespace sst;
 using namespace std;
 
@@ -36,16 +39,23 @@ void print(const MLSST& sst) {
     cout << endl;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     srand(getpid());
 
-    // input number of nodes and the local node id
-    std::cout << "Enter my_id and num_nodes" << std::endl;
-    uint32_t my_id, num_nodes;
-    std::cin >> my_id >> num_nodes;
+    if(argc < 3) {
+        cout << "Usage: " << argv[0] << " <num_nodes> <num_params>" << endl;
+        return -1;
+    }
 
+    // the number of nodes for this test
+    const uint32_t num_nodes = std::stoi(argv[1]);
+    const uint32_t num_params = std::stoi(argv[1]);
+
+    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    
     std::cout << "Input the IP addresses" << std::endl;
-    uint16_t port = 32567;
+    // assume all have the same port
+    uint16_t port = getConfUInt16(CONF_DERECHO_SST_PORT);
     // input the ip addresses
     std::map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(uint i = 0; i < num_nodes; ++i) {
@@ -53,7 +63,6 @@ int main() {
         std::cin >> ip;
         ip_addrs_and_ports[i] = {ip, port};
     }
-    std::cout << "Using the default port value of " << port << std::endl;
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
@@ -67,10 +76,6 @@ int main() {
     for(unsigned int i = 0; i < num_nodes; ++i) {
         members[i] = i;
     }
-
-    uint32_t num_params;
-    std::cout << "Enter the number of parameters: " << std::endl;
-    std::cin >> num_params;
 
     MLSST sst(members, my_id, num_params);
     uint32_t my_rank = sst.get_local_index();
