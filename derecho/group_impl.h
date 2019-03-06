@@ -42,7 +42,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
      ...);
 }
 
-/* Leader constructor */
+/* There is only one constructor */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
