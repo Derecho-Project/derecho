@@ -225,19 +225,17 @@ private:
 
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
-     * @return True if the leader informed this node that it is in total restart mode, false otherwise
      */
-    bool receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
 
     /**
-     * Helper for total restart mode that re-initializes TCP connections (in the
-     * tcp_connections pool) to all of the "current" members of curr_view. This
-     * is needed because Group's update_tcp_connections_callback will only
-     * initialize TCP connections with nodes in the joiners list, but after
-     * total restart even nodes that are not "joining" the new view will need
-     * their TCP connections initialized.
+     * Helper for total restart mode that initializes TCP connections (in the
+     * tcp_connections pool) to all of the members of the restart view. This is
+     * needed because in total restart mode we must complete state transfer
+     * before installing the restart view, which means we won't call Group's
+     * update_tcp_connections_callback (which normally sets up TCP connections).
      */
-    void restart_existing_tcp_connections(node_id_t my_id);
+    void setup_initial_tcp_connections(node_id_t my_id);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]

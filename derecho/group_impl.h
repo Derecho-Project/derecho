@@ -89,16 +89,15 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     while(!initial_view_confirmed) {
         //This might be the shard leaders from the previous view,
         //or the nodes with the longest logs in their shard if we're doing total restart,
-        //or empty if we're the initial leader of a new group
+        //or empty if this is the first View of a new group
         const vector_int64_2d& old_shard_leaders = view_manager.get_old_shard_leaders();
-        if(view_manager.is_in_total_restart()) {
-            view_manager.truncate_logs();
-        }
         //As a side effect, construct_objects filters old_shard_leaders to just the leaders
         //this node needs to receive object state from
-        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
-                                                                                                                               old_shard_leaders);
+        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
+                = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
+                                                        old_shard_leaders);
         if(view_manager.is_in_total_restart()) {
+            view_manager.truncate_logs();
             view_manager.send_logs();
         }
         receive_objects(subgroups_and_leaders_to_receive);
@@ -122,7 +121,7 @@ template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
     // shutdown the persistence manager
     // TODO-discussion:
-    // Will a nodebe able to come back once it leaves? if not, maybe we should
+    // Will a node be able to come back once it leaves? if not, maybe we should
     // shut it down on leave().
     persistence_manager.shutdown(true);
     tcp_sockets->destroy();

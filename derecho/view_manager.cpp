@@ -60,6 +60,7 @@ ViewManager::ViewManager(
                 std::move(curr_view), *restart_state,
                 subgroup_info, my_id);
         await_rejoining_nodes(my_id);
+        setup_initial_tcp_connections(my_id);
     } else {
         in_total_restart = false;
         curr_view = std::make_unique<View>(
@@ -103,7 +104,11 @@ ViewManager::ViewManager(
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    in_total_restart = receive_configuration(my_id, leader_connection);
+    receive_configuration(my_id, leader_connection);
+    //As soon as we have a tentative initial view, set up the TCP connections
+    if(in_total_restart) {
+        setup_initial_tcp_connections(my_id);
+    }
 }
 
 ViewManager::~ViewManager() {
@@ -120,7 +125,7 @@ ViewManager::~ViewManager() {
 }
 
 /* ----------  1. Constructor Components ------------- */
-bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
     JoinResponse leader_response;
     bool leader_redirect;
     do {
@@ -151,8 +156,8 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         }
     } while(leader_redirect);
 
-    bool is_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
-    if(is_total_restart) {
+    in_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
+    if(in_total_restart) {
         curr_view = persistent::loadObject<View>();
         whenlog(logger->debug("In restart mode, sending view {} to leader", curr_view->vid););
         bool success = leader_connection.write(mutils::bytes_size(*curr_view));
@@ -187,7 +192,6 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
 
     receive_view_and_leaders(leader_connection);
     whenlog(logger->debug("Received initial view {} from leader.", curr_view->vid););
-    return is_total_restart;
 }
 
 void ViewManager::receive_view_and_leaders(tcp::socket& leader_connection) {
@@ -251,6 +255,8 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         //Wait for a new initial view and ragged trim to be sent,
         //so that when this method returns we can try state transfer again
         receive_view_and_leaders(leader_connection);
+        //NOTE: At this point we need to update the TCP connections pool for any new/failed nodes,
+        //so we can run state transfer again.
     }
     return view_confirmed;
 }
@@ -287,9 +293,6 @@ void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
 void ViewManager::finish_setup() {
     //At this point curr_view has been committed by the leader
     last_suspected = std::vector<bool>(curr_view->members.size());
-    if(in_total_restart) {
-        restart_existing_tcp_connections(curr_view->members[curr_view->my_rank]);
-    }
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     whenlog(logger->debug("Done setting up initial SST and RDMC"););
@@ -313,7 +316,7 @@ void ViewManager::finish_setup() {
 void ViewManager::send_logs() {
     /* If we're in total restart mode (which is the only time this method is called),
      * prior_view_shard_leaders is equal to restart_state->restart_shard_leaders */
-    node_id_t my_id = curr_view->members[curr_view->my_rank];
+    node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     for(subgroup_id_t subgroup_id = 0; subgroup_id < prior_view_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < prior_view_shard_leaders[subgroup_id].size(); ++shard) {
             if(my_id == prior_view_shard_leaders[subgroup_id][shard]) {
@@ -329,20 +332,19 @@ void ViewManager::send_logs() {
     }
 }
 
-void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
-    /* If this node is marked as a joiner in the restart view, it will establish TCP
-     * connections to everyone in the new view upcall anyway, so do nothing. */
-    if(std::find(curr_view->joined.begin(), curr_view->joined.end(), my_id) != curr_view->joined.end()) {
-        return;
-    }
-    /* If this node is not a joiner, it "should" already have a TCP connection to every
-     * other current member, so establish those TCP connections. */
-    for(int i = 0; i < curr_view->num_members; ++i) {
-        if(curr_view->members[i] != my_id
-                && std::find(curr_view->joined.begin(), curr_view->joined.end(),
-                             curr_view->members[i]) == curr_view->joined.end()) {
-            group_member_sockets->add_node(curr_view->members[i], {std::get<0>(curr_view->member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(curr_view->member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", curr_view->members[i]);)
+void ViewManager::setup_initial_tcp_connections(node_id_t my_id) {
+    //As usual the restart leader is a special case, since it doesn't have curr_view
+    const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    /* Establish TCP connections to each other member of the restart view in ascending order,
+     * just like we would do at the beginning of the initial view, except we can't use the
+     * new-view upcall that would normally do that.
+     * Problem: The new-view upcall will run anyway, and attempt to re-setup TCP connections
+     * to any nodes that are in the joined list of the restart view. */
+    for(int i = 0; i < restart_view.num_members; ++i) {
+        if(restart_view.members[i] != my_id) {
+            group_member_sockets->add_node(restart_view.members[i], {std::get<0>(restart_view.member_ips_and_ports[i]),
+                    std::get<PORT_TYPE::RPC>(restart_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", restart_view.members[i]);)
         }
     }
 }
@@ -360,11 +362,23 @@ void ViewManager::start() {
 void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim) {
     for(const auto& id_to_shard_map : logged_ragged_trim) {
         subgroup_id_t subgroup_id = id_to_shard_map.first;
-        const auto find_my_shard = curr_view->my_subgroups.find(subgroup_id);
-        if(find_my_shard == curr_view->my_subgroups.end()) {
-            continue;
+        uint32_t my_shard_id;
+        //On the restart leader, the proposed view is still in RestartLeaderState
+        //On all the other nodes, it's been received and stored in curr_view
+        if(restart_leader_state_machine) {
+            const auto find_my_shard = restart_leader_state_machine->get_restart_view().my_subgroups.find(subgroup_id);
+            if(find_my_shard == restart_leader_state_machine->get_restart_view().my_subgroups.end()) {
+                continue;
+            }
+            my_shard_id = find_my_shard->second;
+        } else {
+            const auto find_my_shard = curr_view->my_subgroups.find(subgroup_id);
+            if(find_my_shard == curr_view->my_subgroups.end()) {
+                continue;
+            }
+            my_shard_id = find_my_shard->second;
         }
-        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(find_my_shard->second);
+        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
         persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
         whenlog(logger->trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version););
