@@ -25,6 +25,9 @@
 using namespace persistent;
 using derecho::Replicated;
 
+using std::cout;
+using std::endl;
+
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
 
@@ -40,12 +43,12 @@ public:
     void print_log() {
         int64_t num_versions = state.getNumOfVersions();
         int64_t index_num = state.getEarliestIndex();
-        std::cout << "PersistentThing.state log: [";
+        cout << "PersistentThing.state log: [";
         for(int64_t version_count = 0; version_count < num_versions; ++version_count) {
-            std::cout << "(" << index_num << "," << *state.getByIndex(index_num) << ") ";
+            cout << "(" << index_num << "," << *state.getByIndex(index_num) << ") ";
             index_num++;
         }
-        std::cout << "]" << std::endl;
+        cout << "]" << endl;
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(PersistentThing, state);
@@ -55,21 +58,32 @@ public:
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "restart");
     srand(getpid());
+    int num_args = 2;
+    if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
+        cout << "Invalid command line arguments." << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes members_per_shard" << endl;
+        return -1;
+    }
+
+    const uint num_nodes = std::stoi(argv[argc - num_args]);
+    const uint members_per_shard = std::stoi(argv[argc - num_args + 1]);
+    if (num_nodes < members_per_shard) {
+        cout << "Must have at least " << members_per_shard << " members" << endl;
+    }
 
     derecho::Conf::initialize(argc, argv);
 
     derecho::CallbackSet callback_set{
             nullptr,
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-                // std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
+                // cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << endl;
             }};
-    derecho::SubgroupInfo subgroup_info([](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_info([num_nodes, members_per_shard](const std::type_index& subgroup_type,
                                            const std::unique_ptr<derecho::View>& prev_view,
                                            derecho::View& curr_view) {
-        const int num_subgroups = 1;
-        const int num_shards = 2;
-        const int members_per_shard = 3;
-        if(curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
+        const uint num_subgroups = 1;
+        const uint num_shards = num_nodes/members_per_shard;
+        if((uint32_t)curr_view.num_members < (num_subgroups * num_shards * members_per_shard)) {
             throw derecho::subgroup_provisioning_exception();
         }
         derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
@@ -78,6 +92,11 @@ int main(int argc, char** argv) {
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
                 std::vector<node_id_t> subview_members(&curr_view.members[member_rank],
                                                        &curr_view.members[member_rank + members_per_shard]);
+		// cout << "subgroup = " << subgroup_num << ", shard = " << shard_num << ", members = ";
+                // for(auto m : subview_members) {
+                //     cout << m << " ";
+                // }
+		// cout << endl;
                 layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
                 member_rank += members_per_shard;
             }
@@ -89,18 +108,27 @@ int main(int argc, char** argv) {
         return std::make_unique<PersistentThing>(pr);
     };
 
+    struct timespec start_time;
+    // start timer
+    clock_gettime(CLOCK_REALTIME, &start_time);
+    // std::cout << "Starting to join the group" << std::endl;
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
-    // std::cout << "Successfully joined group" << std::endl;
-    // std::cout << "Members are: " << std::endl;
+    // end timer
+    struct timespec end_time;
+    clock_gettime(CLOCK_REALTIME, &end_time);
+    std::cout << "Total time: " << (end_time.tv_sec - start_time.tv_sec) * (long long int)1e3 + ((double)end_time.tv_nsec - start_time.tv_nsec)/1e6 << " milliseconds" << std::endl;
+    // cout << "Successfully joined group" << endl;
+    // cout << "Members are: " << endl;
     // auto members = group.get_members();
     // for(auto m : members) {
-    // std::cout << m << " ";
+    // cout << m << " ";
     // }
-    // std::cout << std::endl;
-    auto my_rank = group.get_my_rank();
-    if(my_rank <= 5) {
+    // cout << endl;
+    uint32_t my_rank = group.get_my_rank();
+    if(my_rank <= (num_nodes/members_per_shard) * members_per_shard - 1) {
+        // cout << "I am part of a subgroup" << endl;
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {
@@ -112,19 +140,19 @@ int main(int argc, char** argv) {
                     // curr_state =
                     reply_pair.second.get();
                 } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                    // std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+                    // cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << endl;
                 }
             }
-            // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
+            // cout << "Current state according to ordered_send: " << curr_state << endl;
 
             //This ensures the state changes with every update from every node
             // int new_value = counter * 10 + node_id;
             int new_value = rand() % 100;
-            // std::cout << "Updating state to " << new_value << std::endl;
+            // cout << "Updating state to " << new_value << endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         }
     }
-    // std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+    // cout << "Reached end of main(), entering infinite loop so program doesn't exit" << endl;
     while(true) {
     }
 }
