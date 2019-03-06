@@ -104,6 +104,9 @@ target_link_libraries(persistent_rejoin_test derecho)
 add_executable(total_restart_test total_restart_test.cpp)
 target_link_libraries(total_restart_test derecho)
 
+add_executable(total_restart_data_transfer total_restart_data_transfer.cpp)
+target_link_libraries(total_restart_data_transfer derecho)
+
 # scaling_subgroup_test
 add_executable(scaling_subgroup_test scaling_subgroup_test.cpp)
 target_link_libraries(scaling_subgroup_test derecho)
@@ -155,3 +158,4 @@ target_link_libraries(rdma_two_sided sst)
 # membership_tests
 add_executable(membership_tests membership_tests.cpp)
 target_link_libraries(membership_tests derecho)
+
