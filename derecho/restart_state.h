@@ -77,8 +77,8 @@ private:
     /** Mutable reference to RestartState, since this class needs to update
      * the restart state stored in ViewManager. */
     RestartState& restart_state;
-    std::map<subgroup_id_t, SubgroupSettings>& restart_subgroup_settings;
-    uint32_t& restart_num_received_size;
+    std::map<subgroup_id_t, SubgroupSettings> restart_subgroup_settings;
+    uint32_t restart_num_received_size;
     const SubgroupInfo& subgroup_info;
 
     std::unique_ptr<View> restart_view;
@@ -101,10 +101,8 @@ private:
     void receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket);
 
 public:
-    static const int RESTART_LEADER_TIMEOUT = 300000;
+    static const int RESTART_LEADER_TIMEOUT = 2000;
     RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
-                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
-                       uint32_t& num_received_size,
                        const SubgroupInfo& subgroup_info,
                        const node_id_t my_id);
     /**
@@ -176,7 +174,7 @@ public:
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
                                                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.

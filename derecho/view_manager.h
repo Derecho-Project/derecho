@@ -185,12 +185,31 @@ private:
      */
     const bool any_persistent_objects;
 
-    /** State related to restarting, such as the current logged ragged trim;
-     * null if this node is not currently doing a total restart. */
+    /** Set to true in the constructor if this node must do a total restart
+     * before completing group setup; false otherwise. */
+    bool in_total_restart;
+
+    /** If this node is the restart leader and currently doing a total restart,
+     * this object contains state related to the restart, including curr_view.
+     * Otherwise this will be a null pointer. */
+    std::unique_ptr<RestartLeaderState> restart_leader_state_machine;
+
+    /** If this node is currently doing a total restart, this object contains
+     * state related to restarting, such as the current logged ragged trim.
+     * Otherwise this will be a null pointer. */
     std::unique_ptr<RestartState> restart_state;
 
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
+
+    /**
+     * A 2-dimensional vector, indexed by (subgroup ID -> shard number),
+     * containing the ID of the node in each shard that was its leader
+     * in the prior view, or -1 if that shard had no state in the prior view.
+     * Only used for state transfer during initial startup and total restart,
+     * may be empty otherwise.
+     */
+    std::vector<std::vector<int64_t>> prior_view_shard_leaders;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
     void commit_join(const View& new_view, tcp::socket& client_socket);
@@ -292,9 +311,9 @@ private:
      * senders in the current epoch
      */
     void leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
-                                           const uint32_t num_received_offset,
-                                           const std::vector<node_id_t>& shard_members,
-                                           uint num_shard_senders);
+                                    const uint32_t num_received_offset,
+                                    const std::vector<node_id_t>& shard_members,
+                                    uint num_shard_senders);
     /**
      * Implements the Ragged Edge Cleanup algorithm for a non-leader node in a
      * subgroup. This simply waits for the leader to write a value to global_min
@@ -310,10 +329,10 @@ private:
      * senders in the current epoch
      */
     void follower_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
-                                             uint shard_leader_rank,
-                                             const uint32_t num_received_offset,
-                                             const std::vector<node_id_t>& shard_members,
-                                             uint num_shard_senders);
+                                      uint shard_leader_rank,
+                                      const uint32_t num_received_offset,
+                                      const std::vector<node_id_t>& shard_members,
+                                      uint num_shard_senders);
 
     /* -- Static helper methods that implement chunks of view-management functionality -- */
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
@@ -350,9 +369,12 @@ private:
                           uint32_t& num_received_size);
     /** Constructor helper for the leader when it is restarting from complete failure;
      * waits for a majority of nodes from the last known view to join. */
-    void await_rejoining_nodes(const node_id_t my_id,
-                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                               uint32_t& num_received_size);
+    void await_rejoining_nodes(const node_id_t my_id);
+
+    /** Constructor helper for non-leader nodes; encapsulates receiving and
+     * deserializing a View, DerechoParams, and state-transfer leaders (old
+     * shard leaders) from the leader. */
+    void receive_view_and_leaders(tcp::socket& leader_connection);
 
     /** Helper function for total restart mode: Uses the RaggedTrim values
      * in logged_ragged_trim to truncate any persistent logs that have a
@@ -445,12 +467,31 @@ private:
      */
     static std::vector<std::vector<int64_t>> old_shard_leaders_by_new_ids(const View& curr_view, const View& next_view);
 
+    /**
+     * A little convenience method that receives a 2-dimensional vector using
+     * our standard network protocol, which first sends the buffer size and then
+     * a serialized buffer.
+     * @param socket The socket to read from
+     * @return A 2-dimensional vector of ValueType
+     * @tparam ValueType The type of values in the vector; this assumes ValueType
+     * can be serialized by mutils
+     */
+    template <typename ValueType>
+    static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
+        std::size_t buffer_size;
+        socket.read(buffer_size);
+        if(buffer_size == 0) {
+            return std::make_unique<std::vector<std::vector<ValueType>>>();
+        }
+        char buffer[buffer_size];
+        socket.read(buffer, buffer_size);
+        return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
+    }
+
 public:
     /**
      * Constructor for a new group where this node is the GMS leader.
      * @param my_ip The IP address of the node executing this code
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
      * @param derecho_params The assorted configuration parameters for this
@@ -464,8 +505,7 @@ public:
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
-    ViewManager(CallbackSet callbacks,
-                const SubgroupInfo& subgroup_info,
+    ViewManager(const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
                 const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
@@ -479,8 +519,6 @@ public:
      * @param my_id The node ID of this node
      * @param leader_connection A Socket connected to the leader on its
      * group-management service port.
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
      * @param subgroup_info The set of functions defining subgroup membership
      * in this group. Must be the same as the SubgroupInfo used to set up the
      * leader.
@@ -494,7 +532,6 @@ public:
      * changes.
      */
     ViewManager(tcp::socket& leader_connection,
-                CallbackSet callbacks,
                 const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
@@ -506,31 +543,69 @@ public:
     ~ViewManager();
 
     /**
-     * Completes first-time setup of the ViewManager, including synchronizing
-     * the initial SST and delivering the first new-view upcalls. This must be
-     * separate from the constructor to resolve the circular dependency of SST
-     * synchronization. This also provides a convenient way to give the
-     * constructor a "return value" to hand back to its caller.
-     * @return A copy of restart_shard_leaders, which was computed in the
-     * constructor if we're in total restart mode, or an empty vector if we're
-     * not in total restart mode. The Group leader constructor will need this information.
+     * Setup method for non-leader nodes: checks whether the initial View received
+     * in the constructor gets committed by the leader, and if not, waits for another
+     * initial View to be sent.
+     * @param leader_connection
+     * @return True if the initial View was committed, false if it was aborted
+     * and a new View has been received.
      */
-    std::vector<std::vector<int64_t>> finish_setup();
+    bool check_view_committed(tcp::socket& leader_connection);
+
+    /**
+     * Setup method for the leader node: sends a commit message to all non-leader
+     * nodes indicating that it is safe to use the initial View.
+     * @return True if the initial View was committed, false if it was aborted
+     */
+    bool leader_commit_initial_view();
+
+    /**
+     * An extra setup step only needed during total restart; truncates the
+     * persistent logs of this node to conform to the ragged trim decided
+     * on by the restart leader.
+     */
+    void truncate_logs();
 
     /**
      * An extra setup method only needed during total restart. Sends Replicated
      * Object data (most importantly, the persistent logs) to all members of a
-     * shard if this node is listed as that shard's leader. This does nothing if
-     * the node is not in total restart mode, but it must be called anyway
-     * because only ViewManager knows if we are doing total restart.
-     * @param restart_shard_leaders The list of shard leaders for total restart
-     * received from the restart leader; these are the nodes with the longest logs.
+     * shard if this node is listed as that shard's leader.
      */
-    void send_logs_if_total_restart(const std::unique_ptr<std::vector<std::vector<int64_t>>>& restart_shard_leaders);
+    void send_logs();
+
+    /**
+     * Sets up RDMA sessions for the multicast groups within this group. This
+     * should only be called once the initial view is committed by the leader.
+     * @param callbacks The set of callback functions for message delivery
+     * events in this group.
+     */
+    void initialize_multicast_groups(CallbackSet callbacks);
+
+    /**
+     * Completes first-time setup of the ViewManager, including synchronizing
+     * the initial SST and delivering the first new-view upcalls. This assumes
+     * the initial view has been committed and initialize_multicast_groups has
+     * finished.
+     */
+    void finish_setup();
 
     /** Starts predicate evaluation in the current view's SST. Call this only
      * when all other setup has been done for the Derecho group. */
     void start();
+
+    /**
+     * @return True if the system is currently doing a total restart,
+     * false otherwise. Group needs to know this information in order to
+     * perform state transfer, but only ViewManager learns it from the
+     * leader.
+     */
+    bool is_in_total_restart() const { return in_total_restart; }
+
+    /**
+     * @return The list of shard leaders in the previous view that this node
+     * received along with curr_view
+     */
+    const std::vector<std::vector<int64_t>>& get_old_shard_leaders() const { return prior_view_shard_leaders; }
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
@@ -561,6 +636,15 @@ public:
      * the Group that contains this ViewManager to set things up.
      */
     SharedLockedReference<View> get_current_view();
+
+    /**
+     * This function is a dirty workaround for the fact that Group might need
+     * read-only access to curr_view during a total restart when curr_view is
+     * owned by restart_leader_state, but it's only available by const reference
+     * and SharedLockedReference<View> wants a mutable reference.
+     * @return
+     */
+    SharedLockedReference<const View> get_current_view_const();
 
     /** Gets a read-only reference to the DerechoParams settings,
      * in case other components need to see them after construction time. */

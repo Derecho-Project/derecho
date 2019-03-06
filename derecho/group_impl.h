@@ -9,11 +9,11 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
-#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "derecho_internal.h"
 #include "group.h"
 #include "make_kind_map.h"
+#include "utils/logger.hpp"
 
 namespace derecho {
 
@@ -65,14 +65,14 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           view_manager([&]() {
               if(is_starting_leader) {
-                  return ViewManager(callbacks, subgroup_info,
+                  return ViewManager(subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
                                      std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                                      tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);
               } else {
-                  return ViewManager(leader_connection.value(), callbacks,
+                  return ViewManager(leader_connection.value(),
                                      subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
                                      std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
@@ -81,28 +81,38 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager,deserialization_context.get()),
+          rpc_manager(view_manager, deserialization_context.get()),
           factories(make_kind_map(factories...)) {
-    set_up_components();
-    vector_int64_2d restart_shard_leaders = view_manager.finish_setup();
-    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive;
-    std::unique_ptr<vector_int64_2d> old_shard_leaders;
-    if(is_starting_leader) {
-        /* If in total restart mode, ViewManager will have computed the members of each shard
-         * with the longest logs, and this node will need to receive state from them even
-         * though it's the leader. Otherwise, this vector will be empty because the leader
-         * normally doesn't need to receive any object state. */
-        subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(
-                view_manager.get_current_view().get(), restart_shard_leaders);
-    } else {
-        // I am a non-leader
-        old_shard_leaders = receive_old_shard_leaders(leader_connection.value());
-        subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(
-                view_manager.get_current_view().get(), *old_shard_leaders);
+    //Since state transfer must complete before an initial view can commit in total restart,
+    //the recieve_objects call must happen in this loop
+    bool initial_view_confirmed = false;
+    while(!initial_view_confirmed) {
+        //This might be the shard leaders from the previous view,
+        //or the nodes with the longest logs in their shard if we're doing total restart,
+        //or empty if we're the initial leader of a new group
+        const vector_int64_2d& old_shard_leaders = view_manager.get_old_shard_leaders();
+        if(view_manager.is_in_total_restart()) {
+            view_manager.truncate_logs();
+        }
+        //As a side effect, construct_objects filters old_shard_leaders to just the leaders
+        //this node needs to receive object state from
+        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
+                                                                                                                               old_shard_leaders);
+        if(view_manager.is_in_total_restart()) {
+            view_manager.send_logs();
+        }
+        receive_objects(subgroups_and_leaders_to_receive);
+        if(is_starting_leader) {
+            initial_view_confirmed = view_manager.leader_commit_initial_view();
+        } else {
+            initial_view_confirmed = view_manager.check_view_committed(leader_connection.value());
+        }
     }
-    //The next two methods will do nothing unless we're in total restart mode
-    view_manager.send_logs_if_total_restart(old_shard_leaders);
-    receive_objects(subgroups_and_leaders_to_receive);
+    //Once the initial view is committed, we can make RDMA connections
+    view_manager.initialize_multicast_groups(callbacks);
+    //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
+    set_up_components();
+    view_manager.finish_setup();
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();

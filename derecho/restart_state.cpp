@@ -1,8 +1,8 @@
 #include <optional>
 
-#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "restart_state.h"
+#include "utils/logger.hpp"
 //This code needs access to ViewManager's static methods
 #include "view_manager.h"
 
@@ -72,15 +72,13 @@ persistent::version_t RestartState::ragged_trim_to_latest_version(const int32_t 
 }
 
 RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
-                                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
-                                       uint32_t& num_received_size,
                                        const SubgroupInfo& subgroup_info,
                                        const node_id_t my_id)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-                  curr_view(std::move(_curr_view)),
+          curr_view(std::move(_curr_view)),
           restart_state(restart_state),
-          restart_subgroup_settings(subgroup_settings_map),
-          restart_num_received_size(num_received_size),
+          restart_subgroup_settings(),
+          restart_num_received_size(0),
           subgroup_info(subgroup_info),
           last_known_view_members(curr_view->members.begin(), curr_view->members.end()),
           longest_log_versions(curr_view->subgroup_shard_views.size()),
@@ -108,10 +106,11 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
     int time_remaining_ms = RESTART_LEADER_TIMEOUT;
     while(time_remaining_ms > 0) {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        using namespace std::chrono;
+        auto start_time = high_resolution_clock::now();
         std::optional<tcp::socket> client_socket = server_socket.try_accept(time_remaining_ms);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::milliseconds time_waited = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        auto end_time = high_resolution_clock::now();
+        milliseconds time_waited = duration_cast<milliseconds>(end_time - start_time);
         time_remaining_ms -= time_waited.count();
         if(client_socket) {
             node_id_t joiner_id = 0;
@@ -133,7 +132,8 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             uint16_t joiner_rdmc_port = 0;
             client_socket->read(joiner_rdmc_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
-            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
+            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port,
+                                                      joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
             waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
             //Compute the intersection of rejoined_node_ids and last_known_view_members
@@ -209,13 +209,15 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
             if(existing_ragged_trim == restart_state.logged_ragged_trim[ragged_trim->subgroup_id].end()) {
                 whenlog(logger->trace("Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})", joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num););
                 //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
-                restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
+                restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
+                                                                                   std::move(ragged_trim));
             } else if(existing_ragged_trim->second->vid <= ragged_trim->vid) {
                 existing_ragged_trim->second = std::move(ragged_trim);
             }
         } else {
             //The client had a newer View, so accept everything it sends
-            restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
+            restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
+                                                                               std::move(ragged_trim));
         }
     }
     //Replace curr_view if the client's view was newer
@@ -246,8 +248,10 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
         waiting_sockets_iter != waiting_join_sockets.end();) {
         std::size_t view_buffer_size = mutils::bytes_size(*restart_view);
         std::size_t params_buffer_size = mutils::bytes_size(derecho_params);
+        std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
         char view_buffer[view_buffer_size];
         char params_buffer[params_buffer_size];
+        char leaders_buffer[leaders_buffer_size];
         bool send_success;
         //Within this try block, any send that returns failure throws the ID of the node that failed
         try {
@@ -291,6 +295,16 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
                         throw waiting_sockets_iter->first;
                     }
                 }
+            }
+            whenlog(logger->debug("Sending longest-log locations to node {}", waiting_sockets_iter->first););
+            send_success = waiting_sockets_iter->second.write(leaders_buffer_size);
+            if(!send_success) {
+                throw waiting_sockets_iter->first;
+            }
+            mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
+            send_success = waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
+            if(!send_success) {
+                throw waiting_sockets_iter->first;
             }
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
             waiting_sockets_iter++;
@@ -381,7 +395,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
                                                          const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                                 whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
