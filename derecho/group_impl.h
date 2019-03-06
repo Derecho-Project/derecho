@@ -112,7 +112,7 @@ template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
     // shutdown the persistence manager
     // TODO-discussion:
-    // Will a nodebe able to come back once it leaves? if not, maybe we should
+    // Will a node be able to come back once it leaves? if not, maybe we should
     // shut it down on leave().
     persistence_manager.shutdown(true);
     tcp_sockets->destroy();
@@ -254,11 +254,13 @@ std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::re
         tcp::socket& leader_socket) {
     std::size_t buffer_size;
     leader_socket.read(buffer_size);
+    ViewManager::metadata_bytes_received += sizeof(buffer_size);
     if(buffer_size == 0) {
         return std::make_unique<vector_int64_2d>();
     }
     char buffer[buffer_size];
     leader_socket.read(buffer, buffer_size);
+    ViewManager::metadata_bytes_received += buffer_size;
     return mutils::from_bytes<std::vector<std::vector<int64_t>>>(nullptr, buffer);
 }
 
@@ -316,6 +318,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
             whenlog(logger->debug("Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second));
             leader_socket.get().write(log_tail_length);
+            ViewManager::metadata_bytes_sent += sizeof(log_tail_length);
         }
         whenlog(logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second));
         std::size_t buffer_size;
@@ -324,6 +327,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         char buffer[buffer_size];
         success = leader_socket.get().read(buffer, buffer_size);
         assert_always(success);
+        ViewManager::log_bytes_received += sizeof(buffer_size) + buffer_size;
         subgroup_object.receive_object(buffer);
     }
     whenlog(logger->debug("Done receiving all Replicated Objects from subgroup leaders"));

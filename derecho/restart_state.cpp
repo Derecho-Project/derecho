@@ -117,6 +117,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             node_id_t joiner_id = 0;
             client_socket->read(joiner_id);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
+            ViewManager::metadata_bytes_sent += sizeof(JoinResponse);
             whenlog(logger->debug("Node {} rejoined", joiner_id););
             rejoined_node_ids.emplace(joiner_id);
 
@@ -132,6 +133,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             client_socket->read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
             client_socket->read(joiner_rdmc_port);
+            ViewManager::metadata_bytes_received += (4 * sizeof(uint16_t));
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
             rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
@@ -162,6 +164,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     client_socket.read(size_of_view);
     char view_buffer[size_of_view];
     client_socket.read(view_buffer, size_of_view);
+    ViewManager::metadata_bytes_received += sizeof(size_of_view) + size_of_view;
     std::unique_ptr<View> client_view = mutils::from_bytes<View>(nullptr, view_buffer);
 
     if(client_view->vid > curr_view->vid) {
@@ -181,11 +184,13 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     //Receive the joining node's RaggedTrims
     std::size_t num_of_ragged_trims;
     client_socket.read(num_of_ragged_trims);
+    ViewManager::metadata_bytes_received += sizeof(num_of_ragged_trims);
     for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
         std::size_t size_of_ragged_trim;
         client_socket.read(size_of_ragged_trim);
         char buffer[size_of_ragged_trim];
         client_socket.read(buffer, size_of_ragged_trim);
+        ViewManager::metadata_bytes_received += sizeof(size_of_ragged_trim) + size_of_ragged_trim;
         std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
         whenlog(logger->trace("Received ragged trim for subgroup {}, shard {} from node {}", ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id););
         /* If the joining node has an obsolete View, we only care about the
@@ -256,26 +261,31 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += sizeof(view_buffer_size);
             mutils::to_bytes(*restart_view, view_buffer);
             send_success = waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += view_buffer_size;
             send_success = waiting_sockets_iter->second.write(params_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += sizeof(params_buffer_size);
             mutils::to_bytes(derecho_params, params_buffer);
             send_success = waiting_sockets_iter->second.write(params_buffer, params_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += params_buffer_size;
             whenlog(logger->debug("Sending ragged-trim information to node {}", waiting_sockets_iter->first););
             std::size_t num_ragged_trims = multimap_size(restart_state.logged_ragged_trim);
             send_success = waiting_sockets_iter->second.write(num_ragged_trims);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += sizeof(num_ragged_trims);
             //Unroll the maps and send each RaggedTrim individually, since it contains its subgroup_id and shard_num
             for(const auto& subgroup_to_shard_map : restart_state.logged_ragged_trim) {
                 for(const auto& shard_trim_pair : subgroup_to_shard_map.second) {
@@ -285,11 +295,13 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
                     if(!send_success) {
                         throw waiting_sockets_iter->first;
                     }
+                    ViewManager::metadata_bytes_sent += sizeof(trim_buffer_size);
                     mutils::to_bytes(*shard_trim_pair.second, trim_buffer);
                     send_success = waiting_sockets_iter->second.write(trim_buffer, trim_buffer_size);
                     if(!send_success) {
                         throw waiting_sockets_iter->first;
                     }
+                    ViewManager::metadata_bytes_sent += trim_buffer_size;
                 }
             }
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
@@ -322,6 +334,7 @@ void RestartLeaderState::send_shard_leaders() {
         waiting_sockets_iter->second.write(leaders_buffer_size);
         mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
         waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
+        ViewManager::metadata_bytes_sent += sizeof(leaders_buffer_size) + leaders_buffer_size;
         //This is the last message a joining node expects to get, so close the socket
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
@@ -333,6 +346,7 @@ void RestartLeaderState::confirm_restart_view(const bool commit) {
         //Eventually it would be nice to check for failures here, but
         //we probably won't detect a failure by writing one byte.
         waiting_join_sockets.at(member_sent_view).write(commit);
+        ViewManager::metadata_bytes_sent += sizeof(commit);
     }
     members_sent_restart_view.clear();
 }

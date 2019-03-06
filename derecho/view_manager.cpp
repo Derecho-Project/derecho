@@ -21,6 +21,12 @@ using lock_guard_t = std::lock_guard<std::mutex>;
 using unique_lock_t = std::unique_lock<std::mutex>;
 using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
+//redundant declarations of static variables
+uint64_t ViewManager::metadata_bytes_sent = 0;
+uint64_t ViewManager::metadata_bytes_received = 0;
+uint64_t ViewManager::log_bytes_sent = 0;
+uint64_t ViewManager::log_bytes_received = 0;
+
 /* Leader/Restart Leader Constructor */
 ViewManager::ViewManager(
         CallbackSet callbacks, const SubgroupInfo& subgroup_info,
@@ -41,6 +47,10 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    metadata_bytes_sent = 0;
+    metadata_bytes_received = 0;
+    log_bytes_sent = 0;
+    log_bytes_received = 0;
     if(any_persistent_objects) {
         //Attempt to load a saved View from disk, to see if one is there
         curr_view = persistent::loadObject<View>();
@@ -108,6 +118,10 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    metadata_bytes_sent = 0;
+    metadata_bytes_received = 0;
+    log_bytes_sent = 0;
+    log_bytes_received = 0;
     //First, receive the view and parameters over the given socket
     uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     bool is_total_restart = receive_configuration(my_id, leader_connection);
@@ -162,6 +176,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             whenlog(logger->error("Error! Leader refused connection because ID {} is already in use!", my_id););
             whenlog(logger->flush();) throw derecho_exception("Leader rejected join, ID already in use");
         }
+        metadata_bytes_received += sizeof(leader_response);
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
             std::size_t ip_addr_size;
             leader_connection.read(ip_addr_size);
@@ -182,14 +197,17 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     if(is_total_restart) {
         curr_view = persistent::loadObject<View>();
         whenlog(logger->debug("In restart mode, sending view {} to leader", curr_view->vid););
-        bool success = leader_connection.write(mutils::bytes_size(*curr_view));
+        std::size_t size_of_view = mutils::bytes_size(*curr_view);
+        bool success = leader_connection.write(size_of_view);
         if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
+        metadata_bytes_sent += sizeof(size_of_view);
         auto leader_socket_write = [&leader_connection](const char* bytes, std::size_t size) {
             if(!leader_connection.write(bytes, size)) {
                 throw derecho_exception("Restart leader crashed before sending a restart View!");
             }
         };
         mutils::post_object(leader_socket_write, *curr_view);
+        metadata_bytes_sent += size_of_view;
         //Restore this non-serializeable field to curr_view before using it
         curr_view->subgroup_type_order = subgroup_type_order;
         restart_state = std::make_unique<RestartState>();
@@ -200,17 +218,22 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
          * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
         success = leader_connection.write(restart_state->logged_ragged_trim.size());
         if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
+        metadata_bytes_sent += sizeof(ragged_trim_map_t::size_type);
         for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
             const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second;  //The inner map has one entry
-            success = leader_connection.write(mutils::bytes_size(*ragged_trim));
+            std::size_t size_of_ragged_trim = mutils::bytes_size(*ragged_trim);
+            success = leader_connection.write(size_of_ragged_trim);
             if(!success) throw derecho_exception("Restart leader crashed before sending a restart View!");
+            metadata_bytes_sent += sizeof(size_of_ragged_trim);
             mutils::post_object(leader_socket_write, *ragged_trim);
+            metadata_bytes_sent += size_of_ragged_trim;
         }
     }
     leader_connection.write(getConfUInt16(CONF_DERECHO_GMS_PORT));
     leader_connection.write(getConfUInt16(CONF_DERECHO_RPC_PORT));
     leader_connection.write(getConfUInt16(CONF_DERECHO_SST_PORT));
     leader_connection.write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
+    metadata_bytes_sent += 4 * sizeof(uint16_t);
 
     bool view_confirmed = false;
     while(!view_confirmed) {
@@ -220,20 +243,24 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
+        metadata_bytes_received += sizeof(size_of_view);
         char buffer[size_of_view];
         success = leader_connection.read(buffer, size_of_view);
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
+        metadata_bytes_received += size_of_view;
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         //Next, the leader sends DerechoParams
         std::size_t size_of_derecho_params;
         success = leader_connection.read(size_of_derecho_params);
+        metadata_bytes_received += sizeof(size_of_derecho_params);
         char buffer2[size_of_derecho_params];
         success = leader_connection.read(buffer2, size_of_derecho_params);
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
+        metadata_bytes_received += size_of_derecho_params;
         derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
         if(is_total_restart) {
             //In total restart mode, the leader will also send the RaggedTrims it has collected
@@ -241,11 +268,14 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
             restart_state->logged_ragged_trim.clear();
             std::size_t num_of_ragged_trims;
             leader_connection.read(num_of_ragged_trims);
+            metadata_bytes_received += sizeof(num_of_ragged_trims);
             for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
                 std::size_t size_of_ragged_trim;
                 leader_connection.read(size_of_ragged_trim);
+                metadata_bytes_received += sizeof(size_of_ragged_trim);
                 char buffer[size_of_ragged_trim];
                 leader_connection.read(buffer, size_of_ragged_trim);
+                metadata_bytes_received += size_of_ragged_trim;
                 std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
                 //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
                 restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(
@@ -258,6 +288,7 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
+        metadata_bytes_received += sizeof(view_confirmed);
         whenlog(logger->debug("Received view {} from leader. View_confirmed = {}", curr_view->vid, view_confirmed););
     }
     //This must be set up locally, since it's not serializable
@@ -354,6 +385,8 @@ void ViewManager::start() {
     }
     whenlog(logger->debug("Starting predicate evaluation"););
     curr_view->gmsSST->start_predicate_evaluation();
+    std::cout << "Metadata sent\tMetadata received\tLog sent\tLog received" << std::endl;
+    std::cout << metadata_bytes_sent << '\t' << metadata_bytes_received << '\t' << log_bytes_sent << '\t' << log_bytes_received << std::endl;
 }
 
 void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim) {
@@ -389,6 +422,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 continue;
             }
             client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
+            metadata_bytes_sent += sizeof(JoinResponse);
             uint16_t joiner_gms_port = 0;
             client_socket.read(joiner_gms_port);
             uint16_t joiner_rpc_port = 0;
@@ -397,6 +431,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
             client_socket.read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
             client_socket.read(joiner_rdmc_port);
+            metadata_bytes_received += 4 * sizeof(uint16_t);
             const ip_addr_t& joiner_ip = client_socket.get_remote_ip();
             ip_addr_t my_ip = client_socket.get_self_ip();
             //Construct a new view by appending this joiner to the previous view
@@ -427,20 +462,24 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
+                metadata_bytes_sent += sizeof(view_buffer_size);
                 mutils::to_bytes(*curr_view, view_buffer);
                 send_success = waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
+                metadata_bytes_sent += view_buffer_size;
                 send_success = waiting_sockets_iter->second.write(params_buffer_size);
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
+                metadata_bytes_sent += sizeof(params_buffer_size);
                 mutils::to_bytes(derecho_params, params_buffer);
                 send_success = waiting_sockets_iter->second.write(params_buffer, params_buffer_size);
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
+                metadata_bytes_sent += params_buffer_size;
                 members_sent_view.emplace(waiting_sockets_iter->first);
                 waiting_sockets_iter++;
             } catch(node_id_t failed_joiner_id) {
@@ -473,6 +512,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
         for(const node_id_t& member_sent_view : members_sent_view) {
             whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, !joiner_failed););
             waiting_join_sockets.at(member_sent_view).write(!joiner_failed);
+            metadata_bytes_sent += sizeof(joiner_failed);
         }
         members_sent_view.clear();
     } while(joiner_failed);
@@ -482,6 +522,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
         waiting_sockets_iter->second.write(std::size_t{0});
+        metadata_bytes_sent += sizeof(std::size_t);
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
 }
@@ -1320,6 +1361,7 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
         //First, read the log tail length sent by the joining node
         int64_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
+        metadata_bytes_received += sizeof(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         whenlog(logger->debug("Got log tail length {}", persistent_log_length););
     }

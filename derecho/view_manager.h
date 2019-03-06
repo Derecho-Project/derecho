@@ -585,6 +585,14 @@ public:
         initialize_subgroup_objects = std::move(upcall);
     }
 
+    /*
+     * Experiment variables
+     */
+    static uint64_t metadata_bytes_received;
+    static uint64_t metadata_bytes_sent;
+    static uint64_t log_bytes_sent;
+    static uint64_t log_bytes_received;
+
     void debug_print_status() const;
 };
 

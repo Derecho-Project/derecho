@@ -363,8 +363,11 @@ public:
      */
     void send_object(tcp::socket& receiver_socket) const {
         auto bind_socket_write = [&receiver_socket](const char* bytes, std::size_t size) { receiver_socket.write(bytes, size); };
-        mutils::post_object(bind_socket_write, object_size());
+        std::size_t size_of_object = object_size();
+        mutils::post_object(bind_socket_write, size_of_object);
+        ViewManager::log_bytes_sent += sizeof(std::size_t);
         send_object_raw(receiver_socket);
+        ViewManager::log_bytes_sent += size_of_object;
     }
 
     /**
