@@ -291,7 +291,7 @@ public:
         std::thread detector(&SST::detect, this);
         background_threads.push_back(std::move(detector));
 
-        std::cout << "Initialized SST and Started Threads" << std::endl;
+        // std::cout << "Initialized SST and Started Threads" << std::endl;
     }
 
     ~SST();

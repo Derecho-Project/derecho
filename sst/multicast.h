@@ -63,7 +63,7 @@ class multicast_group {
             }
         }
         sst->sync_with_members(row_indices);
-        std::cout << "Initialization complete" << std::endl;
+        // std::cout << "Initialization complete" << std::endl;
     }
 
 public:
