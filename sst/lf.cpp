@@ -566,7 +566,7 @@ namespace sst{
   void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
     dbg_default_trace("Polling thread starting.");
-    std::cout<<"["<<std::this_thread::get_id()<<"] polling thread starts."<<std::endl;
+    // std::cout<<"["<<std::this_thread::get_id()<<"] polling thread starts."<<std::endl;
     while(!shutdown) {
         auto ce = lf_poll_completion();
         if (shutdown) {

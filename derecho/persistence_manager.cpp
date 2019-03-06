@@ -52,7 +52,7 @@ void PersistenceManager::start() {
     // if(replicated_objects == nullptr) return;
 
     this->persist_thread = std::thread{[this]() {
-        std::cout << "The persist thread started" << std::endl;
+        // std::cout << "The persist thread started" << std::endl;
         do {
             // wait for semaphore
             sem_wait(&persistence_request_sem);
