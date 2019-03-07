@@ -13,9 +13,9 @@ int main(int argc, char** argv) {
     }
 
     bool use_aio = false;
-    if(strcmp("aio", argv[argc - NUM_APP_ARGS]) != 0) {
+    if(strcmp("aio", argv[argc - NUM_APP_ARGS]) == 0) {
         use_aio = true;
-    } else if ( strcmp("bio", argv[1]) != 0 ) {
+    } else if ( strcmp("bio", argv[argc - NUM_APP_ARGS]) != 0 ) {
         std::cerr << "unrecognized argument:" << argv[argc - NUM_APP_ARGS] << ". Using bio (blocking io) instead." <<
         std::endl;
     }
