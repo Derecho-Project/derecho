@@ -41,8 +41,9 @@ std::string make_random_string(uint length) {
 
 int main(int argc, char** argv) {
     //Get custom arguments from the end of the arguments list
-    const uint num_shards = std::stoi(argv[argc - 3]);
-    const uint nodes_per_shard = std::stoi(argv[argc - 2]);
+    const uint num_shards = std::stoi(argv[argc - 4]);
+    const uint nodes_per_shard = std::stoi(argv[argc - 3]);
+    const uint updates_behind = std::stoi(argv[argc - 2]);
     const uint update_size = std::stoi(argv[argc - 1]);
     unsigned int pid = getpid();
     srand(pid);
@@ -88,28 +89,45 @@ int main(int argc, char** argv) {
                                      std::vector<derecho::view_upcall_t>{},
                                      [](PersistentRegistry* pr){ return std::make_unique<TestObject>(pr); });
 
-    int32_t my_rank = group.get_my_rank();
+    std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
+    while(group.get_members().size() < num_shards * nodes_per_shard) {
 
+    }
+
+    std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
+            group.get_my_shard<TestObject>(0));
+    uint my_shard_rank;
+    for(my_shard_rank = 0; my_shard_rank < my_shard_members.size(); ++my_shard_rank) {
+        if(my_shard_members[my_shard_rank] == derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID))
+            break;
+    }
     Replicated<TestObject>& obj_handle = group.get_subgroup<TestObject>();
-    int num_updates = 100;
-    int tail_updates = 10;
-    for(int counter = 0; counter < num_updates - tail_updates; ++counter) {
+    uint num_updates = 10000;
+    for(uint counter = 0; counter < num_updates - updates_behind; ++counter) {
         std::string new_value = make_random_string(update_size);
         derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(new_value);
-    }
-    //The second node in each shard will exit early
-    if(my_rank / num_shards == 1) {
-        std::cout << "All updates sent" << std::endl;
-        return 0;
-    }
-    else {
-        for(int counter = 0; counter < tail_updates; ++counter) {
-            std::string new_value = make_random_string(update_size);
-            derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(new_value);
+        //Wait for the last message to be sent
+        if(counter == num_updates - updates_behind) {
+            result.get();
         }
     }
-
-    std::cout << "All updates sent" << std::endl;
+    std::cout << (num_updates - updates_behind) << " updates sent" << std::endl;
+    //The second node in each shard will exit early
+    if(my_shard_rank == 1) {
+        std::cout << "All updates sent, exiting early" << std::endl;
+        exit(0);
+    }
+    else {
+        for(uint counter = 0; counter < updates_behind; ++counter) {
+            std::string new_value = make_random_string(update_size);
+            derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(new_value);
+            //Wait for the last message to be sent
+            if(counter == updates_behind) {
+                result.get();
+            }
+        }
+    }
+    std::cout << "All updates sent, spinning" << std::endl;
     while(true) {
     }
     return 0;
