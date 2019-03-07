@@ -51,9 +51,12 @@ enum NextOnFailure{
     REPORT_ON_FAILURE = 0,
     CRASH_ON_FAILURE = 1
 };
-#define FAIL_IF_NONZERO(x,desc,next) \
+#define FAIL_IF_NONZERO_RETRY_EAGAIN(x,desc,next) \
     do { \
-        int64_t _int64_r_ = (int64_t)(x); \
+        int64_t _int64_r_; \
+        do { \
+            _int64_r_ = (int64_t)(x); \
+        } while ( _int64_r_ == -FI_EAGAIN ); \
         if (_int64_r_ != 0) { \
             dbg_default_error("{}:{},ret={},{}",__FILE__,__LINE__,_int64_r_,desc); \
             fprintf(stderr,"%s:%d,ret=%ld,%s\n",__FILE__,__LINE__,_int64_r_,desc); \
@@ -207,7 +210,7 @@ memory_region::memory_region(char *buf, size_t s) : buffer(buf), size(s) {
  
     /** Register the memory, use it to construct a smart pointer */  
     fid_mr* raw_mr;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_mr_reg(g_ctxt.domain, (void *)buffer, size, mr_access, 
                   0, 0, 0, &raw_mr, nullptr),
         "Failed to register memory", CRASH_ON_FAILURE
@@ -227,7 +230,7 @@ uint64_t memory_region::get_key() const { return mr->key; }
 completion_queue::completion_queue() {
     g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
     fid_cq* raw_cq;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &raw_cq, NULL),
         "failed to initialize tx completion queue", CRASH_ON_FAILURE
     );
@@ -250,7 +253,7 @@ int endpoint::init(struct fi_info *fi) {
     int ret;
     /** Open an endpoint */
     fid_ep* raw_ep;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         ret = fi_endpoint(g_ctxt.domain, fi, &raw_ep, NULL), 
         "Failed to open endpoint", REPORT_ON_FAILURE
     );
@@ -267,7 +270,7 @@ int endpoint::init(struct fi_info *fi) {
 
     /** Create an event queue */
     fid_eq* raw_eq;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         ret = fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &raw_eq, NULL),
         "Failed to open event queue", REPORT_ON_FAILURE
     );
@@ -278,18 +281,18 @@ int endpoint::init(struct fi_info *fi) {
     );
     
     /** Bind endpoint to event queue and completion queue */
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         ret = fi_ep_bind(raw_ep, &(raw_eq)->fid, 0), 
         "Failed to bind endpoint and event queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
     const uint64_t ep_flags = FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         ret = fi_ep_bind(raw_ep, &(g_ctxt.cq)->fid, ep_flags), 
         "Failed to bind endpoint and tx completion queue", REPORT_ON_FAILURE
     );
     if(ret) return ret;
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         ret = fi_enable(raw_ep), 
         "Failed to enable endpoint", REPORT_ON_FAILURE
     );
@@ -354,7 +357,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
                (void*)remote_cm_data.pep_addr,
                (size_t)remote_cm_data.pep_addr_len);
         client_hints->dest_addrlen = remote_cm_data.pep_addr_len;
-        FAIL_IF_NONZERO(
+        FAIL_IF_NONZERO_RETRY_EAGAIN(
             fi_getinfo(LF_VERSION, NULL, NULL, 0, client_hints, &client_info),
             "fi_getinfo() failed.", CRASH_ON_FAILURE
         );
@@ -365,7 +368,7 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             fi_freeinfo(client_info);
             CRASH_WITH_MESSAGE("failed to initialize client endpoint.\n");
         }
-        FAIL_IF_NONZERO(
+        FAIL_IF_NONZERO_RETRY_EAGAIN(
             fi_connect(ep.get(), remote_cm_data.pep_addr, NULL, 0),
             "fi_connect() failed", CRASH_ON_FAILURE
         );
@@ -406,7 +409,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT);
     msg.data       = immediate;
  
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_sendmsg(ep.get(), &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
         "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
@@ -427,7 +430,7 @@ bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size,
     msg.addr      = 0;
     msg.context   = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT); 
  
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
         "fi_recvmsg() failed", REPORT_ON_FAILURE
     );
@@ -442,7 +445,7 @@ bool endpoint::post_empty_send(uint64_t wr_id, uint32_t immediate,
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT); 
     msg.data   = immediate;
  
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_sendmsg(ep.get(), &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
         "fi_sendmsg() failed", REPORT_ON_FAILURE
     );
@@ -455,7 +458,7 @@ bool endpoint::post_empty_recv(uint64_t wr_id, const message_type& type) {
     memset(&msg, 0, sizeof(msg));
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT);
  
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_recvmsg(ep.get(), &msg, FI_COMPLETION),
         "fi_recvmsg() failed", REPORT_ON_FAILURE
     );
@@ -494,7 +497,7 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     msg.context       = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_WRITE) << OP_BITS_SHIFT); 
     // msg.data          = RDMA_OP_WRITE;
 
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
         fi_writemsg(ep.get(), &msg, FI_COMPLETION),
         "fi_writemsg() failed", REPORT_ON_FAILURE
     );
@@ -668,40 +671,40 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
 
   dbg_default_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
   /** Initialize the fabric, domain and completion queue */
-  FAIL_IF_NONZERO(
+  FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),
       "fi_getinfo() failed", CRASH_ON_FAILURE);
 
-  FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),
                   "fi_fabric() failed", CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),
                   "fi_domain() failed", CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(
+  FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),
       "failed to initialize tx completion queue", CRASH_ON_FAILURE);
   FAIL_IF_ZERO(g_ctxt.cq, "Pointer to completion queue is null",
                CRASH_ON_FAILURE);
 
   /** Initialize the event queue, initialize and configure pep  */
-  FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.peq, NULL),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.peq, NULL),
                   "failed to open the event queue for passive endpoint",
                   CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(fi_passive_ep(g_ctxt.fabric, g_ctxt.fi, &g_ctxt.pep, NULL),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_passive_ep(g_ctxt.fabric, g_ctxt.fi, &g_ctxt.pep, NULL),
                   "failed to open a local passive endpoint", CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(fi_pep_bind(g_ctxt.pep, &g_ctxt.peq->fid, 0),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_pep_bind(g_ctxt.pep, &g_ctxt.peq->fid, 0),
                   "failed to bind event queue to passive endpoint",
                   CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(fi_listen(g_ctxt.pep),
+  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_listen(g_ctxt.pep),
                   "failed to prepare passive endpoint for incoming connections",
                   CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO(
+  FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),
       "failed to get the local PEP address", CRASH_ON_FAILURE);
-  FAIL_IF_NONZERO((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),
+  FAIL_IF_NONZERO_RETRY_EAGAIN((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),
                   "local name is too big to fit in local buffer",
                   CRASH_ON_FAILURE);
   //  event queue moved to endpoint.
-  //  FAIL_IF_NONZERO(
+  //  FAIL_IF_NONZERO_RETRY_EAGAIN(
   //      fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
   //      "failed to open the event queue for rdma transmission.",
   //      CRASH_ON_FAILURE

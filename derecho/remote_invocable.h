@@ -21,6 +21,9 @@ namespace derecho {
 
 namespace rpc {
 
+/** defined in rpc_manager.h */
+bool in_rpc_handler();
+
 //Technically, RemoteInvocable "specializes" this template for the case where
 //the second parameter is a std::function<Ret(Args...)>. However, there is no
 //implementation for any other specialization, so this template is meaningless.
@@ -599,7 +602,20 @@ public:
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
-        populate_header(buf, payload_size, invoker.invoke_opcode, nid);
+        uint32_t flags = 0;
+        /*
+         set the cascading flag if necessary.
+         This is not important because, unlike p2p_send, ordered_send/query
+         does not distinguish cascading and non cascading sends. However,
+         to keep the format consistency, we keep the flags field in the RPC
+         message header reserved for future use.
+
+        if (in_rpc_handler()) {
+            RPC_HEADER_FLAG_SET(flags,CASCADE);
+            dbg_default_info("send cascading message.");
+        }
+        */
+        populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*
@@ -728,7 +744,12 @@ public:
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
-        populate_header(buf, payload_size, invoker.invoke_opcode, nid);
+        uint32_t flags = 0;
+        if (in_rpc_handler()) {
+            RPC_HEADER_FLAG_SET(flags,CASCADE);
+            dbg_default_info("sending cascading RPC.");
+        }
+        populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*
