@@ -117,24 +117,15 @@ int main(int argc, char** argv) {
         return std::make_unique<PersistentThing>(pr);
     };
 
-    struct timespec start_time;
-    // start timer
-    clock_gettime(CLOCK_REALTIME, &start_time);
+    std::ofstream fout;
+    fout.open("metadata_data", std::ofstream::app);
+    fout << num_nodes << " " << members_per_shard << " ";
+    fout.close();
+
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
-    // end timer
-    struct timespec end_time;
-    clock_gettime(CLOCK_REALTIME, &end_time);
-    double time_in_ms = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e3 + ((double)end_time.tv_nsec - start_time.tv_nsec) / 1e6;
     uint32_t my_rank = group.get_my_rank();
-    if (my_rank == 0) {
-        std::ofstream fout;
-        fout.open("total_restart_data", std::ofstream::app);
-        fout << num_nodes << " " << members_per_shard << " " << time_in_ms << std::endl;
-	fout.close();
-    }
-
     if(my_rank < (num_nodes / members_per_shard) * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         while (true) {
