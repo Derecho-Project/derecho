@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
     int32_t my_rank = group.get_my_rank();
 
     Replicated<TestObject>& obj_handle = group.get_subgroup<TestObject>();
-    int num_updates = 10000;
+    int num_updates = 100;
     int tail_updates = 10;
     for(int counter = 0; counter < num_updates - tail_updates; ++counter) {
         std::string new_value = make_random_string(update_size);

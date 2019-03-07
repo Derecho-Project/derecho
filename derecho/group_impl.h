@@ -318,7 +318,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
             whenlog(logger->debug("Sending log tail length of {} for subgroup {} to node {}.", log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second));
             leader_socket.get().write(log_tail_length);
-            ViewManager::metadata_bytes_sent += sizeof(log_tail_length);
+//            ViewManager::metadata_bytes_sent += sizeof(log_tail_length);
         }
         whenlog(logger->debug("Receiving Replicated Object state for subgroup {} from node {}", subgroup_and_leader.first, subgroup_and_leader.second));
         std::size_t buffer_size;

@@ -1363,7 +1363,7 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
         //First, read the log tail length sent by the joining node
         int64_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
-        metadata_bytes_received += sizeof(persistent_log_length);
+//        metadata_bytes_received += sizeof(persistent_log_length);
         PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         whenlog(logger->debug("Got log tail length {}", persistent_log_length););
     }
