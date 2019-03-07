@@ -449,10 +449,20 @@ public:
  * Utility functions for manipulating the headers of RPC messages
  */
 namespace remote_invocation_utilities {
+#define RPC_HEADER_FLAG_TST(f,name) \
+    ((f) & (((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
+#define RPC_HEADER_FLAG_SET(f,name) \
+    ((f) |= (((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
+#define RPC_HEADER_FLAG_CLR(f,name) \
+    ((f) &= ~(((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
+
+// add new rpc header flags here.
+#define _RPC_HEADER_FLAG_CASCADE    (0)
+#define _RPC_HEADER_FLAG_RESERVED   (1)
 
 inline std::size_t header_space() {
-    return sizeof(std::size_t) + sizeof(Opcode) + sizeof(node_id_t);
-    //          size                      operation           from
+    return sizeof(std::size_t) + sizeof(Opcode) + sizeof(node_id_t) + sizeof(uint32_t);
+    //            size                  operation        from                flags
 }
 
 inline char* extra_alloc(int i) {
@@ -462,7 +472,8 @@ inline char* extra_alloc(int i) {
 
 inline void populate_header(char* reply_buf,
                             const std::size_t& payload_size,
-                            const Opcode& op, const node_id_t& from) {
+                            const Opcode& op, const node_id_t& from,
+                            const uint32_t& flags) {
     std::size_t offset = 0;
     static_assert(sizeof(op) == sizeof(Opcode), "Opcode& is not the same size as Opcode!");
     ((std::size_t*)(reply_buf + offset))[0] = payload_size;  // size
@@ -470,19 +481,23 @@ inline void populate_header(char* reply_buf,
     ((Opcode*)(reply_buf + offset))[0] = op;  // what
     offset += sizeof(op);
     ((node_id_t*)(reply_buf + offset))[0] = from;  // from
+    offset += sizeof(from);
+    ((uint32_t*)(reply_buf + offset))[0] = flags; // flags
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
 inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
                             char const* const reply_buf,
                             std::size_t& payload_size, Opcode& op,
-                            node_id_t& from) {
+                            node_id_t& from, uint32_t& flags) {
     std::size_t offset = 0;
     payload_size = ((std::size_t const* const)(reply_buf + offset))[0];
     offset += sizeof(payload_size);
     op = ((Opcode const* const)(reply_buf + offset))[0];
     offset += sizeof(op);
     from = ((node_id_t const* const)(reply_buf + offset))[0];
+    offset += sizeof(from);
+    flags = ((uint32_t*)(reply_buf + offset))[0];
 }
 }  // namespace remote_invocation_utilities
 
