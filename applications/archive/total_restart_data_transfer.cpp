@@ -22,7 +22,8 @@ public:
     TestObject(PersistentRegistry* registry) : state([](){return std::make_unique<std::string>();},
                                                      nullptr,
                                                      registry) {}
-    void update(const std::string& new_state) {
+    void update(const int update_num, const int sender, const std::string& new_state) {
+        std::cout << "Received update " << update_num << " from " << sender << std::endl;
         *state = new_state;
     }
     DEFAULT_SERIALIZATION_SUPPORT(TestObject, state);
@@ -41,10 +42,16 @@ std::string make_random_string(uint length) {
 
 int main(int argc, char** argv) {
     //Get custom arguments from the end of the arguments list
-    const uint num_shards = std::stoi(argv[argc - 4]);
-    const uint nodes_per_shard = std::stoi(argv[argc - 3]);
-    const uint updates_behind = std::stoi(argv[argc - 2]);
-    const uint update_size = std::stoi(argv[argc - 1]);
+//    const uint num_shards = std::stoi(argv[argc - 4]);
+//    const uint nodes_per_shard = std::stoi(argv[argc - 3]);
+//    const uint updates_behind = std::stoi(argv[argc - 2]);
+//    const uint update_size = std::stoi(argv[argc - 1]);
+    const uint num_shards = 3;
+    const uint nodes_per_shard = 3;
+    const uint updates_behind = std::stoi(argv[argc - 3]);
+    const uint update_size = std::stoi(argv[argc - 2]);
+    //Phase 0 is the normal run with updates, phase 1 is restart only
+    const uint phase = std::stoi(argv[argc - 1]);
     unsigned int pid = getpid();
     srand(pid);
 
@@ -89,42 +96,42 @@ int main(int argc, char** argv) {
                                      std::vector<derecho::view_upcall_t>{},
                                      [](PersistentRegistry* pr){ return std::make_unique<TestObject>(pr); });
 
+    if(phase == 1) {
+        std::cout << "Done with total restart, exiting" << std::endl;
+        return 0;
+    }
+
     std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
     while(group.get_members().size() < num_shards * nodes_per_shard) {
-
     }
 
     std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
             group.get_my_shard<TestObject>(0));
     uint my_shard_rank;
+    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     for(my_shard_rank = 0; my_shard_rank < my_shard_members.size(); ++my_shard_rank) {
-        if(my_shard_members[my_shard_rank] == derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID))
+        if(my_shard_members[my_shard_rank] == my_id)
             break;
     }
     Replicated<TestObject>& obj_handle = group.get_subgroup<TestObject>();
     uint num_updates = 10000;
     for(uint counter = 0; counter < num_updates - updates_behind; ++counter) {
         std::string new_value = make_random_string(update_size);
-        derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(new_value);
-        //Wait for the last message to be sent
-        if(counter == num_updates - updates_behind) {
-            result.get();
-        }
+        derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
     }
+    group.barrier_sync();
     std::cout << (num_updates - updates_behind) << " updates sent" << std::endl;
+    std::cout << "Going to sleep now" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     //The second node in each shard will exit early
     if(my_shard_rank == 1) {
         std::cout << "All updates sent, exiting early" << std::endl;
         exit(0);
     }
     else {
-        for(uint counter = 0; counter < updates_behind; ++counter) {
+        for(uint counter = num_updates - updates_behind; counter < num_updates; ++counter) {
             std::string new_value = make_random_string(update_size);
-            derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(new_value);
-            //Wait for the last message to be sent
-            if(counter == updates_behind) {
-                result.get();
-            }
+            derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
         }
     }
     std::cout << "All updates sent, spinning" << std::endl;
