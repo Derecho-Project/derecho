@@ -13,6 +13,8 @@ namespace derecho {
 
 namespace rpc {
 
+thread_local bool _in_rpc_handler = false;
+
 RPCManager::~RPCManager() {
     thread_shutdown = true;
     if(rpc_thread.joinable()) {
@@ -48,7 +50,7 @@ std::exception_ptr RPCManager::receive_message(
         reply_buf -= reply_header_size;
         const auto id = reply_return.opcode;
         const auto size = reply_return.size;
-        populate_header(reply_buf, size, id, nid);
+        populate_header(reply_buf, size, id, nid, 0);
     }
     return reply_return.possible_exception;
 }
@@ -59,7 +61,8 @@ std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
     std::size_t payload_size = size;
     Opcode indx;
     node_id_t received_from;
-    retrieve_header(&rdv, buf, payload_size, indx, received_from);
+    uint32_t flags;
+    retrieve_header(&rdv, buf, payload_size, indx, received_from, flags);
     return receive_message(indx, received_from, buf + header_space(),
                            payload_size, out_alloc);
 }
@@ -79,6 +82,10 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             in_dest = true;
         }
     }
+
+    // set the thread local rpc_handler context
+    _in_rpc_handler = true;
+
     if(in_dest || dest_size == 0) {
         //Use the reply-buffer allocation lambda to detect whether parse_and_receive generated a reply
         size_t reply_size = 0;
@@ -121,6 +128,9 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             connections->send(connections->get_node_rank(sender_id));
         }
     }
+
+    // clear the thread local rpc_handler context
+    _in_rpc_handler = false;
 }
 
 void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size) {
@@ -129,19 +139,33 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     std::size_t payload_size;
     Opcode indx;
     node_id_t received_from;
-    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from);
+    uint32_t flags;
+    retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
     size_t reply_size = 0;
-    receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                    [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
-                        reply_size = _size;
-                        if(reply_size <= buffer_size) {
-                            return (char*)connections->get_sendbuffer_ptr(
-                                    connections->get_node_rank(sender_id), sst::REQUEST_TYPE::P2P_REPLY);
-                        }
-                        return nullptr;
-                    });
-    if(reply_size > 0) {
-        connections->send(connections->get_node_rank(sender_id));
+    if (indx.is_reply) {
+        // REPLYs can be handled here because they do not block.
+        receive_message(indx, received_from, msg_buf + header_size, payload_size,
+                        [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
+                            reply_size = _size;
+                            if(reply_size <= buffer_size) {
+                                return (char*)connections->get_sendbuffer_ptr(
+                                        connections->get_node_rank(sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                            }
+                            return nullptr;
+                        });
+        if(reply_size > 0) {
+            connections->send(connections->get_node_rank(sender_id));
+        }
+    } else if (RPC_HEADER_FLAG_TST(flags,CASCADE)) {
+        // TODO: what is the lifetime of msg_buf? discuss with Sagar to make
+        // sure the buffers are safely managed.
+        // for cascading messages, we create a new thread.
+        throw derecho::derecho_exception("Cascading P2P Send/Queries to be implemented!");
+    } else {
+        // send to fifo queue.
+        std::unique_lock<std::mutex> lock(fifo_queue_mutex);
+        fifo_queue.emplace(sender_id,msg_buf,buffer_size);
+        fifo_queue_cv.notify_one();
     }
 }
 
@@ -201,14 +225,64 @@ void RPCManager::finish_p2p_send(bool is_query, node_id_t dest_id, PendingBase& 
     }
 }
 
+void RPCManager::fifo_worker() {
+    using namespace remote_invocation_utilities;
+    const std::size_t header_size = header_space();
+    std::size_t payload_size;
+    Opcode indx;
+    node_id_t received_from;
+    uint32_t flags;
+    size_t reply_size = 0;
+    fifo_req request;
+
+    while(!fifo_worker_stop) {
+        {
+            std::unique_lock<std::mutex> lock(fifo_queue_mutex);
+            while(fifo_queue.empty())
+                fifo_queue_cv.wait(lock);
+            request = fifo_queue.front();
+            fifo_queue.pop();
+        }
+        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        if (indx.is_reply || RPC_HEADER_FLAG_TST(flags,CASCADE)) {
+            dbg_default_error("Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
+                indx.is_reply,RPC_HEADER_FLAG_TST(flags,CASCADE));
+            throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
+        }
+        receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
+                        [this, &reply_size, &request](size_t _size) -> char* {
+                            reply_size = _size;
+                            if(reply_size <= request.buffer_size) {
+                                return (char*)connections->get_sendbuffer_ptr(
+                                        connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                            }
+                            return nullptr;
+                        });
+        if(reply_size > 0) {
+            connections->send(connections->get_node_rank(request.sender_id));
+        }
+    }
+}
+
+void RPCManager::stop_and_wait_for_fifo_worker() {
+    fifo_worker_stop = true;
+    fifo_worker_thread.join();
+}
+
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
     uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    // set the thread local rpc_handler context
+    _in_rpc_handler = true;
+
     while(!thread_start) {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
     whenlog(logger->debug("P2P listening thread started"););
+    // start the fifo worker thread
+    fifo_worker_thread = std::thread(&RPCManager::fifo_worker, this);
+    // loop event
     while(!thread_shutdown) {
         std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();
@@ -217,6 +291,12 @@ void RPCManager::p2p_receive_loop() {
             p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
         }
     }
+    // stop fifo worker.
+    stop_and_wait_for_fifo_worker();
+}
+
+bool in_rpc_handler() {
+    return _in_rpc_handler;
 }
 }  // namespace rpc
 }  // namespace derecho

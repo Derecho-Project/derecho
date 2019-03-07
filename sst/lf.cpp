@@ -114,9 +114,12 @@ namespace sst{
     REPORT_ON_FAILURE = 0,
     CRASH_ON_FAILURE = 1
   };
-  #define FAIL_IF_NONZERO(x,desc,next) \
+  #define FAIL_IF_NONZERO_RETRY_EAGAIN(x,desc,next) \
     do { \
-      int64_t _int64_r_ = (int64_t)(x); \
+      int64_t _int64_r_; \
+      do { \
+        _int64_r_ = (int64_t)(x); \
+      } while ( _int64_r_ == -FI_EAGAIN ); \
       if (_int64_r_ != 0) { \
         dbg_default_error("{}:{},ret={},{}",__FILE__,__LINE__,_int64_r_,desc); \
         fprintf(stderr,"%s:%d,ret=%ld,%s\n",__FILE__,__LINE__,_int64_r_,desc); \
@@ -197,25 +200,25 @@ namespace sst{
 
     // 1 - open completion queue - use unified cq
     // cq_attr.size = fi->tx_attr->size;
-    // FAIL_IF_NONZERO(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->txcq), NULL)"initialize tx completion queue.",REPORT_ON_FAILURE);
+    // FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->txcq), NULL)"initialize tx completion queue.",REPORT_ON_FAILURE);
     // if(ret) return ret;
-    // FAIL_IF_NONZERO(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->rxcq), NULL)"initialize rx completion queue.",REPORT_ON_FAILURE);
+    // FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->rxcq), NULL)"initialize rx completion queue.",REPORT_ON_FAILURE);
     // if(ret) return ret;
     // 2 - open endpoint
-    FAIL_IF_NONZERO(ret = fi_endpoint(g_ctxt.domain, fi, &(this->ep), NULL), "open endpoint.", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_endpoint(g_ctxt.domain, fi, &(this->ep), NULL), "open endpoint.", REPORT_ON_FAILURE);
     if(ret) return ret;
     dbg_default_debug("{}:{} init_endpoint:ep->fid={}",__FILE__,__func__,(void*)&this->ep->fid);
 
     // 2.5 - open an event queue.
-    FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&this->eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&this->eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
     dbg_default_debug("{}:{} event_queue opened={}",__FILE__,__func__,(void*)&this->eq->fid);
 
     // 3 - bind them and global event queue together
-    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(this->eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_ep_bind(this->ep, &(this->eq)->fid, 0), "bind endpoint and event queue", REPORT_ON_FAILURE);
     if(ret) return ret;
-    FAIL_IF_NONZERO(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION), "bind endpoint and tx completion queue", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_ep_bind(this->ep, &(g_ctxt.cq)->fid, FI_RECV | FI_TRANSMIT | FI_SELECTIVE_COMPLETION), "bind endpoint and tx completion queue", REPORT_ON_FAILURE);
     if(ret) return ret;
-    FAIL_IF_NONZERO(ret = fi_enable(this->ep), "enable endpoint", REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_enable(this->ep), "enable endpoint", REPORT_ON_FAILURE);
     return ret;
   }
 
@@ -274,14 +277,14 @@ namespace sst{
       FAIL_IF_ZERO(client_hints->dest_addr = malloc(remote_cm_data.pep_addr_len),"failed to malloc address space for server pep.",CRASH_ON_FAILURE);
       memcpy((void*)client_hints->dest_addr,(void*)remote_cm_data.pep_addr,(size_t)remote_cm_data.pep_addr_len);
       client_hints->dest_addrlen = remote_cm_data.pep_addr_len;
-      FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,client_hints,&client_info),"fi_getinfo() failed.",CRASH_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_getinfo(LF_VERSION,NULL,NULL,0,client_hints,&client_info),"fi_getinfo() failed.",CRASH_ON_FAILURE);
       if(init_endpoint(client_info)){
         fi_freeinfo(client_hints);
         fi_freeinfo(client_info);
         CRASH_WITH_MESSAGE("failed to initialize client endpoint.\n");
       }
 
-      FAIL_IF_NONZERO(fi_connect(this->ep, remote_cm_data.pep_addr, NULL, 0),"fi_connect()",CRASH_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_connect(this->ep, remote_cm_data.pep_addr, NULL, 0),"fi_connect()",CRASH_ON_FAILURE);
 
       nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
       if (nRead != sizeof(entry)) {
@@ -330,7 +333,7 @@ namespace sst{
 #define LF_RMR_KEY(rid) (((uint64_t)0xf0000000)<<32 | (uint64_t)(rid))
 #define LF_WMR_KEY(rid) (((uint64_t)0xf8000000)<<32 | (uint64_t)(rid))
     // register the write buffer
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_mr_reg(
         g_ctxt.domain,write_buf,size_w,FI_SEND|FI_RECV|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE,
         0, 0, 0, &this->write_mr, NULL),
@@ -339,7 +342,7 @@ namespace sst{
       CRASH_ON_FAILURE);
     dbg_default_trace("{}:{} registered memory for remote write: {}:{}",__FILE__,__func__,(void*)write_addr,size_w);
     // register the read buffer
-    FAIL_IF_NONZERO(
+    FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_mr_reg(
         g_ctxt.domain,read_buf,size_r,FI_SEND|FI_RECV|FI_READ|FI_WRITE|FI_REMOTE_READ|FI_REMOTE_WRITE,
         0, 0, 0, &this->read_mr, NULL),
@@ -364,17 +367,17 @@ namespace sst{
   _resources::~_resources(){
     dbg_default_trace("resources destructor:this={}",(void*)this);
     // if(this->txcq) 
-    //  FAIL_IF_NONZERO(fi_close(&this->txcq->fid),"close txcq",REPORT_ON_FAILURE);
+    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->txcq->fid),"close txcq",REPORT_ON_FAILURE);
     // if(this->rxcq) 
-    //  FAIL_IF_NONZERO(fi_close(&this->rxcq->fid),"close rxcq",REPORT_ON_FAILURE);
+    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->rxcq->fid),"close rxcq",REPORT_ON_FAILURE);
     if(this->ep) 
-      FAIL_IF_NONZERO(fi_close(&this->ep->fid),"close endpoint",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->ep->fid),"close endpoint",REPORT_ON_FAILURE);
     if(this->eq)
-      FAIL_IF_NONZERO(fi_close(&this->eq->fid),"close event",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->eq->fid),"close event",REPORT_ON_FAILURE);
     if(this->write_mr)
-      FAIL_IF_NONZERO(fi_close(&this->write_mr->fid),"unregister write mr",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->write_mr->fid),"unregister write mr",REPORT_ON_FAILURE);
     if(this->read_mr)
-      FAIL_IF_NONZERO(fi_close(&this->read_mr->fid),"unregister read mr",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->read_mr->fid),"unregister read mr",REPORT_ON_FAILURE);
   }
 
   int _resources::post_remote_send(
@@ -406,7 +409,7 @@ namespace sst{
       msg.context = (void*)ctxt;
       msg.data = 0l; // not used
 
-      FAIL_IF_NONZERO(ret = fi_sendmsg(this->ep,&msg,(completion)?(FI_COMPLETION|FI_REMOTE_CQ_DATA):(FI_REMOTE_CQ_DATA)),
+      FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_sendmsg(this->ep,&msg,(completion)?(FI_COMPLETION|FI_REMOTE_CQ_DATA):(FI_REMOTE_CQ_DATA)),
         "fi_sendmsg failed.",
         REPORT_ON_FAILURE);
     } else { // one sided send or receive
@@ -436,11 +439,11 @@ namespace sst{
       // dbg_default_flush();
   
       if(op == 1) { //write
-        FAIL_IF_NONZERO(ret = fi_writemsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
+        FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_writemsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
           "fi_writemsg failed.",
           REPORT_ON_FAILURE);
       } else { // read op==0
-        FAIL_IF_NONZERO(ret = fi_readmsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
+        FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_readmsg(this->ep,&msg,(completion)?FI_COMPLETION:0),
           "fi_readmsg failed.",
           REPORT_ON_FAILURE);
       }
@@ -455,27 +458,27 @@ namespace sst{
   }
 
   void resources::post_remote_read(const long long int size){
-    FAIL_IF_NONZERO(post_remote_send(NULL,0,size,0,false),"post_remote_read(1) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(NULL,0,size,0,false),"post_remote_read(1) failed.",REPORT_ON_FAILURE);
   }
 
   void resources::post_remote_read(const long long int offset, const long long int size){
-    FAIL_IF_NONZERO(post_remote_send(NULL,offset,size,0,false),"post_remote_read(2) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(NULL,offset,size,0,false),"post_remote_read(2) failed.",REPORT_ON_FAILURE);
   }
 
   void resources::post_remote_write(const long long int size){
-    FAIL_IF_NONZERO(post_remote_send(NULL,0,size,1,false),"post_remote_write(1) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(NULL,0,size,1,false),"post_remote_write(1) failed.",REPORT_ON_FAILURE);
   }
 
   void resources::post_remote_write(const long long int offset, long long int size){
-    FAIL_IF_NONZERO(post_remote_send(NULL,offset,size,1,false),"post_remote_write(2) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(NULL,offset,size,1,false),"post_remote_write(2) failed.",REPORT_ON_FAILURE);
   }
 
   void resources::post_remote_write_with_completion(struct lf_sender_ctxt *ctxt, const long long int size){
-    FAIL_IF_NONZERO(post_remote_send(ctxt,0,size,1,true),"post_remote_write(3) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(ctxt,0,size,1,true),"post_remote_write(3) failed.",REPORT_ON_FAILURE);
   }
 
   void resources::post_remote_write_with_completion(struct lf_sender_ctxt *ctxt, const long long int offset, const long long int size){
-    FAIL_IF_NONZERO(post_remote_send(ctxt,offset,size,1,true),"post_remote_write(4) failed.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(post_remote_send(ctxt,offset,size,1,true),"post_remote_write(4) failed.",REPORT_ON_FAILURE);
   }
 
 
@@ -544,7 +547,7 @@ namespace sst{
       msg.iov_count  = 1;
       msg.addr       = 0; // not used
       msg.context    = (void*)ctxt;
-      FAIL_IF_NONZERO(ret = fi_recvmsg(this->ep, &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
+      FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_recvmsg(this->ep, &msg, FI_COMPLETION|FI_REMOTE_CQ_DATA),
           "fi_recvmsg",
           REPORT_ON_FAILURE);
       return ret;
@@ -689,21 +692,21 @@ namespace sst{
 
     //dbg_default_info(fi_tostr(g_ctxt.hints,FI_TYPE_INFO));
     // STEP 2: initialize fabric, domain, and completion queue
-    FAIL_IF_NONZERO(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_getinfo(LF_VERSION,NULL,NULL,0,g_ctxt.hints,&(g_ctxt.fi)),"fi_getinfo()",CRASH_ON_FAILURE);
     dbg_default_trace("going to use virtual address?{}",LF_USE_VADDR);
-    FAIL_IF_NONZERO(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),"fi_domain()",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),"fi_domain()",CRASH_ON_FAILURE);
     g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
-    FAIL_IF_NONZERO(fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),"initialize tx completion queue.",REPORT_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),"initialize tx completion queue.",REPORT_ON_FAILURE);
 
     // STEP 3: prepare local PEP
-    FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.peq,NULL),"open the event queue for passive endpoint",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_passive_ep(g_ctxt.fabric,g_ctxt.fi,&g_ctxt.pep,NULL),"open a local passive endpoint",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_pep_bind(g_ctxt.pep,&g_ctxt.peq->fid,0),"binding event queue to passive endpoint",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_listen(g_ctxt.pep),"preparing passive endpoint for incoming connections",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO(fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),"get the local PEP address",CRASH_ON_FAILURE);
-    FAIL_IF_NONZERO((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),"local name is too big to fit in local buffer",CRASH_ON_FAILURE);
-    // FAIL_IF_NONZERO(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.peq,NULL),"open the event queue for passive endpoint",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_passive_ep(g_ctxt.fabric,g_ctxt.fi,&g_ctxt.pep,NULL),"open a local passive endpoint",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_pep_bind(g_ctxt.pep,&g_ctxt.peq->fid,0),"binding event queue to passive endpoint",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_listen(g_ctxt.pep),"preparing passive endpoint for incoming connections",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN(fi_getname(&g_ctxt.pep->fid, g_ctxt.pep_addr, &g_ctxt.pep_addr_len),"get the local PEP address",CRASH_ON_FAILURE);
+    FAIL_IF_NONZERO_RETRY_EAGAIN((g_ctxt.pep_addr_len > MAX_LF_ADDR_SIZE),"local name is too big to fit in local buffer",CRASH_ON_FAILURE);
+    // FAIL_IF_NONZERO_RETRY_EAGAIN(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
     
     // STEP 4: start polling thread.
     polling_thread = std::thread(polling_loop);
@@ -724,23 +727,23 @@ namespace sst{
     shutdown_polling_thread();
     // TODO: make sure all resources are destroyed first.
     if (g_ctxt.pep) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.pep->fid),"close passive endpoint",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.pep->fid),"close passive endpoint",REPORT_ON_FAILURE);
     }
     if (g_ctxt.peq) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.peq->fid),"close event queue for passive endpoint",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.peq->fid),"close event queue for passive endpoint",REPORT_ON_FAILURE);
     }
     if (g_ctxt.cq) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.cq->fid),"close completion queue",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.cq->fid),"close completion queue",REPORT_ON_FAILURE);
     }
     // g_ctxt.eq has been moved to resources
     // if (g_ctxt.eq) {
-    //  FAIL_IF_NONZERO(fi_close(&g_ctxt.eq->fid),"close event queue",REPORT_ON_FAILURE);
+    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.eq->fid),"close event queue",REPORT_ON_FAILURE);
     // }
     if (g_ctxt.domain) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.domain->fid),"close domain",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.domain->fid),"close domain",REPORT_ON_FAILURE);
     }
     if (g_ctxt.fabric) {
-      FAIL_IF_NONZERO(fi_close(&g_ctxt.fabric->fid),"close fabric",REPORT_ON_FAILURE);
+      FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.fabric->fid),"close fabric",REPORT_ON_FAILURE);
     }
     if (g_ctxt.fi) {
       fi_freeinfo(g_ctxt.fi);
