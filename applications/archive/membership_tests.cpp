@@ -138,7 +138,7 @@ int test_state(Replicated<State>& stateHandle, int prev_state) {
     auto& initial_replies = initial_results.get();
     for(auto& reply_pair : initial_replies) {
         auto other_state = reply_pair.second.get();
-        if(other_state != prev_state) {
+        if(prev_state != -1 && other_state != prev_state) {
             std::cout << "Failure from node " << reply_pair.first
                       << ": Expected " << prev_state << " but got " << other_state << std::endl;
             return -1;
@@ -176,35 +176,38 @@ int test_state(Replicated<State>& stateHandle, int prev_state) {
  * Main.
  */
 int main(int argc, char* argv[]) {
+    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
+        std::cout << "Invalid command line arguments." << std::endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] migration(0/1) init_empty(0/1) inter_empty(0/1) disjoint_mem(0/1)" << std::endl;
+        return -1;
+    }
+    pthread_setname_np(pthread_self(), "member_test");
+
+    // initialize test flags
+    std::map<Tests, bool> tests = {{Tests::MIGRATION, std::stoi(argv[argc - 4])},
+                                   {Tests::INIT_EMPTY, std::stoi(argv[argc - 3])},
+                                   {Tests::INTER_EMPTY, std::stoi(argv[argc - 2])},
+                                   {Tests::DISJOINT_MEM, std::stoi(argv[argc - 1])}};
+    std::cout << "tests initialized " << std::endl;
+
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
-    std::cout << ">>> Got items from conf file" << std::endl;
 
     srand(time(NULL));
     node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    std::cout << ">>> ID is " << my_id << std::endl;
-
-    // could take these from command line
-    std::map<Tests, bool> tests = {{Tests::MIGRATION, true},
-                                   {Tests::INIT_EMPTY, false},
-                                   {Tests::INTER_EMPTY, false},
-                                   {Tests::DISJOINT_MEM, false}};
-    std::cout << ">>> tests initialized " << std::endl;
 
     auto state_membership_function = [&tests](const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view) {
         if(curr_view.members.size() < 3) {
             throw subgroup_provisioning_exception();
         }
 
-        std::cout << ">>> Enough members present" << std::endl;
-
         subgroup_shard_layout_t layout_vec(std::count_if(tests.begin(), tests.end(), [](auto& p) { return p.second; }));
 
-        // TODO: Fix this!
-        if(tests[Tests::MIGRATION]) migration_layout(layout_vec[Tests::MIGRATION], curr_view);
-        if(tests[Tests::INIT_EMPTY]) init_empty_layout(layout_vec[Tests::INIT_EMPTY], curr_view);
-        if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[Tests::INTER_EMPTY], curr_view);
-        if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[Tests::DISJOINT_MEM], curr_view);
+        int t = 0;
+        if(tests[Tests::MIGRATION]) migration_layout(layout_vec[t++], curr_view);
+        if(tests[Tests::INIT_EMPTY]) init_empty_layout(layout_vec[t++], curr_view);
+        if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[t++], curr_view);
+        if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[t++], curr_view);
 
         std::cout << ">>> Created layouts" << std::endl;
 
@@ -250,13 +253,12 @@ int main(int argc, char* argv[]) {
     auto run_test = [&](Tests t, std::map<Tests, Replicated<State>&> subgroups) {
         if(tests[t]) {
             prev_states[t] = test_state(subgroups.at(t), prev_states[t]);
-            if(prev_states[t] == -1) {
-                exit(1);
-            }
+            return prev_states[t] != -1;
         }
+        return true;
     };
 
-    for (int i=0; i < 3 - std::max((int) my_rank - 3, 0); i++) {
+    for (int i=0; i < 3 - std::max((int) my_rank - 2, 0); i++) {
         std::unique_lock<std::mutex> main_lock(main_mutex);
         main_cv.wait(main_lock, [&new_view_installed]() { return new_view_installed; });
         new_view_installed = false;
@@ -267,29 +269,38 @@ int main(int argc, char* argv[]) {
 
         switch(my_rank) {
             case 0:
-                run_test(Tests::MIGRATION, subgroups);
+                if (!run_test(Tests::MIGRATION, subgroups))
+                    return 1;
                 if(num_members == 3) {
-                    run_test(Tests::DISJOINT_MEM, subgroups);
+                    if (!run_test(Tests::DISJOINT_MEM, subgroups))
+                      return 1;
                 }
                 break;
             case 1:
                 if(num_members >= 4) {
-                    run_test(Tests::INIT_EMPTY, subgroups);
+                    if (!run_test(Tests::INIT_EMPTY, subgroups))
+                      return 1;
                 }
                 break;
             case 2:
                 if(num_members != 4) {
-                    run_test(Tests::INTER_EMPTY, subgroups);
+                    if (!run_test(Tests::INTER_EMPTY, subgroups))
+                      return 1;
                     prev_states[Tests::INTER_EMPTY] = INIT_STATE;
                 }
                 break;
             case 3:
                 if(num_members >= 4) {
-                    run_test(Tests::DISJOINT_MEM, subgroups);
+                    if (num_members == 4) {
+                      prev_states[Tests::DISJOINT_MEM] = -1;
+                    }
+                    if (!run_test(Tests::DISJOINT_MEM, subgroups))
+                      return 1;
                 }
                 break;
         }
     }
+    std::cout << "Preparing to leave...\n";
     group.barrier_sync();
     group.leave();
 }
