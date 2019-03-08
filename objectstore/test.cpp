@@ -5,6 +5,16 @@
 #include "conf/conf.hpp"
 
 int main(int argc, char **argv) {
+    if ( argc < 2 ) {
+        std::cerr << "Usage: " << argv[0] << "<aio|bio>" << std::endl;
+        return -1;
+    }
+
+    bool use_aio = true;
+    if ( strcmp("aio",argv[1]) != 0 ) {
+        use_aio = false;
+    }
+
     derecho::Conf::initialize(argc,argv);
     std::cout << "Starting object store service..." << std::endl;
     // oss - objectstore service
@@ -13,7 +23,8 @@ int main(int argc, char **argv) {
             std::cout << "watcher: " << oid << "->" << object << std::endl;
         });
     // print some message
-    std::cout << "Object store service started. Is replica:" << std::boolalpha << oss.isReplica()
+    std::cout << "Object store service started. \n\tIs replica:" << std::boolalpha << oss.isReplica()
+              << "\n\tUsing aio API:" << use_aio
               << std::noboolalpha << "." << std::endl;
 
     bool bNextCommand = true; // waiting for the next command.
@@ -24,13 +35,24 @@ int main(int argc, char **argv) {
             "put", // command
             {
                 "put <oid> <string>", // help info
-                [&oss](std::string args)->bool {
+                [&oss,use_aio](std::string args)->bool {
                     std::istringstream ss(args);
                     std::string oid,odata;
                     ss >> oid >> odata;
                     objectstore::Object object(std::stol(oid),odata.c_str(),odata.length()+1);
                     try{
-                        oss.bio_put(object);
+                        if ( use_aio ) {
+                            // asynchronous api
+                            derecho::rpc::QueryResults<bool> results = oss.aio_put(object);
+                            decltype(results)::ReplyMap& replies = results.get();
+                            for (auto& reply_pair: replies) {
+                                std::cout << reply_pair.first << reply_pair.second.get() << std::endl;
+                            }
+                        } else {
+                            // synchronous api
+                            std::cout << "bio put:" << std::boolalpha << oss.bio_put(object)
+                                      << std::noboolalpha << std::endl;
+                        }
                     } catch (...) {
                         return false;
                     }

@@ -752,9 +752,8 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     message_id_t min_stable_num
             = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
     for(uint i = 0; i < num_shard_members; ++i) {
-        if(sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_stable_num) {
-            min_stable_num = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
-        }
+        // to avoid a race condition, do not read the same SST entry twice
+        min_stable_num = std::min(min_stable_num, (message_id_t)sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num]);
     }
 
     bool update_sst = false;

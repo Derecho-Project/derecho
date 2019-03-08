@@ -21,6 +21,9 @@ namespace derecho {
 
 namespace rpc {
 
+/** defined in rpc_manager.h */
+bool in_rpc_handler();
+
 //Technically, RemoteInvocable "specializes" this template for the case where
 //the second parameter is a std::function<Ret(Args...)>. However, there is no
 //implementation for any other specialization, so this template is meaningless.
@@ -136,6 +139,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             mutils::DeserializationManager* dsm,
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
+        //note: find where this exception is set on the sending side!
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
         lock_t l{map_lock};
@@ -556,11 +560,13 @@ public:
 
     template <FunctionTag Tag, typename... Args>
     std::size_t get_size(Args&&... a) {
-        auto invocation_id = mutils::long_rand();
+      //only used for size calculation
+      long int invocation_id = 0;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
-            size += std::accumulate(t.begin(), t.end(), 0);
+	  //auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            //size += std::accumulate(t.begin(), t.end(), 0);
+	    size += (0 + ... + mutils::bytes_size(a));
         }
         return size;
     }
@@ -596,7 +602,20 @@ public:
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
-        populate_header(buf, payload_size, invoker.invoke_opcode, nid);
+        uint32_t flags = 0;
+        /*
+         set the cascading flag if necessary.
+         This is not important because, unlike p2p_send, ordered_send/query
+         does not distinguish cascading and non cascading sends. However,
+         to keep the format consistency, we keep the flags field in the RPC
+         message header reserved for future use.
+
+        if (in_rpc_handler()) {
+            RPC_HEADER_FLAG_SET(flags,CASCADE);
+            dbg_default_info("send cascading message.");
+        }
+        */
+        populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*
@@ -606,6 +625,17 @@ public:
         struct send_return {
             QueryResults<Ret> results;
             PendingResults<Ret>& pending;
+	  //LifeTracker
+	  /*
+class LifeTracker {
+std::function<void () > deleter;
+~LifeTraker(){
+deleter();
+}
+};
+
+LifeTracker{[invocation_id, &map](){map.erase(invocation_id);}};
+	   */
         };
         return send_return{std::move(sent_return.results),
                            sent_return.pending};
@@ -714,7 +744,12 @@ public:
 
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
-        populate_header(buf, payload_size, invoker.invoke_opcode, nid);
+        uint32_t flags = 0;
+        if (in_rpc_handler()) {
+            RPC_HEADER_FLAG_SET(flags,CASCADE);
+            dbg_default_info("sending cascading RPC.");
+        }
+        populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);
 
         using Ret = typename decltype(sent_return.results)::type;
         /*

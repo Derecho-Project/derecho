@@ -7,6 +7,7 @@
  * then re-starting them in different orders.
  */
 #include <iostream>
+#include <time.h>
 
 #include "derecho/derecho.h"
 
@@ -29,7 +30,7 @@ class PersistentThing : public mutils::ByteRepresentable, public derecho::Persis
 
 public:
     PersistentThing(Persistent<int>& init_state) : state(std::move(init_state)) {}
-    PersistentThing(PersistentRegistry* registry) : state([](){return std::make_unique<int>();}, nullptr, registry) {}
+    PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<int>(); }, nullptr, registry) {}
     int read_state() {
         return *state;
     }
@@ -52,15 +53,19 @@ public:
 };
 
 int main(int argc, char** argv) {
+    pthread_setname_np(pthread_self(), "restart");
+    srand(getpid());
+
     derecho::Conf::initialize(argc, argv);
 
     derecho::CallbackSet callback_set{
             nullptr,
             [](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-                std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
+                // std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
     derecho::SubgroupInfo subgroup_info([](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                           const std::unique_ptr<derecho::View>& prev_view,
+                                           derecho::View& curr_view) {
         const int num_subgroups = 1;
         const int num_shards = 2;
         const int members_per_shard = 3;
@@ -80,33 +85,46 @@ int main(int argc, char** argv) {
         return layout_vector;
     });
 
-    auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
+    auto thing_factory = [](PersistentRegistry* pr) {
+        return std::make_unique<PersistentThing>(pr);
+    };
 
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
-    std::cout << "Successfully joined group" << std::endl;
-    Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
-    int num_updates = 1000;
-    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    for(int counter = 0; counter < num_updates; ++counter) {
-        //This ensures the state changes with every update from every node
-        int new_value = counter * 10 + node_id;
-        std::cout << "Updating state to " << new_value << std::endl;
-        thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
-        derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
-        derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
-        int curr_state = 0;
-        for(auto& reply_pair : replies) {
-            try {
-                curr_state = reply_pair.second.get();
-            } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+    // std::cout << "Successfully joined group" << std::endl;
+    // std::cout << "Members are: " << std::endl;
+    // auto members = group.get_members();
+    // for(auto m : members) {
+    // std::cout << m << " ";
+    // }
+    // std::cout << std::endl;
+    auto my_rank = group.get_my_rank();
+    if(my_rank <= 5) {
+        Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
+        int num_updates = 1000000;
+        for(int counter = 0; counter < num_updates; ++counter) {
+            derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
+            derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
+            // int curr_state = 0;
+            for(auto& reply_pair : replies) {
+                try {
+                    // curr_state =
+                    reply_pair.second.get();
+                } catch(derecho::rpc::node_removed_from_group_exception& ex) {
+                    // std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+                }
             }
+            // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
+
+            //This ensures the state changes with every update from every node
+            // int new_value = counter * 10 + node_id;
+            int new_value = rand() % 100;
+            // std::cout << "Updating state to " << new_value << std::endl;
+            thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         }
-        std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
     }
-    std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+    // std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
     while(true) {
     }
 }

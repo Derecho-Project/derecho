@@ -128,6 +128,10 @@ target_link_libraries(debug_failure_test derecho)
 add_executable(count_write count_write.cpp)
 target_link_libraries(count_write sst)
 
+# rdma_for_ml.cpp
+add_executable(rdma_for_ml rdma_for_ml.cpp)
+target_link_libraries(rdma_for_ml sst pthread)
+
 # sst_test
 add_executable(sst_test sst_test.cpp)
 target_link_libraries(sst_test sst)

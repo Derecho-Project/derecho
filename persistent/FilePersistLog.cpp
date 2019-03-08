@@ -113,7 +113,7 @@ void FilePersistLog::load() noexcept(false) {
         dbg_default_error("{0}:map ringbuffer space for the first half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap((void*)((uint64_t) this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
+    if(mmap((void*)((uint64_t)this->m_pLog + MAX_LOG_SIZE), MAX_LOG_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iLogFileDesc, 0) == MAP_FAILED) {
         dbg_default_error("{0}:map ringbuffer space for the second half of log failed. Is the size of log ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
@@ -127,7 +127,7 @@ void FilePersistLog::load() noexcept(false) {
         dbg_default_error("{0}:map ringbuffer space for the first half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
-    if(mmap((void*)((uint64_t) this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
+    if(mmap((void*)((uint64_t)this->m_pData + MAX_DATA_SIZE), (size_t)MAX_DATA_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, this->m_iDataFileDesc, 0) == MAP_FAILED) {
         dbg_default_error("{0}:map ringbuffer space for the second half of data failed. Is the size of data ringbuffer aligned to page?", this->m_sName);
         throw PERSIST_EXP_MMAP_FILE(errno);
     }
@@ -220,30 +220,30 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
-#define __DO_VALIDATION                                                                            \
-    do {                                                                                           \
-        if(NUM_FREE_SLOTS < 1) {                                                                   \
+#define __DO_VALIDATION                                                                                    \
+    do {                                                                                                   \
+        if(NUM_FREE_SLOTS < 1) {                                                                           \
             dbg_default_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",             \
-                      this->m_sName, NUM_FREE_SLOTS);                                              \
+                              this->m_sName, NUM_FREE_SLOTS);                                              \
             dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                            \
-            throw PERSIST_EXP_NOSPACE_LOG;                                                         \
-        }                                                                                          \
-        if(NUM_FREE_BYTES < size) {                                                                \
+            FPL_UNLOCK;                                                                                    \
+            throw PERSIST_EXP_NOSPACE_LOG;                                                                 \
+        }                                                                                                  \
+        if(NUM_FREE_BYTES < size) {                                                                        \
             dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",      \
-                      this->m_sName, NUM_FREE_BYTES, size);                                        \
+                              this->m_sName, NUM_FREE_BYTES, size);                                        \
             dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                            \
-            throw PERSIST_EXP_NOSPACE_DATA;                                                        \
-        }                                                                                          \
-        if((CURR_LOG_IDX != -1) && (META_HEADER->fields.ver >= ver)) {                             \
-            int64_t cver = META_HEADER->fields.ver;                                                \
+            FPL_UNLOCK;                                                                                    \
+            throw PERSIST_EXP_NOSPACE_DATA;                                                                \
+        }                                                                                                  \
+        if((CURR_LOG_IDX != -1) && (META_HEADER->fields.ver >= ver)) {                                     \
+            int64_t cver = META_HEADER->fields.ver;                                                        \
             dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
-                      (int64_t)cver, (int64_t)ver);                                                \
+                              (int64_t)cver, (int64_t)ver);                                                \
             dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                            \
-            throw PERSIST_EXP_INV_VERSION;                                                         \
-        }                                                                                          \
+            FPL_UNLOCK;                                                                                    \
+            throw PERSIST_EXP_INV_VERSION;                                                                 \
+        }                                                                                                  \
     } while(0)
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -289,7 +289,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
     }
 */
     dbg_default_debug("{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
-              ver, mhlc.m_rtc_us, mhlc.m_logic);
+                      ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
 }
 
@@ -446,7 +446,7 @@ int64_t FilePersistLog::getVersionIndex(const version_t& ver) {
 const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false) {
     FPL_RDLOCK;
     dbg_default_trace("{0}-getEntryByIndex-head:{1},tail:{2},eidx:{3}",
-              this->m_sName, META_HEADER->fields.head, META_HEADER->fields.tail, eidx);
+                      this->m_sName, META_HEADER->fields.head, META_HEADER->fields.tail, eidx);
 
     int64_t ridx = (eidx < 0) ? (META_HEADER->fields.tail + eidx) : eidx;
 
@@ -457,11 +457,11 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false)
     FPL_UNLOCK;
 
     dbg_default_trace("{0} getEntryByIndex at idx:{1} ver:{2} time:({3},{4})",
-              this->m_sName,
-              ridx,
-              (int64_t)(LOG_ENTRY_AT(ridx)->fields.ver),
-              (LOG_ENTRY_AT(ridx))->fields.hlc_r,
-              (LOG_ENTRY_AT(ridx))->fields.hlc_l);
+                      this->m_sName,
+                      ridx,
+                      (int64_t)(LOG_ENTRY_AT(ridx)->fields.ver),
+                      (LOG_ENTRY_AT(ridx))->fields.hlc_r,
+                      (LOG_ENTRY_AT(ridx))->fields.hlc_l);
 
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
 }
@@ -946,7 +946,7 @@ const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::strin
     if(dir == NULL) {
         // We cannot open the persistent directory, so just return error.
         dbg_default_error("{}:{} failed to open the directory. errno={}, err={}.",
-                  __FILE__, __func__, errno, strerror(errno));
+                          __FILE__, __func__, errno, strerror(errno));
         return INVALID_VERSION;
     }
     // STEP 2: get through the meta header for the minimum
@@ -962,13 +962,13 @@ const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::strin
             int fd = open(fn, O_RDONLY);
             if(fd < 0) {
                 dbg_default_warn("{}:{} cannot read file:{}, errno={}, err={}.",
-                         __FILE__, __func__, errno, strerror(errno));
+                                 __FILE__, __func__, errno, strerror(errno));
                 continue;
             }
             int nRead = read(fd, (void*)&mh, sizeof(mh));
             if(nRead != sizeof(mh)) {
                 dbg_default_warn("{}:{} cannot load meta header from file:{}, errno={}, err={}",
-                         __FILE__, __func__, errno, strerror(errno));
+                                 __FILE__, __func__, errno, strerror(errno));
                 close(fd);
                 continue;
             }
@@ -979,4 +979,4 @@ const uint64_t FilePersistLog::getMinimumLatestPersistedVersion(const std::strin
     }
     return ver;
 }
-}
+}  // namespace persistent

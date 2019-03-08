@@ -327,7 +327,9 @@ void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
     /* If this node is not a joiner, it "should" already have a TCP connection to every
      * other current member, so establish those TCP connections. */
     for(int i = 0; i < curr_view->num_members; ++i) {
-        if(curr_view->members[i] != my_id) {
+        if(curr_view->members[i] != my_id
+                && std::find(curr_view->joined.begin(), curr_view->joined.end(),
+                             curr_view->members[i]) == curr_view->joined.end()) {
             group_member_sockets->add_node(curr_view->members[i], {std::get<0>(curr_view->member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(curr_view->member_ips_and_ports[i])});
             whendebug(logger->debug("Established a TCP connection to node {}", curr_view->members[i]);)
         }
