@@ -23,7 +23,7 @@ public:
                                                      nullptr,
                                                      registry) {}
     void update(const int update_num, const int sender, const std::string& new_state) {
-        std::cout << "Received update " << update_num << " from " << sender << std::endl;
+        // std::cout << "Received update " << update_num << " from " << sender << std::endl;
         *state = new_state;
     }
     DEFAULT_SERIALIZATION_SUPPORT(TestObject, state);
@@ -48,10 +48,8 @@ int main(int argc, char** argv) {
 //    const uint update_size = std::stoi(argv[argc - 1]);
     const uint num_shards = 3;
     const uint nodes_per_shard = 3;
-    const uint updates_behind = std::stoi(argv[argc - 3]);
-    const uint update_size = std::stoi(argv[argc - 2]);
-    //Phase 0 is the normal run with updates, phase 1 is restart only
-    const uint phase = std::stoi(argv[argc - 1]);
+    const uint updates_behind = std::stoi(argv[argc - 2]);
+    const uint update_size = std::stoi(argv[argc - 1]);
     unsigned int pid = getpid();
     srand(pid);
 
@@ -63,8 +61,8 @@ int main(int argc, char** argv) {
     //        }}));
     //Hacky custom allocator to allow shards to continue operating with 1 failed node
     derecho::SubgroupInfo subgroup_config([num_shards, nodes_per_shard](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view,
-            derecho::View& curr_view) {
+                                                                        const std::unique_ptr<derecho::View>& prev_view,
+                                                                        derecho::View& curr_view) {
         const uint num_subgroups = 1;
         const uint minimum_members_per_shard = nodes_per_shard - 1;
         derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
@@ -92,19 +90,32 @@ int main(int argc, char** argv) {
         return layout_vector;
     });
 
+    struct timespec start_time;
+    // start timer
+    clock_gettime(CLOCK_REALTIME, &start_time);
     derecho::Group<TestObject> group(derecho::CallbackSet{nullptr}, subgroup_config, nullptr,
                                      std::vector<derecho::view_upcall_t>{},
-                                     [](PersistentRegistry* pr){ return std::make_unique<TestObject>(pr); });
+                                     [](PersistentRegistry* pr) { return std::make_unique<TestObject>(pr); });
 
-    if(phase == 1) {
-        std::cout << "Done with total restart, exiting" << std::endl;
-        return 0;
-    }
-
-    std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
+    // std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
     while(group.get_members().size() < num_shards * nodes_per_shard) {
     }
+    group.barrier_sync();
 
+    struct timespec end_time;
+    clock_gettime(CLOCK_REALTIME, &end_time);
+
+    double time_in_ms = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e3 + ((double)end_time.tv_nsec - start_time.tv_nsec) / 1e6;
+    uint32_t my_rank = group.get_my_rank();
+    if (my_rank == 0) {
+        std::ofstream fout;
+        fout.open("restart_data_transfer_times", std::ofstream::app);
+        fout << updates_behind << " " << update_size << " " << time_in_ms << std::endl;
+	fout.close();
+    }
+
+    std::cout << "Done writing the time measurement" << std::endl;
+    
     std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
             group.get_my_shard<TestObject>(0));
     uint my_shard_rank;
@@ -114,23 +125,26 @@ int main(int argc, char** argv) {
             break;
     }
     Replicated<TestObject>& obj_handle = group.get_subgroup<TestObject>();
-    uint num_updates = 10000;
+    uint num_updates = 1000 + updates_behind;
+    std::string new_value = make_random_string(update_size);
     for(uint counter = 0; counter < num_updates - updates_behind; ++counter) {
-        std::string new_value = make_random_string(update_size);
+        // std::cout << "counter = " << counter << std::endl;
         derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
     }
     group.barrier_sync();
-    std::cout << (num_updates - updates_behind) << " updates sent" << std::endl;
-    std::cout << "Going to sleep now" << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(5));
     //The second node in each shard will exit early
-    if(my_shard_rank == 1) {
-        std::cout << "All updates sent, exiting early" << std::endl;
-        exit(0);
+    if(my_shard_rank == 2) {
+        std::cout << "Waiting to be killed" << std::endl;
+        while(true) {
+        }
     }
     else {
+        std::cout << "Enter something" << std::endl;
+        int n;
+        std::cin >> n;
+        std::string new_value = make_random_string(update_size);
         for(uint counter = num_updates - updates_behind; counter < num_updates; ++counter) {
-            std::string new_value = make_random_string(update_size);
+            // std::cout << "counter = " << counter << std::endl;
             derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
         }
     }

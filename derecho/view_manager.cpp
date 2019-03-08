@@ -387,8 +387,6 @@ void ViewManager::start() {
     }
     whenlog(logger->debug("Starting predicate evaluation"););
     curr_view->gmsSST->start_predicate_evaluation();
-    std::cout << "Metadata sent\tMetadata received\tLog sent\tLog received" << std::endl;
-    std::cout << metadata_bytes_sent << '\t' << metadata_bytes_received << '\t' << log_bytes_sent << '\t' << log_bytes_received << std::endl;
 }
 
 void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim) {
