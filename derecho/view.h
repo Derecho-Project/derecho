@@ -46,6 +46,8 @@ public:
     /** The rank of this node within the subgroup/shard, or -1 if this node is
      * not a member of the subgroup/shard. */
     int32_t my_rank;
+    /** Settings for the subview */
+    const DerechoParams profile;
     /** Looks up the sub-view rank of a node ID. Returns -1 if
      * that node ID is not a member of this subgroup/shard. */
     int rank_of(const node_id_t& who) const;
@@ -58,23 +60,26 @@ public:
     SubView(int32_t num_members);
 
     DEFAULT_SERIALIZATION_SUPPORT(SubView, mode, members, is_sender,
-                                  member_ips_and_ports, joined, departed);
+                                  member_ips_and_ports, joined, departed, profile);
     SubView(Mode mode, const std::vector<node_id_t>& members,
             std::vector<int> is_sender,
             const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
             const std::vector<node_id_t>& joined,
-            const std::vector<node_id_t>& departed)
+            const std::vector<node_id_t>& departed,
+            const DerechoParams &profile)
             : mode(mode),
               members(members),
               is_sender(is_sender),
               member_ips_and_ports(member_ips_and_ports),
               joined(joined),
               departed(departed),
-              my_rank(-1) {}
+              my_rank(-1),
+              profile(profile) {}
 
     SubView(Mode mode, const std::vector<node_id_t>& members,
             std::vector<int> is_sender,
-            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports);
+            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+            DerechoParams profile);
 };
 
 class View : public mutils::ByteRepresentable {
@@ -140,7 +145,7 @@ public:
      * @throws subgroup_provisioning_exception if any of the requested members
      * are not actually in this View's members vector.
      */
-    SubView make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}) const;
+    SubView make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}, const DerechoParams profile = DerechoParams()) const;
 
     /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
     int rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>& who) const;

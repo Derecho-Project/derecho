@@ -19,18 +19,21 @@ SubView::SubView(int32_t num_members)
           member_ips_and_ports(num_members),
           joined(0),
           departed(0),
-          my_rank(-1) {}
+          my_rank(-1),
+          profile(DerechoParams()) {}
 
 SubView::SubView(Mode mode,
                  const std::vector<node_id_t>& members,
                  std::vector<int> is_sender,
                  const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
-                                              uint16_t>>& member_ips_and_ports)
+                                              uint16_t>>& member_ips_and_ports,
+                                              const DerechoParams profile)
         : mode(mode),
           members(members),
           is_sender(members.size(), 1),
           member_ips_and_ports(member_ips_and_ports),
-          my_rank(-1) {
+          my_rank(-1),
+          profile(profile) {
     // if the sender information is not provided, assume that all members are
     // senders
     if(is_sender.size()) {
@@ -154,7 +157,8 @@ int View::rank_of(const node_id_t& who) const {
 
 SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
-                           const std::vector<int>& is_sender) const {
+                           const std::vector<int>& is_sender,
+                           const DerechoParams profile) const {
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size();
         ++subview_rank) {
@@ -167,7 +171,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
         subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[member_pos];
     }
     // Note that joined and departed do not need to get initialized here; they wiill be initialized by ViewManager
-    return SubView(mode, with_members, is_sender, subview_member_ips_and_ports);
+    return SubView(mode, with_members, is_sender, subview_member_ips_and_ports, profile);
 }
 
 int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id,
