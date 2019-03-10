@@ -4,15 +4,20 @@
 #include "ObjectStore.hpp"
 #include "conf/conf.hpp"
 
+#define NUM_APP_ARGS (1)
+
 int main(int argc, char **argv) {
-    if ( argc < 2 ) {
-        std::cerr << "Usage: " << argv[0] << "<aio|bio>" << std::endl;
+    if ( (argc < (NUM_APP_ARGS + 1)) || 
+         ((argc > (NUM_APP_ARGS+1)) && strcmp("--", argv[argc - NUM_APP_ARGS - 1])) ) {
+        std::cerr << "Usage: " << argv[0] << " [ derecho-config-list -- ] <aio|bio>" << std::endl;
         return -1;
     }
 
-    bool use_aio = true;
-    if ( strcmp("aio",argv[1]) != 0 ) {
-        use_aio = false;
+    bool use_aio = false;
+    if ( strcmp("aio",argv[argc - NUM_APP_ARGS]) == 0 ) {
+        use_aio = true;
+    } else if ( strcmp("bio",argv[1]) != 0 ) {
+        std::cerr << "unrecognized argument:" << argv[argc - NUM_APP_ARGS] << ". Using bio (blocking io) instead." << std::endl;
     }
 
     derecho::Conf::initialize(argc,argv);

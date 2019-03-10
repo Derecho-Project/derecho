@@ -353,6 +353,7 @@ private:
      * call. It will be fulfilled when fulfill_map is called, which means the RPC
      * function call was actually sent and the set of destination nodes is known. */
     std::future<std::map<node_id_t, std::promise<Ret>>> reply_promises_are_ready;
+    std::mutex reply_promises_are_ready_mutex;
     std::map<node_id_t, std::promise<Ret>> reply_promises;
 
     bool map_fulfilled = false;
@@ -396,6 +397,7 @@ public:
     }
 
     void set_value(const node_id_t& nid, const Ret& v) {
+        std::lock_guard<std::mutex> lock(reply_promises_are_ready_mutex);
         responded_nodes.insert(nid);
         if(reply_promises.size() == 0) {
             whenlog(logger->trace("PendingResults<{}>::set_value about to wait on reply_promises_are_ready", typeid(Ret).name()););
