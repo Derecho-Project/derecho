@@ -81,6 +81,15 @@ public:
      * was not.
      */
     bool delete_node(node_id_t remove_id);
+    /**
+     * Checks whether this connection manager currently has a socket connected
+     * to the node with the specified ID
+     * @param node_id The node ID to check
+     * @return True if this connection manager has a socket for that node ID,
+     * false if it does not.
+     */
+    bool contains_node(node_id_t node_id);
+
     template <class T>
     bool exchange(node_id_t node_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
@@ -97,6 +106,15 @@ public:
      * if no sockets are ready to read.
      */
     int32_t probe_all();
+
+    /**
+     * Compares the set of TCP connections to a list of known live nodes and
+     * removes any connections to nodes not in that list. This is used to
+     * filter out connections to nodes that were removed from the view.
+     * @param live_nodes_list A list of node IDs whose connections should be
+     * retained; all other connections will be deleted.
+     */
+    void filter_to(const std::vector<node_id_t>& live_nodes_list);
 
     /**
      * Gets a locked reference to the TCP socket connected to a particular node.

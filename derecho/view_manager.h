@@ -162,7 +162,7 @@ private:
     DerechoParams derecho_params;
 
     /** The same set of TCP sockets used by Group and RPCManager. */
-    std::shared_ptr<tcp::tcp_connections> group_member_sockets;
+    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
 
     using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
     /**
@@ -212,7 +212,7 @@ private:
     std::vector<std::vector<int64_t>> prior_view_shard_leaders;
 
     /** Sends a joining node the new view that has been constructed to include it.*/
-    void commit_join(const View& new_view, tcp::socket& client_socket);
+    void send_view(const View& new_view, tcp::socket& client_socket);
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
@@ -226,16 +226,29 @@ private:
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
      */
-    void receive_configuration(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_initial_view(node_id_t my_id, tcp::socket& leader_connection);
 
     /**
-     * Helper for total restart mode that initializes TCP connections (in the
-     * tcp_connections pool) to all of the members of the restart view. This is
-     * needed because in total restart mode we must complete state transfer
-     * before installing the restart view, which means we won't call Group's
-     * update_tcp_connections_callback (which normally sets up TCP connections).
+     * Constructor helper that initializes TCP connections (for state transfer)
+     * to the members of curr_view in ascending rank order. Assumes that no TCP
+     * connections have been set up yet.
      */
     void setup_initial_tcp_connections(node_id_t my_id);
+
+    /**
+     * Another setup helper for joining nodes; re-initializes the TCP connections
+     * list to reflect the current list of members in curr_view, assuming that the
+     * initial curr_view was aborted and a new one has been sent.
+     */
+    void reinit_tcp_connections(node_id_t my_id);
+
+    /**
+     * Updates the TCP connections pool to reflect the joined and departed
+     * members in a new view. Removes connections to departed members, and
+     * initializes new connections to joined members.
+     * @param new_view The new view that is about to be installed.
+     */
+    void update_tcp_connections(const View& new_view);
 
     // View-management triggers
     /** Called when there is a new failure suspicion. Updates the suspected[]
@@ -372,7 +385,7 @@ private:
     /** Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
      * shard leaders) from the leader. */
-    void receive_view_and_leaders(tcp::socket& leader_connection);
+    void receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection);
 
     /** Helper function for total restart mode: Uses the RaggedTrim values
      * in logged_ragged_trim to truncate any persistent logs that have a

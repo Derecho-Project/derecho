@@ -216,10 +216,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
-    //Now that ViewManager is constructed, register some new-view upcalls for system functionality
-    view_manager.add_view_upcall([this](const View& new_view) {
-        update_tcp_connections_callback(new_view);
-    });
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });

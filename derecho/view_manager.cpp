@@ -37,7 +37,7 @@ ViewManager::ViewManager(
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
           derecho_params(),
-          group_member_sockets(group_tcp_sockets),
+          tcp_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
@@ -60,7 +60,6 @@ ViewManager::ViewManager(
                 std::move(curr_view), *restart_state,
                 subgroup_info, my_id);
         await_rejoining_nodes(my_id);
-        setup_initial_tcp_connections(my_id);
     } else {
         in_total_restart = false;
         curr_view = std::make_unique<View>(
@@ -80,6 +79,7 @@ ViewManager::ViewManager(
          * because I had to separate initialize_multicast_groups from the
          * constructor. After the deadline I should fix this. */
     }
+    setup_initial_tcp_connections(my_id);
 }
 
 /* Non-leader Constructor */
@@ -99,16 +99,14 @@ ViewManager::ViewManager(
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
           derecho_params(),
-          group_member_sockets(group_tcp_sockets),
+          tcp_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    receive_configuration(my_id, leader_connection);
+    receive_initial_view(my_id, leader_connection);
     //As soon as we have a tentative initial view, set up the TCP connections
-    if(in_total_restart) {
-        setup_initial_tcp_connections(my_id);
-    }
+    setup_initial_tcp_connections(my_id);
 }
 
 ViewManager::~ViewManager() {
@@ -125,7 +123,7 @@ ViewManager::~ViewManager() {
 }
 
 /* ----------  1. Constructor Components ------------- */
-void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_connection) {
     JoinResponse leader_response;
     bool leader_redirect;
     do {
@@ -190,11 +188,11 @@ void ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     leader_connection.write(getConfUInt16(CONF_DERECHO_SST_PORT));
     leader_connection.write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
 
-    receive_view_and_leaders(leader_connection);
+    receive_view_and_leaders(my_id, leader_connection);
     whenlog(logger->debug("Received initial view {} from leader.", curr_view->vid););
 }
 
-void ViewManager::receive_view_and_leaders(tcp::socket& leader_connection) {
+void ViewManager::receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection) {
     //The leader will first send the size of the necessary buffer, then the serialized View
     std::size_t size_of_view;
     bool success = leader_connection.read(size_of_view);
@@ -237,7 +235,6 @@ void ViewManager::receive_view_and_leaders(tcp::socket& leader_connection) {
     prior_view_shard_leaders = *receive_vector2d<int64_t>(leader_connection);
 
     //Set up non-serialized fields of curr_view
-    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     curr_view->subgroup_type_order = subgroup_type_order;
     curr_view->my_rank = curr_view->rank_of(my_id);
 }
@@ -252,11 +249,13 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
     }
     if(!view_confirmed) {
+        const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
         //Wait for a new initial view and ragged trim to be sent,
         //so that when this method returns we can try state transfer again
-        receive_view_and_leaders(leader_connection);
-        //NOTE: At this point we need to update the TCP connections pool for any new/failed nodes,
+        receive_view_and_leaders(my_id, leader_connection);
+        //Update the TCP connections pool for any new/failed nodes,
         //so we can run state transfer again.
+        reinit_tcp_connections(my_id);
     }
     return view_confirmed;
 }
@@ -334,18 +333,44 @@ void ViewManager::send_logs() {
 
 void ViewManager::setup_initial_tcp_connections(node_id_t my_id) {
     //As usual the restart leader is a special case, since it doesn't have curr_view
-    const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
-    /* Establish TCP connections to each other member of the restart view in ascending order,
-     * just like we would do at the beginning of the initial view, except we can't use the
-     * new-view upcall that would normally do that.
-     * Problem: The new-view upcall will run anyway, and attempt to re-setup TCP connections
-     * to any nodes that are in the joined list of the restart view. */
-    for(int i = 0; i < restart_view.num_members; ++i) {
-        if(restart_view.members[i] != my_id) {
-            group_member_sockets->add_node(restart_view.members[i], {std::get<0>(restart_view.member_ips_and_ports[i]),
-                    std::get<PORT_TYPE::RPC>(restart_view.member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", restart_view.members[i]);)
+    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    //Establish TCP connections to each other member of the view in ascending order
+    for(int i = 0; i < proposed_view.num_members; ++i) {
+        if(proposed_view.members[i] != my_id) {
+            tcp_sockets->add_node(proposed_view.members[i],
+                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
         }
+    }
+}
+
+void ViewManager::reinit_tcp_connections(node_id_t my_id) {
+    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    //Delete sockets for failed members no longer in the view
+    tcp_sockets->filter_to(proposed_view.members);
+    //Recheck the members list and establish connections to any new members
+    for(int i = 0; i < proposed_view.num_members; ++i) {
+        if(proposed_view.members[i] != my_id
+           && !tcp_sockets->contains_node(proposed_view.members[i])) {
+            tcp_sockets->add_node(proposed_view.members[i],
+                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
+        }
+    }
+}
+
+void ViewManager::update_tcp_connections(const View& new_view) {
+    for(const node_id_t& removed_id : new_view.departed) {
+        whenlog(logger->debug("Removing TCP connection for failed node {}", removed_id););
+        tcp_sockets->delete_node(removed_id);
+    }
+    for(const node_id_t& joiner_id : new_view.joined) {
+        tcp_sockets->add_node(joiner_id,
+                              {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]),
+                               std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
+        whenlog(logger->debug("Established a TCP connection to node {}", joiner_id););
     }
 }
 
@@ -1084,33 +1109,47 @@ void ViewManager::finish_view_change(
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
+    // Determine the shard leaders in the old view and re-index them by new subgroup IDs
+    std::vector<std::vector<int64_t>> old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
+            *curr_view, *next_view);
+
     std::list<tcp::socket> joiner_sockets;
     if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
         // If j joins have been committed, pop the next j sockets off
-        // proposed_join_sockets and send them the new View (must happen before we
-        // try to do SST setup)
+        // proposed_join_sockets and send them the new View and old shard
+        // leaders list
         for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
-            commit_join(*next_view, proposed_join_sockets.front());
-            // save the socket for later
+            send_view(*next_view, proposed_join_sockets.front());
+            std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
+            proposed_join_sockets.front().write(size_of_vector);
+            mutils::post_object([this](const char* bytes, std::size_t size) {
+                proposed_join_sockets.front().write(bytes, size);
+            },
+                                old_shard_leaders_by_id);
+            // save the socket for the commit step
             joiner_sockets.emplace_back(std::move(proposed_join_sockets.front()));
             proposed_join_sockets.pop_front();
         }
     }
 
-    // Determine the shard leaders in the old view and re-index them by new subgroup IDs
-    std::vector<std::vector<int64_t>> old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
-            *curr_view, *next_view);
+    node_id_t my_id = next_view->members[next_view->my_rank];
 
+    // Set up TCP connections to the joined nodes
+    update_tcp_connections(*next_view);
+    // After doing that, shard leaders can send them RPC objects
+    send_objects_to_new_members(old_shard_leaders_by_id);
+
+    // Re-initialize this node's RPC objects, which includes receiving them
+    // from shard leaders if it is newly a member of a subgroup
+    whenlog(logger->debug("Receiving state for local Replicated Objects"););
+    initialize_subgroup_objects(my_id, *next_view, old_shard_leaders_by_id);
+
+    // Once state transfer completes, we can tell joining clients to commit the view
     if(curr_view->i_am_leader()) {
         while(!joiner_sockets.empty()) {
-            // Send the array of old shard leaders, so the new member knows who to receive from
-            std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            joiner_sockets.front().write(size_of_vector);
-            mutils::post_object(
-                    [&joiner_sockets](const char* bytes, std::size_t size) {
-                        joiner_sockets.front().write(bytes, size);
-                    },
-                    old_shard_leaders_by_id);
+            //Send True to indicate that the client should commit this View
+            //This should actually be a 2-phase commit
+            joiner_sockets.front().write(true);
             joiner_sockets.pop_front();
         }
     }
@@ -1119,7 +1158,6 @@ void ViewManager::finish_view_change(
     gmsSST.predicates.remove(leader_committed_handle);
     gmsSST.predicates.remove(suspected_changed_handle);
 
-    node_id_t my_id = next_view->members[next_view->my_rank];
     whenlog(logger->debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid););
     for(const node_id_t failed_node_id : next_view->departed) {
         whenlog(logger->debug("Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id););
@@ -1191,15 +1229,6 @@ void ViewManager::finish_view_change(
         view_upcall(*curr_view);
     }
 
-    // One of those view upcalls is a function in Group that sets up TCP connections to the new members
-    // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(old_shard_leaders_by_id);
-
-    // Re-initialize this node's RPC objects, which includes receiving them
-    // from shard leaders if it is newly a member of a subgroup
-    whenlog(logger->debug("Initializing local Replicated Objects"););
-    initialize_subgroup_objects(my_id, *curr_view, old_shard_leaders_by_id);
-    // It's only safe to start evaluating predicates once all RPC objects exist
     curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
 }
@@ -1314,7 +1343,7 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
     return true;
 }
 
-void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) {
+void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     whenlog(logger->debug("Sending client the new view"););
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
@@ -1323,8 +1352,6 @@ void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) 
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write(size_of_derecho_params);
     mutils::post_object(bind_socket_write, derecho_params);
-    //Send True to indicate that the client should commit this View (for compatibility with restart mode)
-    client_socket.write(true);
 }
 
 void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders) {
@@ -1351,7 +1378,7 @@ void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int6
  * different object to A, and neither node will be able to send the log tail length that
  * the other one is waiting on. */
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = group_member_sockets->get_socket(new_node_id);
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets->get_socket(new_node_id);
     ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
     if(subgroup_object.is_persistent()) {
         //First, read the log tail length sent by the joining node
@@ -1501,7 +1528,7 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST
-                                                  whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                          whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;
