@@ -180,6 +180,7 @@ struct SubgroupSettings {
     uint32_t num_received_offset;
     /** The operation mode of the subgroup */
     Mode mode;
+    DerechoParams profile;
 };
 
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
@@ -199,21 +200,6 @@ private:
     const unsigned int num_members;
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
-
-public:
-    /** Block size used for message transfer.
-     * we keep it simple; one block size for messages from all senders */
-    const long long unsigned int block_size;
-    // maximum size of any message that can be sent
-    const long long unsigned int max_msg_size;
-    // maximum size of message that can be sent using SST multicast
-    const long long unsigned int sst_max_msg_size;
-    /** Send algorithm for constructing a multicast from point-to-point unicast.
-     *  Binomial pipeline by default. */
-    const rdmc::send_algorithm rdmc_send_algorithm;
-    const unsigned int window_size;
-
-private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
     uint32_t total_num_subgroups;

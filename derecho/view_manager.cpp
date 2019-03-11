@@ -923,7 +923,7 @@ void ViewManager::terminate_epoch(
             curr_view->multicast_group->receiver_function(
                     subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
                     num_shard_senders, *curr_view->gmsSST,
-                    curr_view->multicast_group->window_size, sst_receive_handler_lambda);
+                    curr_subgroup_settings.profile.window_size, sst_receive_handler_lambda);
         }
     }
 
@@ -1447,6 +1447,11 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
             if(shard_view.my_rank != -1) {
                 //Initialize my_subgroups
                 curr_view.my_subgroups[subgroup_id] = shard_num;
+
+                //TODO modify constructor & allow multiple profiles. Also sanitize DerechoParams?
+//                auto max_payload_size = compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size, derecho_params.max_payload_size > derecho_params.max_smc_payload_size);
+//                auto max_smc_payload_size = derecho_params.max_smc_payload_size + sizeof(header);
+
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
                         shard_num,
@@ -1455,7 +1460,8 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
                         shard_view.is_sender,
                         shard_view.sender_rank_of(shard_view.my_rank),
                         num_received_offset,
-                        shard_view.mode};
+                        shard_view.mode,
+                        DerechoParams()}; //TODO read in parameters
             }
         }  // for(shard_num)
         num_received_offset += max_shard_senders;
