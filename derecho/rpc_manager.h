@@ -105,17 +105,12 @@ class RPCManager {
     std::queue<fifo_req> fifo_queue;
     std::mutex fifo_queue_mutex;
     std::condition_variable fifo_queue_cv;
-    std::atomic<bool> fifo_worker_stop{false};
-
 
     /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
 
     /** Handle Non-cascading P2P Send and P2P Queries in fifo*/
     void fifo_worker();
-
-    /** Stop fifo_worker */
-    void stop_and_wait_for_fifo_worker();
 
     /**
      * Handler to be called by rpc_process_loop each time it receives a

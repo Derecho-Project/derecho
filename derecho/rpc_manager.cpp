@@ -235,11 +235,13 @@ void RPCManager::fifo_worker() {
     size_t reply_size = 0;
     fifo_req request;
 
-    while(!fifo_worker_stop) {
+    while(!thread_shutdown) {
         {
             std::unique_lock<std::mutex> lock(fifo_queue_mutex);
-            while(fifo_queue.empty())
-                fifo_queue_cv.wait(lock);
+            fifo_queue_cv.wait(lock, [&]() { return !fifo_queue.empty() || thread_shutdown; });
+	    if (thread_shutdown) {
+	      break;
+	    }
             request = fifo_queue.front();
             fifo_queue.pop();
         }
@@ -262,11 +264,6 @@ void RPCManager::fifo_worker() {
             connections->send(connections->get_node_rank(request.sender_id));
         }
     }
-}
-
-void RPCManager::stop_and_wait_for_fifo_worker() {
-    fifo_worker_stop = true;
-    fifo_worker_thread.join();
 }
 
 void RPCManager::p2p_receive_loop() {
@@ -292,7 +289,8 @@ void RPCManager::p2p_receive_loop() {
         }
     }
     // stop fifo worker.
-    stop_and_wait_for_fifo_worker();
+    fifo_queue_cv.notify_one();
+    fifo_worker_thread.join();
 }
 
 bool in_rpc_handler() {
