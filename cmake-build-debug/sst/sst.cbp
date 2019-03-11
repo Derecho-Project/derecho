@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6"/>
+	<Project>
+		<Option title="sst"/>
+		<Option makefile_is_custom="1"/>
+		<Option compiler="clang"/>
+		<Option virtualFolders="CMake Files\;CMake Files\persistent\;CMake Files\conf\;CMake Files\utils\;CMake Files\derecho\;CMake Files\rdmc\;CMake Files\sst\;CMake Files\tcp\;CMake Files\objectstore\;CMake Files\applications\;CMake Files\applications\archive\;CMake Files\applications\demos\;CMake Files\applications\tests\;CMake Files\applications\tests\unit_tests\;CMake Files\applications\tests\performance_tests\;CMake Files\applications\tests\scalability_tests\;"/>
+		<Build>
+			<Target title="all">
+				<Option working_dir="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="format_sst">
+				<Option working_dir="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 format_sst"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="sst">
+				<Option output="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst/libsst.dylib" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified"/>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified/third_party/spdlog/include"/>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified/third_party/libfabric/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/10.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 sst"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="sst/fast">
+				<Option output="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst/libsst.dylib" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/eos/Documents/cornell meng/derecho-unified/cmake-build-debug/sst"/>
+				<Option object_output="./"/>
+				<Option type="3"/>
+				<Option compiler="clang"/>
+				<Compiler>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified"/>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified/third_party/spdlog/include"/>
+					<Add directory="/Users/eos/Documents/cornell meng/derecho-unified/third_party/libfabric/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include/c++/v1"/>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/10.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 sst/fast"/>
+					<CompileFile command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j4 -f &quot;/Users/eos/Documents/cornell\ meng/derecho-unified/cmake-build-debug/sst/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+		</Build>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/derecho/connection_manager.cpp">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/derecho/connection_manager.h">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/sst/lf.cpp">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/sst/lf.h">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/sst/poll_utils.cpp">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/sst/poll_utils.h">
+			<Option target="sst"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/persistent/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\persistent\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/conf/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\conf\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/utils/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\utils\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/derecho/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\derecho\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/rdmc/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\rdmc\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/sst/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\sst\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/tcp/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\tcp\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/objectstore/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\objectstore\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/archive/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\archive\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/demos/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\demos\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/tests/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\tests\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/tests/unit_tests/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\tests\unit_tests\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/tests/performance_tests/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\tests\performance_tests\"/>
+		</Unit>
+		<Unit filename="/Users/eos/Documents/cornell meng/derecho-unified/applications/tests/scalability_tests/CMakeLists.txt">
+			<Option virtualFolder="CMake Files\applications\tests\scalability_tests\"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>
