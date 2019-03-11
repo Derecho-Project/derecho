@@ -20,14 +20,14 @@ SubView::SubView(int32_t num_members)
           joined(0),
           departed(0),
           my_rank(-1),
-          profile(DerechoParams()) {}
+          profile("default") {}
 
 SubView::SubView(Mode mode,
                  const std::vector<node_id_t>& members,
                  std::vector<int> is_sender,
                  const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
                                               uint16_t>>& member_ips_and_ports,
-                                              const DerechoParams profile)
+                                              const std::string profile)
         : mode(mode),
           members(members),
           is_sender(members.size(), 1),
@@ -158,7 +158,7 @@ int View::rank_of(const node_id_t& who) const {
 SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
                            const std::vector<int>& is_sender,
-                           const DerechoParams profile) const {
+                           const std::string profile) const {
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size();
         ++subview_rank) {
@@ -170,7 +170,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
         }
         subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[member_pos];
     }
-    // Note that joined and departed do not need to get initialized here; they wiill be initialized by ViewManager
+    // Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
     return SubView(mode, with_members, is_sender, subview_member_ips_and_ports, profile);
 }
 
