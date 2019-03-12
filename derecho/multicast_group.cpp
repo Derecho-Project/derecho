@@ -32,6 +32,7 @@ MulticastGroup::MulticastGroup(
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const DerechoParams derecho_params,
+	const subgroup_post_next_version_func_t& post_next_version_callback,
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
@@ -59,6 +60,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
+	  post_next_version_callback(post_next_version_callback),
           persistence_manager_callbacks(persistence_manager_callbacks) {
     assert(window_size >= 1);
 
@@ -98,7 +100,8 @@ MulticastGroup::MulticastGroup(
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-        const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+	const subgroup_post_next_version_func_t& post_next_version_callback,
+        const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : whenlog(logger(old_group.logger), )
                   members(_members),
@@ -124,7 +127,8 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          persistence_manager_callbacks(_persistence_manager_callbacks) {
+	  post_next_version_callback(post_next_version_callback),
+          persistence_manager_callbacks(persistence_manager_callbacks) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -462,6 +466,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
+	post_next_version_callback(subgroup_num, version);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
