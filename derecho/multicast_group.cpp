@@ -60,7 +60,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-	  post_next_version_callback(post_next_version_callback),
+          post_next_version_callback(post_next_version_callback),
           persistence_manager_callbacks(persistence_manager_callbacks) {
     assert(window_size >= 1);
 
@@ -127,7 +127,7 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-	  post_next_version_callback(post_next_version_callback),
+          post_next_version_callback(post_next_version_callback),
           persistence_manager_callbacks(persistence_manager_callbacks) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
@@ -466,7 +466,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-	post_next_version_callback(subgroup_num, version);
+        post_next_version_callback(subgroup_num, version);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
@@ -486,6 +486,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
+        post_next_version_callback(subgroup_num, version);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
