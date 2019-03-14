@@ -119,7 +119,7 @@ private:
      *  in the process of transitioning to a new view. */
     std::unique_ptr<View> next_view;
 
-    /** Contains client sockets for pending joins that have not yet been handled.*/
+    /** On the leader node, contains client sockets for pending joins that have not yet been handled.*/
     LockedQueue<tcp::socket> pending_join_sockets;
 
     /** Contains old Views that need to be cleaned up*/
@@ -129,12 +129,11 @@ private:
 
     /** The sockets connected to clients that will join in the next view, if any */
     std::list<tcp::socket> proposed_join_sockets;
-    /** The node ID that has been assigned to the client that is currently joining, if any. */
-    node_id_t joining_client_id;
     /** A cached copy of the last known value of this node's suspected[] array.
      * Helps the SST predicate detect when there's been a change to suspected[].*/
     std::vector<bool> last_suspected;
 
+    /** The TCP socket the leader uses to listen for joining clients */
     tcp::connection_listener server_socket;
     /** A flag to signal background threads to shut down; set to true when the group is destroyed. */
     std::atomic<bool> thread_shutdown;
@@ -378,9 +377,6 @@ private:
     void await_first_view(const node_id_t my_id,
                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                           uint32_t& num_received_size);
-    /** Constructor helper for the leader when it is restarting from complete failure;
-     * waits for a majority of nodes from the last known view to join. */
-    void await_rejoining_nodes(const node_id_t my_id);
 
     /** Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
@@ -554,6 +550,12 @@ public:
     ~ViewManager();
 
     /**
+     * Setup method for the leader when it is restarting from complete failure:
+     * waits for a restart quorum of nodes from the last known view to join.
+     */
+    void await_rejoining_nodes(const node_id_t my_id);
+
+    /**
      * Setup method for non-leader nodes: checks whether the initial View received
      * in the constructor gets committed by the leader, and if not, waits for another
      * initial View to be sent.
@@ -564,23 +566,37 @@ public:
     bool check_view_committed(tcp::socket& leader_connection);
 
     /**
+     * Setup method for the leader node in total restart mode: sends a Prepare
+     * message to all non-leader nodes indicating that state transfer has finished.
+     * Also checks to see whether any non-leader nodes have failed in the meantime.
+     * This function simply does nothing if this node is not in total restart mode.
+     * @param leader_has_quorum A mutable reference to a bool that will be set to
+     * False if the leader realizes it no longer has a restart quorum due to
+     * failures.
+     * @return True if all non-leader nodes are still alive, False if there was
+     * a failure.
+     */
+    bool leader_prepare_initial_view(bool& leader_has_quorum);
+
+    /**
      * Setup method for the leader node: sends a commit message to all non-leader
      * nodes indicating that it is safe to use the initial View.
-     * @return True if the initial View was committed, false if it was aborted
      */
-    bool leader_commit_initial_view();
+    void leader_commit_initial_view();
 
     /**
      * An extra setup step only needed during total restart; truncates the
      * persistent logs of this node to conform to the ragged trim decided
-     * on by the restart leader.
+     * on by the restart leader. This function does nothing if this node is not
+     * in total restart mode.
      */
     void truncate_logs();
 
     /**
      * An extra setup method only needed during total restart. Sends Replicated
      * Object data (most importantly, the persistent logs) to all members of a
-     * shard if this node is listed as that shard's leader.
+     * shard if this node is listed as that shard's leader. This function does
+     * nothing if this node is not in total restart mode.
      */
     void send_logs();
 
@@ -600,21 +616,16 @@ public:
      */
     void finish_setup();
 
-    /** Starts predicate evaluation in the current view's SST. Call this only
-     * when all other setup has been done for the Derecho group. */
+    /**
+     * Starts predicate evaluation in the current view's SST. Call this only
+     * when all other setup has been done for the Derecho group.
+     */
     void start();
 
     /**
-     * @return True if the system is currently doing a total restart,
-     * false otherwise. Group needs to know this information in order to
-     * perform state transfer, but only ViewManager learns it from the
-     * leader.
-     */
-    bool is_in_total_restart() const { return in_total_restart; }
-
-    /**
      * @return The list of shard leaders in the previous view that this node
-     * received along with curr_view
+     * received along with curr_view when it joined the group. Needed by Group
+     * to complete state transfer.
      */
     const std::vector<std::vector<int64_t>>& get_old_shard_leaders() const { return prior_view_shard_leaders; }
 

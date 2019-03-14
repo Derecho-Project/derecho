@@ -83,8 +83,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
           }()),
           rpc_manager(view_manager, deserialization_context.get()),
           factories(make_kind_map(factories...)) {
-    //Since state transfer must complete before an initial view can commit in total restart,
-    //the recieve_objects call must happen in this loop
+    //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
     while(!initial_view_confirmed) {
         //This might be the shard leaders from the previous view,
@@ -96,22 +95,34 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
                 = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
                                                         old_shard_leaders);
-        if(view_manager.is_in_total_restart()) {
-            view_manager.truncate_logs();
-            view_manager.send_logs();
-        }
+        //These functions are no-ops if we're not doing total restart
+        view_manager.truncate_logs();
+        view_manager.send_logs();
         receive_objects(subgroups_and_leaders_to_receive);
         if(is_starting_leader) {
-            initial_view_confirmed = view_manager.leader_commit_initial_view();
+            bool leader_has_quorum = true;
+            initial_view_confirmed = view_manager.leader_prepare_initial_view(leader_has_quorum);
+            if(!leader_has_quorum) {
+                //If quorum was lost due to failures during the prepare message,
+                //stop here and wait for more nodes to rejoin before going back to state-transfer
+                view_manager.await_rejoining_nodes(my_id);
+            }
         } else {
+            //This will wait for a new view to be sent if the view was aborted
             initial_view_confirmed = view_manager.check_view_committed(leader_connection.value());
         }
+    }
+    if(is_starting_leader) {
+        //In restart mode, once a prepare is successful, send a commit
+        //(this function does nothing if we're not doing total restart)
+        view_manager.leader_commit_initial_view();
     }
     //Once the initial view is committed, we can make RDMA connections
     view_manager.initialize_multicast_groups(callbacks);
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
     view_manager.finish_setup();
+    //Start all the predicates and listeners threads
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
