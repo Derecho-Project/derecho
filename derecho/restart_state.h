@@ -86,8 +86,6 @@ private:
     /** Mutable reference to RestartState, since this class needs to update
      * the restart state stored in ViewManager. */
     RestartState& restart_state;
-    std::map<subgroup_id_t, SubgroupSettings> restart_subgroup_settings;
-    uint32_t restart_num_received_size;
     const SubgroupInfo& subgroup_info;
     const DerechoParams& derecho_params;
 

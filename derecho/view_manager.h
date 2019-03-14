@@ -271,15 +271,11 @@ private:
     /** Runs when all live nodes have reported they have wedged the current view
      * (meta-wedged), and does ragged edge cleanup to finalize the terminated epoch.
      * Determines if the next view will be adequate, and only proceeds to start a view change if it will be. */
-    void terminate_epoch(std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
-                         uint32_t next_num_received_size,
-                         DerechoSST& gmsSST);
+    void terminate_epoch(DerechoSST& gmsSST);
     /** Finishes installing the new view, assuming it is adequately provisioned.
      * Sends the new view and necessary Replicated Object state to new members,
      * sets up the new SST and MulticastGroup instances, and calls the new-view upcalls. */
     void finish_view_change(std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
-                            std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
-                            uint32_t next_num_received_size,
                             DerechoSST& gmsSST);
 
     /** Helper method for completing view changes; determines whether this node
@@ -374,9 +370,7 @@ private:
     void load_ragged_trim();
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
-    void await_first_view(const node_id_t my_id,
-                          std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                          uint32_t& num_received_size);
+    void await_first_view(const node_id_t my_id);
 
     /** Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
@@ -408,32 +402,24 @@ private:
                                     const uint32_t new_num_received_size);
     /**
      * Initializes curr_view with subgroup information based on the membership
-     * functions in subgroup_info, and creates the subgroup-settings map that
-     * MulticastGroup's constructor needs based on this information. If curr_view
-     * would be inadequate based on the subgroup allocation functions, it will
-     * be marked as inadequate and no subgroup settings will be provided.
+     * functions in subgroup_info. If curr_view would be inadequate based on
+     * the subgroup allocation functions, it will be marked as inadequate.
      * @param subgroup_info The SubgroupInfo (containing subgroup membership
      * functions) to use to provision subgroups
      * @param prev_view The previous View, which may be null if the current view
      * is the first one
      * @param curr_view A mutable reference to the current View, which will have
      * its SubViews initialized
-     * @param subgroup_settings A mutable reference to the subgroup settings map,
-     * which will be filled out
-     * @return num_received_size for the SST based on the computed subgroup membership
      */
-    static uint32_t make_subgroup_maps(const SubgroupInfo& subgroup_info,
+    static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
                                        const std::unique_ptr<View>& prev_view,
-                                       View& curr_view,
-                                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+                                       View& curr_view);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
      * (and the num_received_size for the SST) based on the subgroup information
      * already in curr_view. Also reinitializes curr_view's my_subgroups to
-     * indicate which subgroups this node belongs to. This function is only used
-     * during total restart, when a joining node receives a View that already
-     * has subgroup_shard_views populated.
+     * indicate which subgroups this node belongs to.
      * @param curr_view A mutable reference to the current View, which will have its
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,

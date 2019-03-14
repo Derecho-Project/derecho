@@ -77,8 +77,6 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
           curr_view(std::move(_curr_view)),
           restart_state(restart_state),
-          restart_subgroup_settings(),
-          restart_num_received_size(0),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
           last_known_view_members(curr_view->members.begin(), curr_view->members.end()),
@@ -244,7 +242,7 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
 
 bool RestartLeaderState::compute_restart_view() {
     restart_view = update_curr_and_next_restart_view();
-    restart_num_received_size = ViewManager::make_subgroup_maps(subgroup_info, curr_view, *restart_view, restart_subgroup_settings);
+    ViewManager::make_subgroup_maps(subgroup_info, curr_view, *restart_view);
     return restart_view->is_adequately_provisioned;
 }
 
