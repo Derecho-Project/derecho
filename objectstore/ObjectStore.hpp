@@ -32,13 +32,13 @@ public:
     // @PARAM object - const reference of the object to be inserted. If
     //        corresponding object id exists, the object is replaced
     // @PARAM force_client - see above
-    // @RETURN true/false
-    virtual bool bio_put(const Object& object, bool force_client = false) = 0;
+    // @RETURN new version of this object
+    virtual persistent::version_t bio_put(const Object& object, bool force_client = false) = 0;
     // 2 - blocking remove
     // @PARAM oid - const reference of the object id.
     // @PARAM force_client - see above
-    // @RETURN true/false
-    virtual bool bio_remove(const OID& oid, bool force_client = false) = 0;
+    // @RETURN version of this remove operation
+    virtual persistent::version_t bio_remove(const OID& oid, bool force_client = false) = 0;
     // 3 - blocking get
     // @PARAM oid - const reference of the object id.
     // @PARAM force_client - see above
@@ -47,8 +47,8 @@ public:
 
     // non blocking operations: the operations will return a future.
     // The arguments align to the blocking apis.
-    virtual derecho::rpc::QueryResults<bool> aio_put(const Object& object, bool force_client = false) = 0;
-    virtual derecho::rpc::QueryResults<bool> aio_remove(const OID& oid, bool force_client = false) = 0;
+    virtual derecho::rpc::QueryResults<persistent::version_t> aio_put(const Object& object, bool force_client = false) = 0;
+    virtual derecho::rpc::QueryResults<persistent::version_t> aio_remove(const OID& oid, bool force_client = false) = 0;
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, bool force_client = false) = 0;
 
     virtual void leave() = 0; // leave gracefully
