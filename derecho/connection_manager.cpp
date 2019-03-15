@@ -131,6 +131,11 @@ bool tcp_connections::delete_node(node_id_t remove_id) {
     return (sockets.erase(remove_id) > 0);
 }
 
+bool tcp_connections::contains_node(node_id_t node_id) {
+    std::lock_guard<std::mutex> lock(sockets_mutex);
+    return (sockets.find(node_id) != sockets.end());
+}
+
 int32_t tcp_connections::probe_all() {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     for(auto& p : sockets) {
@@ -140,6 +145,24 @@ int32_t tcp_connections::probe_all() {
         }
     }
     return -1;
+}
+
+void tcp_connections::filter_to(const std::vector<node_id_t>& live_nodes_list) {
+    std::vector<node_id_t> sorted_nodes_list(live_nodes_list.size());
+    //There's nothing "partial" about this. Make a sorted copy of live_nodes_list.
+    std::partial_sort_copy(live_nodes_list.begin(), live_nodes_list.end(),
+                           sorted_nodes_list.begin(), sorted_nodes_list.end());
+    std::lock_guard<std::mutex> lock(sockets_mutex);
+    for(auto socket_map_iter = sockets.begin(); socket_map_iter != sockets.end();) {
+        if(!std::binary_search(sorted_nodes_list.begin(),
+                               sorted_nodes_list.end(),
+                               socket_map_iter->first)) {
+            //If the node ID is not in the list, delete the socket
+            socket_map_iter = sockets.erase(socket_map_iter);
+        } else {
+            socket_map_iter++;
+        }
+    }
 }
 
 derecho::LockedReference<std::unique_lock<std::mutex>, socket> tcp_connections::get_socket(node_id_t node_id) {

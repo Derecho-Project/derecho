@@ -1,8 +1,8 @@
 #include <optional>
 
-#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "restart_state.h"
+#include "utils/logger.hpp"
 //This code needs access to ViewManager's static methods
 #include "view_manager.h"
 
@@ -72,16 +72,13 @@ persistent::version_t RestartState::ragged_trim_to_latest_version(const int32_t 
 }
 
 RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
-                                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
-                                       uint32_t& num_received_size,
-                                       const SubgroupInfo& subgroup_info,
+                                       const SubgroupInfo& subgroup_info, const DerechoParams& derecho_params,
                                        const node_id_t my_id)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-                  curr_view(std::move(_curr_view)),
+          curr_view(std::move(_curr_view)),
           restart_state(restart_state),
-          restart_subgroup_settings(subgroup_settings_map),
-          restart_num_received_size(num_received_size),
           subgroup_info(subgroup_info),
+          derecho_params(derecho_params),
           last_known_view_members(curr_view->members.begin(), curr_view->members.end()),
           longest_log_versions(curr_view->subgroup_shard_views.size()),
           nodes_with_longest_log(curr_view->subgroup_shard_views.size()),
@@ -108,10 +105,11 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
     int time_remaining_ms = RESTART_LEADER_TIMEOUT;
     while(time_remaining_ms > 0) {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        using namespace std::chrono;
+        auto start_time = high_resolution_clock::now();
         std::optional<tcp::socket> client_socket = server_socket.try_accept(time_remaining_ms);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::milliseconds time_waited = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        auto end_time = high_resolution_clock::now();
+        milliseconds time_waited = duration_cast<milliseconds>(end_time - start_time);
         time_remaining_ms -= time_waited.count();
         if(client_socket) {
             node_id_t joiner_id = 0;
@@ -133,20 +131,15 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             uint16_t joiner_rdmc_port = 0;
             client_socket->read(joiner_rdmc_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
-            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
+            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port,
+                                                      joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
             waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
-            //Compute the intersection of rejoined_node_ids and last_known_view_members
-            //in the most clumsy, verbose, awkward way possible
-            std::set<node_id_t> intersection_of_ids;
-            std::set_intersection(rejoined_node_ids.begin(), rejoined_node_ids.end(),
-                                  last_known_view_members.begin(), last_known_view_members.end(),
-                                  std::inserter(intersection_of_ids, intersection_of_ids.end()));
-            if(intersection_of_ids.size() >= (last_known_view_members.size() / 2) + 1) {
-                ready_to_restart = compute_restart_view();
-            }
+            //Check for quorum
+            ready_to_restart = has_restart_quorum();
             //If all the members have rejoined, no need to keep waiting
-            if(intersection_of_ids.size() == last_known_view_members.size() && ready_to_restart) {
+            if(std::includes(rejoined_node_ids.begin(), rejoined_node_ids.end(),
+                             last_known_view_members.begin(), last_known_view_members.end())) {
                 return;
             }
         } else if(!ready_to_restart) {
@@ -154,6 +147,23 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             time_remaining_ms = RESTART_LEADER_TIMEOUT;
         }
     }
+}
+
+bool RestartLeaderState::has_restart_quorum() {
+    //Compute rejoined_node_ids.intersect(last_known_view_members)
+    //but with a lot of unnecessary repetitive boilerplate because it's the STL
+    std::set<node_id_t> intersection_of_ids;
+    std::set_intersection(rejoined_node_ids.begin(), rejoined_node_ids.end(),
+                          last_known_view_members.begin(), last_known_view_members.end(),
+                          std::inserter(intersection_of_ids, intersection_of_ids.end()));
+    if(intersection_of_ids.size() < (last_known_view_members.size() / 2) + 1 ||
+            !contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
+        return false;
+    }
+    //If we have a sufficient number of members, attempt to compute a restart view
+    //If that fails, we know we don't have a quorum, but if it succeeds, we
+    //both have a quorum and know the restart view
+    return compute_restart_view();
 }
 
 void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket) {
@@ -209,13 +219,15 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
             if(existing_ragged_trim == restart_state.logged_ragged_trim[ragged_trim->subgroup_id].end()) {
                 whenlog(logger->trace("Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})", joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num););
                 //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
-                restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
+                restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
+                                                                                   std::move(ragged_trim));
             } else if(existing_ragged_trim->second->vid <= ragged_trim->vid) {
                 existing_ragged_trim->second = std::move(ragged_trim);
             }
         } else {
             //The client had a newer View, so accept everything it sends
-            restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num, std::move(ragged_trim));
+            restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
+                                                                               std::move(ragged_trim));
         }
     }
     //Replace curr_view if the client's view was newer
@@ -230,24 +242,20 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
 
 bool RestartLeaderState::compute_restart_view() {
     restart_view = update_curr_and_next_restart_view();
-    restart_num_received_size = ViewManager::make_subgroup_maps(subgroup_info, curr_view, *restart_view, restart_subgroup_settings);
-    if(restart_view->is_adequately_provisioned
-       && contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
-        return true;
-    } else {
-        //We're not yet ready to restart if the next view would not be adequate,
-        //or if some subgroup/shard from the last known view has no members restarting
-        return false;
-    }
+    ViewManager::make_subgroup_maps(subgroup_info, curr_view, *restart_view);
+    return restart_view->is_adequately_provisioned;
 }
 
-int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_params) {
+int64_t RestartLeaderState::send_restart_view() {
+    members_sent_restart_view.clear();
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
         std::size_t view_buffer_size = mutils::bytes_size(*restart_view);
         std::size_t params_buffer_size = mutils::bytes_size(derecho_params);
+        std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
         char view_buffer[view_buffer_size];
         char params_buffer[params_buffer_size];
+        char leaders_buffer[leaders_buffer_size];
         bool send_success;
         //Within this try block, any send that returns failure throws the ID of the node that failed
         try {
@@ -292,6 +300,16 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
                     }
                 }
             }
+            whenlog(logger->debug("Sending longest-log locations to node {}", waiting_sockets_iter->first););
+            send_success = waiting_sockets_iter->second.write(leaders_buffer_size);
+            if(!send_success) {
+                throw waiting_sockets_iter->first;
+            }
+            mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
+            send_success = waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
+            if(!send_success) {
+                throw waiting_sockets_iter->first;
+            }
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
             waiting_sockets_iter++;
         } catch(node_id_t failed_node) {
@@ -310,32 +328,64 @@ int64_t RestartLeaderState::send_restart_view(const DerechoParams& derecho_param
     return -1;
 }
 
-void RestartLeaderState::send_shard_leaders() {
+bool RestartLeaderState::resend_view_until_quorum_lost() {
+    bool success = false;
+    //This method is only called after at least one failure, so first recompute the view
+    bool can_retry = has_restart_quorum();
+    while(can_retry) {
+        int64_t failed_node_id = send_restart_view();
+        if(failed_node_id != -1) {
+            whenlog(logger->debug("Recomputed View would still have been adequate, but node {} failed while sending it!", failed_node_id););
+            send_abort();
+            //Recompute the restart view again, and try again if it's still adequate
+            can_retry = has_restart_quorum();
+        } else {
+            //Successfully sent the recomputed View to all remaining nodes, so we can stop retrying
+            success = true;
+            break;
+        }
+    }
+    //If we reached this point and success is still false, we lost the quorum
+    return success;
+}
+
+void RestartLeaderState::send_abort() {
+    for(const node_id_t& member_sent_view : members_sent_restart_view) {
+        whenlog(logger->debug("Sending view abort message to node {}", member_sent_view););
+        waiting_join_sockets.at(member_sent_view).write(CommitMessage::ABORT);
+    }
+}
+
+int64_t RestartLeaderState::send_prepare() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
-        char leaders_buffer[leaders_buffer_size];
-        /* It would be nice to check the return values of these writes and handle a failure here,
-         * but since all the other nodes have already installed the View there's no way to tell
-         * them about the failure - they're already attempting to set up their SST with the
-         * failed node. */
-        waiting_sockets_iter->second.write(leaders_buffer_size);
-        mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
-        waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
-        //This is the last message a joining node expects to get, so close the socket
+        bool send_success;
+        try {
+            whenlog(logger->debug("Sending view prepare message to node {}", waiting_sockets_iter->first););
+            send_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
+            if(!send_success) {
+                throw waiting_sockets_iter->first;
+            }
+        } catch(node_id_t failed_node) {
+            waiting_join_sockets.erase(waiting_sockets_iter);
+            rejoined_node_ips_and_ports.erase(failed_node);
+            rejoined_node_ids.erase(failed_node);
+            return failed_node;
+        }
+        waiting_sockets_iter++;
+    }
+    return -1;
+}
+
+void RestartLeaderState::send_commit() {
+    for(auto waiting_sockets_iter = waiting_join_sockets.begin();
+        waiting_sockets_iter != waiting_join_sockets.end();) {
+        whenlog(logger->debug("Sending view commit message to node {}", waiting_sockets_iter->first););
+        waiting_sockets_iter->second.write(CommitMessage::COMMIT);
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
 }
 
-void RestartLeaderState::confirm_restart_view(const bool commit) {
-    for(const node_id_t& member_sent_view : members_sent_restart_view) {
-        whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, commit););
-        //Eventually it would be nice to check for failures here, but
-        //we probably won't detect a failure by writing one byte.
-        waiting_join_sockets.at(member_sent_view).write(commit);
-    }
-    members_sent_restart_view.clear();
-}
 
 void RestartLeaderState::print_longest_logs() const {
     std::ostringstream leader_list;
@@ -381,7 +431,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
                                                          const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                                 whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);

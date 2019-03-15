@@ -33,6 +33,15 @@ struct RaggedTrim : public mutils::ByteRepresentable {
 };
 
 /**
+ * A type-safe set of messages that can be sent during two-phase commit
+ */
+enum class CommitMessage {
+    PREPARE,//!< PREPARE
+    COMMIT, //!< COMMIT
+    ABORT   //!< ABORT
+};
+
+/**
  * Builds a filename to use for a RaggedTrim logged to disk using its subgroup and shard IDs.
  */
 inline std::string ragged_trim_filename(subgroup_id_t subgroup_num, uint32_t shard_num) {
@@ -77,9 +86,8 @@ private:
     /** Mutable reference to RestartState, since this class needs to update
      * the restart state stored in ViewManager. */
     RestartState& restart_state;
-    std::map<subgroup_id_t, SubgroupSettings>& restart_subgroup_settings;
-    uint32_t& restart_num_received_size;
     const SubgroupInfo& subgroup_info;
+    const DerechoParams& derecho_params;
 
     std::unique_ptr<View> restart_view;
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
@@ -100,12 +108,26 @@ private:
      */
     void receive_joiner_logs(const node_id_t& joiner_id, tcp::socket& client_socket);
 
+    /**
+     * Recomputes the restart view based on the current set of nodes that have
+     * rejoined (in waiting_join_sockets and rejoined_node_ids). This just ties
+     * together update_curr_and_next_restart_view and make_subgroup_maps.
+     * @return True if the restart view would be adequate, false if it would be
+     * inadequate.
+     */
+    bool compute_restart_view();
+
+    /**
+     * Updates curr_view and makes a new next_view based on the current set of
+     * rejoining nodes during total restart.
+     * @return The next view that will be installed if the restart continues at this point
+     */
+    std::unique_ptr<View> update_curr_and_next_restart_view();
+
 public:
-    static const int RESTART_LEADER_TIMEOUT = 300000;
+    static const int RESTART_LEADER_TIMEOUT = 2000;
     RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
-                       std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_map,
-                       uint32_t& num_received_size,
-                       const SubgroupInfo& subgroup_info,
+                       const SubgroupInfo& subgroup_info, const DerechoParams& derecho_params,
                        const node_id_t my_id);
     /**
      * Waits for nodes to rejoin at this node, updating the last known View and
@@ -115,34 +137,51 @@ public:
      * @param server_socket The TCP socket to listen for rejoining nodes on
      */
     void await_quorum(tcp::connection_listener& server_socket);
+
     /**
-     * Recomputes the restart view based on the current set of nodes that have
-     * rejoined (in waiting_join_sockets and rejoined_node_ids).
-     * @return True if the group is now ready to restart, false if it is not
-     * (because, e.g. the restart view would be inadequate).
+     * Checks to see whether the leader has achieved a restart quorum, which
+     * may involve recomputing the restart view if the minimum number of nodes
+     * have rejoined.
+     * @return True if there is a restart quorum, false if there is not
      */
-    bool compute_restart_view();
+    bool has_restart_quorum();
+
     /**
-     * Sends the currently-computed restart view and the provided DerechoParams
-     * to all members who are currently ready to restart.
-     * @param derecho_params The DerechoParams to send to each restarting node
+     * Repeatedly attempts to send a new restart view, recomputing it on each
+     * failure, until either there is no longer a restart quorum or the view was
+     * sent successfully to everyone.
+     * @return True if the view was sent successfully, false if the quorum was lost
+     */
+    bool resend_view_until_quorum_lost();
+
+    /**
+     * Sends the currently-computed restart view, the current ragged trim, the
+     * current location of the longest logs (the "shard leaders"), and the
+     * DerechoParams to all members who are currently ready to restart.
      * @return -1 if all sends were successful; the ID of a node that has failed
      * if sending the View to a node failed.
      */
-    int64_t send_restart_view(const DerechoParams& derecho_params);
+    int64_t send_restart_view();
+
     /**
-     * Sends a Boolean value to all nodes that have previously been sent the
-     * restart view, indicating whether they can commit this view or must
-     * discard it because some node has failed.
-     * @param commit
+     * Sends an Abort message to all nodes that have previously been sent the
+     * restart View, indicating that they must go back to waiting for a new View.
      */
-    void confirm_restart_view(const bool commit);
+    void send_abort();
+
     /**
-     * Sends the list of nodes from each shard that have the longest log (which
-     * are the restart shard leaders, though they won't be shard leaders after
-     * restart) to all members in the restart view, then closes their TCP sockets.
+     * Sends a Prepare message to all members who are currently ready to restart;
+     * this checks for failures one more time before committing.
+     * @return -1 if all sends were successful; the ID of a node that has failed
+     * if sending a Prepare message failed.
      */
-    void send_shard_leaders();
+    int64_t send_prepare();
+
+    /**
+     * Sends a Commit message to all members of the restart view, then closes the
+     * TCP sockets connected to them.
+     */
+    void send_commit();
     /** Read the curr_view (last known view) managed by RestartLeaderState. Only used for debugging. */
     const View& get_curr_view() const { return *curr_view; }
     /** Read the current restart view managed by RestartLeaderState. */
@@ -152,31 +191,24 @@ public:
     std::unique_ptr<View> take_restart_view() { return std::move(restart_view); }
 
     void print_longest_logs() const;
-    /**
-     * Updates curr_view and makes a new next_view based on the current set of
-     * rejoining nodes during total restart. This is only used by the restart
-     * leader during total restart.
-     * @param waiting_join_sockets The set of connections to restarting nodes
-     * @param rejoined_node_ids The IDs of those nodes
-     * @return The next view that will be installed if the restart continues at this point
-     */
-    std::unique_ptr<View> update_curr_and_next_restart_view();
+
     /**
      * Constructs the next view from the current view and a list of joining
-     * nodes, by ID and IP address. This version is only used by the restart
-     * leader during total restart, and assumes that all nodes marked failed
-     * in curr_view will be removed.
+     * nodes, by ID and IP address. This is slightly different from the standard
+     * ViewManager::make_next_view because it gets explicit inputs rather than
+     * examining the SST, and assumes that all nodes marked failed in curr_view
+     * will be removed (instead of removing only the "accepted changes").
      * @param curr_view The current view, including the list of failed members
      * to remove
-     * @param joiner_ids
-     * @param joiner_ips
+     * @param joiner_ids The list of joining node IDs
+     * @param joiner_ips_and_ports The list of IP addresses and ports for the joining nodes
      * @param logger
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
                                                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.
