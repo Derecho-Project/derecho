@@ -17,11 +17,8 @@ namespace objectstore {
 
     A short summary of the classes:
 
-    - ObjectStoreCore
-    The core functions of a object store.
-
     - DeltaObjectStoreCore
-    Delta feature is enabled based on ObjectStoreCore.
+    Delta feature is enabled.
 
     - VolatileUnloggedObjectStore (Type for a derecho subgroup)
     The implementation of an object store with out persistence and log.
@@ -59,16 +56,18 @@ namespace objectstore {
 class IObjectStoreAPI {
 public:
     // insert or update a new object
-    // @PARAM oid
+    // @PARAM object - reference to the object to be inserted or updated.
+    //        object.ver is not used and will be assigned a value after 
+    //        'put' operation finish.
     // @RETURN
-    //     return true if oid removed successfully, false if no object is found.
-    virtual bool put(const Object& object) = 0;
+    //     return the version of the new object 
+    virtual persistent::version_t put(const Object& object) = 0;
     // remove an object
     // @PARAM oid
     //     the object id
     // @RETURN
-    //     return true if oid removed successfully, false if no object is found.
-    virtual bool remove(const OID& oid) = 0;
+    //     return the version of the remove operation.
+    virtual persistent::version_t remove(const OID& oid) = 0;
     // get an object
     // @PARAM oid
     //     the object id
@@ -81,16 +80,17 @@ public:
 class IReplica {
 public:
     // Perform an ordered 'put' in the subgroup
+    //
     // @PARAM oid
     // @RETURN
-    //     return true if oid removed successfully, false if no object is found.
-    virtual bool orderedPut(const Object& object) = 0;
+    //     return the version of the new object
+    virtual persistent::version_t orderedPut(const Object& object) = 0;
     // Perform an ordered 'remove' in the subgroup
     // @PARAM oid
     //     the object id
     // @RETURN
-    //     return true if oid removed successfully, false if no object is found.
-    virtual bool orderedRemove(const OID& oid) = 0;
+    //     return the version of the remove operation
+    virtual persistent::version_t orderedRemove(const OID& oid) = 0;
     // Perform an ordered 'get' in the subgroup
     // @PARAM oid
     //     the object id
@@ -100,55 +100,15 @@ public:
     virtual const Object orderedGet(const OID& oid) = 0;
 };
 
-class ObjectStoreCore : public IReplica {
-public:
-    std::map<OID, Object> objects;
-    const ObjectWatcher object_watcher;
-    const Object inv_obj;
-
-    // @override IReplica::orderedPut
-    virtual bool orderedPut(const Object& object) {
-        this->objects.erase(object.oid);
-        this->objects.emplace(object.oid, object);  // copy constructor
-        // call object watcher
-        if (object_watcher) {
-            object_watcher(object.oid,object);
-        }
-        return true;
-    }
-    // @override IReplica::orderedRemove:
-    virtual bool orderedRemove(const OID& oid) {
-        if (this->objects.erase(oid)) {
-            object_watcher(oid,inv_obj);
-            return true;
-        }
-        return false; 
-    }
-    // @override IReplica::orderedGet
-    virtual const Object orderedGet(const OID& oid) {
-        if(objects.find(oid) != objects.end()) {
-            return objects.at(oid);
-        } else {
-            return this->inv_obj;
-        }
-    }
-
-    // constructors
-    ObjectStoreCore(const ObjectWatcher& ow) : object_watcher(ow) {}
-    ObjectStoreCore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
-        objects(_objects),
-        object_watcher(ow) {}
-    ObjectStoreCore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
-        objects(_objects),
-        object_watcher(ow) {}
-};
-
-class VolatileUnloggedObjectStore : public ObjectStoreCore,
+class VolatileUnloggedObjectStore : public IReplica,
                                     public mutils::ByteRepresentable,
                                     public derecho::GroupReference,
                                     public IObjectStoreAPI {
 public:
     using derecho::GroupReference::group;
+    std::map<OID, Object> objects;
+    const ObjectWatcher object_watcher;
+    const Object inv_obj;
 
     REGISTER_RPC_FUNCTIONS(VolatileUnloggedObjectStore,
                            orderedPut,
@@ -158,36 +118,36 @@ public:
                            remove,
                            get);
 
-    // @override IObjectStoreAPI::put
-    virtual bool put(const Object& object) {
+    inline persistent::version_t get_version() {
         derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template
-        get_subgroup<VolatileUnloggedObjectStore>();
+            get_subgroup<VolatileUnloggedObjectStore>();
+	return subgroup_handle.get_next_version();
+    }
+
+    // @override IObjectStoreAPI::put
+    virtual persistent::version_t put(const Object& object) {
+        derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template
+            get_subgroup<VolatileUnloggedObjectStore>();
         auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
         decltype(results)::ReplyMap& replies = results.get();
-        bool bRet = true;
+	persistent::version_t vRet = INVALID_VERSION;
+	// TODO: should we verify consistency of the versions?
         for(auto& reply_pair : replies) {
-            if(!reply_pair.second.get()) {
-                bRet = false;
-                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << " returned false" << std::endl;
-                break;
-            }
+            vRet = reply_pair.second.get();
         }
-        return bRet;
+        return vRet;
     }
     // @override IObjectStoreAPI::remove
-    virtual bool remove(const OID& oid) {
+    virtual persistent::version_t remove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
-        derecho::rpc::QueryResults<bool> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
+        derecho::rpc::QueryResults<persistent::version_t> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        bool bRet = true;
+	persistent::version_t vRet = INVALID_VERSION;
+        // TODO: should we verify consistency of the versions?
         for(auto& reply_pair : replies) {
-            if(!reply_pair.second.get()) {
-                bRet = false;
-                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << " returned false" << std::endl;
-                break;
-            }
+            vRet = reply_pair.second.get();
         }
-        return bRet;
+        return vRet;
     }
     // @override IObjectStoreAPI::get
     virtual const Object get(const OID& oid) {
@@ -201,28 +161,35 @@ public:
 
     // This is for REGISTER_RPC_FUNCTIONS
     // @override IReplica::orderedPut
-    virtual bool orderedPut(const Object& object) {
-#ifndef NDEBUG
-        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
-#endif
-        dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
-        return ObjectStoreCore::orderedPut(object);
+    virtual persistent::version_t orderedPut(const Object& object) {
+        persistent::version_t version = get_version();
+        dbg_default_info("orderedPut object:{},version:{}", object.oid, version);
+        this->objects.erase(object.oid);
+	object.ver = version;
+        this->objects.emplace(object.oid, object);  // copy constructor
+        // call object watcher
+        if (object_watcher) {
+            object_watcher(object.oid,object);
+        }
+        return object.ver;
     }
-    // @override IReplica::orderedRemove:
-    virtual bool orderedRemove(const OID& oid) {
-#ifndef NDEBUG
-        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
-#endif
-        dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
-        return ObjectStoreCore::orderedRemove(oid);
+    // @override IReplica::orderedRemove
+    virtual persistent::version_t orderedRemove(const OID& oid) {
+        persistent::version_t version = get_version();
+        dbg_default_info("orderedRemove object:{},version:{}", oid, version);
+        if (this->objects.erase(oid)) {
+            object_watcher(oid,inv_obj);
+        }
+        return version;
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
-#ifndef NDEBUG
-        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
-#endif
-        dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
-        return ObjectStoreCore::orderedGet(oid);
+        dbg_default_info("orderedGet object:{},version:{}", oid, get_version());
+        if(objects.find(oid) != objects.end()) {
+            return objects.at(oid);
+        } else {
+            return this->inv_obj;
+        }
     }
 
     DEFAULT_SERIALIZE(objects);
@@ -238,16 +205,15 @@ public:
     void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructors
-    VolatileUnloggedObjectStore(const ObjectWatcher& ow) : ObjectStoreCore(ow) {}
+    VolatileUnloggedObjectStore(const ObjectWatcher& ow) : object_watcher(ow) {}
     VolatileUnloggedObjectStore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
-        ObjectStoreCore(_objects,ow) {}
+        objects(_objects), object_watcher(ow) {}
     VolatileUnloggedObjectStore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
-        ObjectStoreCore(std::move(_objects),ow) {}
+        objects(std::move(_objects)),object_watcher(ow) {}
 };
 
 // Enable the Delta feature
-class DeltaObjectStoreCore : public ObjectStoreCore,
-                             public mutils::ByteRepresentable,
+class DeltaObjectStoreCore : public mutils::ByteRepresentable,
                              public persistent::IDeltaSupport<DeltaObjectStoreCore> {
 #define DEFAULT_DELTA_BUFFER_CAPACITY (4096)
     enum _OPID {
@@ -320,6 +286,9 @@ class DeltaObjectStoreCore : public ObjectStoreCore,
     }
 
 public:
+    std::map<OID, Object> objects;
+    const ObjectWatcher object_watcher;
+    const Object inv_obj;
     ///////////////////////////////////////////////////////////////////////////
     // Object Store Delta is represented by an operation id and a list of
     // argument. The operation id (OPID) is a 4 bytes integer.
@@ -340,10 +309,10 @@ public:
         const char* data = (delta + sizeof(const uint32_t));
         switch(*(const uint32_t*)delta) {
             case PUT:
-                ObjectStoreCore::orderedPut(*mutils::from_bytes<Object>(nullptr, data));
+                applyOrderedPut(*mutils::from_bytes<Object>(nullptr, data));
                 break;
             case REMOVE:
-                ObjectStoreCore::orderedRemove(*(const OID*)data);
+                applyOrderedRemove(*(const OID*)data);
                 break;
             default:
                 std::cerr << __FILE__ << ":" << __LINE__ << ":" << __func__ << " " << std::endl;
@@ -355,6 +324,28 @@ public:
         return std::make_unique<DeltaObjectStoreCore>(dm->mgr<IObjectStoreService>().getObjectWatcher());
     }
 
+    inline void applyOrderedPut(const Object& object) {
+        // put
+        this->objects.erase(object.oid);
+	this->objects.emplace(object.oid, object);
+	// call object watcher
+        if (object_watcher) {
+            object_watcher(object.oid,object);
+        }
+    }
+    inline bool applyOrderedRemove(const OID& oid) {
+        bool bRet = false;
+        // remove
+        if (this->objects.erase(oid)) {
+	    // call object watcher
+	    if (object_watcher) {
+                object_watcher(oid,inv_obj);
+	    }
+            bRet = true;
+        }
+        return bRet;
+    }
+
     // Can we get the serialized operation representation from Derecho?
     virtual bool orderedPut(const Object& object) {
         // create delta.
@@ -363,8 +354,9 @@ public:
         object.to_bytes(this->delta.dataPtr());
         this->delta.setDataLen(object.bytes_size());
         this->delta.setOpid(PUT);
-        // put
-        return ObjectStoreCore::orderedPut(object);
+        // apply orderedPut
+	applyOrderedPut(object);
+    	return true;
     }
     // Can we get the serialized operation representation from Derecho?
     virtual bool orderedRemove(const OID& oid) {
@@ -375,7 +367,15 @@ public:
         this->delta.setDataLen(sizeof(OID));
         this->delta.setOpid(REMOVE);
         // remove
-        return ObjectStoreCore::orderedRemove(oid);
+        return applyOrderedRemove(oid);
+    }
+
+    virtual const Object orderedGet(const OID& oid) {
+        if(objects.find(oid) != objects.end()) {
+            return objects.at(oid);
+        } else {
+            return this->inv_obj;
+        }
     }
 
     // Not going to register them as RPC functions because DeltaObjectStoreCore
@@ -397,15 +397,15 @@ public:
     void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructor
-    DeltaObjectStoreCore(const ObjectWatcher& ow) : ObjectStoreCore(ow) {
+    DeltaObjectStoreCore(const ObjectWatcher& ow) : object_watcher(ow) {
         initialize_delta();
     }
     DeltaObjectStoreCore(const std::map<OID, Object>& _objects, const ObjectWatcher& ow) : 
-        ObjectStoreCore(_objects, ow) {
+        objects(_objects), object_watcher(ow) {
         initialize_delta();
     }
     DeltaObjectStoreCore(std::map<OID, Object>&& _objects, const ObjectWatcher& ow) : 
-        ObjectStoreCore(_objects, ow) {
+        objects(_objects), object_watcher(ow) {
         initialize_delta();
     }
     virtual ~DeltaObjectStoreCore() {
@@ -434,20 +434,20 @@ public:
 
 
     // @override IReplica::orderedPut
-    virtual bool orderedPut(const Object& object) {
-#ifndef NDEBUG
+    virtual persistent::version_t orderedPut(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-#endif
-        dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
-        return this->persistent_objectstore->orderedPut(object);
+	object.ver = subgroup_handle.get_next_version();
+        dbg_default_info("orderedPut object:{},version:{}", object.oid, object.ver);
+        this->persistent_objectstore->orderedPut(object);
+	return object.ver;
     }
     // @override IReplica::orderedRemove
-    virtual bool orderedRemove(const OID& oid) {
-#ifndef NDEBUG
+    virtual persistent::version_t orderedRemove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-#endif
-        dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
-        return this->persistent_objectstore->orderedRemove(oid);
+	persistent::version_t vRet = subgroup_handle.get_next_version();
+        dbg_default_info("orderedRemove object:{},version:{}", oid, vRet);
+        this->persistent_objectstore->orderedRemove(oid);
+	return vRet;
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
@@ -458,36 +458,26 @@ public:
         return this->persistent_objectstore->orderedGet(oid);
     }
     // @override IObjectStoreAPI::put
-    virtual bool put(const Object& object) {
+    virtual persistent::version_t put(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
         auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
         decltype(results)::ReplyMap& replies = results.get();
-        bool bRet = true;
+	persistent::version_t vRet = INVALID_VERSION;
         for(auto& reply_pair : replies) {
-            if(!reply_pair.second.get()) {
-                bRet = false;
-                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << 
-                "returned false" << std::endl;
-                break;
-            }
+            vRet = reply_pair.second.get();
         }
-        return bRet;
+        return vRet;
     }
     // @override IObjectStoreAPI::remove
-    virtual bool remove(const OID& oid) {
+    virtual persistent::version_t remove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-        derecho::rpc::QueryResults<bool> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
+        derecho::rpc::QueryResults<persistent::version_t> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        bool bRet = true;
+        bool vRet = INVALID_VERSION;
         for(auto& reply_pair : replies) {
-            if(!reply_pair.second.get()) {
-                bRet = false;
-                std::cerr << __FILE__ << ":L" << __LINE__ << ":" << __func__ << "\t node " << reply_pair.first << 
-                "returned false" << std::endl;
-                break;
-            }
+            vRet = reply_pair.second.get();
         }
-        return bRet;
+        return vRet;
     }
     // @override IObjectStoreAPI::get
     virtual const Object get(const OID& oid) {
@@ -648,7 +638,7 @@ public:
     }
 
     template <typename T>
-    derecho::rpc::QueryResults<bool> _aio_put(const Object& object, bool force_client) {
+    derecho::rpc::QueryResults<persistent::version_t> _aio_put(const Object& object, bool force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if ( bReplica && !force_client ) {
             // replica server can do ordered send
@@ -664,39 +654,36 @@ public:
 
 
     template <typename T>
-    bool _bio_put(const Object& object, bool force_client) {
-        derecho::rpc::QueryResults<bool> results = this->template _aio_put<T>(object, force_client);
+    persistent::version_t _bio_put(const Object& object, bool force_client) {
+        derecho::rpc::QueryResults<persistent::version_t> results = this->template _aio_put<T>(object, force_client);
         decltype(results)::ReplyMap& replies = results.get();
 
+	persistent::version_t vRet = INVALID_VERSION;
         for ( auto& reply_pair: replies) {
-           if ( !reply_pair.second.get() ) {
-               dbg_default_warn("{}:{} _bio_put(object id={},force_client={}) failed with false from"
-               "node:{}",__FILE__,__LINE__,object.oid,force_client,reply_pair.first);
-               return false;
-           }
+            vRet = reply_pair.second.get();
         }
-        return true;
+        return vRet;
     }
 
     // blocking put
-    virtual bool bio_put(const Object& object, bool force_client) {
+    virtual persistent::version_t bio_put(const Object& object, bool force_client) {
         dbg_default_debug("bio_put object id={}, mode={}, force_client={}",object.oid,mode,force_client);
-        bool bRet = false;
+	persistent::version_t vRet = INVALID_VERSION;
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
-            bRet = this->template _bio_put<VolatileUnloggedObjectStore>(object,force_client);
+            vRet = this->template _bio_put<VolatileUnloggedObjectStore>(object,force_client);
             break;
         case PERSISTENT_LOGGED:
-            bRet = this->template _bio_put<PersistentLoggedObjectStore>(object,force_client);
+            vRet = this->template _bio_put<PersistentLoggedObjectStore>(object,force_client);
             break;
         default:
             dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
         }
-        return bRet;
+        return vRet;
     }
 
     // non-blocking put
-    virtual derecho::rpc::QueryResults<bool> aio_put(const Object& object, bool force_client) {
+    virtual derecho::rpc::QueryResults<persistent::version_t> aio_put(const Object& object, bool force_client) {
         dbg_default_debug("aio_put object id={}, mode={}, force_client={}",object.oid,mode,force_client);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
@@ -710,7 +697,7 @@ public:
     }
 
     template <typename T>
-    derecho::rpc::QueryResults<bool> _aio_remove(const OID& oid, bool force_client) {
+    derecho::rpc::QueryResults<persistent::version_t> _aio_remove(const OID& oid, bool force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if( bReplica && !force_client ) {
             // replica server can do ordered send
@@ -725,22 +712,19 @@ public:
     }
 
     template <typename T>
-    bool _bio_remove(const OID& oid, bool force_client) {
-        derecho::rpc::QueryResults<bool> results = this->template _aio_remove<T>(oid,force_client);
+    persistent::version_t _bio_remove(const OID& oid, bool force_client) {
+        derecho::rpc::QueryResults<persistent::version_t> results = this->template _aio_remove<T>(oid,force_client);
         decltype(results)::ReplyMap& replies = results.get();
 
+	persistent::version_t vRet = INVALID_VERSION;
         for ( auto& reply_pair: replies) {
-           if ( !reply_pair.second.get() ) {
-               dbg_default_warn("{}:{} _bio_remove(object={},force_client={}) failed with false from"
-               "node:{}",__FILE__,__LINE__,oid,force_client,reply_pair.first);
-               return false;
-           }
+           vRet =  reply_pair.second.get();
         }
-        return true;
+        return vRet;
     }
 
     // blocking remove
-    virtual bool bio_remove(const OID& oid, bool force_client) {
+    virtual persistent::version_t bio_remove(const OID& oid, bool force_client) {
         dbg_default_debug("bio_remove object id={}, mode={}, force_client={}",oid,mode,force_client);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
@@ -754,7 +738,7 @@ public:
     }
 
     // non-blocking remove
-    virtual derecho::rpc::QueryResults<bool> aio_remove(const OID& oid, bool force_client) {
+    virtual derecho::rpc::QueryResults<persistent::version_t> aio_remove(const OID& oid, bool force_client) {
         dbg_default_debug("aio_remove object id={}, mode={}, force_client={}",oid,mode,force_client);
         switch(this->mode) {
         case VOLATILE_UNLOGGED:
