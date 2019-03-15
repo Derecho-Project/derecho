@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
                     try{
                         if ( use_aio ) {
                             // asynchronous api
-                            derecho::rpc::QueryResults<bool> results = oss.aio_put(object);
+                            derecho::rpc::QueryResults<persistent::version_t> results = oss.aio_put(object);
                             decltype(results)::ReplyMap& replies = results.get();
                             for (auto& reply_pair: replies) {
                                 std::cout << reply_pair.first << reply_pair.second.get() << std::endl;
