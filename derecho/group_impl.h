@@ -241,19 +241,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
 }
 
 template <typename... ReplicatedTypes>
-std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
-        tcp::socket& leader_socket) {
-    std::size_t buffer_size;
-    leader_socket.read(buffer_size);
-    if(buffer_size == 0) {
-        return std::make_unique<vector_int64_2d>();
-    }
-    char buffer[buffer_size];
-    leader_socket.read(buffer, buffer_size);
-    return mutils::from_bytes<std::vector<std::vector<int64_t>>>(nullptr, buffer);
-}
-
-template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 Replicated<SubgroupType>& Group<ReplicatedTypes...>::get_subgroup(uint32_t subgroup_index) {
     if(!view_manager.get_current_view().get().is_adequately_provisioned) {
@@ -316,7 +303,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         success = leader_socket.get().read(buffer, buffer_size);
         assert_always(success);
         subgroup_object.receive_object(buffer);
-	delete[] buffer;
+        delete[] buffer;
     }
     whenlog(logger->debug("Done receiving all Replicated Objects from subgroup leaders"));
 }

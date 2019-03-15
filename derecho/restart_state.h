@@ -36,9 +36,9 @@ struct RaggedTrim : public mutils::ByteRepresentable {
  * A type-safe set of messages that can be sent during two-phase commit
  */
 enum class CommitMessage {
-    PREPARE,//!< PREPARE
-    COMMIT, //!< COMMIT
-    ABORT   //!< ABORT
+    PREPARE,  //!< PREPARE
+    COMMIT,   //!< COMMIT
+    ABORT     //!< ABORT
 };
 
 /**
@@ -208,7 +208,7 @@ public:
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
                                                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.

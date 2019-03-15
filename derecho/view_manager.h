@@ -87,6 +87,9 @@ using SharedLockedReference = LockedReference<std::shared_lock<std::shared_timed
 
 using view_upcall_t = std::function<void(const View&)>;
 
+/** Type of a 2-dimensional vector used to store potential node IDs, or -1 */
+using vector_int64_2d = std::vector<std::vector<int64_t>>;
+
 class ViewManager {
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
@@ -281,7 +284,7 @@ private:
     /** Helper method for completing view changes; determines whether this node
      * needs to send Replicated Object state to each node that just joined, and then
      * sends the state if necessary. */
-    void send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders);
+    void send_objects_to_new_members(const vector_int64_2d& old_shard_leaders);
 
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
@@ -356,7 +359,7 @@ private:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const DerechoSST& gmsSST
-                                                whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
 
     /* ---------------------------------------------------------------------------------- */
 
@@ -412,8 +415,8 @@ private:
      * its SubViews initialized
      */
     static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
-                                       const std::unique_ptr<View>& prev_view,
-                                       View& curr_view);
+                                   const std::unique_ptr<View>& prev_view,
+                                   View& curr_view);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
@@ -458,7 +461,7 @@ private:
      * leader in the old view, or is a RawObject shard (which does not do state
      * transfer), the "node ID" for that shard will be -1.
      */
-    static std::vector<std::vector<int64_t>> old_shard_leaders_by_new_ids(const View& curr_view, const View& next_view);
+    static vector_int64_2d old_shard_leaders_by_new_ids(const View& curr_view, const View& next_view);
 
     /**
      * A little convenience method that receives a 2-dimensional vector using
@@ -613,7 +616,7 @@ public:
      * received along with curr_view when it joined the group. Needed by Group
      * to complete state transfer.
      */
-    const std::vector<std::vector<int64_t>>& get_old_shard_leaders() const { return prior_view_shard_leaders; }
+    const vector_int64_2d& get_old_shard_leaders() const { return prior_view_shard_leaders; }
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();

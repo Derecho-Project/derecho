@@ -93,8 +93,9 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
     for(const auto& subgroup_map_pair : restart_state.logged_ragged_trim) {
         for(const auto& shard_and_trim : subgroup_map_pair.second) {
             nodes_with_longest_log[subgroup_map_pair.first][shard_and_trim.first] = my_id;
-            longest_log_versions[subgroup_map_pair.first][shard_and_trim.first] = RestartState::ragged_trim_to_latest_version(shard_and_trim.second->vid,
-                                                                                                                              shard_and_trim.second->max_received_by_sender);
+            longest_log_versions[subgroup_map_pair.first][shard_and_trim.first]
+                    = RestartState::ragged_trim_to_latest_version(shard_and_trim.second->vid,
+                                                                  shard_and_trim.second->max_received_by_sender);
             whenlog(logger->trace("Latest logged persistent version for subgroup {}, shard {} initialized to {}",
                                   subgroup_map_pair.first, shard_and_trim.first, longest_log_versions[subgroup_map_pair.first][shard_and_trim.first]););
         }
@@ -156,8 +157,7 @@ bool RestartLeaderState::has_restart_quorum() {
     std::set_intersection(rejoined_node_ids.begin(), rejoined_node_ids.end(),
                           last_known_view_members.begin(), last_known_view_members.end(),
                           std::inserter(intersection_of_ids, intersection_of_ids.end()));
-    if(intersection_of_ids.size() < (last_known_view_members.size() / 2) + 1 ||
-            !contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
+    if(intersection_of_ids.size() < (last_known_view_members.size() / 2) + 1 || !contains_at_least_one_member_per_subgroup(rejoined_node_ids, *curr_view)) {
         return false;
     }
     //If we have a sufficient number of members, attempt to compute a restart view
@@ -386,7 +386,6 @@ void RestartLeaderState::send_commit() {
     }
 }
 
-
 void RestartLeaderState::print_longest_logs() const {
     std::ostringstream leader_list;
     for(subgroup_id_t subgroup = 0; subgroup < longest_log_versions.size(); ++subgroup) {
@@ -431,7 +430,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
                                                          const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                                 whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);

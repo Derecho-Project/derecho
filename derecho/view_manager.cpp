@@ -1099,7 +1099,7 @@ void ViewManager::finish_view_change(
     uint32_t next_num_received_size = derive_subgroup_settings(*next_view, next_subgroup_settings);
 
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs
-    std::vector<std::vector<int64_t>> old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
+    vector_int64_2d old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
             *curr_view, *next_view);
 
     std::list<tcp::socket> joiner_sockets;
@@ -1243,11 +1243,11 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, num_subgroups, subgroup_settings,
             derecho_params,
-	    [this](const subgroup_id_t& subgroup_id,const persistent::version_t& ver){
-	        assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-		subgroup_objects.at(subgroup_id).get().post_next_version(ver);
-	    },
-	    persistence_manager_callbacks, curr_view->failed);
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+                assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+            },
+            persistence_manager_callbacks, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group(
@@ -1264,12 +1264,12 @@ void ViewManager::transition_multicast_group(
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
             next_view->gmsSST, std::move(*curr_view->multicast_group), num_subgroups,
-            new_subgroup_settings, 
-	    [this](const subgroup_id_t& subgroup_id,const persistent::version_t& ver){
-	        assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-		subgroup_objects.at(subgroup_id).get().post_next_version(ver);
-	    },
-	    persistence_manager_callbacks, next_view->failed);
+            new_subgroup_settings,
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+                assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+            },
+            persistence_manager_callbacks, next_view->failed);
 
     curr_view->multicast_group.reset();
 
@@ -1356,7 +1356,7 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     mutils::post_object(bind_socket_write, derecho_params);
 }
 
-void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders) {
+void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
     node_id_t my_id = curr_view->members[curr_view->my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
@@ -1601,8 +1601,8 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
     return std::move(next_view);
 }
 
-std::vector<std::vector<int64_t>> ViewManager::old_shard_leaders_by_new_ids(const View& curr_view,
-                                                                            const View& next_view) {
+vector_int64_2d ViewManager::old_shard_leaders_by_new_ids(const View& curr_view,
+                                                          const View& next_view) {
     std::vector<std::vector<int64_t>> old_shard_leaders_by_new_id(next_view.subgroup_shard_views.size());
     for(const auto& type_to_old_ids : curr_view.subgroup_ids_by_type_id) {
         for(uint32_t subgroup_index = 0; subgroup_index < type_to_old_ids.second.size(); ++subgroup_index) {
