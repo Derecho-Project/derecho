@@ -241,31 +241,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::update_tcp_connections_callback(const View& new_view) {
-    if(std::find(new_view.joined.begin(), new_view.joined.end(), my_id) != new_view.joined.end()) {
-        //If this node is in the joined list, we need to set up a connection to everyone
-        for(int i = 0; i < new_view.num_members; ++i) {
-            if(new_view.members[i] != my_id) {
-                tcp_sockets->add_node(new_view.members[i], {std::get<0>(new_view.member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[i])});
-                whendebug(logger->debug("Established a TCP connection to node {}", new_view.members[i]);)
-            }
-        }
-    } else {
-        //This node is already a member, so we already have connections to the previous view's members
-        for(const node_id_t& joiner_id : new_view.joined) {
-            tcp_sockets->add_node(joiner_id,
-                                  {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]),
-                                   std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
-            whenlog(logger->debug("Established a TCP connection to node {}", joiner_id););
-        }
-        for(const node_id_t& removed_id : new_view.departed) {
-            whenlog(logger->debug("Removing TCP connection for failed node {}", removed_id););
-            tcp_sockets->delete_node(removed_id);
-        }
-    }
-}
-
-template <typename... ReplicatedTypes>
 std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
         tcp::socket& leader_socket) {
     std::size_t buffer_size;

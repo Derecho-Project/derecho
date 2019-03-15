@@ -177,10 +177,6 @@ private:
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
 
-    /** A new-view callback that adds and removes TCP connections from the pool
-     * of long-standing TCP connections to each member (used mostly by RPCManager). */
-    void update_tcp_connections_callback(const View& new_view);
-
     /**
      * Base case for the construct_objects template. Note that the neat "varargs
      * trick" (defining construct_objects(...) as the base case) doesn't work
