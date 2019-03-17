@@ -213,7 +213,12 @@ public:
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
-    virtual ~Replicated() = default;
+    virtual ~Replicated(){
+        // hack to check if the object was merely moved
+        if(wrapped_this) {
+            group_rpc_manager.destroy_remote_invocable_class(subgroup_id);
+        }
+    };
 
     /**
      * @return The value of has_persistent_fields<T> for this Replicated<T>'s
@@ -400,7 +405,9 @@ public:
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
+	std::cout << "In receive object before pointer reset: " << user_object_ptr.get() << std::endl;
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
+	std::cout << "In receive object after pointer reset: " << user_object_ptr.get() << std::endl;
         if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }

@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
                                       persistent::version_t ver) mutable {
         char* buf;
         long long int size;
-        std:tie(buf,size) = data.value();
+        std::tie(buf,size) = data.value();
         cout << "Here" << endl;
         cout << buf << endl;
         num_messages_received++;

@@ -207,6 +207,19 @@ public:
                                 funs);
     }
 
+    void destroy_remote_invocable_class(uint32_t instance_id) {
+        std::list<Opcode> keysToDelete;
+        for(const auto& r : *receivers) {
+            const auto opcode = r.first;
+            if(opcode.subgroup_id == instance_id) {
+                keysToDelete.push_back(opcode);
+            }
+        }
+        for(auto opcodes : keysToDelete) {
+            receivers->erase(opcodes);
+        }
+    }
+
     /**
      * Given a subgroup ID and a list of functions, constructs a
      * RemoteInvokerForClass for the type of object given by the template

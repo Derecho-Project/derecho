@@ -405,6 +405,8 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
             [_this, fun = partial.fun](Args... arguments) {
+                assert(_this);
+                assert(_this->get());
                 return (_this->get()->*fun)(arguments...);
             }};
 }
