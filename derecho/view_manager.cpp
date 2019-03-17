@@ -23,7 +23,7 @@ using shared_lock_t = std::shared_lock<std::shared_timed_mutex>;
 
 /* Leader/Restart Leader Constructor */
 ViewManager::ViewManager(
-        CallbackSet callbacks, const SubgroupInfo& subgroup_info,
+        const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
         const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
@@ -31,13 +31,13 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-          server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+                  server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
           derecho_params(),
-          group_member_sockets(group_tcp_sockets),
+          tcp_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
@@ -45,21 +45,21 @@ ViewManager::ViewManager(
         //Attempt to load a saved View from disk, to see if one is there
         curr_view = persistent::loadObject<View>();
     }
-    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    uint32_t num_received_size = 0;
-    bool is_total_restart;
-    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     if(curr_view) {
-        is_total_restart = true;
+        in_total_restart = true;
         whenlog(logger->debug("Found view {} on disk", curr_view->vid););
         whenlog(logger->info("Logged View found on disk. Restarting in recovery mode."););
         //The subgroup_type_order can't be serialized, but it's constant across restarts
         curr_view->subgroup_type_order = subgroup_type_order;
         restart_state = std::make_unique<RestartState>();
         restart_state->load_ragged_trim(*curr_view);
-        await_rejoining_nodes(my_id, subgroup_settings_map, num_received_size);
+        restart_leader_state_machine = std::make_unique<RestartLeaderState>(
+                std::move(curr_view), *restart_state,
+                subgroup_info, derecho_params, my_id);
+        await_rejoining_nodes(my_id);
     } else {
-        is_total_restart = false;
+        in_total_restart = false;
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
                 std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>{
@@ -71,25 +71,14 @@ ViewManager::ViewManager(
                 std::vector<char>{0},
                 std::vector<node_id_t>{}, std::vector<node_id_t>{},
                 0, 0, subgroup_type_order);
-        await_first_view(my_id, subgroup_settings_map, num_received_size);
+        await_first_view(my_id);
     }
-    curr_view->my_rank = curr_view->rank_of(my_id);
-    last_suspected = std::vector<bool>(curr_view->members.size());
-    if(any_persistent_objects) {
-        persistent::saveObject(*curr_view);
-    }
-    initialize_rdmc_sst();
-    whenlog(logger->debug("Initializing SST and RDMC for the first time."););
-    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
-    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
-    if(is_total_restart) {
-        restart_existing_tcp_connections(my_id);
-    }
+    setup_initial_tcp_connections(my_id);
 }
 
 /* Non-leader Constructor */
 ViewManager::ViewManager(
-        tcp::socket& leader_connection, CallbackSet callbacks,
+        tcp::socket& leader_connection,
         const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
@@ -98,39 +87,20 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-          server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+                  server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
           derecho_params(),
-          group_member_sockets(group_tcp_sockets),
+          tcp_sockets(group_tcp_sockets),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
-    //First, receive the view and parameters over the given socket
-    uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    bool is_total_restart = receive_configuration(my_id, leader_connection);
-
-    // Set this while we still know my_id
-    curr_view->my_rank = curr_view->rank_of(my_id);
-
-    last_suspected = std::vector<bool>(curr_view->members.size());
-    initialize_rdmc_sst();
-    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    uint32_t num_received_size = derive_subgroup_settings(*curr_view, subgroup_settings_map);
-    whenlog(logger->trace("Received initial view: {}", curr_view->debug_string()););
-    if(any_persistent_objects) {
-        //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
-        persistent::saveObject(*curr_view);
-    }
-
-    whenlog(logger->debug("Initializing SST and RDMC for the first time."););
-    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
-    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
-    if(is_total_restart) {
-        restart_existing_tcp_connections(my_id);
-    }
+    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    receive_initial_view(my_id, leader_connection);
+    //As soon as we have a tentative initial view, set up the TCP connections
+    setup_initial_tcp_connections(my_id);
 }
 
 ViewManager::~ViewManager() {
@@ -147,7 +117,7 @@ ViewManager::~ViewManager() {
 }
 
 /* ----------  1. Constructor Components ------------- */
-bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_connection) {
+void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_connection) {
     JoinResponse leader_response;
     bool leader_redirect;
     do {
@@ -178,8 +148,8 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
         }
     } while(leader_redirect);
 
-    bool is_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
-    if(is_total_restart) {
+    in_total_restart = (leader_response.code == JoinResponseCode::TOTAL_RESTART);
+    if(in_total_restart) {
         curr_view = persistent::loadObject<View>();
         whenlog(logger->debug("In restart mode, sending view {} to leader", curr_view->vid););
         bool success = leader_connection.write(mutils::bytes_size(*curr_view));
@@ -212,60 +182,126 @@ bool ViewManager::receive_configuration(node_id_t my_id, tcp::socket& leader_con
     leader_connection.write(getConfUInt16(CONF_DERECHO_SST_PORT));
     leader_connection.write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
 
-    bool view_confirmed = false;
-    while(!view_confirmed) {
-        //The leader will first send the size of the necessary buffer, then the serialized View
-        std::size_t size_of_view;
-        bool success = leader_connection.read(size_of_view);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-        }
-        char buffer[size_of_view];
-        success = leader_connection.read(buffer, size_of_view);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-        }
-        curr_view = mutils::from_bytes<View>(nullptr, buffer);
-        //Next, the leader sends DerechoParams
-        std::size_t size_of_derecho_params;
-        success = leader_connection.read(size_of_derecho_params);
-        char buffer2[size_of_derecho_params];
-        success = leader_connection.read(buffer2, size_of_derecho_params);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-        }
-        derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
-        if(is_total_restart) {
-            //In total restart mode, the leader will also send the RaggedTrims it has collected
-            whenlog(logger->debug("In restart mode, receiving ragged trim from leader"););
-            restart_state->logged_ragged_trim.clear();
-            std::size_t num_of_ragged_trims;
-            leader_connection.read(num_of_ragged_trims);
-            for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
-                std::size_t size_of_ragged_trim;
-                leader_connection.read(size_of_ragged_trim);
-                char buffer[size_of_ragged_trim];
-                leader_connection.read(buffer, size_of_ragged_trim);
-                std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-                //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
-                restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(
-                        ragged_trim->shard_num, std::move(ragged_trim));
-            }
-        }
-        //Next, the leader will send a single bool indicating whether this View has been committed
-        //at all newly joining members. If not, we must go back to waiting for a View.
-        success = leader_connection.read(view_confirmed);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-        }
-        whenlog(logger->debug("Received view {} from leader. View_confirmed = {}", curr_view->vid, view_confirmed););
-    }
-    //This must be set up locally, since it's not serializable
-    curr_view->subgroup_type_order = subgroup_type_order;
-    return is_total_restart;
+    receive_view_and_leaders(my_id, leader_connection);
+    whenlog(logger->debug("Received initial view {} from leader.", curr_view->vid););
 }
 
-std::vector<std::vector<int64_t>> ViewManager::finish_setup() {
+void ViewManager::receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection) {
+    //The leader will first send the size of the necessary buffer, then the serialized View
+    std::size_t size_of_view;
+    bool success = leader_connection.read(size_of_view);
+    if(!success) {
+        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    }
+    char buffer[size_of_view];
+    success = leader_connection.read(buffer, size_of_view);
+    if(!success) {
+        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    }
+    curr_view = mutils::from_bytes<View>(nullptr, buffer);
+    //Next, the leader sends DerechoParams
+    std::size_t size_of_derecho_params;
+    success = leader_connection.read(size_of_derecho_params);
+    char buffer2[size_of_derecho_params];
+    success = leader_connection.read(buffer2, size_of_derecho_params);
+    if(!success) {
+        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    }
+    derecho_params = *mutils::from_bytes<DerechoParams>(nullptr, buffer2);
+    if(in_total_restart) {
+        //In total restart mode, the leader will also send the RaggedTrims it has collected
+        whenlog(logger->debug("In restart mode, receiving ragged trim from leader"););
+        restart_state->logged_ragged_trim.clear();
+        std::size_t num_of_ragged_trims;
+        leader_connection.read(num_of_ragged_trims);
+        for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
+            std::size_t size_of_ragged_trim;
+            leader_connection.read(size_of_ragged_trim);
+            char buffer[size_of_ragged_trim];
+            leader_connection.read(buffer, size_of_ragged_trim);
+            std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+            //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
+            restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(
+                    ragged_trim->shard_num, std::move(ragged_trim));
+        }
+    }
+    //Next, the leader will send the list of nodes to do state transfer from
+    prior_view_shard_leaders = *receive_vector2d<int64_t>(leader_connection);
+
+    //Set up non-serialized fields of curr_view
+    curr_view->subgroup_type_order = subgroup_type_order;
+    curr_view->my_rank = curr_view->rank_of(my_id);
+}
+
+bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
+    CommitMessage commit_message;
+    //The leader will first sent a Prepare message, then a Commit message if the
+    //new was committed at all joining members. Either one of these could be Abort
+    //if the leader detected a failure.
+    bool success = leader_connection.read(commit_message);
+    if(!success) {
+        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    }
+    if(commit_message == CommitMessage::PREPARE) {
+        whenlog(logger->debug("Leader sent PREPARE"););
+        //On success, replace commit_message with the second message, which is either Commit or Abort
+        bool success = leader_connection.read(commit_message);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
+    }
+    //This checks if either the first or the second message was Abort
+    if(commit_message == CommitMessage::ABORT) {
+        whenlog(logger->debug("Leader sent ABORT"););
+        const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+        //Wait for a new initial view and ragged trim to be sent,
+        //so that when this method returns we can try state transfer again
+        receive_view_and_leaders(my_id, leader_connection);
+        //Update the TCP connections pool for any new/failed nodes,
+        //so we can run state transfer again.
+        reinit_tcp_connections(my_id);
+    }
+    //Unless the final message was Commit, we need to retry state transfer
+    return (commit_message == CommitMessage::COMMIT);
+}
+
+void ViewManager::truncate_logs() {
+    if(!in_total_restart) {
+        return;
+    }
+    for(const auto& subgroup_and_map : restart_state->logged_ragged_trim) {
+        for(const auto& shard_and_trim : subgroup_and_map.second) {
+            persistent::saveObject(*shard_and_trim.second,
+                                   ragged_trim_filename(subgroup_and_map.first, shard_and_trim.first).c_str());
+        }
+    }
+    whenlog(logger->debug("Truncating persistent logs to conform to leader's ragged trim"););
+    truncate_persistent_logs(restart_state->logged_ragged_trim);
+}
+
+void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
+    initialize_rdmc_sst();
+    std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
+    uint32_t num_received_size = derive_subgroup_settings(*curr_view, subgroup_settings_map);
+    whenlog(logger->trace("Initial view is: {}", curr_view->debug_string()););
+    if(any_persistent_objects) {
+        //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
+        persistent::saveObject(*curr_view);
+    }
+
+    whenlog(logger->debug("Initializing SST and RDMC for the first time."););
+    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
+    curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
+}
+
+void ViewManager::finish_setup() {
+    //At this point curr_view has been committed by the leader
+    if(in_total_restart) {
+        //If we were doing total restart, it has completed successfully
+        restart_state.reset();
+        in_total_restart = false;
+    }
+    last_suspected = std::vector<bool>(curr_view->members.size());
     curr_view->gmsSST->put();
     curr_view->gmsSST->sync_with_members();
     whenlog(logger->debug("Done setting up initial SST and RDMC"););
@@ -284,31 +320,23 @@ std::vector<std::vector<int64_t>> ViewManager::finish_setup() {
     for(auto& view_upcall : view_upcalls) {
         view_upcall(*curr_view);
     }
-    if(restart_state) {
-        //Hand this vector back to the Group constructor so it can call receive_objects if this node is the restart leader
-        return restart_state->restart_shard_leaders;
-    } else {
-        return std::vector<std::vector<int64_t>>{};
-    }
 }
 
-void ViewManager::send_logs_if_total_restart(const std::unique_ptr<std::vector<std::vector<int64_t>>>& shard_leaders) {
-    if(!restart_state) {
+void ViewManager::send_logs() {
+    if(!in_total_restart) {
         return;
     }
-    /* The leader will call this method with nullptr, because it already set restart_shard_leaders
-     * in await_rejoining_nodes, but for other nodes this is the first point at which they find out
-     * the restart leaders. */
-    if(shard_leaders) {
-        restart_state->restart_shard_leaders = *shard_leaders;
-    }
-    node_id_t my_id = curr_view->members[curr_view->my_rank];
-    for(subgroup_id_t subgroup_id = 0; subgroup_id < restart_state->restart_shard_leaders.size(); ++subgroup_id) {
-        for(uint32_t shard = 0; shard < restart_state->restart_shard_leaders[subgroup_id].size(); ++shard) {
-            if(my_id == restart_state->restart_shard_leaders[subgroup_id][shard]) {
+    //The restart leader doesn't have curr_view
+    const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    /* If we're in total restart mode, prior_view_shard_leaders is equal
+     * to restart_state->restart_shard_leaders */
+    node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    for(subgroup_id_t subgroup_id = 0; subgroup_id < prior_view_shard_leaders.size(); ++subgroup_id) {
+        for(uint32_t shard = 0; shard < prior_view_shard_leaders[subgroup_id].size(); ++shard) {
+            if(my_id == prior_view_shard_leaders[subgroup_id][shard]) {
                 whenlog(logger->debug("This node is the restart leader for subgroup {}, shard {}. Sending object data to shard members.", subgroup_id, shard););
                 //Send object data to all shard members, since they will all be in receive_objects()
-                for(node_id_t shard_member : curr_view->subgroup_shard_views[subgroup_id][shard].members) {
+                for(node_id_t shard_member : restart_view.subgroup_shard_views[subgroup_id][shard].members) {
                     if(shard_member != my_id) {
                         send_subgroup_object(subgroup_id, shard_member);
                     }
@@ -318,42 +346,50 @@ void ViewManager::send_logs_if_total_restart(const std::unique_ptr<std::vector<s
     }
 }
 
-void ViewManager::restart_existing_tcp_connections(node_id_t my_id) {
-    /* If this node is marked as a joiner in the restart view, it will establish TCP
-     * connections to everyone in the new view upcall anyway, so do nothing. */
-    if(std::find(curr_view->joined.begin(), curr_view->joined.end(), my_id) != curr_view->joined.end()) {
-        return;
-    }
-    /* If this node is not a joiner, it "should" already have a TCP connection to every
-     * other current member, so establish those TCP connections. */
-    for(int i = 0; i < curr_view->num_members; ++i) {
-        if(curr_view->members[i] != my_id
-                && std::find(curr_view->joined.begin(), curr_view->joined.end(),
-                             curr_view->members[i]) == curr_view->joined.end()) {
-            group_member_sockets->add_node(curr_view->members[i], {std::get<0>(curr_view->member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(curr_view->member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", curr_view->members[i]);)
+void ViewManager::setup_initial_tcp_connections(node_id_t my_id) {
+    //As usual the restart leader is a special case, since it doesn't have curr_view
+    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    //Establish TCP connections to each other member of the view in ascending order
+    for(int i = 0; i < proposed_view.num_members; ++i) {
+        if(proposed_view.members[i] != my_id) {
+            tcp_sockets->add_node(proposed_view.members[i],
+                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
         }
     }
 }
 
-void ViewManager::start() {
-    /* If this node is doing a total restart, it has just received the tails of any logs it needed
-     * in order to implement the leader's ragged trim proposal from the nodes with the longest logs
-     * (specifically, it got them in receive_objects). It should now log the ragged trim to disk,
-     * and then truncate its own logs if they are longer than the leader's ragged trim proposal.
-     */
-    if(restart_state) {
-        for(const auto& subgroup_and_map : restart_state->logged_ragged_trim) {
-            for(const auto& shard_and_trim : subgroup_and_map.second) {
-                persistent::saveObject(*shard_and_trim.second,
-                                       ragged_trim_filename(subgroup_and_map.first, shard_and_trim.first).c_str());
-            }
+void ViewManager::reinit_tcp_connections(node_id_t my_id) {
+    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+    //Delete sockets for failed members no longer in the view
+    tcp_sockets->filter_to(proposed_view.members);
+    //Recheck the members list and establish connections to any new members
+    for(int i = 0; i < proposed_view.num_members; ++i) {
+        if(proposed_view.members[i] != my_id
+           && !tcp_sockets->contains_node(proposed_view.members[i])) {
+            tcp_sockets->add_node(proposed_view.members[i],
+                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
         }
-        whenlog(logger->debug("Truncating persistent logs to conform to leader's ragged trim"););
-        truncate_persistent_logs(restart_state->logged_ragged_trim);
-        //Once this is finished, we no longer need logged_ragged_trim or restart_shard_leaders
-        restart_state.reset();
     }
+}
+
+void ViewManager::update_tcp_connections(const View& new_view) {
+    for(const node_id_t& removed_id : new_view.departed) {
+        whenlog(logger->debug("Removing TCP connection for failed node {}", removed_id););
+        tcp_sockets->delete_node(removed_id);
+    }
+    for(const node_id_t& joiner_id : new_view.joined) {
+        tcp_sockets->add_node(joiner_id,
+                              {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]),
+                               std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
+        whenlog(logger->debug("Established a TCP connection to node {}", joiner_id););
+    }
+}
+
+void ViewManager::start() {
     whenlog(logger->debug("Starting predicate evaluation"););
     curr_view->gmsSST->start_predicate_evaluation();
 }
@@ -361,11 +397,16 @@ void ViewManager::start() {
 void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim) {
     for(const auto& id_to_shard_map : logged_ragged_trim) {
         subgroup_id_t subgroup_id = id_to_shard_map.first;
-        const auto find_my_shard = curr_view->my_subgroups.find(subgroup_id);
-        if(find_my_shard == curr_view->my_subgroups.end()) {
+        uint32_t my_shard_id;
+        //On the restart leader, the proposed view is still in RestartLeaderState
+        //On all the other nodes, it's been received and stored in curr_view
+        const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+        const auto find_my_shard = restart_view.my_subgroups.find(subgroup_id);
+        if(find_my_shard == restart_view.my_subgroups.end()) {
             continue;
         }
-        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(find_my_shard->second);
+        my_shard_id = find_my_shard->second;
+        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
         persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
         whenlog(logger->trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version););
@@ -374,9 +415,7 @@ void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragge
     }
 }
 
-void ViewManager::await_first_view(const node_id_t my_id,
-                                   std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                   uint32_t& num_received_size) {
+void ViewManager::await_first_view(const node_id_t my_id) {
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
     std::set<node_id_t> members_sent_view;
     curr_view->is_adequately_provisioned = false;
@@ -410,8 +449,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
                                                functional_append(curr_view->joined, joiner_id),
                                                std::vector<node_id_t>{}, 0, 0,
                                                subgroup_type_order);
-            num_received_size = make_subgroup_maps(subgroup_info, std::unique_ptr<View>(),
-                                                   *curr_view, subgroup_settings);
+            make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view);
             waiting_join_sockets.emplace(joiner_id, std::move(client_socket));
             whenlog(logger->debug("Node {} connected from IP address {} and GMS port {}", joiner_id, joiner_ip, joiner_gms_port););
         }
@@ -425,6 +463,7 @@ void ViewManager::await_first_view(const node_id_t my_id,
             bool send_success;
             //Within this try block, any send that returns failure throws the ID of the node that failed
             try {
+                //First send the View
                 send_success = waiting_sockets_iter->second.write(view_buffer_size);
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
@@ -434,12 +473,18 @@ void ViewManager::await_first_view(const node_id_t my_id,
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
+                //Then send the DerechoParams
                 send_success = waiting_sockets_iter->second.write(params_buffer_size);
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
                 mutils::to_bytes(derecho_params, params_buffer);
                 send_success = waiting_sockets_iter->second.write(params_buffer, params_buffer_size);
+                if(!send_success) {
+                    throw waiting_sockets_iter->first;
+                }
+                //Then send "0" as the size of the "old shard leaders" vector, since there are no old leaders
+                send_success = waiting_sockets_iter->second.write(std::size_t{0});
                 if(!send_success) {
                     throw waiting_sockets_iter->first;
                 }
@@ -465,38 +510,41 @@ void ViewManager::await_first_view(const node_id_t my_id,
                                                    subgroup_type_order);
                 /* This will update curr_view->is_adequately_provisioned, so set joiner_failed to true
                  * to start over from the beginning and test if we need to wait for more joiners. */
-                num_received_size = make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view, subgroup_settings);
+                make_subgroup_maps(subgroup_info, std::unique_ptr<View>(), *curr_view);
                 waiting_join_sockets.erase(waiting_sockets_iter);
                 joiner_failed = true;
                 break;
             }
         }  //for (waiting_join_sockets)
-        //Tell each node whether to commit or abort the view they received, which is the opposite of joiner_failed
-        for(const node_id_t& member_sent_view : members_sent_view) {
-            whenlog(logger->debug("Sending view commit message to node {}: {}", member_sent_view, !joiner_failed););
-            waiting_join_sockets.at(member_sent_view).write(!joiner_failed);
+
+        if(joiner_failed) {
+            for(const node_id_t& member_sent_view : members_sent_view) {
+                whenlog(logger->debug("Sending view abort message to node {}", member_sent_view););
+                waiting_join_sockets.at(member_sent_view).write(CommitMessage::ABORT);
+            }
+            members_sent_view.clear();
         }
-        members_sent_view.clear();
     } while(joiner_failed);
+
     whenlog(logger->trace("Decided on initial view: {}", curr_view->debug_string()););
-    //At this point, we have successfully sent an initial view to all joining nodes
-    //Now send a "0" as the size of the "old shard leaders" vector, since there are no old leaders, and close the socket
+    //At this point, we have successfully sent an initial view to all joining nodes, so we can commit it
+    //There's no state-transfer step to do, so we don't have to wait for state transfer to complete
+    //before committing this view, and the Group constructor's state-transfer methods will do nothing
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        waiting_sockets_iter->second.write(std::size_t{0});
+        whenlog(logger->debug("Sending prepare and commit messages to node {}", waiting_sockets_iter->first););
+        waiting_sockets_iter->second.write(CommitMessage::PREPARE);
+        waiting_sockets_iter->second.write(CommitMessage::COMMIT);
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
 }
 
-void ViewManager::await_rejoining_nodes(const node_id_t my_id,
-                                        std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                        uint32_t& num_received_size) {
-    RestartLeaderState restart_leader_state_machine(std::move(curr_view), *restart_state, subgroup_settings, num_received_size, subgroup_info, my_id);
-    bool still_need_quorum = true;
-    while(still_need_quorum) {
-        restart_leader_state_machine.await_quorum(server_socket);
-        whenlog(logger->debug("Reached a quorum of nodes from view {}, created view {}", restart_leader_state_machine.get_curr_view().vid, restart_leader_state_machine.get_restart_view().vid););
-        still_need_quorum = false;
+void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
+    bool quorum_achieved = false;
+    while(!quorum_achieved) {
+        restart_leader_state_machine->await_quorum(server_socket);
+        whenlog(logger->debug("Reached a quorum of nodes from view {}, created view {}", restart_leader_state_machine->get_curr_view().vid, restart_leader_state_machine->get_restart_view().vid););
+        quorum_achieved = true;
         //Compute a final ragged trim
         //Actually, I don't think there's anything to "compute" because
         //we only kept the latest ragged trim from each subgroup and shard
@@ -506,38 +554,45 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id,
                 shard_trim_pair.second->leader_id = std::numeric_limits<node_id_t>::max();
             }
         }
-        whenlog(restart_leader_state_machine.print_longest_logs(););
+        whenlog(restart_leader_state_machine->print_longest_logs(););
 
-        //Send the next view to all the members
-        int64_t failed_node_id
-                = restart_leader_state_machine.send_restart_view(derecho_params);
-        //If a node failed while waiting for the View, abort this restart view and try again
+        //Send the restart view, ragged trim, and restart shard leaders to all the members
+        int64_t failed_node_id = restart_leader_state_machine->send_restart_view();
+        //If a node failed while waiting for the quorum, abort this restart view and try again
         if(failed_node_id != -1) {
             whenlog(logger->info("Node {} failed while waiting for restart leader to reach a quorum!", failed_node_id););
-            restart_leader_state_machine.confirm_restart_view(false);
-            still_need_quorum = true;
-            //Try recomputing the restart view without the failed node, to see if we can restart anyway
-            bool can_restart = restart_leader_state_machine.compute_restart_view();
-            while(can_restart) {
-                failed_node_id = restart_leader_state_machine.send_restart_view(derecho_params);
-                if(failed_node_id != -1) {
-                    whenlog(logger->debug("Recomputed View would still have been adequate, but node {} failed while sending it!", failed_node_id););
-                    restart_leader_state_machine.confirm_restart_view(false);
-                    //Recompute the restart view again, and try again if it's still adequate
-                    can_restart = restart_leader_state_machine.compute_restart_view();
-                } else {
-                    //Successfully sent the recomputed View to all remaining nodes, so we can proceed after all
-                    still_need_quorum = false;
-                    break;
-                }
-            }
+            quorum_achieved = restart_leader_state_machine->resend_view_until_quorum_lost();
         }
     }
-    whenlog(logger->trace("Decided on restart view: {}", restart_leader_state_machine.get_restart_view().debug_string()););
-    //Commit the restart view at all joining clients
-    restart_leader_state_machine.confirm_restart_view(true);
-    restart_leader_state_machine.send_shard_leaders();
-    curr_view = restart_leader_state_machine.take_restart_view();
+    whenlog(logger->debug("Successfully sent restart view {} to all restarted nodes", restart_leader_state_machine->get_restart_view().vid););
+    prior_view_shard_leaders = restart_state->restart_shard_leaders;
+    //Now control will return to Group to do state transfer before confirming this view
+}
+
+bool ViewManager::leader_prepare_initial_view(bool& leader_has_quorum) {
+    if(restart_leader_state_machine) {
+        whenlog(logger->trace("Sending prepare messages for restart View"););
+        int64_t failed_node_id = restart_leader_state_machine->send_prepare();
+        if(failed_node_id != -1) {
+            whenlog(logger->info("Node {} failed when sending Prepare messages for the restart view!", failed_node_id););
+            leader_has_quorum = restart_leader_state_machine->resend_view_until_quorum_lost();
+            //If there was at least one failure, we (may) need to do state transfer again, so return false
+            //The out-parameter will tell the leader if it also needs to wait for more joins
+            return false;
+        }
+    }
+    return true;
+}
+
+void ViewManager::leader_commit_initial_view() {
+    if(restart_leader_state_machine) {
+        whenlog(logger->trace("Decided on restart view: {}", restart_leader_state_machine->get_restart_view().debug_string()););
+        //Commit the restart view at all joining clients
+        restart_leader_state_machine->send_commit();
+        curr_view = restart_leader_state_machine->take_restart_view();
+        //After sending the commit messages, it's safe to discard the restart state
+        restart_leader_state_machine.reset();
+    }
 }
 
 void ViewManager::initialize_rdmc_sst() {
@@ -668,9 +723,9 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             gmssst::set(gmsSST.suspected[myRank][who],
                         gmsSST.suspected[myRank][who] || gmsSST.suspected[r][who]);
         }
-	if (gmsSST.rip[r]) {
-	  num_left++;
-	}
+        if(gmsSST.rip[r]) {
+            num_left++;
+        }
     }
 
     for(int q = 0; q < Vc.num_members; q++) {
@@ -754,7 +809,7 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
         client_socket.write(bytes, size);
     };
     mutils::post_object(bind_socket_write, std::get<0>(
-            curr_view->member_ips_and_ports[curr_view->rank_of_leader()]));
+                                                   curr_view->member_ips_and_ports[curr_view->rank_of_leader()]));
     client_socket.write(std::get<PORT_TYPE::GMS>(
             curr_view->member_ips_and_ports[curr_view->rank_of_leader()]));
 }
@@ -839,17 +894,13 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
         return true;
     };
     auto meta_wedged_continuation = [this](DerechoSST& gmsSST) {
-        // Before the first call to terminate_epoch(), heap-allocate this map
-        auto next_subgroup_settings = std::make_shared<std::map<subgroup_id_t, SubgroupSettings>>();
-        terminate_epoch(next_subgroup_settings, 0, gmsSST);
+        terminate_epoch(gmsSST);
     };
     gmsSST.predicates.insert(is_meta_wedged, meta_wedged_continuation,
                              sst::PredicateType::ONE_TIME);
 }
 
-void ViewManager::terminate_epoch(
-        std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
-        uint32_t next_num_received_size, DerechoSST& gmsSST) {
+void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     whenlog(logger->debug("MetaWedged is true; continuing epoch termination"););
     // If this is the first time terminate_epoch() was called, next_view will
     // still be null
@@ -860,9 +911,7 @@ void ViewManager::terminate_epoch(
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
     next_view = make_next_view(curr_view, gmsSST whenlog(, logger));
     whenlog(logger->debug("Checking provisioning of view {}", next_view->vid););
-    next_subgroup_settings->clear();
-    next_num_received_size = make_subgroup_maps(subgroup_info, curr_view, *next_view,
-                                                *next_subgroup_settings);
+    make_subgroup_maps(subgroup_info, curr_view, *next_view);
     if(!next_view->is_adequately_provisioned) {
         whenlog(logger->debug("Next view would not be adequately provisioned, waiting for more joins."););
         if(first_call) {
@@ -878,9 +927,8 @@ void ViewManager::terminate_epoch(
             return gmsSST.num_committed[curr_view->rank_of_leader()] > curr_num_committed;
         };
         // Construct a trigger that will re-call finish_view_change() with the same parameters
-        auto retry_next_view = [this, next_subgroup_settings,
-                                next_num_received_size](DerechoSST& sst) {
-            terminate_epoch(next_subgroup_settings, next_num_received_size, sst);
+        auto retry_next_view = [this](DerechoSST& sst) {
+            terminate_epoch(sst);
         };
         gmsSST.predicates.insert(leader_committed_change, retry_next_view,
                                  sst::PredicateType::ONE_TIME);
@@ -972,8 +1020,7 @@ void ViewManager::terminate_epoch(
             };
 
     auto global_min_ready_continuation =
-            [this, follower_subgroups_and_shards, next_subgroup_settings,
-             next_num_received_size](DerechoSST& gmsSST) {
+            [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
                 whenlog(logger->debug("GlobalMins are ready for all {} subgroup leaders this node is waiting on", follower_subgroups_and_shards->size()););
                 // Finish RaggedEdgeCleanup for subgroups in which I'm not the leader
                 for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
@@ -1022,11 +1069,8 @@ void ViewManager::terminate_epoch(
                 };
 
                 auto finish_view_change_trig =
-                        [this, follower_subgroups_and_shards, next_subgroup_settings,
-                         next_num_received_size](DerechoSST& gmsSST) {
-                            finish_view_change(follower_subgroups_and_shards,
-                                               next_subgroup_settings, next_num_received_size,
-                                               gmsSST);
+                        [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
+                            finish_view_change(follower_subgroups_and_shards, gmsSST);
                         };
 
                 // Last statement in global_min_ready_continuation: register finish_view_change_trig
@@ -1041,8 +1085,7 @@ void ViewManager::terminate_epoch(
 
 void ViewManager::finish_view_change(
         std::shared_ptr<std::map<subgroup_id_t, uint32_t>> follower_subgroups_and_shards,
-        std::shared_ptr<std::map<subgroup_id_t, SubgroupSettings>> next_subgroup_settings,
-        uint32_t next_num_received_size, DerechoSST& gmsSST) {
+        DerechoSST& gmsSST) {
     std::unique_lock<std::shared_timed_mutex> write_lock(view_mutex);
 
     // Disable all the other SST predicates, except suspected_changed
@@ -1051,24 +1094,61 @@ void ViewManager::finish_view_change(
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
+    // Now that the next_view won't change any more, calculate its subgroup settings
+    std::map<subgroup_id_t, SubgroupSettings> next_subgroup_settings;
+    uint32_t next_num_received_size = derive_subgroup_settings(*next_view, next_subgroup_settings);
+
+    // Determine the shard leaders in the old view and re-index them by new subgroup IDs
+    vector_int64_2d old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
+            *curr_view, *next_view);
+
     std::list<tcp::socket> joiner_sockets;
     if(curr_view->i_am_leader() && next_view->joined.size() > 0) {
         // If j joins have been committed, pop the next j sockets off
-        // proposed_join_sockets and send them the new View (must happen before we
-        // try to do SST setup)
+        // proposed_join_sockets and send them the new View and old shard
+        // leaders list
         for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
-            commit_join(*next_view, proposed_join_sockets.front());
-            // save the socket for later
+            send_view(*next_view, proposed_join_sockets.front());
+            std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
+            proposed_join_sockets.front().write(size_of_vector);
+            mutils::post_object([this](const char* bytes, std::size_t size) {
+                proposed_join_sockets.front().write(bytes, size);
+            },
+                                old_shard_leaders_by_id);
+            // save the socket for the commit step
             joiner_sockets.emplace_back(std::move(proposed_join_sockets.front()));
             proposed_join_sockets.pop_front();
         }
+    }
+
+    node_id_t my_id = next_view->members[next_view->my_rank];
+
+    // Set up TCP connections to the joined nodes
+    update_tcp_connections(*next_view);
+    // After doing that, shard leaders can send them RPC objects
+    send_objects_to_new_members(old_shard_leaders_by_id);
+
+    // Re-initialize this node's RPC objects, which includes receiving them
+    // from shard leaders if it is newly a member of a subgroup
+    whenlog(logger->debug("Receiving state for local Replicated Objects"););
+    initialize_subgroup_objects(my_id, *next_view, old_shard_leaders_by_id);
+
+    // Once state transfer completes, we can tell joining clients to commit the view
+    if(curr_view->i_am_leader()) {
+        for(auto& joiner_socket : joiner_sockets) {
+            //Eventually, we could check for success here and abort the view if a node failed
+            joiner_socket.write(CommitMessage::PREPARE);
+        }
+        for(auto& joiner_socket : joiner_sockets) {
+            joiner_socket.write(CommitMessage::COMMIT);
+        }
+        joiner_sockets.clear();
     }
 
     // Delete the last two GMS predicates from the old SST in preparation for deleting it
     gmsSST.predicates.remove(leader_committed_handle);
     gmsSST.predicates.remove(suspected_changed_handle);
 
-    node_id_t my_id = next_view->members[next_view->my_rank];
     whenlog(logger->debug("Starting creation of new SST and DerechoGroup for view {}", next_view->vid););
     for(const node_id_t failed_node_id : next_view->departed) {
         whenlog(logger->debug("Removing global TCP connections for failed node {} from RDMC and SST", failed_node_id););
@@ -1105,25 +1185,10 @@ void ViewManager::finish_view_change(
                               std::get<PORT_TYPE::SST>(
                                       next_view->member_ips_and_ports[joiner_rank])});
     }
+
     // This will block until everyone responds to SST/RDMC initial handshakes
-    transition_multicast_group(*next_subgroup_settings, next_num_received_size);
+    transition_multicast_group(next_subgroup_settings, next_num_received_size);
 
-    // Determine the shard leaders in the old view and re-index them by new subgroup IDs
-    std::vector<std::vector<int64_t>> old_shard_leaders_by_id = old_shard_leaders_by_new_ids(*curr_view, *next_view);
-
-    if(curr_view->i_am_leader()) {
-        while(!joiner_sockets.empty()) {
-            // Send the array of old shard leaders, so the new member knows who to receive from
-            std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            joiner_sockets.front().write(size_of_vector);
-            mutils::post_object(
-                    [&joiner_sockets](const char* bytes, std::size_t size) {
-                        joiner_sockets.front().write(bytes, size);
-                    },
-                    old_shard_leaders_by_id);
-            joiner_sockets.pop_front();
-        }
-    }
     // New members can now proceed to view_manager.start(), which will call sync()
     next_view->gmsSST->put();
     next_view->gmsSST->sync_with_members();
@@ -1156,15 +1221,6 @@ void ViewManager::finish_view_change(
         view_upcall(*curr_view);
     }
 
-    // One of those view upcalls is a function in Group that sets up TCP connections to the new members
-    // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(old_shard_leaders_by_id);
-
-    // Re-initialize this node's RPC objects, which includes receiving them
-    // from shard leaders if it is newly a member of a subgroup
-    whenlog(logger->debug("Initializing local Replicated Objects"););
-    initialize_subgroup_objects(my_id, *curr_view, old_shard_leaders_by_id);
-    // It's only safe to start evaluating predicates once all RPC objects exist
     curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
 }
@@ -1187,11 +1243,11 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, num_subgroups, subgroup_settings,
             derecho_params,
-	    [this](const subgroup_id_t& subgroup_id,const persistent::version_t& ver){
-	        assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-		subgroup_objects.at(subgroup_id).get().post_next_version(ver);
-	    },
-	    persistence_manager_callbacks, curr_view->failed);
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+                assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+            },
+            persistence_manager_callbacks, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group(
@@ -1208,12 +1264,12 @@ void ViewManager::transition_multicast_group(
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
             next_view->gmsSST, std::move(*curr_view->multicast_group), num_subgroups,
-            new_subgroup_settings, 
-	    [this](const subgroup_id_t& subgroup_id,const persistent::version_t& ver){
-	        assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-		subgroup_objects.at(subgroup_id).get().post_next_version(ver);
-	    },
-	    persistence_manager_callbacks, next_view->failed);
+            new_subgroup_settings,
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+                assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+            },
+            persistence_manager_callbacks, next_view->failed);
 
     curr_view->multicast_group.reset();
 
@@ -1289,7 +1345,7 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
     return true;
 }
 
-void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) {
+void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     whenlog(logger->debug("Sending client the new view"););
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
     std::size_t size_of_view = mutils::bytes_size(new_view);
@@ -1298,11 +1354,9 @@ void ViewManager::commit_join(const View& new_view, tcp::socket& client_socket) 
     std::size_t size_of_derecho_params = mutils::bytes_size(derecho_params);
     client_socket.write(size_of_derecho_params);
     mutils::post_object(bind_socket_write, derecho_params);
-    //Send True to indicate that the client should commit this View (for compatibility with restart mode)
-    client_socket.write(true);
 }
 
-void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int64_t>>& old_shard_leaders) {
+void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
     node_id_t my_id = curr_view->members[curr_view->my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
@@ -1326,7 +1380,7 @@ void ViewManager::send_objects_to_new_members(const std::vector<std::vector<int6
  * different object to A, and neither node will be able to send the log tail length that
  * the other one is waiting on. */
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = group_member_sockets->get_socket(new_node_id);
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets->get_socket(new_node_id);
     ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
     if(subgroup_object.is_persistent()) {
         //First, read the log tail length sent by the joining node
@@ -1355,10 +1409,8 @@ uint32_t ViewManager::compute_num_received_size(const View& view) {
     return num_received_size;
 }
 
-uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
-                                         const std::unique_ptr<View>& prev_view, View& curr_view,
-                                         std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
-    uint32_t num_received_offset = 0;
+void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
+                                     const std::unique_ptr<View>& prev_view, View& curr_view) {
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
@@ -1376,8 +1428,7 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
             curr_view.subgroup_shard_views.clear();
             curr_view.subgroup_ids_by_type_id.clear();
-            subgroup_settings.clear();
-            return 0;
+            return;
         }
         std::size_t num_subgroups = curr_type_subviews.size();
         curr_view.subgroup_ids_by_type_id[subgroup_type_id] = std::vector<subgroup_id_t>(num_subgroups);
@@ -1399,15 +1450,6 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
                 if(shard_view.my_rank != -1) {
                     // Initialize my_subgroups
                     curr_view.my_subgroups[curr_subgroup_num] = shard_num;
-                    // Save the settings for MulticastGroup
-                    subgroup_settings[curr_subgroup_num] = {
-                            shard_num,
-                            (uint32_t)shard_view.my_rank,
-                            shard_view.members,
-                            shard_view.is_sender,
-                            shard_view.sender_rank_of(shard_view.my_rank),
-                            num_received_offset,
-                            shard_view.mode};
                 }
                 if(prev_view) {
                     // Initialize this shard's SubView.joined and SubView.departed
@@ -1431,32 +1473,30 @@ uint32_t ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
              * shard_views_by_subgroup.size()) */
             curr_view.subgroup_shard_views.emplace_back(
                     std::move(curr_type_subviews[subgroup_index]));
-            num_received_offset += max_shard_senders;
         }  // for (subgroup_index)
     }
-    return num_received_offset;
 }
 
-uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
+uint32_t ViewManager::derive_subgroup_settings(View& view,
                                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
-    curr_view.my_subgroups.clear();
-    for(subgroup_id_t subgroup_id = 0; subgroup_id < curr_view.subgroup_shard_views.size(); ++subgroup_id) {
-        uint32_t num_shards = curr_view.subgroup_shard_views.at(subgroup_id).size();
+    view.my_subgroups.clear();
+    for(subgroup_id_t subgroup_id = 0; subgroup_id < view.subgroup_shard_views.size(); ++subgroup_id) {
+        uint32_t num_shards = view.subgroup_shard_views.at(subgroup_id).size();
         uint32_t max_shard_senders = 0;
 
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-            SubView& shard_view = curr_view.subgroup_shard_views.at(subgroup_id).at(shard_num);
+            SubView& shard_view = view.subgroup_shard_views.at(subgroup_id).at(shard_num);
             std::size_t shard_size = shard_view.members.size();
             uint32_t num_shard_senders = shard_view.num_senders();
             if(num_shard_senders > max_shard_senders) {
                 max_shard_senders = shard_size;  //really? why not max_shard_senders = num_shard_senders?
             }
             //Initialize my_rank in the SubView for this node's ID
-            shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
+            shard_view.my_rank = shard_view.rank_of(view.members[view.my_rank]);
             if(shard_view.my_rank != -1) {
                 //Initialize my_subgroups
-                curr_view.my_subgroups[subgroup_id] = shard_num;
+                view.my_subgroups[subgroup_id] = shard_num;
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
                         shard_num,
@@ -1476,7 +1516,7 @@ uint32_t ViewManager::derive_subgroup_settings(View& curr_view,
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST
-                                                  whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                          whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;
@@ -1561,8 +1601,8 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
     return std::move(next_view);
 }
 
-std::vector<std::vector<int64_t>> ViewManager::old_shard_leaders_by_new_ids(const View& curr_view,
-                                                                            const View& next_view) {
+vector_int64_2d ViewManager::old_shard_leaders_by_new_ids(const View& curr_view,
+                                                          const View& next_view) {
     std::vector<std::vector<int64_t>> old_shard_leaders_by_new_id(next_view.subgroup_shard_views.size());
     for(const auto& type_to_old_ids : curr_view.subgroup_ids_by_type_id) {
         for(uint32_t subgroup_index = 0; subgroup_index < type_to_old_ids.second.size(); ++subgroup_index) {
@@ -1656,7 +1696,7 @@ void ViewManager::deliver_in_order(const int shard_leader_rank,
     if(any_persistent_objects) {
         uint32_t shard_num = Vc.my_subgroups.at(subgroup_num);
         RaggedTrim trim_log{subgroup_num, shard_num, Vc.vid,
-            static_cast<int32_t>(Vc.members[Vc.rank_of_leader()]), max_received_indices};
+                            static_cast<int32_t>(Vc.members[Vc.rank_of_leader()]), max_received_indices};
         whenlog(logger->debug("Logging ragged trim to disk"););
         persistent::saveObject(trim_log, ragged_trim_filename(subgroup_num, shard_num).c_str());
     }
@@ -1748,11 +1788,10 @@ void ViewManager::report_failure(const node_id_t who) {
     int failed_cnt = 0;
     int rip_cnt = 0;
     for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
-	if(curr_view->gmsSST->rip[r]) {
-	  ++rip_cnt;
-	}
-        else if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
-	  ++failed_cnt;
+        if(curr_view->gmsSST->rip[r]) {
+            ++rip_cnt;
+        } else if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
+            ++failed_cnt;
         }
     }
 
@@ -1776,7 +1815,7 @@ void ViewManager::leave() {
             sizeof(curr_view->gmsSST->suspected[0][curr_view->my_rank]));
     curr_view->gmsSST->rip[curr_view->my_rank] = true;
     curr_view->gmsSST->put_with_completion(curr_view->gmsSST->rip.get_base() - curr_view->gmsSST->getBaseAddress(),
-               sizeof(curr_view->gmsSST->rip[0]));
+                                           sizeof(curr_view->gmsSST->rip[0]));
     thread_shutdown = true;
 }
 
@@ -1835,7 +1874,16 @@ void ViewManager::barrier_sync() {
 }
 
 SharedLockedReference<View> ViewManager::get_current_view() {
+    assert(curr_view);
     return SharedLockedReference<View>(*curr_view, view_mutex);
+}
+
+SharedLockedReference<const View> ViewManager::get_current_view_const() {
+    if(restart_leader_state_machine) {
+        return SharedLockedReference<const View>(restart_leader_state_machine->get_curr_view(), view_mutex);
+    } else {
+        return SharedLockedReference<const View>(*curr_view, view_mutex);
+    }
 }
 
 void ViewManager::debug_print_status() const {
