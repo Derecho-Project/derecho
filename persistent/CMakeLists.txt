@@ -33,7 +33,8 @@ link_directories(
   ${derecho_SOURCE_DIR}/third_party/mutils 
   ${derecho_SOURCE_DIR}/third_party/mutils-serialization)
 
-add_library(persistent SHARED Persistent.hpp Persistent.cpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp FilePersistLog.hpp HLC.cpp HLC.hpp PersistNoLog.hpp)
+add_library(persistent SHARED Persistent.hpp Persistent.cpp PersistLog.cpp PersistLog.hpp FilePersistLog.cpp
+    FilePersistLog.hpp SPDKPersistLog.cpp SPDKPersistLog.hpp HLC.cpp HLC.hpp PersistNoLog.hpp)
 target_link_libraries(persistent stdc++fs)
 output_directory(persistent target/usr/local/lib)
 add_dependencies(persistent libfabric_target)
