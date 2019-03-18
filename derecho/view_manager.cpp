@@ -58,6 +58,7 @@ ViewManager::ViewManager(
                 std::move(curr_view), *restart_state,
                 subgroup_info, derecho_params, my_id);
         await_rejoining_nodes(my_id);
+        setup_initial_tcp_connections(restart_leader_state_machine->get_restart_view(), my_id);
     } else {
         in_total_restart = false;
         curr_view = std::make_unique<View>(
@@ -72,8 +73,8 @@ ViewManager::ViewManager(
                 std::vector<node_id_t>{}, std::vector<node_id_t>{},
                 0, 0, subgroup_type_order);
         await_first_view(my_id);
+        setup_initial_tcp_connections(*curr_view, my_id);
     }
-    setup_initial_tcp_connections(my_id);
 }
 
 /* Non-leader Constructor */
@@ -100,7 +101,7 @@ ViewManager::ViewManager(
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     receive_initial_view(my_id, leader_connection);
     //As soon as we have a tentative initial view, set up the TCP connections
-    setup_initial_tcp_connections(my_id);
+    setup_initial_tcp_connections(*curr_view, my_id);
 }
 
 ViewManager::~ViewManager() {
@@ -259,7 +260,7 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         receive_view_and_leaders(my_id, leader_connection);
         //Update the TCP connections pool for any new/failed nodes,
         //so we can run state transfer again.
-        reinit_tcp_connections(my_id);
+        reinit_tcp_connections(*curr_view, my_id);
     }
     //Unless the final message was Commit, we need to retry state transfer
     return (commit_message == CommitMessage::COMMIT);
@@ -346,32 +347,29 @@ void ViewManager::send_logs() {
     }
 }
 
-void ViewManager::setup_initial_tcp_connections(node_id_t my_id) {
-    //As usual the restart leader is a special case, since it doesn't have curr_view
-    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+void ViewManager::setup_initial_tcp_connections(const View& initial_view, node_id_t my_id) {
     //Establish TCP connections to each other member of the view in ascending order
-    for(int i = 0; i < proposed_view.num_members; ++i) {
-        if(proposed_view.members[i] != my_id) {
-            tcp_sockets->add_node(proposed_view.members[i],
-                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
+    for(int i = 0; i < initial_view.num_members; ++i) {
+        if(initial_view.members[i] != my_id) {
+            tcp_sockets->add_node(initial_view.members[i],
+                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", initial_view.members[i]);)
         }
     }
 }
 
-void ViewManager::reinit_tcp_connections(node_id_t my_id) {
-    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+void ViewManager::reinit_tcp_connections(const View& initial_view, node_id_t my_id) {
     //Delete sockets for failed members no longer in the view
-    tcp_sockets->filter_to(proposed_view.members);
+    tcp_sockets->filter_to(initial_view.members);
     //Recheck the members list and establish connections to any new members
-    for(int i = 0; i < proposed_view.num_members; ++i) {
-        if(proposed_view.members[i] != my_id
-           && !tcp_sockets->contains_node(proposed_view.members[i])) {
-            tcp_sockets->add_node(proposed_view.members[i],
-                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
+    for(int i = 0; i < initial_view.num_members; ++i) {
+        if(initial_view.members[i] != my_id
+           && !tcp_sockets->contains_node(initial_view.members[i])) {
+            tcp_sockets->add_node(initial_view.members[i],
+                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", initial_view.members[i]);)
         }
     }
 }
@@ -1126,7 +1124,7 @@ void ViewManager::finish_view_change(
     // Set up TCP connections to the joined nodes
     update_tcp_connections(*next_view);
     // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(old_shard_leaders_by_id);
+    send_objects_to_new_members(*next_view, old_shard_leaders_by_id);
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
@@ -1356,14 +1354,14 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     mutils::post_object(bind_socket_write, derecho_params);
 }
 
-void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
-    node_id_t my_id = curr_view->members[curr_view->my_rank];
+void ViewManager::send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders) {
+    node_id_t my_id = new_view.members[new_view.my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
             //if I was the leader of the shard in the old view...
             if(my_id == old_shard_leaders[subgroup_id][shard]) {
                 //send its object state to the new members
-                for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard].joined) {
+                for(node_id_t shard_joiner : new_view.subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }

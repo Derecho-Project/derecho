@@ -232,17 +232,20 @@ private:
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
-     * to the members of curr_view in ascending rank order. Assumes that no TCP
+     * to the members of initial_view in ascending rank order. Assumes that no TCP
      * connections have been set up yet.
+     * @param initial_view The View to use for membership
      */
-    void setup_initial_tcp_connections(node_id_t my_id);
+    void setup_initial_tcp_connections(const View& initial_view, node_id_t my_id);
 
     /**
      * Another setup helper for joining nodes; re-initializes the TCP connections
-     * list to reflect the current list of members in curr_view, assuming that the
-     * initial curr_view was aborted and a new one has been sent.
+     * list to reflect the current list of members in initial_view, assuming that the
+     * first view was aborted and a new one has been sent.
+     * @param initial_view The View whose membership the TCP connections should be
+     * updated to reflect
      */
-    void reinit_tcp_connections(node_id_t my_id);
+    void reinit_tcp_connections(const View& initial_view, node_id_t my_id);
 
     /**
      * Updates the TCP connections pool to reflect the joined and departed
@@ -284,7 +287,7 @@ private:
     /** Helper method for completing view changes; determines whether this node
      * needs to send Replicated Object state to each node that just joined, and then
      * sends the state if necessary. */
-    void send_objects_to_new_members(const vector_int64_2d& old_shard_leaders);
+    void send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders);
 
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
