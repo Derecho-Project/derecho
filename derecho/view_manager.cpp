@@ -1477,6 +1477,52 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     }
 }
 
+rdmc::send_algorithm get_send_alg(std::string rdmc_send_algorithm_string) {
+    if(rdmc_send_algorithm_string == "binomial_send") {
+        return rdmc::send_algorithm::BINOMIAL_SEND;
+    } else if(rdmc_send_algorithm_string == "chain_send") {
+        return rdmc::send_algorithm::CHAIN_SEND;
+    } else if(rdmc_send_algorithm_string == "sequential_send") {
+        return rdmc::send_algorithm::SEQUENTIAL_SEND;
+    } else if(rdmc_send_algorithm_string == "tree_send") {
+        return rdmc::send_algorithm::TREE_SEND;
+    } else {
+        throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
+    }
+}
+
+// Constructs DerechoParams specifying subgroup metadata for specified profile
+derecho::DerechoParams construct_subgroup_param(std::string profile) {
+    // Use the profile string to search the configuration file for the appropriate 
+    // settings. If they do not exist, then we should utilize the defaults
+    std::transform(profile.begin(), profile.end(),profile.begin(), ::toupper);
+    std::string prefix = "SUBGROUP/" + profile + "/";
+    std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm", "rpc_port"};
+    for(int i = 0; i < int(fields.size()); i++) {
+        fields[i] = prefix + fields[i];
+        if (!hasCustomizedConfKey(fields[i])) {
+            // If an invalid profile was loaded in, utilize the default
+            // derecho parameters
+            // TODO: remove before merging to master
+            std::cout << "Could not find " + fields[i] + ". Using default parameters" << "\n";
+            return derecho::DerechoParams();
+        }
+    }
+    // Since we have determined that all keys are defined in the conf file
+    // we can safely construct the derecho params struct and return it
+    // TODO: remove before merging to master
+    std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
+    return derecho::DerechoParams{
+        getConfUInt32(fields[0]),
+        getConfUInt32(fields[1]),
+        getConfUInt32(fields[2]),
+        getConfUInt32(fields[3]),
+        getConfUInt32(fields[4]),
+        get_send_alg(getConfString(fields[5])),
+        getConfUInt32(fields[6]),
+    };
+}
+
 uint32_t ViewManager::derive_subgroup_settings(View& view,
                                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
@@ -1497,11 +1543,9 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
             if(shard_view.my_rank != -1) {
                 //Initialize my_subgroups
                 view.my_subgroups[subgroup_id] = shard_num;
-
                 //TODO modify constructor & allow multiple profiles. Also sanitize DerechoParams?
 //                auto max_payload_size = compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size, derecho_params.max_payload_size > derecho_params.max_smc_payload_size);
 //                auto max_smc_payload_size = derecho_params.max_smc_payload_size + sizeof(header);
-
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
                         shard_num,
@@ -1511,7 +1555,8 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
                         shard_view.sender_rank_of(shard_view.my_rank),
                         num_received_offset,
                         shard_view.mode,
-                        DerechoParams()}; //TODO read in parameters
+                        construct_subgroup_param(shard_view.profile),
+                };
             }
         }  // for(shard_num)
         num_received_offset += max_shard_senders;
