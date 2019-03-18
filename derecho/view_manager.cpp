@@ -1570,7 +1570,6 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
             if(shard_view.my_rank != -1) {
                 //Initialize my_subgroups
                 view.my_subgroups[subgroup_id] = shard_num;
-                //TODO modify constructor & allow multiple profiles. Also sanitize DerechoParams?
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
                         shard_num,

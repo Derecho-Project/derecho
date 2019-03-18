@@ -107,7 +107,7 @@ public:
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t num_received_size, uint32_t window_size, uint64_t sst_max_msg_size)
+    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t num_received_size, uint64_t slot_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
               delivered_num(num_subgroups),
@@ -122,7 +122,7 @@ public:
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
-              slots((sst_max_msg_size)*window_size * num_subgroups),
+              slots(slot_size),
               num_received_sst(num_received_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num,
