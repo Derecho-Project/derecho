@@ -280,6 +280,10 @@ private:
 
     std::vector<bool> last_transfer_medium;
 
+    /** post the next version to a subgroup just before deliver a message so
+     * that the user code know the current version being handled. */
+    subgroup_post_next_version_func_t post_next_version_callback;
+
     /** persistence manager callbacks */
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
@@ -388,7 +392,9 @@ public:
      * @param subgroup_settings_by_id A list of SubgroupSettings, one for each
      * subgroup this node belongs to, indexed by subgroup ID
      * @param derecho_params The parameters for multicasts in this group
-     * @param _persistence_manager_callbacks The callbacks to PersistenceManager
+     * @param post_next_version_callback The callback for posting the upcoming
+     *        version to be delivered in a subgroup.
+     * @param persistence_manager_callbacks The callbacks to PersistenceManager
      * that will be used to persist received messages
      * @param already_failed (Optional) A Boolean vector indicating which
      * elements of _members are nodes that have already failed in this view
@@ -400,6 +406,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const DerechoParams derecho_params,
+	    const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -410,6 +417,7 @@ public:
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
+	    const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
 

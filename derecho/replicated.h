@@ -81,6 +81,7 @@ public:
     virtual const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
     virtual void truncate(const persistent::version_t& latest_version) = 0;
+    virtual void post_next_version(const persistent::version_t& version) = 0;
 };
 
 template <typename T>
@@ -113,6 +114,8 @@ private:
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     _Group* group;
+    /** The version number being processed */
+    persistent::version_t next_version = INVALID_VERSION;
 
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
@@ -211,7 +214,12 @@ public:
         persistent_registry_ptr->updateTemporalFrontierProvider(this);
     }
     Replicated(const Replicated&) = delete;
-    virtual ~Replicated() = default;
+    virtual ~Replicated(){
+        // hack to check if the object was merely moved
+        if(wrapped_this) {
+            group_rpc_manager.destroy_remote_invocable_class(subgroup_id);
+        }
+    };
 
     /**
      * @return The value of has_persistent_fields<T> for this Replicated<T>'s
@@ -398,7 +406,9 @@ public:
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
+	std::cout << "In receive object before pointer reset: " << user_object_ptr.get() << std::endl;
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
+	std::cout << "In receive object after pointer reset: " << user_object_ptr.get() << std::endl;
         if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
@@ -447,6 +457,20 @@ public:
      */
     virtual void truncate(const persistent::version_t& latest_version) {
         persistent_registry_ptr->truncate(latest_version);
+    }
+
+    /**
+     * Post the next version to be handled.
+     */
+    virtual void post_next_version(const persistent::version_t& version) {
+        next_version = version;
+    }
+
+    /**
+     * Get the next version to be handled.
+     */
+    virtual persistent::version_t get_next_version() {
+        return next_version;
     }
 
     /**

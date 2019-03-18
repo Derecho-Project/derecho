@@ -105,17 +105,12 @@ class RPCManager {
     std::queue<fifo_req> fifo_queue;
     std::mutex fifo_queue_mutex;
     std::condition_variable fifo_queue_cv;
-    std::atomic<bool> fifo_worker_stop{false};
-
 
     /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
 
     /** Handle Non-cascading P2P Send and P2P Queries in fifo*/
     void fifo_worker();
-
-    /** Stop fifo_worker */
-    void stop_and_wait_for_fifo_worker();
 
     /**
      * Handler to be called by rpc_process_loop each time it receives a
@@ -210,6 +205,19 @@ public:
                                                                    bind_to_instance(cls, unpacked_functions)...);
         },
                                 funs);
+    }
+
+    void destroy_remote_invocable_class(uint32_t instance_id) {
+        std::list<Opcode> keysToDelete;
+        for(const auto& r : *receivers) {
+            const auto opcode = r.first;
+            if(opcode.subgroup_id == instance_id) {
+                keysToDelete.push_back(opcode);
+            }
+        }
+        for(auto opcodes : keysToDelete) {
+            receivers->erase(opcodes);
+        }
     }
 
     /**

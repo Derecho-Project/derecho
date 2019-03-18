@@ -33,6 +33,13 @@ private:
 #define CONF_DERECHO_WINDOW_SIZE "DERECHO/window_size"
 #define CONF_DERECHO_TIMEOUT_MS "DERECHO/timeout_ms"
 #define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
+#define CONF_SUBGROUP_MAX_PAYLOAD_SIZE "SUBGROUP/max_payload_size"
+#define CONF_SUBGROUP_MAX_SMC_PAYLOAD_SIZE "SUBGROUP/max_smc_payload_size"
+#define CONF_SUBGROUP_BLOCK_SIZE "SUBGROUP/block_size"
+#define CONF_SUBGROUP_WINDOW_SIZE "SUBGROUP/window_size"
+#define CONF_SUBGROUP_TIMEOUT_MS "SUBGROUP/timeout_ms"
+#define CONF_SUBGROUP_RDMC_SEND_ALGORITHM "SUBGROUP/rdmc_send_algorithm"
+#define CONF_SUBGROUP_RPC_PORT "SUBGROUP/rpc_port"
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
 #define CONF_RDMA_TX_DEPTH "RDMA/tx_depth"
@@ -64,6 +71,14 @@ private:
             {CONF_RDMA_DOMAIN, "eth0"},
             {CONF_RDMA_TX_DEPTH, "256"},
             {CONF_RDMA_RX_DEPTH, "256"},
+            // [SUBGROUP]
+            {CONF_SUBGROUP_MAX_PAYLOAD_SIZE, "10240"},
+            {CONF_SUBGROUP_MAX_SMC_PAYLOAD_SIZE, "10240"},
+            {CONF_SUBGROUP_BLOCK_SIZE, "1048576"},
+            {CONF_SUBGROUP_WINDOW_SIZE, "16"},
+            {CONF_SUBGROUP_TIMEOUT_MS, "1"},
+            {CONF_SUBGROUP_RDMC_SEND_ALGORITHM, "binomial_send"},
+            {CONF_SUBGROUP_RPC_PORT, "28366"},
             // [PERS]
             {CONF_PERS_FILE_PATH, ".plog"},
             {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},

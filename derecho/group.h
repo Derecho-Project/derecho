@@ -120,9 +120,7 @@ private:
     const node_id_t my_id;
     bool is_starting_leader;
     std::optional<tcp::socket> leader_connection;
-    /** The user deserialization context for all objects serialized and 
-     * deserialized.
-     */
+    /** The user deserialization context for all objects serialized and deserialized. */
     std::shared_ptr<IDeserializationContext> user_deserialization_context;
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
@@ -159,12 +157,6 @@ private:
      * its keys are continuous integers starting at 0 and it should be a std::vector. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
 
-    /** Type of a 2-dimensional vector used to store potential node IDs, or -1 */
-    using vector_int64_2d = std::vector<std::vector<int64_t>>;
-
-    /** Deserializes a vector of shard leader IDs sent over the given socket. */
-    static std::unique_ptr<vector_int64_2d> receive_old_shard_leaders(tcp::socket& leader_socket);
-
     /**
      * Updates the state of the replicated objects that correspond to subgroups
      * identified in the provided map, by receiving serialized state from the
@@ -176,10 +168,6 @@ private:
 
     /** Constructor helper that wires together the component objects of Group. */
     void set_up_components();
-
-    /** A new-view callback that adds and removes TCP connections from the pool
-     * of long-standing TCP connections to each member (used mostly by RPCManager). */
-    void update_tcp_connections_callback(const View& new_view);
 
     /**
      * Base case for the construct_objects template. Note that the neat "varargs
@@ -292,14 +280,14 @@ public:
      * entry for each shard in the subgroup, and the vector at each position
      * contains the IDs of the nodes in that shard.
      */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     /** Returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
     /** Returns the shard number that this node is a member of in the specified
      * subgroup (by subgroup type and index), or -1 if this node is not a member
      * of any shard in the specified subgroup. */
-    template<typename SubgroupType>
+    template <typename SubgroupType>
     std::int32_t get_my_shard(uint32_t subgroup_index = 0);
     /** Reports to the GMS that the given node has failed. */
     void report_failure(const node_id_t who);

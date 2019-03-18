@@ -9,11 +9,11 @@
 #include "spdlog/sinks/stdout_color_sinks.h"
 #include <mutils-serialization/SerializationSupport.hpp>
 
-#include "utils/logger.hpp"
 #include "container_template_functions.h"
 #include "derecho_internal.h"
 #include "group.h"
 #include "make_kind_map.h"
+#include "utils/logger.hpp"
 
 namespace derecho {
 
@@ -65,14 +65,14 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           view_manager([&]() {
               if(is_starting_leader) {
-                  return ViewManager(callbacks, subgroup_info,
+                  return ViewManager(subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
                                      std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                                      tcp_sockets, objects_by_subgroup_id,
                                      persistence_manager.get_callbacks(),
                                      _view_upcalls);
               } else {
-                  return ViewManager(leader_connection.value(), callbacks,
+                  return ViewManager(leader_connection.value(),
                                      subgroup_info,
                                      {std::type_index(typeid(ReplicatedTypes))...},
                                      std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
@@ -81,28 +81,48 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager,deserialization_context.get()),
+          rpc_manager(view_manager, deserialization_context.get()),
           factories(make_kind_map(factories...)) {
-    set_up_components();
-    vector_int64_2d restart_shard_leaders = view_manager.finish_setup();
-    std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive;
-    std::unique_ptr<vector_int64_2d> old_shard_leaders;
-    if(is_starting_leader) {
-        /* If in total restart mode, ViewManager will have computed the members of each shard
-         * with the longest logs, and this node will need to receive state from them even
-         * though it's the leader. Otherwise, this vector will be empty because the leader
-         * normally doesn't need to receive any object state. */
-        subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(
-                view_manager.get_current_view().get(), restart_shard_leaders);
-    } else {
-        // I am a non-leader
-        old_shard_leaders = receive_old_shard_leaders(leader_connection.value());
-        subgroups_and_leaders_to_receive = construct_objects<ReplicatedTypes...>(
-                view_manager.get_current_view().get(), *old_shard_leaders);
+    //State transfer must complete before an initial view can commit, and must retry if the view is aborted
+    bool initial_view_confirmed = false;
+    while(!initial_view_confirmed) {
+        //This might be the shard leaders from the previous view,
+        //or the nodes with the longest logs in their shard if we're doing total restart,
+        //or empty if this is the first View of a new group
+        const vector_int64_2d& old_shard_leaders = view_manager.get_old_shard_leaders();
+        //As a side effect, construct_objects filters old_shard_leaders to just the leaders
+        //this node needs to receive object state from
+        std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
+                = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
+                                                        old_shard_leaders);
+        //These functions are no-ops if we're not doing total restart
+        view_manager.truncate_logs();
+        view_manager.send_logs();
+        receive_objects(subgroups_and_leaders_to_receive);
+        if(is_starting_leader) {
+            bool leader_has_quorum = true;
+            initial_view_confirmed = view_manager.leader_prepare_initial_view(leader_has_quorum);
+            if(!leader_has_quorum) {
+                //If quorum was lost due to failures during the prepare message,
+                //stop here and wait for more nodes to rejoin before going back to state-transfer
+                view_manager.await_rejoining_nodes(my_id);
+            }
+        } else {
+            //This will wait for a new view to be sent if the view was aborted
+            initial_view_confirmed = view_manager.check_view_committed(leader_connection.value());
+        }
     }
-    //The next two methods will do nothing unless we're in total restart mode
-    view_manager.send_logs_if_total_restart(old_shard_leaders);
-    receive_objects(subgroups_and_leaders_to_receive);
+    if(is_starting_leader) {
+        //In restart mode, once a prepare is successful, send a commit
+        //(this function does nothing if we're not doing total restart)
+        view_manager.leader_commit_initial_view();
+    }
+    //Once the initial view is committed, we can make RDMA connections
+    view_manager.initialize_multicast_groups(callbacks);
+    //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
+    set_up_components();
+    view_manager.finish_setup();
+    //Start all the predicates and listeners threads
     rpc_manager.start_listening();
     view_manager.start();
     persistence_manager.start();
@@ -112,7 +132,7 @@ template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
     // shutdown the persistence manager
     // TODO-discussion:
-    // Will a nodebe able to come back once it leaves? if not, maybe we should
+    // Will a node be able to come back once it leaves? if not, maybe we should
     // shut it down on leave().
     persistence_manager.shutdown(true);
     tcp_sockets->destroy();
@@ -207,10 +227,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
-    //Now that ViewManager is constructed, register some new-view upcalls for system functionality
-    view_manager.add_view_upcall([this](const View& new_view) {
-        update_tcp_connections_callback(new_view);
-    });
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
@@ -222,44 +238,6 @@ void Group<ReplicatedTypes...>::set_up_components() {
                 = construct_objects<ReplicatedTypes...>(view, old_shard_leaders);
         receive_objects(subgroups_and_leaders);
     });
-}
-
-template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::update_tcp_connections_callback(const View& new_view) {
-    if(std::find(new_view.joined.begin(), new_view.joined.end(), my_id) != new_view.joined.end()) {
-        //If this node is in the joined list, we need to set up a connection to everyone
-        for(int i = 0; i < new_view.num_members; ++i) {
-            if(new_view.members[i] != my_id) {
-                tcp_sockets->add_node(new_view.members[i], {std::get<0>(new_view.member_ips_and_ports[i]), std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[i])});
-                whendebug(logger->debug("Established a TCP connection to node {}", new_view.members[i]);)
-            }
-        }
-    } else {
-        //This node is already a member, so we already have connections to the previous view's members
-        for(const node_id_t& joiner_id : new_view.joined) {
-            tcp_sockets->add_node(joiner_id,
-                                  {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]),
-                                   std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
-            whenlog(logger->debug("Established a TCP connection to node {}", joiner_id););
-        }
-        for(const node_id_t& removed_id : new_view.departed) {
-            whenlog(logger->debug("Removing TCP connection for failed node {}", removed_id););
-            tcp_sockets->delete_node(removed_id);
-        }
-    }
-}
-
-template <typename... ReplicatedTypes>
-std::unique_ptr<std::vector<std::vector<int64_t>>> Group<ReplicatedTypes...>::receive_old_shard_leaders(
-        tcp::socket& leader_socket) {
-    std::size_t buffer_size;
-    leader_socket.read(buffer_size);
-    if(buffer_size == 0) {
-        return std::make_unique<vector_int64_2d>();
-    }
-    char buffer[buffer_size];
-    leader_socket.read(buffer, buffer_size);
-    return mutils::from_bytes<std::vector<std::vector<int64_t>>>(nullptr, buffer);
 }
 
 template <typename... ReplicatedTypes>
@@ -321,10 +299,11 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         std::size_t buffer_size;
         bool success = leader_socket.get().read(buffer_size);
         assert_always(success);
-        char buffer[buffer_size];
+        char* buffer = new char[buffer_size];
         success = leader_socket.get().read(buffer, buffer_size);
         assert_always(success);
         subgroup_object.receive_object(buffer);
+        delete[] buffer;
     }
     whenlog(logger->debug("Done receiving all Replicated Objects from subgroup leaders"));
 }

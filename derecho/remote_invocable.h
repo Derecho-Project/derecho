@@ -144,6 +144,25 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         long int invocation_id = ((long int*)(response + 1))[0];
         lock_t l{map_lock};
         assert(results_map.count(invocation_id) != 0);
+        // we unlock the map here to avoid the deadlock: 
+        // The p2p handler thread, on receiving an RPC REPLY may get this lock
+        // before sst_detect thread finish handling the corresponding ordered
+        // send locally. However, sst_detect thread may be so slow that it 
+        // hasn't finish deliverying of a previous ordered send, therefore waits
+        // for the map_lock in the following call stack: 
+        // - RPCManager::rpc_message_handler() ->
+        // - RPCManager::parse_and_receive() ->
+        // - RPCManager::receive_message()->
+        // - receivers->at(indx)->
+        // - RemoteInvoker::receive_response().
+        // therefore, the promise for the next ordered_send, on which the 
+        // p2p handler thread is waiting for, cannot be fulfilled.
+        // dead lock!!!
+        // We use this workaround by just release the results_map lock as early
+        // because we have 64K slots and we assume after 64K messages, this
+        // corresponding ordered_send has been finished already. 
+        // TODO: make a better plan along with garbage collection.
+        l.unlock();
         // TODO: garbage collection for the responses.
         if(is_exception) {
             results_map.at(invocation_id).set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
@@ -386,6 +405,8 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
     assert(_this);
     return wrapped<Tag, std::function<Ret(Args...)>>{
             [_this, fun = partial.fun](Args... arguments) {
+                assert(_this);
+                assert(_this->get());
                 return (_this->get()->*fun)(arguments...);
             }};
 }

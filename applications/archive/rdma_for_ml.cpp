@@ -53,14 +53,15 @@ int main(int argc, char* argv[]) {
 
     uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     
-    std::cout << "Input the IP addresses" << std::endl;
-    // assume all have the same port
-    uint16_t port = getConfUInt16(CONF_DERECHO_SST_PORT);
     // input the ip addresses
     std::map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(uint i = 0; i < num_nodes; ++i) {
         std::string ip;
+	uint16_t port;
+        std::cout << "Input the IP address for node " << i << ": ";
         std::cin >> ip;
+	std::cout << "Input the port number for node " << i << ": ";
+	std::cin >> port;
         ip_addrs_and_ports[i] = {ip, port};
     }
 

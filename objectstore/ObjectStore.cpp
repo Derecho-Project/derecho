@@ -202,14 +202,20 @@ public:
     // This is for REGISTER_RPC_FUNCTIONS
     // @override IReplica::orderedPut
     virtual bool orderedPut(const Object& object) {
+        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+        dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedPut(object);
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+        dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedRemove(oid);
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+        dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedGet(oid);
     }
 
@@ -423,14 +429,20 @@ public:
 
     // @override IReplica::orderedPut
     virtual bool orderedPut(const Object& object) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedPut(object);
     }
     // @override IReplica::orderedRemove
     virtual bool orderedRemove(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedRemove(oid);
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
+        auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedGet(oid);
     }
     // @override IObjectStoreAPI::put

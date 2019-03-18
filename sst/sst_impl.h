@@ -140,6 +140,7 @@ void SST<DerivedSST>::detect() {
             //Still to do: Clean up deleted predicates
         } catch(const std::exception& e) {
             std::cout << "Exception in the SST detect thread: " << e.what() << std::endl;
+	    throw e;
         }
     }
 }
