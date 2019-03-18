@@ -389,6 +389,13 @@ private:
     void initialize_rdmc_sst();
 
     /**
+     * Calculates the total size of slots given subgroups and the profiles for each.
+     * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
+     * @return
+     */
+    uint64_t ViewManager::slot_size_for_subgroups(const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+
+    /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
      * @param derecho_params The initial DerechoParams to supply to the MulticastGroup

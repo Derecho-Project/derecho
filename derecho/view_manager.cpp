@@ -1228,16 +1228,26 @@ void ViewManager::finish_view_change(
 /* ------------- 3. Helper Functions for Predicates and Triggers -------------
  */
 
+uint64_t ViewManager::slot_size_for_subgroups(const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
+    uint64_t slot_size = 0;
+    for (const std::pair<subgroup_id_t, SubgroupSettings> entry : subgroup_settings) {
+        const DerechoParams& profile = entry.second.profile;
+        slot_size += profile.window_size * (profile.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
+    }
+    return slot_size;
+}
+
 void ViewManager::construct_multicast_group(CallbackSet callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                             const uint32_t num_received_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
+    const uint64_t slot_size = slot_size_for_subgroups(subgroup_settings);
+
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); },
                            curr_view->failed, false),
-            num_subgroups, num_received_size, derecho_params.window_size,
-            derecho_params.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
+            num_subgroups, num_received_size, slot_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -1254,12 +1264,13 @@ void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
         const uint32_t new_num_received_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
+    const uint64_t slot_size = slot_size_for_subgroups(subgroup_settings);
+
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); },
                            next_view->failed, false),
-            num_subgroups, new_num_received_size, derecho_params.window_size,
-            derecho_params.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
+            num_subgroups, new_num_received_size, slot_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
