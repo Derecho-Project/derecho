@@ -64,14 +64,23 @@ int main(int argc, char** argv) {
             {
                     "get",  // command
                     {
-                            "get <oid>",  // help info
+                            "get <oid> [version]",  // help info
                             [&oss](std::string& args) -> bool {
+                                char *argcopy = strdup(args.c_str());
+                                char *token = std::strtok(argcopy, " ");
+                                uint64_t oid = std::stol(token);
+                                version_t ver = INVALID_VERSION;
+                                if (token = std::strtok(NULL, " ")) {
+                                    ver = std::stol(token);
+                                }
                                 try {
-                                    objectstore::Object obj = oss.bio_get(std::stol(args));
+                                    objectstore::Object obj = oss.bio_get(oid,ver);
                                     std::cout << obj << std::endl;
                                 } catch(...) {
+                                    free(argcopy);
                                     return false;
                                 }
+                                free(argcopy);
                                 return true;
                             }}},
             {"remove",  // command
