@@ -48,50 +48,72 @@ int main(int argc, char** argv) {
                                  // asynchronous api
                                  derecho::rpc::QueryResults<persistent::version_t> results = oss.aio_put(object);
                                  decltype(results)::ReplyMap& replies = results.get();
+                                 std::cout << "aio returns:" << std::endl;
                                  for(auto& reply_pair : replies) {
-                                     std::cout << reply_pair.first << reply_pair.second.get() << std::endl;
+                                     std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
                                  }
                              } else {
                                  // synchronous api
-                                 std::cout << "bio put:" << std::boolalpha << oss.bio_put(object)
-                                           << std::noboolalpha << std::endl;
+                                 std::cout << "version:" << oss.bio_put(object) << std::endl;
                              }
                          } catch(...) {
                              return false;
                          }
                          return true;
                      }}},  // put
-            {
-                    "get",  // command
-                    {
-                            "get <oid> [version]",  // help info
-                            [&oss](std::string& args) -> bool {
-                                char *argcopy = strdup(args.c_str());
-                                char *token = std::strtok(argcopy, " ");
-                                uint64_t oid = std::stol(token);
-                                version_t ver = INVALID_VERSION;
-                                if (token = std::strtok(NULL, " ")) {
-                                    ver = std::stol(token);
-                                }
-                                try {
-                                    objectstore::Object obj = oss.bio_get(oid,ver);
-                                    std::cout << obj << std::endl;
-                                } catch(...) {
-                                    free(argcopy);
-                                    return false;
-                                }
-                                free(argcopy);
-                                return true;
-                            }}},
+            {"get",        // command
+             {
+                     "get <oid> [version]",  // help info
+                     [&oss, use_aio](std::string& args) -> bool {
+                         char* argcopy = strdup(args.c_str());
+                         char* token = std::strtok(argcopy, " ");
+                         uint64_t oid = std::stol(token);
+                         version_t ver = INVALID_VERSION;
+                         if((token = std::strtok(nullptr, " ")) != nullptr) {
+                             ver = std::stol(token);
+                         }
+                         try {
+                             if(use_aio) {
+                                 // asynchronous api
+                                 derecho::rpc::QueryResults<const objectstore::Object> results = oss.aio_get(oid, ver);
+                                 decltype(results)::ReplyMap& replies = results.get();
+                                 std::cout << "aio returns:" << std::endl;
+                                 for(auto& reply_pair : replies) {
+                                     std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
+                                 }
+                             } else {
+                                 // synchronous api
+                                 objectstore::Object obj = oss.bio_get(oid, ver);
+                                 std::cout << obj << std::endl;
+                             }
+                         } catch(...) {
+                             free(argcopy);
+                             return false;
+                         }
+                         free(argcopy);
+                         return true;
+                     }}},
             {"remove",  // command
              {
                      "remove <oid>",  // help info
-                     [&oss](std::string& args) -> bool {
+                     [&oss, use_aio](std::string& args) -> bool {
                          try {
-                             return oss.bio_remove(std::stol(args));
+                             if(use_aio) {
+                                 // asynchronous api
+                                 derecho::rpc::QueryResults<version_t> results = oss.aio_remove(std::stol(args));
+                                 decltype(results)::ReplyMap& replies = results.get();
+                                 std::cout << "aio returns:" << std::endl;
+                                 for(auto& reply_pair : replies) {
+                                     std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
+                                 }
+                             } else {
+                                 version_t ver = oss.bio_remove(std::stol(args));
+                                 std::cout << "version:" << ver << std::endl;
+                             }
                          } catch(...) {
                              return false;
                          }
+                         return true;
                      }}},
             {"leave",  // command
              {
