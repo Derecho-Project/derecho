@@ -926,19 +926,6 @@ MulticastGroup::~MulticastGroup() {
     }
 }
 
-long long unsigned int MulticastGroup::compute_max_msg_size(
-        const long long unsigned int max_payload_size,
-        const long long unsigned int block_size,
-        bool using_rdmc) {
-    auto max_msg_size = max_payload_size + sizeof(header);
-    if(using_rdmc) {
-        if(max_msg_size % block_size != 0) {
-            max_msg_size = (max_msg_size / block_size + 1) * block_size;
-        }
-    }
-    return max_msg_size;
-}
-
 void MulticastGroup::wedge() {
     bool thread_shutdown_existing = thread_shutdown.exchange(true);
     if(thread_shutdown_existing) {  // Wedge has already been called

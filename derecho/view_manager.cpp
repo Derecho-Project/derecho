@@ -1477,6 +1477,20 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     }
 }
 
+
+long long unsigned int compute_max_msg_size(
+        const long long unsigned int max_payload_size,
+        const long long unsigned int block_size,
+        bool using_rdmc) {
+    auto max_msg_size = max_payload_size + sizeof(header);
+    if(using_rdmc) {
+        if(max_msg_size % block_size != 0) {
+            max_msg_size = (max_msg_size / block_size + 1) * block_size;
+        }
+    }
+    return max_msg_size;
+}
+
 rdmc::send_algorithm get_send_alg(std::string rdmc_send_algorithm_string) {
     if(rdmc_send_algorithm_string == "binomial_send") {
         return rdmc::send_algorithm::BINOMIAL_SEND;
@@ -1512,14 +1526,27 @@ derecho::DerechoParams construct_subgroup_param(std::string profile) {
     // we can safely construct the derecho params struct and return it
     // TODO: remove before merging to master
     std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
+
+    uint32_t max_payload_size = getConfUInt32(fields[0]);
+    uint32_t max_smc_payload_size = getConfUInt32(fields[1]);
+    uint32_t block_size = getConfUInt32(fields[2]);
+    uint32_t window_size = getConfUInt32(fields[3]);
+    uint32_t timeout_ms = getConfUInt32(fields[4]);
+    rdmc::send_algorithm algorithm = get_send_alg(getConfString(fields[5]));
+    uint32_t rpc_port = getConfUInt32(fields[6]);
+
+    // Increase allocated memory for message sending
+    max_payload_size = compute_max_msg_size(max_payload_size, block_size, max_payload_size > max_smc_payload_size);
+    max_smc_payload_size = max_smc_payload_size + sizeof(header);
+
     return derecho::DerechoParams{
-        getConfUInt32(fields[0]),
-        getConfUInt32(fields[1]),
-        getConfUInt32(fields[2]),
-        getConfUInt32(fields[3]),
-        getConfUInt32(fields[4]),
-        get_send_alg(getConfString(fields[5])),
-        getConfUInt32(fields[6]),
+        max_payload_size,
+        max_smc_payload_size,
+        block_size,
+        window_size,
+        timeout_ms,
+        algorithm,
+        rpc_port,
     };
 }
 
@@ -1544,8 +1571,6 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
                 //Initialize my_subgroups
                 view.my_subgroups[subgroup_id] = shard_num;
                 //TODO modify constructor & allow multiple profiles. Also sanitize DerechoParams?
-//                auto max_payload_size = compute_max_msg_size(derecho_params.max_payload_size, derecho_params.block_size, derecho_params.max_payload_size > derecho_params.max_smc_payload_size);
-//                auto max_smc_payload_size = derecho_params.max_smc_payload_size + sizeof(header);
                 //Save the settings for MulticastGroup
                 subgroup_settings[subgroup_id] = {
                         shard_num,

@@ -442,10 +442,6 @@ public:
     void wedge();
     /** Debugging function; prints the current state of the SST to stdout. */
     void debug_print();
-    static long long unsigned int compute_max_msg_size(
-            const long long unsigned int max_payload_size,
-            const long long unsigned int block_size,
-            bool using_rdmc);
 
     /**
      * @return a map from subgroup ID to SubgroupSettings for only those subgroups
