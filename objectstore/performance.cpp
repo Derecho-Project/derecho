@@ -6,18 +6,16 @@
 #define NUM_APP_ARGS (1)
 
 int main(int argc, char** argv) {
-    if ( (argc < (NUM_APP_ARGS + 1)) || 
-         ((argc > (NUM_APP_ARGS + 1)) && strcmp("--", argv[argc - NUM_APP_ARGS - 1])) ) {
-        std::cerr << "Usage: " << argv [0] << " [ derecho-config-list -- ] <aio|bio>" << std::endl;
+    if((argc < (NUM_APP_ARGS + 1)) || ((argc > (NUM_APP_ARGS + 1)) && strcmp("--", argv[argc - NUM_APP_ARGS - 1]))) {
+        std::cerr << "Usage: " << argv[0] << " [ derecho-config-list -- ] <aio|bio>" << std::endl;
         return -1;
     }
 
     bool use_aio = false;
     if(strcmp("aio", argv[argc - NUM_APP_ARGS]) == 0) {
         use_aio = true;
-    } else if ( strcmp("bio", argv[argc - NUM_APP_ARGS]) != 0 ) {
-        std::cerr << "unrecognized argument:" << argv[argc - NUM_APP_ARGS] << ". Using bio (blocking io) instead." <<
-        std::endl;
+    } else if(strcmp("bio", argv[argc - NUM_APP_ARGS]) != 0) {
+        std::cerr << "unrecognized argument:" << argv[argc - NUM_APP_ARGS] << ". Using bio (blocking io) instead." << std::endl;
     }
 
     struct timespec t_start, t_end;
@@ -32,7 +30,6 @@ int main(int argc, char** argv) {
     std::cout << "Object store service started. Is replica:" << std::boolalpha << oss.isReplica()
               << std::noboolalpha << "." << std::endl;
 
-
     int runtime = 60 * 1000;  // approximate runtime
     int num_msg = 10000;      // num_msg sent for the trial run
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
@@ -42,7 +39,7 @@ int main(int argc, char** argv) {
     for(int i = 0; i < msg_size; i++) {
         odata[i] = 'A';
     }
-    
+
     // create a pool of objects
     std::vector<objectstore::Object> objpool;
     for(int i = 0; i < num_msg; i++) {
@@ -67,7 +64,7 @@ int main(int argc, char** argv) {
     double msec = (double)nsec / 1000000;
 
     int multiplier = ceil(runtime / msec);
-    
+
     // real benchmarking starts
     clock_gettime(CLOCK_REALTIME, &t_start);
     if(use_aio) {
