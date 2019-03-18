@@ -405,9 +405,7 @@ public:
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
-	std::cout << "In receive object before pointer reset: " << user_object_ptr.get() << std::endl;
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-	std::cout << "In receive object after pointer reset: " << user_object_ptr.get() << std::endl;
         if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
