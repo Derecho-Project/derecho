@@ -1264,7 +1264,7 @@ void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
         const uint32_t new_num_received_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
-    const uint64_t slot_size = slot_size_for_subgroups(subgroup_settings);
+    const uint64_t slot_size = slot_size_for_subgroups(new_subgroup_settings);
 
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
