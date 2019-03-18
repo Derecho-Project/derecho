@@ -1,3 +1,7 @@
+.vscode
+.idea
+cmake-build-debug/
+
 *~
 script_copy.sh
 TAGS
