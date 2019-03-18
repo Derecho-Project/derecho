@@ -296,6 +296,8 @@ public:
     std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
     /** Returns the order of this node in the sequence of members of the group */
     std::int32_t get_my_rank();
+    /** Returns the id of local node */
+    node_id_t get_my_id();
     /** Returns the shard number that this node is a member of in the specified
      * subgroup (by subgroup type and index), or -1 if this node is not a member
      * of any shard in the specified subgroup. */
