@@ -718,7 +718,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
             auto num_received = sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + sender_count] + 1;
             uint32_t slot = num_received % profile.window_size;
             message_id_t next_seq = (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
-                                                        [(profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * profile.window_size + slot + 1) - sizeof(uint64_t)];
+                                                        [curr_subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)];
             if(next_seq == num_received / static_cast<int32_t>(profile.window_size) + 1) {
                 whenlog(logger->trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
                                       next_seq, num_received, sender_count, node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]), (subgroup_num * profile.window_size + slot)););
@@ -726,7 +726,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
                                            &sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
                                                      [(profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * profile.window_size + slot)],
                                            (uint64_t&)sst.slots[node_id_to_sst_index.at(curr_subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
-                                                               [(profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (subgroup_num * profile.window_size + slot + 1) - 2 * sizeof(uint64_t)]);
+                                                               [curr_subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
                 sst.num_received_sst[member_index][curr_subgroup_settings.num_received_offset + sender_count] = num_received;
             }
         }
