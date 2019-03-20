@@ -120,7 +120,6 @@ private:
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
         if(is_valid()) {
-            assert(dest_node != node_id);
             //Ensure a view change isn't in progress
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;

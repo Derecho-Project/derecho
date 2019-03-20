@@ -186,9 +186,6 @@ char* P2PConnections::probe(uint32_t rank) {
     if((uint64_t&)incoming_p2p_buffers[rank][getOffsetSeqNum(REQUEST_TYPE::RPC_REPLY, incoming_rpc_reply_seq_nums[rank])] == incoming_rpc_reply_seq_nums[rank] + 1) {
         return const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBuf(REQUEST_TYPE::RPC_REPLY, incoming_rpc_reply_seq_nums[rank]);
     }
-    if(rank == my_index) {
-        return nullptr;
-    }
     // then check for P2P replies
     if((uint64_t&)incoming_p2p_buffers[rank][getOffsetSeqNum(REQUEST_TYPE::P2P_REPLY, incoming_p2p_reply_seq_nums[rank])] == incoming_p2p_reply_seq_nums[rank] + 1) {
         return const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBuf(REQUEST_TYPE::P2P_REPLY, incoming_p2p_reply_seq_nums[rank]);
@@ -253,20 +250,47 @@ void P2PConnections::send(uint32_t rank) {
         }
         outgoing_rpc_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_REPLY) {
-        res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), sizeof(uint64_t));
-        outgoing_p2p_reply_seq_nums[rank]++;
-        num_rdma_writes++;
+        if(rank == my_index) {
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]),
+                        max_msg_size - sizeof(uint64_t));
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]),
+                        sizeof(uint64_t));
+        } else {
+            res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), sizeof(uint64_t));
+            outgoing_p2p_reply_seq_nums[rank]++;
+            num_rdma_writes++;
+        }
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_QUERY) {
-        res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_query_seq_nums[rank]), sizeof(uint64_t));
-        outgoing_query_seq_nums[rank]++;
-        num_rdma_writes++;
+        if(rank == my_index) {
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]),
+                        max_msg_size - sizeof(uint64_t));
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_query_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_query_seq_nums[rank]),
+                        sizeof(uint64_t));
+        } else {
+            res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_query_seq_nums[rank]), sizeof(uint64_t));
+            outgoing_query_seq_nums[rank]++;
+            num_rdma_writes++;
+        }
     } else {
-        res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_send_seq_nums[rank]), sizeof(uint64_t));
-        outgoing_send_seq_nums[rank]++;
-        num_rdma_writes++;
+        if(rank == my_index) {
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]),
+                        max_msg_size - sizeof(uint64_t));
+            std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_send_seq_nums[rank]),
+                        const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetSeqNum(prev_mode[rank], outgoing_send_seq_nums[rank]),
+                        sizeof(uint64_t));
+        } else {
+            res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
+            res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_send_seq_nums[rank]), sizeof(uint64_t));
+            outgoing_send_seq_nums[rank]++;
+            num_rdma_writes++;
+        }
     }
 }
 
