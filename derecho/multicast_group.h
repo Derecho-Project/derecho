@@ -425,7 +425,7 @@ private:
                              uint32_t num_shard_senders, uint32_t sender_rank,
                              volatile char* data, uint64_t size);
 
-    bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    bool receiver_predicate(const SubgroupSettings& curr_subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                             uint32_t num_shard_senders, const DerechoSST& sst);
 

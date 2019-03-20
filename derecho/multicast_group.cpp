@@ -622,7 +622,7 @@ int32_t MulticastGroup::resolve_num_received(int32_t index, uint32_t num_receive
     return *std::next(received_intervals[num_received_entry].begin());
 }
 
-bool MulticastGroup::receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+bool MulticastGroup::receiver_predicate(const SubgroupSettings& curr_subgroup_settings,
                                         const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
@@ -831,7 +831,7 @@ void MulticastGroup::register_predicates() {
         }
 
         auto receiver_pred = [=](const DerechoSST& sst) {
-            return receiver_predicate(subgroup_num, curr_subgroup_settings,
+            return receiver_predicate(curr_subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
         auto batch_size = curr_subgroup_settings.profile.window_size / 2;
