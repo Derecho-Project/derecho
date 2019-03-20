@@ -1421,14 +1421,16 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
     //A subgroup's type ID is just its index in the ordered list of subgroup types
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
+    for (subgroup_type_id_t subgroup_type_id = 0;
+         subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
+        const std::type_index &subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
         subgroup_shard_layout_t curr_type_subviews;
         try {
-            auto temp = subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view);
+            auto temp = subgroup_info.subgroup_membership_function(subgroup_type, prev_view,
+                                                                   curr_view);
             // Hack to ensure RVO still works even though curr_type_subviews had to be declared outside this scope
             curr_type_subviews = std::move(temp);
-        } catch(subgroup_provisioning_exception& ex) {
+        } catch (subgroup_provisioning_exception &ex) {
             // Mark the view as inadequate and roll back everything done by previous allocation functions
             curr_view.is_adequately_provisioned = false;
             curr_view.next_unassigned_rank = initial_next_unassigned_rank;
@@ -1437,31 +1439,33 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
             return;
         }
         std::size_t num_subgroups = curr_type_subviews.size();
-        curr_view.subgroup_ids_by_type_id[subgroup_type_id] = std::vector<subgroup_id_t>(num_subgroups);
-        for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
+        curr_view.subgroup_ids_by_type_id[subgroup_type_id] = std::vector<subgroup_id_t>(
+                num_subgroups);
+        for (uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
             // Assign this (type, index) pair a new unique subgroup ID
             subgroup_id_t curr_subgroup_num = curr_view.subgroup_shard_views.size();
             curr_view.subgroup_ids_by_type_id[subgroup_type_id][subgroup_index] = curr_subgroup_num;
             uint32_t num_shards = curr_type_subviews.at(subgroup_index).size();
             uint32_t max_shard_senders = 0;
-            for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                SubView& shard_view = curr_type_subviews.at(subgroup_index).at(shard_num);
+            for (uint shard_num = 0; shard_num < num_shards; ++shard_num) {
+                SubView &shard_view = curr_type_subviews.at(subgroup_index).at(shard_num);
                 std::size_t shard_size = shard_view.members.size();
                 uint32_t num_shard_senders = shard_view.num_senders();
-                if(num_shard_senders > max_shard_senders) {
+                if (num_shard_senders > max_shard_senders) {
                     max_shard_senders = shard_size;
                 }
                 // Initialize my_rank in the SubView for this node's ID
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
-                if(shard_view.my_rank != -1) {
+                if (shard_view.my_rank != -1) {
                     // Initialize my_subgroups
                     curr_view.my_subgroups[curr_subgroup_num] = shard_num;
                 }
-                if(prev_view) {
+                if (prev_view) {
                     // Initialize this shard's SubView.joined and SubView.departed
-                    subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)
-                                                             .at(subgroup_index);
-                    SubView& prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
+                    subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type_id.at(
+                                    subgroup_type_id)
+                            .at(subgroup_index);
+                    SubView &prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
                     std::set<node_id_t> prev_members(prev_shard_view.members.begin(),
                                                      prev_shard_view.members.end());
                     std::set<node_id_t> curr_members(shard_view.members.begin(),
@@ -1483,79 +1487,6 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     }
 }
 
-
-long long unsigned int compute_max_msg_size(
-        const long long unsigned int max_payload_size,
-        const long long unsigned int block_size,
-        bool using_rdmc) {
-    auto max_msg_size = max_payload_size + sizeof(header);
-    if(using_rdmc) {
-        if(max_msg_size % block_size != 0) {
-            max_msg_size = (max_msg_size / block_size + 1) * block_size;
-        }
-    }
-    return max_msg_size;
-}
-
-rdmc::send_algorithm get_send_alg(std::string rdmc_send_algorithm_string) {
-    if(rdmc_send_algorithm_string == "binomial_send") {
-        return rdmc::send_algorithm::BINOMIAL_SEND;
-    } else if(rdmc_send_algorithm_string == "chain_send") {
-        return rdmc::send_algorithm::CHAIN_SEND;
-    } else if(rdmc_send_algorithm_string == "sequential_send") {
-        return rdmc::send_algorithm::SEQUENTIAL_SEND;
-    } else if(rdmc_send_algorithm_string == "tree_send") {
-        return rdmc::send_algorithm::TREE_SEND;
-    } else {
-        throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
-    }
-}
-
-// Constructs DerechoParams specifying subgroup metadata for specified profile
-derecho::DerechoParams construct_subgroup_param(std::string profile) {
-    // Use the profile string to search the configuration file for the appropriate 
-    // settings. If they do not exist, then we should utilize the defaults
-    std::transform(profile.begin(), profile.end(),profile.begin(), ::toupper);
-    std::string prefix = "SUBGROUP/" + profile + "/";
-    std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm", "rpc_port"};
-    for(int i = 0; i < int(fields.size()); i++) {
-        fields[i] = prefix + fields[i];
-        if (!hasCustomizedConfKey(fields[i])) {
-            // If an invalid profile was loaded in, utilize the default
-            // derecho parameters
-            // TODO: remove before merging to master
-            std::cout << "Could not find " + fields[i] + ". Using default parameters" << "\n";
-            return derecho::DerechoParams();
-        }
-    }
-    // Since we have determined that all keys are defined in the conf file
-    // we can safely construct the derecho params struct and return it
-    // TODO: remove before merging to master
-    std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
-
-    uint32_t max_payload_size = getConfUInt32(fields[0]);
-    uint32_t max_smc_payload_size = getConfUInt32(fields[1]);
-    uint32_t block_size = getConfUInt32(fields[2]);
-    uint32_t window_size = getConfUInt32(fields[3]);
-    uint32_t timeout_ms = getConfUInt32(fields[4]);
-    rdmc::send_algorithm algorithm = get_send_alg(getConfString(fields[5]));
-    uint32_t rpc_port = getConfUInt32(fields[6]);
-
-    // Increase allocated memory for message sending
-    max_payload_size = compute_max_msg_size(max_payload_size, block_size, max_payload_size > max_smc_payload_size);
-    max_smc_payload_size = max_smc_payload_size + sizeof(header);
-
-    return derecho::DerechoParams{
-        max_payload_size,
-        max_smc_payload_size,
-        block_size,
-        window_size,
-        timeout_ms,
-        algorithm,
-        rpc_port,
-    };
-}
-
 std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
                                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
@@ -1574,8 +1505,8 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
                 max_shard_senders = shard_size;  //really? why not max_shard_senders = num_shard_senders?
             }
 
-            const DerechoParams& profile = construct_subgroup_param(shard_view.profile);
-            uint32_t slot_size_for_shard = profile.window_size * (profile.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
+            const DerechoParams& profile = DerechoParams::from_profile(shard_view.profile);
+            uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + 2 * sizeof(uint64_t));
             if (slot_size_for_shard > slot_size_for_subgroup) {
                 slot_size_for_subgroup = slot_size_for_shard;
             }

@@ -43,61 +43,6 @@ struct CallbackSet {
 };
 
 /**
- * Bundles together a set of low-level parameters for configuring Derecho groups.
- * All of the parameters except max payload size and block size have sensible
- * defaults, but the correct block size to set depends on the user's desired max
- * payload size.
- */
-struct DerechoParams : public mutils::ByteRepresentable {
-    long long unsigned int max_payload_size;
-    long long unsigned int max_smc_payload_size;
-    long long unsigned int block_size;
-    unsigned int window_size;
-    unsigned int timeout_ms;
-    rdmc::send_algorithm rdmc_send_algorithm;
-    uint32_t rpc_port;
-
-    DerechoParams() {
-        max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-        max_smc_payload_size = std::min((uint64_t)max_payload_size, derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE));
-        block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
-        window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
-        timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
-        std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
-        if(rdmc_send_algorithm_string == "binomial_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
-        } else if(rdmc_send_algorithm_string == "chain_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::CHAIN_SEND;
-        } else if(rdmc_send_algorithm_string == "sequential_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::SEQUENTIAL_SEND;
-        } else if(rdmc_send_algorithm_string == "tree_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::TREE_SEND;
-        } else {
-            throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
-        }
-        rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
-    }
-
-    DerechoParams(long long unsigned int max_payload_size,
-                  long long unsigned int max_smc_payload_size,
-                  long long unsigned int block_size,
-                  unsigned int window_size,
-                  unsigned int timeout_ms,
-                  rdmc::send_algorithm rdmc_send_algorithm,
-                  uint32_t rpc_port)
-            : max_payload_size(max_payload_size),
-              max_smc_payload_size(max_smc_payload_size),
-              block_size(block_size),
-              window_size(window_size),
-              timeout_ms(timeout_ms),
-              rdmc_send_algorithm(rdmc_send_algorithm),
-              rpc_port(rpc_port) {
-    }
-
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
-};
-
-/**
  * The header for an individual multicast message, which will always be the
  * first sizeof(header) bytes in the message's data buffer.
  */
@@ -106,6 +51,121 @@ struct __attribute__((__packed__)) header {
     int32_t index;
     uint64_t timestamp;
     bool cooked_send;
+};
+
+/**
+ * Bundles together a set of low-level parameters for configuring Derecho groups.
+ * All of the parameters except max payload size and block size have sensible
+ * defaults, but the correct block size to set depends on the user's desired max
+ * payload size.
+ */
+struct DerechoParams : public mutils::ByteRepresentable {
+    long long unsigned int max_msg_size;
+    long long unsigned int sst_max_msg_size;
+    long long unsigned int block_size;
+    unsigned int window_size;
+    unsigned int timeout_ms;
+    rdmc::send_algorithm rdmc_send_algorithm;
+    uint32_t rpc_port;
+
+    static long long unsigned int compute_max_msg_size(
+            const long long unsigned int max_payload_size,
+            const long long unsigned int block_size,
+            bool using_rdmc) {
+        auto max_msg_size = max_payload_size + sizeof(header);
+        if (using_rdmc) {
+            if (max_msg_size % block_size != 0) {
+                max_msg_size = (max_msg_size / block_size + 1) * block_size;
+            }
+        }
+        return max_msg_size;
+    }
+
+    static rdmc::send_algorithm send_algorithm_from_string(const std::string& rdmc_send_algorithm_string) {
+        if(rdmc_send_algorithm_string == "binomial_send") {
+            return rdmc::send_algorithm::BINOMIAL_SEND;
+        } else if(rdmc_send_algorithm_string == "chain_send") {
+            return rdmc::send_algorithm::CHAIN_SEND;
+        } else if(rdmc_send_algorithm_string == "sequential_send") {
+            return rdmc::send_algorithm::SEQUENTIAL_SEND;
+        } else if(rdmc_send_algorithm_string == "tree_send") {
+            return rdmc::send_algorithm::TREE_SEND;
+        } else {
+            throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
+        }
+    }
+
+    DerechoParams(long long unsigned int max_payload_size,
+                  long long unsigned int max_smc_payload_size,
+                  long long unsigned int block_size,
+                  unsigned int window_size,
+                  unsigned int timeout_ms,
+                  const std::string& rdmc_send_algorithm_string,
+                  uint32_t rpc_port)
+            : sst_max_msg_size(max_smc_payload_size + sizeof(header)),
+              block_size(block_size),
+              window_size(window_size),
+              timeout_ms(timeout_ms),
+              rdmc_send_algorithm(send_algorithm_from_string(rdmc_send_algorithm_string)),
+              rpc_port(rpc_port) {
+        //if this is initialized above, DerechoParams turns abstract. idk why.
+        max_msg_size = compute_max_msg_size(max_payload_size, block_size,
+                max_payload_size > max_smc_payload_size);
+    }
+
+    DerechoParams() : DerechoParams(derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE),
+                                    derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE),
+                                    derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE),
+                                    derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE),
+                                    derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS),
+                                    derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM),
+                                    derecho::getConfUInt32(CONF_DERECHO_RPC_PORT)) {}
+
+    /**
+     * Constructs DerechoParams specifying subgroup metadata for specified profile.
+     * @param profile Name of profile in the configuration file to use.
+     * @return DerechoParams.
+     */
+    static DerechoParams from_profile(const std::string& profile) {
+        // Use the profile string to search the configuration file for the appropriate
+        // settings. If they do not exist, then we should utilize the defaults
+        std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
+        std::string prefix = "SUBGROUP/" + profile + "/";
+        std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm", "rpc_port"};
+        for (auto &field : fields) {
+            if (!hasCustomizedConfKey(prefix + field)) {
+                // If an invalid profile was loaded in, utilize the default
+                // derecho parameters
+                // TODO: remove before merging to master
+                std::cout << "Could not find " + field + ". Using default parameters" << "\n";
+                return DerechoParams();
+            }
+        }
+        // Since we have determined that all keys are defined in the conf file
+        // we can safely construct the derecho params struct and return it
+        // TODO: remove before merging to master
+        std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
+
+        uint32_t max_payload_size = getConfUInt32(fields[0]);
+        uint32_t max_smc_payload_size = getConfUInt32(fields[1]);
+        uint32_t block_size = getConfUInt32(fields[2]);
+        uint32_t window_size = getConfUInt32(fields[3]);
+        uint32_t timeout_ms = getConfUInt32(fields[4]);
+        const std::string& algorithm = getConfString(fields[5]);
+        uint32_t rpc_port = getConfUInt32(fields[6]);
+
+        return DerechoParams {
+            max_payload_size,
+            max_smc_payload_size,
+            block_size,
+            window_size,
+            timeout_ms,
+            algorithm,
+            rpc_port,
+        };
+    }
+
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_msg_size, sst_max_msg_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**

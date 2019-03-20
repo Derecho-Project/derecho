@@ -125,7 +125,7 @@ private:
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
             const SubgroupSettings& settings = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id);
-            auto max_payload_size = settings.profile.max_payload_size - sizeof(header);
+            auto max_payload_size = settings.profile.max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
                     [this, &is_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
@@ -506,7 +506,7 @@ private:
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
             const SubgroupSettings& settings = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id); //TODO this code is copy pasted from above (like this method)
-            auto max_payload_size = settings.profile.max_payload_size - sizeof(header);
+            auto max_payload_size = settings.profile.max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
                     [this, &is_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
