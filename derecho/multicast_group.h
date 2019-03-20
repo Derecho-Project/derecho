@@ -178,6 +178,8 @@ struct SubgroupSettings {
     int sender_rank;
     /** The offset of this node's num_received counter within the subgroup's SST section */
     uint32_t num_received_offset;
+    /** The offset of this node's slot within the subgroup's SST section */
+    uint32_t slot_offset;
     /** The operation mode of the subgroup */
     Mode mode;
     DerechoParams profile;

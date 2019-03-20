@@ -248,7 +248,6 @@ MulticastGroup::MulticastGroup(
 }
 
 bool MulticastGroup::create_rdmc_sst_groups() {
-    unsigned int slot_offset = 0;
 
     for(const auto& p : subgroup_settings) {
         uint32_t subgroup_num = p.first;
@@ -261,8 +260,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
 
         sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(
                 sst, shard_sst_indices, curr_subgroup_settings.profile.window_size, curr_subgroup_settings.profile.max_smc_payload_size, curr_subgroup_settings.senders,
-                curr_subgroup_settings.num_received_offset, slot_offset);
-        slot_offset += curr_subgroup_settings.profile.window_size;
+                curr_subgroup_settings.num_received_offset, curr_subgroup_settings.slot_offset);
 
         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
             // don't create RDMC group if the shard member is never going to send

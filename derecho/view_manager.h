@@ -389,13 +389,6 @@ private:
     void initialize_rdmc_sst();
 
     /**
-     * Calculates the total size of slots given subgroups and the profiles for each.
-     * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
-     * @return
-     */
-    uint64_t slot_size_for_subgroups(const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
-
-    /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
      * @param derecho_params The initial DerechoParams to supply to the MulticastGroup
@@ -404,12 +397,14 @@ private:
      */
     void construct_multicast_group(CallbackSet callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                   const uint32_t num_received_size);
+                                   const uint32_t num_received_size,
+                                   const uint32_t slot_size);
 
     /** Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
      * and copies over the SST data from the current view. */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-                                    const uint32_t new_num_received_size);
+                                    const uint32_t new_num_received_size,
+                                    const uint32_t new_slot_size);
     /**
      * Initializes curr_view with subgroup information based on the membership
      * functions in subgroup_info. If curr_view would be inadequate based on
@@ -434,9 +429,9 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size for the SST based on the current View's subgroup membership
+     * @return num_received_size and slot_size for the SST based on the current View's subgroup membership
      */
-    static uint32_t derive_subgroup_settings(View& curr_view,
+    static std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
                                              std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**

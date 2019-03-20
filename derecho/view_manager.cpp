@@ -282,7 +282,10 @@ void ViewManager::truncate_logs() {
 void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    uint32_t num_received_size = derive_subgroup_settings(*curr_view, subgroup_settings_map);
+    auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
+    uint32_t num_received_size = sizes.first;
+    uint32_t slot_size = sizes.second;
+
     whenlog(logger->trace("Initial view is: {}", curr_view->debug_string()););
     if(any_persistent_objects) {
         //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
@@ -290,7 +293,7 @@ void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
     }
 
     whenlog(logger->debug("Initializing SST and RDMC for the first time."););
-    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size);
+    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size, slot_size);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -1096,7 +1099,9 @@ void ViewManager::finish_view_change(
 
     // Now that the next_view won't change any more, calculate its subgroup settings
     std::map<subgroup_id_t, SubgroupSettings> next_subgroup_settings;
-    uint32_t next_num_received_size = derive_subgroup_settings(*next_view, next_subgroup_settings);
+    auto sizes = derive_subgroup_settings(*next_view, next_subgroup_settings);
+    uint32_t new_num_received_size = sizes.first;
+    uint32_t new_slot_size = sizes.second;
 
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs
     vector_int64_2d old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
@@ -1187,7 +1192,7 @@ void ViewManager::finish_view_change(
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
-    transition_multicast_group(next_subgroup_settings, next_num_received_size);
+    transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size);
 
     // New members can now proceed to view_manager.start(), which will call sync()
     next_view->gmsSST->put();
@@ -1228,20 +1233,11 @@ void ViewManager::finish_view_change(
 /* ------------- 3. Helper Functions for Predicates and Triggers -------------
  */
 
-uint64_t ViewManager::slot_size_for_subgroups(const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
-    uint64_t slot_size = 0;
-    for (const std::pair<subgroup_id_t, SubgroupSettings> entry : subgroup_settings) {
-        const DerechoParams& profile = entry.second.profile;
-        slot_size += profile.window_size * (profile.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
-    }
-    return slot_size;
-}
-
 void ViewManager::construct_multicast_group(CallbackSet callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                            const uint32_t num_received_size) {
+                                            const uint32_t num_received_size,
+                                            const uint32_t slot_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
-    const uint64_t slot_size = slot_size_for_subgroups(subgroup_settings);
 
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
@@ -1262,15 +1258,14 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
 
 void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-        const uint32_t new_num_received_size) {
+        const uint32_t new_num_received_size, const uint32_t new_slot_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
-    const uint64_t slot_size = slot_size_for_subgroups(new_subgroup_settings);
 
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
                            [this](const uint32_t node_id) { report_failure(node_id); },
                            next_view->failed, false),
-            num_subgroups, new_num_received_size, slot_size);
+            num_subgroups, new_num_received_size, new_slot_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
@@ -1561,13 +1556,15 @@ derecho::DerechoParams construct_subgroup_param(std::string profile) {
     };
 }
 
-uint32_t ViewManager::derive_subgroup_settings(View& view,
+std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
                                                std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
+    uint32_t slot_offset = 0;
     view.my_subgroups.clear();
     for(subgroup_id_t subgroup_id = 0; subgroup_id < view.subgroup_shard_views.size(); ++subgroup_id) {
         uint32_t num_shards = view.subgroup_shard_views.at(subgroup_id).size();
         uint32_t max_shard_senders = 0;
+        uint32_t slot_size_for_subgroup = 0;
 
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
             SubView& shard_view = view.subgroup_shard_views.at(subgroup_id).at(shard_num);
@@ -1576,6 +1573,13 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
             if(num_shard_senders > max_shard_senders) {
                 max_shard_senders = shard_size;  //really? why not max_shard_senders = num_shard_senders?
             }
+
+            const DerechoParams& profile = construct_subgroup_param(shard_view.profile);
+            uint32_t slot_size_for_shard = profile.window_size * (profile.max_smc_payload_size + sizeof(header) + 2 * sizeof(uint64_t));
+            if (slot_size_for_shard > slot_size_for_subgroup) {
+                slot_size_for_subgroup = slot_size_for_shard;
+            }
+
             //Initialize my_rank in the SubView for this node's ID
             shard_view.my_rank = shard_view.rank_of(view.members[view.my_rank]);
             if(shard_view.my_rank != -1) {
@@ -1589,15 +1593,17 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
                         shard_view.is_sender,
                         shard_view.sender_rank_of(shard_view.my_rank),
                         num_received_offset,
+                        slot_offset,
                         shard_view.mode,
-                        construct_subgroup_param(shard_view.profile),
+                        profile,
                 };
             }
         }  // for(shard_num)
         num_received_offset += max_shard_senders;
+        slot_offset += slot_size_for_subgroup;
     }  // for(subgroup_id)
 
-    return num_received_offset;
+    return {num_received_offset, slot_offset};
 }
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
