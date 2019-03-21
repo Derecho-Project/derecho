@@ -158,7 +158,9 @@ int View::rank_of(const node_id_t& who) const {
 SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
                            const std::vector<int>& is_sender,
-                           const std::string profile) const {
+                           std::string profile) const {
+  // Make the profile string all uppercase so that it is effectively case-insensitive
+  std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size();
         ++subview_rank) {

@@ -100,13 +100,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   long long unsigned int block_size,
                   unsigned int window_size,
                   unsigned int timeout_ms,
-                  const std::string& rdmc_send_algorithm_string,
+                  rdmc::send_algorithm rdmc_send_algorithm,
                   uint32_t rpc_port)
             : sst_max_msg_size(max_smc_payload_size + sizeof(header)),
               block_size(block_size),
               window_size(window_size),
               timeout_ms(timeout_ms),
-              rdmc_send_algorithm(send_algorithm_from_string(rdmc_send_algorithm_string)),
+              rdmc_send_algorithm(rdmc_send_algorithm),
               rpc_port(rpc_port) {
         //if this is initialized above, DerechoParams turns abstract. idk why.
         max_msg_size = compute_max_msg_size(max_payload_size, block_size,
@@ -118,7 +118,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
                                     derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE),
                                     derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE),
                                     derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS),
-                                    derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM),
+                                    send_algorithm_from_string(derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM)),
                                     derecho::getConfUInt32(CONF_DERECHO_RPC_PORT)) {}
 
     /**
@@ -129,9 +129,8 @@ struct DerechoParams : public mutils::ByteRepresentable {
     static DerechoParams from_profile(const std::string& profile) {
         // Use the profile string to search the configuration file for the appropriate
         // settings. If they do not exist, then we should utilize the defaults
-        std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
         std::string prefix = "SUBGROUP/" + profile + "/";
-        std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm", "rpc_port"};
+        std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm"};
         for (auto &field : fields) {
             if (!hasCustomizedConfKey(prefix + field)) {
                 // If an invalid profile was loaded in, utilize the default
@@ -152,7 +151,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         uint32_t window_size = getConfUInt32(fields[3]);
         uint32_t timeout_ms = getConfUInt32(fields[4]);
         const std::string& algorithm = getConfString(fields[5]);
-        uint32_t rpc_port = getConfUInt32(fields[6]);
+        uint32_t rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
 
         return DerechoParams {
             max_payload_size,
@@ -160,7 +159,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
             block_size,
             window_size,
             timeout_ms,
-            algorithm,
+            send_algorithm_from_string(algorithm),
             rpc_port,
         };
     }

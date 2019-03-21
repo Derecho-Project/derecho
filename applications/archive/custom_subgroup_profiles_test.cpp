@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
             derecho::subgroup_shard_layout_t subgroup_vector(1);
             std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
             //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes, derecho::Mode::ORDERED, {}, "ALTERNATIVE"));
+            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes, derecho::Mode::ORDERED, {}, "SMALL"));
             curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 3);
             return subgroup_vector;
         } else { /* subgroup_type == std::type_index(typeid(Cache)) */
@@ -39,11 +39,13 @@ int main(int argc, char** argv) {
             derecho::subgroup_shard_layout_t subgroup_vector(1);
             std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
             // This should go into the DEFAULT group since it does not exist within the mapping
-            subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes, derecho::Mode::ORDERED, {}, "SDLKFJSLKDFJ"));
+            subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes, derecho::Mode::ORDERED, {}, "LARGE"));
             curr_view.next_unassigned_rank += 3;
             return subgroup_vector;
         }
     }};
+
+    std::cout << "My GMS port: " << derecho::getConfUInt16(CONF_DERECHO_GMS_PORT) << ", leader's GMS port: " << derecho::getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT);
 
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
