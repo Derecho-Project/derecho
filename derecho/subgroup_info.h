@@ -42,11 +42,23 @@ public:
  */
 using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
 
-/** The type of a lambda function that generates subgroup and shard views
- * for a specific subgroup type. This is a function that takes the previous View
- * and current View as input, and outputs a vector-of-vectors representing
- * subgroups and shards. */
-using shard_view_generator_t = std::function<subgroup_shard_layout_t(const std::type_index&, const std::unique_ptr<View>&, View&)>;
+/**
+ * The type of a lambda function that generates subgroup and shard views
+ * for a specific subgroup type. It will be called twice for each subgroup
+ * type, in order to facilitate a two-phase node allocation process: in the
+ * first phase the function should ensure every shard has the minimum necessary
+ * number of members (if possible), and in the second phase the function should
+ * allocate as many members as it needs to fill shards to their desired size.
+ *
+ * @param const std::type_index& - The type of subgroup being allocated
+ * @param const std::unique_ptr<View>& - A pointer to the previous View, if there is one
+ * @param View& - A reference to the current View (in which the shards will be allocated)
+ * @param const int - A number indicating the phase of allocation to do, either 0 or 1.
+ */
+using shard_view_generator_t = std::function<subgroup_shard_layout_t(const std::type_index&,
+                                                                     const std::unique_ptr<View>&,
+                                                                     View&,
+                                                                     const int)>;
 
 /**
  * Container for whatever information is needed to describe a Group's subgroups

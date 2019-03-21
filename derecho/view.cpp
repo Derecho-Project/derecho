@@ -70,6 +70,22 @@ uint32_t SubView::num_senders() const {
     return num;
 }
 
+void SubView::init_joined_departed(const SubView& previous_subview) {
+    //To ensure this method is idempotent
+    joined.clear();
+    departed.clear();
+    std::set<node_id_t> prev_members(previous_subview.members.begin(),
+                                     previous_subview.members.end());
+    std::set<node_id_t> curr_members(members.begin(),
+                                     members.end());
+    std::set_difference(curr_members.begin(), curr_members.end(),
+                        prev_members.begin(), prev_members.end(),
+                        std::back_inserter(joined));
+    std::set_difference(prev_members.begin(), prev_members.end(),
+                        curr_members.begin(), curr_members.end(),
+                        std::back_inserter(departed));
+}
+
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
            const std::vector<char>& failed, const int32_t num_failed,
@@ -166,7 +182,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
         }
         subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[member_pos];
     }
-    // Note that joined and departed do not need to get initialized here; they wiill be initialized by ViewManager
+    // Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
     return SubView(mode, with_members, is_sender, subview_member_ips_and_ports);
 }
 

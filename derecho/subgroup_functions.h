@@ -37,30 +37,41 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
  * what subgroup type is supplied. This is best used when there is only one
  * subgroup type.
  */
-subgroup_shard_layout_t one_subgroup_entire_view(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
+subgroup_shard_layout_t one_subgroup_entire_view(const std::type_index& subgroup_type,
+                                                 const std::unique_ptr<View>& prev_view,
+                                                 View& curr_view,
+                                                 const int phase);
 /**
  * A simple implementation of shard_view_generator_t that returns a single,
  * un-sharded subgroup in Unordered (Raw) mode containing all the members of
  * curr_view, regardless of what subgroup type is supplied. This is best used
  * when there is only one subgroup type.
  */
-subgroup_shard_layout_t one_subgroup_entire_view_raw(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
+subgroup_shard_layout_t one_subgroup_entire_view_raw(const std::type_index& subgroup_type,
+                                                     const std::unique_ptr<View>& prev_view,
+                                                     View& curr_view,
+                                                     const int phase);
 
 struct ShardAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */
     int num_shards;
     /** Whether all shards should contain the same number of members. */
     bool even_shards;
-    /** If even_shards is true, this is the number of nodes per shard. (Ignored
-     * if even_shards is false). */
-    int nodes_per_shard;
+    /** If even_shards is true, this is the minimum number of nodes per shard.
+     * (Ignored if even_shards is false). */
+    int min_nodes_per_shard;
+    /** If even_shards is true, this is the maximum number of nodes per shard. */
+    int max_nodes_per_shard;
     /** If even_shards is true, this is the delivery mode that will be used for
      * every shard. (Ignored if even_shards is false). */
     Mode shards_mode;
     /** If even_shards is false, this will contain an entry for each shard
-     * indicating the number of members it should have. (Ignored if even_shards
-     * is true). */
-    std::vector<int> num_nodes_by_shard;
+     * indicating the minimum number of members it should have.
+     * (Ignored if even_shards is true). */
+    std::vector<int> min_num_nodes_by_shard;
+    /** If even_shards is false, this will contain an entry for each shard
+     * indicating the maximum number of members it should have. */
+    std::vector<int> max_num_nodes_by_shard;
     /** If even_shards is false, this will contain an entry for each shard
      * indicating which delivery mode it should use. (Ignored if even_shards is
      * true). */
@@ -84,7 +95,14 @@ struct SubgroupAllocationPolicy {
 
 /**
  * An alternate type of subgroup allocation policy for subgroup types whose
- * membership will be defined as a cross-product of other subgroups.
+ * membership will be defined as a cross-product of other subgroups. Each node
+ * in the source subgroup will be placed in T subgroups, one for each shard in
+ * the target subgroup (the target subgroup has T shards). Thus, if there are S
+ * members in the source subgroup, and T shards in the target subgroup, S * T
+ * subgroups of a single type will be created. The nodes in the source subgroup
+ * will be marked as the only senders in these subgroups. A node that has rank
+ * i within the source subgroup can send a multicast to shard j of the target
+ * subgroup by selecting the cross-product subgroup at index (i * T + j).
  */
 struct CrossProductPolicy {
     /** The (type, index) pair identifying the "source" subgroup of the cross-product.
@@ -96,36 +114,53 @@ struct CrossProductPolicy {
      * as receivers, where S is the number of members in the source subgroup. */
     std::pair<std::type_index, uint32_t> target_subgroup;
 };
+
 /* Helper functions that construct ShardAllocationPolicy values for common cases. */
 
 /**
- * Returns a ShardAllocationPolicy that specifies num_shards shards with
- * the same number of nodes in each shard.
- * @param num_shards The number of shards to request in this policy.
- * @param nodes_per_shard The number of nodes per shard to request.
- * @return A ShardAllocationPolicy value with these parameters.
+ * Returns a ShardAllocationPolicy that specifies num_shards "flexible" or
+ * fault-tolerant shards, each of which has the same minimum number of nodes
+ * and maximuim number of nodes
+ * @param num_shards The number of shards to request in this policy
+ * @param min_nodes_per_shard The minimum number of nodes that each shard can have
+ * @param max_nodes_per_shard The maximum number of nodes that each shard can have
+ * @return A ShardAllocationPolicy value with these parameters
  */
-ShardAllocationPolicy even_sharding_policy(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
+                                           int max_nodes_per_shard);
+
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards shards with
- * the same number of nodes in each shard, and every shard running in "raw"
- * delivery mode.
+ * the same fixed number of nodes in each shard; each shard must have
+ * exactly nodes_per_shard members.
  * @param num_shards The number of shards to request in this policy.
  * @param nodes_per_shard The number of nodes per shard to request.
  * @return A ShardAllocationPolicy value with these parameters.
  */
-ShardAllocationPolicy raw_even_sharding_policy(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard);
+/**
+ * Returns a ShardAllocationPolicy that specifies num_shards shards with
+ * the same fixed number of nodes in each shard, and every shard running in
+ * "raw" delivery mode.
+ * @param num_shards The number of shards to request in this policy.
+ * @param nodes_per_shard The number of nodes per shard to request.
+ * @return A ShardAllocationPolicy value with these parameters.
+ */
+ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard);
 /**
  * Returns a ShardAllocationPolicy for a subgroup that has a different number of
  * members in each shard, and possibly has each shard in a different delivery mode.
- * Note that the two parameter vectors must be the same length.
- * @param num_nodes_by_shard A vector specifying how many nodes should be in each
- * shard; the ith shard will have num_nodes_by_shard[i] members.
+ * Note that the parameter vectors must all be the same length.
+ * @param min_nodes_by_shard A vector specifying the minimum number of nodes for each
+ * shard; the ith shard must have at least min_nodes_by_shard[i] members.
+ * @param max_nodes_by_shard A vector specifying the maximum number of nodes for each
+ * shard; the ith shard can have up to max_nodes_by_shard[i] members.
  * @param delivery_modes_by_shard A vector specifying the delivery mode (Raw or
- * Ordered) for each shard, in the same order as the other vector.
+ * Ordered) for each shard, in the same order as the other vectors.
  * @return A ShardAllocationPolicy that specifies these shard sizes and modes.
  */
-ShardAllocationPolicy custom_shards_policy(const std::vector<int>& num_nodes_by_shard,
+ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
+                                           const std::vector<int>& max_nodes_by_shard,
                                            const std::vector<Mode>& delivery_modes_by_shard);
 
 /**
@@ -164,43 +199,32 @@ protected:
      */
     const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
-    std::vector<SubView> assign_subgroup(const std::unique_ptr<View>& prev_view, View& curr_view,
+    std::vector<SubView> assign_subgroup(const std::unique_ptr<View>& prev_view,
+                                         View& curr_view,
                                          const ShardAllocationPolicy& subgroup_policy) const;
-    subgroup_shard_layout_t compute_standard_membership(const std::type_index& subgroup_type,
-                                                        const std::unique_ptr<View>& prev_view, View& curr_view) const;
+    subgroup_shard_layout_t compute_standard_membership_phase_1(const std::type_index& subgroup_type,
+                                                                const std::unique_ptr<View>& prev_view,
+                                                                View& curr_view) const;
+    subgroup_shard_layout_t compute_standard_membership_phase_2(const std::type_index& subgroup_type,
+                                                                const std::unique_ptr<View>& prev_view,
+                                                                View& curr_view) const;
     subgroup_shard_layout_t compute_cross_product_membership(const std::type_index& subgroup_type,
-                                                             const std::unique_ptr<View>& prev_view, View& curr_view) const;
+                                                             const std::unique_ptr<View>& prev_view,
+                                                             View& curr_view) const;
 
 public:
-    DefaultSubgroupAllocator(const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& policies_by_subgroup_type)
+    DefaultSubgroupAllocator(const std::map<std::type_index,
+                                            std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
+                                     policies_by_subgroup_type)
             : policies(policies_by_subgroup_type) {}
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
             : policies(to_copy.policies) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
     subgroup_shard_layout_t operator()(const std::type_index& subgroup_type,
-                                       const std::unique_ptr<View>& prev_view, View& curr_view) const;
+                                       const std::unique_ptr<View>& prev_view,
+                                       View& curr_view,
+                                       const int phase) const;
 };
 
-/**
- * A shard_view_generator_t functor that creates a set of subgroups that is the
- * "cross-product" of two subgroups, source and target. Each node in the source
- * subgroup will be placed in T subgroups, one for each shard in the target
- * subgroup (where the target subgroup has T shards). Thus, if there are S members
- * in the source subgroup, and T shards in the target subgroup, S * T subgroups
- * of a single type will be created. The nodes in the source subgroup will be
- * marked as the only senders in these subgroups. A node that has rank i within
- * the source subgroup can send a multicast to shard j of the target subgroup
- * by selecting the cross-product subgroup at index (i * T + j).
- */
-class CrossProductAllocator {
-    const CrossProductPolicy policy;
-
-public:
-    CrossProductAllocator(const CrossProductPolicy& allocation_policy) : policy(allocation_policy) {}
-    CrossProductAllocator(const CrossProductAllocator& to_copy) : policy(to_copy.policy) {}
-    CrossProductAllocator(CrossProductAllocator&&) = default;
-
-    subgroup_shard_layout_t operator()(const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view);
-};
 }  // namespace derecho

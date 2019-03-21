@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
 
     // Use the standard layout manager provided by derecho
     // allocate a single subgroup with a single shard consisting of all the nodes
-    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(even_sharding_policy(1, num_nodes));
+    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(fixed_even_shards(1, num_nodes));
     SubgroupInfo one_raw_group (DefaultSubgroupAllocator({
         {std::type_index(typeid(RawObject)), all_nodes_one_subgroup_policy}
     }));
