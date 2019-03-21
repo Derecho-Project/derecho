@@ -117,7 +117,6 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
 }
 
 P2PConnections::~P2PConnections() {
-    // std::cout << "In the P2PConnections destructor" << std::endl;
     shutdown_failures_thread();
 }
 
@@ -205,7 +204,7 @@ char* P2PConnections::probe(uint32_t rank) {
 std::optional<std::pair<uint32_t, char*>> P2PConnections::probe_all() {
     for(uint rank = 0; rank < num_members; ++rank) {
         auto buf = probe(rank);
-        if(buf) {
+        if(buf && buf[0]) {
             return std::pair<uint32_t, char*>(members[rank], buf);
         }
     }
@@ -260,9 +259,9 @@ void P2PConnections::send(uint32_t rank) {
         } else {
             res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
             res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_p2p_reply_seq_nums[rank]), sizeof(uint64_t));
-            outgoing_p2p_reply_seq_nums[rank]++;
             num_rdma_writes++;
         }
+	outgoing_p2p_reply_seq_nums[rank]++;
     } else if(prev_mode[rank] == REQUEST_TYPE::P2P_QUERY) {
         if(rank == my_index) {
             std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]),
@@ -274,9 +273,9 @@ void P2PConnections::send(uint32_t rank) {
         } else {
             res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_query_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
             res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_query_seq_nums[rank]), sizeof(uint64_t));
-            outgoing_query_seq_nums[rank]++;
             num_rdma_writes++;
         }
+	outgoing_query_seq_nums[rank]++;
     } else {
         if(rank == my_index) {
             std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]),
@@ -288,9 +287,9 @@ void P2PConnections::send(uint32_t rank) {
         } else {
             res_vec[rank]->post_remote_write(getOffsetBufNoIncrement(prev_mode[rank], outgoing_send_seq_nums[rank]), max_msg_size - sizeof(uint64_t));
             res_vec[rank]->post_remote_write(getOffsetSeqNum(prev_mode[rank], outgoing_send_seq_nums[rank]), sizeof(uint64_t));
-            outgoing_send_seq_nums[rank]++;
             num_rdma_writes++;
         }
+	outgoing_send_seq_nums[rank]++;
     }
 }
 

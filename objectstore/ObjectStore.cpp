@@ -35,7 +35,7 @@ namespace objectstore {
     do not explicitly support a "VolatileLoggedObjectStore" Type right now.
 
     - IObjectStoreAPI
-    The interface for p2p_query between clients and replicas.
+    The interface for p2p_send between clients and replicas.
 
     - IReplica
     The interface for operations provided by the replica subgroup.
@@ -658,7 +658,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object));
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(put)>(target, object));
         }
     }
 
@@ -720,7 +720,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid));
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(remove)>(target, oid));
         }
     }
 
@@ -778,7 +778,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
-            return std::move( os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid) );
+            return std::move( os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid) );
         }
     }
 
