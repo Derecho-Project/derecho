@@ -777,6 +777,11 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
 void ViewManager::leader_start_join(DerechoSST& gmsSST) {
     whenlog(logger->debug("GMS handling a new client connection"););
+    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank])
+            == static_cast<int>(curr_view->members.size())) {
+        whenlog(logger->debug("Delaying handling the new client, there are already {} pending changes", curr_view->members.size()));
+        return;
+    }
     {
         //Hold the lock on pending_join_sockets while moving a socket into proposed_join_sockets
         auto pending_join_sockets_locked = pending_join_sockets.locked();
@@ -1280,12 +1285,6 @@ void ViewManager::transition_multicast_group(
 
 bool ViewManager::receive_join(tcp::socket& client_socket) {
     DerechoSST& gmsSST = *curr_view->gmsSST;
-    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
-        // TODO: this shouldn't throw an exception, it should just block the client
-        // until the group stabilizes
-        throw derecho_exception("Too many changes to allow a Join right now");
-    }
-
     struct in_addr joiner_ip_packed;
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
