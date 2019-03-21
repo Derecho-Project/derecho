@@ -961,7 +961,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         curr_view->gmsSST->sync_with_members(
                 curr_view->multicast_group->get_shard_sst_indices(subgroup_id));
         while(curr_view->multicast_group->receiver_predicate(
-                subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
+                curr_subgroup_settings, shard_ranks_by_sender_rank,
                 num_shard_senders, *curr_view->gmsSST)) {
             auto sst_receive_handler_lambda =
                     [this, subgroup_id, curr_subgroup_settings,
