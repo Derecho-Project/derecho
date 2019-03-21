@@ -215,17 +215,15 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     return buf;
 }
 
-void RPCManager::finish_p2p_send(bool is_query, node_id_t dest_id, PendingBase& pending_results_handle) {
+void RPCManager::finish_p2p_send(node_id_t dest_id, PendingBase& pending_results_handle) {
     connections->send(connections->get_node_rank(dest_id));
-    if(is_query) {
-        //only fulfill the reply map if this is a non-void query - sends ignore the PendingResults
-        pending_results_handle.fulfill_map({dest_id});
-        std::lock_guard<std::mutex> lock(pending_results_mutex);
-        fulfilledList.push_back(pending_results_handle);
-    }
+    pending_results_handle.fulfill_map({dest_id});
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    fulfilledList.push_back(pending_results_handle);
 }
 
 void RPCManager::fifo_worker() {
+    pthread_setname_np(pthread_self(), "fifo_thread");
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -261,6 +259,11 @@ void RPCManager::fifo_worker() {
                             return nullptr;
                         });
         if(reply_size > 0) {
+            connections->send(connections->get_node_rank(request.sender_id));
+        } else {
+            // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
+            char* buf = connections->get_sendbuffer_ptr(connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+            buf[0] = 0;
             connections->send(connections->get_node_rank(request.sender_id));
         }
     }

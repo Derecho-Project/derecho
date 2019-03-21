@@ -621,7 +621,6 @@ void ViewManager::create_threads() {
             whenlog(logger->debug("Background thread got a client connection from {}", client_socket.get_remote_ip()););
             pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
-        std::cout << "Connection listener thread shutting down." << std::endl;
     }};
 
     old_view_cleanup_thread = std::thread([this]() {
@@ -636,7 +635,6 @@ void ViewManager::create_threads() {
                 old_views.pop();
             }
         }
-        std::cout << "Old View cleanup thread shutting down." << std::endl;
     });
 }
 
@@ -1631,8 +1629,6 @@ bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vecto
     for(unsigned int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
-                // std::cout<<__func__<<" returns true:
-                // old[who]="<<old[who]<<",who="<<who<<std::endl;
                 return true;
             }
         }

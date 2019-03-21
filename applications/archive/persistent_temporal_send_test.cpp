@@ -12,7 +12,7 @@
 #include <mutils-serialization/context_ptr.hpp>
 #include <persistent/Persistent.hpp>
 #include <persistent/util.hpp>
-#include "conf/conf.hpp"
+#include <conf/conf.hpp>
 
 using mutils::context_ptr;
 
@@ -111,15 +111,15 @@ struct Bytes : public mutils::ByteRepresentable {
  */
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
-    //Persistent<Bytes> pers_bytes;
-    Persistent<Bytes, ST_MEM> vola_bytes;
+    Persistent<Bytes> pers_bytes;
+    //Persistent<Bytes,ST_MEM> vola_bytes;
 
     //void change_pers_bytes(const Bytes& bytes) {
     //  *pers_bytes = bytes;
     //}
 
-    void change_vola_bytes(const Bytes &bytes) {
-        *vola_bytes = bytes;
+    void change_pers_bytes(const Bytes &bytes) {
+        *pers_bytes = bytes;
     }
 
     int query_const_int(uint64_t query_us) {
@@ -132,50 +132,64 @@ public:
         return b;
     }
 
-    Bytes query_vola_bytes(uint64_t query_us) {
+    Bytes query_pers_bytes(uint64_t query_us) {
         HLC hlc{query_us, 0};
         try {
-            return *vola_bytes.get(hlc);
+            return *pers_bytes.get(hlc);
         } catch(std::exception e) {
-            std::cout << "query_vola_bytes failed:" << e.what() << std::endl;
+            std::cout << "query_pers_bytes failed:" << e.what() << std::endl;
         }
         return Bytes();
     }
 
-    REGISTER_RPC_FUNCTIONS(ByteArrayObject, query_vola_bytes, query_const_int, query_const_bytes, change_vola_bytes);
+    /** Named integers that will be used to tag the RPC methods */
+    //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
+    enum Functions { CHANGE_PERS_BYTES,
+                     QUERY_PERS_BYTES,
+                     QUERY_CONST_INT,
+                     QUERY_CONST_BYTES };
+
+    static auto register_functions() {
+        return std::make_tuple(
+                //      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
+                derecho::rpc::tag<QUERY_PERS_BYTES>(&ByteArrayObject::query_pers_bytes),
+                derecho::rpc::tag<QUERY_CONST_INT>(&ByteArrayObject::query_const_int),
+                derecho::rpc::tag<QUERY_CONST_BYTES>(&ByteArrayObject::query_const_bytes),
+                derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
+    }
 
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
-    DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, vola_bytes);
+    DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
     //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes, ST_MEM> &_v_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
-                                                            //    pers_bytes(std::move(_p_bytes)) {
-                                                           vola_bytes(std::move(_v_bytes)) {
+    ByteArrayObject(Persistent<Bytes> &_p_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+                                                    //    pers_bytes(std::move(_p_bytes)) {
+                                                   pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry *pr) :  //    pers_bytes(nullptr,pr) {
-                                              vola_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
+                                              pers_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
     }
 };
 
 int main(int argc, char *argv[]) {
-    if(argc < 6) {
+    if(argc != 6) {
         std::cout << "usage:" << argv[0] << "<shard_size> <num_of_shards> <ops_per_sec> <min_dur_sec> <query_cnt>" << std::endl;
         return -1;
     }
-    derecho::Conf::initialize(argc,argv);
     int shard_size = atoi(argv[1]);
     int num_of_shards = atoi(argv[2]);
     // 1 for shards
     int num_of_nodes = (shard_size * num_of_shards + 1);
     int ops_per_sec = atoi(argv[3]);
     int min_dur_sec = atoi(argv[4]);
-    int qcnt = atoi(argv[6]);
+    int qcnt = atoi(argv[5]);
     uint64_t si_us = (1000000l / ops_per_sec);
+
     int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
 
     derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View &curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
             throw derecho::subgroup_provisioning_exception();
@@ -194,19 +208,16 @@ int main(int argc, char *argv[]) {
         return subgroup_vector;
     }};
 
-
     auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
 
-    derecho::Group<ByteArrayObject> group{{},subgroup_info, nullptr,
-                std::vector<derecho::view_upcall_t>{},
-                ba_factory};
+    derecho::Group<ByteArrayObject> group{{}, subgroup_info, nullptr, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
-    uint32_t node_rank = group.get_my_rank();
+    int32_t node_rank = group.get_my_rank();
 
     ///////////////////////////////////////////////////////////////////////////////
     // ordered send.
-    if(node_rank < (uint32_t)(num_of_nodes - 1)) {
+    if(node_rank < (num_of_nodes - 1)) {
         dbg_default_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
         char *bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
@@ -237,7 +248,7 @@ int main(int argc, char *argv[]) {
                     ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
                     ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
 
-                    handle.ordered_send<RPC_NAME(change_vola_bytes)>(bs);
+                    handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
                 }
                 last = cur;
             };
@@ -251,7 +262,7 @@ int main(int argc, char *argv[]) {
     group.barrier_sync();
     usleep(min_dur_sec * 1e6);
     // query
-    if(node_rank == (uint32_t)(num_of_nodes - 1)) {
+    if(node_rank == (num_of_nodes - 1)) {
         struct timespec cur, tqs, tqm, tqm1, tqe;
         clock_gettime(CLOCK_REALTIME, &cur);
         uint64_t center_ts_us = (cur.tv_sec - min_dur_sec - min_dur_sec / 2) * 1e6;
@@ -260,9 +271,9 @@ int main(int argc, char *argv[]) {
             uint64_t query_ts_us = center_ts_us + random() % 2000000 - 1000000;
             clock_gettime(CLOCK_REALTIME, &tqs);
             auto shard_iterator = group.get_shard_iterator<ByteArrayObject>();
-            // auto query_results_vec = shard_iterator.p2p_query<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
+            // auto query_results_vec = shard_iterator.p2p_send<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
             clock_gettime(CLOCK_REALTIME, &tqm1);
-            auto query_results_vec = shard_iterator.p2p_query<RPC_NAME(query_vola_bytes)>(query_ts_us);
+            auto query_results_vec = shard_iterator.p2p_send<ByteArrayObject::QUERY_PERS_BYTES>(query_ts_us);
             clock_gettime(CLOCK_REALTIME, &tqm);
             for(auto &query_result : query_results_vec) {
                 auto &reply_map = query_result.get();

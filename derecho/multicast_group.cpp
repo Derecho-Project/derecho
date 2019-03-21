@@ -1032,24 +1032,19 @@ void MulticastGroup::send_loop() {
         return false;
     };
     auto should_wake = [&]() { return thread_shutdown || should_send(); };
-    try {
-        std::unique_lock<std::mutex> lock(msg_state_mtx);
-        while(!thread_shutdown) {
-            sender_cv.wait(lock, should_wake);
-            if(!thread_shutdown) {
-                current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
-                whenlog(logger->trace("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id););
-                if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
-                               current_sends[subgroup_to_send]->message_buffer.mr, 0,
-                               current_sends[subgroup_to_send]->size)) {
-                    throw std::runtime_error("rdmc::send returned false");
-                }
-                pending_sends[subgroup_to_send].pop();
+    std::unique_lock<std::mutex> lock(msg_state_mtx);
+    while(!thread_shutdown) {
+        sender_cv.wait(lock, should_wake);
+        if(!thread_shutdown) {
+            current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
+            whenlog(logger->trace("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id););
+            if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
+                           current_sends[subgroup_to_send]->message_buffer.mr, 0,
+                           current_sends[subgroup_to_send]->size)) {
+                throw std::runtime_error("rdmc::send returned false");
             }
+            pending_sends[subgroup_to_send].pop();
         }
-        std::cout << "DerechoGroup send thread shutting down" << std::endl;
-    } catch(const std::exception& e) {
-        std::cout << "DerechoGroup send thread had an exception: " << e.what() << std::endl;
     }
 }
 
@@ -1103,7 +1098,6 @@ void MulticastGroup::check_failures_loop() {
         }
     }
 
-    std::cout << "timeout_thread shutting down" << std::endl;
 }
 
 // we already hold the lock on msg_state_mtx when we call this

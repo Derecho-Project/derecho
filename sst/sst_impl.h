@@ -68,80 +68,75 @@ void SST<DerivedSST>::detect() {
     clock_gettime(CLOCK_REALTIME, &last_time);
 
     while(!thread_shutdown) {
-        try {
-            bool predicate_fired = false;
-            // Take the predicate lock before reading the predicate lists
-            std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
+        bool predicate_fired = false;
+        // Take the predicate lock before reading the predicate lists
+        std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
 
-            // one time predicates need to be evaluated only until they become true
-            for(auto& pred : predicates.one_time_predicates) {
-                if(pred != nullptr && (pred->first(*derived_this) == true)) {
-                    predicate_fired = true;
-                    // Copy the trigger pointer locally, so it can continue running without
-                    // segfaulting even if this predicate gets deleted when we unlock predicates_lock
-                    std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
-                    predicates_lock.unlock();
-                    (*trigger)(*derived_this);
-                    predicates_lock.lock();
-                    // erase the predicate as it was just found to be true
-                    pred.reset();
-                }
+        // one time predicates need to be evaluated only until they become true
+        for(auto& pred : predicates.one_time_predicates) {
+            if(pred != nullptr && (pred->first(*derived_this) == true)) {
+                predicate_fired = true;
+                // Copy the trigger pointer locally, so it can continue running without
+                // segfaulting even if this predicate gets deleted when we unlock predicates_lock
+                std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
+                predicates_lock.unlock();
+                (*trigger)(*derived_this);
+                predicates_lock.lock();
+                // erase the predicate as it was just found to be true
+                pred.reset();
             }
-
-            // recurrent predicates are evaluated each time they are found to be true
-            for(auto& pred : predicates.recurrent_predicates) {
-                if(pred != nullptr && (pred->first(*derived_this) == true)) {
-                    predicate_fired = true;
-                    std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
-                    predicates_lock.unlock();
-                    (*trigger)(*derived_this);
-                    predicates_lock.lock();
-                }
-            }
-
-            // transition predicates are only evaluated when they change from false to true
-            // We need to use iterators here because we need to iterate over two lists in parallel
-            auto pred_it = predicates.transition_predicates.begin();
-            auto pred_state_it = predicates.transition_predicate_states.begin();
-            while(pred_it != predicates.transition_predicates.end()) {
-                if(*pred_it != nullptr) {
-                    //*pred_state_it is the previous state of the predicate at *pred_it
-                    bool curr_pred_state = (*pred_it)->first(*derived_this);
-                    if(curr_pred_state == true && *pred_state_it == false) {
-                        predicate_fired = true;
-                        std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(
-                                (*pred_it)->second);
-                        predicates_lock.unlock();
-                        (*trigger)(*derived_this);
-                        predicates_lock.lock();
-                    }
-                    *pred_state_it = curr_pred_state;
-
-                    ++pred_it;
-                    ++pred_state_it;
-                }
-            }
-
-            if(predicate_fired) {
-                // update last time
-                clock_gettime(CLOCK_REALTIME, &last_time);
-            } else {
-                clock_gettime(CLOCK_REALTIME, &cur_time);
-                // check if the system has been inactive for enough time to induce sleep
-                double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                            + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-                if(time_elapsed_in_ms > 1) {
-                    predicates_lock.unlock();
-                    using namespace std::chrono_literals;
-                    std::this_thread::sleep_for(1ms);
-                    predicates_lock.lock();
-                }
-            }
-            //Still to do: Clean up deleted predicates
-        } catch(const std::exception& e) {
-            std::cout << "Exception in the SST detect thread: " << e.what() << std::endl;
-	    throw e;
         }
+
+        // recurrent predicates are evaluated each time they are found to be true
+        for(auto& pred : predicates.recurrent_predicates) {
+            if(pred != nullptr && (pred->first(*derived_this) == true)) {
+                predicate_fired = true;
+                std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
+                predicates_lock.unlock();
+                (*trigger)(*derived_this);
+                predicates_lock.lock();
+            }
+        }
+
+        // transition predicates are only evaluated when they change from false to true
+        // We need to use iterators here because we need to iterate over two lists in parallel
+        auto pred_it = predicates.transition_predicates.begin();
+        auto pred_state_it = predicates.transition_predicate_states.begin();
+        while(pred_it != predicates.transition_predicates.end()) {
+            if(*pred_it != nullptr) {
+                //*pred_state_it is the previous state of the predicate at *pred_it
+                bool curr_pred_state = (*pred_it)->first(*derived_this);
+                if(curr_pred_state == true && *pred_state_it == false) {
+                    predicate_fired = true;
+                    std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(
+                            (*pred_it)->second);
+                    predicates_lock.unlock();
+                    (*trigger)(*derived_this);
+                    predicates_lock.lock();
+                }
+                *pred_state_it = curr_pred_state;
+
+                ++pred_it;
+                ++pred_state_it;
+            }
+        }
+
+        if(predicate_fired) {
+            // update last time
+            clock_gettime(CLOCK_REALTIME, &last_time);
+        } else {
+            clock_gettime(CLOCK_REALTIME, &cur_time);
+            // check if the system has been inactive for enough time to induce sleep
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            if(time_elapsed_in_ms > 1) {
+                predicates_lock.unlock();
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+                predicates_lock.lock();
+            }
+        }
+        //Still to do: Clean up deleted predicates
     }
 }
 
@@ -226,9 +221,6 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
                 if(!posted_write_to[index2] || polled_successfully_from[index2]) {
                     continue;
                 }
-
-                /* std::cout << "Reporting failure on row " << index2 */
-                /*           << " due to a missing poll completion" << std::endl; */
                 failed_node_indexes.push_back(index2);
             }
             continue;
@@ -241,8 +233,6 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
             polled_successfully_from[remote_id] = true;
         } else if(result == -1) {
             if(!row_is_frozen[index]) {
-                std::cerr << "Poll completion error with node (id=" << remote_id
-                          << "). Freezing row " << remote_id << std::endl;
                 failed_node_indexes.push_back(remote_id);
             }
         }
@@ -267,11 +257,7 @@ void SST<DerivedSST>::freeze(int row_index) {
     num_frozen++;
     res_vec[row_index].reset();
     if(failure_upcall) {
-        try {
-            failure_upcall(members[row_index]);
-        } catch(const std::exception& e) {
-            std::cout << "Exception in the failure upcall: " << e.what() << std::endl;
-        }
+        failure_upcall(members[row_index]);
     }
 }
 
