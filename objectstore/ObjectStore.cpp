@@ -786,7 +786,7 @@ public:
                 target = group.get_my_id();
             }
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
-            return std::move( os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid) );
+            return std::move( os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid, ver) );
         }
     }
 
