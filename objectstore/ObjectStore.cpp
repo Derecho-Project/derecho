@@ -157,7 +157,7 @@ public:
     virtual const Object get(const OID& oid, const version_t& ver) {
         // check version
         if(ver != INVALID_VERSION) {
-            dbg_default_info("{}:{} does not support versioned query ( oid = {}; ver = {} ). Return with an invalid object.",
+            dbg_default_info("{}:{} does not support versioned query ( oid = {}; ver = 0x{:x} ). Return with an invalid object.",
                              typeid(*this).name(), __func__, oid, ver);
             return inv_obj;
         }
@@ -174,7 +174,7 @@ public:
     // @override IReplica::orderedPut
     virtual version_t orderedPut(const Object& object) {
         version_t version = get_version();
-        dbg_default_info("orderedPut object:{},version:{}", object.oid, version);
+        dbg_default_info("orderedPut object:{},version:0x{:x}", object.oid, version);
         this->objects.erase(object.oid);
         object.ver = version;
         this->objects.emplace(object.oid, object);  // copy constructor
@@ -187,7 +187,7 @@ public:
     // @override IReplica::orderedRemove
     virtual version_t orderedRemove(const OID& oid) {
         version_t version = get_version();
-        dbg_default_info("orderedRemove object:{},version:{}", oid, version);
+        dbg_default_info("orderedRemove object:{},version:0x{:x}", oid, version);
         if(this->objects.erase(oid)) {
             object_watcher(oid, inv_obj);
         }
@@ -195,7 +195,7 @@ public:
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
-        dbg_default_info("orderedGet object:{},version:{}", oid, get_version());
+        dbg_default_info("orderedGet object:{},version:0x{:x}", oid, get_version());
         if(objects.find(oid) != objects.end()) {
             return objects.at(oid);
         } else {
@@ -452,7 +452,7 @@ public:
     virtual version_t orderedPut(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
         object.ver = subgroup_handle.get_next_version();
-        dbg_default_info("orderedPut object:{},version:{}", object.oid, object.ver);
+        dbg_default_info("orderedPut object:{},version:0x{:x}", object.oid, object.ver);
         this->persistent_objectstore->orderedPut(object);
         return object.ver;
     }
@@ -460,7 +460,7 @@ public:
     virtual version_t orderedRemove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
         version_t vRet = subgroup_handle.get_next_version();
-        dbg_default_info("orderedRemove object:{},version:{}", oid, vRet);
+        dbg_default_info("orderedRemove object:{},version:0x{:x}", oid, vRet);
         this->persistent_objectstore->orderedRemove(oid);
         return vRet;
     }
@@ -469,7 +469,7 @@ public:
 #ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
 #endif
-        dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
+        dbg_default_info("orderedGet object:{},version:0x{:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedGet(oid);
     }
     // @override IObjectStoreAPI::put
@@ -508,7 +508,7 @@ public:
             // 1 - check if the version is valid
             version_t lv = persistent_objectstore.getLatestVersion();
             if(ver > lv || ver < 0) {
-                dbg_default_info("{}::{} failed with invalid version ( oid={}, ver = {}, latest_version={}), returning an invalid object.",
+                dbg_default_info("{}::{} failed with invalid version ( oid={}, ver = 0x{:x}, latest_version=0x{:x}), returning an invalid object.",
                                  typeid(*this).name(), __func__, oid, ver, lv);
                 return inv_obj;
             }
@@ -655,7 +655,7 @@ public:
         // Unimplemented yet:
         if(mode == PERSISTENT_UNLOGGED || mode == VOLATILE_LOGGED) {
             // log it
-            dbg_default_error("ObjectStoreService mode {} is not supported yet.");
+            dbg_default_error("ObjectStoreService mode {} is not supported yet.", mode);
             throw derecho::derecho_exception("Unimplmented ObjectStoreService mode: persistent_unlogged/volatile_logged.");
         }
     }
