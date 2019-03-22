@@ -179,9 +179,9 @@ public:
         return replies.begin()->second.get();
     }
     //@overrid IObjectStoreAPI::get_by_time
-    virtual const Object get_by_time(const OID& oid, const uint64_t& us_ts) {
+    virtual const Object get_by_time(const OID& oid, const uint64_t& ts_us) {
         dbg_default_info("{}:{} does not support temporal query (oid = {}; timestamp = {} us). Return with an invalid object.",
-                         typeid(*this).name(), __func__, oid, us_ts);
+                         typeid(*this).name(), __func__, oid, ts_us);
         return inv_obj;
     }
 
@@ -551,13 +551,15 @@ public:
         }
     }
     // @override IObjectStoreAPI::get_by_time
-    virtual const Object get_by_time(const OID& oid, const uint64_t& us_ts) {
-        dbg_default_debug("get_by_time, oid={}, ts={}.",oid,us_ts);
-        const HLC hlc(us_ts,0ull); // generate a hybrid logical clock: TODO: do we have to use HLC????
+    virtual const Object get_by_time(const OID& oid, const uint64_t& ts_us) {
+        dbg_default_debug("get_by_time, oid={}, ts={}.", oid, ts_us);
+        const HLC hlc(ts_us,0ull); // generate a hybrid logical clock: TODO: do we have to use HLC????
         try{
             return persistent_objectstore.get(hlc)->objects.at(oid);
-        } catch (uint64_t ex) {
-            dbg_default_warn("temporal query throws exception:0x{:x}. oid={}, ts={}", ex, oid, us_ts);
+        } catch (const int64_t &ex) {
+            dbg_default_warn("temporal query throws exception:0x{:x}. oid={}, ts={}", ex, oid, ts_us);
+        } catch (...) {
+            dbg_default_warn("temporal query throws unknown exception. oid={}, ts={}", oid, ts_us);
         }
         return inv_obj;
     }
