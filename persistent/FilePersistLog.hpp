@@ -180,6 +180,7 @@ public:
     virtual int64_t getEarliestIndex() noexcept(false);
     virtual int64_t getLatestIndex() noexcept(false);
     virtual int64_t getVersionIndex(const version_t& ver) noexcept(false);
+    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
     virtual const version_t getLastPersisted() noexcept(false);

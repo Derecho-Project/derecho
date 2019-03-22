@@ -543,6 +543,25 @@ const void* FilePersistLog::getEntry(const int64_t& ver) noexcept(false) {
     return LOG_ENTRY_DATA(ple);
 }
 
+int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) noexcept(false) {
+    FPL_RDLOCK;
+    dbg_default_trace("getHLCIndex for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
+    struct hlc_index_entry skey(rhlc, 0);
+    auto key = this->hidx.upper_bound(skey);
+    FPL_UNLOCK;
+
+    if(key != this->hidx.begin() && this->hidx.size() > 0) {
+        dbg_default_trace("getHLCIndex returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
+        return key->log_idx;
+    }
+
+    // no object exists before the requested timestamp.
+
+    dbg_default_trace("{0} getHLCIndex found no entry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
+
+    return INVALID_INDEX;
+}
+
 const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
     LogEntry* ple = nullptr;
     //    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
