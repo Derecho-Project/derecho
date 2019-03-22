@@ -189,7 +189,7 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
     std::vector<uint32_t> failed_node_indexes;
 
     /** Completion Queue poll timeout in millisec */
-    const int MAX_POLL_CQ_TIMEOUT = 2000;
+    const int MAX_POLL_CQ_TIMEOUT = 10;
     unsigned long start_time_msec;
     unsigned long cur_time_msec;
     struct timeval cur_time;
