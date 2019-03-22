@@ -557,7 +557,7 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) noexcept(false) {
 
     // no object exists before the requested timestamp.
 
-    dbg_default_trace("{0} getHLCIndex found no entry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
+    dbg_default_trace("{0} getHLCIndex found no entry at ({1},{2})", this->m_sName, rhlc.m_rtc_us, rhlc.m_logic);
 
     return INVALID_INDEX;
 }
