@@ -330,7 +330,13 @@ public:
 
     // @override IDeltaSupport::create()
     static std::unique_ptr<DeltaObjectStoreCore> create(mutils::DeserializationManager* dm) {
-        return std::make_unique<DeltaObjectStoreCore>(dm->mgr<IObjectStoreService>().getObjectWatcher());
+        if(dm != nullptr) {
+            try {
+                return std::make_unique<DeltaObjectStoreCore>(dm->mgr<IObjectStoreService>().getObjectWatcher());
+            } catch(...) {
+            }
+        }
+        return std::make_unique<DeltaObjectStoreCore>((ObjectWatcher){});
     }
 
     inline void applyOrderedPut(const Object& object) {
@@ -429,6 +435,7 @@ class PersistentLoggedObjectStore : public mutils::ByteRepresentable,
                                     public IReplica {
 private:
     const Object inv_obj;
+
 public:
     using derecho::GroupReference::group;
     Persistent<DeltaObjectStoreCore> persistent_objectstore;
@@ -500,21 +507,21 @@ public:
         } else {  // do a versioned get
             // 1 - check if the version is valid
             version_t lv = persistent_objectstore.getLatestVersion();
-            if (ver > lv || ver < 0) {
+            if(ver > lv || ver < 0) {
                 dbg_default_info("{}::{} failed with invalid version ( oid={}, ver = {}, latest_version={}), returning an invalid object.",
-                        typeid(*this).name(),__func__,oid,ver,lv);
+                                 typeid(*this).name(), __func__, oid, ver, lv);
                 return inv_obj;
             }
             // 2 - return the object
-            // TODO: 
+            // TODO:
             // - avoid copy here!!!
-            // - delta implementation needs to be improved!!! The existing 
+            // - delta implementation needs to be improved!!! The existing
             //   implementation of Persistent<T> will Rebuild the whole object
             //   store on each versioned call. Fix this in persistent/
             //   Persistent.hpp
             try {
                 return persistent_objectstore[ver]->objects.at(oid);
-            } catch (std::out_of_range ex) {
+            } catch(std::out_of_range ex) {
                 return inv_obj;
             }
         }
@@ -777,18 +784,18 @@ public:
         //TODO: for bReplica and version, we need to call the local version. concurrent access!!!
         if(bReplica && !force_client) {
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
-            if (ver == INVALID_VERSION) {
+            if(ver == INVALID_VERSION) {
                 // replica server can do ordered send
                 return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid));
             } else {
                 // send a local p2p send/query to access history versions
-                return std::move(os_rpc_handle.template p2p_send<RPC_NAME(get)>(group.get_my_id(),oid,ver));
+                return std::move(os_rpc_handle.template p2p_send<RPC_NAME(get)>(group.get_my_id(), oid, ver));
             }
         } else {
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
-            return std::move( os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid, ver) );
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid, ver));
         }
     }
 
