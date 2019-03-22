@@ -296,16 +296,16 @@ protected:
 // - 'create' This static method is used to create an empty object from deserialization
 //   manager.
 using DeltaFinalizer = std::function<void(char const* const, std::size_t)>;
-template<typename DeltaObjectType>
+template <typename DeltaObjectType>
 class IDeltaObjectFactory {
 public:
-    static std::unique_ptr<DeltaObjectType> create(mutils::DeserializationManager *dm){
+    static std::unique_ptr<DeltaObjectType> create(mutils::DeserializationManager* dm) {
         return DeltaObjectType::create(dm);
     }
 };
 
-template<typename ObjectType>
-class IDeltaSupport: public IDeltaObjectFactory<ObjectType> {
+template <typename ObjectType>
+class IDeltaSupport : public IDeltaObjectFactory<ObjectType> {
 public:
     virtual void finalizeCurrentDelta(const DeltaFinalizer&) = 0;
     virtual void applyDelta(char const* const) = 0;
@@ -369,11 +369,11 @@ protected:
     }
     /** initialize the object from log
        */
-    inline void initialize_object_from_log(const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
-    mutils::DeserializationManager* dm) {
+    inline void initialize_object_from_log(const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
+                                           mutils::DeserializationManager* dm) {
         if(this->getNumOfVersions() > 0) {
             // load the object from log.
-            this->m_pWrappedObject = this->getByIndex(this->getLatestIndex(),dm);
+            this->m_pWrappedObject = this->getByIndex(this->getLatestIndex(), dm);
         } else {  // create a new one;
             this->m_pWrappedObject = object_factory();
         }
@@ -389,7 +389,7 @@ protected:
                     std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
                     std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
                     std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)              // truncate persistent versions.
-                    );
+            );
         }
     }
     inline void unregister_callbacks() noexcept(false) {
@@ -407,16 +407,15 @@ public:
        * @param dm The deserialization manager for deserializing local log entries.
        */
     Persistent(
-            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
+            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
-            mutils::DeserializationManager dm = {{}})  
-            noexcept(false)
+            mutils::DeserializationManager dm = {{}}) noexcept(false)
             : m_pRegistry(persistent_registry) {
         // Initialize log
         initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
         // Initialize object
-        initialize_object_from_log(object_factory,&dm);
+        initialize_object_from_log(object_factory, &dm);
         // Register Callbacks
         register_callbacks();
     }
@@ -530,11 +529,9 @@ public:
             int64_t idx,
             const Func& fun,
             mutils::DeserializationManager* dm = nullptr) noexcept(false) {
-        if
-            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-                return f(*this->getByIndex(idx, dm));
-            }
-        else {
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            return f(*this->getByIndex(idx, dm));
+        } else {
             return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
         }
     };
@@ -543,19 +540,17 @@ public:
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
             mutils::DeserializationManager* dm = nullptr) noexcept(false) {
-        if
-            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-                // ObjectType* ot = new ObjectType{};
-                std::unique_ptr<ObjectType> p = ObjectType::create(dm);
-                // TODO: accelerate this by checkpointing
-                for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-                    const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-                    p->applyDelta(entry_data);
-                }
-
-                return p;
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            // ObjectType* ot = new ObjectType{};
+            std::unique_ptr<ObjectType> p = ObjectType::create(dm);
+            // TODO: accelerate this by checkpointing
+            for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
+                const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
+                p->applyDelta(entry_data);
             }
-        else {
+
+            return p;
+        } else {
             return mutils::from_bytes<ObjectType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
         }
     };
@@ -573,12 +568,10 @@ public:
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_VERSION;
         }
-        if
-            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-                // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
-                return f(*this->get(ver, dm));
-            }
-        else {
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
+            return f(*this->get(ver, dm));
+        } else {
             return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
         }
     };
@@ -593,11 +586,9 @@ public:
             throw PERSIST_EXP_INV_VERSION;
         }
 
-        if
-            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-                return getByIndex(idx, dm);
-            }
-        else {
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            return getByIndex(idx, dm);
+        } else {
             return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
         }
     }
@@ -631,11 +622,20 @@ public:
         if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
             throw PERSIST_EXP_BEYOND_GSF;
         }
-        char* pdat = (char*)this->m_pLog->getEntry(hlc);
-        if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            int64_t idx = this->m_pLog->getHLCIndex(hlc);
+            if(idx == INVALID_INDEX) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return getByIndex(idx, fun, dm);
+        } else {
+            char* pdat = (char*)this->m_pLog->getEntry(hlc);
+            if(pdat == nullptr) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
         }
-        return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
     };
 
     // get a version of value T. specified by HLC clock.
@@ -646,12 +646,19 @@ public:
         if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
             throw PERSIST_EXP_BEYOND_GSF;
         }
-        char const* pdat = (char const*)this->m_pLog->getEntry(hlc);
-        if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            int64_t idx = this->m_pLog->getHLCIndex(hlc);
+            if(idx == INVALID_INDEX) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return getByIndex(idx, dm);
+        } else {
+            char const* pdat = (char const*)this->m_pLog->getEntry(hlc);
+            if(pdat == nullptr) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return mutils::from_bytes<ObjectType>(dm, pdat);
         }
-
-        return mutils::from_bytes<ObjectType>(dm, pdat);
     }
 
     // syntax sugar: get a specified version of T without DSM
@@ -700,13 +707,11 @@ public:
     // make a version with version and mhlc clock
     virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false) {
         dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
-        if
-            constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-                v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
-                    this->m_pLog->append((const void* const)buf, len, ver, mhlc);
-                });
-            }
-        else {
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
+                this->m_pLog->append((const void* const)buf, len, ver, mhlc);
+            });
+        } else {
             // ObjectType does not support Delta, logging the whole current state.
             auto size = mutils::bytes_size(v);
             char* buf = new char[size];
@@ -931,7 +936,7 @@ public:
      * @param dm DeserializationManager for deserializing logged object.
      */
     Volatile(
-            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
+            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}}) noexcept(false)
@@ -955,7 +960,7 @@ public:
      * @param dm DeserializationManager for deserializing logged object.
      */
     Volatile(
-            const std::function<std::unique_ptr<ObjectType>(void)> &object_factory,
+            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
             std::unique_ptr<PersistLog>& log_ptr = nullptr,
@@ -1041,6 +1046,6 @@ const typename std::enable_if<(storageType == ST_FILE || storageType == ST_MEM),
 }
 
 ///
-}
+}  // namespace persistent
 
 #endif  //PERSIST_VAR_H

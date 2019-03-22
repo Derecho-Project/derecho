@@ -81,6 +81,14 @@ public:
     //     - ver is not found
     //     - ver is not INVALID_VERSION, but versions are not logged.
     virtual const Object get(const OID& oid, const version_t& ver) = 0;
+    // @PARAM oid
+    //     the object id
+    // @PARAM ts_us
+    //     timestamp in microsecond
+    // @RETURN
+    //     return the object. If an invalid object is returned, oid is not
+    //     found or is not found at time ts_us.
+    virtual const Object get_by_time(const OID& oid, const uint64_t& ts_us) = 0;
 };
 
 class IReplica {
@@ -122,7 +130,8 @@ public:
                            orderedGet,
                            put,
                            remove,
-                           get);
+                           get,
+                           get_by_time);
 
     inline version_t get_version() {
         derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
@@ -168,6 +177,12 @@ public:
         // here we only check the first reply.
         // Should we verify the consistency of all replies?
         return replies.begin()->second.get();
+    }
+    //@overrid IObjectStoreAPI::get_by_time
+    virtual const Object get_by_time(const OID& oid, const uint64_t& ts_us) {
+        dbg_default_info("{}:{} does not support temporal query (oid = {}; timestamp = {} us). Return with an invalid object.",
+                         typeid(*this).name(), __func__, oid, ts_us);
+        return inv_obj;
     }
 
     // This is for REGISTER_RPC_FUNCTIONS
@@ -402,9 +417,17 @@ public:
     DEFAULT_SERIALIZE(objects);
 
     static std::unique_ptr<DeltaObjectStoreCore> from_bytes(mutils::DeserializationManager* dsm, char const* buf) {
+        if(dsm != nullptr) {
+            try {
+                return std::make_unique<DeltaObjectStoreCore>(
+                    std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+                    dsm->mgr<IObjectStoreService>().getObjectWatcher());
+            } catch(...) {
+            }
+        }
         return std::make_unique<DeltaObjectStoreCore>(
-                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
-                dsm->mgr<IObjectStoreService>().getObjectWatcher());
+            std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+            (ObjectWatcher){});
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(DeltaObjectStoreCore);
@@ -446,7 +469,8 @@ public:
                            orderedGet,
                            put,
                            remove,
-                           get);
+                           get,
+                           get_by_time);
 
     // @override IReplica::orderedPut
     virtual version_t orderedPut(const Object& object) {
@@ -525,6 +549,19 @@ public:
                 return inv_obj;
             }
         }
+    }
+    // @override IObjectStoreAPI::get_by_time
+    virtual const Object get_by_time(const OID& oid, const uint64_t& ts_us) {
+        dbg_default_debug("get_by_time, oid={}, ts={}.", oid, ts_us);
+        const HLC hlc(ts_us,0ull); // generate a hybrid logical clock: TODO: do we have to use HLC????
+        try{
+            return persistent_objectstore.get(hlc)->objects.at(oid);
+        } catch (const int64_t &ex) {
+            dbg_default_warn("temporal query throws exception:0x{:x}. oid={}, ts={}", ex, oid, ts_us);
+        } catch (...) {
+            dbg_default_warn("temporal query throws unknown exception. oid={}, ts={}", oid, ts_us);
+        }
+        return inv_obj;
     }
 
     // DEFAULT_SERIALIZATION_SUPPORT(PersistentLoggedObjectStore,persistent_objectstore);
@@ -781,7 +818,6 @@ public:
     template <typename T>
     derecho::rpc::QueryResults<const Object> _aio_get(const OID& oid, const version_t& ver, const bool& force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
-        //TODO: for bReplica and version, we need to call the local version. concurrent access!!!
         if(bReplica && !force_client) {
             derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
             if(ver == INVALID_VERSION) {
@@ -789,13 +825,28 @@ public:
                 return std::move(os_rpc_handle.template ordered_send<RPC_NAME(orderedGet)>(oid));
             } else {
                 // send a local p2p send/query to access history versions
-                return std::move(os_rpc_handle.template p2p_send<RPC_NAME(get)>(group.get_my_id(), oid, ver));
+                return std::move(os_rpc_handle.template p2p_send<RPC_NAME(get)>(myid, oid, ver));
             }
         } else {
-            // send request to a static mapped replica. Use random mapping for load-balance?
+            // Send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
             return std::move(os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid, ver));
+        }
+    }
+
+    template <typename T>
+    derecho::rpc::QueryResults<const Object> _aio_get(const OID& oid, const uint64_t& ts_us) {
+        std::lock_guard<std::mutex> guard(write_mutex);
+        if (bReplica) {
+            // send to myself.
+            derecho::Replicated<T>& os_rpc_handle = group.template get_subgroup<T>();
+            return std::move(os_rpc_handle.template p2p_send<RPC_NAME(get_by_time)>(myid, oid, ts_us));
+        } else {
+            // Send request to a static mapped replica. Use random mapping for load-balance?
+            node_id_t target = replicas[myid % replicas.size()];
+            derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(get_by_time)>(target, oid, ts_us));
         }
     }
 
@@ -804,6 +855,13 @@ public:
         derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ver, force_client);
         decltype(results)::ReplyMap& replies = results.get();
         // should we check reply consistency?
+        return std::move(replies.begin()->second.get());
+    }
+
+    template <typename T>
+    Object _bio_get(const OID& oid, const uint64_t& ts_us) {
+        derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ts_us);
+        decltype(results)::ReplyMap& replies = results.get();
         return std::move(replies.begin()->second.get());
     }
 
@@ -820,6 +878,19 @@ public:
         }
     }
 
+    virtual Object bio_get(const OID& oid, const uint64_t& ts_us) {
+        dbg_default_debug("bio_get object id={}, ts_us={}.", oid, ts_us);
+        switch(this->mode) {
+            case VOLATILE_UNLOGGED:
+                return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+            case PERSISTENT_LOGGED:
+                return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, ts_us));
+            default:
+                dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
+                throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
+        }
+    }
+
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const version_t& ver, const bool& force_client) {
         dbg_default_debug("aio_get object id={}, ver={}, mode={}, force_client={}", oid, ver, mode, force_client);
         switch(this->mode) {
@@ -827,6 +898,19 @@ public:
                 return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ver, force_client));
             case PERSISTENT_LOGGED:
                 return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ver, force_client));
+            default:
+                dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
+                throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
+        }
+    }
+
+    virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const uint64_t& ts_us) {
+        dbg_default_debug("aio_get object id={}, ts_us={}.", oid, ts_us);
+        switch(this->mode) {
+            case VOLATILE_UNLOGGED:
+                return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+            case PERSISTENT_LOGGED:
+                return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ts_us));
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");

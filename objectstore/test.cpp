@@ -93,6 +93,33 @@ int main(int argc, char** argv) {
                          free(argcopy);
                          return true;
                      }}},
+            {"tget",
+             {
+                 "tget <oid> <unix time in us>", // help info
+                 [&oss, use_aio](std::string& args) -> bool {
+                     std::istringstream ss(args);
+                     objectstore::OID oid;
+                     uint64_t ts_us;
+                     ss >> oid >> ts_us;
+                     try {
+                         if(use_aio) {
+                             // asynchronous api
+                             derecho::rpc::QueryResults<const objectstore::Object> results = oss.aio_get(oid,ts_us);
+                             decltype(results)::ReplyMap& replies = results.get();
+                             std::cout << "aio returns:" << std::endl;
+                             for(auto& reply_pair : replies) {
+                                 std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
+                             }
+                         } else {
+                             // synchronous api
+                             objectstore::Object obj = oss.bio_get(oid, ts_us);
+                             std::cout << obj << std::endl;
+                         }
+                     } catch(...) {
+                         return false;
+                     }
+                     return true;
+                 }}},
             {"remove",  // command
              {
                      "remove <oid>",  // help info

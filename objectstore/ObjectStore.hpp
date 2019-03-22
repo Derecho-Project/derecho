@@ -46,12 +46,19 @@ public:
     // @PARAM force_client - see above
     // @RETURN the object of oid, invalid object if corresponding object does not exists.
     virtual Object bio_get(const OID& oid, const version_t& ver = INVALID_VERSION, const bool& force_client = false) = 0;
+    // 3.1 - temporal get
+    // @PARAM oid - const reference of the object id.
+    // @PARAM ts_us - timestamp.
+    // @RETURN the object of oid, invalid object if corresponding object does not exists.
+    virtual Object bio_get(const OID& oid, const uint64_t& ts_us) = 0;
 
     // non blocking operations: the operations will return a future.
     // The arguments align to the blocking apis.
     virtual derecho::rpc::QueryResults<version_t> aio_put(const Object& object, const bool& force_client = false) = 0;
     virtual derecho::rpc::QueryResults<version_t> aio_remove(const OID& oid, const bool& force_client = false) = 0;
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const version_t& ver = INVALID_VERSION, const bool& force_client = false) = 0;
+    virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const uint64_t& ts_us) = 0;
+
 
     virtual void leave() = 0;  // leave gracefully
     virtual const ObjectWatcher& getObjectWatcher() = 0;
