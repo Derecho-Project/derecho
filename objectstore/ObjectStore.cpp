@@ -417,9 +417,17 @@ public:
     DEFAULT_SERIALIZE(objects);
 
     static std::unique_ptr<DeltaObjectStoreCore> from_bytes(mutils::DeserializationManager* dsm, char const* buf) {
+        if(dsm != nullptr) {
+            try {
+                return std::make_unique<DeltaObjectStoreCore>(
+                    std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+                    dsm->mgr<IObjectStoreService>().getObjectWatcher());
+            } catch(...) {
+            }
+        }
         return std::make_unique<DeltaObjectStoreCore>(
-                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
-                dsm->mgr<IObjectStoreService>().getObjectWatcher());
+            std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+            (ObjectWatcher){});
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(DeltaObjectStoreCore);
