@@ -102,6 +102,7 @@ public:
         // 1 - load configuration from configuration file
         if(getpotcfg != nullptr) {
             for(const std::string& key : getpotcfg->get_variable_names()) {
+                std::cout << key << std::endl;
                 this->config[key] = (*getpotcfg)(key, "");
             }
         }
