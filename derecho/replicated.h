@@ -117,32 +117,6 @@ private:
     /** The version number being processed */
     persistent::version_t next_version = INVALID_VERSION;
 
-    template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
-        if(is_valid()) {
-            assert(dest_node != node_id);
-            //Ensure a view change isn't in progress
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-            size_t size;
-            const SubgroupSettings& settings = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id);
-            auto max_payload_size = settings.profile.max_msg_size - sizeof(header);
-            auto return_pair = wrapped_this->template send<tag>(
-                    [this, &is_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
-                        size = _size;
-                        if(size <= max_payload_size) {
-                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, is_query ? sst::REQUEST_TYPE::P2P_QUERY : sst::REQUEST_TYPE::P2P_SEND);
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(is_query, dest_node, return_pair.pending);
-            return std::move(return_pair.results);
-        } else {
-            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
-        }
-    }
-
 public:
     /**
      * Constructs a Replicated<T> that enables sending and receiving RPC
@@ -244,6 +218,39 @@ public:
     }
 
     /**
+     * Sends a peer-to-peer message to a single member of the subgroup that
+     * replicates this Replicated<T>, invoking the RPC function identified
+     * by the FunctionTag template parameter.
+     * @param dest_node The ID of the node that the P2P message should be sent to
+     * @param args The arguments to the RPC function being invoked
+     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
+     * of the RPC function being invoked
+     */
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_send(node_id_t dest_node, Args&&... args) {
+        if(is_valid()) {
+            //Ensure a view change isn't in progress
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+            size_t size;
+            auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+            auto return_pair = wrapped_this->template send<tag>(
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                        size = _size;
+                        if(size <= max_payload_size) {
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_SEND);
+                        } else {
+                            return nullptr;
+                        }
+                    },
+                    std::forward<Args>(args)...);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+            return std::move(return_pair.results);
+        } else {
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        }
+    }
+
+    /**
      * Sends a multicast to the entire subgroup that replicates this Replicated<T>,
      * invoking the RPC function identified by the FunctionTag template parameter.
      * The caller must keep the returned QueryResults object in scope in order to
@@ -294,36 +301,6 @@ public:
         } else {
             throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
         }
-    }
-
-    /**
-     * Sends a peer-to-peer message to a single member of the subgroup that
-     * replicates this Replicated<T>, invoking the RPC function identified
-     * by the FunctionTag template parameter, but does not wait for a response.
-     * This should only be used for RPC functions whose return type is void.
-     * @param dest_node The ID of the node that the P2P message should be sent to
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void p2p_send(node_id_t dest_node, Args&&... args) {
-        p2p_send_or_query<tag>(false, dest_node, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a peer-to-peer message over TCP to a single member of the subgroup
-     * that replicates this Replicated<T>, invoking the RPC function identified
-     * by the FunctionTag template parameter. The caller must keep the returned
-     * QueryResults object in scope in order to receive replies. It is up to the
-     * caller to ensure that the node ID specified in the parameter is actually
-     * a member of the subgroup that this Replicated<T> is bound to.
-     * @param dest_node The ID of the node that the P2P message should be sent to
-     * @param args The arguments to the RPC function being invoked
-     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
-     * of the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_query(node_id_t dest_node, Args&&... args) {
-        return p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
     }
 
     const uint64_t compute_global_stability_frontier() {
@@ -406,9 +383,7 @@ public:
         mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
         rdv.insert(rdv.begin(), persistent_registry_ptr.get());
         mutils::DeserializationManager dsm{rdv};
-	std::cout << "In receive object before pointer reset: " << user_object_ptr.get() << std::endl;
         *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
-	std::cout << "In receive object after pointer reset: " << user_object_ptr.get() << std::endl;
         if constexpr(std::is_base_of_v<GroupReference, T>) {
             (**user_object_ptr).set_group_pointers(group, subgroup_index);
         }
@@ -496,34 +471,6 @@ private:
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
-    //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
-    //but I'm afraid that will introduce unnecessary overheads.
-    template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_send_or_query(bool is_query, node_id_t dest_node, Args&&... args) {
-        if(is_valid()) {
-            assert(dest_node != node_id);
-            //Ensure a view change isn't in progress
-            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-            size_t size;
-            const SubgroupSettings& settings = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id); //TODO this code is copy pasted from above (like this method)
-            auto max_payload_size = settings.profile.max_msg_size - sizeof(header);
-            auto return_pair = wrapped_this->template send<tag>(
-                    [this, &is_query, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
-                        size = _size;
-                        if(size <= max_payload_size) {
-                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, is_query ? sst::REQUEST_TYPE::P2P_QUERY : sst::REQUEST_TYPE::P2P_SEND);
-                        } else {
-                            return nullptr;
-                        }
-                    },
-                    std::forward<Args>(args)...);
-            group_rpc_manager.finish_p2p_send(is_query, dest_node, return_pair.pending);
-            return std::move(return_pair.results);
-        } else {
-            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
-        }
-    }
-
 public:
     ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, rpc::RPCManager& group_rpc_manager)
             : node_id(nid),
@@ -534,37 +481,35 @@ public:
     ExternalCaller(ExternalCaller&&) = default;
     ExternalCaller(const ExternalCaller&) = delete;
 
+    //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
+    //but I'm afraid that will introduce unnecessary overheads.
+    template <rpc::FunctionTag tag, typename... Args>
+    auto p2p_send(node_id_t dest_node, Args&&... args) {
+        if(is_valid()) {
+            assert(dest_node != node_id);
+            //Ensure a view change isn't in progress
+            std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+            size_t size;
+            const SubgroupSettings& settings = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id); //TODO this code is copy pasted from above (like this method)
+            auto max_payload_size = settings.profile.max_msg_size - sizeof(header);
+            auto return_pair = wrapped_this->template send<tag>(
+                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                        size = _size;
+                        if(size <= max_payload_size) {
+                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_SEND);
+                        } else {
+                            return nullptr;
+                        }
+                    },
+                    std::forward<Args>(args)...);
+            group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+            return std::move(return_pair.results);
+        } else {
+            throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        }
+    }
+
     bool is_valid() const { return true; }
-
-    /**
-     * Sends a peer-to-peer message over TCP to a single member of the subgroup
-     * that this ExternalCaller targets, invoking the RPC function identified
-     * by the FunctionTag template parameter, but does not wait for a response.
-     * This should only be used for RPC functions whose return type is void.
-     * @param dest_node The ID of the node that the P2P message should be sent to
-     * @param args The arguments to the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    void p2p_send(node_id_t dest_node, Args&&... args) {
-        p2p_send_or_query<tag>(false, dest_node, std::forward<Args>(args)...);
-    }
-
-    /**
-     * Sends a peer-to-peer message over TCP to a single member of the subgroup
-     * that this ExternalCaller targets, invoking the RPC function identified
-     * by the FunctionTag template parameter. The caller must keep the returned
-     * QueryResults object in scope in order to receive replies. It is up to the
-     * caller to ensure that the node ID specified in the parameter is actually
-     * a member of the subgroup that this ExternalCaller is bound to.
-     * @param dest_node The ID of the node that the P2P message should be sent to
-     * @param args The arguments to the RPC function being invoked
-     * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
-     * of the RPC function being invoked
-     */
-    template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_query(node_id_t dest_node, Args&&... args) {
-        return p2p_send_or_query<tag>(true, dest_node, std::forward<Args>(args)...);
-    }
 };
 
 template <typename T>
@@ -579,22 +524,15 @@ public:
               shard_reps(shard_reps) {
     }
     template <rpc::FunctionTag tag, typename... Args>
-    void p2p_send(Args&&... args) {
-        for(auto nid : shard_reps) {
-            EC.template p2p_send<tag>(nid, std::forward<Args>(args)...);
-        }
-    }
-
-    template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_query(Args&&... args) {
+    auto p2p_send(Args&&... args) {
         // shard_reps should have at least one member
-        auto query_result = EC.template p2p_query<tag>(shard_reps.at(0), std::forward<Args>(args)...);
-        std::vector<decltype(query_result)> query_result_vec;
-        query_result_vec.emplace_back(std::move(query_result));
+        auto send_result = EC.template p2p_send<tag>(shard_reps.at(0), std::forward<Args>(args)...);
+        std::vector<decltype(send_result)> send_result_vec;
+        send_result_vec.emplace_back(std::move(send_result));
         for(uint i = 1; i < shard_reps.size(); ++i) {
-            query_result_vec.emplace_back(EC.template p2p_query<tag>(shard_reps[i], std::forward<Args>(args)...));
+            send_result_vec.emplace_back(EC.template p2p_send<tag>(shard_reps[i], std::forward<Args>(args)...));
         }
-        return query_result_vec;
+        return send_result_vec;
     }
 };
 }  // namespace derecho

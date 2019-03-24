@@ -569,7 +569,6 @@ namespace sst{
   void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
     dbg_default_trace("Polling thread starting.");
-    std::cout<<"["<<std::this_thread::get_id()<<"] polling thread starts."<<std::endl;
     while(!shutdown) {
         auto ce = lf_poll_completion();
         if (shutdown) {
@@ -579,7 +578,6 @@ namespace sst{
           util::polling_data.insert_completion_entry(ce.first, ce.second);
         } // else we don't know who sent the message, so just drop it.
     }
-    std::cout<<"["<<std::this_thread::get_id()<<"] polling thread stops."<<std::endl;
     dbg_default_trace("Polling thread ending.");
   }
 
@@ -715,12 +713,9 @@ namespace sst{
 
   void shutdown_polling_thread(){
     shutdown = true;
-    std::cout<<"["<<std::this_thread::get_id()<<"] shutdown_polling_thread() begins."<<std::endl;
     if(polling_thread.joinable()) {
-      std::cout<<"["<<std::this_thread::get_id()<<"] joining polling thread."<<std::endl;
       polling_thread.join();
     }
-    std::cout<<"["<<std::this_thread::get_id()<<"] done with shutdown_polling_thread()."<<std::endl;
   }
 
   void lf_destroy(){

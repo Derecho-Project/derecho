@@ -307,13 +307,11 @@ public:
     /**
      * Sends the next P2P message buffer over an RDMA connection to the specified node,
      * and registers the "promise object" in pending_results_handle to await its reply.
-     * @param is_query True if this message represents a query (which expects replies),
-     * false if it repesents a send (which does not)
      * @param dest_node The node to send the message to
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(bool is_query, node_id_t dest_node, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

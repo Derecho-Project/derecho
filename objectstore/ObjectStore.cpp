@@ -35,7 +35,7 @@ namespace objectstore {
     do not explicitly support a "VolatileLoggedObjectStore" Type right now.
 
     - IObjectStoreAPI
-    The interface for p2p_query between clients and replicas.
+    The interface for p2p_send between clients and replicas.
 
     - IReplica
     The interface for operations provided by the replica subgroup.
@@ -202,19 +202,25 @@ public:
     // This is for REGISTER_RPC_FUNCTIONS
     // @override IReplica::orderedPut
     virtual bool orderedPut(const Object& object) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+#endif
         dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedPut(object);
     }
     // @override IReplica::orderedRemove:
     virtual bool orderedRemove(const OID& oid) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+#endif
         dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedRemove(oid);
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
+#endif
         dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return ObjectStoreCore::orderedGet(oid);
     }
@@ -429,19 +435,25 @@ public:
 
     // @override IReplica::orderedPut
     virtual bool orderedPut(const Object& object) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+#endif
         dbg_default_info("orderedPut object:{},version:{0:x}", object.oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedPut(object);
     }
     // @override IReplica::orderedRemove
     virtual bool orderedRemove(const OID& oid) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+#endif
         dbg_default_info("orderedRemove object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedRemove(oid);
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
+#ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+#endif
         dbg_default_info("orderedGet object:{},version:{0:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedGet(oid);
     }
@@ -646,7 +658,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(put)>(target, object));
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(put)>(target, object));
         }
     }
 
@@ -708,7 +720,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.get_nonmember_subgroup<T>();
-            return std::move(os_p2p_handle.template p2p_query<RPC_NAME(remove)>(target, oid));
+            return std::move(os_p2p_handle.template p2p_send<RPC_NAME(remove)>(target, oid));
         }
     }
 
@@ -766,7 +778,7 @@ public:
             // send request to a static mapped replica. Use random mapping for load-balance?
             node_id_t target = replicas[myid % replicas.size()];
             derecho::ExternalCaller<T>& os_p2p_handle = group.template get_nonmember_subgroup<T>();
-            return std::move( os_p2p_handle.template p2p_query<RPC_NAME(get)>(target, oid) );
+            return std::move( os_p2p_handle.template p2p_send<RPC_NAME(get)>(target, oid) );
         }
     }
 

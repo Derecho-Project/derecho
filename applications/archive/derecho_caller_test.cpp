@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
     if(my_rank != 2) {
         cout << "Changing other's state to " << 36 - my_rank << endl;
         Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
-        output_result<bool>(rpc_handle.p2p_query<RPC_NAME(change_state)>(1 - my_rank, 36 - my_rank).get());
+        output_result<bool>(rpc_handle.p2p_send<RPC_NAME(change_state)>(1 - my_rank, 36 - my_rank).get());
     }
 
     while(managed_group.get_members().size() < 3) {

@@ -756,7 +756,8 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
     for(uint i = 0; i < num_shard_members; ++i) {
         // to avoid a race condition, do not read the same SST entry twice
-        min_stable_num = std::min(min_stable_num, (message_id_t)sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num]);
+        message_id_t stable_num_copy = sst.seq_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
+        min_stable_num = std::min(min_stable_num, stable_num_copy);
     }
 
     bool update_sst = false;
@@ -867,9 +868,8 @@ void MulticastGroup::register_predicates() {
                 persistent::version_t min_persisted_num
                         = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[0])][subgroup_num];
                 for(uint i = 1; i < num_shard_members; ++i) {
-                    if(sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num] < min_persisted_num) {
-                        min_persisted_num = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
-                    }
+                    persistent::version_t persisted_num_copy = sst.persisted_num[node_id_to_sst_index.at(curr_subgroup_settings.members[i])][subgroup_num];
+                    min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
                 }
                 // callbacks
                 if((version_seen < min_persisted_num) && callbacks.global_persistence_callback) {
@@ -1017,24 +1017,19 @@ void MulticastGroup::send_loop() {
         return false;
     };
     auto should_wake = [&]() { return thread_shutdown || should_send(); };
-    try {
-        std::unique_lock<std::mutex> lock(msg_state_mtx);
-        while(!thread_shutdown) {
-            sender_cv.wait(lock, should_wake);
-            if(!thread_shutdown) {
-                current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
-                whenlog(logger->trace("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id););
-                if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
-                               current_sends[subgroup_to_send]->message_buffer.mr, 0,
-                               current_sends[subgroup_to_send]->size)) {
-                    throw std::runtime_error("rdmc::send returned false");
-                }
-                pending_sends[subgroup_to_send].pop();
+    std::unique_lock<std::mutex> lock(msg_state_mtx);
+    while(!thread_shutdown) {
+        sender_cv.wait(lock, should_wake);
+        if(!thread_shutdown) {
+            current_sends[subgroup_to_send] = std::move(pending_sends[subgroup_to_send].front());
+            whenlog(logger->trace("Calling send in subgroup {} on message {} from sender {}", subgroup_to_send, current_sends[subgroup_to_send]->index, current_sends[subgroup_to_send]->sender_id););
+            if(!rdmc::send(subgroup_to_rdmc_group[subgroup_to_send],
+                           current_sends[subgroup_to_send]->message_buffer.mr, 0,
+                           current_sends[subgroup_to_send]->size)) {
+                throw std::runtime_error("rdmc::send returned false");
             }
+            pending_sends[subgroup_to_send].pop();
         }
-        std::cout << "DerechoGroup send thread shutting down" << std::endl;
-    } catch(const std::exception& e) {
-        std::cout << "DerechoGroup send thread had an exception: " << e.what() << std::endl;
     }
 }
 
@@ -1045,10 +1040,11 @@ uint64_t MulticastGroup::get_time() {
 }
 
 const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
-    auto global_stability_frontier = sst->local_stability_frontier[member_index][subgroup_num];
+    uint64_t global_stability_frontier = sst->local_stability_frontier[member_index][subgroup_num];
     auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
     for(auto index : shard_sst_indices) {
-        global_stability_frontier = std::min(global_stability_frontier, static_cast<uint64_t>(sst->local_stability_frontier[index][subgroup_num]));
+        uint64_t local_stability_frontier_copy = sst->local_stability_frontier[index][subgroup_num];
+        global_stability_frontier = std::min(global_stability_frontier, local_stability_frontier_copy);
     }
     return global_stability_frontier;
 }
@@ -1067,9 +1063,8 @@ void MulticastGroup::check_failures_loop() {
                 // clean up timestamps of persisted messages
                 auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
                 for(auto i : sst_indices) {
-                    if(min_persisted_num < sst->persisted_num[i][subgroup_num]) {
-                        min_persisted_num = sst->persisted_num[i][subgroup_num];
-                    }
+                    persistent::version_t persisted_num_copy = sst->persisted_num[i][subgroup_num];
+                    min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
                 }
                 while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
                     auto timestamp = pending_persistence[subgroup_num].begin()->second;
@@ -1088,7 +1083,6 @@ void MulticastGroup::check_failures_loop() {
         }
     }
 
-    std::cout << "timeout_thread shutting down" << std::endl;
 }
 
 // we already hold the lock on msg_state_mtx when we call this

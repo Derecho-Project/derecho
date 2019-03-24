@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
         long long int num_times = 10000;
         for(long long int i = 0; i < num_times; ++i) {
             try {
-                output_result<int>(rpc_handle.p2p_query<RPC_NAME(read_state)>(1).get());
+                output_result<int>(rpc_handle.p2p_send<RPC_NAME(read_state)>(1).get());
             } catch(...) {
             }
         }

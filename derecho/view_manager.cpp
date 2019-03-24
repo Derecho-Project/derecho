@@ -58,6 +58,7 @@ ViewManager::ViewManager(
                 std::move(curr_view), *restart_state,
                 subgroup_info, derecho_params, my_id);
         await_rejoining_nodes(my_id);
+        setup_initial_tcp_connections(restart_leader_state_machine->get_restart_view(), my_id);
     } else {
         in_total_restart = false;
         curr_view = std::make_unique<View>(
@@ -72,8 +73,8 @@ ViewManager::ViewManager(
                 std::vector<node_id_t>{}, std::vector<node_id_t>{},
                 0, 0, subgroup_type_order);
         await_first_view(my_id);
+        setup_initial_tcp_connections(*curr_view, my_id);
     }
-    setup_initial_tcp_connections(my_id);
 }
 
 /* Non-leader Constructor */
@@ -100,7 +101,7 @@ ViewManager::ViewManager(
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     receive_initial_view(my_id, leader_connection);
     //As soon as we have a tentative initial view, set up the TCP connections
-    setup_initial_tcp_connections(my_id);
+    setup_initial_tcp_connections(*curr_view, my_id);
 }
 
 ViewManager::~ViewManager() {
@@ -259,7 +260,7 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         receive_view_and_leaders(my_id, leader_connection);
         //Update the TCP connections pool for any new/failed nodes,
         //so we can run state transfer again.
-        reinit_tcp_connections(my_id);
+        reinit_tcp_connections(*curr_view, my_id);
     }
     //Unless the final message was Commit, we need to retry state transfer
     return (commit_message == CommitMessage::COMMIT);
@@ -349,32 +350,29 @@ void ViewManager::send_logs() {
     }
 }
 
-void ViewManager::setup_initial_tcp_connections(node_id_t my_id) {
-    //As usual the restart leader is a special case, since it doesn't have curr_view
-    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+void ViewManager::setup_initial_tcp_connections(const View& initial_view, node_id_t my_id) {
     //Establish TCP connections to each other member of the view in ascending order
-    for(int i = 0; i < proposed_view.num_members; ++i) {
-        if(proposed_view.members[i] != my_id) {
-            tcp_sockets->add_node(proposed_view.members[i],
-                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
+    for(int i = 0; i < initial_view.num_members; ++i) {
+        if(initial_view.members[i] != my_id) {
+            tcp_sockets->add_node(initial_view.members[i],
+                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", initial_view.members[i]);)
         }
     }
 }
 
-void ViewManager::reinit_tcp_connections(node_id_t my_id) {
-    const View& proposed_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+void ViewManager::reinit_tcp_connections(const View& initial_view, node_id_t my_id) {
     //Delete sockets for failed members no longer in the view
-    tcp_sockets->filter_to(proposed_view.members);
+    tcp_sockets->filter_to(initial_view.members);
     //Recheck the members list and establish connections to any new members
-    for(int i = 0; i < proposed_view.num_members; ++i) {
-        if(proposed_view.members[i] != my_id
-           && !tcp_sockets->contains_node(proposed_view.members[i])) {
-            tcp_sockets->add_node(proposed_view.members[i],
-                                  {std::get<0>(proposed_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(proposed_view.member_ips_and_ports[i])});
-            whendebug(logger->debug("Established a TCP connection to node {}", proposed_view.members[i]);)
+    for(int i = 0; i < initial_view.num_members; ++i) {
+        if(initial_view.members[i] != my_id
+           && !tcp_sockets->contains_node(initial_view.members[i])) {
+            tcp_sockets->add_node(initial_view.members[i],
+                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
+                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+            whendebug(logger->debug("Established a TCP connection to node {}", initial_view.members[i]);)
         }
     }
 }
@@ -626,7 +624,6 @@ void ViewManager::create_threads() {
             whenlog(logger->debug("Background thread got a client connection from {}", client_socket.get_remote_ip()););
             pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
-        std::cout << "Connection listener thread shutting down." << std::endl;
     }};
 
     old_view_cleanup_thread = std::thread([this]() {
@@ -641,7 +638,6 @@ void ViewManager::create_threads() {
                 old_views.pop();
             }
         }
-        std::cout << "Old View cleanup thread shutting down." << std::endl;
     });
 }
 
@@ -782,6 +778,11 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
 void ViewManager::leader_start_join(DerechoSST& gmsSST) {
     whenlog(logger->debug("GMS handling a new client connection"););
+    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank])
+            == static_cast<int>(curr_view->members.size())) {
+        whenlog(logger->debug("Delaying handling the new client, there are already {} pending changes", curr_view->members.size()));
+        return;
+    }
     {
         //Hold the lock on pending_join_sockets while moving a socket into proposed_join_sockets
         auto pending_join_sockets_locked = pending_join_sockets.locked();
@@ -1131,7 +1132,7 @@ void ViewManager::finish_view_change(
     // Set up TCP connections to the joined nodes
     update_tcp_connections(*next_view);
     // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(old_shard_leaders_by_id);
+    send_objects_to_new_members(*next_view, old_shard_leaders_by_id);
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
@@ -1288,12 +1289,6 @@ void ViewManager::transition_multicast_group(
 
 bool ViewManager::receive_join(tcp::socket& client_socket) {
     DerechoSST& gmsSST = *curr_view->gmsSST;
-    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
-        // TODO: this shouldn't throw an exception, it should just block the client
-        // until the group stabilizes
-        throw derecho_exception("Too many changes to allow a Join right now");
-    }
-
     struct in_addr joiner_ip_packed;
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
@@ -1362,14 +1357,14 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     mutils::post_object(bind_socket_write, derecho_params);
 }
 
-void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
-    node_id_t my_id = curr_view->members[curr_view->my_rank];
+void ViewManager::send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders) {
+    node_id_t my_id = new_view.members[new_view.my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
             //if I was the leader of the shard in the old view...
             if(my_id == old_shard_leaders[subgroup_id][shard]) {
                 //send its object state to the new members
-                for(node_id_t shard_joiner : curr_view->subgroup_shard_views[subgroup_id][shard].joined) {
+                for(node_id_t shard_joiner : new_view.subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }
@@ -1657,8 +1652,6 @@ bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vecto
     for(unsigned int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
-                // std::cout<<__func__<<" returns true:
-                // old[who]="<<old[who]<<",who="<<who<<std::endl;
                 return true;
             }
         }
@@ -1687,14 +1680,16 @@ bool ViewManager::changes_contains(const DerechoSST& gmsSST, const node_id_t q) 
 
 int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
     int myRank = gmsSST.get_local_index();
-    int min = gmsSST.num_acked[myRank];
+    int min_num_acked = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
-        if(!failed[n] && gmsSST.num_acked[n] < min) {
-            min = gmsSST.num_acked[n];
+        if(!failed[n]) {
+	  // copy to avoid race condition and non-volatile based optimizations
+	  int num_acked_copy = gmsSST.num_acked[n];
+	  min_num_acked = std::min(min_num_acked, num_acked_copy);
         }
     }
 
-    return min;
+    return min_num_acked;
 }
 
 void ViewManager::deliver_in_order(const int shard_leader_rank,
@@ -1747,16 +1742,16 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
 
     if(!found) {
         for(uint n = 0; n < num_shard_senders; n++) {
-            int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
+            int min_num_received = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
-                const auto node_id = shard_members[r];
-                const auto node_rank = Vc.rank_of(node_id);
-                if(!Vc.failed[node_rank] && min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
-                    min = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+                auto node_rank = Vc.rank_of(shard_members[r]);
+                if(!Vc.failed[node_rank]) {
+		  int num_received_copy = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+		  min_num_received = std::min(min_num_received, num_received_copy);
                 }
             }
 
-            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min);
+            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min_num_received);
         }
     }
 

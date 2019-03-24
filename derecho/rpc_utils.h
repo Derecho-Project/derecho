@@ -422,7 +422,7 @@ public:
 
 /**
  * Specialization of PendingResults for void functions, which do not generate
- * replies. Its only functionality is to fulfill the "reply map" in the its
+ * replies. Its only functionality is to fulfill the "reply map" in its
  * corresponding QueryResults<void>, which is just a set of nodes to which the
  * RPC message was delivered.
  */

@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         int server = node_rank % S;
         string bytes(B, 'a');
         for(unsigned long long int i = 0;; i++) {
-            rpc::QueryResults<string> result = server_p2p_handle.p2p_query<RPC_NAME(exchange)>(server, bytes);
+            rpc::QueryResults<string> result = server_p2p_handle.p2p_send<RPC_NAME(exchange)>(server, bytes);
             string response = result.get().get(server);
             cout << "Received response number " << i << endl;
             server = (server + 1) % S;
