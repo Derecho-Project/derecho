@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     // node 13 queries for the state of each shard
     if(node_rank == num_nodes - 1) {
         auto shard_iterator = group.get_shard_iterator<Foo>();
-        auto query_results_vec = shard_iterator.p2p_query<Foo::READ_STATE>();
+        auto query_results_vec = shard_iterator.p2p_send<Foo::READ_STATE>();
         uint cnt = 0;
         for(auto& query_result : query_results_vec) {
             auto& reply_map = query_result.get();

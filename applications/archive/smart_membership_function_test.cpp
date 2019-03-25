@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         derecho::ExternalCaller<Cache>& cache_handle = group.get_nonmember_subgroup<Cache>();
         node_id_t who = 3;
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        derecho::rpc::QueryResults<std::string> cache_results = cache_handle.p2p_query<RPC_NAME(get)>(who, "6");
+        derecho::rpc::QueryResults<std::string> cache_results = cache_handle.p2p_send<RPC_NAME(get)>(who, "6");
         std::string response = cache_results.get().get(who);
         cout << " Response from node " << who << ":" << response << endl;
     }

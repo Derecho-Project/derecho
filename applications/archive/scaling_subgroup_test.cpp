@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
         }
         cout << endl;
         int p2p_target = 3;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.p2p_query<RPC_NAME(print)>(p2p_target);
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.p2p_send<RPC_NAME(print)>(p2p_target);
         std::string response = bar_results.get().get(p2p_target);
         cout << "Node " << p2p_target << "'s state for Bar: " << response << endl;
     }
@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         }
         cout << endl;
         int p2p_target = 4;
-        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.p2p_query<RPC_NAME(print)>(p2p_target);
+        derecho::rpc::QueryResults<std::string> bar_results = bar_rpc_handle.p2p_send<RPC_NAME(print)>(p2p_target);
         std::string response = bar_results.get().get(p2p_target);
         cout << "Node " << p2p_target << "'s state for Bar: " << response << endl;
     }
@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
             cout << "Node " << reply_pair.first << " says the log is: " << reply_pair.second.get() << endl;
         }
         int p2p_target = 1;
-        derecho::rpc::QueryResults<int> foo_results = foo_p2p_handle.p2p_query<RPC_NAME(read_state)>(p2p_target);
+        derecho::rpc::QueryResults<int> foo_results = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(p2p_target);
         int response = foo_results.get().get(p2p_target);
         cout << "Node " << p2p_target << " says Foo's state is " << response << endl;
     }

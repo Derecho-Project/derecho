@@ -34,14 +34,16 @@ class ReplicatedT {
 
 PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
 
+
+#define MAX_VB_SIZE (1ull<<30)
 // A variable that can change the length of its value
 class VariableBytes : public ByteRepresentable {
 public:
     std::size_t data_len;
-    char buf[MAX_DATA_SIZE];
+    char buf[MAX_VB_SIZE];
 
     VariableBytes() {
-        data_len = MAX_DATA_SIZE;
+        data_len = MAX_VB_SIZE;
     }
 
     virtual std::size_t to_bytes(char* v) const {

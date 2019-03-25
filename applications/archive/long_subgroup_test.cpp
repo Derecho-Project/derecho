@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
         }
         ExternalCaller<Cache>& cache_p2p_handle = group.get_nonmember_subgroup<Cache>();
         int p2p_target = 4;
-        derecho::rpc::QueryResults<std::string> result = cache_p2p_handle.p2p_query<RPC_NAME(get)>(p2p_target, "Stuff");
+        derecho::rpc::QueryResults<std::string> result = cache_p2p_handle.p2p_send<RPC_NAME(get)>(p2p_target, "Stuff");
         std::string response = result.get().get(p2p_target);
         cout << "Node " << p2p_target << " had cache entry Stuff = " << response << endl;
     } else {
@@ -100,11 +100,11 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         ExternalCaller<Foo>& foo_p2p_handle = group.get_nonmember_subgroup<Foo>();
         node_id_t foo_p2p_target = foo_members[1];
-        derecho::rpc::QueryResults<int> foo_result = foo_p2p_handle.p2p_query<RPC_NAME(read_state)>(foo_p2p_target);
+        derecho::rpc::QueryResults<int> foo_result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(foo_p2p_target);
         cout << "Node " << foo_p2p_target << " returned Foo state = " << foo_result.get().get(foo_p2p_target) << endl;
         ExternalCaller<Bar>& bar_p2p_handle = group.get_nonmember_subgroup<Bar>();
         node_id_t bar_p2p_target = foo_members[0];
-        derecho::rpc::QueryResults<std::string> bar_result = bar_p2p_handle.p2p_query<RPC_NAME(print)>(bar_p2p_target);
+        derecho::rpc::QueryResults<std::string> bar_result = bar_p2p_handle.p2p_send<RPC_NAME(print)>(bar_p2p_target);
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

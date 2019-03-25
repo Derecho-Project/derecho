@@ -119,8 +119,8 @@ std::map<Tests, Replicated<State>&> get_subgroups(Group<State>& group, std::map<
             auto& handle = group.get_subgroup<State>(subgroup_index);
             subgroups.insert({t, handle});
         } catch(const invalid_subgroup_exception e) {
-            continue;
         } catch(...) {
+            std::cout << "Got an unknown exception: " << std::endl;
             exit(1);
         }
         subgroup_index++;
@@ -132,7 +132,6 @@ std::map<Tests, Replicated<State>&> get_subgroups(Group<State>& group, std::map<
  * Tests membership by reading initial state, changing it, and reading again.
  */
 int test_state(Replicated<State>& stateHandle, int prev_state) {
-    std::cout << "In test state" << std::endl;
     // Read initial state
     auto initial_results = stateHandle.ordered_send<RPC_NAME(read_value)>();
     auto& initial_replies = initial_results.get();
@@ -209,8 +208,6 @@ int main(int argc, char* argv[]) {
         if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[t++], curr_view);
         if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[t++], curr_view);
 
-        std::cout << ">>> Created layouts" << std::endl;
-
         return layout_vec;
     };
 
@@ -231,8 +228,6 @@ int main(int argc, char* argv[]) {
 
     Group<State> group({}, subgroup_info, nullptr, {announce_view_changed}, state_subgroup_factory);
 
-    std::cout << ">>> Created group" << std::endl;
-
     auto group_members = group.get_members();
     uint32_t my_rank = -1;
     for(uint i = 0; i < group_members.size(); ++i) {
@@ -241,14 +236,10 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    std::cout << ">>> Got ranks" << std::endl;
-
     std::map<Tests, int> prev_states;
     for(auto t : AllTests) {
         prev_states[t] = INIT_STATE;
     }
-
-    std::cout << ">>> Initialized prev_states" << std::endl;
 
     auto run_test = [&](Tests t, std::map<Tests, Replicated<State>&> subgroups) {
         if(tests[t]) {
@@ -263,7 +254,6 @@ int main(int argc, char* argv[]) {
         main_cv.wait(main_lock, [&new_view_installed]() { return new_view_installed; });
         new_view_installed = false;
 
-        std::cout << "i is " << i << std::endl;
         auto subgroups = get_subgroups(group, tests);
         int num_members = group.get_members().size();
 

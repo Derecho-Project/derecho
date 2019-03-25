@@ -32,9 +32,9 @@ target_link_libraries(p2p_latency_test derecho mutils mutils-serialization)
 add_executable(subgroup_test subgroup_test.cpp)
 target_link_libraries(subgroup_test derecho)
 
-# p2p_query_test
-add_executable(p2p_query_test p2p_query_test.cpp)
-target_link_libraries(p2p_query_test derecho)
+# p2p_send_test
+add_executable(p2p_send_test p2p_send_test.cpp)
+target_link_libraries(p2p_send_test derecho)
 
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp)
@@ -60,13 +60,13 @@ target_link_libraries(objstore derecho)
 add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp)
 target_link_libraries(volatile_typed_subgroup_bw_test derecho)
 
-# volatile_temporal_query_test
-add_executable(volatile_temporal_query_test volatile_temporal_query_test.cpp)
-target_link_libraries(volatile_temporal_query_test derecho)
+# volatile_temporal_send_test
+add_executable(volatile_temporal_send_test volatile_temporal_send_test.cpp)
+target_link_libraries(volatile_temporal_send_test derecho)
 
-# persistent_temporal_query_test
-add_executable(persistent_temporal_query_test persistent_temporal_query_test.cpp)
-target_link_libraries(persistent_temporal_query_test derecho)
+# persistent_temporal_send_test
+add_executable(persistent_temporal_send_test persistent_temporal_send_test.cpp)
+target_link_libraries(persistent_temporal_send_test derecho)
 
 # volatile_temporal_stability_test
 add_executable(volatile_temporal_stability_test volatile_temporal_stability_test.cpp)

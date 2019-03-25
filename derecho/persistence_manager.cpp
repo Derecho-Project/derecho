@@ -52,7 +52,6 @@ void PersistenceManager::start() {
     // if(replicated_objects == nullptr) return;
 
     this->persist_thread = std::thread{[this]() {
-        std::cout << "The persist thread started" << std::endl;
         do {
             // wait for semaphore
             sem_wait(&persistence_request_sem);
@@ -107,7 +106,6 @@ void PersistenceManager::start() {
                 prq_lock.clear(std::memory_order_release);  // release lock
             }
         } while(true);
-        std::cout << "The persist thread is exiting" << std::endl;
     }};
 }
 

@@ -105,7 +105,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
     send_return send(const std::function<char*(int)>& out_alloc,
                      const std::decay_t<Args>&... remote_args) {
         // auto invocation_id = mutils::long_rand();
-        std::size_t invocation_id = invocation_id_sequencer ++;
+        std::size_t invocation_id = invocation_id_sequencer++;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
             auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(remote_args)...};

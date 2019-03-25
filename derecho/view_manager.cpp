@@ -621,7 +621,6 @@ void ViewManager::create_threads() {
             whenlog(logger->debug("Background thread got a client connection from {}", client_socket.get_remote_ip()););
             pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
         }
-        std::cout << "Connection listener thread shutting down." << std::endl;
     }};
 
     old_view_cleanup_thread = std::thread([this]() {
@@ -636,7 +635,6 @@ void ViewManager::create_threads() {
                 old_views.pop();
             }
         }
-        std::cout << "Old View cleanup thread shutting down." << std::endl;
     });
 }
 
@@ -777,6 +775,11 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 
 void ViewManager::leader_start_join(DerechoSST& gmsSST) {
     whenlog(logger->debug("GMS handling a new client connection"););
+    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank])
+            == static_cast<int>(curr_view->members.size())) {
+        whenlog(logger->debug("Delaying handling the new client, there are already {} pending changes", curr_view->members.size()));
+        return;
+    }
     {
         //Hold the lock on pending_join_sockets while moving a socket into proposed_join_sockets
         auto pending_join_sockets_locked = pending_join_sockets.locked();
@@ -1280,12 +1283,6 @@ void ViewManager::transition_multicast_group(
 
 bool ViewManager::receive_join(tcp::socket& client_socket) {
     DerechoSST& gmsSST = *curr_view->gmsSST;
-    if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank]) == (int)gmsSST.changes.size()) {
-        // TODO: this shouldn't throw an exception, it should just block the client
-        // until the group stabilizes
-        throw derecho_exception("Too many changes to allow a Join right now");
-    }
-
     struct in_addr joiner_ip_packed;
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
@@ -1632,8 +1629,6 @@ bool ViewManager::suspected_not_equal(const DerechoSST& gmsSST, const std::vecto
     for(unsigned int r = 0; r < gmsSST.get_num_rows(); r++) {
         for(size_t who = 0; who < gmsSST.suspected.size(); who++) {
             if(gmsSST.suspected[r][who] && !old[who]) {
-                // std::cout<<__func__<<" returns true:
-                // old[who]="<<old[who]<<",who="<<who<<std::endl;
                 return true;
             }
         }
@@ -1662,14 +1657,16 @@ bool ViewManager::changes_contains(const DerechoSST& gmsSST, const node_id_t q) 
 
 int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
     int myRank = gmsSST.get_local_index();
-    int min = gmsSST.num_acked[myRank];
+    int min_num_acked = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
-        if(!failed[n] && gmsSST.num_acked[n] < min) {
-            min = gmsSST.num_acked[n];
+        if(!failed[n]) {
+	  // copy to avoid race condition and non-volatile based optimizations
+	  int num_acked_copy = gmsSST.num_acked[n];
+	  min_num_acked = std::min(min_num_acked, num_acked_copy);
         }
     }
 
-    return min;
+    return min_num_acked;
 }
 
 void ViewManager::deliver_in_order(const int shard_leader_rank,
@@ -1722,16 +1719,16 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
 
     if(!found) {
         for(uint n = 0; n < num_shard_senders; n++) {
-            int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
+            int min_num_received = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
-                const auto node_id = shard_members[r];
-                const auto node_rank = Vc.rank_of(node_id);
-                if(!Vc.failed[node_rank] && min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
-                    min = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+                auto node_rank = Vc.rank_of(shard_members[r]);
+                if(!Vc.failed[node_rank]) {
+		  int num_received_copy = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+		  min_num_received = std::min(min_num_received, num_received_copy);
                 }
             }
 
-            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min);
+            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min_num_received);
         }
     }
 
