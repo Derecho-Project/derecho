@@ -44,6 +44,8 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_PERS_FILE_PATH),
         MAKE_LONG_OPT_ENTRY(CONF_PERS_RAMDISK_PATH),
         MAKE_LONG_OPT_ENTRY(CONF_PERS_RESET),
+        MAKE_LONG_OPT_ENTRY(CONF_PERS_MAX_LOG_ENTRY),
+        MAKE_LONG_OPT_ENTRY(CONF_PERS_MAX_DATA_SIZE),
         {0, 0, 0, 0}};
 
 void Conf::initialize(int argc, char* argv[], const char* conf_file) {
