@@ -85,8 +85,6 @@ int main(int argc, char** argv) {
         nsec = (t_end.tv_sec - t_start.tv_sec) * 1000000000 + (t_end.tv_nsec - t_start.tv_nsec);
         msec = (double)nsec / 1000000;
     }
-    std::cout << "num_msg" << num_msg << std::endl;
-    std::cout << "multi" << multiplier << std::endl;
     double thp_mBps = ((double)max_msg_size * num_msg * multiplier * 1000) / nsec;
     double thp_ops = ((double)num_msg * multiplier * 1000000000) / nsec;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
