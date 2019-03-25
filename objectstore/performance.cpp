@@ -2,7 +2,6 @@
 #include "conf/conf.hpp"
 #include <iostream>
 #include <time.h>
-
 #define NUM_APP_ARGS (1)
 
 int main(int argc, char** argv) {
@@ -34,12 +33,14 @@ int main(int argc, char** argv) {
     int num_msg = 10000;      // num_msg sent for the trial run
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     int msg_size = max_msg_size - 128;
-
-    char odata[msg_size];
-    for(int i = 0; i < msg_size; i++) {
-        odata[i] = 'A';
+    if(msg_size > 2000000) {
+        num_msg = 5000;
     }
-
+    char odata[msg_size];
+    srand(time(0));
+    for(int i = 0; i < msg_size; i++) {
+        odata[i] = '1' + (rand() % 74);
+    }
     // create a pool of objects
     std::vector<objectstore::Object> objpool;
     for(int i = 0; i < num_msg; i++) {
@@ -63,24 +64,29 @@ int main(int argc, char** argv) {
     long long int nsec = (t_end.tv_sec - t_start.tv_sec) * 1000000000 + (t_end.tv_nsec - t_start.tv_nsec);
     double msec = (double)nsec / 1000000;
 
-    int multiplier = ceil(runtime / msec);
+    int multiplier = 1;
+    if(msec < runtime) {
+        multiplier = ceil(runtime / msec);
 
-    // real benchmarking starts
-    clock_gettime(CLOCK_REALTIME, &t_start);
-    if(use_aio) {
-        for(int i = 0; i < num_msg * multiplier; i++) {
-            oss.aio_put(objpool[i % num_msg]);
+        // real benchmarking starts
+        clock_gettime(CLOCK_REALTIME, &t_start);
+        if(use_aio) {
+            for(int i = 0; i < num_msg * multiplier; i++) {
+                oss.aio_put(objpool[i % num_msg]);
+            }
+        } else {
+            for(int i = 0; i < num_msg * multiplier; i++) {
+                oss.bio_put(objpool[i % num_msg]);
+            }
         }
-    } else {
-        for(int i = 0; i < num_msg * multiplier; i++) {
-            oss.bio_put(objpool[i % num_msg]);
-        }
+        oss.bio_get(num_msg - 1);
+        clock_gettime(CLOCK_REALTIME, &t_end);
+
+        nsec = (t_end.tv_sec - t_start.tv_sec) * 1000000000 + (t_end.tv_nsec - t_start.tv_nsec);
+        msec = (double)nsec / 1000000;
     }
-    oss.bio_get(num_msg - 1);
-    clock_gettime(CLOCK_REALTIME, &t_end);
-
-    nsec = (t_end.tv_sec - t_start.tv_sec) * 1000000000 + (t_end.tv_nsec - t_start.tv_nsec);
-    msec = (double)nsec / 1000000;
+    std::cout << "num_msg" << num_msg << std::endl;
+    std::cout << "multi" << multiplier << std::endl;
     double thp_mBps = ((double)max_msg_size * num_msg * multiplier * 1000) / nsec;
     double thp_ops = ((double)num_msg * multiplier * 1000000000) / nsec;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
