@@ -31,7 +31,7 @@ private:
 #define CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE "DERECHO/max_smc_payload_size"
 #define CONF_DERECHO_BLOCK_SIZE "DERECHO/block_size"
 #define CONF_DERECHO_WINDOW_SIZE "DERECHO/window_size"
-#define CONF_DERECHO_TIMEOUT_MS "DERECHO/timeout_ms"
+#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/timeout_heartbeat_ms"
 #define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
@@ -59,7 +59,7 @@ private:
             {CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE, "10240"},
             {CONF_DERECHO_BLOCK_SIZE, "1048576"},
             {CONF_DERECHO_WINDOW_SIZE, "16"},
-            {CONF_DERECHO_TIMEOUT_MS, "1"},
+            {CONF_DERECHO_HEARTBEAT_MS, "1"},
             {CONF_DERECHO_RDMC_SEND_ALGORITHM, "binomial_send"},
             // [RDMA]
             {CONF_RDMA_PROVIDER, "sockets"},

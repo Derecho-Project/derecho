@@ -56,7 +56,7 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
-          sender_timeout(derecho_params.timeout_ms),
+          sender_timeout(derecho_params.heartbeat_ms),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),

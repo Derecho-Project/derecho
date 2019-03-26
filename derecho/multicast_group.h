@@ -53,7 +53,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     long long unsigned int max_smc_payload_size;
     long long unsigned int block_size;
     unsigned int window_size;
-    unsigned int timeout_ms;
+    unsigned int heartbeat_ms;
     rdmc::send_algorithm rdmc_send_algorithm;
     uint32_t rpc_port;
 
@@ -62,7 +62,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         max_smc_payload_size = std::min((uint64_t)max_payload_size, derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE));
         block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
         window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
-        timeout_ms = derecho::getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
+        heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
         std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
         if(rdmc_send_algorithm_string == "binomial_send") {
             rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
@@ -82,19 +82,20 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   long long unsigned int max_smc_payload_size,
                   long long unsigned int block_size,
                   unsigned int window_size,
-                  unsigned int timeout_ms,
+                  unsigned int heartbeat_ms,
                   rdmc::send_algorithm rdmc_send_algorithm,
                   uint32_t rpc_port)
             : max_payload_size(max_payload_size),
               max_smc_payload_size(max_smc_payload_size),
               block_size(block_size),
               window_size(window_size),
-              timeout_ms(timeout_ms),
+              heartbeat_ms(heartbeat_ms),
               rdmc_send_algorithm(rdmc_send_algorithm),
               rpc_port(rpc_port) {
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size, timeout_ms, rdmc_send_algorithm, rpc_port);
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size,
+    heartbeat_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**
