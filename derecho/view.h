@@ -177,7 +177,8 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_ports,
                                   failed, num_failed, joined, departed,
-                                  num_members, subgroup_ids_by_type_id, subgroup_shard_views, my_subgroups);
+                                  num_members, next_unassigned_rank,
+                                  subgroup_ids_by_type_id, subgroup_shard_views, my_subgroups);
 
     /**
      * Constructor used by deserialization: constructs a View given the values of its serialized fields.
@@ -189,6 +190,7 @@ public:
          const std::vector<char>& failed, const int32_t num_failed,
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members,
+         const int32_t next_unassigned_rank,
          const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
          const std::vector<std::vector<SubView>>& subgroup_shard_views,
          const std::map<subgroup_id_t, uint32_t>& my_subgroups);

@@ -92,6 +92,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t num_members,
+           const int32_t next_unassigned_rank,
            const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
            const std::vector<std::vector<SubView>>& subgroup_shard_views,
            const std::map<subgroup_id_t, uint32_t>& my_subgroups)
@@ -104,8 +105,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           departed(departed),
           num_members(num_members),
           my_rank(0),              // This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(0), /* next_unassigned_rank should never be serialized, since each
-                                    * node must re-run the allocation functions independently */
+          next_unassigned_rank(next_unassigned_rank),
           subgroup_ids_by_type_id(subgroup_ids_by_type_id),
           subgroup_shard_views(subgroup_shard_views),
           my_subgroups(my_subgroups) {
