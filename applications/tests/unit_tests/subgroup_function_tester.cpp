@@ -36,6 +36,17 @@ int main(int argc, char* argv[]) {
             derecho::custom_shards_policy({4, 3, 4}, {4, 3, 4}, three_ordered),
             derecho::fixed_even_shards(2, 2)}};
 
+    SubgroupAllocationPolicy flexible_shards_policy = derecho::one_subgroup_policy(
+            derecho::flexible_even_shards(5, 2, 3));
+    SubgroupAllocationPolicy uneven_flexible_shards = derecho::one_subgroup_policy(
+            derecho::custom_shards_policy({2, 5, 3}, {3, 6, 5}, three_ordered));
+    SubgroupAllocationPolicy multiple_copies_flexible = derecho::identical_subgroups_policy(
+            2, derecho::flexible_even_shards(3, 4, 5));
+    SubgroupAllocationPolicy multiple_fault_tolerant_subgroups{3, false,
+            {derecho::flexible_even_shards(3, 2, 4),
+             derecho::custom_shards_policy({4, 3, 4}, {5, 4, 5}, three_ordered),
+             derecho::flexible_even_shards(2, 2, 4)}};
+
     //This will create subgroups that are the cross product of the "uneven_sharded_policy" and "sharded_policy" groups
     CrossProductPolicy uneven_to_even_cp{
             {std::type_index(typeid(TestType3)), 0},
@@ -95,10 +106,46 @@ int main(int argc, char* argv[]) {
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> new_member_ips_and_ports(40);
     std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
     std::cout << "TEST 5: Adding new members 100-140" << std::endl;
-    prev_view.swap(curr_view);
-    curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips_and_ports);
+    //Since an inadequate view will never be installed, keep the same prev_view from before the failures
+    curr_view = derecho::make_next_view(*prev_view, lots_of_members_to_fail, new_members, new_member_ips_and_ports);
 
     derecho::test_provision_subgroups(test_fixed_subgroups, prev_view, *curr_view);
+
+    //Now test the flexible allocation functions
+    derecho::SubgroupInfo test_flexible_subgroups(DefaultSubgroupAllocator({
+        {std::type_index(typeid(TestType1)), flexible_shards_policy},
+        {std::type_index(typeid(TestType2)), uneven_flexible_shards},
+        {std::type_index(typeid(TestType3)), multiple_copies_flexible},
+        {std::type_index(typeid(TestType4)), multiple_fault_tolerant_subgroups}
+    }));
+
+    std::vector<std::type_index> flexible_subgroup_type_order = {
+            std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
+            std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4))
+    };
+    curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
+                                                std::vector<node_id_t>{}, std::vector<node_id_t>{},
+                                                0, 0, flexible_subgroup_type_order);
+    std::cout << "Now testing flexible subgroup allocation" << std::endl;
+    std::cout << "TEST 6: Initial allocation" << std::endl;
+    derecho::test_provision_subgroups(test_flexible_subgroups, nullptr, *curr_view);
+
+    std::set<int> flexible_ranks_to_fail{3, 6, 31, 45, 57};
+    std::cout << "TEST 7: Failing some nodes that are in subgroups: " << flexible_ranks_to_fail << std::endl;
+    prev_view = std::move(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail, {}, {});
+    derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
+
+    std::set<int> flexible_ranks_to_fail_2{7, 8, 17, 18, 40, 41, 51, 61, 62};
+    std::cout << "TEST 8: Failing more nodes so that shards must shrink. Ranks are: " << flexible_ranks_to_fail_2 << std::endl;
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail_2, {}, {});
+    derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
+
+    std::cout<< "TEST 9: Adding new members 100-140 so shards can re-expand." << std::endl;
+    prev_view.swap(curr_view);
+    curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips_and_ports);
+    derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
 
     return 0;
 }
