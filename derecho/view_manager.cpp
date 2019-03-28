@@ -776,7 +776,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
 void ViewManager::leader_start_join(DerechoSST& gmsSST) {
     whenlog(logger->debug("GMS handling a new client connection"););
     if((gmsSST.num_changes[curr_view->my_rank] - gmsSST.num_committed[curr_view->my_rank])
-            == static_cast<int>(curr_view->members.size())) {
+       == static_cast<int>(curr_view->members.size())) {
         whenlog(logger->debug("Delaying handling the new client, there are already {} pending changes", curr_view->members.size()));
         return;
     }
@@ -851,8 +851,8 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
     // Notice a new request, acknowledge it
     gmssst::set(gmsSST.num_acked[myRank], gmsSST.num_changes[myRank]);
     /* breaking the above put statement into individual put calls, to be sure that
-   * if we were relying on any ordering guarantees, we won't run into issue when
-   * guarantees do not hold*/
+     * if we were relying on any ordering guarantees, we won't run into issue when
+     * guarantees do not hold*/
     gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
                gmsSST.joiner_ips.get_base() - gmsSST.changes.get_base());
     gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
@@ -882,10 +882,10 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
     curr_view->wedge();
 
     /* We now need to wait for all other nodes to wedge the current view,
-   * which is called "meta-wedged." To do that, this predicate trigger
-   * creates a new predicate that will fire when meta-wedged is true, and
-   * registers the next epoch termination method as its trigger.
-   */
+     * which is called "meta-wedged." To do that, this predicate trigger
+     * creates a new predicate that will fire when meta-wedged is true, and
+     * registers the next epoch termination method as its trigger.
+     */
     auto is_meta_wedged = [this](const DerechoSST& gmsSST) {
         for(unsigned int n = 0; n < gmsSST.get_num_rows(); ++n) {
             if(!curr_view->failed[n] && !gmsSST.wedged[n]) {
@@ -903,8 +903,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
 
 void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     whenlog(logger->debug("MetaWedged is true; continuing epoch termination"););
-    // If this is the first time terminate_epoch() was called, next_view will
-    // still be null
+    // If this is the first time terminate_epoch() was called, next_view will still be null
     bool first_call = false;
     if(!next_view) {
         first_call = true;
@@ -1341,7 +1340,9 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
 
 void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     whenlog(logger->debug("Sending client the new view"););
-    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) { client_socket.write(bytes, size); };
+    auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
+        client_socket.write(bytes, size);
+    };
     std::size_t size_of_view = mutils::bytes_size(new_view);
     client_socket.write(size_of_view);
     mutils::post_object(bind_socket_write, new_view);
@@ -1512,7 +1513,7 @@ uint32_t ViewManager::derive_subgroup_settings(View& view,
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST
-                                                          whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                  whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int myRank = curr_view->my_rank;
     std::set<int> leave_ranks;
     std::vector<int> join_indexes;
@@ -1548,7 +1549,8 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         // New members go at the end of the members list, but it may shrink in the new view
         int new_member_rank = curr_view->num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_id;
-        member_ips_and_ports[new_member_rank] = std::tuple{joiner_ip, gmsSST.joiner_gms_ports[myRank][join_index],
+        member_ips_and_ports[new_member_rank] = std::tuple{joiner_ip,
+                                                           gmsSST.joiner_gms_ports[myRank][join_index],
                                                            gmsSST.joiner_rpc_ports[myRank][join_index],
                                                            gmsSST.joiner_sst_ports[myRank][join_index],
                                                            gmsSST.joiner_rdmc_ports[myRank][join_index]};
