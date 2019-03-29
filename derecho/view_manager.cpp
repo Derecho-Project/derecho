@@ -1409,14 +1409,15 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
+    std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>> subgroup_allocations;
+    for(const auto& subgroup_type : curr_view.subgroup_type_order) {
+        subgroup_allocations.emplace(subgroup_type, nullptr);
+    }
     //A subgroup's type ID is just its index in the ordered list of subgroup types
     for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        subgroup_shard_layout_t curr_type_subviews;
         try {
-            auto temp = subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, 0);
-            // Hack to ensure RVO still works even though curr_type_subviews had to be declared outside this scope
-            curr_type_subviews = std::move(temp);
+            subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
         } catch(subgroup_provisioning_exception& ex) {
             // Mark the view as inadequate and roll back everything done by previous allocation functions
             curr_view.is_adequately_provisioned = false;
@@ -1425,21 +1426,6 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
             curr_view.subgroup_ids_by_type_id.clear();
             return;
         }
-        // This is the first point at which we learn how many subgroups each type has
-        std::size_t num_subgroups = curr_type_subviews.size();
-        curr_view.subgroup_ids_by_type_id.emplace(subgroup_type_id, std::vector<subgroup_id_t>(num_subgroups));
-        for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
-            // Assign this (type, index) pair a new unique subgroup ID
-            subgroup_id_t curr_subgroup_id = curr_view.subgroup_shard_views.size();
-            curr_view.subgroup_ids_by_type_id[subgroup_type_id][subgroup_index] = curr_subgroup_id;
-            /* Pull the shard->SubView mapping out of the subgroup membership list
-             * and save it under its subgroup ID (which was subgroup_shard_views.size()).
-             * This seems wasteful since it will get overwritten in the second pass,
-             * but we need to make the subgroup's first-pass membership available
-             * to the membership function in the second pass. */
-            curr_view.subgroup_shard_views.emplace_back(
-                    std::move(curr_type_subviews[subgroup_index]));
-        }  // for (subgroup_index)
     }
     /* If this loop completed, all subgroups and shards are provisioned with their minimum membership,
      * but have not allocated more than the minimum even if there are unassigned nodes.
@@ -1448,28 +1434,42 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
         //No need to catch a subgroup_provisioning_exception
-        subgroup_shard_layout_t curr_type_subviews
-                = subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, 1);
+        subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
+    }
+
+    /* Now that all the subgroups are fully provisioned, use subgroup_allocations to initialize
+     * curr_view's subgroup_ids_by_type_id, my_subgroups, and subgroup_shard_views
+     */
+    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
+        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
+        subgroup_shard_layout_t& curr_type_subviews = *subgroup_allocations.at(subgroup_type);
         std::size_t num_subgroups = curr_type_subviews.size();
-        //subgroup_ids_by_type_ids is already filled out, we just need to initialize
-        //each shard's my_rank, and set up my_subgroups, now that its membership won't change
+        curr_view.subgroup_ids_by_type_id.emplace(subgroup_type_id, std::vector<subgroup_id_t>(num_subgroups));
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
-            subgroup_id_t curr_subgroup_id = curr_view.subgroup_ids_by_type_id
-                                                     .at(subgroup_type_id)
-                                                     .at(subgroup_index);
-            uint32_t num_shards = curr_type_subviews.at(subgroup_index).size();
+            // Assign this (type, index) pair a new unique subgroup ID
+            subgroup_id_t curr_subgroup_id = curr_view.subgroup_shard_views.size();
+            curr_view.subgroup_ids_by_type_id[subgroup_type_id][subgroup_index] = curr_subgroup_id;
+            uint32_t num_shards = curr_type_subviews[subgroup_index].size();
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                SubView& shard_view = curr_type_subviews.at(subgroup_index).at(shard_num);
+                SubView& shard_view = curr_type_subviews[subgroup_index][shard_num];
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
                 if(shard_view.my_rank != -1) {
                     // Initialize my_subgroups
                     curr_view.my_subgroups[curr_subgroup_id] = shard_num;
                 }
+                if(prev_view) {
+                    // Initialize this shard's SubView.joined and SubView.departed
+                    subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)
+                                                             .at(subgroup_index);
+                    SubView& prev_shard_view = prev_view->subgroup_shard_views[prev_subgroup_id][shard_num];
+                    shard_view.init_joined_departed(prev_shard_view);
+                }
             }  // for(shard_num)
-            //Overwrite the SubView map in subgroup_shard_views for this subgroup
-            //This seems wasteful, but the subgroup membership function must return a new vector
-            //with new SubViews, not change the ones inside curr_view
-            curr_view.subgroup_shard_views[curr_subgroup_id] = std::move(curr_type_subviews[subgroup_index]);
+            /* Pull this shard->SubView mapping out of the subgroup allocation
+             * and save it under its subgroup ID (which was subgroup_shard_views.size()).
+             * This deletes it from the subgroup_shard_layout_t's outer vector. */
+            curr_view.subgroup_shard_views.emplace_back(std::move(
+                    (*subgroup_allocations.at(subgroup_type))[subgroup_index]));
         }  //for(subgroup_index)
     }
 }

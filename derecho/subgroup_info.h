@@ -49,16 +49,21 @@ using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
  * first phase the function should ensure every shard has the minimum necessary
  * number of members (if possible), and in the second phase the function should
  * allocate as many members as it needs to fill shards to their desired size.
+ * The results of the function's allocation should be placed in the
+ * out-parameter of type std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>&,
+ * at the entry corresponding to the input subgroup type.
  *
  * @param const std::type_index& - The type of subgroup being allocated
  * @param const std::unique_ptr<View>& - A pointer to the previous View, if there is one
  * @param View& - A reference to the current View (in which the shards will be allocated)
- * @param const int - A number indicating the phase of allocation to do, either 0 or 1.
+ * @param std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>& - A reference
+ * to the subgroup allocation map, into which this function should place its output (at the
+ * key corresponding to its type_index)
  */
-using shard_view_generator_t = std::function<subgroup_shard_layout_t(const std::type_index&,
-                                                                     const std::unique_ptr<View>&,
-                                                                     View&,
-                                                                     const int)>;
+using shard_view_generator_t = std::function<void(const std::type_index&,
+                                                  const std::unique_ptr<View>&,
+                                                  View&,
+                                                  std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>&)>;
 
 /**
  * Container for whatever information is needed to describe a Group's subgroups

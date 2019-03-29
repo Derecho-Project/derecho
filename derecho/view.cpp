@@ -172,15 +172,13 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
                            const std::vector<int>& is_sender) const {
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
-    for(std::size_t subview_rank = 0; subview_rank < with_members.size();
-        ++subview_rank) {
-        std::size_t member_pos = std::distance(members.begin(), std::find(members.begin(), members.end(),
-                                                                          with_members[subview_rank]));
-        if(member_pos == members.size()) {
+    for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
+        int view_rank_of_member = rank_of(with_members[subview_rank]);
+        if(view_rank_of_member == -1) {
             // The ID wasn't found in members[]
             throw subgroup_provisioning_exception();
         }
-        subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[member_pos];
+        subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[view_rank_of_member];
     }
     // Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
     return SubView(mode, with_members, is_sender, subview_member_ips_and_ports);
