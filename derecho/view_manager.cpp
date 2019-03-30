@@ -1409,40 +1409,28 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
-    std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>> subgroup_allocations;
-    for(const auto& subgroup_type : curr_view.subgroup_type_order) {
-        subgroup_allocations.emplace(subgroup_type, nullptr);
+    subgroup_allocation_map_t subgroup_allocations;
+    try {
+        auto temp = subgroup_info.subgroup_membership_function(curr_view.subgroup_type_order,
+                                                               prev_view, curr_view);
+        //Hack to ensure RVO works even though subgroup_allocations had to be declared outside this scope
+        subgroup_allocations = std::move(temp);
+    } catch(subgroup_provisioning_exception& ex) {
+        // Mark the view as inadequate and roll back everything done by allocation functions
+        curr_view.is_adequately_provisioned = false;
+        curr_view.next_unassigned_rank = initial_next_unassigned_rank;
+        curr_view.subgroup_shard_views.clear();
+        curr_view.subgroup_ids_by_type_id.clear();
+        return;
     }
-    //A subgroup's type ID is just its index in the ordered list of subgroup types
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        try {
-            subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
-        } catch(subgroup_provisioning_exception& ex) {
-            // Mark the view as inadequate and roll back everything done by previous allocation functions
-            curr_view.is_adequately_provisioned = false;
-            curr_view.next_unassigned_rank = initial_next_unassigned_rank;
-            curr_view.subgroup_shard_views.clear();
-            curr_view.subgroup_ids_by_type_id.clear();
-            return;
-        }
-    }
-    /* If this loop completed, all subgroups and shards are provisioned with their minimum membership,
-     * but have not allocated more than the minimum even if there are unassigned nodes.
-     * Now we must make a second pass to allow them to allocate additional nodes for fault tolerance.
-     */
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        //No need to catch a subgroup_provisioning_exception
-        subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
-    }
-
     /* Now that all the subgroups are fully provisioned, use subgroup_allocations to initialize
      * curr_view's subgroup_ids_by_type_id, my_subgroups, and subgroup_shard_views
      */
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
+    for(subgroup_type_id_t subgroup_type_id = 0;
+            subgroup_type_id < curr_view.subgroup_type_order.size();
+            ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        subgroup_shard_layout_t& curr_type_subviews = *subgroup_allocations.at(subgroup_type);
+        subgroup_shard_layout_t& curr_type_subviews = subgroup_allocations[subgroup_type];
         std::size_t num_subgroups = curr_type_subviews.size();
         curr_view.subgroup_ids_by_type_id.emplace(subgroup_type_id, std::vector<subgroup_id_t>(num_subgroups));
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
@@ -1469,7 +1457,7 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
              * and save it under its subgroup ID (which was subgroup_shard_views.size()).
              * This deletes it from the subgroup_shard_layout_t's outer vector. */
             curr_view.subgroup_shard_views.emplace_back(std::move(
-                    (*subgroup_allocations.at(subgroup_type))[subgroup_index]));
+                    subgroup_allocations[subgroup_type][subgroup_index]));
         }  //for(subgroup_index)
     }
 }

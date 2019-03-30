@@ -169,42 +169,31 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
     int32_t initial_next_unassigned_rank = curr_view.next_unassigned_rank;
     curr_view.subgroup_shard_views.clear();
     curr_view.subgroup_ids_by_type_id.clear();
-    std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>> subgroup_allocations;
-    for(const auto& subgroup_type : curr_view.subgroup_type_order) {
-        subgroup_allocations.emplace(subgroup_type, nullptr);
-    }
     std::cout << "View has these members: " << curr_view.members << std::endl;
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        try {
-            subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
-            std::cout << "On first pass, subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
-            print_subgroup_layout(*subgroup_allocations.at(subgroup_type));
-            std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl
-                      << std::endl;
-        } catch(subgroup_provisioning_exception& ex) {
-            curr_view.is_adequately_provisioned = false;
-            curr_view.next_unassigned_rank = initial_next_unassigned_rank;
-            curr_view.subgroup_shard_views.clear();
-            curr_view.subgroup_ids_by_type_id.clear();
-            std::cout << "Subgroup type " << subgroup_type.name() << " failed to provision, marking View inadequate" << std::endl
-                      << std::endl;
-            return;
-        }
-    }
-    //Second pass to assign nodes beyond the minumum necessary
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        subgroup_info.subgroup_membership_function(subgroup_type, prev_view, curr_view, subgroup_allocations);
-        std::cout << "On second pass, subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
-        print_subgroup_layout(*subgroup_allocations.at(subgroup_type));
-        std::cout << "next_unassigned_rank is " << curr_view.next_unassigned_rank << std::endl
+    std::map<std::type_index, subgroup_shard_layout_t> subgroup_allocations;
+    try {
+        auto temp = subgroup_info.subgroup_membership_function(curr_view.subgroup_type_order,
+                                                               prev_view, curr_view);
+        //Hack to ensure RVO works even though subgroup_allocations had to be declared outside this scope
+        subgroup_allocations = std::move(temp);
+    } catch(subgroup_provisioning_exception& ex) {
+        // Mark the view as inadequate and roll back everything done by allocation functions
+        curr_view.is_adequately_provisioned = false;
+        curr_view.next_unassigned_rank = initial_next_unassigned_rank;
+        curr_view.subgroup_shard_views.clear();
+        curr_view.subgroup_ids_by_type_id.clear();
+        std::cout << "Got a subgroup_provisioning_exception, marking View inadequate" << std::endl
                   << std::endl;
+        return;
     }
     //Go through subgroup_allocations and initialize curr_view
-    for(subgroup_type_id_t subgroup_type_id = 0; subgroup_type_id < curr_view.subgroup_type_order.size(); ++subgroup_type_id) {
+    for(subgroup_type_id_t subgroup_type_id = 0;
+            subgroup_type_id < curr_view.subgroup_type_order.size();
+            ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
-        subgroup_shard_layout_t& curr_type_subviews = *subgroup_allocations.at(subgroup_type);
+        subgroup_shard_layout_t& curr_type_subviews = subgroup_allocations[subgroup_type];
+        std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;
+        print_subgroup_layout(curr_type_subviews);
         std::size_t num_subgroups = curr_type_subviews.size();
         curr_view.subgroup_ids_by_type_id.emplace(subgroup_type_id, std::vector<subgroup_id_t>(num_subgroups));
         for(uint32_t subgroup_index = 0; subgroup_index < num_subgroups; ++subgroup_index) {
@@ -231,7 +220,7 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
              * and save it under its subgroup ID (which was subgroup_shard_views.size()).
              * This deletes it from the subgroup_shard_layout_t's outer vector. */
             curr_view.subgroup_shard_views.emplace_back(std::move(
-                    (*subgroup_allocations.at(subgroup_type))[subgroup_index]));
+                    subgroup_allocations[subgroup_type][subgroup_index]));
         }  //for(subgroup_index)
     }
 }

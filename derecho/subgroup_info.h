@@ -43,27 +43,38 @@ public:
 using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
 
 /**
- * The type of a lambda function that generates subgroup and shard views
- * for a specific subgroup type. It will be called twice for each subgroup
- * type, in order to facilitate a two-phase node allocation process: in the
- * first phase the function should ensure every shard has the minimum necessary
- * number of members (if possible), and in the second phase the function should
- * allocate as many members as it needs to fill shards to their desired size.
- * The results of the function's allocation should be placed in the
- * out-parameter of type std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>&,
- * at the entry corresponding to the input subgroup type.
+ * The data structure used to store the subgroups-and-shards layouts for all
+ * subgroup types in a Group (at least during the subgroup allocation process).
+ * The keys are Replicated Object types, and the values are subgroups-and-shards
+ * layouts as defined in subgroup_shard_layout_t.
  *
- * @param const std::type_index& - The type of subgroup being allocated
- * @param const std::unique_ptr<View>& - A pointer to the previous View, if there is one
- * @param View& - A reference to the current View (in which the shards will be allocated)
- * @param std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>& - A reference
- * to the subgroup allocation map, into which this function should place its output (at the
- * key corresponding to its type_index)
+ * Combining this type with subgroup_shard_layout_t, the map is organized by:
+ * subgroup type -> subgroup index -> shard index -> sub-view of that shard
  */
-using shard_view_generator_t = std::function<void(const std::type_index&,
-                                                  const std::unique_ptr<View>&,
-                                                  View&,
-                                                  std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>&)>;
+using subgroup_allocation_map_t = std::map<std::type_index, subgroup_shard_layout_t>;
+
+/**
+ * The type of a lambda function that generates subgroup and shard views
+ * for a Derecho group.
+ *
+ * @param const std::vector<std::type_index>& - A list of type_indexes of all
+ * the subgroup types in this Group, arranged in the same order as the template
+ * parameters to Group. This is the order in which the subgroup types should be
+ * allocated.
+ * @param const std::unique_ptr<View>& - A pointer to the previous View, if there is one
+ * @param View& - A reference to the current View, which is in the process of being
+ * provisioned into subgroups and shards
+ * @return subgroup_allocation_map_t - A subgroup allocation map in which each
+ * subgroup type in the Group has an entry containing its subgroup and shard
+ * SubViews. Thus, there should be a key in this map for every element in the
+ * std::vector<std::type_index> that is the first parameter.
+ * @throws subgroup_provisioning_exception if there are not enough nodes in the
+ * current view to allocate all the subgroups and shards
+ */
+using shard_view_generator_t = std::function<subgroup_allocation_map_t(
+        const std::vector<std::type_index>&,
+        const std::unique_ptr<View>&,
+        View&)>;
 
 /**
  * Container for whatever information is needed to describe a Group's subgroups
@@ -71,8 +82,7 @@ using shard_view_generator_t = std::function<void(const std::type_index&,
  */
 struct SubgroupInfo {
     /**
-     * The function that generates SubViews for each subgroup and shard
-     * of a given replicated type.
+     * The function that generates all the SubViews for a View
      */
     const shard_view_generator_t subgroup_membership_function;
 

@@ -33,24 +33,19 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
 
 /**
  * A simple implementation of shard_view_generator_t that creates a single,
- * un-sharded subgroup containing all the members of curr_view, regardless of
- * what subgroup type is supplied. This is best used when there is only one
- * subgroup type.
+ * un-sharded subgroup containing all the members of curr_view for every subgroup
+ * type in the list. This is best used when there is only one subgroup type.
  */
-void one_subgroup_entire_view(const std::type_index& subgroup_type,
-                              const std::unique_ptr<View>& prev_view,
-                              View& curr_view,
-                              std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>& subgroup_layouts);
+subgroup_allocation_map_t one_subgroup_entire_view(const std::vector<std::type_index>& subgroup_type_order,
+                                                   const std::unique_ptr<View>& prev_view, View& curr_view);
 /**
  * A simple implementation of shard_view_generator_t that returns a single,
  * un-sharded subgroup in Unordered (Raw) mode containing all the members of
- * curr_view, regardless of what subgroup type is supplied. This is best used
- * when there is only one subgroup type.
+ * curr_view for every type in the list. This is best used when there is only
+ * one subgroup type.
  */
-void one_subgroup_entire_view_raw(const std::type_index& subgroup_type,
-                                  const std::unique_ptr<View>& prev_view,
-                                  View& curr_view,
-                                  std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>& subgroup_layouts);
+subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::type_index>& subgroup_type_order,
+                                                       const std::unique_ptr<View>& prev_view, View& curr_view);
 
 struct ShardAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */
@@ -199,24 +194,31 @@ protected:
      */
     const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
-    std::vector<SubView> assign_subgroup(const std::unique_ptr<View>& prev_view,
-                                         View& curr_view,
-                                         const ShardAllocationPolicy& subgroup_policy) const;
-    void compute_standard_membership_phase_1(const std::type_index& subgroup_type,
-                                             const std::unique_ptr<View>& prev_view,
-                                             View& curr_view,
-                                             std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>&
-                                             subgroup_layouts) const;
-    void compute_standard_membership_phase_2(const std::type_index& subgroup_type,
-                                             const std::unique_ptr<View>& prev_view,
-                                             View& curr_view,
-                                             std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>&
-                                             subgroup_layouts) const;
-    void compute_cross_product_membership(const std::type_index& subgroup_type,
-                                          const std::unique_ptr<View>& prev_view,
-                                          View& curr_view,
-                                          std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>&
-                                          subgroup_layouts) const;
+    std::map<std::type_index, std::vector<std::vector<uint32_t>>> compute_standard_shard_sizes(
+            const std::vector<std::type_index>& subgroup_type_order,
+            const View& curr_view) const;
+
+    subgroup_shard_layout_t allocate_standard_subgroup_type(
+            const std::type_index subgroup_type,
+            View& curr_view,
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+
+    subgroup_shard_layout_t update_standard_subgroup_type(
+            const std::type_index subgroup_type,
+            const subgroup_type_id_t subgroup_type_id,
+            const std::unique_ptr<View>& prev_view,
+            View& curr_view,
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+
+    void compute_standard_memberships(const std::vector<std::type_index>& subgroup_type_order,
+                                      const std::unique_ptr<View>& prev_view,
+                                      View& curr_view,
+                                      subgroup_allocation_map_t& subgroup_layouts) const;
+
+    void compute_cross_product_memberships(const std::vector<std::type_index>& subgroup_type_order,
+                                           const std::unique_ptr<View>& prev_view,
+                                           View& curr_view,
+                                           subgroup_allocation_map_t& subgroup_layouts) const;
 
 public:
     DefaultSubgroupAllocator(const std::map<std::type_index,
@@ -227,10 +229,9 @@ public:
             : policies(to_copy.policies) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
-    void operator()(const std::type_index& subgroup_type,
-                    const std::unique_ptr<View>& prev_view,
-                    View& curr_view,
-                    std::map<std::type_index, std::unique_ptr<subgroup_shard_layout_t>>& subgroup_layouts) const;
+    subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
+                                         const std::unique_ptr<View>& prev_view,
+                                         View& curr_view) const;
 };
 
 }  // namespace derecho
