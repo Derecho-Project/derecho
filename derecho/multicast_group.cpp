@@ -295,9 +295,11 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 } else {
                     auto it = current_receives.find({subgroup_num, node_id});
                     assert(it != current_receives.end());
-                    auto& message = it->second;
-                    message.index = index;
-                    locally_stable_rdmc_messages[subgroup_num].emplace(sequence_number, std::move(message));
+                    auto& msg = it->second;
+                    msg.index = index;
+		    // We set the size in this receive handler instead of in the incoming_message_handler
+		    msg.size = size;
+                    locally_stable_rdmc_messages[subgroup_num].emplace(sequence_number, std::move(msg));
                     current_receives.erase(it);
                 }
 
@@ -422,7 +424,9 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                //Create a Message struct to receive the data into.
                                RDMCMessage msg;
                                msg.sender_id = node_id;
-                               msg.size = length;
+			       // The length variable is not the exact size of the msg,
+			       // but it is the nearest multiple of the block size greater then the size
+			       // so we will set the size in the receive handler
                                msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
                                free_message_buffers[subgroup_num].pop_back();
 
