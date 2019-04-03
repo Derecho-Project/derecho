@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include "conf/conf.hpp"
 #include "predicates.h"
 
 #ifdef USE_VERBS_API
@@ -180,6 +181,8 @@ public:
     friend class Predicates<DerivedSST>;
 
 private:
+    /** timeout settings for poll completion queue */
+    const uint32_t poll_cq_timeout_ms;
     /** Pointer to memory where the SST rows are stored. */
     volatile char* rows;
     // char* snapshot;
@@ -224,6 +227,7 @@ public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
               thread_shutdown(false),
+              poll_cq_timeout_ms(derecho::getConfUInt32(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS)),
               members(params.members),
               num_members(members.size()),
               all_indices(num_members),
