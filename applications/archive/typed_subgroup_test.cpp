@@ -24,24 +24,24 @@ int main(int argc, char** argv) {
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         derecho::subgroup_allocation_map_t subgroup_allocation;
         for(const auto& subgroup_type : subgroup_type_order) {
-            derecho::subgroup_shard_layout_t subgroup_vector(1);
+            derecho::subgroup_shard_layout_t subgroup_layout(1);
             if(subgroup_type == std::type_index(typeid(Foo)) || subgroup_type == std::type_index(typeid(Bar))) {
                 if(curr_view.num_members < 3) {
                     throw derecho::subgroup_provisioning_exception();
                 }
                 std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
-                //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-                subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+                //Put the desired SubView at subgroup_layout[0][0] since there's one subgroup with one shard
+                subgroup_layout[0].emplace_back(curr_view.make_subview(first_3_nodes));
                 curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 3);
             } else { /* subgroup_type == std::type_index(typeid(Cache)) */
                 if(curr_view.num_members < 6) {
                     throw derecho::subgroup_provisioning_exception();
                 }
                 std::vector<node_id_t> next_3_nodes(&curr_view.members[3], &curr_view.members[3] + 3);
-                subgroup_vector[0].emplace_back(curr_view.make_subview(next_3_nodes));
+                subgroup_layout[0].emplace_back(curr_view.make_subview(next_3_nodes));
                 curr_view.next_unassigned_rank += 3;
             }
-            subgroup_allocation.emplace(subgroup_type, std::move(subgroup_vector));
+            subgroup_allocation.emplace(subgroup_type, std::move(subgroup_layout));
         }
         return subgroup_allocation;
     }};

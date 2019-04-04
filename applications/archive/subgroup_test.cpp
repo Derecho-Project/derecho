@@ -60,12 +60,8 @@ int main(int argc, char* argv[]) {
     std::unordered_set<node_id_t> group_1_members{3, 4, 5};
     std::unordered_set<node_id_t> group_2_members{6, 7, 8};
     derecho::SubgroupInfo subgroup_info{[group_0_members, group_1_members, group_2_members](
-            const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view,
-            std::map<std::type_index, std::unique_ptr<derecho::subgroup_shard_layout_t>>& subgroup_allocation) {
-        if(subgroup_allocation[subgroup_type]) {
-            return;
-        }
+            const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         std::vector<node_id_t> subgroup_0_members;
         std::vector<node_id_t> subgroup_1_members;
         std::vector<node_id_t> subgroup_2_members;
@@ -75,16 +71,19 @@ int main(int argc, char* argv[]) {
                                group_1_members, std::back_inserter(subgroup_1_members));
         unordered_intersection(curr_view.members.begin(), curr_view.members.end(),
                                group_2_members, std::back_inserter(subgroup_2_members));
-        auto subgroup_vector = std::make_unique<derecho::subgroup_shard_layout_t>(3);
+        derecho::subgroup_shard_layout_t subgroup_layout(3);
         std::vector<int> subgroup_0_senders(subgroup_0_members.size());
         if(subgroup_0_senders.size()) {
             subgroup_0_senders[0] = 1;
         }
-        (*subgroup_vector)[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
-        (*subgroup_vector)[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
-        (*subgroup_vector)[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
+        subgroup_layout[0].emplace_back(curr_view.make_subview(subgroup_0_members, derecho::Mode::ORDERED, subgroup_0_senders));
+        subgroup_layout[1].emplace_back(curr_view.make_subview(subgroup_1_members)); // ,subgroup_1_senders
+        subgroup_layout[2].emplace_back(curr_view.make_subview(subgroup_2_members)); // ,subgroup_2_senders
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 9);
-        subgroup_allocation[subgroup_type] = std::move(subgroup_vector);
+        //Since we know there is only one subgroup type, just put a single entry in the map
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(RawObject)), std::move(subgroup_layout));
+        return subgroup_allocation;
     }};
 
     derecho::Group<RawObject> managed_group(callbacks, subgroup_info, nullptr,

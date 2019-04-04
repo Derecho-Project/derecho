@@ -48,6 +48,12 @@ using subgroup_shard_layout_t = std::vector<std::vector<SubView>>;
  * The keys are Replicated Object types, and the values are subgroups-and-shards
  * layouts as defined in subgroup_shard_layout_t.
  *
+ * Note that since the subgroup_shard_layout_t elements are stored by value,
+ * placing a local variable of type subgroup_shard_layout_t in the map will
+ * copy all of the vectors and SubViews; it is preferable to use std::move to
+ * move-assign the local variable into the map, like this:
+ * subgroup_allocation.emplace(subgroup_type, std::move(subgroup_layout));
+ *
  * Combining this type with subgroup_shard_layout_t, the map is organized by:
  * subgroup type -> subgroup index -> shard index -> sub-view of that shard
  */

@@ -48,7 +48,8 @@ int main(int argc, char** argv) {
 
     const int32_t num_nodes = 7;
 
-    derecho::SubgroupInfo subgroup_info{[num_nodes](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_info{[num_nodes](
+            const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_nodes) {
             throw derecho::subgroup_provisioning_exception();
@@ -59,7 +60,10 @@ int main(int argc, char** argv) {
             subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
         }
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes - 1);
-        return subgroup_vector;
+        //Since we know there is only one subgroup type, just put a single entry in the map
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(Foo)), std::move(subgroup_vector));
+        return subgroup_allocation;
     }};
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 

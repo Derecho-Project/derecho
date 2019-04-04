@@ -77,17 +77,19 @@ int main(int argc, char** argv) {
                 std::cout << "Subgroup " << subgroup << ", version " << ver << "is persisted." << std::endl;
             }};
 
-    derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View &curr_view) {
+    derecho::SubgroupInfo subgroup_info{[](const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < 2) {
-            std::cout << "PFoo function throwing subgroup_provisioning_exception" << std::endl;
             throw derecho::subgroup_provisioning_exception();
         }
         derecho::subgroup_shard_layout_t subgroup_vector(1);
         //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
         subgroup_vector[0].emplace_back(curr_view.make_subview({0, 1}));
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 2);
-        return subgroup_vector;
+        //Since we know there is only one subgroup type, just put a single entry in the map
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(PFoo)), std::move(subgroup_vector));
+        return subgroup_allocation;
     }};
 
     auto pfoo_factory = [](PersistentRegistry* pr) { return std::make_unique<PFoo>(pr); };

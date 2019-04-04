@@ -57,8 +57,9 @@ int main(int argc, char* argv[]) {
     }
     const uint32_t num_nodes = atoi(argv[1]);
     Conf::initialize(argc, argv);
-    auto subgroup_membership_function = [num_nodes](const std::type_index& subgroup_type,
-                                                    const std::unique_ptr<View>& prev_view, View& curr_view) {
+    auto subgroup_membership_function = [num_nodes](
+            const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         auto& members = curr_view.members;
         auto num_members = members.size();
         if(num_members < num_nodes) {
@@ -66,7 +67,9 @@ int main(int argc, char* argv[]) {
         }
         subgroup_shard_layout_t layout(num_members);
         layout[0].push_back(curr_view.make_subview(vector<uint32_t>(members)));
-        return layout;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(CookedMessages)), std::move(layout));
+        return subgroup_allocation;
     };
 
     auto cooked_subgroup_factory = [](PersistentRegistry*) { return std::make_unique<CookedMessages>(); };

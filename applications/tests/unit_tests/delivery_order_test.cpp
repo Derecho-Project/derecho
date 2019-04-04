@@ -34,12 +34,12 @@ int main(int argc, char* argv[]) {
 
     uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-    SubgroupInfo subgroup_info([num_nodes](const std::type_index& subgroup_type,
-                                           const std::unique_ptr<View>& prev_view, View& curr_view) {
+    SubgroupInfo subgroup_info([num_nodes](const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.members.size() < num_nodes) {
             throw subgroup_provisioning_exception();
         }
-        return one_subgroup_entire_view(subgroup_type, prev_view, curr_view);
+        return one_subgroup_entire_view(subgroup_type_order, prev_view, curr_view);
     });
 
     auto get_next_line = [&input_file_map](node_id_t sender_id) {

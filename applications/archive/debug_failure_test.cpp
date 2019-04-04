@@ -16,12 +16,14 @@ int main(int argc, char *argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto membership_function = [](const std::type_index& subgroup_type,
+    auto membership_function = [](const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members));
         curr_view.next_unassigned_rank = curr_view.members.size();
-        return subgroup_vector;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(RawObject)), std::move(subgroup_vector));
+        return subgroup_allocation;
     };
 
     SubgroupInfo one_raw_group(membership_function);

@@ -604,29 +604,33 @@ public:
                 {},  // callback set
                 // derecho::SubgroupInfo
                 {
-                    [this](const std::type_index& subgroup_type,
+                    [this](const std::vector<std::type_index>& subgroup_type_order,
                            const std::unique_ptr<derecho::View>& prev_view,
                            derecho::View& curr_view) {
-                        if (subgroup_type == std::type_index(typeid(VolatileUnloggedObjectStore)) || 
-                            subgroup_type == std::type_index(typeid(PersistentLoggedObjectStore))) {
-                            std::vector<node_id_t> active_replicas;
-                            for(uint32_t i = 0; i < curr_view.members.size(); i++){
-                                const node_id_t id = curr_view.members[i];
-                                if(!curr_view.failed[i] && std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
-                                    active_replicas.push_back(id);
+                        derecho::subgroup_allocation_map_t subgroup_allocation;
+                        for(const auto& subgroup_type : subgroup_type_order) {
+                            if (subgroup_type == std::type_index(typeid(VolatileUnloggedObjectStore)) ||
+                                    subgroup_type == std::type_index(typeid(PersistentLoggedObjectStore))) {
+                                std::vector<node_id_t> active_replicas;
+                                for(uint32_t i = 0; i < curr_view.members.size(); i++){
+                                    const node_id_t id = curr_view.members[i];
+                                    if(!curr_view.failed[i] && std::find(replicas.begin(),replicas.end(),id) != replicas.end()) {
+                                        active_replicas.push_back(id);
+                                    }
                                 }
+                                if(active_replicas.size() < derecho::getConfUInt32(CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR)) {
+                                    throw derecho::subgroup_provisioning_exception();
+                                }
+
+                                derecho::subgroup_shard_layout_t subgroup_vector(1);
+                                subgroup_vector[0].emplace_back(curr_view.make_subview(active_replicas));
+                                curr_view.next_unassigned_rank += active_replicas.size();
+                                subgroup_allocation.emplace(subgroup_type, std::move(subgroup_vector));
+                            } else {
+                                subgroup_allocation.emplace(subgroup_type, derecho::subgroup_shard_layout_t{});
                             }
-                            if(active_replicas.size() < derecho::getConfUInt32(CONF_OBJECTSTORE_MIN_REPLICATION_FACTOR)) {
-                                throw derecho::subgroup_provisioning_exception();
-                            }
-    
-                            derecho::subgroup_shard_layout_t subgroup_vector(1);
-                            subgroup_vector[0].emplace_back(curr_view.make_subview(active_replicas));
-                            curr_view.next_unassigned_rank += active_replicas.size();
-                            return subgroup_vector;
-                        } else {
-                            return derecho::subgroup_shard_layout_t{};
                         }
+                        return subgroup_allocation;
                     }
                 }, 
                 std::shared_ptr<derecho::IDeserializationContext>{this},
