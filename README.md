@@ -31,16 +31,16 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Getting Started
 Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
 
-    git clone --recursive https://github.com/Derecho-Project/derecho-unified.git
+    git clone --recursive https://github.com/Derecho-Project/derecho.git
 
-Once cloning is complete, to compile the code, `cd` into the `derecho-unified` directory and run:
+Once cloning is complete, to compile the code, `cd` into the `derecho` directory and run:
 * mkdir Release
 * cd Release
 * `cmake -DCMAKE_BUILD_TYPE=Release ..`
 * `make`
 
 This will place the binaries and libraries in the sub-dierectories of `Release`.
-The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho-unified` will not work.
+The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
 To add your own executable (that uses Derecho) to the build system, simply add an executable target to CMakeLists.txt with `derecho` as a "linked library." You can do this either in the top-level CMakeLists.txt or in the CMakeLists.txt inside the "applications" directory. It will look something like this:
 
@@ -61,7 +61,7 @@ The other important parameters are the message sizes. Since Derecho pre-allocate
 There are three options to control the size of messages: **max_payload_size**, **max_smc_payload_size**, and **block_size**.
 No message bigger than **max_payload_size** will be sent by Derecho. Messages equal to or smaller than **max_smc_payload_size** will be sent through SST multicast (SMC), which is more suitable than RDMC for small messages. **block_size** defines the size of unit sent in RDMC (messages bigger than **block_size** will be split internally and sent in a pipeline).
 
-Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho-unified/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
@@ -120,7 +120,7 @@ Then, call the application as follows, assuming the application's name is `app`:
 ```bash
 $ app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
 ```
-Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho-unified/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
+Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
 
 ### Setup and Testing
 There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance\_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules for using RDMA hardware:
@@ -331,7 +331,7 @@ For simplicity, the versioned type is int in this example. You set it up in the 
 
 By default, the Persistent<T> stores its log in the filesystem (in a folder called .plog in the current directory). Application can specify memory as the storage location by setting the second template parameter: `Persistent<T,ST_MEM>` (or `Volatile<T>` as syntactic sugar). We are working on more store storage types including NVM.
 
-Once the version vector is set up with Derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
+Once the version vector is set up with Derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
 
 ###  Notes on Very Large Deployments
 We are committed to supporting Derecho with RDMA on 1000 (or even more) physical nodes, one application instance per node.  On a machine that actually allows some small number K of applications to share an RDMA NIC, we would even be happy to help get things working with k\*1000's of group members... eventually.  However, we do not recommend that Derecho developers start by trying to work at that scale before gaining experience at smaller scales.  Even launching a Derecho test program at that scale would be very challenging, and we will only be able to help if the team undertaking this has a good level of experience with the system at smaller scales.
