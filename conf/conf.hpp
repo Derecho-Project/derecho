@@ -31,8 +31,9 @@ private:
 #define CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE "DERECHO/max_smc_payload_size"
 #define CONF_DERECHO_BLOCK_SIZE "DERECHO/block_size"
 #define CONF_DERECHO_WINDOW_SIZE "DERECHO/window_size"
-#define CONF_DERECHO_TIMEOUT_MS "DERECHO/timeout_ms"
+#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/timeout_heartbeat_ms"
 #define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
+#define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
 #define CONF_RDMA_TX_DEPTH "RDMA/tx_depth"
@@ -40,6 +41,8 @@ private:
 #define CONF_PERS_FILE_PATH "PERS/file_path"
 #define CONF_PERS_RAMDISK_PATH "PERS/ramdisk_path"
 #define CONF_PERS_RESET "PERS/reset"
+#define CONF_PERS_MAX_LOG_ENTRY "PERS/max_log_entry"
+#define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
 
@@ -57,8 +60,9 @@ private:
             {CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE, "10240"},
             {CONF_DERECHO_BLOCK_SIZE, "1048576"},
             {CONF_DERECHO_WINDOW_SIZE, "16"},
-            {CONF_DERECHO_TIMEOUT_MS, "1"},
+            {CONF_DERECHO_HEARTBEAT_MS, "1"},
             {CONF_DERECHO_RDMC_SEND_ALGORITHM, "binomial_send"},
+            {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "10"},
             // [RDMA]
             {CONF_RDMA_PROVIDER, "sockets"},
             {CONF_RDMA_DOMAIN, "eth0"},
@@ -68,6 +72,8 @@ private:
             {CONF_PERS_FILE_PATH, ".plog"},
             {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
             {CONF_PERS_RESET, "false"},
+            {CONF_PERS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
+            {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};

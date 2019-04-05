@@ -1,5 +1,6 @@
 #include "FilePersistLog.hpp"
 #include "util.hpp"
+#include "conf/conf.hpp"
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -26,15 +27,6 @@ namespace persistent {
 // internal structures //
 /////////////////////////
 
-// verify the existence of the meta file
-static bool checkOrCreateMetaFile(const string& metaFile) noexcept(false);
-
-// verify the existence of the log file
-static bool checkOrCreateLogFile(const string& logFile) noexcept(false);
-
-// verify the existence of the data file
-static bool checkOrCreateDataFile(const string& dataFile) noexcept(false);
-
 ////////////////////////
 // visible to outside //
 ////////////////////////
@@ -44,6 +36,8 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexc
                                                                                              m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
                                                                                              m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
                                                                                              m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
+                                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
+                                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
                                                                                              m_iLogFileDesc(-1),
                                                                                              m_iDataFileDesc(-1),
                                                                                              m_pLog(MAP_FAILED),
@@ -87,9 +81,9 @@ void FilePersistLog::load() noexcept(false) {
     checkOrCreateDir(this->m_sDataPath);
     dbg_default_trace("{0}:checkOrCreateDir passed.", this->m_sName);
     // STEP 1: check and create files.
-    bool bCreate = checkOrCreateMetaFile(this->m_sMetaFile);
-    checkOrCreateLogFile(this->m_sLogFile);
-    checkOrCreateDataFile(this->m_sDataFile);
+    bool bCreate = checkOrCreateMetaFile();
+    checkOrCreateLogFile();
+    checkOrCreateDataFile();
     dbg_default_trace("{0}:checkOrCreateDataFile passed.", this->m_sName);
     // STEP 2: open files
     this->m_iLogFileDesc = open(this->m_sLogFile.c_str(), O_RDWR);
@@ -227,6 +221,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
                               this->m_sName, NUM_FREE_SLOTS);                                              \
             dbg_default_flush();                                                                           \
             FPL_UNLOCK;                                                                                    \
+            std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;              \
             throw PERSIST_EXP_NOSPACE_LOG;                                                                 \
         }                                                                                                  \
         if(NUM_FREE_BYTES < size) {                                                                        \
@@ -234,6 +229,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
                               this->m_sName, NUM_FREE_BYTES, size);                                        \
             dbg_default_flush();                                                                           \
             FPL_UNLOCK;                                                                                    \
+            std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl; \
             throw PERSIST_EXP_NOSPACE_DATA;                                                                \
         }                                                                                                  \
         if((CURR_LOG_IDX != -1) && (META_HEADER->fields.ver >= ver)) {                                     \
@@ -242,6 +238,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
                               (int64_t)cver, (int64_t)ver);                                                \
             dbg_default_flush();                                                                           \
             FPL_UNLOCK;                                                                                    \
+            std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;           \
             throw PERSIST_EXP_INV_VERSION;                                                                 \
         }                                                                                                  \
     } while(0)
@@ -541,6 +538,25 @@ const void* FilePersistLog::getEntry(const int64_t& ver) noexcept(false) {
     dbg_default_trace("{0} getEntry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
 
     return LOG_ENTRY_DATA(ple);
+}
+
+int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) noexcept(false) {
+    FPL_RDLOCK;
+    dbg_default_trace("getHLCIndex for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
+    struct hlc_index_entry skey(rhlc, 0);
+    auto key = this->hidx.upper_bound(skey);
+    FPL_UNLOCK;
+
+    if(key != this->hidx.begin() && this->hidx.size() > 0) {
+        dbg_default_trace("getHLCIndex returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
+        return key->log_idx;
+    }
+
+    // no object exists before the requested timestamp.
+
+    dbg_default_trace("{0} getHLCIndex found no entry at ({1},{2})", this->m_sName, rhlc.m_rtc_us, rhlc.m_logic);
+
+    return INVALID_INDEX;
 }
 
 const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
@@ -888,16 +904,16 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false
     return bCreate;
   }
 */
-bool checkOrCreateMetaFile(const string& metaFile) noexcept(false) {
-    return checkOrCreateFileWithSize(metaFile, META_SIZE);
+bool FilePersistLog::checkOrCreateMetaFile() noexcept(false) {
+    return checkOrCreateFileWithSize(this->m_sMetaFile, META_SIZE);
 }
 
-bool checkOrCreateLogFile(const string& logFile) noexcept(false) {
-    return checkOrCreateFileWithSize(logFile, MAX_LOG_SIZE);
+bool FilePersistLog::checkOrCreateLogFile() noexcept(false) {
+    return checkOrCreateFileWithSize(this->m_sLogFile, MAX_LOG_SIZE);
 }
 
-bool checkOrCreateDataFile(const string& dataFile) noexcept(false) {
-    return checkOrCreateFileWithSize(dataFile, MAX_DATA_SIZE);
+bool FilePersistLog::checkOrCreateDataFile() noexcept(false) {
+    return checkOrCreateFileWithSize(this->m_sDataFile, MAX_DATA_SIZE);
 }
 
 void FilePersistLog::truncate(const int64_t& ver) noexcept(false) {

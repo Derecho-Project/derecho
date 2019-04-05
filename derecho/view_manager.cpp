@@ -1648,14 +1648,16 @@ bool ViewManager::changes_contains(const DerechoSST& gmsSST, const node_id_t q) 
 
 int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed) {
     int myRank = gmsSST.get_local_index();
-    int min = gmsSST.num_acked[myRank];
+    int min_num_acked = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
-        if(!failed[n] && gmsSST.num_acked[n] < min) {
-            min = gmsSST.num_acked[n];
+        if(!failed[n]) {
+	  // copy to avoid race condition and non-volatile based optimizations
+	  int num_acked_copy = gmsSST.num_acked[n];
+	  min_num_acked = std::min(min_num_acked, num_acked_copy);
         }
     }
 
-    return min;
+    return min_num_acked;
 }
 
 void ViewManager::deliver_in_order(const int shard_leader_rank,
@@ -1708,16 +1710,16 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
 
     if(!found) {
         for(uint n = 0; n < num_shard_senders; n++) {
-            int min = Vc.gmsSST->num_received[myRank][num_received_offset + n];
+            int min_num_received = Vc.gmsSST->num_received[myRank][num_received_offset + n];
             for(uint r = 0; r < shard_members.size(); r++) {
-                const auto node_id = shard_members[r];
-                const auto node_rank = Vc.rank_of(node_id);
-                if(!Vc.failed[node_rank] && min > Vc.gmsSST->num_received[node_rank][num_received_offset + n]) {
-                    min = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+                auto node_rank = Vc.rank_of(shard_members[r]);
+                if(!Vc.failed[node_rank]) {
+		  int num_received_copy = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+		  min_num_received = std::min(min_num_received, num_received_copy);
                 }
             }
 
-            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min);
+            gmssst::set(Vc.gmsSST->global_min[myRank][num_received_offset + n], min_num_received);
         }
     }
 

@@ -188,8 +188,6 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 
     std::vector<uint32_t> failed_node_indexes;
 
-    /** Completion Queue poll timeout in millisec */
-    const int MAX_POLL_CQ_TIMEOUT = 2000;
     unsigned long start_time_msec;
     unsigned long cur_time_msec;
     struct timeval cur_time;
@@ -210,7 +208,7 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
             }
             gettimeofday(&cur_time, NULL);
             cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
-            if((cur_time_msec - start_time_msec) >= MAX_POLL_CQ_TIMEOUT) {
+            if((cur_time_msec - start_time_msec) >= poll_cq_timeout_ms) {
                 break;
             }
         }

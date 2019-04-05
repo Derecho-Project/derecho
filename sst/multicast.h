@@ -125,9 +125,8 @@ public:
             } else {
                 long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
                 for(auto i : row_indices) {
-                    if(sst->num_received_sst[i][num_received_offset + my_sender_index] < min_multicast_num) {
-                        min_multicast_num = sst->num_received_sst[i][num_received_offset + my_sender_index];
-                    }
+                    long long int num_received_sst_copy = sst->num_received_sst[i][num_received_offset + my_sender_index];
+                    min_multicast_num = std::min(min_multicast_num, num_received_sst_copy);
                 }
                 if(finished_multicasts_num == min_multicast_num) {
                     return nullptr;

@@ -102,7 +102,10 @@ public:
     virtual int64_t getLatestIndex() noexcept(false) = 0;
 
     // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t &ver) = 0;
+    virtual int64_t getVersionIndex(const version_t &ver) noexcept(false) = 0;
+
+    // Get the Index corresponding to an HLC timestamp
+    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false) = 0;
 
     // Get the Earlist version
     virtual version_t getEarliestVersion() noexcept(false) = 0;

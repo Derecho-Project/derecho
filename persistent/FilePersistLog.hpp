@@ -43,12 +43,13 @@ typedef union log_entry {
 
 // TODO: make this hard-wired number configurable.
 // Currently, we allow 1M(2^20-1) log entries and
-// 512GB data size.
-#define MAX_LOG_ENTRY ((uint64_t)(1UL << 20))
-// #define MAX_LOG_ENTRY         (1UL<<6)
+// 512GB data size. The max log entry and max size are
+// both from the configuration file:
+// CONF_PERS_MAX_LOG_ENTRY - "PERS/max_log_entry"
+// CONF_PERS_MAX_DATA_SIZE - "PERS/max_data_size"
+#define MAX_LOG_ENTRY (this->m_iMaxLogEntry)
 #define MAX_LOG_SIZE (sizeof(LogEntry) * MAX_LOG_ENTRY)
-#define MAX_DATA_SIZE ((uint64_t)(1UL << 39))
-// #define MAX_DATA_SIZE         (1UL<<12)
+#define MAX_DATA_SIZE (this->m_iMaxDataSize)
 #define META_SIZE (sizeof(MetaHeader))
 
 // helpers:
@@ -98,6 +99,10 @@ protected:
     const std::string m_sLogFile;
     // full data file name
     const std::string m_sDataFile;
+    // max number of log entry
+    const uint64_t m_iMaxLogEntry;
+    // max data size
+    const uint64_t m_iMaxDataSize;
 
     // the log file descriptor
     int m_iLogFileDesc;
@@ -112,6 +117,7 @@ protected:
     pthread_rwlock_t m_rwlock;
     // persistent lock
     pthread_mutex_t m_perslock;
+
 // lock macro
 #define FPL_WRLOCK                                        \
     do {                                                  \
@@ -180,6 +186,7 @@ public:
     virtual int64_t getEarliestIndex() noexcept(false);
     virtual int64_t getLatestIndex() noexcept(false);
     virtual int64_t getVersionIndex(const version_t& ver) noexcept(false);
+    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
     virtual const version_t getLastPersisted() noexcept(false);
@@ -243,6 +250,15 @@ public:
     static const uint64_t getMinimumLatestPersistedVersion(const std::string& prefix);
 
 private:
+     /** verify the existence of the meta file */
+     bool checkOrCreateMetaFile() noexcept(false);
+
+     /** verify the existence of the log file */
+     bool checkOrCreateLogFile() noexcept(false);
+
+     /** verify the existence of the data file */
+     bool checkOrCreateDataFile() noexcept(false);
+
     /**
      * Get the minimum index greater than a given version
      * Note: no lock protected, use FPL_RDLOCK

@@ -122,11 +122,12 @@ using OID = uint64_t;
 
 class Object : public mutils::ByteRepresentable {
 public:
-    OID oid;    // object_id
-    Blob blob;  // the object
+    mutable persistent::version_t ver;  // object version
+    OID oid;                            // object_id
+    Blob blob;                          // the object
 
     bool operator==(const Object& other) {
-        return this->oid == other.oid;
+        return (this->oid == other.oid) && (this->ver == other.ver);
     }
 
     bool is_valid() const {
@@ -134,31 +135,42 @@ public:
     }
 
     // constructor 0 : copy constructor
-    Object(const OID& _oid, const Blob& _blob) : oid(_oid),
+    Object(const OID& _oid, const Blob& _blob) : ver(INVALID_VERSION),
+                                                 oid(_oid),
                                                  blob(_blob) {}
+    // constructor 0.5 : copy constructor
+    Object(const persistent::version_t _ver, const OID& _oid, const Blob& _blob) : ver(_ver), oid(_oid), blob(_blob) {}
+
     // constructor 1 : copy consotructor
-    Object(const uint64_t _oid, const char* const _b, const std::size_t _s) : oid(_oid),
+    Object(const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(INVALID_VERSION),
+                                                                              oid(_oid),
                                                                               blob(_b, _s) {}
+    // constructor 1.5 : copy constructor
+    Object(const persistent::version_t _ver, const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(_ver), oid(_oid), blob(_b, _s) {}
+    // TODO: we need a move version for the deserializer.
+
     // constructor 2 : move constructor
-    Object(Object&& other) : oid(other.oid),
+    Object(Object&& other) : ver(other.ver),
+                             oid(other.oid),
                              blob(std::move(other.blob)) {}
     // constructor 3 : copy constructor
-    Object(const Object& other) : oid(other.oid),
+    Object(const Object& other) : ver(other.ver),
+                                  oid(other.oid),
                                   blob(other.blob) {}
     // constructor 4 : default invalid constructor
-    Object() : oid(INV_OID) {}
+    Object() : ver(INVALID_VERSION), oid(INV_OID) {}
 
-    DEFAULT_SERIALIZATION_SUPPORT(Object, oid, blob);
+    DEFAULT_SERIALIZATION_SUPPORT(Object, ver, oid, blob);
 };
 
-inline std::ostream& operator << (std::ostream &out, const Blob &b) {
+inline std::ostream& operator<<(std::ostream& out, const Blob& b) {
     out << "[size:" << b.size << ", data:" << std::hex;
-    if (b.size > 0) {
+    if(b.size > 0) {
         uint32_t i = 0;
-        for (i = 0;i<8 && i<b.size; i++) {
+        for(i = 0; i < 8 && i < b.size; i++) {
             out << " " << b.bytes[i];
         }
-        if (i < b.size) {
+        if(i < b.size) {
             out << "...";
         }
     }
@@ -166,8 +178,9 @@ inline std::ostream& operator << (std::ostream &out, const Blob &b) {
     return out;
 }
 
-inline std::ostream& operator << (std::ostream &out, const Object &o) {
-    out << "Object{id:" << o.oid << ", data:" << o.blob << "}";
+inline std::ostream& operator<<(std::ostream& out, const Object& o) {
+    out << "Object{ver: 0x" << std::hex << o.ver << std::dec << ", id:"
+        << o.oid << ", data:" << o.blob << "}";
     return out;
 }
 
