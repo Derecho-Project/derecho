@@ -194,20 +194,72 @@ protected:
      */
     const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
+    /**
+     * Determines how many members each shard can have in the current view, based
+     * on each shard's policy (minimum and maximum number of nodes) and the size
+     * of the current view. This function first assigns the minimum number of
+     * nodes to each shard, then evenly increments every shard's size by 1 (in
+     * order of subgroup_type_order and in order of shard number within each
+     * subgroup) until either all shards are at their maximum size or all of the
+     * View's members are accounted for. It throws a subgroup_provisioning_exception
+     * if the View doesn't have enough members for even the minimum-size
+     * allocation.
+     * @param subgroup_type_order The same subgroup type order passed in to the operator() function
+     * @param curr_view The current View
+     * @return A map from subgroup type -> subgroup index -> shard number
+     * -> number of nodes in that shard
+     */
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> compute_standard_shard_sizes(
             const std::vector<std::type_index>& subgroup_type_order,
             const View& curr_view) const;
 
+    /**
+     * Creates and returns an initial membership allocation for a single
+     * subgroup type, based on the input map of shard sizes.
+     * @param subgroup_type The subgroup type to allocate members for
+     * @param curr_view The current view, whose next_unassigned_rank will be updated
+     * @param shard_sizes The map of membership sizes for every subgroup and shard
+     * @return A subgroup layout for this subgroup type
+     */
     subgroup_shard_layout_t allocate_standard_subgroup_type(
             const std::type_index subgroup_type,
             View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
 
+    /**
+     * Determines which nodes in the previous View's subgroup allocation will
+     * need to get reassigned to new subgroups in the current View because the
+     * shard-size function has determined that their shard must shrink. (Nodes
+     * from the previous View that have failed in the current View are not
+     * counted). This is a necessary first pass before the actual new assignments
+     * can be computed.
+     * @param subgroup_type_order The same subgroup type order passed in to the operator() function
+     * @param prev_view The previous View (which is not null)
+     * @param curr_view The current View
+     * @param shard_sizes The map of membership sizes for every subgroup and shard in curr_view
+     * @return A list of node IDs of nodes that will be leaving their prev_view
+     * shard for a different shard in curr_view
+     */
     std::list<node_id_t> find_reassigned_nodes(
             const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<View>& prev_view, const View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
 
+    /**
+     * Creates and returns a new membership allocation for a single subgroup
+     * type, based on its previous allocation and its newly-assigned sizes.
+     * @param subgroup_type The subgroup type to allocate members for
+     * @param subgroup_type_id The numeric "type ID" for this subgroup type
+     * (its position in the subgroup_type_order list)
+     * @param prev_view The previous View, now known to be non-null
+     * @param curr_view The current View, whose next_unassigned_rank will be updated
+     * @param shard_sizes The map of membership sizes for every subgroup and shard in curr_view
+     * @param free_reassigned_nodes The list of node IDs that can be reassigned
+     * to shards that need more members (even though they are before next_unassigned_rank
+     * in the members list). Each invocation of this function will modify this parameter
+     * to remove any nodes it uses in its subgroup's allocation.
+     * @return A subgroup layout for this subgroup type.
+     */
     subgroup_shard_layout_t update_standard_subgroup_type(
             const std::type_index subgroup_type,
             const subgroup_type_id_t subgroup_type_id,
@@ -216,11 +268,32 @@ protected:
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
             std::list<node_id_t>& free_reassigned_nodes) const;
 
+    /**
+     * Helper function that implements the subgroup allocation algorithm for all
+     * "standard" (non-cross-product) subgroups. It creates entries for those
+     * subgroups in the out-parameter subgroup_layouts.
+     * @param subgroup_type_order The same subgroup type order passed in to the operator() function
+     * @param prev_view The same previous view passed in to the operator() function
+     * @param curr_view The same current view passed in to the operator() function
+     * @param subgroup_layouts The map of subgroup types to subgroup layouts that operator()
+     * will end up returning; this function will fill in the entries for some of the types.
+     */
     void compute_standard_memberships(const std::vector<std::type_index>& subgroup_type_order,
                                       const std::unique_ptr<View>& prev_view,
                                       View& curr_view,
                                       subgroup_allocation_map_t& subgroup_layouts) const;
 
+    /**
+     * Helper function that implements the subgroup allocation algorithm for all
+     * cross-product subgroups. It must be run second so that it can refer to the allocations
+     * created for the "standard" subgroups. It creates entries for the cross-product
+     * subgroups in the out-parameter subgroup_layouts.
+     * @param subgroup_type_order The same subgroup type order passed in to the operator() function
+     * @param prev_view The same previous view passed in to the operator() function
+     * @param curr_view The same current view passed in to the operator() function
+     * @param subgroup_layouts The map of subgroup types to subgroup layouts that operator()
+     * will end up returning; this function will fill in the entries for some of the types.
+     */
     void compute_cross_product_memberships(const std::vector<std::type_index>& subgroup_type_order,
                                            const std::unique_ptr<View>& prev_view,
                                            View& curr_view,
