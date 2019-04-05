@@ -132,7 +132,8 @@ struct DerechoParams : public mutils::ByteRepresentable {
         std::string prefix = "SUBGROUP/" + profile + "/";
         std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm"};
         for (auto &field : fields) {
-            if (!hasCustomizedConfKey(prefix + field)) {
+            field = prefix + field;
+            if (!hasCustomizedConfKey(field)) {
                 // If an invalid profile was loaded in, utilize the default
                 // derecho parameters
                 // TODO: remove before merging to master
