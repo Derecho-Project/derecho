@@ -59,8 +59,9 @@ public:
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const version_t& ver = INVALID_VERSION, const bool& force_client = false) = 0;
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const uint64_t& ts_us) = 0;
 
-
-    virtual void leave() = 0;  // leave gracefully
+    // leave
+    // @PARAM grace - leave gracefully if true (wait for other nodes), false otherwise. Default to true.
+    virtual void leave(bool grace = true) = 0;
     virtual const ObjectWatcher& getObjectWatcher() = 0;
 
     // get singleton
