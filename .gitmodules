@@ -1,7 +1,3 @@
-[submodule "mutils-serialization"]
-	path = third_party/mutils-serialization
-	url = https://github.com/Derecho-Project/mutils-serialization.git
-	branch = master
 [submodule "mutils"]
 	path = third_party/mutils
 	url = https://github.com/mpmilano/mutils.git
