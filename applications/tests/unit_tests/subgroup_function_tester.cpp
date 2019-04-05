@@ -53,18 +53,20 @@ int main(int argc, char* argv[]) {
             {std::type_index(typeid(TestType1)), 0}};
 
     //We're really just testing the allocation functions, so assign each one to a dummy Replicated type
-    derecho::SubgroupInfo test_fixed_subgroups(DefaultSubgroupAllocator({
-        {std::type_index(typeid(TestType1)), sharded_policy},
-        {std::type_index(typeid(TestType2)), unsharded_policy},
-        {std::type_index(typeid(TestType3)), uneven_sharded_policy},
-        {std::type_index(typeid(TestType4)), multiple_copies_policy},
-        {std::type_index(typeid(TestType5)), multiple_subgroups_policy},
-        {std::type_index(typeid(TestType6)), uneven_to_even_cp}
-    }));
+    derecho::SubgroupInfo test_fixed_subgroups(
+            DefaultSubgroupAllocator({{std::type_index(typeid(TestType1)), sharded_policy},
+                                      {std::type_index(typeid(TestType2)), unsharded_policy},
+                                      {std::type_index(typeid(TestType3)), uneven_sharded_policy},
+                                      {std::type_index(typeid(TestType4)), multiple_copies_policy},
+                                      {std::type_index(typeid(TestType5)), multiple_subgroups_policy},
+                                      {std::type_index(typeid(TestType6)), uneven_to_even_cp}}));
 
-    std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
-                                                        std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4)),
-                                                        std::type_index(typeid(TestType5)), std::type_index(typeid(TestType6))};
+    std::vector<std::type_index> subgroup_type_order = {std::type_index(typeid(TestType1)),
+                                                        std::type_index(typeid(TestType2)),
+                                                        std::type_index(typeid(TestType3)),
+                                                        std::type_index(typeid(TestType4)),
+                                                        std::type_index(typeid(TestType5)),
+                                                        std::type_index(typeid(TestType6))};
     std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(100);
@@ -112,17 +114,15 @@ int main(int argc, char* argv[]) {
     derecho::test_provision_subgroups(test_fixed_subgroups, prev_view, *curr_view);
 
     //Now test the flexible allocation functions
-    derecho::SubgroupInfo test_flexible_subgroups(DefaultSubgroupAllocator({
-        {std::type_index(typeid(TestType1)), flexible_shards_policy},
-        {std::type_index(typeid(TestType2)), uneven_flexible_shards},
-        {std::type_index(typeid(TestType3)), multiple_copies_flexible},
-        {std::type_index(typeid(TestType4)), multiple_fault_tolerant_subgroups}
-    }));
+    derecho::SubgroupInfo test_flexible_subgroups(
+            DefaultSubgroupAllocator({{std::type_index(typeid(TestType1)), flexible_shards_policy},
+                                      {std::type_index(typeid(TestType2)), uneven_flexible_shards},
+                                      {std::type_index(typeid(TestType3)), multiple_copies_flexible},
+                                      {std::type_index(typeid(TestType4)), multiple_fault_tolerant_subgroups}}));
 
     std::vector<std::type_index> flexible_subgroup_type_order = {
             std::type_index(typeid(TestType1)), std::type_index(typeid(TestType2)),
-            std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4))
-    };
+            std::type_index(typeid(TestType3)), std::type_index(typeid(TestType4))};
     curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
                                                 std::vector<node_id_t>{}, std::vector<node_id_t>{},
                                                 0, 0, flexible_subgroup_type_order);
@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
     curr_view = derecho::make_next_view(*prev_view, flexible_ranks_to_fail_2, {}, {});
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
 
-    std::cout<< "TEST 9: Adding new members 100-140 so shards can re-expand." << std::endl;
+    std::cout << "TEST 9: Adding new members 100-140 so shards can re-expand." << std::endl;
     prev_view.swap(curr_view);
     curr_view = derecho::make_next_view(*prev_view, {}, new_members, new_member_ips_and_ports);
     derecho::test_provision_subgroups(test_flexible_subgroups, prev_view, *curr_view);
@@ -188,8 +188,8 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
     }
     //Go through subgroup_allocations and initialize curr_view
     for(subgroup_type_id_t subgroup_type_id = 0;
-            subgroup_type_id < curr_view.subgroup_type_order.size();
-            ++subgroup_type_id) {
+        subgroup_type_id < curr_view.subgroup_type_order.size();
+        ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
         subgroup_shard_layout_t& curr_type_subviews = subgroup_allocations[subgroup_type];
         std::cout << "Subgroup type " << subgroup_type.name() << " got assignment: " << std::endl;

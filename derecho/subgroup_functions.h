@@ -203,12 +203,18 @@ protected:
             View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
 
+    std::list<node_id_t> find_reassigned_nodes(
+            const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<View>& prev_view, const View& curr_view,
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+
     subgroup_shard_layout_t update_standard_subgroup_type(
             const std::type_index subgroup_type,
             const subgroup_type_id_t subgroup_type_id,
             const std::unique_ptr<View>& prev_view,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            std::list<node_id_t>& free_reassigned_nodes) const;
 
     void compute_standard_memberships(const std::vector<std::type_index>& subgroup_type_order,
                                       const std::unique_ptr<View>& prev_view,
