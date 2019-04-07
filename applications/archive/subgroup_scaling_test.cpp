@@ -91,8 +91,10 @@ int main(int argc, char *argv[]) {
             received_message_indices[subgroup_to_local_index.at(subgroup_num)][sender_rank] = index;
         };
 
-        auto membership_function = [num_nodes, subgroup_size](const std::type_index& subgroup_type,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
+        auto membership_function = [num_nodes, subgroup_size](
+                const std::vector<std::type_index>& subgroup_type_order,
+                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+            derecho::subgroup_allocation_map_t subgroup_allocation;
             auto num_members = curr_view.members.size();
             if(num_members < num_nodes) {
                 throw subgroup_provisioning_exception();
@@ -106,8 +108,8 @@ int main(int argc, char *argv[]) {
                 subgroup_vector[i].emplace_back(curr_view.make_subview(members));
             }
             curr_view.next_unassigned_rank = curr_view.members.size();
-
-            return subgroup_vector;
+            subgroup_allocation.emplace(std::type_index(typeid(RawObject)), std::move(subgroup_vector));
+            return subgroup_allocation;
         };
 
         SubgroupInfo raw_groups(membership_function);

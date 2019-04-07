@@ -174,7 +174,8 @@ int main(int argc, char *argv[]) {
     uint64_t si_us = (1000000l / ops_per_sec);
     int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
 
-    derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](
+            const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
@@ -191,7 +192,10 @@ int main(int argc, char *argv[]) {
         }
 
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_of_nodes - 1);
-        return subgroup_vector;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(ByteArrayObject)),
+                                    std::move(subgroup_vector));
+        return subgroup_allocation;
     }};
 
 

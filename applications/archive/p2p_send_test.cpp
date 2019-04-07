@@ -13,17 +13,20 @@ using namespace persistent;
 
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
-    derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
-                                           const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+    derecho::SubgroupInfo subgroup_info{[](const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < 3) {
             throw derecho::subgroup_provisioning_exception();
         }
-        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        derecho::subgroup_shard_layout_t subgroup_layout(1);
         std::vector<node_id_t> first_3_nodes(&curr_view.members[0], &curr_view.members[0] + 3);
-        //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-        subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+        //Put the desired SubView at subgroup_layout[0][0] since there's one subgroup with one shard
+        subgroup_layout[0].emplace_back(curr_view.make_subview(first_3_nodes));
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, 3);
-        return subgroup_vector;
+        //Since we know there is only one subgroup type, just put a single entry in the map
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(Foo)), std::move(subgroup_layout));
+        return subgroup_allocation;
     }};
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments

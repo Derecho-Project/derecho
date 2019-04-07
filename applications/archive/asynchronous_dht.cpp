@@ -78,7 +78,8 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    derecho::SubgroupInfo subgroup_function{[](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_function{[](
+            const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < 2) {
             throw derecho::subgroup_provisioning_exception();
@@ -88,7 +89,10 @@ int main(int argc, char* argv[]) {
             subgroup_vector[0].emplace_back(curr_view.make_subview({2 * i, 2 * i + 1}));
         }
         curr_view.next_unassigned_rank = curr_view.num_members;
-        return subgroup_vector;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(HashTable<std::string>)),
+                                    std::move(subgroup_vector));
+        return subgroup_allocation;
     }};
 
     auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };

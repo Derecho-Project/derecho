@@ -70,12 +70,29 @@ uint32_t SubView::num_senders() const {
     return num;
 }
 
+void SubView::init_joined_departed(const SubView& previous_subview) {
+    //To ensure this method is idempotent
+    joined.clear();
+    departed.clear();
+    std::set<node_id_t> prev_members(previous_subview.members.begin(),
+                                     previous_subview.members.end());
+    std::set<node_id_t> curr_members(members.begin(),
+                                     members.end());
+    std::set_difference(curr_members.begin(), curr_members.end(),
+                        prev_members.begin(), prev_members.end(),
+                        std::back_inserter(joined));
+    std::set_difference(prev_members.begin(), prev_members.end(),
+                        curr_members.begin(), curr_members.end(),
+                        std::back_inserter(departed));
+}
+
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
            const std::vector<char>& failed, const int32_t num_failed,
            const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t num_members,
+           const int32_t next_unassigned_rank,
            const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
            const std::vector<std::vector<SubView>>& subgroup_shard_views,
            const std::map<subgroup_id_t, uint32_t>& my_subgroups)
@@ -88,8 +105,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           departed(departed),
           num_members(num_members),
           my_rank(0),              // This will always get overwritten by the receiver after deserializing
-          next_unassigned_rank(0), /* next_unassigned_rank should never be serialized, since each
-                                    * node must re-run the allocation functions independently */
+          next_unassigned_rank(next_unassigned_rank),
           subgroup_ids_by_type_id(subgroup_ids_by_type_id),
           subgroup_shard_views(subgroup_shard_views),
           my_subgroups(my_subgroups) {
@@ -156,17 +172,15 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
                            const std::vector<int>& is_sender) const {
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
-    for(std::size_t subview_rank = 0; subview_rank < with_members.size();
-        ++subview_rank) {
-        std::size_t member_pos = std::distance(members.begin(), std::find(members.begin(), members.end(),
-                                                                          with_members[subview_rank]));
-        if(member_pos == members.size()) {
+    for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
+        int view_rank_of_member = rank_of(with_members[subview_rank]);
+        if(view_rank_of_member == -1) {
             // The ID wasn't found in members[]
             throw subgroup_provisioning_exception();
         }
-        subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[member_pos];
+        subview_member_ips_and_ports[subview_rank] = member_ips_and_ports[view_rank_of_member];
     }
-    // Note that joined and departed do not need to get initialized here; they wiill be initialized by ViewManager
+    // Note that joined and departed do not need to get initialized here; they will be initialized by ViewManager
     return SubView(mode, with_members, is_sender, subview_member_ips_and_ports);
 }
 

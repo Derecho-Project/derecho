@@ -43,22 +43,25 @@ int main(int argc, char* argv[]) {
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
     int count = std::stoi(argv[2]);
 
-    derecho::SubgroupInfo subgroup_info{[num_of_nodes](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_info{[num_of_nodes](
+            const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
             throw derecho::subgroup_provisioning_exception();
         }
-        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        derecho::subgroup_shard_layout_t subgroup_layout(1);
 
         std::vector<uint32_t> members(num_of_nodes);
         for(int i = 0; i < num_of_nodes; i++) {
             members[i] = i;
         }
 
-        subgroup_vector[0].emplace_back(curr_view.make_subview(members));
+        subgroup_layout[0].emplace_back(curr_view.make_subview(members));
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_of_nodes);
-        return subgroup_vector;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
+        return subgroup_allocation;
     }};
 
     auto ba_factory = [](PersistentRegistry*) { return std::make_unique<TestObject>(); };
