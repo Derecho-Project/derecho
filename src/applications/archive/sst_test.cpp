@@ -1,8 +1,8 @@
-#include "sst/sst.h"
+#include <derecho/sst/sst.hpp>
 #ifdef USE_VERBS_API
-#include "sst/verbs.h"
+    #include <derecho/sst/verbs.hpp>
 #else
-#include "sst/lf.h"
+    #include <derecho/sst/lf.hpp>
 #endif
 #include <spdlog/spdlog.h>
 

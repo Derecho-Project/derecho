@@ -1,13 +1,13 @@
 #include <iostream>
 
 #include <sys/time.h>
-#include "sst/poll_utils.h"
+#include <derecho/sst/poll_utils.hpp>
 #ifdef USE_VERBS_API
-  #include "sst/verbs.h"
+  #include <derecho/sst/verbs.hpp>
 #else
-  #include "sst/lf.h"
+  #include <derecho/sst/lf.hpp>
 #endif
-#include "tcp/tcp.h"
+#include <derecho/tcp/tcp.hpp>
 
 using std::cin;
 using std::cout;

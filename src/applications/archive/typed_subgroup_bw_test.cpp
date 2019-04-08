@@ -5,11 +5,11 @@
 #include <time.h>
 #include <vector>
 
-#include "bytes_object.h"
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <persistent/Persistent.hpp>
-#include <conf/conf.hpp>
+#include "bytes_object.hpp"
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/conf/conf.hpp>
 
 using derecho::Bytes;
 

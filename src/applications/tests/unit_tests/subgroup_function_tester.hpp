@@ -14,10 +14,10 @@
 #include <set>
 #include <vector>
 
-#include "derecho/derecho_type_definitions.h"
-#include "derecho/subgroup_functions.h"
-#include "derecho/subgroup_info.h"
-#include "derecho/view.h"
+#include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/subgroup_functions.hpp>
+#include <derecho/core/subgroup_info.hpp>
+#include <derecho/core/view.hpp>
 
 namespace std {
 

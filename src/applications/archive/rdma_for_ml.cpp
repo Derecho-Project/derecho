@@ -7,10 +7,10 @@
 #include <unistd.h>
 #include <vector>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 
-#include "sst/poll_utils.h"
-#include "sst/sst.h"
+#include <derecho/sst/poll_utils.hpp>
+#include <derecho/sst/sst.hpp>
 
 using namespace derecho;
 using namespace sst;

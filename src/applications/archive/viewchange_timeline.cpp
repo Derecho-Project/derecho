@@ -9,10 +9,10 @@
 #include <thread>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include "initialize.h"
-#include "rdmc/util.h"
-#include "utils/time.h"
+#include <derecho/core/derecho.hpp>
+#include "initialize.hpp"
+#include <private/derecho/rdmc/util.hpp>
+#include <derecho/utils/time.h>
 
 using namespace std;
 using namespace std::chrono_literals;

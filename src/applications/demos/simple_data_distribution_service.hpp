@@ -1,7 +1,7 @@
 #pragma once
 
-#include "objectstore/ObjectStore.hpp"
-#include "conf/conf.hpp"
+#include <derecho/objectstore/ObjectStore.hpp>
+#include <derecho/conf/conf.hpp>
 
 /**
    Data Distribution Service(DDS) on Derecho Object Store

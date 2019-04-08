@@ -1,5 +1,5 @@
-#ifndef UTIL_HPP
-#define UTIL_HPP
+#ifndef PERSISTENT_UTIL_HPP
+#define PERSISTENT_UTIL_HPP
 
 #include "PersistException.hpp"
 #include <derecho/conf/conf.hpp>
@@ -90,4 +90,4 @@ inline bool checkOrCreateFileWithSize(const std::string& file, uint64_t size) no
     return bCreate;
 }
 
-#endif  //UTIL_HPP
+#endif  //UTIL_PERSISTENT_HPP

@@ -3,8 +3,8 @@
 #include <map>
 #include <string>
 
-#include "block_size.h"
-#include "derecho/derecho.h"
+#include "block_size.hpp"
+#include <derecho/core/derecho.hpp>
 #include "initialize.h"
 
 using derecho::RawObject;

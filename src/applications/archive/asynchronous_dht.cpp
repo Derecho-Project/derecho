@@ -1,9 +1,9 @@
 #include <iostream>
 #include <map>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include "conf/conf.hpp"
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/conf/conf.hpp>
 
 template <class DataType>
 class HashTable;

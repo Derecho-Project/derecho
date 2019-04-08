@@ -1,5 +1,5 @@
-#include "derecho/derecho.h"
-#include "conf/conf.hpp"
+#include <derecho/core/derecho.hpp>
+#include <derecho/conf/conf.hpp>
 
 using std::cout;
 using std::endl;

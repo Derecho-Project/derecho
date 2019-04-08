@@ -5,9 +5,9 @@
 #include <time.h>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include "rdmc/rdmc.h"
-#include "rdmc/util.h"
+#include <derecho/core/derecho.hpp>
+#include <derecho/rdmc/rdmc.hpp>
+#include <private/derecho/rdmc/util.hpp>
 
 using std::cout;
 using std::endl;

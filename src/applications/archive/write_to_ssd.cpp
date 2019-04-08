@@ -3,11 +3,11 @@
 #include <time.h>
 #include <vector>
 
-#include "aggregate_bandwidth.h"
-#include "block_size.h"
-#include "derecho/derecho.h"
-#include "initialize.h"
-#include "log_results.h"
+#include "aggregate_bandwidth.hpp"
+#include "block_size.hpp"
+#include <derecho/core/derecho.hpp>
+#include "initialize.hpp"
+#include "log_results.hpp"
 
 using derecho::RawObject;
 using std::cin;

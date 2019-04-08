@@ -1,8 +1,8 @@
 #include <iostream>
 
-#include "derecho/derecho.h"
-#include "rdmc/util.h"
-#include "conf/conf.hpp"
+#include <derecho/core/derecho.hpp>
+#include <private/derecho/rdmc/util.hpp>
+#include <derecho/conf/conf.hpp>
 
 using std::cin;
 using std::cout;

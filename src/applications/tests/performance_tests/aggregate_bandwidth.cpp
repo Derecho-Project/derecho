@@ -1,6 +1,6 @@
 #include <fstream>
 
-#include "aggregate_bandwidth.h"
+#include "aggregate_bandwidth.hpp"
 
 double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_id,
                            double bw) {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sst/sst.h"
+#include <derecho/sst/sst.hpp>
 #include <vector>
 
 class ResultSST : public sst::SST<ResultSST> {

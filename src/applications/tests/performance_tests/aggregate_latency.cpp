@@ -1,6 +1,6 @@
 #include <fstream>
 
-#include "aggregate_latency.h"
+#include "aggregate_latency.hpp"
 
 std::pair<double, double> aggregate_latency(std::vector<uint32_t> members, uint32_t node_id,
 			 double latency, double latency_std_dev) {

@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;

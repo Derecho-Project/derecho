@@ -7,8 +7,8 @@
 #include <typeindex>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include "conf/conf.hpp"
+#include <derecho/core/derecho.hpp>
+#include <derecho/conf/conf.hpp>
 
 /*
  * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS

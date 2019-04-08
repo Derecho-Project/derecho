@@ -1,5 +1,5 @@
-#ifndef UTIL_HPP
-#define UTIL_HPP
+#ifndef RDMC_UTIL_HPP
+#define RDMC_UTIL_HPP
 
 #include <derecho/utils/time.h>
 

@@ -1,8 +1,8 @@
 #include <iostream>
 #include <vector>
 
-#include "conf/conf.hpp"
-#include "derecho/derecho.h"
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;

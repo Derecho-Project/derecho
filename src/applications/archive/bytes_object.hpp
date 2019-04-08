@@ -1,9 +1,7 @@
 #pragma once
 
-#include "derecho/replicated.h"
 #include <cstring>
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <mutils-serialization/context_ptr.hpp>
+#include <derecho/core/replicated.hpp>
 
 namespace derecho {
 //A ByteRepresentable object representing a byte array that is used in several experiments.

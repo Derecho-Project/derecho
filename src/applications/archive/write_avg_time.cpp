@@ -4,12 +4,12 @@
 #include <map>
 #include <vector>
 
-#include "compute_nodes_list.h"
-#include "sst/sst.h"
+#include "compute_nodes_list.hpp"
+#include <derecho/sst/sst.hpp>
 #ifdef USE_VERBS_API
-#include "sst/verbs.h"
+#include <derecho/sst/verbs.hpp>
 #else
-#include "sst/lf.h"
+#include <derecho/sst/lf.hpp>
 #endif
 
 using namespace sst;

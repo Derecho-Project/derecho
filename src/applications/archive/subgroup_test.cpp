@@ -7,7 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 
 using derecho::RawObject;
 using std::cin;

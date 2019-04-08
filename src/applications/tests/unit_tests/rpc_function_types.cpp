@@ -1,5 +1,5 @@
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 
 /*
  * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS

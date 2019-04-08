@@ -7,9 +7,9 @@
 
 #include <iostream>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 #include "test_objects.h"
-#include "conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 
 using derecho::ExternalCaller;
 using derecho::Replicated;

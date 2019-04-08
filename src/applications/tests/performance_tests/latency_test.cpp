@@ -16,12 +16,12 @@
 #include <thread>
 #include <vector>
 
-#include "rdmc/rdmc.h"
-#include "rdmc/util.h"
+#include <derecho/rdmc/rdmc.hpp>
+#include <private/derecho/rdmc/util.hpp>
+#include <derecho/core/derecho.hpp>
 
-#include "aggregate_latency.h"
-#include "derecho/derecho.h"
-#include "log_results.h"
+#include "aggregate_latency.hpp"
+#include "log_results.hpp"
 
 using std::cout;
 using std::endl;

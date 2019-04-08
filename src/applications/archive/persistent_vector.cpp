@@ -6,9 +6,7 @@
 #include <thread>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <persistent/Persistent.hpp>
+#include <derecho/core/derecho.hpp>
 
 using derecho::ExternalCaller;
 using derecho::Replicated;

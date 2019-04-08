@@ -7,12 +7,12 @@
 #include <time.h>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <mutils-serialization/context_ptr.hpp>
-#include <persistent/Persistent.hpp>
-#include <persistent/util.hpp>
-#include <conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/mutils-serialization/context_ptr.hpp>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/persistent/util.hpp>
+#include <derecho/conf/conf.hpp>
 
 using mutils::context_ptr;
 

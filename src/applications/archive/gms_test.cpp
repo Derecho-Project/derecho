@@ -3,9 +3,9 @@
 #include <map>
 #include <string>
 
-#include "block_size.h"
-#include "derecho/derecho.h"
-#include "initialize.h"
+#include "block_size.hpp"
+#include <derecho/core/derecho.hpp>
+#include "initialize.hpp"
 
 using std::cin;
 using std::cout;

@@ -15,9 +15,9 @@
 #include <time.h>
 #include <vector>
 
-#include "aggregate_bandwidth.h"
-#include "derecho/derecho.h"
-#include "log_results.h"
+#include "aggregate_bandwidth.hpp"
+#include <derecho/core/derecho.hpp>
+#include "log_results.hpp"
 
 using std::cout;
 using std::endl;

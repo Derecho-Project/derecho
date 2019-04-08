@@ -1,6 +1,6 @@
 #include <cassert>
 
-#include "compute_nodes_list.h"
+#include "compute_nodes_list.hpp"
 
 using namespace std;
 

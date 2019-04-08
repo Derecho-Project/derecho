@@ -6,12 +6,8 @@
 #include <time.h>
 #include <vector>
 
-#include "bytes_object.h"
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <persistent/Persistent.hpp>
-#include <persistent/util.hpp>
-#include "conf/conf.hpp"
+#include "bytes_object.hpp"
+#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;

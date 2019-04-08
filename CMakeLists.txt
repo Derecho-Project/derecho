@@ -78,5 +78,5 @@ add_dependencies(derecho
     rdmc sst tcp persistent)
 
 add_subdirectory(src/objectstore)
-# add_subdirectory(src/applications)
+add_subdirectory(src/applications)
 

@@ -1,20 +1,13 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwarf-3 -D_DEBUG -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -Wall -fPIC")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -O0 -ggdb -gdwarf-3 -D_DEBUG -pg")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS} -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
-include_directories(${derecho_SOURCE_DIR})
-include_directories(${derecho_SOURCE_DIR}/third_party)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_CIRRENT_SOURCE_DIR})
 
 # bandwidth_test
 add_executable(bandwidth_test bandwidth_test.cpp aggregate_bandwidth.cpp)

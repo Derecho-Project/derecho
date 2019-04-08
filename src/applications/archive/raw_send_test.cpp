@@ -5,10 +5,10 @@
 #include <time.h>
 #include <vector>
 
-#include "block_size.h"
-#include "derecho/derecho.h"
-#include "rdmc/util.h"
-#include "conf/conf.hpp"
+#include "block_size.hpp"
+#include <derecho/core/derecho.hpp>
+#include <private/derecho/rdmc/util.h>
+#include <derecho/conf/conf.hpp>
 
 using std::cout;
 using std::endl;

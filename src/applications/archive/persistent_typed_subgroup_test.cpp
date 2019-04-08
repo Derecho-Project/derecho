@@ -6,9 +6,9 @@
 #include <thread>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <persistent/Persistent.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
 
 /**
  * Example for replicated object with Persistent<T>

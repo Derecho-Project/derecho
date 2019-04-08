@@ -5,8 +5,8 @@
 #include <vector>
 
 #include "sst/experiments/statistics.h"
-#include "routing.h"
-#include "lsdb_row.h"
+#include "routing.hpp"
+#include "lsdb_row.hpp"
 
 
 using std::tie;

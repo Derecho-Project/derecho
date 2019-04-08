@@ -16,9 +16,9 @@
 #include <string>
 #include <vector>
 
-#include "conf/conf.hpp"
-#include "derecho/derecho.h"
-#include "sample_objects.h"
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
+#include "sample_objects.hpp"
 
 using derecho::ExternalCaller;
 using derecho::Replicated;

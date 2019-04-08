@@ -7,10 +7,10 @@
 #include <string.h>
 #include <chrono>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
-#include <persistent/Persistent.hpp>
-#include "conf/conf.hpp"
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/conf/conf.hpp>
 #include <optional>
 
 using std::cout;

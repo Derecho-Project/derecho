@@ -1,8 +1,8 @@
 #include <iostream>
 #include <vector>
 
-#include "derecho/derecho_internal.h"
-#include "subgroup_function_tester.h"
+#include <derecho/core/derecho_internal.hpp>
+#include "subgroup_function_tester.hpp"
 
 std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t> ip_and_ports_generator() {
     static int invocation_count = 0;

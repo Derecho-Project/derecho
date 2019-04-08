@@ -7,8 +7,8 @@
 #include <iostream>
 #include <string>
 
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 
 #ifdef __CDT_PARSER__
 #define REGISTER_RPC_FUNCTIONS(...)

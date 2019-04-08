@@ -1,20 +1,13 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -Wall -ggdb -gdwarf-3 -D_DEBUG -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -Wall -O3 -fPIC")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -ggdb -gdwarf-3 -D_DEBUG -pg")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS} -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
-include_directories(${derecho_SOURCE_DIR})
-include_directories(${derecho_SOURCE_DIR}/third_party)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 # subgroup_scaling_test
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
@@ -22,11 +15,11 @@ target_link_libraries(subgroup_scaling_test derecho)
 
 # derecho_caller_test
 add_executable(derecho_caller_test derecho_caller_test.cpp)
-target_link_libraries(derecho_caller_test derecho mutils mutils-serialization)
+target_link_libraries(derecho_caller_test derecho)
 
 # p2p_latency_test
 add_executable(p2p_latency_test p2p_latency_test.cpp)
-target_link_libraries(p2p_latency_test derecho mutils mutils-serialization)
+target_link_libraries(p2p_latency_test derecho)
 
 # subgroup_test
 add_executable(subgroup_test subgroup_test.cpp)
@@ -126,31 +119,31 @@ target_link_libraries(debug_failure_test derecho)
 
 # count_write
 add_executable(count_write count_write.cpp)
-target_link_libraries(count_write sst)
+target_link_libraries(count_write derecho)
 
 # rdma_for_ml.cpp
 add_executable(rdma_for_ml rdma_for_ml.cpp)
-target_link_libraries(rdma_for_ml sst pthread)
+target_link_libraries(rdma_for_ml derecho)
 
 # sst_test
 add_executable(sst_test sst_test.cpp)
-target_link_libraries(sst_test sst)
+target_link_libraries(sst_test derecho)
 
 # simple_predicate
 add_executable(simple_predicate simple_predicate.cpp)
-target_link_libraries(simple_predicate sst)
+target_link_libraries(simple_predicate derecho)
 
 # test_write
 add_executable(test_write test_write.cpp)
-target_link_libraries(test_write sst)
+target_link_libraries(test_write derecho)
 
 # write_avg_time
 add_executable(write_avg_time write_avg_time.cpp compute_nodes_list.cpp)
-target_link_libraries(write_avg_time sst)
+target_link_libraries(write_avg_time derecho)
 
 # rdma_two_sided
 add_executable(rdma_two_sided rdma_two_sided.cpp)
-target_link_libraries(rdma_two_sided sst)
+target_link_libraries(rdma_two_sided derecho)
 
 # membership_tests
 add_executable(membership_tests membership_tests.cpp)

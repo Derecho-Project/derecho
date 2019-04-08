@@ -11,11 +11,11 @@
 #include <typeindex>
 #include <vector>
 
-#include "aggregate_bandwidth.h"
-#include "derecho/derecho.h"
-#include "log_results.h"
-#include "rdmc/rdmc.h"
-#include "rdmc/util.h"
+#include "aggregate_bandwidth.hpp"
+#include <derecho/core/derecho.hpp>
+#include "log_results.hpp"
+#include <derecho/rdmc/rdmc.hpp>
+#include <private/derecho/rdmc/util.hpp>
 
 using std::cout;
 using std::endl;

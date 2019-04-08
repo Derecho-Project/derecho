@@ -5,9 +5,9 @@
 #include <utility>
 #include <vector>
 
-#include "sst/sst.h"
-#include "lsdb_row.h"
-#include "std_hashes.h"
+#include <derecho/sst/sst.hpp>
+#include "lsdb_row.hpp"
+#include "std_hashes.hpp"
 
 static constexpr int RACK_SIZE = 30;
 

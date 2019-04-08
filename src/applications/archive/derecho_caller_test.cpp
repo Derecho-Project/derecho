@@ -5,10 +5,10 @@
 #include <time.h>
 #include <vector>
 
-#include "derecho/derecho.h"
-#include "rdmc/util.h"
+#include <derecho/core/derecho.hpp>
+#include <private/derecho/rdmc/util.hpp>
 #include "spdlog/spdlog.h"
-#include "conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 
 using std::cout;
 using std::endl;

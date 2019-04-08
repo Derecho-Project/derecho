@@ -7,7 +7,7 @@
 #include <time.h>
 #include <vector>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 #include "initialize.h"
 
 using derecho::DerechoSST;

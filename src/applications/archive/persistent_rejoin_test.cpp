@@ -5,7 +5,7 @@
 
 #include <iostream>
 
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 
 /*
  * The Eclipse CDT parser crashes if it tries to expand the REGISTER_RPC_FUNCTIONS

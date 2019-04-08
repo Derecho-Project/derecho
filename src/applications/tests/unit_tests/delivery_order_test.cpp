@@ -1,5 +1,5 @@
-#include <derecho/derecho.h>
-#include <derecho/view.h>
+#include <derecho/core/derecho.hpp>
+#include <derecho/core/view.hpp>
 
 #include <algorithm>
 #include <chrono>
