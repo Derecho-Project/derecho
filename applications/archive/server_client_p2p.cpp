@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     const uint32_t B = atoi(argv[2]);
     const uint32_t R = atoi(argv[3]);
 
-    SubgroupInfo subgroup_info{[S](const std::type_index& subgroup_type,
+    SubgroupInfo subgroup_info{[S](const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if((uint32_t)curr_view.num_members < S) {
             throw subgroup_provisioning_exception();
@@ -47,7 +47,9 @@ int main(int argc, char* argv[]) {
         std::vector<node_id_t> first_S_nodes(&curr_view.members[0], &curr_view.members[0] + S);
         subgroup_vector[0].emplace_back(curr_view.make_subview(first_S_nodes));
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, (int)S);
-        return subgroup_vector;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(Server)), std::move(subgroup_vector));
+        return subgroup_allocation;
     }};
 
     auto server_factory = [R](PersistentRegistry*) {

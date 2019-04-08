@@ -32,8 +32,8 @@ int main(int argc, char** argv) {
     //Define subgroup membership using the default subgroup allocator function
     //Each Replicated type will have one subgroup and one shard, with three members in the shard
     derecho::SubgroupInfo subgroup_function {derecho::DefaultSubgroupAllocator({
-        {std::type_index(typeid(Foo)), derecho::one_subgroup_policy(derecho::even_sharding_policy(1,3))},
-        {std::type_index(typeid(Bar)), derecho::one_subgroup_policy(derecho::even_sharding_policy(1,3))}
+        {std::type_index(typeid(Foo)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))},
+        {std::type_index(typeid(Bar)), derecho::one_subgroup_policy(derecho::fixed_even_shards(1,3))}
     })};
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but

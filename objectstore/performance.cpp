@@ -91,6 +91,5 @@ int main(int argc, char** argv) {
     std::cout << "throughput:" << thp_mBps << "MB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "op/s." << std::endl;
     std::cout << std::flush;
-    while(true) {
-    }
+    oss.leave();
 }

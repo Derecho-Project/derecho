@@ -44,7 +44,8 @@ public:
     /** List of IDs of nodes that left since the previous view, if any. */
     std::vector<node_id_t> departed;
     /** The rank of this node within the subgroup/shard, or -1 if this node is
-     * not a member of the subgroup/shard. */
+     * not a member of the subgroup/shard. This is initialized by ViewManager, not
+     * the subgroup allocation functions that create SubViews. */
     int32_t my_rank;
     /** Looks up the sub-view rank of a node ID. Returns -1 if
      * that node ID is not a member of this subgroup/shard. */
@@ -75,6 +76,14 @@ public:
     SubView(Mode mode, const std::vector<node_id_t>& members,
             std::vector<int> is_sender,
             const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports);
+
+    /**
+     * Initialization helper method that initializes the joined and departed lists
+     * given the previous View's version of this SubView. This should be called
+     * after using the fewer-parameters constructor to finish setting up the SubView.
+     * @param previous_subview The previous SubView to compare against
+     */
+    void init_joined_departed(const SubView& previous_subview);
 };
 
 class View : public mutils::ByteRepresentable {
@@ -168,7 +177,8 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_ports,
                                   failed, num_failed, joined, departed,
-                                  num_members, subgroup_ids_by_type_id, subgroup_shard_views, my_subgroups);
+                                  num_members, next_unassigned_rank,
+                                  subgroup_ids_by_type_id, subgroup_shard_views, my_subgroups);
 
     /**
      * Constructor used by deserialization: constructs a View given the values of its serialized fields.
@@ -180,6 +190,7 @@ public:
          const std::vector<char>& failed, const int32_t num_failed,
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members,
+         const int32_t next_unassigned_rank,
          const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
          const std::vector<std::vector<SubView>>& subgroup_shard_views,
          const std::map<subgroup_id_t, uint32_t>& my_subgroups);

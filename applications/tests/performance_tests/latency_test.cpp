@@ -102,9 +102,9 @@ int main(int argc, char* argv[]) {
         mode = Mode::UNORDERED;
     }
 
-    auto membership_function = [num_senders_selector, mode, num_nodes](const std::type_index& subgroup_type,
-                                                                       const std::unique_ptr<View>& prev_view, View& curr_view) {
-        //There will be only one subgroup (of type RawObject), so no need to check subgroup_type
+    auto membership_function = [num_senders_selector, mode, num_nodes](
+            const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<View>& prev_view, View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         // wait for all nodes to join the group
@@ -135,7 +135,10 @@ int main(int argc, char* argv[]) {
             subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
         }
         curr_view.next_unassigned_rank = curr_view.members.size();
-        return subgroup_vector;
+        //Since we know there is only one subgroup type, just put a single entry in the map
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(RawObject)), std::move(subgroup_vector));
+        return subgroup_allocation;
     };
 
     //Wrap the membership function in a SubgroupInfo

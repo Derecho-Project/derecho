@@ -195,7 +195,9 @@ int main(int argc, char* argv[]) {
     srand(time(NULL));
     node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-    auto state_membership_function = [&tests](const std::type_index& subgroup_type, const std::unique_ptr<View>& prev_view, View& curr_view) {
+    auto state_membership_function = [&tests](
+            const std::vector<std::type_index>& subgroup_type_order,
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.members.size() < 3) {
             throw subgroup_provisioning_exception();
         }
@@ -208,7 +210,9 @@ int main(int argc, char* argv[]) {
         if(tests[Tests::INTER_EMPTY]) inter_empty_layout(layout_vec[t++], curr_view);
         if(tests[Tests::DISJOINT_MEM]) dis_mem_layout(layout_vec[t++], curr_view);
 
-        return layout_vec;
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        subgroup_allocation.emplace(std::type_index(typeid(State)), std::move(layout_vec));
+        return subgroup_allocation;
     };
 
     const int INIT_STATE = 100;

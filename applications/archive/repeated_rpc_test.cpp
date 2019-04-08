@@ -23,17 +23,21 @@ int main(int argc, char** argv) {
 
     const int num_nodes_in_test = 3;
     derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view,
+            derecho::subgroup_allocation_map_t& subgroup_allocation) {
+        if(subgroup_allocation.at(subgroup_type)) {
+            return;
+        }
         if(curr_view.num_members < num_nodes_in_test) {
             throw derecho::subgroup_provisioning_exception();
         }
-        derecho::subgroup_shard_layout_t subgroup_vector(1);
+        auto subgroup_vector = std::make_unique<derecho::subgroup_shard_layout_t>(1);
         std::vector<node_id_t> node_list(&curr_view.members[0], &curr_view.members[0] + num_nodes_in_test);
         //Put the desired SubView at subgroup_vector[0][0] since there's one subgroup with one shard
-        subgroup_vector[0].emplace_back(curr_view.make_subview(node_list));
+        (*subgroup_vector)[0].emplace_back(curr_view.make_subview(node_list));
         curr_view.next_unassigned_rank = std::max(curr_view.next_unassigned_rank, num_nodes_in_test);
         cout << "Foo function setting next_unassigned_rank to " << curr_view.next_unassigned_rank << endl;
-        return subgroup_vector;
+        subgroup_allocation[subgroup_type] = std::move(subgroup_vector);
     }};
 
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };

@@ -78,9 +78,9 @@ On application shutdown, the application can close the local store service by ca
     oss.leave();
 ```
 
-Please check the example application code in [test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/test.cpp).
+Please check the example application code in [test.cpp](https://github.com/Derecho-Project/derecho/blob/master/objectstore/test.cpp).
 
 ## The dPods API
-The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/derecho-unified/blob/master/objectstore/ObjectStore.hpp). TODO: explaining the normal put/get/remove as well as temporal query, conditional-put.
+The dPods API is shown in [ObjectStore.hpp](https://github.com/Derecho-Project/derecho/blob/master/objectstore/ObjectStore.hpp). TODO: explaining the normal put/get/remove as well as temporal query, conditional-put.
 ## TODO: More on the dPods versions
 

@@ -75,8 +75,8 @@ int main(int argc, char** argv) {
     auto load_balancer_factory = [](PersistentRegistry*) { return std::make_unique<LoadBalancer>(); };
     auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
 
-    derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(1, 3));
-    derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::even_sharding_policy(3, 3));
+    derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(1, 3));
+    derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(3, 3));
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
         {std::type_index(typeid(LoadBalancer)), load_balancer_policy},
         {std::type_index(typeid(Cache)), cache_policy}

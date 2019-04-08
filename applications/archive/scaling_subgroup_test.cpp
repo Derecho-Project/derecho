@@ -15,36 +15,39 @@ using std::endl;
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
-    derecho::SubgroupInfo subgroup_function{[](const std::type_index& subgroup_type,
+    derecho::SubgroupInfo subgroup_function{[](const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
-        if(subgroup_type == std::type_index(typeid(Foo))) {
-            if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
-                throw derecho::subgroup_provisioning_exception();
-            }
+        derecho::subgroup_allocation_map_t subgroup_allocation;
+        for(const auto& subgroup_type : subgroup_type_order) {
             derecho::subgroup_shard_layout_t subgroup_vector(1);
-            std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
-                                                 &curr_view.members[curr_view.next_unassigned_rank] + 3);
-            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-            curr_view.next_unassigned_rank += 3;
-            return subgroup_vector;
-        } else { // subgroup_type == std::type_index(typeid(Bar))
-            if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
-                throw derecho::subgroup_provisioning_exception();
-            }
-            derecho::subgroup_shard_layout_t subgroup_vector(1);
-            std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
-                                                 &curr_view.members[curr_view.next_unassigned_rank] + 3);
-            subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
-            curr_view.next_unassigned_rank += 3;
-            //If there are at least 3 more nodes left, make a second subgroup
-            if(curr_view.num_members - curr_view.next_unassigned_rank >= 3) {
-                std::vector<node_id_t> next_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
-                                                    &curr_view.members[curr_view.next_unassigned_rank] + 3);
-                subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
+            if(subgroup_type == std::type_index(typeid(Foo))) {
+                if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
+                    throw derecho::subgroup_provisioning_exception();
+                }
+                std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                     &curr_view.members[curr_view.next_unassigned_rank] + 3);
+                subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
                 curr_view.next_unassigned_rank += 3;
+
+            } else { // subgroup_type == std::type_index(typeid(Bar))
+                if(curr_view.num_members - curr_view.next_unassigned_rank < 3) {
+                    throw derecho::subgroup_provisioning_exception();
+                }
+                std::vector<node_id_t> first_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                     &curr_view.members[curr_view.next_unassigned_rank] + 3);
+                subgroup_vector[0].emplace_back(curr_view.make_subview(first_3_nodes));
+                curr_view.next_unassigned_rank += 3;
+                //If there are at least 3 more nodes left, make a second subgroup
+                if(curr_view.num_members - curr_view.next_unassigned_rank >= 3) {
+                    std::vector<node_id_t> next_3_nodes(&curr_view.members[curr_view.next_unassigned_rank],
+                                                        &curr_view.members[curr_view.next_unassigned_rank] + 3);
+                    subgroup_vector.emplace_back(std::vector<derecho::SubView>{curr_view.make_subview(next_3_nodes)});
+                    curr_view.next_unassigned_rank += 3;
+                }
             }
-            return subgroup_vector;
+            subgroup_allocation.emplace(subgroup_type, std::move(subgroup_vector));
         }
+        return subgroup_allocation;
     }};
 
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
