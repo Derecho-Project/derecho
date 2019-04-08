@@ -1,5 +1,5 @@
-#include "ObjectStore.hpp"
-#include "utils/logger.hpp"
+#include <derecho/objectstore/ObjectStore.hpp>
+#include <derecho/utils/logger.hpp>
 #include <algorithm>
 #include <errno.h>
 #include <iostream>

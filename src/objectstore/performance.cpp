@@ -1,5 +1,5 @@
-#include "ObjectStore.hpp"
-#include "conf/conf.hpp"
+#include <derecho/objectstore/ObjectStore.hpp>
+#include <derecho/conf/conf.hpp>
 #include <iostream>
 #include <time.h>
 #define NUM_APP_ARGS (1)

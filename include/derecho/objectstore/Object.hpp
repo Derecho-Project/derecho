@@ -8,12 +8,12 @@
 #include <string>
 #include <time.h>
 #include <vector>
-
-#include "conf/conf.hpp"
-#include "derecho/derecho.h"
-#include <mutils-serialization/SerializationSupport.hpp>
 #include <optional>
-#include <persistent/Persistent.hpp>
+
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/derecho.hpp>
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/Persistent.hpp>
 
 using std::cout;
 using std::endl;

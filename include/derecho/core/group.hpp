@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-#include <derecho/tcp/tcp.h>
+#include <derecho/tcp/tcp.hpp>
 
 #include "derecho_exception.hpp"
 #include "derecho_internal.hpp"

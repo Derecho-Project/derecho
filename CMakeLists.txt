@@ -77,6 +77,6 @@ add_dependencies(derecho
     mutils-serialization conf utils core
     rdmc sst tcp persistent)
 
-# add_subdirectory(src/objectstore)
+add_subdirectory(src/objectstore)
 # add_subdirectory(src/applications)
 

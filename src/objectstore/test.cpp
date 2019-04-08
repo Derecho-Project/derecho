@@ -1,5 +1,5 @@
-#include "ObjectStore.hpp"
-#include "conf/conf.hpp"
+#include <derecho/objectstore/ObjectStore.hpp>
+#include <derecho/conf/conf.hpp>
 #include <functional>
 #include <iostream>
 #include <sstream>
