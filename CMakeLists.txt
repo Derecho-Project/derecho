@@ -2,49 +2,60 @@ cmake_minimum_required(VERSION 2.8.1)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -gdwarf-3 -pg")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DNOLOG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
-add_subdirectory(conf)
-add_subdirectory(utils)
-add_subdirectory(derecho)
-add_subdirectory(rdmc)
-add_subdirectory(sst)
-add_subdirectory(tcp)
-add_subdirectory(persistent)
-add_subdirectory(objectstore)
-add_subdirectory(applications)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
-add_custom_target(
-	mutils_target
-	COMMAND $(MAKE)
-	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/mutils
-)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils)
-add_custom_target(
-	mutils_serialization_target
-	COMMAND CPLUS_INCLUDE_PATH=${derecho_SOURCE_DIR}/third_party/mutils $(MAKE)
-	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/mutils-serialization
-)
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
-link_directories(${derecho_SOURCE_DIR}/third_party/mutils-serialization)
+# mutils_FOUND 
+# mutils_INCLUDE_DIRS
+# mutils_LIBRARIES
+find_package(mutils)
+if (NOT ${mutils_FOUND})
+    message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils.git")
+endif()
 
-include_directories(${derecho_SOURCE_DIR}/third_party/mutils-containers)
+# mutils-tasks_FOUND
+# mutils-tasks_INCLUDE_DIRS
+# mutils-tasks_LIBRARIES
+find_package(mutils-tasks)
+if (NOT ${mutils-tasks_FOUND})
+    message(FATAL_ERROR "mutils not found. Please install from https://github.com/mpmilano/mutils-tasks.git")
+endif()
 
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+# mutils-containers_FOUND
+# mutils-containers_INCLUDE_DIRS
+# mutils-containers_LIBRARIES
+find_package(mutils-containers)
+if (NOT ${mutils-containers_FOUND})
+    message(FATAL_ERROR "mutils-containers not found. Please install from https://github.com/mpmilano/mutils-containers.git")
+endif()
 
-add_custom_target(
-	libfabric_target
-#	COMMAND { if [ ! -e Makefile ]\; then libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ \; fi } && make && make DESTDIR=${derecho_SOURCE_DIR}/third_party/libfabric/build install
-	COMMAND { if [ ! -e src/.libs/libfabric.so ]\; then libtoolize && ./autogen.sh && ./configure CFLAGS='-g' --disable-mlx --enable-debug --prefix=/ \; fi } && make
-	WORKING_DIRECTORY ${derecho_SOURCE_DIR}/third_party/libfabric
-)
-# include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-# link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/build/lib)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
+# spdlog_FOUND
+find_package(spdlog)
+if (NOT ${spdlog_FOUND})
+    message(FATAL_ERROR "spdlog not found. Please install from https://github.com/gabime/spdlog [commit:10e809cf644d55e5bd7d66d02e2604e2ddd7fb48]")
+endif()
 
-include_directories(${derecho_SOURCE_DIR}/third_party)
+# libfabric_FOUND
+# libfabric_INCLUDE_DIRS
+# libfabric_LIBRARIES
+find_package(libfabric)
+if (NOT ${libfabric_FOUND})
+    message(FATAL_ERROR "libfabric not found. Please install from https://github.com/ofiwg/libfabric.git. [commit:fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6]")
+endif()
+
+add_subdirectory(src/mutils-serialization)
+add_subdirectory(src/conf)
+add_subdirectory(src/utils)
+add_subdirectory(src/core)
+add_subdirectory(src/rdmc)
+add_subdirectory(src/sst)
+add_subdirectory(src/tcp)
+add_subdirectory(src/persistent)
+# add_subdirectory(src/objectstore)
+# add_subdirectory(src/applications)
+

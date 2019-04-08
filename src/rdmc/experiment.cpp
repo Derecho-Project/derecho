@@ -1,8 +1,11 @@
-
-#include "rdmc.h"
-#include "schedule.h"
-#include "util.h"
-#include "verbs_helper.h"
+#include <derecho/rdmc/rdmc.hpp>
+#include <derecho/rdmc/schedule.hpp>
+#include <derecho/rdmc/util.hpp>
+#ifdef USE_VERBS_API
+    #include <derecho/rdmc/verbs_helper.hpp>
+#else
+    #include <derecho/rdmc/lf_helper.hpp>
+#endif
 
 #include <algorithm>
 #include <atomic>

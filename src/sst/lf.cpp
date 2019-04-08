@@ -16,12 +16,12 @@
 #include <rdma/fi_rma.h>
 #include <rdma/fi_errno.h>
 
-#include "conf/conf.hpp"
-#include "utils/logger.hpp"
-#include "derecho/connection_manager.h"
-#include "poll_utils.h"
-#include "tcp/tcp.h"
-#include "lf.h"
+#include <derecho/conf/conf.hpp>
+#include <derecho/utils/logger.hpp>
+#include <derecho/core/connection_manager.hpp>
+#include <derecho/sst/poll_utils.hpp>
+#include <derecho/tcp/tcp.hpp>
+#include <derecho/sst/lf.hpp>
 
 using std::cout;
 using std::endl;

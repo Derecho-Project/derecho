@@ -1,4 +1,4 @@
-#include "derecho_sst.h"
+#include <derecho/core/derecho_sst.hpp>
 #include <atomic>
 #include <cstring>
 

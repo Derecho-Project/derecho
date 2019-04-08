@@ -16,12 +16,12 @@
 #include <rdma/fi_endpoint.h>
 #include <rdma/fi_domain.h>
 
-#include "conf/conf.hpp"
-#include "derecho/connection_manager.h"
-#include "lf_helper.h"
-#include "tcp/tcp.h"
-#include "util.h"
-#include "utils/logger.hpp"
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/connection_manager.hpp>
+#include <derecho/rdmc/lf_helper.hpp>
+#include <derecho/tcp/tcp.hpp>
+#include <derecho/rdmc/util.hpp>
+#include <derecho/utils/logger.hpp>
 
 /** From sst/verbs.cpp */
 #if __BYTE_ORDER == __LITTLE_ENDIAN

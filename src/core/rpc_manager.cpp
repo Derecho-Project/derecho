@@ -7,7 +7,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "rpc_manager.h"
+#include <derecho/core/rpc_manager.hpp>
 
 namespace derecho {
 

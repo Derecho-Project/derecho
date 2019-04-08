@@ -1,12 +1,12 @@
 #include <optional>
 
-#include "container_template_functions.h"
-#include "restart_state.h"
-#include "utils/logger.hpp"
+#include <derecho/core/container_template_functions.hpp>
+#include <derecho/core/restart_state.hpp>
+#include <derecho/utils/logger.hpp>
 //This code needs access to ViewManager's static methods
-#include "view_manager.h"
+#include <derecho/core/view_manager.hpp>
 
-#include "persistent/Persistent.hpp"
+#include <derecho/persistent/Persistent.hpp>
 
 namespace derecho {
 

@@ -6,11 +6,11 @@
 
 #include <vector>
 
-#include "container_template_functions.h"
-#include "derecho_internal.h"
-#include "derecho_modes.h"
-#include "subgroup_functions.h"
-#include "view.h"
+#include <derecho/core/container_template_functions.hpp>
+#include <derecho/core/derecho_internal.hpp>
+#include <derecho/core/derecho_modes.hpp>
+#include <derecho/core/subgroup_functions.hpp>
+#include <derecho/core/view.hpp>
 
 namespace derecho {
 

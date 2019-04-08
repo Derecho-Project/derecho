@@ -1,11 +1,11 @@
-#include "group_send.h"
-#include "message.h"
-#include "util.h"
+#include <derecho/rdmc/group_send.hpp>
+#include <derecho/rdmc/message.hpp>
+#include <derecho/rdmc/util.hpp>
 
 #ifdef USE_VERBS_API
-  #include "verbs_helper.h"
+    #include <derecho/rdmc/verbs_helper.hpp>
 #else 
-  #include "lf_helper.h"
+    #include <derecho/rdmc/lf_helper.hpp>
 #endif
 
 #include <cassert>

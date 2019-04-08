@@ -3,7 +3,7 @@
  *
  * @date Jun 20, 2017
  */
-#include "derecho/persistence_manager.h"
+#include "derecho/core/persistence_manager.hpp"
 
 namespace derecho {
 

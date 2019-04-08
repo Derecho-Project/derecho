@@ -1,12 +1,12 @@
-#include "rdmc.h"
-#include "group_send.h"
-#include "message.h"
-#include "schedule.h"
-#include "util.h"
+#include <derecho/rdmc/rdmc.hpp>
+#include <derecho/rdmc/group_send.hpp>
+#include <derecho/rdmc/message.hpp>
+#include <derecho/rdmc/schedule.hpp>
+#include <derecho/rdmc/util.hpp>
 #ifdef USE_VERBS_API
-    #include "verbs_helper.h"
+    #include <derecho/rdmc/verbs_helper.hpp>
 #else
-    #include "lf_helper.h"
+    #include <derecho/rdmc/lf_helper.hpp>
 #endif
 
 #include <atomic>
@@ -21,7 +21,7 @@
 #include <utility>
 #include <vector>
 
-#include "derecho/derecho_type_definitions.h"
+#include <derecho/core/derecho_type_definitions.hpp>
 
 using namespace std;
 using namespace rdma;

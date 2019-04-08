@@ -7,22 +7,20 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3")
 
-include_directories(${derecho_SOURCE_DIR})
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
+ADD_LIBRARY(rdmc OBJECT rdmc.cpp util.cpp group_send.cpp schedule.cpp lf_helper.cpp)
+target_include_directories(rdmc PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/private>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+)
 
-ADD_LIBRARY(rdmc SHARED rdmc.cpp util.cpp group_send.cpp schedule.cpp lf_helper.cpp)
-TARGET_LINK_LIBRARIES(rdmc conf tcp rdmacm ibverbs rt pthread fabric utils)
-
-find_library(SLURM_FOUND slurm)
-if (SLURM_FOUND)
-  target_link_libraries(rdmc slurm)
-  add_definitions(-DUSE_SLURM)
-endif (SLURM_FOUND)
+#find_library(SLURM_FOUND slurm)
+#if (SLURM_FOUND)
+#  target_link_libraries(rdmc slurm)
+#  add_definitions(-DUSE_SLURM)
+#endif (SLURM_FOUND)
 
 #ADD_EXECUTABLE(verbs-mcast experiment.cpp)
 #TARGET_LINK_LIBRARIES(verbs-mcast rdmc)
-add_dependencies(rdmc libfabric_target conf utils)
 
 add_custom_target(format_rdmc clang-format-3.8 -i *.cpp *.h)

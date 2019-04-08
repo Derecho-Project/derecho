@@ -2,7 +2,7 @@
 #include <numeric>
 #include <functional>
 
-#include "poll_utils.h"
+#include <derecho/sst/poll_utils.hpp>
 
 namespace sst {
 namespace util {

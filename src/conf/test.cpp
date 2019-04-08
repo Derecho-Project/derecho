@@ -1,4 +1,4 @@
-#include "conf.hpp"
+#include <derecho/conf/conf.hpp>
 #include <iostream>
 #include <spdlog/spdlog.h>
 

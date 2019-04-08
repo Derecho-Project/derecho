@@ -11,13 +11,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O3 -fPIC -D_RE
 set(CMAKE_CXX_FLAGS_DEBUG   "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O0 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
-include_directories(${derecho_SOURCE_DIR})
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
+add_library(conf OBJECT conf.cpp)
+target_include_directories(conf PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/private>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+)
 
-add_library(conf SHARED conf.hpp conf.cpp)
-
-add_executable(conftst test.cpp)
-target_link_libraries(conftst conf pthread)
+add_executable(conftst test.cpp conf.cpp)
+target_include_directories(conftst PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/private>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+)
+target_link_libraries(conftst pthread)
 
 add_custom_target(format_conf
     COMMAND clang-format-3.8 -i *.cpp *.hpp

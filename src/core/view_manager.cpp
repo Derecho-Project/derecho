@@ -7,13 +7,13 @@
 #include <arpa/inet.h>
 #include <tuple>
 
-#include "container_template_functions.h"
-#include "derecho_exception.h"
-#include "replicated.h"  //Needed for the ReplicatedObject interface
-#include "view_manager.h"
+#include <derecho/core/container_template_functions.hpp>
+#include <derecho/core/derecho_exception.hpp>
+#include <derecho/core/replicated.hpp>  //Needed for the ReplicatedObject interface
+#include <derecho/core/view_manager.hpp>
 
-#include "persistent/Persistent.hpp"
-#include "utils/logger.hpp"
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/utils/logger.hpp>
 
 namespace derecho {
 

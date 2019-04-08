@@ -1,4 +1,4 @@
-#include "conf.hpp"
+#include <derecho/conf/conf.hpp>
 #include <cstdlib>
 #include <sys/stat.h>
 #include <unistd.h>

@@ -5,7 +5,7 @@
 #include <sstream>
 #include <string>
 
-#include "view.h"
+#include <derecho/core/view.hpp>
 
 namespace derecho {
 

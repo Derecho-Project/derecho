@@ -7,15 +7,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3")
 
-include_directories(${derecho_SOURCE_DIR})
-include_directories(${derecho_SOURCE_DIR}/third_party/spdlog/include)
-include_directories(${derecho_SOURCE_DIR}/third_party/libfabric/include)
-link_directories(${derecho_SOURCE_DIR}/third_party/libfabric/src/.libs)
-
-
 # ADD_LIBRARY(sst SHARED verbs.cpp lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)
-ADD_LIBRARY(sst SHARED lf.cpp poll_utils.cpp ../derecho/connection_manager.cpp)
-TARGET_LINK_LIBRARIES(sst conf tcp rdmacm fabric ibverbs pthread rt utils) 
-add_dependencies(sst libfabric_target conf utils)
+ADD_LIBRARY(sst OBJECT lf.cpp poll_utils.cpp)
+target_include_directories(sst PRIVATE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include/private>
+)
 
-add_custom_target(format_sst clang-format-3.8 -i *.cpp *.h)
+add_custom_target(format_sst clang-format-3.8 -i *.cpp *.hpp)

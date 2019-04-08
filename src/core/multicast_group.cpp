@@ -4,11 +4,11 @@
 #include <limits>
 #include <thread>
 
-#include "derecho_internal.h"
-#include "multicast_group.h"
-#include "persistent/Persistent.hpp"
-#include "rdmc/util.h"
-#include "utils/logger.hpp"
+#include <derecho/core/derecho_internal.hpp>
+#include <derecho/core/multicast_group.hpp>
+#include <derecho/persistent/Persistent.hpp>
+#include <derecho/rdmc/util.hpp>
+#include <derecho/utils/logger.hpp>
 
 namespace derecho {
 

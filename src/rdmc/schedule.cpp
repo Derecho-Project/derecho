@@ -1,5 +1,4 @@
-
-#include "schedule.h"
+#include <derecho/rdmc/schedule.hpp>
 
 #include <cassert>
 #include <climits>

@@ -1,4 +1,4 @@
-#include "HLC.hpp"
+#include <derecho/persistent/HLC.hpp>
 #include <errno.h>
 #include <time.h>
 
