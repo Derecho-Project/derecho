@@ -592,7 +592,7 @@ namespace sst{
    */
   std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
     struct fi_cq_entry entry;
-    int poll_result;
+    int poll_result = 0;
 
     while(!shutdown) {
         poll_result = 0;

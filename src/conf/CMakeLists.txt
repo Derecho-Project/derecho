@@ -1,15 +1,11 @@
 cmake_minimum_required (VERSION 3.1)
 project (conf)
 
-# C FLAGS
-set(CMAKE_C_FLAGS_RELEASE "-std=c++1z ${CMAKE_C_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64")
-set(CMAKE_C_FLAGS_DEBUG   "-std=c++1z ${CMAKE_C_FLAGS} -Wall -O0 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_DEBUG -DSPDLOG_TRACE_ON")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-std=c++1z ${CMAKE_C_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
-
 # CXX FLAGS
-set(CMAKE_CXX_FLAGS_RELEASE "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64")
-set(CMAKE_CXX_FLAGS_DEBUG   "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O0 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -O3 -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
+set(CMAKE_CXX_FLAGS "-std=c++1z ${CMAKE_CXX_FLAGS} -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3")
+set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS} -O0 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS} -O3 -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 add_library(conf OBJECT conf.cpp)
 target_include_directories(conf PRIVATE
@@ -26,7 +22,4 @@ target_include_directories(conftst PRIVATE
 )
 target_link_libraries(conftst pthread)
 
-add_custom_target(format_conf
-    COMMAND clang-format-3.8 -i *.cpp *.hpp
-    WORKING_DIRECTORY ${derecho_SOURCE_DIR}/conf
-)
+add_custom_target(format_conf clang-format-3.8 -i *.cpp *.hpp)

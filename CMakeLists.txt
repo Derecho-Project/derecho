@@ -4,9 +4,9 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -gdwarf-3 -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DNOLOG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -O0 -Wall -ggdb -gdwarf-3 -pg")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -Wall -DNOLOG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS} -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
@@ -56,6 +56,27 @@ add_subdirectory(src/rdmc)
 add_subdirectory(src/sst)
 add_subdirectory(src/tcp)
 add_subdirectory(src/persistent)
+
+# make libderecho.so
+add_library(derecho SHARED
+    $<TARGET_OBJECTS:mutils-serialization> 
+    $<TARGET_OBJECTS:conf>
+    $<TARGET_OBJECTS:utils>
+    $<TARGET_OBJECTS:core>
+    $<TARGET_OBJECTS:rdmc>
+    $<TARGET_OBJECTS:sst>
+    $<TARGET_OBJECTS:tcp>
+    $<TARGET_OBJECTS:persistent>)
+target_link_libraries(derecho
+    rdmacm ibverbs rt pthread atomic
+    stdc++fs ${libfabric_LIBRARIES} 
+    ${mutils_LIBRARIES} 
+    ${mutils-containers_LIBRARIES}
+    ${mutils-tasks_LIBRARIES})
+add_dependencies(derecho
+    mutils-serialization conf utils core
+    rdmc sst tcp persistent)
+
 # add_subdirectory(src/objectstore)
 # add_subdirectory(src/applications)
 
