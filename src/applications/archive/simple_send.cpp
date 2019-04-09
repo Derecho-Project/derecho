@@ -7,7 +7,6 @@
 
 #include <derecho/core/derecho.hpp>
 #include <derecho/rdmc/rdmc.hpp>
-#include <derecho/rdmc/util.hpp>
 
 using std::cout;
 using std::endl;

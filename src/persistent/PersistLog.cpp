@@ -1,4 +1,4 @@
-#include <derecho/persistent/PersistLog.hpp>
+#include <derecho/persistent/detail/PersistLog.hpp>
 #include <derecho/persistent/util.hpp>
 #include <derecho/utils/logger.hpp>
 

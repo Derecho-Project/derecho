@@ -7,10 +7,10 @@
 #include <arpa/inet.h>
 #include <tuple>
 
-#include <derecho/core/container_template_functions.hpp>
+#include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/core/replicated.hpp>  //Needed for the ReplicatedObject interface
-#include <derecho/core/view_manager.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/utils/logger.hpp>

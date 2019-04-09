@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "derecho_internal.hpp"
-#include "derecho_type_definitions.hpp"
+#include "../derecho_type_definitions.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <mutils/macro_utils.hpp>
 #include <derecho/utils/logger.hpp>

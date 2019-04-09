@@ -11,7 +11,6 @@
 
 #include <derecho/core/derecho.hpp>
 #include "initialize.hpp"
-#include <private/derecho/rdmc/util.hpp>
 #include <derecho/utils/time.h>
 
 using namespace std;

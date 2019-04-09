@@ -4,8 +4,8 @@
 #include <cstring>
 #include <sys/time.h>
 
-#include <derecho/core/p2p_connections.hpp>
-#include <derecho/sst/poll_utils.hpp>
+#include <derecho/core/detail/p2p_connections.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
 
 namespace sst {
 P2PConnections::P2PConnections(const P2PParams params)

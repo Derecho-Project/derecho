@@ -4,7 +4,7 @@
 #include <map>
 #include <mutex>
 
-#include "derecho_type_definitions.hpp"
+#include "../derecho_type_definitions.hpp"
 #include "locked_reference.hpp"
 #include <derecho/tcp/tcp.hpp>
 

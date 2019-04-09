@@ -13,7 +13,7 @@
 #include <thread>
 
 #include "derecho_internal.hpp"
-#include "replicated.hpp"
+#include "../replicated.hpp"
 #include "view_manager.hpp"
 #include <derecho/utils/logger.hpp>
 #include <derecho/persistent/Persistent.hpp>

@@ -1,11 +1,11 @@
 #include <iostream>
 
 #include <sys/time.h>
-#include <derecho/sst/poll_utils.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
 #ifdef USE_VERBS_API
-  #include <derecho/sst/verbs.hpp>
+  #include <derecho/sst/detail/verbs.hpp>
 #else
-  #include <derecho/sst/lf.hpp>
+  #include <derecho/sst/detail/lf.hpp>
 #endif
 #include <derecho/tcp/tcp.hpp>
 

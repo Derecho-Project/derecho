@@ -18,10 +18,10 @@
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/utils/logger.hpp>
-#include <derecho/core/connection_manager.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
 #include <derecho/sst/poll_utils.hpp>
 #include <derecho/tcp/tcp.hpp>
-#include <derecho/sst/lf.hpp>
+#include <derecho/sst/detail/lf.hpp>
 
 using std::cout;
 using std::endl;

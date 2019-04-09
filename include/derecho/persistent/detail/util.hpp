@@ -1,7 +1,7 @@
 #ifndef PERSISTENT_UTIL_HPP
 #define PERSISTENT_UTIL_HPP
 
-#include "PersistException.hpp"
+#include "../PersistException.hpp"
 #include <derecho/conf/conf.hpp>
 #include <errno.h>
 #include <fcntl.h>

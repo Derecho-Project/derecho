@@ -18,12 +18,12 @@
 #include <derecho/tcp/tcp.hpp>
 
 #include "derecho_exception.hpp"
-#include "derecho_internal.hpp"
-#include "persistence_manager.hpp"
+#include "detail/derecho_internal.hpp"
+#include "detail/persistence_manager.hpp"
 #include "replicated.hpp"
-#include "rpc_manager.hpp"
+#include "detail/rpc_manager.hpp"
 #include "subgroup_info.hpp"
-#include "view_manager.hpp"
+#include "detail/view_manager.hpp"
 
 #include <derecho/conf/conf.hpp>
 #include <mutils-containers/KindMap.hpp>
@@ -306,4 +306,4 @@ public:
 
 } /* namespace derecho */
 
-#include "group_impl.hpp"
+#include "detail/group_impl.hpp"

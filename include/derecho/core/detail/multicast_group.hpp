@@ -17,7 +17,7 @@
 #include <derecho/conf/conf.hpp>
 #include "connection_manager.hpp"
 #include "derecho_internal.hpp"
-#include "derecho_modes.hpp"
+#include "../derecho_modes.hpp"
 #include "derecho_sst.hpp"
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -25,7 +25,7 @@
 #include <spdlog/spdlog.h>
 #include <derecho/sst/multicast.hpp>
 #include <derecho/sst/sst.hpp>
-#include "subgroup_info.hpp"
+#include "../subgroup_info.hpp"
 
 namespace derecho {
 

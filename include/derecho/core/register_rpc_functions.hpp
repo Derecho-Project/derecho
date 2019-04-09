@@ -1,5 +1,5 @@
 #pragma once
-#include "rpc_utils.hpp"
+#include "detail/rpc_utils.hpp"
 #include <mutils/macro_utils.hpp>
 #include <tuple>
 

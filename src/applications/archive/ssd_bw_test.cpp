@@ -13,7 +13,6 @@
 #include "block_size.hpp"
 #include <derecho/core/derecho.hpp>
 #include "log_results.hpp"
-#include <private/derecho/rdmc/util.hpp>
 
 #include <derecho/rdmc/rdmc.hpp>
 

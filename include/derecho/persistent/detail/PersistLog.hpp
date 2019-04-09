@@ -5,9 +5,9 @@
 #error PersistLog.hpp only works with clang and gnu compilers
 #endif
 
-#include "HLC.hpp"
-#include "PersistException.hpp"
-#include "PersistentTypenames.hpp"
+#include "../HLC.hpp"
+#include "../PersistException.hpp"
+#include "../PersistentTypenames.hpp"
 #include <functional>
 #include <inttypes.h>
 #include <map>

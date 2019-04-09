@@ -18,8 +18,8 @@
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
 #include "restart_state.hpp"
-#include "subgroup_info.hpp"
-#include "view.hpp"
+#include "../subgroup_info.hpp"
+#include "../view.hpp"
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>

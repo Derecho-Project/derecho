@@ -6,8 +6,8 @@
 
 #include <vector>
 
-#include <derecho/core/container_template_functions.hpp>
-#include <derecho/core/derecho_internal.hpp>
+#include <derecho/core/detail/container_template_functions.hpp>
+#include <derecho/core/detail/derecho_internal.hpp>
 #include <derecho/core/derecho_modes.hpp>
 #include <derecho/core/subgroup_functions.hpp>
 #include <derecho/core/view.hpp>

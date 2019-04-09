@@ -17,7 +17,6 @@
 #include <vector>
 
 #include <derecho/rdmc/rdmc.hpp>
-#include <derecho/rdmc/util.hpp>
 #include <derecho/core/derecho.hpp>
 
 #include "aggregate_latency.hpp"

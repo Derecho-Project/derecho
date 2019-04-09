@@ -8,8 +8,8 @@
 #include <vector>
 
 #include "derecho_internal.hpp"
-#include "subgroup_info.hpp"
-#include "view.hpp"
+#include "../subgroup_info.hpp"
+#include "../view.hpp"
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/spdlog.h>

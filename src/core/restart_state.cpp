@@ -1,10 +1,10 @@
 #include <optional>
 
-#include <derecho/core/container_template_functions.hpp>
-#include <derecho/core/restart_state.hpp>
+#include <derecho/core/detail/container_template_functions.hpp>
+#include <derecho/core/detail/restart_state.hpp>
 #include <derecho/utils/logger.hpp>
 //This code needs access to ViewManager's static methods
-#include <derecho/core/view_manager.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 

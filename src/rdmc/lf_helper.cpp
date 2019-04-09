@@ -17,10 +17,10 @@
 #include <rdma/fi_domain.h>
 
 #include <derecho/conf/conf.hpp>
-#include <derecho/core/connection_manager.hpp>
-#include <derecho/rdmc/lf_helper.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/rdmc/detail/lf_helper.hpp>
 #include <derecho/tcp/tcp.hpp>
-#include <derecho/rdmc/util.hpp>
+#include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
 /** From sst/verbs.cpp */

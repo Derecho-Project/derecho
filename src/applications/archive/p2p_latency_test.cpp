@@ -1,7 +1,6 @@
 #include <iostream>
 
 #include <derecho/core/derecho.hpp>
-#include <derecho/rdmc/util.hpp>
 #include <derecho/conf/conf.hpp>
 
 using std::cin;

@@ -1,5 +1,5 @@
-#include <derecho/persistent/FilePersistLog.hpp>
-#include <derecho/persistent/util.hpp>
+#include <derecho/persistent/detail/FilePersistLog.hpp>
+#include <derecho/persistent/detail/util.hpp>
 #include <derecho/conf/conf.hpp>
 #include <dirent.h>
 #include <errno.h>

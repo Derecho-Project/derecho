@@ -14,7 +14,7 @@
 #include <sys/types.h>
 #include <utility>
 
-#include "derecho_type_definitions.hpp"
+#include "../derecho_type_definitions.hpp"
 #include <derecho/persistent/HLC.hpp>
 #include <derecho/persistent/PersistentTypenames.hpp>
 //This is needed for the whenlog() macro used throughout our implementation files

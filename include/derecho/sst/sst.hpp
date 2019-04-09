@@ -20,9 +20,9 @@
 #include "predicates.hpp"
 
 #ifdef USE_VERBS_API
-  #include "verbs.hpp"
+  #include "detail/verbs.hpp"
 #else//LIBFABRIC
-  #include "lf.hpp"
+  #include "detail/lf.hpp"
 #endif
 
 using sst::resources;
@@ -389,4 +389,4 @@ private:
 
 } /* namespace sst */
 
-#include "sst_impl.hpp"
+#include "detail/sst_impl.hpp"

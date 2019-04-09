@@ -6,7 +6,7 @@
 #endif
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include "util.hpp"
+#include "detail/util.hpp"
 #include <inttypes.h>
 #include <map>
 #include <set>

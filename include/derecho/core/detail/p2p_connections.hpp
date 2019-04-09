@@ -9,9 +9,9 @@
 #include <vector>
 
 #ifdef USE_VERBS_API
-    #include <derecho/sst/verbs.h>
+    #include <derecho/sst/detail/verbs.hpp>
 #else
-    #include <derecho/sst/lf.hpp>
+    #include <derecho/sst/detail/lf.hpp>
 #endif
 
 namespace sst {

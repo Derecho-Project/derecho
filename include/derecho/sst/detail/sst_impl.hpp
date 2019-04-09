@@ -17,8 +17,8 @@
 #include <vector>
 
 #include "poll_utils.hpp"
-#include "predicates.hpp"
-#include "sst.hpp"
+#include "../predicates.hpp"
+#include "../sst.hpp"
 
 namespace sst {
 

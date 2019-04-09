@@ -1,4 +1,4 @@
-#include <derecho/core/connection_manager.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
 
 #include <cassert>
 #include <iostream>

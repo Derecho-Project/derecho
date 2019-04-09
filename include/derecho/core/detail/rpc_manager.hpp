@@ -14,12 +14,12 @@
 #include <vector>
 
 #include "derecho_internal.hpp"
-#include "derecho_type_definitions.hpp"
+#include "../derecho_type_definitions.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include "p2p_connections.hpp"
 #include "remote_invocable.hpp"
 #include "rpc_utils.hpp"
-#include "view.hpp"
+#include "../view.hpp"
 #include "view_manager.hpp"
 #include <derecho/utils/logger.hpp>
 

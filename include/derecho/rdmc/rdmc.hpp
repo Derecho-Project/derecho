@@ -3,9 +3,9 @@
 #define RDMC_HPP
 
 #ifdef USE_VERBS_API
-#include "verbs_helper.hpp"
+    #include "detail/verbs_helper.hpp"
 #else
-#include "lf_helper.hpp"
+    #include "detail/lf_helper.hpp"
 #endif
 
 #include <array>

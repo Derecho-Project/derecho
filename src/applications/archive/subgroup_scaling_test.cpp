@@ -15,7 +15,6 @@
 #include <derecho/core/derecho.hpp>
 #include "log_results.hpp"
 #include <derecho/rdmc/rdmc.hpp>
-#include <derecho/rdmc/util.hpp>
 
 using std::cout;
 using std::endl;

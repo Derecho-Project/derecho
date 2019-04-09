@@ -4,10 +4,10 @@
 #include <limits>
 #include <thread>
 
-#include <derecho/core/derecho_internal.hpp>
-#include <derecho/core/multicast_group.hpp>
+#include <derecho/core/detail/derecho_internal.hpp>
+#include <derecho/core/detail/multicast_group.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include <derecho/rdmc/util.hpp>
+#include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {

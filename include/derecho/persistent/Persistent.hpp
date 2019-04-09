@@ -2,10 +2,10 @@
 #ifndef PERSISTENT_HPP
 #define PERSISTENT_HPP
 
-#include "FilePersistLog.hpp"
+#include "detail/FilePersistLog.hpp"
 #include "HLC.hpp"
 #include "PersistException.hpp"
-#include "PersistLog.hpp"
+#include "detail/PersistLog.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentTypenames.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>

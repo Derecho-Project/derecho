@@ -4,9 +4,9 @@
 
 #include <derecho/sst/sst.hpp>
 #ifdef USE_VERBS_API
-#include <derecho/sst/verbs.hpp>
+#include <derecho/sst/detail/verbs.hpp>
 #else
-#include <derecho/sst/lf.hpp>
+#include <derecho/sst/detail/lf.hpp>
 #endif
 
 using std::cin;

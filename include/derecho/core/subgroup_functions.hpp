@@ -9,7 +9,7 @@
 #include <memory>
 #include <variant>
 
-#include "derecho_internal.hpp"
+#include "detail/derecho_internal.hpp"
 #include "derecho_modes.hpp"
 #include "subgroup_info.hpp"
 

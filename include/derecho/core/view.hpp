@@ -10,10 +10,10 @@
 #include <memory>
 #include <vector>
 
-#include "derecho_internal.hpp"
+#include "detail/derecho_internal.hpp"
 #include "derecho_modes.hpp"
-#include "derecho_sst.hpp"
-#include "multicast_group.hpp"
+#include "detail/derecho_sst.hpp"
+#include "detail/multicast_group.hpp"
 #include <derecho/sst/sst.hpp>
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>

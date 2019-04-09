@@ -6,7 +6,6 @@
 #include <vector>
 
 #include <derecho/core/derecho.hpp>
-#include <derecho/rdmc/util.hpp>
 #include <spdlog/spdlog.h>
 #include <derecho/conf/conf.hpp>
 

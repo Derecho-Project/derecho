@@ -9,7 +9,7 @@
 
 #include <derecho/core/derecho.hpp>
 
-#include <derecho/sst/poll_utils.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/sst/sst.hpp>
 
 using namespace derecho;

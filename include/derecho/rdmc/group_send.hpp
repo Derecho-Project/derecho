@@ -2,12 +2,12 @@
 #define GROUP_SEND_HPP
 
 #include <derecho/rdmc/rdmc.hpp>
-#include "schedule.hpp"
+#include "detail/schedule.hpp"
 
 #ifdef USE_VERBS_API
-    #include <derecho/rdmc/verbs_helper.hpp>
+    #include "detail/verbs_helper.hpp"
 #else
-    #include <derecho/rdmc/lf_helper.hpp>
+    #include "detail/lf_helper.hpp"
 #endif
 
 #include <optional>

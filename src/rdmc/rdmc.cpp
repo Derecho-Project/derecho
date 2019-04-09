@@ -1,12 +1,12 @@
 #include <derecho/rdmc/rdmc.hpp>
 #include <derecho/rdmc/group_send.hpp>
-#include <derecho/rdmc/message.hpp>
-#include <derecho/rdmc/schedule.hpp>
-#include <derecho/rdmc/util.hpp>
+#include <derecho/rdmc/detail/message.hpp>
+#include <derecho/rdmc/detail/schedule.hpp>
+#include <derecho/rdmc/detail/util.hpp>
 #ifdef USE_VERBS_API
-    #include <derecho/rdmc/verbs_helper.hpp>
+    #include <derecho/rdmc/detail/verbs_helper.hpp>
 #else
-    #include <derecho/rdmc/lf_helper.hpp>
+    #include <derecho/rdmc/detail/lf_helper.hpp>
 #endif
 
 #include <atomic>

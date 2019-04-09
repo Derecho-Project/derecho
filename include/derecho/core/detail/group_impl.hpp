@@ -11,7 +11,7 @@
 
 #include "container_template_functions.hpp"
 #include "derecho_internal.hpp"
-#include "group.hpp"
+#include "../group.hpp"
 #include "make_kind_map.hpp"
 #include <derecho/utils/logger.hpp>
 

@@ -13,10 +13,10 @@
 #include <utility>
 
 #include "derecho_exception.hpp"
-#include "derecho_internal.hpp"
-#include "remote_invocable.hpp"
-#include "rpc_manager.hpp"
-#include "rpc_utils.hpp"
+#include "detail/derecho_internal.hpp"
+#include "detail/remote_invocable.hpp"
+#include "detail/rpc_manager.hpp"
+#include "detail/rpc_utils.hpp"
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
