@@ -20,4 +20,7 @@ target_include_directories(conftst PRIVATE
 )
 target_link_libraries(conftst pthread)
 
+install(FILES derecho-default.cfg
+    DESTINATION share/derecho/derecho-sample.cfg)
+
 add_custom_target(format_conf clang-format-3.8 -i *.cpp *.hpp)
