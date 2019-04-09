@@ -4,6 +4,7 @@ set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
 # version
 set(dpods_VERSION "0.9")
+set(dpods_build_VERSION "0.9.1")
 
 # compiler flags
 set(CMAKE_CXX_FLAGS "-fPIC -std=c++1z -Wall")
@@ -16,6 +17,10 @@ add_library(dpods SHARED ObjectStore.cpp)
 target_include_directories(dpods PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_DIR}>
+)
+set_target_properties(dpods PROPERTIES
+    SOVERSION ${dpods_VERSION}
+    VERSION ${dpods_build_VERSION}
 )
 target_link_libraries(dpods derecho)
 add_dependencies(dpods derecho)

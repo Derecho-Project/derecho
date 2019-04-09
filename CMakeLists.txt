@@ -5,7 +5,7 @@ project(derecho CXX)
 
 # Version
 set(derecho_VERSION 0.9)
-
+set(derecho_build_VERSION 0.9.1)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -O0 -Wall -ggdb -gdwarf-3 -pg")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -Wall -DNOLOG")
@@ -76,6 +76,10 @@ target_link_libraries(derecho
     ${mutils_LIBRARIES} 
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES})
+set_target_properties(derecho PROPERTIES
+    SOVERSION ${derecho_VERSION}
+    VERSION ${derecho_build_VERSION}
+)
 add_dependencies(derecho
     mutils-serialization conf utils core
     rdmc sst tcp persistent)
