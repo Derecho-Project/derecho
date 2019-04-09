@@ -13,7 +13,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -ggdb -gdwarf-3 -D_DEBUG -D_PERFORMANCE_DEBUG")
 
 # objectstore library
-add_library(dpods SHARED ObjectStore.cpp)
+add_library(dpods SHARED ObjectStore.cpp Object.cpp)
 target_include_directories(dpods PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_DIR}>

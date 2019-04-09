@@ -28,93 +28,42 @@ public:
     std::size_t size;
 
     // constructor - copy to own the data
-    Blob(const char* const b, const decltype(size) s) : bytes(nullptr),
-                                                        size(0) {
-        if(s > 0) {
-            bytes = new char[s];
-            memcpy(bytes, b, s);
-            size = s;
-        }
-    }
+    Blob(const char* const b, const decltype(size) s);
 
     // copy constructor - copy to own the data
-    Blob(const Blob& other) : bytes(nullptr),
-                              size(0) {
-        if(other.size > 0) {
-            bytes = new char[other.size];
-            memcpy(bytes, other.bytes, other.size);
-            size = other.size;
-        }
-    }
+    Blob(const Blob& other);
 
     // move constructor - accept the memory from another object
-    Blob(Blob&& other) : bytes(other.bytes), size(other.size) {
-        other.bytes = nullptr;
-        other.size = 0;
-    }
+    Blob(Blob&& other);
 
     // default constructor - no data at all
-    Blob() : bytes(nullptr), size(0) {}
+    Blob();
 
     // destructor
-    virtual ~Blob() {
-        if(bytes) delete bytes;
-    }
+    virtual ~Blob();
 
     // move evaluator:
-    Blob& operator=(Blob&& other) {
-        char* swp_bytes = other.bytes;
-        std::size_t swp_size = other.size;
-        other.bytes = bytes;
-        other.size = size;
-        bytes = swp_bytes;
-        size = swp_size;
-        return *this;
-    }
+    Blob& operator=(Blob&& other);
 
     // copy evaluator:
-    Blob& operator=(const Blob& other) {
-        if(bytes != nullptr) {
-            delete bytes;
-        }
-        size = other.size;
-        if(size > 0) {
-            bytes = new char[size];
-            memcpy(bytes, other.bytes, size);
-        } else {
-            bytes = nullptr;
-        }
-        return *this;
-    }
+    Blob& operator=(const Blob& other);
 
-    std::size_t to_bytes(char* v) const {
-        ((std::size_t*)(v))[0] = size;
-        if(size > 0) {
-            memcpy(v + sizeof(size), bytes, size);
-        }
-        return size + sizeof(size);
-    }
+    // serialization/deserialization supports
+    std::size_t to_bytes(char* v) const;
 
-    std::size_t bytes_size() const {
-        return size + sizeof(size);
-    }
+    std::size_t bytes_size() const;
 
-    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {
-        f((char*)&size, sizeof(size));
-        f(bytes, size);
-    }
+    void post_object(const std::function<void(char const* const, std::size_t)>& f) const;
 
     void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager*, const char* const v) {
-        return std::make_unique<Blob>(v + sizeof(std::size_t), ((std::size_t*)(v))[0]);
-    }
+    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager*, const char* const v);
 
     // from_bytes_noalloc() implementation borrowed from mutils-serialization.
-    // TODO: check with Matthew: if this will cause memory leak?
-    mutils::context_ptr<Blob> from_bytes_noalloc(mutils::DeserializationManager* ctx, const char* const v, mutils::context_ptr<Blob> = mutils::context_ptr<Blob>{}) {
-        return mutils::context_ptr<Blob>{from_bytes(ctx, v).release()};
-    }
+    mutils::context_ptr<Blob> from_bytes_noalloc(
+        mutils::DeserializationManager* ctx,
+        const char* const v, 
+        mutils::context_ptr<Blob> = mutils::context_ptr<Blob>{});
 };
 
 using OID = uint64_t;
@@ -126,39 +75,32 @@ public:
     OID oid;                            // object_id
     Blob blob;                          // the object
 
-    bool operator==(const Object& other) {
-        return (this->oid == other.oid) && (this->ver == other.ver);
-    }
+    bool operator==(const Object& other);
 
-    bool is_valid() const {
-        return (oid == INV_OID);
-    }
+    bool is_valid() const;
 
     // constructor 0 : copy constructor
-    Object(const OID& _oid, const Blob& _blob) : ver(INVALID_VERSION),
-                                                 oid(_oid),
-                                                 blob(_blob) {}
+    Object(const OID& _oid, const Blob& _blob);
+
     // constructor 0.5 : copy constructor
-    Object(const persistent::version_t _ver, const OID& _oid, const Blob& _blob) : ver(_ver), oid(_oid), blob(_blob) {}
+    Object(const persistent::version_t _ver, const OID& _oid, const Blob& _blob);
 
     // constructor 1 : copy consotructor
-    Object(const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(INVALID_VERSION),
-                                                                              oid(_oid),
-                                                                              blob(_b, _s) {}
+    Object(const uint64_t _oid, const char* const _b, const std::size_t _s);
+
     // constructor 1.5 : copy constructor
-    Object(const persistent::version_t _ver, const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(_ver), oid(_oid), blob(_b, _s) {}
+    Object(const persistent::version_t _ver, const uint64_t _oid, const char* const _b, const std::size_t _s);
+
     // TODO: we need a move version for the deserializer.
 
     // constructor 2 : move constructor
-    Object(Object&& other) : ver(other.ver),
-                             oid(other.oid),
-                             blob(std::move(other.blob)) {}
+    Object(Object&& other);
+
     // constructor 3 : copy constructor
-    Object(const Object& other) : ver(other.ver),
-                                  oid(other.oid),
-                                  blob(other.blob) {}
+    Object(const Object& other);
+
     // constructor 4 : default invalid constructor
-    Object() : ver(INVALID_VERSION), oid(INV_OID) {}
+    Object();
 
     DEFAULT_SERIALIZATION_SUPPORT(Object, ver, oid, blob);
 };
