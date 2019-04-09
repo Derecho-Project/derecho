@@ -1,6 +1,6 @@
-#include "objectstore/ObjectStore.hpp"
+#include <derecho/objectstore/ObjectStore.hpp>
 #include "com_derecho_objectstore_ObjectStoreService.h"
-#include "conf/conf.hpp"
+#include <derecho/conf/conf.hpp>
 #include <iostream>
 #include <sstream>
 #include <string.h>
