@@ -11,7 +11,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/mutils-serialization/context_ptr.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include <derecho/persistent/util.hpp>
+#include <derecho/persistent/detail/util.hpp>
 #include <derecho/conf/conf.hpp>
 
 using mutils::context_ptr;

@@ -1,5 +1,5 @@
 #include <derecho/persistent/detail/PersistLog.hpp>
-#include <derecho/persistent/util.hpp>
+#include <derecho/persistent/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace persistent {

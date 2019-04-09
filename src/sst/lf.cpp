@@ -19,7 +19,7 @@
 #include <derecho/conf/conf.hpp>
 #include <derecho/utils/logger.hpp>
 #include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/sst/poll_utils.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/tcp/tcp.hpp>
 #include <derecho/sst/detail/lf.hpp>
 
