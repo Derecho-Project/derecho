@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
+# version
+set(dpods_VERSION "0.9")
+
+# compiler flags
 set(CMAKE_CXX_FLAGS "-fPIC -std=c++1z -Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -ggdb -gdwarf-3 -D_DEBUG -pg")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -33,6 +37,41 @@ target_include_directories(dpods_perf PRIVATE
 )
 target_link_libraries(dpods_perf dpods)
 add_dependencies(dpods_perf dpods)
+
+# make install
+install(TARGETS dpods EXPORT dpods
+        LIBRARY DESTINATION lib)
+install(DIRECTORY
+        ${CMAKE_SOURCE_DIR}/include/derecho/objectstore
+        DESTINATION include/derecho)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfigVersion.cmake"
+    VERSION ${dpods_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+export (EXPORT dpods
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsTargets.cmake"
+)
+
+configure_file(dpodsConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfig.cmake"
+    COPYONLY
+)
+
+set(ConfigPackageLocation lib/cmake/dpods)
+install(EXPORT derecho
+    FILE dpodsTargets.cmake
+    DESTINATION ${ConfigPackageLocation}
+)
+
+install(FILES
+    dpodsConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfigVersion.cmake"
+    DESTINATION ${ConfigPackageLocation}
+)
 
 # Java support
 find_package(Java QUIET)

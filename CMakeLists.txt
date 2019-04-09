@@ -3,6 +3,9 @@ set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 project(derecho CXX)
 
+# Version
+set(derecho_VERSION 0.9)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -O0 -Wall -ggdb -gdwarf-3 -pg")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -Wall -DNOLOG")
@@ -77,6 +80,50 @@ add_dependencies(derecho
     mutils-serialization conf utils core
     rdmc sst tcp persistent)
 
-add_subdirectory(src/objectstore)
-add_subdirectory(src/applications)
+# make install
+install(TARGETS derecho EXPORT derecho
+        LIBRARY DESTINATION lib)
+install(DIRECTORY
+        include/derecho/conf
+        include/derecho/core
+        include/derecho/mutils-serialization
+        include/derecho/persistent
+        include/derecho/rdmc
+        include/derecho/sst
+        include/derecho/tcp
+        include/derecho/utils
+        DESTINATION include/derecho)
 
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
+    VERSION ${derecho_VERSION}
+    COMPATIBILITY AnyNewerVersion
+)
+
+export (EXPORT derecho
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoTargets.cmake"
+)
+
+configure_file (derechoConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
+    COPYONLY
+)
+
+set(ConfigPackageLocation lib/cmake/derecho)
+install(EXPORT derecho
+    FILE derechoTargets.cmake
+    DESTINATION ${ConfigPackageLocation}
+)
+
+install(FILES
+    derechoConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
+    DESTINATION ${ConfigPackageLocation}
+)
+
+# objectstore aka dPods
+add_subdirectory(src/objectstore)
+
+# applications
+add_subdirectory(src/applications)
