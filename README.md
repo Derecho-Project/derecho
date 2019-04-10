@@ -42,14 +42,14 @@ To download the project, run
 Once cloning is complete, to build the code, `cd` into the `derecho` directory and run:
 * `mkdir Release`
 * `cd Release`
-* `cmake -DCMAKE_BUILD_TYPE=Release ..`
+* `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<path-to-install-dir> ..`
 * ``make -j `lscpu | grep "^CPU(" | awk '{print $2}'` ``
 
 This will place the binaries and libraries in the sub-dierectories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
 Once the project is built, install it by run:
-* `make DESTDIR=<path-to-installation> install`
+* `make install`
 
 By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` priviledge to write to system directories.
 
@@ -65,7 +65,7 @@ To uninstall, run:
 
 To build your own derecho executable, simple run:
 * `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
-* or, `g++ -std=c++1z -o myapp myapp.cpp -lderecho -dpods -pthread`, if you use **dPods**
+* or, `g++ -std=c++1z -o myapp myapp.cpp -lderecho -ldpods -pthread`, if you use **dPods**
 
 To use Derecho in your code, you simply need to 
 - include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
