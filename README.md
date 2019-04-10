@@ -17,7 +17,7 @@ To obtain such high speeds, Derecho sacrifices some of the interoperability seen
 Derecho does not have any specific O/S dependency.  We've tested most extensively on the current release of Ubuntu, which is also the default Linux configuration used on Azure IoT Edge and Azure IoT, but there is no reason the system couldn't be used on other platforms.
 
 ## Organization
-The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies are located in the `third_party` directory, and will be pointers to Git submodules whenever possible to reduce code duplication. 
+The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies have to be installed beforehand (Yes, we removed the submodules.) 
 
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
@@ -25,31 +25,51 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`), `autoconf`, and `libtool`. The last two are required in order to build the LibFabrics library, which is bundled with Derecho under the `third_party` directory.
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
+* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`).
+* Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-libfabric.sh))
+* Logging library: [`spdlog`](https://github.com/gabime/spdlog). To avoid compatibility issue, please use commit `10e809cf644d55e5bd7d66d02e2604e2ddd7fb48` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-spdlog.sh))
+* Matthew's C++ utilities
+  - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils.sh))
+  - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-containers.sh))
+  - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-tasks.sh))
 
 ### Getting Started
-Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
+To download the project, run
 
-    git clone --recursive https://github.com/Derecho-Project/derecho.git
+    git clone https://github.com/Derecho-Project/derecho.git
 
-Once cloning is complete, to compile the code, `cd` into the `derecho` directory and run:
-* mkdir Release
-* cd Release
+Once cloning is complete, to build the code, `cd` into the `derecho` directory and run:
+* `mkdir Release`
+* `cd Release`
 * `cmake -DCMAKE_BUILD_TYPE=Release ..`
-* `make`
+* ``make -j `lscpu | grep "^CPU(" | awk '{print $2}'` ``
 
 This will place the binaries and libraries in the sub-dierectories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
-To add your own executable (that uses Derecho) to the build system, simply add an executable target to CMakeLists.txt with `derecho` as a "linked library." You can do this either in the top-level CMakeLists.txt or in the CMakeLists.txt inside the "applications" directory. It will look something like this:
+Once the project is built, install it by run:
+* `make DESTDIR=<path-to-installation> install`
 
-    add_executable(my_project_main my_project_main.cpp)
-	target_link_libraries(my_project_main derecho)
+By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` priviledge to write to system directories.
+
+Successful installtion will set up the followings in `$DESTDIR`:
+* `include/derecho` - the header files
+* `lib/libderecho.so` - the main shared library
+* `lib/libdpods.so` - the derecho Old-Plain-Data storage library
+* `lib/cmake/derecho` and `lib/cmake/dpods` - cmake support for `find_package(derecho)`/`find_package(dpods)`
+* `share/derecho` - sample derecho configuration files.
+
+To uninstall, run:
+* ``rm -rf `cat install_manifest.txt` ``
+
+To build your own derecho executable, simple run:
+* `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
+* or, `g++ -std=c++1z -o myapp myapp.cpp -lderecho -dpods -pthread`, if you use **dPods**
 
 To use Derecho in your code, you simply need to 
-- include the header `derecho/derecho.h` in your \*.h or \*.cpp files, and
-- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `conf/derecho-default.cfg`. 
+- include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
+- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `<installation-prefix>/share/derecho/derecho-sample.cfg`. 
 
 The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior. 
 
