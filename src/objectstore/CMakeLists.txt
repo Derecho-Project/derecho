@@ -49,8 +49,8 @@ install(TARGETS dpods EXPORT dpods
 install(DIRECTORY
         ${CMAKE_SOURCE_DIR}/include/derecho/objectstore
         DESTINATION include/derecho)
-install(FILES objectstore-default.cfg
-        DESTINATION share/derecho/dpods-sample.cfg)
+install(FILES dpods-sample.cfg
+        DESTINATION share/derecho/)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
