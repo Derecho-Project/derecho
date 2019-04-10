@@ -1,14 +1,14 @@
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/HLC.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include <derecho/persistent/util.hpp>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/persistent/detail/util.hpp>
 #include <iostream>
+#include <signal.h>
 #include <spdlog/spdlog.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <time.h>
-#include <signal.h>
 
 using namespace persistent;
 using namespace mutils;
@@ -34,8 +34,7 @@ class ReplicatedT {
 
 PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
 
-
-#define MAX_VB_SIZE (1ull<<30)
+#define MAX_VB_SIZE (1ull << 30)
 // A variable that can change the length of its value
 class VariableBytes : public ByteRepresentable {
 public:
@@ -82,29 +81,29 @@ class IntegerWithDelta : public ByteRepresentable, IDeltaSupport<IntegerWithDelt
 public:
     int value;
     int delta;
-    IntegerWithDelta (int v):value(v),delta(0) {}
-    IntegerWithDelta (): value(0),delta(0) {}
-    int add(int op){
+    IntegerWithDelta(int v) : value(v), delta(0) {}
+    IntegerWithDelta() : value(0), delta(0) {}
+    int add(int op) {
         this->value += op;
         this->delta += op;
         return this->value;
     }
-    int sub(int op){
+    int sub(int op) {
         this->value -= op;
         this->delta -= op;
         return this->value;
     }
     virtual void finalizeCurrentDelta(const DeltaFinalizer& dp) {
         // finalize current delta
-        dp((char const* const)&(this->delta),sizeof(this->delta));
+        dp((char const* const) & (this->delta), sizeof(this->delta));
         // clear delta
         this->delta = 0;
     }
-    virtual void applyDelta(char const * const pdat) {
+    virtual void applyDelta(char const* const pdat) {
         // apply delta
-        this->value += *((const int * const)pdat);
+        this->value += *((const int* const)pdat);
     }
-    static std::unique_ptr<IntegerWithDelta> create(mutils::DeserializationManager *dm) {
+    static std::unique_ptr<IntegerWithDelta> create(mutils::DeserializationManager* dm) {
         // create
         return std::make_unique<IntegerWithDelta>();
     }
@@ -113,7 +112,7 @@ public:
         return std::to_string(this->value);
     };
 
-    DEFAULT_SERIALIZATION_SUPPORT(IntegerWithDelta,value);
+    DEFAULT_SERIALIZATION_SUPPORT(IntegerWithDelta, value);
 };
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -150,13 +149,13 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
-Persistent<X> px1([](){return std::make_unique<X>();},nullptr, &pr);
+Persistent<X> px1([]() { return std::make_unique<X>(); }, nullptr, &pr);
 //Persistent<X> px1;
-Persistent<VariableBytes> npx([](){return std::make_unique<VariableBytes>();},nullptr, &pr), 
-                          npx_logtail([](){return std::make_unique<VariableBytes>();});
+Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
+        npx_logtail([]() { return std::make_unique<VariableBytes>(); });
 //Persistent<X,ST_MEM> px2;
-Volatile<X> px2([](){return std::make_unique<X>();});
-Persistent<IntegerWithDelta> dx([](){return std::make_unique<IntegerWithDelta>();},nullptr, &pr);
+Volatile<X> px2([]() { return std::make_unique<X>(); });
+Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, nullptr, &pr);
 
 template <typename OT, StorageType st = ST_FILE>
 void listvar(Persistent<OT, st>& var) {
@@ -193,7 +192,7 @@ static void test_hlc();
 template <StorageType st = ST_FILE>
 static void eval_write(std::size_t osize, int nops, bool batch) {
     VariableBytes writeMe;
-    Persistent<VariableBytes, st> pvar([](){return std::make_unique<VariableBytes>();});
+    Persistent<VariableBytes, st> pvar([]() { return std::make_unique<VariableBytes>(); });
     writeMe.data_len = osize;
     struct timespec ts, te;
     int cnt = nops;
@@ -233,14 +232,15 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    std::cout << "command:" << argv[1] << std::endl;
+
     try {
         if(strcmp(argv[1], "list") == 0) {
             cout << "Persistent<VariableBytes> npx:" << endl;
             listvar<VariableBytes>(npx);
             //cout<<"Persistent<X,ST_MEM> px2:"<<endl;
             //listvar<X,ST_MEM>(px2);
-        }
-        if(strcmp(argv[1], "logtail-list") == 0) {
+        } else if(strcmp(argv[1], "logtail-list") == 0) {
             cout << "Persistent<VariableBytes> npx:" << endl;
             listvar<VariableBytes>(npx_logtail);
         } else if(strcmp(argv[1], "getbyidx") == 0) {
@@ -413,25 +413,25 @@ int main(int argc, char** argv) {
             } else {
                 cout << "unknown storage type:" << argv[2] << endl;
             }
-        } else if (strcmp(argv[1], "delta-add") == 0) {
+        } else if(strcmp(argv[1], "delta-add") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "add(" << op << ") = " << (*dx).add(op) << endl;
             dx.version(ver);
             dx.persist();
-        } else if (strcmp(argv[1], "delta-sub") == 0) {
+        } else if(strcmp(argv[1], "delta-sub") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "sub(" << op << ") = " << (*dx).sub(op) << endl;
             dx.version(ver);
             dx.persist();
-        } else if (strcmp(argv[1], "delta-list") == 0) {
+        } else if(strcmp(argv[1], "delta-list") == 0) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
             listvar<IntegerWithDelta>(dx);
-        } else if (strcmp(argv[1], "delta-getbyidx") == 0) {
+        } else if(strcmp(argv[1], "delta-getbyidx") == 0) {
             int64_t index = std::stoi(argv[1]);
             cout << "dx[idx:" << index << "] = " << dx.getByIndex(index)->value << endl;
-        } else if (strcmp(argv[1], "delta-getbyver") == 0) {
+        } else if(strcmp(argv[1], "delta-getbyver") == 0) {
             int64_t version = std::stoi(argv[1]);
             cout << "dx[idx:" << version << "] = " << dx[version]->value << endl;
         } else {
