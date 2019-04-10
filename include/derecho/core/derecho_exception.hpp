@@ -8,6 +8,8 @@
 
 #include <exception>
 #include <string>
+#include <sstream>
+#include <derecho/core/git_version.hpp>
 
 namespace derecho {
 
@@ -18,7 +20,9 @@ struct derecho_exception : public std::exception {
     const std::string message;
     derecho_exception(const std::string& message) : message(message) {}
 
-    const char* what() const noexcept { return message.c_str(); }
+    const char* what() const noexcept {
+        return (message + " Derecho version: " + VERSION_STRING_PLUS_COMMITS).c_str();
+    }
 };
 
 /**

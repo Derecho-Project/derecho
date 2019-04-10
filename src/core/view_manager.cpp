@@ -12,6 +12,7 @@
 #include <derecho/core/replicated.hpp>  //Needed for the ReplicatedObject interface
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/core/detail/version_code.hpp>
+#include <derecho/core/git_version.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/utils/logger.hpp>
@@ -42,6 +43,7 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    whenlog(logger->info("Derecho library running version {}.{}.{} + {} commits", derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION, derecho::COMMITS_AHEAD_OF_VERSION));
     if(any_persistent_objects) {
         //Attempt to load a saved View from disk, to see if one is there
         curr_view = persistent::loadObject<View>();
@@ -99,6 +101,7 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    whenlog(logger->info("Derecho library running version {}.{}.{} + {} commits", derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION, derecho::COMMITS_AHEAD_OF_VERSION));
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     receive_initial_view(my_id, leader_connection);
     //As soon as we have a tentative initial view, set up the TCP connections

@@ -1,4 +1,5 @@
 #include <derecho/core/detail/version_code.hpp>
+#include <derecho/core/git_version.hpp>
 #include <functional>
 
 /** A simple hash-combine function to "mix" two hashcodes */
@@ -14,13 +15,9 @@ const uint64_t compiler = ISGNU | ((__GNUC__ << 16) + __GNUC_MINOR__);
 const uint64_t  compiler = ISCLANG | (__clang_major__ << 16) + __clang_minor__ );
 #endif
 
-// These next assume that this is Derecho release 0.9.0
-// In practice GitHub should be managing the three numbers and we should use
-// the feature that substitutes them into the text file here.
-#define DERECHO_MAJOR 0L       // Replace with a major number managed by GitHub
-#define DERECHO_MINOR 9L       // Replace with a minor version number managed by GitHub
-#define DERECHO_PATCHLEVEL 0L  // Replace with a patch version number managed by GitHub
-#define DERECHO_VERSION ((((DERECHO_MAJOR << 16) + DERECHO_MINOR) << 32) + DERECHO_PATCHLEVEL)
+const uint64_t derecho_version = ((((static_cast<uint64_t>(derecho::MAJOR_VERSION) << 16)
+        + derecho::MINOR_VERSION) << 32)
+        + derecho::COMMITS_AHEAD_OF_VERSION);
 
 /*
  * The following variables are for detection of Endian order for integers.
@@ -98,7 +95,7 @@ namespace derecho {
 // This function combines all the measurements defined above, using the "mix" function
 uint64_t version_hashcode() {
     return mix(mix(mix(mix(mix(mix(mix(std::hash<uint64_t>()(compiler),
-                                       std::hash<uint64_t>()(DERECHO_VERSION)),
+                                       std::hash<uint64_t>()(derecho_version)),
                                    *reinterpret_cast<uint16_t*>(&int16_array)),
                                *reinterpret_cast<uint32_t*>(&int32_array)),
                            *reinterpret_cast<uint64_t*>(&int64_array)),
