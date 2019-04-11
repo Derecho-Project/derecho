@@ -568,7 +568,6 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
-    std::shared_ptr<spdlog::logger> logger;
 
 public:
     const node_id_t nid;
@@ -576,7 +575,6 @@ public:
     RemoteInvocableClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs, const WrappedFuns&... fs)
             : RemoteInvocablePairs<WrappedFuns...>(type_id, instance_id, rvrs, fs.fun...),
-              logger(LoggerFactory::getDefaultLogger()),
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
@@ -673,15 +671,12 @@ LifeTracker{[invocation_id, &map](){map.erase(invocation_id);}};
  */
 template <class IdentifyingClass>
 class RemoteInvocableClass<IdentifyingClass> {
-    std::shared_ptr<spdlog::logger> logger;
-
 public:
     const node_id_t nid;
 
     RemoteInvocableClass(node_id_t nid, uint32_t type_id, uint32_t instance_id,
                          std::map<Opcode, receive_fun_t>& rvrs)
-            : logger(spdlog::get("derecho_debug_log")),
-              nid(nid) {}
+            : nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
     std::size_t get_size(Args&&... a) {

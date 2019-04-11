@@ -17,8 +17,6 @@
 #include "../derecho_type_definitions.hpp"
 #include <derecho/persistent/HLC.hpp>
 #include <derecho/persistent/PersistentTypenames.hpp>
-//This is needed for the whenlog() macro used throughout our implementation files
-#include <mutils/macro_utils.hpp>
 
 namespace persistent {
 class PersistentRegistry;

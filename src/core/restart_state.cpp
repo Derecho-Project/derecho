@@ -12,7 +12,6 @@
 namespace derecho {
 
 void RestartState::load_ragged_trim(const View& curr_view) {
-    whenlog(auto logger = LoggerFactory::getDefaultLogger(););
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
      * so that I have access to the type ID. This wastes time, but I don't have a map
      * from subgroup ID to subgroup_type_id within curr_view. */
@@ -28,7 +27,7 @@ void RestartState::load_ragged_trim(const View& curr_view) {
                         ragged_trim_filename(subgroup_id, shard_num).c_str());
                 //If there was a logged ragged trim from an obsolete View, it's the same as not having a logged ragged trim
                 if(ragged_trim == nullptr || ragged_trim->vid < curr_view.vid) {
-                    whenlog(logger->debug("No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id););
+                    dbg_default_debug("No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id);
                     //Get the latest persisted version number from this subgroup's object's log
                     //(this requires converting the type ID to a std::type_index
                     persistent::version_t last_persisted_version = persistent::getMinimumLatestPersistedVersion(curr_view.subgroup_type_order.at(type_id_and_indices.first),
@@ -75,8 +74,7 @@ persistent::version_t RestartState::ragged_trim_to_latest_version(const int32_t 
 RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
                                        const SubgroupInfo& subgroup_info, const DerechoParams& derecho_params,
                                        const node_id_t my_id)
-        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-          curr_view(std::move(_curr_view)),
+        : curr_view(std::move(_curr_view)),
           restart_state(restart_state),
           subgroup_info(subgroup_info),
           derecho_params(derecho_params),
@@ -97,8 +95,8 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
             longest_log_versions[subgroup_map_pair.first][shard_and_trim.first]
                     = RestartState::ragged_trim_to_latest_version(shard_and_trim.second->vid,
                                                                   shard_and_trim.second->max_received_by_sender);
-            whenlog(logger->trace("Latest logged persistent version for subgroup {}, shard {} initialized to {}",
-                                  subgroup_map_pair.first, shard_and_trim.first, longest_log_versions[subgroup_map_pair.first][shard_and_trim.first]););
+            dbg_default_trace("Latest logged persistent version for subgroup {}, shard {} initialized to {}",
+                              subgroup_map_pair.first, shard_and_trim.first, longest_log_versions[subgroup_map_pair.first][shard_and_trim.first]);
         }
     }
 }
@@ -117,13 +115,13 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             uint64_t joiner_version_code;
             client_socket->exchange(my_version_hashcode, joiner_version_code);
             if(joiner_version_code != my_version_hashcode) {
-                whenlog(logger->warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip()));
+                rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip());
                 continue;
             }
             node_id_t joiner_id = 0;
             client_socket->read(joiner_id);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
-            whenlog(logger->debug("Node {} rejoined", joiner_id););
+            dbg_default_debug("Node {} rejoined", joiner_id);
             rejoined_node_ids.emplace(joiner_id);
 
             //Receive and process the joining node's logs of the last known View and RaggedTrim
@@ -182,7 +180,8 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
     std::unique_ptr<View> client_view = mutils::from_bytes<View>(nullptr, view_buffer);
 
     if(client_view->vid > curr_view->vid) {
-        whenlog(logger->trace("Node {} had newer view {}, replacing view {} and discarding ragged trim", joiner_id, client_view->vid, curr_view->vid););
+        dbg_default_trace("Node {} had newer view {}, replacing view {} and discarding ragged trim",
+                          joiner_id, client_view->vid, curr_view->vid);
         //The joining node has a newer View, so discard any ragged trims that are not longest-log records
         for(auto& subgroup_to_map : restart_state.logged_ragged_trim) {
             auto trim_map_iterator = subgroup_to_map.second.begin();
@@ -204,7 +203,8 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
         char buffer[size_of_ragged_trim];
         client_socket.read(buffer, size_of_ragged_trim);
         std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-        whenlog(logger->trace("Received ragged trim for subgroup {}, shard {} from node {}", ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id););
+        dbg_default_trace("Received ragged trim for subgroup {}, shard {} from node {}",
+                          ragged_trim->subgroup_id, ragged_trim->shard_num, joiner_id);
         /* If the joining node has an obsolete View, we only care about the
          * "ragged trims" if they are actually longest-log records and from
          * a newer view than any ragged trims we have for this subgroup. */
@@ -216,7 +216,8 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
          * compares VIDs, so a ragged trim from a newer View is always "longer" */
         persistent::version_t ragged_trim_log_version = RestartState::ragged_trim_to_latest_version(ragged_trim->vid, ragged_trim->max_received_by_sender);
         if(ragged_trim_log_version > longest_log_versions[ragged_trim->subgroup_id][ragged_trim->shard_num]) {
-            whenlog(logger->trace("Latest logged persistent version for subgroup {}, shard {} is now {}, which is at node {}", ragged_trim->subgroup_id, ragged_trim->shard_num, ragged_trim_log_version, joiner_id););
+            dbg_default_trace("Latest logged persistent version for subgroup {}, shard {} is now {}, which is at node {}",
+                              ragged_trim->subgroup_id, ragged_trim->shard_num, ragged_trim_log_version, joiner_id);
             longest_log_versions[ragged_trim->subgroup_id][ragged_trim->shard_num] = ragged_trim_log_version;
             nodes_with_longest_log[ragged_trim->subgroup_id][ragged_trim->shard_num] = joiner_id;
         }
@@ -224,7 +225,8 @@ void RestartLeaderState::receive_joiner_logs(const node_id_t& joiner_id, tcp::so
             //In both of these cases, only keep the ragged trim if it is newer than anything we have
             auto existing_ragged_trim = restart_state.logged_ragged_trim[ragged_trim->subgroup_id].find(ragged_trim->shard_num);
             if(existing_ragged_trim == restart_state.logged_ragged_trim[ragged_trim->subgroup_id].end()) {
-                whenlog(logger->trace("Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})", joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num););
+                dbg_default_trace("Adding node {}'s ragged trim to map, because we don't have one for shard ({}, {})",
+                                  joiner_id, ragged_trim->subgroup_id, ragged_trim->shard_num);
                 //operator[] is intentional: Default-construct an inner std::map if one doesn't exist at this ID
                 restart_state.logged_ragged_trim[ragged_trim->subgroup_id].emplace(ragged_trim->shard_num,
                                                                                    std::move(ragged_trim));
@@ -266,7 +268,7 @@ int64_t RestartLeaderState::send_restart_view() {
         bool send_success;
         //Within this try block, any send that returns failure throws the ID of the node that failed
         try {
-            whenlog(logger->debug("Sending post-recovery view {} to node {}", restart_view->vid, waiting_sockets_iter->first););
+            dbg_default_debug("Sending post-recovery view {} to node {}", restart_view->vid, waiting_sockets_iter->first);
             send_success = waiting_sockets_iter->second.write(view_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
@@ -285,7 +287,7 @@ int64_t RestartLeaderState::send_restart_view() {
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
-            whenlog(logger->debug("Sending ragged-trim information to node {}", waiting_sockets_iter->first););
+            dbg_default_debug("Sending ragged-trim information to node {}", waiting_sockets_iter->first);
             std::size_t num_ragged_trims = multimap_size(restart_state.logged_ragged_trim);
             send_success = waiting_sockets_iter->second.write(num_ragged_trims);
             if(!send_success) {
@@ -307,7 +309,7 @@ int64_t RestartLeaderState::send_restart_view() {
                     }
                 }
             }
-            whenlog(logger->debug("Sending longest-log locations to node {}", waiting_sockets_iter->first););
+            dbg_default_debug("Sending longest-log locations to node {}", waiting_sockets_iter->first);
             send_success = waiting_sockets_iter->second.write(leaders_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
@@ -342,7 +344,7 @@ bool RestartLeaderState::resend_view_until_quorum_lost() {
     while(can_retry) {
         int64_t failed_node_id = send_restart_view();
         if(failed_node_id != -1) {
-            whenlog(logger->debug("Recomputed View would still have been adequate, but node {} failed while sending it!", failed_node_id););
+            dbg_default_warn("Recomputed View would still have been adequate, but node {} failed while sending it!", failed_node_id);
             send_abort();
             //Recompute the restart view again, and try again if it's still adequate
             can_retry = has_restart_quorum();
@@ -358,7 +360,7 @@ bool RestartLeaderState::resend_view_until_quorum_lost() {
 
 void RestartLeaderState::send_abort() {
     for(const node_id_t& member_sent_view : members_sent_restart_view) {
-        whenlog(logger->debug("Sending view abort message to node {}", member_sent_view););
+        dbg_default_debug("Sending view abort message to node {}", member_sent_view);
         waiting_join_sockets.at(member_sent_view).write(CommitMessage::ABORT);
     }
 }
@@ -368,7 +370,7 @@ int64_t RestartLeaderState::send_prepare() {
         waiting_sockets_iter != waiting_join_sockets.end();) {
         bool send_success;
         try {
-            whenlog(logger->debug("Sending view prepare message to node {}", waiting_sockets_iter->first););
+            dbg_default_debug("Sending view prepare message to node {}", waiting_sockets_iter->first);
             send_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
@@ -387,7 +389,7 @@ int64_t RestartLeaderState::send_prepare() {
 void RestartLeaderState::send_commit() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        whenlog(logger->debug("Sending view commit message to node {}", waiting_sockets_iter->first););
+        dbg_default_debug("Sending view commit message to node {}", waiting_sockets_iter->first);
         waiting_sockets_iter->second.write(CommitMessage::COMMIT);
         waiting_sockets_iter = waiting_join_sockets.erase(waiting_sockets_iter);
     }
@@ -402,7 +404,7 @@ void RestartLeaderState::print_longest_logs() const {
                         << longest_log_versions.at(subgroup).at(shard) << ". ";
         }
     }
-    whenlog(logger->debug("Restart subgroup/shard leaders: {}", leader_list.str()););
+    dbg_default_debug("Restart subgroup/shard leaders: {}", leader_list.str());
 }
 
 std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
@@ -431,13 +433,12 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     }
 
     //Compute the next view, which will include all the members currently rejoining and remove the failed ones
-    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_and_ports_to_add_in_next_view whenlog(, logger));
+    return make_next_view(curr_view, nodes_to_add_in_next_view, ips_and_ports_to_add_in_next_view);
 }
 
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
-                                                         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
@@ -453,7 +454,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
         int new_member_rank = curr_view->num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_ids[i];
         member_ips_and_ports[new_member_rank] = joiner_ips_and_ports[i];
-        whenlog(logger->debug("Restarted next view will add new member with id {}", joiner_ids[i]););
+        dbg_default_debug("Restarted next view will add new member with id {}", joiner_ids[i]);
     }
     for(const auto& leaver_rank : leave_ranks) {
         departed.emplace_back(curr_view->members[leaver_rank]);
@@ -462,7 +463,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
             next_unassigned_rank--;
         }
     }
-    whenlog(logger->debug("Next view will exclude {} failed members.", leave_ranks.size()););
+    dbg_default_debug("Next view will exclude {} failed members.", leave_ranks.size());
     //Copy member information, excluding the members that have failed
     int new_rank = 0;
     for(int old_rank = 0; old_rank < curr_view->num_members; ++old_rank) {
@@ -485,7 +486,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
         }
     }
     if(my_new_rank == -1) {
-        whenlog(logger->flush(););
+        dbg_default_flush();
         throw derecho_exception("Recovery leader wasn't in the next view it computed?!?!");
     }
 

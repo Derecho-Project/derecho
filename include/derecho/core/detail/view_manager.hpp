@@ -107,8 +107,6 @@ private:
 
     friend class RestartLeaderState;
 
-    whenlog(std::shared_ptr<spdlog::logger> logger;);
-
     /** Controls access to curr_view. Read-only accesses should acquire a
      * shared_lock, while view changes acquire a unique_lock. */
     std::shared_timed_mutex view_mutex;
@@ -361,8 +359,7 @@ private:
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
-                                                const DerechoSST& gmsSST
-                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                const DerechoSST& gmsSST);
 
     /* ---------------------------------------------------------------------------------- */
 

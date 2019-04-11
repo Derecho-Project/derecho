@@ -110,13 +110,11 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             // instead we should sleep on a condition variable and let the main thread that called the orderedSend signal us
             // although the race condition is infinitely rare
             pending_results_cv.wait(lock, [&]() { return !toFulfillQueue.empty(); });
-            // whenlog(logger->trace("Calling fulfill_map on toFulfillQueue.front(), its size is {}", toFulfillQueue.size());)
             //We now know the membership of "all nodes in my shard of the subgroup" in the current view
             toFulfillQueue.front().get().fulfill_map(
                     view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
             fulfilledList.push_back(std::move(toFulfillQueue.front()));
             toFulfillQueue.pop();
-            // whenlog(logger->trace("Popped a PendingResults from toFulfillQueue, size is now {}", toFulfillQueue.size());)
             if(reply_size > 0) {
                 //Since this was a self-receive, the reply also goes to myself
                 parse_and_receive(
@@ -172,7 +170,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 void RPCManager::new_view_callback(const View& new_view) {
     std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
-    whenlog(logger->debug("Created new connections among the new view members"););
+    dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& pending : fulfilledList) {
         for(auto removed_id : new_view.departed) {
@@ -279,7 +277,7 @@ void RPCManager::p2p_receive_loop() {
         std::unique_lock<std::mutex> lock(thread_start_mutex);
         thread_start_cv.wait(lock, [this]() { return thread_start; });
     }
-    whenlog(logger->debug("P2P listening thread started"););
+    dbg_default_debug("P2P listening thread started");
     // start the fifo worker thread
     fifo_worker_thread = std::thread(&RPCManager::fifo_worker, this);
     // loop event

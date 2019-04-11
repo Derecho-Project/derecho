@@ -13,8 +13,7 @@ namespace derecho {
 PersistenceManager::PersistenceManager(
         std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>* pro,
         const persistence_callback_t& _persistence_callback)
-        : whenlog(logger(LoggerFactory::getDefaultLogger()), )
-          thread_shutdown(false),
+        : thread_shutdown(false),
           persistence_callback(_persistence_callback),
           ptr_objects_by_subgroup_id(pro) {
     // initialize semaphore
@@ -86,7 +85,7 @@ void PersistenceManager::start() {
                                (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
                                sizeof(long long int));
             } catch(uint64_t exp) {
-                whenlog(logger->debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp););
+                dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
                 std::cout
                         << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
             }

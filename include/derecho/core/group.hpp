@@ -28,7 +28,6 @@
 #include <derecho/conf/conf.hpp>
 #include <mutils-containers/KindMap.hpp>
 #include <mutils-containers/TypeMap2.hpp>
-#include <spdlog/spdlog.h>
 
 namespace derecho {
 /**
@@ -112,10 +111,6 @@ private:
     //Same thing for a sparse-vector of ExternalCaller
     template <typename T>
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
-
-#ifndef NOLOG
-    std::shared_ptr<spdlog::logger> logger;
-#endif
 
     const node_id_t my_id;
     bool is_starting_leader;
@@ -296,12 +291,6 @@ public:
     /** Waits until all members of the group have called this function. */
     void barrier_sync();
     void debug_print_status() const;
-
-#ifndef NOLOG
-    void log_event(const std::string& event_text) {
-        SPDLOG_DEBUG(logger, event_text);
-    }
-#endif
 };
 
 } /* namespace derecho */

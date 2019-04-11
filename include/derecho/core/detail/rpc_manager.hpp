@@ -51,10 +51,6 @@ class RPCManager {
     // Weijia: I prefer the deserialization context vector.
     mutils::RemoteDeserialization_v rdv;
 
-#ifndef NOLOG
-    std::shared_ptr<spdlog::logger> logger;
-#endif
-
     template <typename T>
     friend class ::derecho::Replicated;  //Give only Replicated access to view_manager
     template <typename T>
@@ -158,7 +154,6 @@ public:
                // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              whenlog(logger(LoggerFactory::getDefaultLogger()), )
               view_manager(group_view_manager),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {

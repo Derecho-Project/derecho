@@ -48,6 +48,7 @@ public:
   #define dbg_flush(logger) logger->flush()
   #define dbg_default_flush() LoggerFactory::getDefaultLogger()->flush()
 #else
+  // Release version
   #define dbg_trace(logger, ...)
   #define dbg_default_trace(...)
   #define dbg_debug(logger, ...)
@@ -62,7 +63,18 @@ public:
   #define dbg_default_crit(...)
   #define dbg_flush(logger)
   #define dbg_default_flush()
-  // Release version
 #endif
+
+// Log-in-release macros. These will not be compiled out in release mode, so use carefully.
+#define rls_info(logger, ...) logger->info(__VA_ARGS__)
+#define rls_default_info(...) rls_info(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
+#define rls_warn(logger, ...) logger->warn(__VA_ARGS__)
+#define rls_default_warn( ... ) rls_warn(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
+#define rls_error(logger, ...) logger->error(__VA_ARGS__)
+#define rls_default_error( ... ) rls_error(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
+#define rls_crit(logger, ...) logger->critical(__VA_ARGS__)
+#define rls_default_crit( ... ) rls_crit(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
+#define rls_flush(logger) logger->flush()
+#define rls_default_flush() LoggerFactory::getDefaultLogger()->flush()
 
 #endif//LOGGER_HPP

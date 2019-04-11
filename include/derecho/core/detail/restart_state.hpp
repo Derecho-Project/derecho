@@ -78,7 +78,6 @@ struct RestartState {
 
 class RestartLeaderState {
 private:
-    whenlog(std::shared_ptr<spdlog::logger> logger;);
     /** Takes ownership of ViewManager's curr_view pointer, because
      * await_quroum() might replace curr_view with a newer view discovered
      * on a restarting node. */
@@ -207,13 +206,13 @@ public:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                        whenlog(, std::shared_ptr<spdlog::logger> logger));
+                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports);
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.
      */
-    static bool contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids, const View& last_view);
+    static bool contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids,
+                                                          const View& last_view);
 };
 
 } /* namespace derecho */

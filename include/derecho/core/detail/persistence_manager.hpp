@@ -27,11 +27,6 @@ using persistence_request_t = std::tuple<subgroup_id_t, persistent::version_t>;
  */
 class PersistenceManager {
 private:
-#ifndef NOLOG
-    /* whenlog(logger) */
-    std::shared_ptr<spdlog::logger> logger;
-#endif
-
     /** Thread handle */
     std::thread persist_thread;
     /** A flag to singal the persistent thread to shutdown; set to true when the group is destroyed. */
