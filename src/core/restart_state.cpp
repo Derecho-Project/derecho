@@ -3,6 +3,7 @@
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/restart_state.hpp>
 #include <derecho/utils/logger.hpp>
+#include <derecho/core/detail/version_code.hpp>
 //This code needs access to ViewManager's static methods
 #include <derecho/core/detail/view_manager.hpp>
 
@@ -113,6 +114,12 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
         milliseconds time_waited = duration_cast<milliseconds>(end_time - start_time);
         time_remaining_ms -= time_waited.count();
         if(client_socket) {
+            uint64_t joiner_version_code;
+            client_socket->exchange(my_version_hashcode, joiner_version_code);
+            if(joiner_version_code != my_version_hashcode) {
+                whenlog(logger->warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip()));
+                continue;
+            }
             node_id_t joiner_id = 0;
             client_socket->read(joiner_id);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
@@ -430,7 +437,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
                                                          const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports
-                                                                 whenlog(, std::shared_ptr<spdlog::logger> logger)) {
+                                                         whenlog(, std::shared_ptr<spdlog::logger> logger)) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);

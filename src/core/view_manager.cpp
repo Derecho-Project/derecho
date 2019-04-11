@@ -11,6 +11,8 @@
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/core/replicated.hpp>  //Needed for the ReplicatedObject interface
 #include <derecho/core/detail/view_manager.hpp>
+#include <derecho/core/detail/version_code.hpp>
+#include <derecho/core/git_version.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/utils/logger.hpp>
@@ -41,6 +43,7 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    whenlog(logger->info("Derecho library running version {}.{}.{} + {} commits", derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION, derecho::COMMITS_AHEAD_OF_VERSION));
     if(any_persistent_objects) {
         //Attempt to load a saved View from disk, to see if one is there
         curr_view = persistent::loadObject<View>();
@@ -98,6 +101,7 @@ ViewManager::ViewManager(
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
+    whenlog(logger->info("Derecho library running version {}.{}.{} + {} commits", derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION, derecho::COMMITS_AHEAD_OF_VERSION));
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     receive_initial_view(my_id, leader_connection);
     //As soon as we have a tentative initial view, set up the TCP connections
@@ -123,12 +127,18 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
     bool leader_redirect;
     do {
         leader_redirect = false;
+        uint64_t leader_version_hashcode;
         bool success;
-        whenlog(logger->debug("Socket connected to leader, exchanging IDs."););
+        whenlog(logger->debug("Socket connected to leader, exchanging version codes."););
+        success = leader_connection.exchange(my_version_hashcode, leader_version_hashcode);
+        if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
+        if(leader_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        }
         success = leader_connection.write(my_id);
-        if(!success) throw derecho_exception("Failed to exchange IDs with the leader! Leader has crashed.");
+        if(!success) throw derecho_exception("Failed to send ID to the leader! Leader has crashed.");
         success = leader_connection.read(leader_response);
-        if(!success) throw derecho_exception("Failed to exchange IDs with the leader! Leader has crashed.");
+        if(!success) throw derecho_exception("Failed to read initial response from leader! Leader has crashed.");
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             whenlog(logger->error("Error! Leader refused connection because ID {} is already in use!", my_id););
             whenlog(logger->flush();) throw derecho_exception("Leader rejected join, ID already in use");
@@ -421,6 +431,12 @@ void ViewManager::await_first_view(const node_id_t my_id) {
     do {
         while(!curr_view->is_adequately_provisioned) {
             tcp::socket client_socket = server_socket.accept();
+            uint64_t joiner_version_code;
+            client_socket.exchange(my_version_hashcode, joiner_version_code);
+            if(joiner_version_code != my_version_hashcode) {
+                whenlog(logger->warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",client_socket.get_remote_ip()));
+                continue;
+            }
             node_id_t joiner_id = 0;
             client_socket.read(joiner_id);
             if(curr_view->rank_of(joiner_id) != -1) {
@@ -1284,6 +1300,12 @@ bool ViewManager::receive_join(tcp::socket& client_socket) {
     struct in_addr joiner_ip_packed;
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
+    uint64_t joiner_version_code;
+    client_socket.exchange(my_version_hashcode, joiner_version_code);
+    if(joiner_version_code != my_version_hashcode) {
+        whenlog(logger->warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip()));
+        return false;
+    }
     node_id_t joining_client_id = 0;
     client_socket.read(joining_client_id);
 
