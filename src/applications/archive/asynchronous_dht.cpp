@@ -5,6 +5,8 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/conf/conf.hpp>
 
+using namespace persistent;
+
 template <class DataType>
 class HashTable;
 

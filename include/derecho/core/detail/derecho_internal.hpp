@@ -60,7 +60,7 @@ using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_vers
 
 // to post the next version in a subgroup
 using subgroup_post_next_version_func_t = std::function<void(
-	const subgroup_id_t&,
-	const persistent::version_t&)>;
+        const subgroup_id_t&,
+        const persistent::version_t&)>;
 
 }  // namespace derecho

@@ -13,6 +13,7 @@ using derecho::Replicated;
 using std::cout;
 using std::cerr;
 using std::endl;
+using namespace persistent;
 
 /**
  * Example for replicated object with Persistent<T>

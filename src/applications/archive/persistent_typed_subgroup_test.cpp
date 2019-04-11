@@ -10,6 +10,8 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
 
+using namespace persistent;
+
 /**
  * Example for replicated object with Persistent<T>
  */

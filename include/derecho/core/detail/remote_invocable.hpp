@@ -10,12 +10,12 @@
 #include <numeric>
 #include <type_traits>
 
+#include "rpc_utils.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/utils/logger.hpp>
 #include <mutils/FunctionalMap.hpp>
 #include <mutils/tuple_extras.hpp>
 #include <spdlog/spdlog.h>
-#include <derecho/utils/logger.hpp>
-#include "rpc_utils.hpp"
 
 namespace derecho {
 
@@ -120,7 +120,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
         lock_t l{map_lock};
         // default-initialize the maps
-        results_map.erase(invocation_id); // TODO:release it as soon as possible
+        results_map.erase(invocation_id);  // TODO:release it as soon as possible
         PendingResults<Ret>& pending_results = results_map[invocation_id];
 
         return send_return{size, serialized_args, pending_results.get_future(),
@@ -144,23 +144,23 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         long int invocation_id = ((long int*)(response + 1))[0];
         lock_t l{map_lock};
         assert(results_map.count(invocation_id) != 0);
-        // we unlock the map here to avoid the deadlock: 
+        // we unlock the map here to avoid the deadlock:
         // The p2p handler thread, on receiving an RPC REPLY may get this lock
         // before sst_detect thread finish handling the corresponding ordered
-        // send locally. However, sst_detect thread may be so slow that it 
+        // send locally. However, sst_detect thread may be so slow that it
         // hasn't finish deliverying of a previous ordered send, therefore waits
-        // for the map_lock in the following call stack: 
+        // for the map_lock in the following call stack:
         // - RPCManager::rpc_message_handler() ->
         // - RPCManager::parse_and_receive() ->
         // - RPCManager::receive_message()->
         // - receivers->at(indx)->
         // - RemoteInvoker::receive_response().
-        // therefore, the promise for the next ordered_send, on which the 
+        // therefore, the promise for the next ordered_send, on which the
         // p2p handler thread is waiting for, cannot be fulfilled.
         // dead lock!!!
         // We use this workaround by just release the results_map lock as early
         // because we have 64K slots and we assume after 64K messages, this
-        // corresponding ordered_send has been finished already. 
+        // corresponding ordered_send has been finished already.
         // TODO: make a better plan along with garbage collection.
         l.unlock();
         // TODO: garbage collection for the responses.
@@ -230,7 +230,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                   std::map<Opcode, receive_fun_t>& receivers)
             : invoke_opcode{class_id, instance_id, Tag, false},
               reply_opcode{class_id, instance_id, Tag, true},
-              invocation_id_sequencer(0){
+              invocation_id_sequencer(0) {
         receivers.emplace(reply_opcode, [this](auto... a) {
             return this->receive_response(a...);
         });
@@ -568,7 +568,6 @@ struct RemoteInvokers<wrapped<Tag, FunType>, RestWrapped...>
  */
 template <class IdentifyingClass, typename... WrappedFuns>
 class RemoteInvocableClass : private RemoteInvocablePairs<WrappedFuns...> {
-
 public:
     const node_id_t nid;
 
@@ -579,13 +578,13 @@ public:
 
     template <FunctionTag Tag, typename... Args>
     std::size_t get_size(Args&&... a) {
-      //only used for size calculation
-      long int invocation_id = 0;
+        //only used for size calculation
+        long int invocation_id = 0;
         std::size_t size = mutils::bytes_size(invocation_id);
         {
-	  //auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
+            //auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
             //size += std::accumulate(t.begin(), t.end(), 0);
-	    size += (0 + ... + mutils::bytes_size(a));
+            size += (0 + ... + mutils::bytes_size(a));
         }
         return size;
     }
@@ -644,8 +643,8 @@ public:
         struct send_return {
             QueryResults<Ret> results;
             PendingResults<Ret>& pending;
-	  //LifeTracker
-	  /*
+            //LifeTracker
+            /*
 class LifeTracker {
 std::function<void () > deleter;
 ~LifeTraker(){
@@ -761,8 +760,8 @@ public:
         std::size_t payload_size = sent_return.size;
         char* buf = sent_return.buf - header_size;
         uint32_t flags = 0;
-        if (in_rpc_handler()) {
-            RPC_HEADER_FLAG_SET(flags,CASCADE);
+        if(in_rpc_handler()) {
+            RPC_HEADER_FLAG_SET(flags, CASCADE);
             dbg_default_info("sending cascading RPC.");
         }
         populate_header(buf, payload_size, invoker.invoke_opcode, nid, flags);

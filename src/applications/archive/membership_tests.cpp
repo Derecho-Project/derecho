@@ -6,6 +6,7 @@
 #include <condition_variable>
 
 using namespace derecho;
+using namespace persistent;
 
 namespace myTests {
 enum Tests {

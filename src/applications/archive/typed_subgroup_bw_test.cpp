@@ -12,7 +12,6 @@
 #include <derecho/conf/conf.hpp>
 
 using derecho::Bytes;
-
 /**
  * RPC Object with a single function that accepts a string
  */
@@ -64,7 +63,7 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry*) { return std::make_unique<TestObject>(); };
+    auto ba_factory = [](persistent::PersistentRegistry*) { return std::make_unique<TestObject>(); };
 
     derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;

@@ -12,6 +12,7 @@
 using std::cout;
 using std::endl;
 using derecho::Bytes;
+using namespace persistent;
 
 //the payload is used to identify the user timestamp
 typedef struct _payload {

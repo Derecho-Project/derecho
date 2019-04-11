@@ -7,12 +7,12 @@
 #include <arpa/inet.h>
 #include <tuple>
 
-#include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/derecho_exception.hpp>
-#include <derecho/core/replicated.hpp>  //Needed for the ReplicatedObject interface
-#include <derecho/core/detail/view_manager.hpp>
+#include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/version_code.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 #include <derecho/core/git_version.hpp>
+#include <derecho/core/replicated.hpp>
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/utils/logger.hpp>
@@ -1408,7 +1408,7 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
         //First, read the log tail length sent by the joining node
         int64_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
-        PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
+        persistent::PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         dbg_default_debug("Got log tail length {}", persistent_log_length);
     }
     dbg_default_debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
@@ -1454,8 +1454,8 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
      * curr_view's subgroup_ids_by_type_id, my_subgroups, and subgroup_shard_views
      */
     for(subgroup_type_id_t subgroup_type_id = 0;
-            subgroup_type_id < curr_view.subgroup_type_order.size();
-            ++subgroup_type_id) {
+        subgroup_type_id < curr_view.subgroup_type_order.size();
+        ++subgroup_type_id) {
         const std::type_index& subgroup_type = curr_view.subgroup_type_order[subgroup_type_id];
         subgroup_shard_layout_t& curr_type_subviews = subgroup_allocations[subgroup_type];
         std::size_t num_subgroups = curr_type_subviews.size();
@@ -1568,7 +1568,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
                                                            gmsSST.joiner_rpc_ports[myRank][join_index],
                                                            gmsSST.joiner_sst_ports[myRank][join_index],
                                                            gmsSST.joiner_rdmc_ports[myRank][join_index]};
-       dbg_default_debug("Next view will add new member with ID {}", joiner_id);
+        dbg_default_debug("Next view will add new member with ID {}", joiner_id);
     }
     for(const auto& leaver_rank : leave_ranks) {
         departed.emplace_back(curr_view->members[leaver_rank]);
@@ -1677,9 +1677,9 @@ int ViewManager::min_acked(const DerechoSST& gmsSST, const std::vector<char>& fa
     int min_num_acked = gmsSST.num_acked[myRank];
     for(size_t n = 0; n < failed.size(); n++) {
         if(!failed[n]) {
-	  // copy to avoid race condition and non-volatile based optimizations
-	  int num_acked_copy = gmsSST.num_acked[n];
-	  min_num_acked = std::min(min_num_acked, num_acked_copy);
+            // copy to avoid race condition and non-volatile based optimizations
+            int num_acked_copy = gmsSST.num_acked[n];
+            min_num_acked = std::min(min_num_acked, num_acked_copy);
         }
     }
 
@@ -1740,8 +1740,8 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
             for(uint r = 0; r < shard_members.size(); r++) {
                 auto node_rank = Vc.rank_of(shard_members[r]);
                 if(!Vc.failed[node_rank]) {
-		  int num_received_copy = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
-		  min_num_received = std::min(min_num_received, num_received_copy);
+                    int num_received_copy = Vc.gmsSST->num_received[node_rank][num_received_offset + n];
+                    min_num_received = std::min(min_num_received, num_received_copy);
                 }
             }
 

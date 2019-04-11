@@ -14,18 +14,18 @@
 #include <tuple>
 #include <vector>
 
-#include <derecho/conf/conf.hpp>
+#include "../derecho_modes.hpp"
+#include "../subgroup_info.hpp"
 #include "connection_manager.hpp"
 #include "derecho_internal.hpp"
-#include "../derecho_modes.hpp"
 #include "derecho_sst.hpp"
+#include <derecho/conf/conf.hpp>
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/rdmc/rdmc.hpp>
-#include <spdlog/spdlog.h>
 #include <derecho/sst/multicast.hpp>
 #include <derecho/sst/sst.hpp>
-#include "../subgroup_info.hpp"
+#include <spdlog/spdlog.h>
 
 namespace derecho {
 
@@ -95,7 +95,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size,
-    heartbeat_ms, rdmc_send_algorithm, rpc_port);
+                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**
@@ -420,7 +420,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const DerechoParams derecho_params,
-	    const subgroup_post_next_version_func_t& post_next_version_callback,
+            const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -431,7 +431,7 @@ public:
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-	    const subgroup_post_next_version_func_t& post_next_version_callback,
+            const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
 

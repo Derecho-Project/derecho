@@ -7,8 +7,8 @@
 #include <sstream>
 #include <string>
 
-#include "derecho_internal.hpp"
 #include "../derecho_type_definitions.hpp"
+#include "derecho_internal.hpp"
 #include <derecho/sst/sst.hpp>
 
 namespace derecho {

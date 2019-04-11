@@ -21,11 +21,11 @@
 #include <utility>
 #include <vector>
 
-#include "derecho_internal.hpp"
 #include "../derecho_type_definitions.hpp"
+#include "derecho_internal.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
-#include <mutils/macro_utils.hpp>
 #include <derecho/utils/logger.hpp>
+#include <mutils/macro_utils.hpp>
 
 namespace derecho {
 
@@ -449,16 +449,16 @@ public:
  * Utility functions for manipulating the headers of RPC messages
  */
 namespace remote_invocation_utilities {
-#define RPC_HEADER_FLAG_TST(f,name) \
-    ((f) & (((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
-#define RPC_HEADER_FLAG_SET(f,name) \
-    ((f) |= (((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
-#define RPC_HEADER_FLAG_CLR(f,name) \
-    ((f) &= ~(((uint32_t)1L)<<(_RPC_HEADER_FLAG_ ## name)))
+#define RPC_HEADER_FLAG_TST(f, name) \
+    ((f) & (((uint32_t)1L) << (_RPC_HEADER_FLAG_##name)))
+#define RPC_HEADER_FLAG_SET(f, name) \
+    ((f) |= (((uint32_t)1L) << (_RPC_HEADER_FLAG_##name)))
+#define RPC_HEADER_FLAG_CLR(f, name) \
+    ((f) &= ~(((uint32_t)1L) << (_RPC_HEADER_FLAG_##name)))
 
 // add new rpc header flags here.
-#define _RPC_HEADER_FLAG_CASCADE    (0)
-#define _RPC_HEADER_FLAG_RESERVED   (1)
+#define _RPC_HEADER_FLAG_CASCADE (0)
+#define _RPC_HEADER_FLAG_RESERVED (1)
 
 inline std::size_t header_space() {
     return sizeof(std::size_t) + sizeof(Opcode) + sizeof(node_id_t) + sizeof(uint32_t);
@@ -482,7 +482,7 @@ inline void populate_header(char* reply_buf,
     offset += sizeof(op);
     ((node_id_t*)(reply_buf + offset))[0] = from;  // from
     offset += sizeof(from);
-    ((uint32_t*)(reply_buf + offset))[0] = flags; // flags
+    ((uint32_t*)(reply_buf + offset))[0] = flags;  // flags
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,

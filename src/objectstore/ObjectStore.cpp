@@ -579,7 +579,7 @@ public:
     void ensure_registered(mutils::DeserializationManager&) {}
 
     // constructors TODO: how to pass ObjectWatcher to Persistent? ==>
-    PersistentLoggedObjectStore(PersistentRegistry* pr, IObjectStoreService& oss) : persistent_objectstore(
+    PersistentLoggedObjectStore(persistent::PersistentRegistry* pr, IObjectStoreService& oss) : persistent_objectstore(
                                                                                             [&]() {
                                                                                                 return std::make_unique<DeltaObjectStoreCore>(oss.getObjectWatcher());
                                                                                             },
@@ -691,8 +691,8 @@ public:
                                                           std::shared_ptr<derecho::IDeserializationContext>{this},
                                                           std::vector<derecho::view_upcall_t>{},  // view up-calls
                                                           // factories ...
-                                                          [this](PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
-                                                          [this](PersistentRegistry* pr) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }) {
+                                                          [this](persistent::PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
+                                                          [this](persistent::PersistentRegistry* pr) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }) {
         // Unimplemented yet:
         if(mode == PERSISTENT_UNLOGGED || mode == VOLATILE_LOGGED) {
             // log it

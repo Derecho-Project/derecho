@@ -13,14 +13,14 @@
 #include <mutex>
 #include <vector>
 
-#include "derecho_internal.hpp"
 #include "../derecho_type_definitions.hpp"
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include "../view.hpp"
+#include "derecho_internal.hpp"
 #include "p2p_connections.hpp"
 #include "remote_invocable.hpp"
 #include "rpc_utils.hpp"
-#include "../view.hpp"
 #include "view_manager.hpp"
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -85,18 +85,14 @@ class RPCManager {
         node_id_t sender_id;
         char* msg_buf;
         uint32_t buffer_size;
-        fifo_req () :
-            sender_id(0),
-            msg_buf(nullptr),
-            buffer_size(0)
-        {}
-        fifo_req (node_id_t _sender_id,
-                  char* _msg_buf,
-                  uint32_t _buffer_size):
-                  sender_id(_sender_id),
-                  msg_buf(_msg_buf),
-                  buffer_size(_buffer_size)
-        {}
+        fifo_req() : sender_id(0),
+                     msg_buf(nullptr),
+                     buffer_size(0) {}
+        fifo_req(node_id_t _sender_id,
+                 char* _msg_buf,
+                 uint32_t _buffer_size) : sender_id(_sender_id),
+                                          msg_buf(_msg_buf),
+                                          buffer_size(_buffer_size) {}
     };
     std::queue<fifo_req> fifo_queue;
     std::mutex fifo_queue_mutex;
@@ -150,14 +146,14 @@ class RPCManager {
 
 public:
     RPCManager(ViewManager& group_view_manager,
-               IDeserializationContext * deserialization_context_ptr)
-               // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
+               IDeserializationContext* deserialization_context_ptr)
+            // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               view_manager(group_view_manager),
               connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
               replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
-        if (deserialization_context_ptr != nullptr) {
+        if(deserialization_context_ptr != nullptr) {
             rdv.push_back(deserialization_context_ptr);
         }
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);

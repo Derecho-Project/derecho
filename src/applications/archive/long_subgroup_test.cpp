@@ -9,6 +9,7 @@ using derecho::ExternalCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
+using namespace persistent;
 
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);

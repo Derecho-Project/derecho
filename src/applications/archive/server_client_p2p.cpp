@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto server_factory = [R](PersistentRegistry*) {
+    auto server_factory = [R](persistent::PersistentRegistry*) {
         return std::make_unique<Server>(string(R, 'a'));
     };
 

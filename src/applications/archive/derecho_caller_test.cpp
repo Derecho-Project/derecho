@@ -18,6 +18,7 @@ using namespace std;
 using namespace mutils;
 
 using namespace derecho;
+using namespace persistent;
 
 int count = 0;
 

@@ -4,14 +4,14 @@
  * @date Apr 22, 2016
  */
 
+#include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
-#include <derecho/mutils-serialization/SerializationSupport.hpp>
 
+#include "../group.hpp"
 #include "container_template_functions.hpp"
 #include "derecho_internal.hpp"
-#include "../group.hpp"
 #include "make_kind_map.hpp"
 #include <derecho/utils/logger.hpp>
 

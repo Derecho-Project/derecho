@@ -11,6 +11,7 @@
 using std::cout;
 using std::endl;
 using derecho::Bytes;
+using namespace persistent;
 
 /**
  * Non-Persitent Object with vairable sizes
