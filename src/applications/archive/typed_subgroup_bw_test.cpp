@@ -11,6 +11,8 @@
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/conf/conf.hpp>
 
+#define NUM_APP_ARGS (2)
+
 using derecho::Bytes;
 
 /**
@@ -32,16 +34,16 @@ public:
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        std::cout << "Usage:" << argv[0] << " <num_of_nodes> <count> [configuration options...]" << std::endl;
+    if((argc < (NUM_APP_ARGS + 1)) || ((argc > (NUM_APP_ARGS + 1)) && strcmp("--", argv[argc - NUM_APP_ARGS - 1]))) {
+        std::cout << "Usage:" << argv[0] << " [ derecho-config-list -- ] <num_of_nodes> <count>" << std::endl;
         return -1;
     }
 
     derecho::Conf::initialize(argc, argv);
 
-    int num_of_nodes = std::stoi(argv[1]);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-    int count = std::stoi(argv[2]);
+    int num_of_nodes = std::stoi(argv[argc - 2]);
+    uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE) - 128;
+    int count = std::stoi(argv[argc - 1]);
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes](
             const std::vector<std::type_index>& subgroup_type_order,
@@ -66,7 +68,7 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry*) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
+    derecho::Group<TestObject> group({}, subgroup_info, nullptr, std::vector<derecho::view_upcall_t>{}, ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
@@ -97,10 +99,10 @@ int main(int argc, char* argv[]) {
 
     int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
     double msec = (double)nsec / 1000000;
-    double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
+    double thp_gbps = ((double)count * max_msg_size) / nsec;
     double thp_ops = ((double)count * 1000000000) / nsec;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
-    std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
+    std::cout << "throughput:" << thp_gbps << "GB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
     std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
