@@ -24,9 +24,12 @@ struct P2PParams {
 
 enum REQUEST_TYPE {
     P2P_REPLY,
-    P2P_SEND,
+    P2P_REQUEST,
     RPC_REPLY
 };
+static const REQUEST_TYPE p2p_request_types[] = {P2P_REPLY,
+                                                 P2P_REQUEST,
+                                                 RPC_REPLY};
 
 class P2PConnections {
     const std::vector<uint32_t> members;
@@ -41,14 +44,12 @@ class P2PConnections {
     std::vector<std::unique_ptr<volatile char[]>> outgoing_p2p_buffers;
     std::vector<std::unique_ptr<resources>> res_vec;
     uint64_t p2p_buf_size;
-    std::vector<uint64_t> incoming_send_seq_nums, incoming_rpc_reply_seq_nums, incoming_p2p_reply_seq_nums,
-            outgoing_send_seq_nums, outgoing_rpc_reply_seq_nums, outgoing_p2p_reply_seq_nums;
+    std::map<REQUEST_TYPE, std::vector<uint64_t>> incoming_seq_nums_map, outgoing_seq_nums_map;
     std::vector<REQUEST_TYPE> prev_mode;
     std::atomic<bool> thread_shutdown{false};
     std::thread timeout_thread;
     uint64_t getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num);
-    uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t& seq_num);
-    uint64_t getOffsetBufNoIncrement(REQUEST_TYPE type, uint64_t seq_num);
+    uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num);
     char* probe(uint32_t rank);
     uint32_t num_rdma_writes = 0;
     void check_failures_loop();

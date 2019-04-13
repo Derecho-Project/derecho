@@ -84,7 +84,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     size = _size;
                     if(size <= max_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::REQUEST_TYPE::P2P_SEND);
+                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
                         return nullptr;
                     }
@@ -234,7 +234,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     size = _size;
                     if(size <= max_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
-                                                                           sst::REQUEST_TYPE::P2P_SEND);
+                                                                           sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
                         return nullptr;
                     }
