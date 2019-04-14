@@ -195,7 +195,7 @@ int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_node
     }
     //Two return values: the size of the header we just created,
     //and the maximum payload size based on that
-    max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE) - header_size;
+    max_payload_size -= header_size;
     return header_size;
 }
 

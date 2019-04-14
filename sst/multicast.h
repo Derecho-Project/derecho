@@ -164,8 +164,8 @@ public:
     void debug_print() {
         using std::cout;
         using std::endl;
+        cout << "Printing slots::next_seq" << endl;
         for(auto i : row_indices) {
-            cout << "Printing slots::next_seq" << endl;
             // for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
             //     cout << (uint64_t&)sst->slots[i][max_msg_size * (j + 1) - sizeof(uint64_t)] << " ";
             // }
@@ -173,7 +173,9 @@ public:
                 cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
             }
             cout << endl;
-            cout << "Printing num_received_sst" << endl;
+        }
+        cout << "Printing num_received_sst" << endl;
+        for(auto i : row_indices) {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 cout << sst->num_received_sst[i][j] << " ";
             }

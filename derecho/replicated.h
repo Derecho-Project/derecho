@@ -233,7 +233,11 @@ public:
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
             const DerechoParams& profile = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).profile;
-            auto max_payload_size = profile.max_msg_size - sizeof(header);
+            std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
+                                                   ->multicast_group->get_subgroup_settings()
+                                                   .at(subgroup_id)
+                                                   .profile.max_msg_size
+                                           - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
                     [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                         size = _size;
@@ -275,7 +279,11 @@ public:
             rpc::PendingResults<Ret>* pending_ptr;
 
             auto serializer = [&](char* buffer) {
-                std::size_t max_payload_size;
+                std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
+                                                       ->multicast_group->get_subgroup_settings()
+                                                       .at(subgroup_id)
+                                                       .profile.max_msg_size
+                                               - sizeof(header);
                 int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
                 buffer += buffer_offset;
 
@@ -491,13 +499,12 @@ public:
             //Ensure a view change isn't in progress
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
-            const DerechoParams& profile = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).profile;
-            auto max_payload_size = profile.max_msg_size - sizeof(header);
             auto return_pair = wrapped_this->template send<tag>(
-                    [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                    [this, &dest_node, &size](size_t _size) -> char* {
                         size = _size;
+			const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                         if(size <= max_payload_size) {
-                            return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_SEND);
+                        return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node, sst::REQUEST_TYPE::P2P_SEND);
                         } else {
                             return nullptr;
                         }

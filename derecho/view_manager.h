@@ -434,8 +434,8 @@ private:
      * which will be filled in by this function
      * @return num_received_size and slot_size for the SST based on the current View's subgroup membership
      */
-    static std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
-                                             std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
+                                                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -686,6 +686,10 @@ public:
     }
 
     void debug_print_status() const;
+
+    // UGLY - IMPROVE LATER
+    std::map<subgroup_id_t, uint64_t> max_payload_sizes;
+    std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
 };
 
 } /* namespace derecho */

@@ -128,7 +128,6 @@ int main(int argc, char** argv) {
         cout << "Putting Ken = Birman in the cache" << endl;
         //Do it twice just to send more messages, so that the "contains" and "get" calls can go through
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Birman");
 	// this ASSUMES that node id 2 is part of this subgroup
 	// this will be true if rank is equal to id
         node_id_t p2p_target = 2;
@@ -141,7 +140,6 @@ int main(int argc, char** argv) {
     if(node_rank == 5) {
         Replicated<Cache>& cache_rpc_handle = group.get_subgroup<Cache>();
         cout << "Putting Ken = Woodberry in the cache" << endl;
-        cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
         cache_rpc_handle.ordered_send<RPC_NAME(put)>("Ken", "Woodberry");
     }
 

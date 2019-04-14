@@ -1491,18 +1491,22 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         uint32_t num_shards = view.subgroup_shard_views.at(subgroup_id).size();
         uint32_t max_shard_senders = 0;
         uint32_t slot_size_for_subgroup = 0;
+	uint64_t max_payload_size = 0;
 
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
             SubView& shard_view = view.subgroup_shard_views.at(subgroup_id).at(shard_num);
-            std::size_t shard_size = shard_view.members.size();
             uint32_t num_shard_senders = shard_view.num_senders();
             if(num_shard_senders > max_shard_senders) {
-                max_shard_senders = shard_size;  //really? why not max_shard_senders = num_shard_senders?
+                max_shard_senders = num_shard_senders;
             }
 
             const DerechoParams& profile = DerechoParams::from_profile(shard_view.profile);
             uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + 2 * sizeof(uint64_t));
-            if (slot_size_for_shard > slot_size_for_subgroup) {
+            uint64_t payload_size = profile.max_msg_size - sizeof(header);
+            if(max_payload_size < payload_size) {
+                max_payload_size = payload_size;
+            }
+            if(slot_size_for_shard > slot_size_for_subgroup) {
                 slot_size_for_subgroup = slot_size_for_shard;
             }
 
@@ -1527,9 +1531,14 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         }  // for(shard_num)
         num_received_offset += max_shard_senders;
         slot_offset += slot_size_for_subgroup;
+	max_payload_sizes[subgroup_id] = max_payload_size;
     }  // for(subgroup_id)
 
     return {num_received_offset, slot_offset};
+}
+
+std::map<subgroup_id_t, uint64_t> ViewManager::get_max_payload_sizes() {
+    return max_payload_sizes;
 }
 
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,

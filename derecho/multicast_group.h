@@ -267,7 +267,7 @@ private:
     uint32_t total_num_subgroups;
     /** Maps subgroup IDs (for subgroups this node is a member of) to an immutable
      * set of configuration options for that subgroup. */
-    const std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
+    const std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     /** Used for synchronizing receives by RDMC and SST */
     std::vector<std::list<int32_t>> received_intervals;
     /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
@@ -417,19 +417,19 @@ private:
     /* Predicate functions for receiving and delivering messages, parameterized by subgroup.
      * register_predicates will create and bind one of these for each subgroup. */
 
-    void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                           const uint32_t num_shard_members, DerechoSST& sst);
 
-    void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
                              volatile char* data, uint64_t size);
 
-    bool receiver_predicate(const SubgroupSettings& curr_subgroup_settings,
+    bool receiver_predicate(const SubgroupSettings& subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                             uint32_t num_shard_senders, const DerechoSST& sst);
 
-    void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
@@ -510,7 +510,7 @@ public:
      * that this node belongs to.
      */
     const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
-        return subgroup_settings;
+        return subgroup_settings_map;
     }
     std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num);
 };
