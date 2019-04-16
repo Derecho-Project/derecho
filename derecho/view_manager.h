@@ -684,6 +684,7 @@ public:
     // max of max_payload_sizes
     uint64_t view_max_payload_size = 0;
     unsigned int view_max_window_size = 0;
+    unsigned int view_max_sender_timeout = 0;
 };
 
 } /* namespace derecho */

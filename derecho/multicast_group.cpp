@@ -31,7 +31,7 @@ MulticastGroup::MulticastGroup(
         CallbackSet callbacks,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-        const DerechoParams derecho_params,
+        unsigned int sender_timeout,
 	const subgroup_post_next_version_func_t& post_next_version_callback,
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
@@ -49,14 +49,12 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
-          sender_timeout(derecho_params.timeout_ms),
+          sender_timeout(sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
           post_next_version_callback(post_next_version_callback),
           persistence_manager_callbacks(persistence_manager_callbacks) {
-    assert(derecho_params.window_size >= 1);
-
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
     }

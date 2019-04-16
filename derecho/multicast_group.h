@@ -453,7 +453,6 @@ public:
      * Group
      * @param subgroup_settings_by_id A list of SubgroupSettings, one for each
      * subgroup this node belongs to, indexed by subgroup ID
-     * @param derecho_params The parameters for multicasts in this group
      * @param post_next_version_callback The callback for posting the upcoming
      *        version to be delivered in a subgroup.
      * @param persistence_manager_callbacks The callbacks to PersistenceManager
@@ -467,7 +466,7 @@ public:
             CallbackSet callbacks,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-            const DerechoParams derecho_params,
+            unsigned int sender_timeout,
 	    const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
