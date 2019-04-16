@@ -160,8 +160,8 @@ public:
               receivers(new std::decay_t<decltype(*receivers)>()),
               whenlog(logger(LoggerFactory::getDefaultLogger()), )
               view_manager(group_view_manager),
-              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_msg_size})),
-              replySendBuffer(new char[group_view_manager.derecho_params.max_msg_size]) {
+              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.view_max_window_size, group_view_manager.view_max_payload_size + sizeof(header)})),
+              replySendBuffer(new char[group_view_manager.view_max_payload_size + sizeof(header)]) {
         if (deserialization_context_ptr != nullptr) {
             rdv.push_back(deserialization_context_ptr);
         }

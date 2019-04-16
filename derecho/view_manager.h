@@ -160,8 +160,6 @@ private:
     /** Indicates the order that the subgroups should be provisioned;
      * set by Group to be the same order as its template parameters. */
     std::vector<std::type_index> subgroup_type_order;
-    //Parameters stored here, in case we need them again after construction
-    DerechoParams derecho_params;
 
     /** The same set of TCP sockets used by Group and RPCManager. */
     std::shared_ptr<tcp::tcp_connections> tcp_sockets;
@@ -394,7 +392,6 @@ private:
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
-     * @param derecho_params The initial DerechoParams to supply to the MulticastGroup
      * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      */
@@ -495,8 +492,6 @@ public:
      * @param my_ip The IP address of the node executing this code
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
-     * @param derecho_params The assorted configuration parameters for this
-     * Derecho group instance, such as message size and logfile name
      * @param group_tcp_sockets The pool of TCP connections to each group member
      * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
@@ -662,10 +657,6 @@ public:
      */
     SharedLockedReference<const View> get_current_view_const();
 
-    /** Gets a read-only reference to the DerechoParams settings,
-     * in case other components need to see them after construction time. */
-    const DerechoParams& get_derecho_params() const { return derecho_params; }
-
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -690,6 +681,9 @@ public:
     // UGLY - IMPROVE LATER
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
+    // max of max_payload_sizes
+    uint64_t view_max_payload_size = 0;
+    unsigned int view_max_window_size = 0;
 };
 
 } /* namespace derecho */
