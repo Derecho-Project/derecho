@@ -62,7 +62,7 @@ private:
             {CONF_DERECHO_WINDOW_SIZE, "16"},
             {CONF_DERECHO_HEARTBEAT_MS, "1"},
             {CONF_DERECHO_RDMC_SEND_ALGORITHM, "binomial_send"},
-            {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "20000"},
+            {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
             // [RDMA]
             {CONF_RDMA_PROVIDER, "sockets"},
             {CONF_RDMA_DOMAIN, "eth0"},
