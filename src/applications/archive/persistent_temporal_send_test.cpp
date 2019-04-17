@@ -114,7 +114,6 @@ struct Bytes : public mutils::ByteRepresentable {
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     Persistent<Bytes> pers_bytes;
-    //Persistent<Bytes,ST_MEM> vola_bytes;
 
     //void change_pers_bytes(const Bytes& bytes) {
     //  *pers_bytes = bytes;
@@ -160,10 +159,8 @@ public:
                 derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
     }
 
-    //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
-    //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
     ByteArrayObject(Persistent<Bytes> &_p_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
                                                     //    pers_bytes(std::move(_p_bytes)) {
                                                    pers_bytes(std::move(_p_bytes)) {

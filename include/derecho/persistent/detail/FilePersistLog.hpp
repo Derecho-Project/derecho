@@ -9,11 +9,6 @@
 
 namespace persistent {
 
-#define META_FILE_SUFFIX "meta"
-#define LOG_FILE_SUFFIX "log"
-#define DATA_FILE_SUFFIX "data"
-#define SWAP_FILE_SUFFIX "swp"
-
 // meta header format
 typedef union meta_header {
     struct {
@@ -41,9 +36,7 @@ typedef union log_entry {
     uint8_t bytes[64];
 } LogEntry;
 
-// TODO: make this hard-wired number configurable.
-// Currently, we allow 1M(2^20-1) log entries and
-// 512GB data size. The max log entry and max size are
+// The max log entry and max size are
 // both from the configuration file:
 // CONF_PERS_MAX_LOG_ENTRY - "PERS/max_log_entry"
 // CONF_PERS_MAX_DATA_SIZE - "PERS/max_data_size"

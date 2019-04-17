@@ -34,13 +34,6 @@ void saveNoLogObjectInFile(
         ObjectType& obj,
         const char* object_name) noexcept(false);
 
-template <typename ObjectType>
-void saveNoLogObjectInMem(
-        ObjectType& obj,
-        const char* object_name) noexcept(false) {
-    saveNoLogObjectInFile<ObjectType, ST_MEM>(obj, object_name);
-}
-
 /**
  * load data from file
  * @param object_name
@@ -50,12 +43,6 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         const char* object_name,
         mutils::DeserializationManager* dm = nullptr) noexcept(false);
 
-template <typename ObjectType>
-std::unique_ptr<ObjectType> loadNoLogObjectFromMem(
-        const char* object_name,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false) {
-    return loadNoLogObjectFromFile<ObjectType, ST_MEM>(object_name, dm);
-}
 }
 
 #include "detail/PersistNoLog_impl.hpp"

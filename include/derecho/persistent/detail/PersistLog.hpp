@@ -20,7 +20,6 @@ namespace persistent {
 // Storage type:
 enum StorageType {
     ST_FILE = 0,
-    ST_MEM,
     ST_SPDK
 };
 

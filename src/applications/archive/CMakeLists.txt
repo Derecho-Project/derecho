@@ -49,21 +49,9 @@ target_link_libraries(persistent_typed_subgroup_bw_test derecho)
 add_executable(objstore objstore.cpp)
 target_link_libraries(objstore derecho)
 
-# volatile_typed_subgroup_bw_test
-add_executable(volatile_typed_subgroup_bw_test volatile_typed_subgroup_bw_test.cpp)
-target_link_libraries(volatile_typed_subgroup_bw_test derecho)
-
-# volatile_temporal_send_test
-add_executable(volatile_temporal_send_test volatile_temporal_send_test.cpp)
-target_link_libraries(volatile_temporal_send_test derecho)
-
 # persistent_temporal_send_test
 add_executable(persistent_temporal_send_test persistent_temporal_send_test.cpp)
 target_link_libraries(persistent_temporal_send_test derecho)
-
-# volatile_temporal_stability_test
-add_executable(volatile_temporal_stability_test volatile_temporal_stability_test.cpp)
-target_link_libraries(volatile_temporal_stability_test derecho)
 
 # persistent_temporal_stability_test
 add_executable(persistent_temporal_stability_test persistent_temporal_stability_test.cpp)

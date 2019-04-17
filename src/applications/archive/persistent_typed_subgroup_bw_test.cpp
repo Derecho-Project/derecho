@@ -18,7 +18,6 @@ using namespace persistent;
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     Persistent<derecho::Bytes> pers_bytes;
-    //  Persistent<Bytes,ST_MEM> vola_bytes;
 
     void change_pers_bytes(const derecho::Bytes& bytes) {
         *pers_bytes = bytes;
@@ -41,8 +40,6 @@ public:
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
-    //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    //  ByteArrayObject(Persistent<Bytes,ST_MEM> & _v_bytes):
     ByteArrayObject(Persistent<derecho::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {
         //    vola_bytes(std::move(_v_bytes)) {
     }

@@ -34,15 +34,23 @@ private:
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/timeout_heartbeat_ms"
 #define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
+
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
 #define CONF_RDMA_TX_DEPTH "RDMA/tx_depth"
 #define CONF_RDMA_RX_DEPTH "RDMA/rx_depth"
-#define CONF_PERS_FILE_PATH "PERS/file_path"
-#define CONF_PERS_RAMDISK_PATH "PERS/ramdisk_path"
+
+#define CONF_PERS_STORAGE_TYPE "PERS/storage_type"
 #define CONF_PERS_RESET "PERS/reset"
-#define CONF_PERS_MAX_LOG_ENTRY "PERS/max_log_entry"
-#define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
+#define CONF_PERS_FS_FILE_PATH "PERS/filesystem/file_path"
+#define CONF_PERS_FS_MAX_LOG_ENTRY "PERS/filesystem/max_log_entry"
+#define CONF_PERS_FS_MAX_DATA_SIZE "PERS/filesystem/max_data_size"
+#define CONF_PERS_SPDK_TRTYPE "PERS/spdk/trtype"
+#define CONF_PERS_SPDK_ADRFAM "PERS/spdk/adrfam"
+#define CONF_PERS_SPDK_TRADDR "PERS/spdk/traddr"
+#define CONF_PERS_SPDK_TRSVCID "PERS/spdk/trsvcid"
+#define CONF_PERS_SPDK_SUBNQN "PERS/spdk/subnqn"
+
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
 
@@ -69,11 +77,16 @@ private:
             {CONF_RDMA_TX_DEPTH, "256"},
             {CONF_RDMA_RX_DEPTH, "256"},
             // [PERS]
-            {CONF_PERS_FILE_PATH, ".plog"},
-            {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
+            {CONF_PERS_STORAGE_TYPE, "filesystem"},
             {CONF_PERS_RESET, "false"},
-            {CONF_PERS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
-            {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_FS_FILE_PATH, ".plog"},
+            {CONF_PERS_FS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
+            {CONF_PERS_FS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_SPDK_TRTYPE, "pcie"},
+            {CONF_PERS_SPDK_ADRFAM, ""},
+            {CONF_PERS_SPDK_TRADDR, ""},
+            {CONF_PERS_SPDK_TRSVCID, ""},
+            {CONF_PERS_SPDK_SUBNQN, ""},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};

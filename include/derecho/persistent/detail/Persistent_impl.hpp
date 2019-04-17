@@ -91,15 +91,9 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
             break;
-        // volatile
-        case ST_MEM: {
-            // const std::string tmpfsPath = "/dev/shm/volatile_t";
-            this->m_pLog = std::make_unique<FilePersistLog>(object_name, getPersRamdiskPath());
-            if(this->m_pLog == nullptr) {
-                throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
-            }
-            break;
-        }
+        // spdk
+        case ST_SPDK:
+            // TODO: implementation
         //default
         default:
             throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
@@ -583,11 +577,9 @@ void saveObject(ObjectType& obj, const char* object_name) noexcept(false) {
             saveNoLogObjectInFile(obj, object_name);
             break;
         }
-        // volatile
-        case ST_MEM: {
-            saveNoLogObjectInMem(obj, object_name);
-            break;
-        }
+        // spdk
+        case ST_SPDK:
+            // TODO:
         default:
             throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
     }
@@ -599,16 +591,16 @@ std::unique_ptr<ObjectType> loadObject(const char* object_name) noexcept(false) 
         // file system
         case ST_FILE:
             return loadNoLogObjectFromFile<ObjectType>(object_name);
-        // volatile
-        case ST_MEM:
-            return loadNoLogObjectFromMem<ObjectType>(object_name);
+        // spdk
+        case ST_SPDK:
+            // TODO:
         default:
             throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
     }
 }
 
 template <StorageType storageType>
-const typename std::enable_if<(storageType == ST_FILE || storageType == ST_MEM), version_t>::type getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) {
+const typename std::enable_if<(storageType == ST_FILE), version_t>::type getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) {
     // All persistent log implementation MUST implement getMinimumLatestPersistedVersion()
     // All of them need to be checked here
     // NOTE: we assume that an application will only use ONE type of PERSISTED LOG (ST_FILE or ST_NVM, ...). Otherwise,

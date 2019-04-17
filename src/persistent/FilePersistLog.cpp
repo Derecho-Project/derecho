@@ -19,6 +19,13 @@ namespace fs = std::filesystem;
 namespace fs = std::experimental::filesystem;
 #endif
 
+// MACROS
+#define META_FILE_SUFFIX "meta"
+#define LOG_FILE_SUFFIX "log"
+#define DATA_FILE_SUFFIX "data"
+#define SWAP_FILE_SUFFIX "swp"
+
+
 using namespace std;
 
 namespace persistent {
@@ -36,8 +43,8 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexc
                                                                                              m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
                                                                                              m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
                                                                                              m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
-                                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
-                                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
+                                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_FS_MAX_LOG_ENTRY)),
+                                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_FS_MAX_DATA_SIZE)),
                                                                                              m_iLogFileDesc(-1),
                                                                                              m_iDataFileDesc(-1),
                                                                                              m_pLog(MAP_FAILED),

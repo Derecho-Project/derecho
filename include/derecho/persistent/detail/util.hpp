@@ -24,17 +24,8 @@
 #define LOW__int128(x) (*((uint64_t*)&(x)))
 
 //Persistent folder:
-// #define DEFAULT_FILE_PERSIST_PATH (".plog")
-// #define DEFAULT_RAMDISK_PATH ("/dev/shm/volatile_t")
-inline std::string getPersRamdiskPath() {
-    std::string path = derecho::getConfString(CONF_PERS_RAMDISK_PATH);
-    std::stringstream pid_ss;
-    pid_ss << getpid();
-    return path + pid_ss.str();
-}
-
 inline std::string getPersFilePath() {
-    return std::string(derecho::getConfString(CONF_PERS_FILE_PATH));
+    return std::string(derecho::getConfString(CONF_PERS_FS_FILE_PATH));
 }
 
 // verify the existence of a folder

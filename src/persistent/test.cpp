@@ -128,11 +128,10 @@ printhelp() {
     cout << "\ttrimbytime <time>" << endl;
     cout << "\ttruncate <version>" << endl;
     cout << "\tlist" << endl;
-    cout << "\tvolatile" << endl;
     cout << "\thlc" << endl;
     cout << "\tnologsave <int-value>" << endl;
     cout << "\tnologload" << endl;
-    cout << "\teval <file|mem> <datasize> <num> [batch]" << endl;
+    cout << "\teval <file|spdk> <datasize> <num> [batch]" << endl;
     cout << "\tlogtail-set <value> <version>" << endl;
     cout << "\tlogtail-list" << endl;
     cout << "\tlogtail-serialize [since-ver]" << endl;
@@ -153,8 +152,6 @@ Persistent<X> px1([]() { return std::make_unique<X>(); }, nullptr, &pr);
 //Persistent<X> px1;
 Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
         npx_logtail([]() { return std::make_unique<VariableBytes>(); });
-//Persistent<X,ST_MEM> px2;
-Volatile<X> px2([]() { return std::make_unique<X>(); });
 Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, nullptr, &pr);
 
 template <typename OT, StorageType st = ST_FILE>
@@ -180,12 +177,10 @@ void listvar(Persistent<OT, st>& var) {
 
 static void nologsave(int value) {
     saveObject(value);
-    saveObject<int, ST_MEM>(value);
 }
 
 static void nologload() {
     cout << "in file:" << *loadObject<int>() << endl;
-    cout << "in memory:" << *loadObject<int, ST_MEM>() << endl;
 }
 
 static void test_hlc();
@@ -238,8 +233,6 @@ int main(int argc, char** argv) {
         if(strcmp(argv[1], "list") == 0) {
             cout << "Persistent<VariableBytes> npx:" << endl;
             listvar<VariableBytes>(npx);
-            //cout<<"Persistent<X,ST_MEM> px2:"<<endl;
-            //listvar<X,ST_MEM>(px2);
         } else if(strcmp(argv[1], "logtail-list") == 0) {
             cout << "Persistent<VariableBytes> npx:" << endl;
             listvar<VariableBytes>(npx_logtail);
@@ -370,26 +363,6 @@ int main(int argc, char** argv) {
 
             munmap(buf, (size_t)fsize);
             close(fd);
-        } else if(strcmp(argv[1], "volatile") == 0) {
-            cout << "loading Persistent<X,ST_MEM> px2" << endl;
-            listvar<X, ST_MEM>(px2);
-            int64_t ver = (int64_t)0L;
-            X x;
-            x.x = 1;
-            px2.set(x, ver++);
-            px2.persist();
-            cout << "after set 1" << endl;
-            listvar<X, ST_MEM>(px2);
-            x.x = 10;
-            px2.set(x, ver++);
-            px2.persist();
-            cout << "after set 10" << endl;
-            listvar<X, ST_MEM>(px2);
-            x.x = 100;
-            px2.set(x, ver++);
-            px2.persist();
-            cout << "after set 100" << endl;
-            listvar<X, ST_MEM>(px2);
         } else if(strcmp(argv[1], "hlc") == 0) {
             test_hlc();
         } else if(strcmp(argv[1], "nologsave") == 0) {
@@ -397,7 +370,7 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "nologload") == 0) {
             nologload();
         } else if(strcmp(argv[1], "eval") == 0) {
-            // eval file|mem osize nops
+            // eval file|spdk osize nops
             int osize = atoi(argv[3]);
             int nops = atoi(argv[4]);
             bool batch = false;
@@ -408,8 +381,6 @@ int main(int argc, char** argv) {
 
             if(strcmp(argv[2], "file") == 0) {
                 eval_write<ST_FILE>(osize, nops, batch);
-            } else if(strcmp(argv[2], "mem") == 0) {
-                eval_write<ST_MEM>(osize, nops, batch);
             } else {
                 cout << "unknown storage type:" << argv[2] << endl;
             }

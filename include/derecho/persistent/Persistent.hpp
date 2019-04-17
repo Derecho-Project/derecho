@@ -71,7 +71,7 @@ template <typename int_type>
 std::pair<int_type, int_type> unpack_version(const version_t packed_int);
 
 /**
-   * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
+   * PersistentRegistry is a book for all the Persistent<T> 
    * variables. Replicated<T> class should maintain such a registry to perform
    * the following operations:
    * - makeVersion(const int64_t & ver): create a version 
@@ -311,7 +311,7 @@ private:
 //   - Return value is a pointer to a new created ObjectType deserialized from
 //     'pdata' buffer.
 // - StorageType: storage type is defined in PersistLog. The value could be
-//   ST_FILE/ST_MEM/ST_3DXP ... I will start with ST_FILE and extend it to
+//   ST_FILE/ST_SPDK ... I will start with ST_FILE and extend it to
 //   other persistent Storage.
 // TODO:comments
 //TODO: Persistent<T> has to be serializable, extending from mutils::ByteRepresentable
@@ -597,59 +597,6 @@ public:
 #endif  //_PERFORMANCE_DEBUG
 };
 
-template <typename ObjectType>
-class Volatile : public Persistent<ObjectType, ST_MEM> {
-public:
-    /** constructor 1 is for building a persistent<T> locally, load/create a
-     * log and register itself to a persistent registry.
-     * @param object_factory factory for ObjectType
-     * @param object_name This name is used for persistent data in file.
-     * @param persistent_registry A normal pointer to the registry.
-     * @param dm DeserializationManager for deserializing logged object.
-     */
-    Volatile(
-            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
-            const char* object_name = nullptr,
-            PersistentRegistry* persistent_registry = nullptr,
-            mutils::DeserializationManager dm = {{}}) noexcept(false)
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry) {}
-
-    /** constructor 2 is move constructor. It "steals" the resource from
-     * another object.
-     * @param other The other object.
-     */
-    Volatile(Volatile&& other) noexcept(false)
-            : Persistent<ObjectType, ST_MEM>(other) {}
-
-    /** constructor 3 is for deserialization. It builds a Persistent<T> from
-     * the object name, a unique_ptr to the wrapped object, a unique_ptr to
-     * the log.
-     * @param object_factory factory for ObjectType
-     * @param object_name The name is used for persistent data in file.
-     * @param wrapped_obj_ptr A unique pointer to the wrapped object.
-     * @param log_ptr A unique pointer to the log.
-     * @param persistent_registry A normal pointer to the registry.
-     * @param dm DeserializationManager for deserializing logged object.
-     */
-    Volatile(
-            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
-            const char* object_name,
-            std::unique_ptr<ObjectType>& wrapped_obj_ptr,
-            std::unique_ptr<PersistLog>& log_ptr = nullptr,
-            PersistentRegistry* persistent_registry = nullptr,
-            mutils::DeserializationManager dm = {{}}) noexcept(false)
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}
-
-    /** constructor 4, the default copy constructor, is disabled
-     */
-    Volatile(const Volatile&) = delete;
-
-    // destructor:
-    virtual ~Volatile() noexcept(true){
-            // do nothing
-    };
-};
-
 /* Utilities for manage a single "ByteRepresentable" persistent object. */
 /**
  * saveObject() saves a serializable object
@@ -678,7 +625,7 @@ std::unique_ptr<ObjectType> loadObject(const char* object_name = nullptr) noexce
 /// @param shard_num
 /// @return The minimum latest persisted version across the Replicated's Persistent<T> fields, as a version number
 template <StorageType storageType = ST_FILE>
-const typename std::enable_if<(storageType == ST_FILE || storageType == ST_MEM), version_t>::type getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
+const typename std::enable_if<(storageType == ST_FILE), version_t>::type getMinimumLatestPersistedVersion(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
 
 ///
 }  // namespace persistent
