@@ -315,7 +315,7 @@ namespace sst{
     int size_r,
     int is_lf_server) {
 
-    dbg_default_info("resources constructor:this={}",(void*)this);
+    dbg_default_debug("resources constructor: this={}",(void*)this);
 
     // set remote id
     this->remote_id = r_id;
