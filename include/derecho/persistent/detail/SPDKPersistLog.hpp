@@ -6,25 +6,73 @@
 #endif
 
 #include "PersistLog.hpp"
+#include <bitset>
+#include <unordered_map>
 
 namespace persistent {
 
+// TODO hardcoded sizes for now
+#define NUM_LOGS_SUPPORTED 16384 // 16k
+#define SEGMENT_SIZE 8388608 // 8 MB
+#define VIRTUAL_ADDRESS_SPACE 1099511627776 // 1TB
+#define NUM_SEGMENTS VIRTUAL_ADDRESS_SPACE / SEGMENT_SIZE
+
+// per log metadata
+typedef union log_metadata {
+    struct {
+	uint32_t id;
+	uint32_t segment_table[NUM_SEGMENTS];
+	int64_t head; // head index
+	int64_t tail; // tail index
+	int64_t ver; // latest version number
+    } fields;
+    uint8_t bytes[NUM_LOGS_SUPPORTED]; // TODO figure out size
+    // bool operator?
+} LogMetadata;
+
+// global metadata
+typedef union global_metadata {
+    struct {
+	std::unordered_map<std::string, uint32_t> log_name_to_id;
+	LogMetadata logs[NUM_LOGS_SUPPORTED];
+	std::bitset<NUM_SEGMENTS> segments;
+    } fields;
+    uint8_t bytes[NUM_LOGS_SUPPORTED]; // TODO figure out size
+    // bool operator
+} GlobalMetadata;
+
+// log entry format 
+typedef union log_entry {
+    struct {
+        int64_t ver;     // version of the data
+        uint64_t dlen;   // length of the data
+        uint64_t ofst;   // offset of the data in the memory buffer
+        uint64_t hlc_r;  // realtime component of hlc
+        uint64_t hlc_l;  // logic component of hlc
+    } fields;
+    uint8_t bytes[64];
+} LogEntry;
+
 // Persistent log interfaces
 class SPDKPersistLog : public PersistLog {
+protected:
+    // log metadata
+    LogMetadata m_currLogMetadata;
+
 public:
     // Constructor:
     // Remark: the constructor will check the persistent storage
     // to make sure if this named log(by "name" in the template
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
-    SPDKPersistLog(const std::string &name) : PersistLog(name) noexcept(true) {}
+    SPDKPersistLog(const std::string &name) noexcept(true) : PersistLog(name) {};
     // Destructor
     virtual ~SPDKPersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append
      * @param size - length of the data
      * @param ver - version of the data, the implementation is responsible for
-     *              making sure it grows monotonically.
+	*              making sure it grows monotonically.
      * @param mhlc - the hlc clock of the data, the implementation is 
      *               responsible for making sure it grows monotonically.
      * Note that the entry appended can only become persistent till the persist()
