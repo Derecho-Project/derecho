@@ -27,7 +27,10 @@ typedef union log_metadata {
 	int64_t ver; // latest version number
     } fields;
     uint8_t bytes[NUM_LOGS_SUPPORTED]; // TODO figure out size
-    // bool operator?
+    // bool operator
+    bool operator==(const union log_metadata& other) {
+        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
+    }
 } LogMetadata;
 
 // global metadata
@@ -38,7 +41,6 @@ typedef union global_metadata {
 	std::bitset<NUM_SEGMENTS> segments;
     } fields;
     uint8_t bytes[NUM_LOGS_SUPPORTED]; // TODO figure out size
-    // bool operator
 } GlobalMetadata;
 
 // log entry format 
