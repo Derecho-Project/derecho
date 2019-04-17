@@ -3,4 +3,6 @@
 using namespace std;
 
 namespace persistent {
+namespace spdk {
+}
 }

@@ -3,6 +3,7 @@
 #define PERSISTENT_HPP
 
 #include "detail/FilePersistLog.hpp"
+#include "detail/SPDKPersistLog.hpp"
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "detail/PersistLog.hpp"
