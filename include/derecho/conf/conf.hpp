@@ -31,7 +31,7 @@ private:
 #define CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE "DERECHO/max_smc_payload_size"
 #define CONF_DERECHO_BLOCK_SIZE "DERECHO/block_size"
 #define CONF_DERECHO_WINDOW_SIZE "DERECHO/window_size"
-#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/timeout_heartbeat_ms"
+#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 
