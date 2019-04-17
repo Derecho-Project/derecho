@@ -9,6 +9,8 @@
 
 namespace persistent {
 
+namespace file{
+
 // meta header format
 typedef union meta_header {
     struct {
@@ -40,35 +42,33 @@ typedef union log_entry {
 // both from the configuration file:
 // CONF_PERS_MAX_LOG_ENTRY - "PERS/max_log_entry"
 // CONF_PERS_MAX_DATA_SIZE - "PERS/max_data_size"
-#define MAX_LOG_ENTRY (this->m_iMaxLogEntry)
-#define MAX_LOG_SIZE (sizeof(LogEntry) * MAX_LOG_ENTRY)
-#define MAX_DATA_SIZE (this->m_iMaxDataSize)
-#define META_SIZE (sizeof(MetaHeader))
+#define FS_MAX_LOG_ENTRY (this->m_iMaxLogEntry)
+#define FS_MAX_LOG_SIZE (sizeof(LogEntry) * FS_MAX_LOG_ENTRY)
+#define FS_MAX_DATA_SIZE (this->m_iMaxDataSize)
+#define FS_META_SIZE (sizeof(MetaHeader))
 
 // helpers:
 ///// READ or WRITE LOCK on LOG REQUIRED to use the following MACROs!!!!
-#define META_HEADER ((MetaHeader*)(&(this->m_currMetaHeader)))
-#define META_HEADER_PERS ((MetaHeader*)(&(this->m_persMetaHeader)))
-#define LOG_ENTRY_ARRAY ((LogEntry*)(this->m_pLog))
+#define FS_META_HEADER ((MetaHeader*)(&(this->m_currMetaHeader)))
+#define FS_META_HEADER_PERS ((MetaHeader*)(&(this->m_persMetaHeader)))
+#define FS_LOG_ENTRY_ARRAY ((LogEntry*)(this->m_pLog))
 
-#define NUM_USED_SLOTS (META_HEADER->fields.tail - META_HEADER->fields.head)
-// #define NUM_USED_SLOTS_PERS   (META_HEADER_PERS->tail - META_HEADER_PERS->head)
-#define NUM_FREE_SLOTS (MAX_LOG_ENTRY - 1 - NUM_USED_SLOTS)
-// #define NUM_FREE_SLOTS_PERS   (MAX_LOG_ENTRY - 1 - NUM_USERD_SLOTS_PERS)
+#define FS_NUM_USED_SLOTS (FS_META_HEADER->fields.tail - FS_META_HEADER->fields.head)
+#define FS_NUM_FREE_SLOTS (FS_MAX_LOG_ENTRY - 1 - FS_NUM_USED_SLOTS)
 
-#define LOG_ENTRY_AT(idx) (LOG_ENTRY_ARRAY + (int)((idx) % MAX_LOG_ENTRY))
-#define NEXT_LOG_ENTRY LOG_ENTRY_AT(META_HEADER->fields.tail)
-#define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
-        MAX(META_HEADER_PERS->fields.tail, META_HEADER->fields.head))
-#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? -1 : META_HEADER->fields.tail - 1)
-#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
+#define FS_LOG_ENTRY_AT(idx) (FS_LOG_ENTRY_ARRAY + (int)((idx) % FS_MAX_LOG_ENTRY))
+#define FS_NEXT_LOG_ENTRY FS_LOG_ENTRY_AT(FS_META_HEADER->fields.tail)
+#define FS_NEXT_LOG_ENTRY_PERS FS_LOG_ENTRY_AT( \
+        MAX(FS_META_HEADER_PERS->fields.tail, FS_META_HEADER->fields.head))
+#define FS_CURR_LOG_IDX ((FS_NUM_USED_SLOTS == 0) ? -1 : FS_META_HEADER->fields.tail - 1)
+#define FS_LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % FS_MAX_DATA_SIZE))
 
-#define NEXT_DATA_OFST ((CURR_LOG_IDX == -1) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
-#define NEXT_DATA ((void*)((uint64_t) this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
-#define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
+#define FS_NEXT_DATA_OFST ((FS_CURR_LOG_IDX == -1) ? 0 : (FS_LOG_ENTRY_AT(FS_CURR_LOG_IDX)->fields.ofst + FS_LOG_ENTRY_AT(FS_CURR_LOG_IDX)->fields.dlen))
+#define FS_NEXT_DATA ((void*)((uint64_t) this->m_pData + FS_NEXT_DATA_OFST % FS_MAX_DATA_SIZE))
+#define FS_NEXT_DATA_PERS ((FS_NEXT_LOG_ENTRY > FS_NEXT_LOG_ENTRY_PERS) ? FS_LOG_ENTRY_DATA(FS_NEXT_LOG_ENTRY_PERS) : NULL)
 
-#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(META_HEADER->fields.head)->fields.ofst))
-#define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
+#define FS_NUM_USED_BYTES ((FS_NUM_USED_SLOTS == 0) ? 0 : (FS_LOG_ENTRY_AT(FS_CURR_LOG_IDX)->fields.ofst + FS_LOG_ENTRY_AT(FS_CURR_LOG_IDX)->fields.dlen - FS_LOG_ENTRY_AT(FS_META_HEADER->fields.head)->fields.ofst))
+#define FS_NUM_FREE_BYTES (FS_MAX_DATA_SIZE - FS_NUM_USED_BYTES)
 
 #define PAGE_SIZE (getpagesize())
 #define ALIGN_TO_PAGE(x) ((void*)(((uint64_t)(x)) - ((uint64_t)(x)) % PAGE_SIZE))
@@ -202,7 +202,7 @@ public:
         int64_t idx;
         // RDLOCK for validation
         FPL_RDLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, FS_META_HEADER->fields.head, FS_META_HEADER->fields.tail);
         if(idx == -1) {
             FPL_UNLOCK;
             return;
@@ -213,9 +213,9 @@ public:
         // search?
         // WRLOCK for trim
         FPL_WRLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, FS_META_HEADER->fields.head, FS_META_HEADER->fields.tail);
         if(idx != -1) {
-            META_HEADER->fields.head = (idx + 1);
+            FS_META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
                 persist(true);
@@ -314,13 +314,13 @@ private:
         while(head <= tail) {
             pivot = (head + tail) / 2;
             dbg_default_trace("Search range: {0}->[{1},{2}]", pivot, head, tail);
-            const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
+            const TKey p_key = keyGetter(FS_LOG_ENTRY_AT(pivot));
             if(p_key == key) {
                 break;  // found
             } else if(p_key < key) {
                 if(pivot + 1 >= logTail) {
                     break;  // found - the last element
-                } else if(keyGetter(LOG_ENTRY_AT(pivot + 1)) > key) {
+                } else if(keyGetter(FS_LOG_ENTRY_AT(pivot + 1)) > key) {
                     break;  // found - the next one is greater than key
                 } else {    // search right
                     head = pivot + 1;
@@ -340,12 +340,12 @@ private:
     //dbg functions
     void dbgDumpMeta() {
         dbg_default_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
-        dbg_default_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)META_HEADER->fields.head, (int64_t)META_HEADER->fields.tail);
-        dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
-        dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
+        dbg_default_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)FS_META_HEADER->fields.head, (int64_t)FS_META_HEADER->fields.tail);
+        dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)FS_META_HEADER_PERS->fields.head, (int64_t)FS_META_HEADER_PERS->fields.tail);
+        dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)FS_NEXT_LOG_ENTRY, (void*)FS_NEXT_LOG_ENTRY_PERS);
     }
 #endif  //NDEBUG
 };
 }
-
+}
 #endif  //FILE_PERSIST_LOG_HPP

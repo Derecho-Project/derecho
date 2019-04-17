@@ -86,7 +86,7 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
     switch(storageType) {
         // file system
         case ST_FILE:
-            this->m_pLog = std::make_unique<FilePersistLog>(object_name);
+            this->m_pLog = std::make_unique<file::FilePersistLog>(object_name);
             if(this->m_pLog == nullptr) {
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
@@ -610,7 +610,7 @@ const typename std::enable_if<(storageType == ST_FILE), version_t>::type getMini
     // In case we get a valid version from log stored in other storage type, we should return INVALID_VERSION for 1)
     // but return the valid version for 2).
     version_t mlpv = INVALID_VERSION;
-    mlpv = FilePersistLog::getMinimumLatestPersistedVersion(PersistentRegistry::generate_prefix(subgroup_type, subgroup_index, shard_num));
+    mlpv = file::FilePersistLog::getMinimumLatestPersistedVersion(PersistentRegistry::generate_prefix(subgroup_type, subgroup_index, shard_num));
     return mlpv;
 }
 }
