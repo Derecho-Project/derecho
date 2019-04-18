@@ -42,8 +42,8 @@ matrix:
        
 script:
 # build Derecho
-  - mkdir $BUILD_TYPE
-  - cd $BUILD_TYPE
+  - mkdir build-${BUILD_TYPE}
+  - cd build-${BUILD_TYPE}
   - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
   - make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
   - sudo make install
