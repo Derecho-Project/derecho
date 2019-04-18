@@ -1,6 +1,7 @@
 Full source documentation can be found at https://derecho-project.github.io/.
 
-# Derecho
+
+# Derecho [![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 This is the main repository for the Derecho project. It unifies the RDMC, SST, and Derecho modules under a single, easy-to-use repository. 
 
 ## Intended use cases and assumptions.
