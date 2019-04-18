@@ -130,10 +130,8 @@ struct DerechoParams : public mutils::ByteRepresentable {
         // Use the profile string to search the configuration file for the appropriate
         // settings. If they do not exist, then we should utilize the defaults
         std::string prefix = "SUBGROUP/" + profile + "/";
-        std::vector<std::string> fields = {"max_payload_size", "max_smc_payload_size", "block_size", "window_size", "timeout_ms", "rdmc_send_algorithm"};
-        for (auto &field : fields) {
-            field = prefix + field;
-            if (!hasCustomizedConfKey(field)) {
+        for (auto &field : Conf::subgroupProfileFields) {
+            if (!hasCustomizedConfKey(prefix + field)) {
                 // If an invalid profile was loaded in, utilize the default
                 // derecho parameters
                 // TODO: remove before merging to master
@@ -146,13 +144,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
         // TODO: remove before merging to master
         std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
 
-        uint32_t max_payload_size = getConfUInt32(fields[0]);
-        uint32_t max_smc_payload_size = getConfUInt32(fields[1]);
-        uint32_t block_size = getConfUInt32(fields[2]);
-        uint32_t window_size = getConfUInt32(fields[3]);
-        uint32_t timeout_ms = getConfUInt32(fields[4]);
-        const std::string& algorithm = getConfString(fields[5]);
-        uint32_t rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
+        uint32_t max_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[0]);
+        uint32_t max_smc_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[1]);
+        uint32_t block_size = getConfUInt32(prefix + Conf::subgroupProfileFields[2]);
+        uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[3]);
+        uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
+        const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[4]);
+        uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
 
         return DerechoParams {
             max_payload_size,

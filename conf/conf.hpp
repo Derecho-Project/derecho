@@ -177,6 +177,9 @@ public:
                            const char* conf_file = nullptr);
     static const Conf* get() noexcept;
 
+    // Defines fields used for loading subgroup profiles in multicast_group.h
+    static const std::vector<std::string> subgroupProfileFields;
+
 private:
     // singleton
     static std::unique_ptr<Conf> singleton;

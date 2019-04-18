@@ -10,6 +10,14 @@ namespace derecho {
 
 static const char* default_conf_file = "derecho.cfg";
 
+const std::vector<std::string> Conf::subgroupProfileFields = {
+        "max_payload_size",
+        "max_smc_payload_size",
+        "block_size",
+        "window_size",
+        "rdmc_send_algorithm"
+};
+
 std::unique_ptr<Conf> Conf::singleton = nullptr;
 
 std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
