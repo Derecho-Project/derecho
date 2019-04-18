@@ -232,7 +232,6 @@ public:
             //Ensure a view change isn't in progress
             std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
             size_t size;
-            const DerechoParams& profile = group_rpc_manager.view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).profile;
             std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
                                                    ->multicast_group->get_subgroup_settings()
                                                    .at(subgroup_id)

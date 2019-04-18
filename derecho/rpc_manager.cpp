@@ -22,6 +22,10 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::create_connections() {
+    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+}
+
 void RPCManager::start_listening() {
     std::lock_guard<std::mutex> lock(thread_start_mutex);
     thread_start = true;

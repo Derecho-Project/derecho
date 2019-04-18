@@ -208,8 +208,7 @@ private:
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
-     * the leader. The DerechoParams will be passed through to construct
-     * the underlying DerechoGroup. If they specify a filename, the group will
+     * the leader. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
      *
      * @param callbacks The set of callback functions for message delivery
