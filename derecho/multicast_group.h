@@ -134,15 +134,9 @@ struct DerechoParams : public mutils::ByteRepresentable {
             if (!hasCustomizedConfKey(prefix + field)) {
                 // If an invalid profile was loaded in, utilize the default
                 // derecho parameters
-                // TODO: remove before merging to master
-                std::cout << "Could not find " + field + ". Using default parameters" << "\n";
                 return DerechoParams();
             }
         }
-        // Since we have determined that all keys are defined in the conf file
-        // we can safely construct the derecho params struct and return it
-        // TODO: remove before merging to master
-        std::cout << "Found all params. Loading derecho params for " + profile + "..." << "\n";
 
         uint32_t max_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[0]);
         uint32_t max_smc_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[1]);

@@ -45,8 +45,6 @@ int main(int argc, char** argv) {
         }
     }};
 
-    std::cout << "My GMS port: " << derecho::getConfUInt16(CONF_DERECHO_GMS_PORT) << ", leader's GMS port: " << derecho::getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT);
-
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
