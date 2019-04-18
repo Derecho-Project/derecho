@@ -49,7 +49,6 @@ script:
   - sudo make install
   
 # performance tests
-  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & 
-  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
+  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
   - cat data_derecho_bw
   
