@@ -1489,7 +1489,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
             max_payload_size = std::max(payload_size, max_payload_size);
             slot_size_for_subgroup = std::max(slot_size_for_shard, slot_size_for_subgroup);
             view_max_window_size = std::max(profile.window_size, view_max_window_size);
-            view_max_sender_timeout = std::max(profile.timeout_ms, view_max_sender_timeout);
+            view_max_sender_timeout = std::max(profile.heartbeat_ms, view_max_sender_timeout);
 
             //Initialize my_rank in the SubView for this node's ID
             shard_view.my_rank = shard_view.rank_of(view.members[view.my_rank]);

@@ -123,7 +123,6 @@ struct DerechoParams : public mutils::ByteRepresentable {
                                     derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
                                     send_algorithm_from_string(derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM)),
                                     derecho::getConfUInt32(CONF_DERECHO_RPC_PORT)) {}
-};
 
     /**
      * Constructs DerechoParams specifying subgroup metadata for specified profile.
@@ -146,7 +145,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         uint32_t max_smc_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[1]);
         uint32_t block_size = getConfUInt32(prefix + Conf::subgroupProfileFields[2]);
         uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[3]);
-        uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_TIMEOUT_MS);
+        uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
         const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[4]);
         uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
 
@@ -156,13 +155,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
             block_size,
             window_size,
             timeout_ms,
-            send_algorithm_from_string(algorithm),
+            DerechoParams::send_algorithm_from_string(algorithm),
             rpc_port,
         };
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_msg_size, sst_max_msg_size, block_size, window_size,
-            timeout_ms, rdmc_send_algorithm, rpc_port);
+                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**

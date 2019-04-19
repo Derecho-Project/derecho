@@ -275,15 +275,6 @@ int64_t RestartLeaderState::send_restart_view() {
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
-            send_success = waiting_sockets_iter->second.write(params_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
-            mutils::to_bytes(derecho_params, params_buffer);
-            send_success = waiting_sockets_iter->second.write(params_buffer, params_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
             dbg_default_debug("Sending ragged-trim information to node {}", waiting_sockets_iter->first);
             std::size_t num_ragged_trims = multimap_size(restart_state.logged_ragged_trim);
             send_success = waiting_sockets_iter->second.write(num_ragged_trims);
