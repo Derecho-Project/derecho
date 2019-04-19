@@ -17,7 +17,7 @@ To obtain such high speeds, Derecho sacrifices some of the interoperability seen
 Derecho does not have any specific O/S dependency.  We've tested most extensively on the current release of Ubuntu, which is also the default Linux configuration used on Azure IoT Edge and Azure IoT, but there is no reason the system couldn't be used on other platforms.
 
 ## Organization
-The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies are located in the `third_party` directory, and will be pointers to Git submodules whenever possible to reduce code duplication. 
+The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies have to be installed beforehand (Yes, we removed the submodules.) 
 
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
@@ -25,31 +25,51 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`), `autoconf`, and `libtool`. The last two are required in order to build the LibFabrics library, which is bundled with Derecho under the `third_party` directory.
 * CMake 2.8.1 or newer, if you want to use the bundled build scripts
+* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`).
+* Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-libfabric.sh))
+* Logging library: [`spdlog`](https://github.com/gabime/spdlog). To avoid compatibility issue, please use commit `10e809cf644d55e5bd7d66d02e2604e2ddd7fb48` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-spdlog.sh))
+* Matthew's C++ utilities
+  - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils.sh))
+  - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-containers.sh))
+  - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-tasks.sh))
 
 ### Getting Started
-Since this repository uses Git submodules to refer to some bundled dependencies, a simple `git clone` will not actually download all the code. To download a complete copy of the project, run
+To download the project, run
 
-    git clone --recursive https://github.com/Derecho-Project/derecho-unified.git
+    git clone https://github.com/Derecho-Project/derecho.git
 
-Once cloning is complete, to compile the code, `cd` into the `derecho-unified` directory and run:
-* mkdir Release
-* cd Release
-* `cmake -DCMAKE_BUILD_TYPE=Release ..`
-* `make`
+Once cloning is complete, to build the code, `cd` into the `derecho` directory and run:
+* `mkdir Release`
+* `cd Release`
+* `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<path-to-install-dir> ..`
+* ``make -j `lscpu | grep "^CPU(" | awk '{print $2}'` ``
 
 This will place the binaries and libraries in the sub-dierectories of `Release`.
-The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho-unified` will not work.
+The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
-To add your own executable (that uses Derecho) to the build system, simply add an executable target to CMakeLists.txt with `derecho` as a "linked library." You can do this either in the top-level CMakeLists.txt or in the CMakeLists.txt inside the "applications" directory. It will look something like this:
+Once the project is built, install it by run:
+* `make install`
 
-    add_executable(my_project_main my_project_main.cpp)
-	target_link_libraries(my_project_main derecho)
+By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` priviledge to write to system directories.
+
+Successful installtion will set up the followings in `$DESTDIR`:
+* `include/derecho` - the header files
+* `lib/libderecho.so` - the main shared library
+* `lib/libdpods.so` - the derecho Old-Plain-Data storage library
+* `lib/cmake/derecho` and `lib/cmake/dpods` - cmake support for `find_package(derecho)`/`find_package(dpods)`
+* `share/derecho` - sample derecho configuration files.
+
+To uninstall, run:
+* ``rm -rf `cat install_manifest.txt` ``
+
+To build your own derecho executable, simple run:
+* `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
+* or, `g++ -std=c++1z -o myapp myapp.cpp -lderecho -ldpods -pthread`, if you use **dPods**
 
 To use Derecho in your code, you simply need to 
-- include the header `derecho/derecho.h` in your \*.h or \*.cpp files, and
-- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `conf/derecho-default.cfg`. 
+- include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
+- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `<installation-prefix>/share/derecho/derecho-sample.cfg`. 
 
 The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior. 
 
@@ -61,7 +81,7 @@ The other important parameters are the message sizes. Since Derecho pre-allocate
 There are three options to control the size of messages: **max_payload_size**, **max_smc_payload_size**, and **block_size**.
 No message bigger than **max_payload_size** will be sent by Derecho. Messages equal to or smaller than **max_smc_payload_size** will be sent through SST multicast (SMC), which is more suitable than RDMC for small messages. **block_size** defines the size of unit sent in RDMC (messages bigger than **block_size** will be split internally and sent in a pipeline).
 
-Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho-unified/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
@@ -120,7 +140,7 @@ Then, call the application as follows, assuming the application's name is `app`:
 ```bash
 $ app --DERECHO/local_id=0 --PERS/reset=false -- <application-argument-list>
 ```
-Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho-unified/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
+Please refer to the [bandwidth_test](https://github.com/Derecho-Project/derecho/blob/master/applications/tests/performance_tests/bandwidth_test.cpp) application for more details.
 
 ### Setup and Testing
 There are some sample programs in the folder applications/demos that can be run to test the installation. In addition, there are some performance tests in the folder applications/tests/performance\_tests that you may want to use to measure the performance Derecho achieves on your system. To be able to run the tests, you need a minimum of two machines connected by RDMA. The RDMA devices on the machines should be active. In addition, you need to run the following commands to install and load the required kernel modules for using RDMA hardware:
@@ -331,7 +351,7 @@ For simplicity, the versioned type is int in this example. You set it up in the 
 
 By default, the Persistent<T> stores its log in the filesystem (in a folder called .plog in the current directory). Application can specify memory as the storage location by setting the second template parameter: `Persistent<T,ST_MEM>` (or `Volatile<T>` as syntactic sugar). We are working on more store storage types including NVM.
 
-Once the version vector is set up with Derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho-unified/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
+Once the version vector is set up with Derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
 
 ###  Notes on Very Large Deployments
 We are committed to supporting Derecho with RDMA on 1000 (or even more) physical nodes, one application instance per node.  On a machine that actually allows some small number K of applications to share an RDMA NIC, we would even be happy to help get things working with k\*1000's of group members... eventually.  However, we do not recommend that Derecho developers start by trying to work at that scale before gaining experience at smaller scales.  Even launching a Derecho test program at that scale would be very challenging, and we will only be able to help if the team undertaking this has a good level of experience with the system at smaller scales.
