@@ -27,5 +27,7 @@ public:
 
     // size = 0 writes the entire region
     bool write_remote(size_t offset = 0, size_t size = 0, bool with_completion = false);
+
+    void sync() const;
 };
 }  // namespace rdma

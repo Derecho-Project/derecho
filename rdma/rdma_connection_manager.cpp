@@ -24,6 +24,7 @@ RDMAConnection::RDMAConnection(node_id_t remote_id,
     // proceed with the rest of the connection - create endpoints etc.
 }
 
+// not complete - will need to provide local/remote mr_key etc.
 bool RDMAConnection::write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion) {
     if(!is_broken) {
         // post a remote write to the NIC
@@ -41,6 +42,9 @@ bool RDMAConnection::write_remote(char* local_addr, char* remote_addr, size_t si
     }
     // if the connection is broken, ignore
     return false;
+}
+
+void RDMAConnection::sync() const {
 }
 
 std::map<node_id_t, std::shared_ptr<RDMAConnection>> RDMAConnectionManager::rdma_connections;

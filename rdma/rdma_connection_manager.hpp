@@ -45,8 +45,11 @@ class RDMAConnection {
 
     void breakConnection();
 
-    // not complete - will need to provide local/remote mr_key etc.
+    // update remote_addr with data from local_addr for size size
     bool write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion);
+
+    // barrier with the remote end
+    void sync() const;
 };
 
 class RDMAConnectionManager {

@@ -25,4 +25,10 @@ bool MemoryRegion::write_remote(size_t offset, size_t size, bool with_completion
     return shared_rdma_connection->write_remote(send_buf + offset, remote_recv_buf + offset,
                                                 size, with_completion);
 }
+
+void MemoryRegion::sync() const {
+    std::shared_ptr<RDMAConnection> shared_rdma_connection = rdma_connection.lock();
+    assert(shared_rdma_connection);
+    shared_rdma_connection->sync();
+}
 }  // namespace rdma
