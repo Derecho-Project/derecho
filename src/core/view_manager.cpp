@@ -961,6 +961,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             }
         }
         // wait for all pending sst sends to finish
+        dbg_default_debug("Waiting for pending SST sends to finish");
         while(curr_view->multicast_group->check_pending_sst_sends(subgroup_id)) {
         }
         curr_view->gmsSST->put_with_completion();
@@ -985,6 +986,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     }
 
     curr_view->gmsSST->put_with_completion();
+    dbg_default_debug("Doing an SST sync_with_members");
     curr_view->gmsSST->sync_with_members();
 
     // For subgroups in which I'm the shard leader, do RaggedEdgeCleanup for the leader

@@ -253,7 +253,9 @@ void SST<DerivedSST>::freeze(int row_index) {
         row_is_frozen[row_index] = true;
     }
     num_frozen++;
-    res_vec[row_index].reset();
+    //BUG: deleting from res_vec here creates a race with put(), which blindly
+    //dereferences res_vec[index] after checking fow_is_frozen
+//    res_vec[row_index].reset();
     if(failure_upcall) {
         failure_upcall(members[row_index]);
     }

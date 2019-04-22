@@ -86,8 +86,7 @@ void PersistenceManager::start() {
                                sizeof(long long int));
             } catch(uint64_t exp) {
                 dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
-                std::cout
-                        << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
+                std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
             }
 
             // callback
