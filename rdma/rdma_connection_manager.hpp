@@ -57,7 +57,7 @@ class RDMAConnection {
     bool write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion);
 
     // barrier with the remote end
-    void sync() const;
+    bool sync() const;
 };
 
 class RDMAConnectionManager {

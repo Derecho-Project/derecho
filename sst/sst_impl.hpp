@@ -129,7 +129,7 @@ const char* SST<DerivedSST>::get_base_address() {
  */
 template <typename DerivedSST>
 void SST<DerivedSST>::sync_with_members() const {
-    for(auto& memory_region : members.splice(memory_regions)) {
+    for(auto& memory_region : members.filter_self(memory_regions)) {
         memory_region->sync();
     }
 }
@@ -147,7 +147,7 @@ uint32_t SST<DerivedSST>::get_my_index() const {
 template <typename DerivedSST>
 void SST<DerivedSST>::update_remote_rows(size_t offset, size_t size, bool completion) {
     assert(offset + size <= row_length);
-    for(auto& memory_region : members.splice(memory_regions)) {
+    for(auto& memory_region : members.filter_self(memory_regions)) {
         memory_region->write_remote(offset, size, completion);
     }
 }

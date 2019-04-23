@@ -129,7 +129,7 @@ public:
     // returns the start of the rows
     const char* get_base_address();
 
-    /** Does a RDMA sync with every other member of the SST. */
+    /** Does an RDMA sync with every other member of the SST. */
     void sync_with_members() const;
 
     /** Returns the total number of rows in the table. */

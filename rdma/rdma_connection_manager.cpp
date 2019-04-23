@@ -50,7 +50,8 @@ bool RDMAConnection::write_remote(char* local_addr, char* remote_addr, size_t si
     return false;
 }
 
-void RDMAConnection::sync() const {
+bool RDMAConnection::sync() const {
+    return false;
 }
 
 std::map<node_id_t, std::shared_ptr<RDMAConnection>> RDMAConnectionManager::rdma_connections;

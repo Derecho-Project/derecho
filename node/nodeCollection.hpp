@@ -81,7 +81,7 @@ public:
     uint32_t get_rank_of(node_id_t node_id) const;
 
     template <typename elementType>
-    Splice<elementType> splice(const std::vector<elementType>& vec) const {
+    Splice<elementType> filter_self(const std::vector<elementType>& vec) const {
         return Splice<elementType>((elementType*)&vec[0], my_rank, num_nodes);
     };
 };
