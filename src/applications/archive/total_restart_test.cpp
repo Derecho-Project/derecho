@@ -80,30 +80,30 @@ int main(int argc, char** argv) {
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
-    // std::cout << "Successfully joined group" << std::endl;
-    // std::cout << "Members are: " << std::endl;
-    // auto members = group.get_members();
-    // for(auto m : members) {
-    // std::cout << m << " ";
-    // }
-    // std::cout << std::endl;
+
     auto my_rank = group.get_my_rank();
     if(my_rank <= 5) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {
             derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
-            derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
-            // int curr_state = 0;
-            for(auto& reply_pair : replies) {
-                try {
-                    // curr_state =
-                    reply_pair.second.get();
-                } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                    // std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+            try {
+                derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
+                // int curr_state = 0;
+                for(auto& reply_pair : replies) {
+                    try {
+                        // curr_state =
+                        reply_pair.second.get();
+                    } catch(derecho::rpc::node_removed_from_group_exception& ex) {
+                        std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+                    } catch(derecho::rpc::sender_removed_from_group_exception& ex2) {
+                        std::cout << "No query reply due to sender_removed_from_group_exception: " << ex2.what() << std::endl;
+                    }
                 }
+                // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
+            } catch(derecho::rpc::sender_removed_from_group_exception& ex) {
+                std::cout << "Query send aborted due to sender_removed_from_group_exception: " << ex.what() << std::endl;
             }
-            // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
 
             //This ensures the state changes with every update from every node
             // int new_value = counter * 10 + node_id;

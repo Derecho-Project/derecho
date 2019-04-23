@@ -55,7 +55,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
 
     //Maps invocation-instance IDs to results sets
     std::map<std::size_t, PendingResults<Ret>> results_map;
-    std::atomic<short> invocation_id_sequencer;
+    std::atomic<unsigned short> invocation_id_sequencer;
     std::mutex map_lock;
     using lock_t = std::unique_lock<std::mutex>;
 
@@ -577,16 +577,15 @@ public:
               nid(nid) {}
 
     template <FunctionTag Tag, typename... Args>
-    std::size_t get_size(Args&&... a) {
+    std::size_t get_size_for_ordered_send(Args&&... a) {
         //only used for size calculation
         long int invocation_id = 0;
-        std::size_t size = mutils::bytes_size(invocation_id);
+        std::size_t function_call_size = mutils::bytes_size(invocation_id);
         {
-            //auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(a)...};
-            //size += std::accumulate(t.begin(), t.end(), 0);
-            size += (0 + ... + mutils::bytes_size(a));
+            function_call_size += (0 + ... + mutils::bytes_size(a));
         }
-        return size;
+        //Add the header_size that send() adds to the invoker's out_alloc
+        return function_call_size + remote_invocation_utilities::header_space();
     }
 
     template <FunctionTag Tag, typename... Args>

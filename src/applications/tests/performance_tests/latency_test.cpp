@@ -18,6 +18,7 @@
 
 #include <derecho/rdmc/rdmc.hpp>
 #include <derecho/core/derecho.hpp>
+#include <derecho/utils/time.h>
 
 #include "aggregate_latency.hpp"
 #include "log_results.hpp"

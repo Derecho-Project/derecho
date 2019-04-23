@@ -6,10 +6,10 @@
 
 #pragma once
 
-#include <exception>
-#include <string>
-#include <sstream>
 #include <derecho/core/git_version.hpp>
+#include <exception>
+#include <sstream>
+#include <string>
 
 namespace derecho {
 
@@ -18,10 +18,11 @@ namespace derecho {
  */
 struct derecho_exception : public std::exception {
     const std::string message;
-    derecho_exception(const std::string& message) : message(message) {}
+    derecho_exception(const std::string& message)
+            : message(message + " Derecho version: " + VERSION_STRING_PLUS_COMMITS) {}
 
     const char* what() const noexcept {
-        return (message + " Derecho version: " + VERSION_STRING_PLUS_COMMITS).c_str();
+        return message.c_str();
     }
 };
 

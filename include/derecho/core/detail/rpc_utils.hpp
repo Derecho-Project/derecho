@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "../derecho_exception.hpp"
 #include "../derecho_type_definitions.hpp"
 #include "derecho_internal.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -79,15 +80,12 @@ using node_list_t = std::vector<node_id_t>;
  * Indicates that an RPC call failed because executing the RPC function on the
  * remote node resulted in an exception.
  */
-struct remote_exception_occurred : public std::exception {
+struct remote_exception_occurred : public derecho_exception {
     node_id_t who;
-    remote_exception_occurred(node_id_t who) : who(who) {}
-    virtual const char* what() const noexcept override {
-        std::ostringstream o_stream;
-        o_stream << "An exception occured at node with id " << who;
-        std::string str = o_stream.str();
-        return str.c_str();
-    }
+    remote_exception_occurred(node_id_t who)
+            : derecho_exception(std::string("An exception occurred at node with ID ")
+                                + std::to_string(who)),
+              who(who) {}
 };
 
 /**
@@ -95,16 +93,24 @@ struct remote_exception_occurred : public std::exception {
  * from the Replicated Object's subgroup (and possibly from the enclosing Group
  * entirely) after the RPC message was sent but before a reply was received.
  */
-struct node_removed_from_group_exception : public std::exception {
+struct node_removed_from_group_exception : public derecho_exception {
     node_id_t who;
-    node_removed_from_group_exception(node_id_t who) : who(who) {}
-    virtual const char* what() const noexcept override {
-        std::ostringstream o_stream;
-        o_stream << "Node with id " << who
-                 << " has been removed from the group";
-        std::string str = o_stream.str();
-        return str.c_str();
-    }
+    node_removed_from_group_exception(node_id_t who)
+            : derecho_exception(std::string("Node with ID ")
+                                + std::to_string(who)
+                                + std::string(" has been removed from the group")),
+              who(who) {}
+};
+
+/**
+ * Indicates that an RPC call from this node was aborted because this node was
+ * removed from its subgroup/shard (and reassigned to another one) during the
+ * view change.
+ */
+struct sender_removed_from_group_exception : public derecho_exception {
+    sender_removed_from_group_exception()
+            : derecho_exception("This node was removed from its subgroup or shard "
+                                "and can no longer send the RPC message.") {}
 };
 
 /**
@@ -329,6 +335,7 @@ class PendingBase {
 public:
     virtual void fulfill_map(const node_list_t&) = 0;
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
+    virtual void set_exception_for_caller_removed() = 0;
     virtual ~PendingBase() {}
 };
 
@@ -361,8 +368,10 @@ private:
 
 public:
     PendingResults()
-            : reply_promises_are_ready(promise_for_reply_promises.get_future()) {
-        dbg_default_trace("Created a PendingResults<{}>", typeid(Ret).name());
+            : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
+    virtual ~PendingResults() {
+        dbg_default_debug("Deleted PendingResults at address {:p}", reinterpret_cast<void*>(this));
+        dbg_default_flush();
     }
     /**
      * Fill pending_map and reply_promises with one promise/future pair for
@@ -372,7 +381,6 @@ public:
     void fulfill_map(const node_list_t& who) {
         dbg_default_trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
         dbg_default_flush();
-        map_fulfilled = true;
         std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises_map;
         for(const auto& e : who) {
@@ -382,6 +390,30 @@ public:
         dbg_default_trace("Setting a value for reply_promises_are_ready");
         promise_for_reply_promises.set_value(std::move(promises_map));
         promise_for_pending_map.set_value(std::move(futures_map));
+        map_fulfilled = true;
+    }
+
+    /**
+     * Sets exceptions to indicate to the sender of this RPC call that it has been
+     * removed from its subgroup/shard, and can no longer expect responses.
+     */
+    void set_exception_for_caller_removed() {
+        if(!map_fulfilled) {
+            promise_for_pending_map.set_exception(
+                    std::make_exception_ptr(sender_removed_from_group_exception{}));
+        } else {
+            if(reply_promises.size() == 0) {
+                reply_promises = std::move(reply_promises_are_ready.get());
+            }
+            //Set exceptions for any nodes that have not yet responded
+            for(auto& node_and_promise : reply_promises) {
+                if(responded_nodes.find(node_and_promise.first)
+                   == responded_nodes.end()) {
+                    node_and_promise.second.set_exception(
+                            std::make_exception_ptr(sender_removed_from_group_exception{}));
+                }
+            }
+        }
     }
 
     void set_exception_for_removed_node(const node_id_t& removed_nid) {
@@ -428,6 +460,7 @@ template <>
 class PendingResults<void> : public PendingBase {
 private:
     std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
+    bool map_fulfilled = false;
 
 public:
     void fulfill_map(const node_list_t& sent_nodes) {
@@ -436,9 +469,17 @@ public:
             nodes_sent_set->emplace(node);
         }
         promise_for_pending_map.set_value(std::move(nodes_sent_set));
+        map_fulfilled = true;
     }
 
     void set_exception_for_removed_node(const node_id_t&) {}
+
+    void set_exception_for_caller_removed() {
+        if(!map_fulfilled) {
+            promise_for_pending_map.set_exception(
+                    std::make_exception_ptr(sender_removed_from_group_exception()));
+        }
+    }
 
     QueryResults<void> get_future() {
         return QueryResults<void>(promise_for_pending_map.get_future());
@@ -476,28 +517,28 @@ inline void populate_header(char* reply_buf,
                             const uint32_t& flags) {
     std::size_t offset = 0;
     static_assert(sizeof(op) == sizeof(Opcode), "Opcode& is not the same size as Opcode!");
-    ((std::size_t*)(reply_buf + offset))[0] = payload_size;  // size
+    reinterpret_cast<std::size_t*>(reply_buf + offset)[0] = payload_size;  // size
     offset += sizeof(payload_size);
-    ((Opcode*)(reply_buf + offset))[0] = op;  // what
+    reinterpret_cast<Opcode*>(reply_buf + offset)[0] = op;  // what
     offset += sizeof(op);
-    ((node_id_t*)(reply_buf + offset))[0] = from;  // from
+    reinterpret_cast<node_id_t*>(reply_buf + offset)[0] = from;  // from
     offset += sizeof(from);
-    ((uint32_t*)(reply_buf + offset))[0] = flags;  // flags
+    reinterpret_cast<uint32_t*>(reply_buf + offset)[0] = flags;  // flags
 }
 
 //inline void retrieve_header(mutils::DeserializationManager* dsm,
 inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
-                            char const* const reply_buf,
+                            const char* reply_buf,
                             std::size_t& payload_size, Opcode& op,
                             node_id_t& from, uint32_t& flags) {
     std::size_t offset = 0;
-    payload_size = ((std::size_t const* const)(reply_buf + offset))[0];
+    payload_size = reinterpret_cast<const std::size_t*>(reply_buf + offset)[0];
     offset += sizeof(payload_size);
-    op = ((Opcode const* const)(reply_buf + offset))[0];
+    op = reinterpret_cast<const Opcode*>(reply_buf + offset)[0];
     offset += sizeof(op);
-    from = ((node_id_t const* const)(reply_buf + offset))[0];
+    from = reinterpret_cast<const node_id_t*>(reply_buf + offset)[0];
     offset += sizeof(from);
-    flags = ((uint32_t*)(reply_buf + offset))[0];
+    flags = reinterpret_cast<const uint32_t*>(reply_buf + offset)[0];
 }
 }  // namespace remote_invocation_utilities
 
