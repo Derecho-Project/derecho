@@ -58,14 +58,15 @@ std::exception_ptr RPCManager::receive_message(
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
-    // int offset = indx.is_reply ? 1 : 0;
-    // long int invocation_id = ((long int*)(buf + offset))[0];
-    // whenlog(logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",)
-    //               received_from, indx.class_id.name(), indx.subgroup_id, indx.function_id, indx.is_reply, invocation_id);
+    auto receiver_function_entry = receivers->find(indx);
+    if(receiver_function_entry == receivers->end()) {
+        dbg_default_error("Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
+                          indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
+        //TODO: We should reply with some kind of "no such method" error in this case
+        return std::exception_ptr{};
+    }
     std::size_t reply_header_size = header_space();
-    //TODO: Check that the given Opcode is actually in our receivers map,
-    //and reply with a "no such method error" if it is not
-    recv_ret reply_return = receivers->at(indx)(
+    recv_ret reply_return = receiver_function_entry->second(
             &rdv, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
