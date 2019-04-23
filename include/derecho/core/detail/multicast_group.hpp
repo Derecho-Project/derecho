@@ -135,9 +135,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         std::string prefix = "SUBGROUP/" + profile + "/";
         for (auto &field : Conf::subgroupProfileFields) {
             if (!hasCustomizedConfKey(prefix + field)) {
-                // If an invalid profile was loaded in, utilize the default
-                // derecho parameters
-                return DerechoParams();
+                throw profile + " derecho subgroup profile not found";
             }
         }
 
