@@ -1,8 +1,10 @@
-#include "rdma_connection_manager.h"
+#include "rdma_connection_manager.hpp"
 
 #include <cassert>
 
 namespace rdma {
+static tcp::TCPConnectionManager* connections;
+
 void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_addr_t, uint16_t>>& ip_addrs_and_ports) {
     connections = new tcp::TCPConnectionManager(my_id, ip_addrs_and_ports);
     // global libfabric initialization - not shown
@@ -10,6 +12,10 @@ void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_add
     for(auto p: ip_addrs_and_ports) {
         RDMAConnectionManager::add(p.first);
     }
+}
+
+tcp::TCPConnectionManager* get_connections() {
+    return connections;
 }
 
 RDMAConnection::RDMAConnection(node_id_t remote_id,

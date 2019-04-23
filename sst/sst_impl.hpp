@@ -1,5 +1,7 @@
 #pragma once
 
+#include "sst.hpp"
+
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -9,8 +11,6 @@
 #include <thread>
 #include <time.h>
 #include <vector>
-
-#include "sst.hpp"
 
 namespace sst {
 size_t _SSTField::set_base(volatile char* const base) {
@@ -41,7 +41,7 @@ volatile T& SSTField<T>::operator[](const uint32_t row_index) const {
 }
 
 template <typename T>
-SSTFieldVector<T>::SSTFieldVector(size_t size) : _SSTField(num_elements * sizeof(T)), size(size) {
+SSTFieldVector<T>::SSTFieldVector(size_t size) : _SSTField(_size * sizeof(T)), _size(_size) {
 }
 
 template <typename T>
@@ -65,39 +65,31 @@ void SST<DerivedSST>::compute_row_length(Field& f, Fields&... rest) {
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::set_bases_and_row_lengths(volatile char*&){};
+void SST<DerivedSST>::set_bases_and_row_length(volatile char*&){};
 
 template <typename DerivedSST>
 template <typename Field, typename... Fields>
-void SST<DerivedSST>::set_bases_and_row_lengths(volatile char*& base, Field& f, Fields&... rest) {
+void SST<DerivedSST>::set_bases_and_row_length(volatile char*& base, Field& f, Fields&... rest) {
     base += f.set_base(base);
     f.set_row_length(row_length);
-    set_bases_and_row_lengths(base, rest...);
+    set_bases_and_row_length(base, rest...);
 }
 
 template <typename DerivedSST>
 template <typename... Fields>
 void SST<DerivedSST>::initialize_fields(Fields&... fields) {
     compute_row_length(fields...);
-    rows = new char[row_length * num_members];
+    rows = new char[row_length * members.num_nodes];
     volatile char* base = rows;
     set_bases_and_row_length(base, fields...);
 }
 
 template <typename DerivedSST>
-SST<DerivedSST>::SST(DerivedSST* derived_class_pointer, std::vector<node_id_t>& members, node_id_t my_id)
+SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members)
         : derived_sst_pointer(derived_sst_pointer),
           row_length(0),
-          members(members) {
-    //Figure out my SST index
-    my_index = (uint32_t)-1;
-    for(uint32_t i = 0; i < num_members; ++i) {
-        if(members[i] == my_id) {
-            my_index = i;
-            break;
-        }
-    }
-    assert(my_index != (uint32_t)-1);
+          members(members),
+          memory_regions(members.num_nodes) {
 }
 
 /**
@@ -106,7 +98,8 @@ SST<DerivedSST>::SST(DerivedSST* derived_class_pointer, std::vector<node_id_t>& 
  */
 template <typename DerivedSST>
 SST<DerivedSST>::~SST() {
-    // unregister predicates
+    // unregister predicates - should be just possible when the destructor of predicates is invoked
+    // hopefully
 
     delete[](const_cast<char*>(rows));
 }
@@ -117,15 +110,12 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
     //Initialize rows and set the "base" field of each SSTField
     initialize_fields(fields...);
 
-    for(uint32_t index = 0; index < members.size(); ++index) {
-        if(index == my_index) {
-            continue;
-        }
-        char* local_row_addr = const_cast<char*>(rows) + row_length * my_index;
-        char* remote_row_addr = const_cast<char*>(rows) + row_length * sst_index;
-	// change it later
-        memory_regions.push_back(MemoryRegion(members[index], local_row_addr,
-					      remote_row_addr, row_length));
+    for(uint32_t other_index : members.other_ranks) {
+        char* local_row_addr = const_cast<char*>(rows) + row_length * members.my_rank;
+        char* remote_row_addr = const_cast<char*>(rows) + row_length * other_index;
+        memory_regions[other_index] = std::make_unique<rdma::MemoryRegion>(
+                members.nodes[other_index], local_row_addr,
+                remote_row_addr, row_length);
     }
 }
 
@@ -139,26 +129,26 @@ const char* SST<DerivedSST>::get_base_address() {
  */
 template <typename DerivedSST>
 void SST<DerivedSST>::sync_with_members() const {
-  for(const auto& memory_region: memory_regions) {
-      memory_region.sync();
-  }
+    for(auto& memory_region : members.splice(memory_regions)) {
+        memory_region->sync();
+    }
 }
 
 template <typename DerivedSST>
 uint32_t SST<DerivedSST>::get_num_members() const {
-    return num_members;
+    return members.num_nodes;
 }
 
 template <typename DerivedSST>
-uint32_t SST<DerivedSST>::get_local_index() const {
-    return my_index;
+uint32_t SST<DerivedSST>::get_my_index() const {
+    return members.my_rank;
 }
 
 template <typename DerivedSST>
 void SST<DerivedSST>::update_remote_rows(size_t offset, size_t size, bool completion) {
     assert(offset + size <= row_length);
-    for (auto& memory_region: memory_regions) {
-      memory_region.write_remote(offset, size, completion);
+    for(auto& memory_region : members.splice(memory_regions)) {
+        memory_region->write_remote(offset, size, completion);
     }
 }
 }  // namespace sst

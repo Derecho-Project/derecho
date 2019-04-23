@@ -6,4 +6,4 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3")
 include_directories(${derecho_SOURCE_DIR})
 
-ADD_LIBRARY(tcp SHARED tcp_connection.cpp)
+ADD_LIBRARY(tcp SHARED tcp_connection.cpp tcp_connection_manager.cpp)

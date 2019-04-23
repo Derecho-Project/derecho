@@ -1,4 +1,4 @@
-#include "tcp_connection.h"
+#include "tcp_connection.hpp"
 
 #include <algorithm>
 #include <arpa/inet.h>

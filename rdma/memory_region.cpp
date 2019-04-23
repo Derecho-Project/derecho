@@ -1,9 +1,7 @@
-#include "memory_region.h"
+#include "memory_region.hpp"
 
 #include <memory>
 #include <tuple>
-
-#include "rdma_connection_manager.h"
 
 namespace rdma {
 MemoryRegion::MemoryRegion(node_id_t remote_id, char* send_buf, char* recv_buf, size_t size)
@@ -13,7 +11,7 @@ MemoryRegion::MemoryRegion(node_id_t remote_id, char* send_buf, char* recv_buf, 
     // exchange memory addresses
     MRConnectionData local_data;
     MRConnectionData remote_data;
-    connections->exchange(remote_id, local_data, remote_data);
+    tcp_exchange(remote_id, local_data, remote_data);
 
     // initialize remote_send_buf and remote_recv_buf
 }

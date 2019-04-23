@@ -6,19 +6,27 @@
 #include <mutex>
 #include <functional>
 
-#include "tcp/tcp_connection_manager.h"
+#include "tcp/tcp_connection_manager.hpp"
 
 namespace rdma {
 using node::node_id_t;
 typedef std::function<void(node_id_t)> failure_upcall_t;
-
-static tcp::TCPConnectionManager* connections;
 
 struct RDMAConnectionData {
     // low-level libfabric fields - not shown
 };
 
 void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_addr_t, uint16_t>>& ip_addrs_and_ports);
+
+// instead of defining add, remove etc. separately, I have defined get_connections to access the static pointer connections
+// call add_node, remove_node etc. directly on the return value of get_connections, for example,
+// get_connections().add_node(new_id, new_ip_addr_and_port)
+tcp::TCPConnectionManager* get_connections();
+
+template <typename T>
+bool tcp_exchange(node_id_t remote_id, T local, T& remote) {
+    return get_connections()->exchange(remote_id, local, remote);
+}
 
 class RDMAConnection {
     friend class RDMAConnectionManager;

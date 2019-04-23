@@ -1,4 +1,4 @@
-#include "tcp_connection_manager.h"
+#include "tcp_connection_manager.hpp"
 
 #include <cassert>
 #include <iostream>
@@ -163,9 +163,5 @@ void TCPConnectionManager::filter_to(const std::vector<node_id_t>& live_nodes_li
             socket_map_iter++;
         }
     }
-}
-
-derecho::LockedReference<std::unique_lock<std::mutex>, socket> TCPConnectionManager::get_socket(node_id_t node_id) {
-    return derecho::LockedReference<std::unique_lock<std::mutex>, socket>(sockets.at(node_id), sockets_mutex);
 }
 }  // namespace tcp

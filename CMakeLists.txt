@@ -7,6 +7,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -std=c++1z -O0 -Wall -ggdb -
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DNOLOG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
-add_subdirectory(tcp)
+add_subdirectory(applications)
+add_subdirectory(node)
 add_subdirectory(rdma)
-# add_subdirectory(sst)
+add_subdirectory(sst)
+add_subdirectory(tcp)

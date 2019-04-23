@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "rdma_connection_manager.h"
+#include "rdma_connection_manager.hpp"
 
 namespace rdma {
 class MRConnectionData {

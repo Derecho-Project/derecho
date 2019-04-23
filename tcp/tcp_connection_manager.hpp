@@ -4,8 +4,8 @@
 #include <map>
 #include <mutex>
 
-#include "tcp_connection.h"
-#include "node/node.h"
+#include "tcp_connection.hpp"
+#include "node/node.hpp"
 
 namespace tcp {
 using node::node_id_t;
@@ -92,9 +92,9 @@ public:
     bool contains_node(node_id_t node_id);
 
     template <class T>
-    bool exchange(node_id_t node_id, T local, T& remote) {
+    bool exchange(node_id_t remote_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
-        const auto it = sockets.find(node_id);
+        const auto it = sockets.find(remote_id);
         assert(it != sockets.end());
         return it->second.exchange(local, remote);
     }
