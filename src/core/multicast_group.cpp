@@ -462,7 +462,8 @@ void MulticastGroup::initialize_sst_row() {
     sst->sync_with_members();
 }
 
-void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version) {
+void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
+                                     persistent::version_t version) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // cooked send
@@ -482,7 +483,8 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     }
 }
 
-void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version) {
+void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num,
+                                     persistent::version_t version) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // cooked send
@@ -502,7 +504,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     }
 }
 
-bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
+                                     persistent::version_t version, uint64_t msg_timestamp) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // null message filter
@@ -523,7 +526,8 @@ bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     return true;
 }
 
-bool MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num,
+                                     persistent::version_t version, uint64_t msg_timestamp) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // null message filter

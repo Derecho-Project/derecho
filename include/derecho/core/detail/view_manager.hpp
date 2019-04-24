@@ -307,15 +307,12 @@ private:
      * @param subgroup_num The subgroup ID to compute the ragged trim for
      * @param num_received_offset The offset into the SST's num_received field
      * that corresponds to the specified subgroup's entries in it
-     * @param shard_members The IDs of the members of this node's shard in the
-     * specified subgroup
      * @param num_shard_senders The number of nodes in that shard that are active
      * senders in the current epoch
      */
     void log_ragged_trim(const int shard_leader_rank,
                          const subgroup_id_t subgroup_num,
                          const uint32_t num_received_offset,
-                         const std::vector<node_id_t>& shard_members,
                          const uint num_shard_senders);
     /**
      * Reads the global_min for the specified subgroup from the SST (assuming it
@@ -360,15 +357,12 @@ private:
      * of the specified subgroup
      * @param num_received_offset The offset into the SST's num_received field
      * that corresponds to the specified subgroup's entries in it
-     * @param shard_members The IDs of the members of this node's shard in the
-     * specified subgroup
      * @param num_shard_senders The number of nodes in that shard that are active
      * senders in the current epoch
      */
     void follower_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                       uint shard_leader_rank,
                                       const uint32_t num_received_offset,
-                                      const std::vector<node_id_t>& shard_members,
                                       uint num_shard_senders);
 
     /* -- Static helper methods that implement chunks of view-management functionality -- */

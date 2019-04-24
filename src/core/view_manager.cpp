@@ -146,7 +146,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
             dbg_default_flush();
-            throw derecho_exception("Leader rejected join, ID already in use");
+            throw derecho_exception("Leader rejected join, ID already in use.");
         }
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
             std::size_t ip_addr_size;
@@ -766,7 +766,7 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             if(Vc.i_am_leader() && !changes_contains(gmsSST, Vc.members[q])) {
                 const int next_change_index = gmsSST.num_changes[myRank] - gmsSST.num_installed[myRank];
                 if(next_change_index == (int)gmsSST.changes.size()) {
-                    throw derecho_exception("Ran out of room in the pending changes list");
+                    throw derecho_exception("Ran out of room in the pending changes list!");
                 }
 
                 gmssst::set(gmsSST.changes[myRank][next_change_index],
@@ -1056,7 +1056,7 @@ void ViewManager::echo_ragged_trim(
                 subgroup_id,
                 curr_view->rank_of(shard_leader),
                 curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).num_received_offset,
-                shard_view.members, num_shard_senders);
+                num_shard_senders);
     }
 
     //Now, for all subgroups I'm in (leader or not), wait for everyone to have echoed the leader's
@@ -1153,6 +1153,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     std::map<subgroup_id_t, SubgroupSettings> next_subgroup_settings;
     uint32_t next_num_received_size = derive_subgroup_settings(*next_view, next_subgroup_settings);
 
+    dbg_default_debug("Ready to transition to the next View: {}", next_view->debug_string());
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs
     vector_int64_2d old_shard_leaders_by_id = old_shard_leaders_by_new_ids(
             *curr_view, *next_view);
@@ -1650,7 +1651,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         }
     }
     if(my_new_rank == -1) {
-        throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(myID) + " terminating");
+        throw derecho_exception("Some other node reported that I failed.  Node " + std::to_string(myID) + " terminating.");
     }
 
     auto next_view = std::make_unique<View>(
@@ -1782,21 +1783,20 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
             sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
 
     if(any_persistent_objects) {
-        log_ragged_trim(myRank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
+        log_ragged_trim(myRank, subgroup_num, num_received_offset, num_shard_senders);
     }
 }
 
 void ViewManager::follower_ragged_edge_cleanup(
         const subgroup_id_t subgroup_num, uint shard_leader_rank,
         const uint32_t num_received_offset,
-        const std::vector<node_id_t>& shard_members,
         uint num_shard_senders) {
     const View& Vc = *curr_view;
     int myRank = Vc.my_rank;
     dbg_default_debug("Running follower RaggedEdgeCleanup for subgroup {}", subgroup_num);
     // Learn the leader's ragged trim, log it, and echo it before acting upon it
     if(any_persistent_objects) {
-        log_ragged_trim(shard_leader_rank, subgroup_num, num_received_offset, shard_members, num_shard_senders);
+        log_ragged_trim(shard_leader_rank, subgroup_num, num_received_offset, num_shard_senders);
     }
     //Copy this shard's slice of global_min, starting at num_received_offset
     gmssst::set(&Vc.gmsSST->global_min[myRank][num_received_offset],
@@ -1819,12 +1819,16 @@ void ViewManager::deliver_in_order(const int shard_leader_rank,
     // Ragged cleanup is finished, deliver in the implied order
     const View& Vc = *curr_view;
     std::vector<int32_t> max_received_indices(num_shard_senders);
-    std::stringstream delivery_order;
+    whenlog(std::stringstream delivery_order;)
+    whenlog(if(LoggerFactory::getDefaultLogger()->should_log(spdlog::level::debug)) {
+        delivery_order << "Subgroup " << subgroup_num
+                       << ", shard " << Vc.my_subgroups.at(subgroup_num)
+                       << " ";
+    })
     for(uint sender_rank = 0; sender_rank < num_shard_senders; sender_rank++) {
         whenlog(if(LoggerFactory::getDefaultLogger()->should_log(spdlog::level::debug)) {
-            delivery_order << "Subgroup " << subgroup_num
-                           << ", shard " << Vc.my_subgroups.at(subgroup_num)
-                           << " " << Vc.members[Vc.my_rank]
+            //This only works if every member is a sender, otherwise the rank will be wrong
+            delivery_order << shard_members[sender_rank]
                            << ":0..."
                            << Vc.gmsSST->global_min[shard_leader_rank][num_received_offset + sender_rank]
                            << " ";
@@ -1839,7 +1843,6 @@ void ViewManager::deliver_in_order(const int shard_leader_rank,
 void ViewManager::log_ragged_trim(const int shard_leader_rank,
                                   const subgroup_id_t subgroup_num,
                                   const uint32_t num_received_offset,
-                                  const std::vector<node_id_t>& shard_members,
                                   const uint num_shard_senders) {
     //Copy this shard's slice of global_min into a new vector
     std::vector<int32_t> max_received_indices(num_shard_senders);
@@ -1849,7 +1852,8 @@ void ViewManager::log_ragged_trim(const int shard_leader_rank,
     }
     uint32_t shard_num = curr_view->my_subgroups.at(subgroup_num);
     RaggedTrim trim_log{subgroup_num, shard_num, curr_view->vid,
-                        static_cast<int32_t>(curr_view->members[curr_view->rank_of_leader()]), max_received_indices};
+                        static_cast<int32_t>(curr_view->members[curr_view->rank_of_leader()]),
+                        max_received_indices};
     persistent::saveObject(trim_log, ragged_trim_filename(subgroup_num, shard_num).c_str());
     dbg_default_debug("Done logging ragged trim to disk for subgroup {}", subgroup_num);
 }

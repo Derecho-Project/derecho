@@ -98,7 +98,7 @@ struct node_removed_from_group_exception : public derecho_exception {
     node_removed_from_group_exception(node_id_t who)
             : derecho_exception(std::string("Node with ID ")
                                 + std::to_string(who)
-                                + std::string(" has been removed from the group")),
+                                + std::string(" has been removed from the group.")),
               who(who) {}
 };
 
