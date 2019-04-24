@@ -581,6 +581,8 @@ void MulticastGroup::deliver_messages_upto(
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
             locally_stable_rdmc_messages[subgroup_num].erase(rdmc_msg_ptr);
         } else {
+            dbg_default_trace("Subgroup {}, deliver_messages_upto delivering an SST message with seq_num = {}",
+                              subgroup_num, seq_num);
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;

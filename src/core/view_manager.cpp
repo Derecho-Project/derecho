@@ -1248,7 +1248,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     // New members can now proceed to view_manager.start(), which will call sync()
     next_view->gmsSST->put();
     next_view->gmsSST->sync_with_members();
-    dbg_default_debug("Done setting up SST and DerechoGroup for view {}", next_view->vid);
+    dbg_default_debug("Done setting up SST and MulticastGroup for view {}", next_view->vid);
     {
         lock_guard_t old_views_lock(old_views_mutex);
         old_views.push(std::move(curr_view));

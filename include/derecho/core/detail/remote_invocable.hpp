@@ -123,6 +123,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         results_map.erase(invocation_id);  // TODO:release it as soon as possible
         PendingResults<Ret>& pending_results = results_map[invocation_id];
 
+        dbg_default_trace("Ready to send an RPC call message with invocation ID {}", invocation_id);
         return send_return{size, serialized_args, pending_results.get_future(),
                            pending_results};
     }
@@ -167,6 +168,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if(is_exception) {
             results_map.at(invocation_id).set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
         } else {
+            dbg_default_trace("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);
             results_map.at(invocation_id).set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(invocation_id)));
         }
         return recv_ret{Opcode(), 0, nullptr, nullptr};
@@ -272,7 +274,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
      */
     inline recv_ret receive_call(std::false_type const* const,
                                  mutils::DeserializationManager* dsm,
-                                 const node_id_t&, const char* _recv_buf,
+                                 const node_id_t& caller, const char* _recv_buf,
                                  const std::function<char*(int)>& out_alloc) {
         long int invocation_id = ((long int*)_recv_buf)[0];
         auto recv_buf = _recv_buf + sizeof(long int);
@@ -283,6 +285,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             out[0] = false;
             ((long int*)(out + 1))[0] = invocation_id;
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
+            dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(...) {
             char* out = out_alloc(sizeof(long int) + 1);

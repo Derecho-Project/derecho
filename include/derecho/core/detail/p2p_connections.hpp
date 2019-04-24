@@ -64,5 +64,6 @@ public:
     std::optional<std::pair<uint32_t, char*>> probe_all();
     char* get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type);
     void send(uint32_t rank);
+    void debug_print();
 };
 }  // namespace sst

@@ -3,9 +3,11 @@
 #include <cassert>
 #include <cstring>
 #include <sys/time.h>
+#include <sstream>
 
 #include <derecho/core/detail/p2p_connections.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
+#include <derecho/utils/logger.hpp>
 
 namespace sst {
 P2PConnections::P2PConnections(const P2PParams params)
@@ -193,6 +195,10 @@ void P2PConnections::send(uint32_t rank) {
         num_rdma_writes++;
     }
     outgoing_seq_nums_map[type][rank]++;
+
+    if(rank != my_index && (node_id_to_rank[2] == rank || node_id_to_rank[7] == rank)) {
+        debug_print();
+    }
 }
 
 void P2PConnections::check_failures_loop() {
@@ -256,6 +262,30 @@ void P2PConnections::check_failures_loop() {
             num_completions++;
         }
         util::polling_data.reset_waiting(tid);
+    }
+}
+
+void P2PConnections::debug_print() {
+    for(const auto& type : p2p_request_types) {
+        dbg_default_debug("P2PConnections: Request type {}", type);
+        std::stringstream string_builder;
+        for(uint32_t node = 0; node < num_members; ++node) {
+            string_builder << "Node " << node << std::endl;
+            string_builder << "incoming buffers:";
+            for(uint32_t i = 0; i < window_size; ++i) {
+                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+                string_builder << " " << reinterpret_cast<uint64_t>(
+                        const_cast<char*>(incoming_p2p_buffers[node].get()) + offset);
+            }
+            string_builder << std::endl << "outgoing buffers:";
+            for(uint32_t i = 0; i < window_size; ++i) {
+                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+                string_builder << " " << reinterpret_cast<uint64_t>(
+                        const_cast<char*>(outgoing_p2p_buffers[node].get()) + offset);
+            }
+            dbg_default_debug("{}", string_builder.str());
+        }
+
     }
 }
 }  // namespace sst

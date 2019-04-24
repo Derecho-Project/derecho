@@ -124,7 +124,6 @@ protected:
         if(pthread_rwlock_wrlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
         }                                                 \
-        dbg_default_trace("FPL_WRLOCK");                          \
     } while(0)
 
 #define FPL_RDLOCK                                        \
@@ -132,7 +131,6 @@ protected:
         if(pthread_rwlock_rdlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_WRLOCK(errno);       \
         }                                                 \
-        dbg_default_trace("FPL_RDLOCK");                          \
     } while(0)
 
 #define FPL_UNLOCK                                        \
@@ -140,7 +138,6 @@ protected:
         if(pthread_rwlock_unlock(&this->m_rwlock) != 0) { \
             throw PERSIST_EXP_RWLOCK_UNLOCK(errno);       \
         }                                                 \
-        dbg_default_trace("FPL_UNLOCK");                          \
     } while(0)
 
 #define FPL_PERS_LOCK                                    \
@@ -148,7 +145,6 @@ protected:
         if(pthread_mutex_lock(&this->m_perslock) != 0) { \
             throw PERSIST_EXP_MUTEX_LOCK(errno);         \
         }                                                \
-        dbg_default_trace("PERS_LOCK");                          \
     } while(0)
 
 #define FPL_PERS_UNLOCK                                    \
@@ -156,7 +152,6 @@ protected:
         if(pthread_mutex_unlock(&this->m_perslock) != 0) { \
             throw PERSIST_EXP_MUTEX_UNLOCK(errno);         \
         }                                                  \
-        dbg_default_trace("PERS_UNLOCK");                          \
     } while(0)
 
     // load the log from files. This method may through exceptions if read from

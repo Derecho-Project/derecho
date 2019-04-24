@@ -92,17 +92,18 @@ int main(int argc, char** argv) {
                 // int curr_state = 0;
                 for(auto& reply_pair : replies) {
                     try {
-                        // curr_state =
+                        node_id_t other_node = reply_pair.first;
+                        dbg_default_debug("Waiting on read_state reply from node {}", other_node);
                         reply_pair.second.get();
                     } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                        std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+                        dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
                     } catch(derecho::rpc::sender_removed_from_group_exception& ex2) {
-                        std::cout << "No query reply due to sender_removed_from_group_exception: " << ex2.what() << std::endl;
+                        dbg_default_warn("No query reply due to sender_removed_from_group_exception: {}", ex2.what());
                     }
                 }
                 // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
             } catch(derecho::rpc::sender_removed_from_group_exception& ex) {
-                std::cout << "Query send aborted due to sender_removed_from_group_exception: " << ex.what() << std::endl;
+                dbg_default_warn("Query send aborted due to sender_removed_from_group_exception: {}", ex.what());
             }
 
             //This ensures the state changes with every update from every node
