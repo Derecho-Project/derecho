@@ -189,9 +189,26 @@ void RPCManager::new_view_callback(const View& new_view) {
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
-        for(auto& pending : fulfilled_pending_results_pair.second) {
-            for(auto removed_id : new_view.departed) {
-                pending.get().set_exception_for_removed_node(removed_id);
+        const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
+        //For each PendingResults in this subgroup, check the departed list of each shard
+        //the subgroup, and call set_exception_for_removed_node for the departed nodes
+        for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
+                pending_results_iter != fulfilled_pending_results_pair.second.end(); ) {
+            //Garbage-collect PendingResults references that are obsolete
+            if(pending_results_iter->get().all_responded()) {
+                pending_results_iter = fulfilled_pending_results_pair.second.erase(pending_results_iter);
+            } else {
+                for(uint32_t shard_num = 0;
+                        shard_num < new_view.subgroup_shard_views[subgroup_id].size();
+                        ++shard_num) {
+                    for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
+                        //This will do nothing if removed_id was never in the
+                        //shard this PendingResult corresponds to
+                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        pending_results_iter->get().set_exception_for_removed_node(removed_id);
+                    }
+                }
+                pending_results_iter++;
             }
         }
     }
