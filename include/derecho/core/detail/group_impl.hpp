@@ -46,7 +46,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 std::shared_ptr<IDeserializationContext> deserialization_context,
+                                 IDeserializationContext *deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
@@ -80,7 +80,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager, deserialization_context.get()),
+          rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
