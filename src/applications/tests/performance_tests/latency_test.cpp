@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
 
-    const uint64_t msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    const uint64_t msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     uint32_t num_messages = 1000;
     // used by the sending nodes to track time of delivery of messages

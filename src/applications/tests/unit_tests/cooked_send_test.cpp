@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     if(my_rank == 0) {
-        uint32_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        uint32_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
         uint32_t num_entries = max_msg_size / sizeof(pair<uint, uint>) - 50;
         if(num_entries < 0) {
             cout << "Error: Maximum message size too small!" << endl;

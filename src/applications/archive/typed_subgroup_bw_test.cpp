@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     derecho::Conf::initialize(argc, argv);
 
     int num_of_nodes = std::stoi(argv[1]);
-    uint64_t max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     int count = std::stoi(argv[2]);
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes](

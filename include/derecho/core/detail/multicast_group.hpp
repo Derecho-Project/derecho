@@ -113,16 +113,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
                 max_payload_size > max_smc_payload_size);
     }
 
-    DerechoParams() : DerechoParams(derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE),
-                                    std::min(
-                                            (uint64_t)derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE),
-                                            derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE)
-                                            ),
-                                    derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE),
-                                    derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE),
-                                    derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
-                                    send_algorithm_from_string(derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM)),
-                                    derecho::getConfUInt32(CONF_DERECHO_RPC_PORT)) {}
+    DerechoParams() {}
 
     /**
      * Constructs DerechoParams specifying subgroup metadata for specified profile.

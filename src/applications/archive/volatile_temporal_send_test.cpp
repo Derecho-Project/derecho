@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
     int min_dur_sec = atoi(argv[4]);
     int qcnt = atoi(argv[6]);
     uint64_t si_us = (1000000l / ops_per_sec);
-    int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](
             const std::vector<std::type_index>& subgroup_type_order,
