@@ -315,7 +315,7 @@ namespace sst{
     int size_r,
     int is_lf_server) {
 
-    dbg_default_info("resources constructor:this={}",(void*)this);
+    dbg_default_trace("resources constructor: this={}",(void*)this);
 
     // set remote id
     this->remote_id = r_id;
@@ -668,7 +668,7 @@ namespace sst{
         dbg_default_debug("WEIRD: we get an entry with op_context = NULL.");
         return {0xFFFFFFFFu,{0,0}}; // return a bad entry: weird!!!!
       } else {
-        dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+//        dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
         return {sctxt->ce_idx, {sctxt->remote_id, 1}};
       }
     } else { // shutdown return a bad entry

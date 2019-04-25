@@ -37,6 +37,8 @@ struct IDeserializationContext : public mutils::RemoteDeserializationContext {};
 
 namespace rpc {
 
+using PendingBase_ref = std::reference_wrapper<PendingBase>;
+
 class RPCManager {
     static_assert(std::is_trivially_copyable<Opcode>::value, "Oh no! Opcode is not trivially copyable!");
     /** The ID of the node this RPCManager is running on. */
@@ -65,8 +67,9 @@ class RPCManager {
     std::mutex pending_results_mutex;
     /** This condition variable is to resolve a race condition in using ToFulfillQueue and fulfilledList */
     std::condition_variable pending_results_cv;
-    std::queue<std::reference_wrapper<PendingBase>> toFulfillQueue;
-    std::list<std::reference_wrapper<PendingBase>> fulfilledList;
+    //Both maps contain one list of PendingResults references per subgroup
+    std::map<subgroup_id_t, std::queue<PendingBase_ref>> pending_results_to_fulfill;
+    std::map<subgroup_id_t, std::list<PendingBase_ref>> fulfilled_pending_results;
 
     /** This is not accessed outside invocations of rpc_message_handler,
      * it's just a member so it won't be newly allocated every time. */
@@ -200,18 +203,7 @@ public:
                                 funs);
     }
 
-    void destroy_remote_invocable_class(uint32_t instance_id) {
-        std::list<Opcode> keysToDelete;
-        for(const auto& r : *receivers) {
-            const auto opcode = r.first;
-            if(opcode.subgroup_id == instance_id) {
-                keysToDelete.push_back(opcode);
-            }
-        }
-        for(auto opcodes : keysToDelete) {
-            receivers->erase(opcodes);
-        }
-    }
+    void destroy_remote_invocable_class(uint32_t instance_id);
 
     /**
      * Given a subgroup ID and a list of functions, constructs a
@@ -262,31 +254,21 @@ public:
      * message was received in
      * @param sender_id The ID of the node that sent the message
      * @param msg_buf A buffer containing the message
-     * @param payload_size The size of the message in the buffer, in bytes
+     * @param buffer_size The size of the message in the buffer, in bytes
      */
-    void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id, char* msg_buf, uint32_t payload_size);
-
-    /**
-     * Writes the "list of destination nodes" header field into the given
-     * buffer, in preparation for sending an RPC message.
-     * @param dest_nodes The list of destination nodes
-     * @param buffer The buffer in which to write the header
-     * @param max_payload_size Out parameter: the maximum size of a payload
-     * that can be written to this buffer after the header has been written.
-     * @return The size of the header.
-     */
-    int populate_nodelist_header(const std::vector<node_id_t>& dest_nodes, char* buffer,
-                                 std::size_t& max_payload_size);
+    void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id,
+                             char* msg_buf, uint32_t buffer_size);
 
     /**
      * Sends the next message in the MulticastGroup's send buffer (which is
      * assumed to be an RPC message prepared by earlier functions) and registers
      * the "promise object" in pending_results_handle to await replies.
+     * @param subgroup_id The subgroup in which this message is being sent
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      * @return True if the send was successful, false if the current view is wedged
      */
-    bool finish_rpc_send(PendingBase& pending_results_handle);
+    bool finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle);
 
     /**
      * Retrieves a buffer for sending P2P messages from the RPCManager's pool of
@@ -301,10 +283,11 @@ public:
      * Sends the next P2P message buffer over an RDMA connection to the specified node,
      * and registers the "promise object" in pending_results_handle to await its reply.
      * @param dest_node The node to send the message to
+     * @param dest_subgroup_id The subgroup ID of the subgroup that node is in
      * @param pending_results_handle A reference to the "promise object" in the
      * send_return for this send.
      */
-    void finish_p2p_send(node_id_t dest_node, PendingBase& pending_results_handle);
+    void finish_p2p_send(node_id_t dest_node, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle);
 };
 
 //Now that RPCManager is finished being declared, we can declare these convenience types

@@ -921,8 +921,8 @@ public:
         }
     }
 
-    virtual void leave(bool grace) {
-        if(grace) {
+    virtual void leave(bool gracefully) {
+        if(gracefully) {
             group.barrier_sync();
         }
         group.leave();

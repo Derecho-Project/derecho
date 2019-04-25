@@ -92,7 +92,7 @@ MulticastGroup::MulticastGroup(
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-	const subgroup_post_next_version_func_t& post_next_version_callback,
+        const subgroup_post_next_version_func_t& post_next_version_callback,
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : members(_members),
@@ -290,8 +290,8 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                     assert(it != current_receives.end());
                     auto& msg = it->second;
                     msg.index = index;
-		    // We set the size in this receive handler instead of in the incoming_message_handler
-		    msg.size = size;
+                    // We set the size in this receive handler instead of in the incoming_message_handler
+                    msg.size = size;
                     locally_stable_rdmc_messages[subgroup_num].emplace(sequence_number, std::move(msg));
                     current_receives.erase(it);
                 }
@@ -417,9 +417,9 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                //Create a Message struct to receive the data into.
                                RDMCMessage msg;
                                msg.sender_id = node_id;
-			       // The length variable is not the exact size of the msg,
-			       // but it is the nearest multiple of the block size greater then the size
-			       // so we will set the size in the receive handler
+                               // The length variable is not the exact size of the msg,
+                               // but it is the nearest multiple of the block size greater then the size
+                               // so we will set the size in the receive handler
                                msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
                                free_message_buffers[subgroup_num].pop_back();
 
@@ -713,20 +713,23 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
                                        uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                                        const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda) {
     DerechoParams profile = subgroup_settings.profile;
+    const uint64_t slot_width = profile.sst_max_msg_size + 2 * sizeof(uint64_t);
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     for(uint i = 0; i < batch_size; ++i) {
         for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
             auto num_received = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
-            uint32_t slot = num_received % profile.window_size;
-            message_id_t next_seq = (uint64_t&)sst.slots[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
-                                                        [subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)];
+            const uint32_t slot = num_received % profile.window_size;
+            const uint32_t sender_sst_index = node_id_to_sst_index.at(
+                    subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
+            const message_id_t next_seq = (uint64_t&)sst.slots[sender_sst_index]
+                                                              [subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)];
             if(next_seq == num_received / static_cast<int32_t>(profile.window_size) + 1) {
                 dbg_default_trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
-                                      next_seq, num_received, sender_count, node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]), subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * slot);
+                                  next_seq, num_received, sender_count, sender_sst_index, subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * slot);
                 sst_receive_handler_lambda(sender_count,
-                                           &sst.slots[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
-					   [subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * slot],
-                                           (uint64_t&)sst.slots[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+                                           &sst.slots[sender_sst_index]
+                                                     [subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * slot],
+                                           (uint64_t&)sst.slots[sender_sst_index]
                                                                [subgroup_settings.slot_offset + (profile.sst_max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
                 sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = num_received;
             }
@@ -1084,7 +1087,6 @@ void MulticastGroup::check_failures_loop() {
                                      sizeof(sst->local_stability_frontier[0][0]) * sst->local_stability_frontier.size());
         }
     }
-
 }
 
 // we already hold the lock on msg_state_mtx when we call this

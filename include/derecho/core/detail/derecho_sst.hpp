@@ -32,65 +32,89 @@ public:
      *
      * This variable is the highest sequence number that has been received
      * in-order by this node; if a node updates seq_num, it has received all
-     * messages up to seq_num in the global round-robin order. */
+     * messages up to seq_num in the global round-robin order.
+     */
     SSTFieldVector<message_id_t> seq_num;
-    /** This represents the highest sequence number that has been delivered
-     * at this node. Messages are only delievered once stable (received by all),
-     * so it must be at least stable_num. */
+    /**
+     * This represents the highest sequence number that has been delivered
+     * at this node. Messages are only delivered once stable (received by all),
+     * so it must be at least stable_num.
+     */
     SSTFieldVector<message_id_t> delivered_num;
-    /** This represents the highest persistent version number that has been
+    /**
+     * This represents the highest persistent version number that has been
      * persisted to disk at this node, if persistence is enabled. This is
-     * updated by the PersistenceManager. */
+     * updated by the PersistenceManager.
+     */
     SSTFieldVector<persistent::version_t> persisted_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
     SSTField<int32_t> vid;
-    /** Array of same length as View::members, where each bool represents
-     * whether the corresponding member is suspected to have failed */
+    /**
+     * Array of same length as View::members, where each bool represents
+     * whether the corresponding member is suspected to have failed
+     */
     SSTFieldVector<bool> suspected;
-    /** An array of the same length as View::members, containing a list of
+    /**
+     * An array of the same length as View::members, containing a list of
      * proposed changes to the view that have not yet been installed. The number
      * of valid elements is num_changes - num_installed, which should never exceed
      * View::num_members/2.
      * If request i is a Join, changes[i] is not in current View's members.
-     * If request i is a Departure, changes[i] is in current View's members. */
+     * If request i is a Departure, changes[i] is in current View's members.
+     */
     SSTFieldVector<node_id_t> changes;
-    /** If changes[i] is a Join, joiner_ips[i] is the IP address of the joining
-     *  node, packed into an unsigned int in network byte order. This
-     *  representation is necessary because SST doesn't support variable-length
-     *  strings. */
+    /**
+     * If changes[i] is a Join, joiner_ips[i] is the IP address of the joining
+     * node, packed into an unsigned int in network byte order. This
+     * representation is necessary because SST doesn't support variable-length
+     * strings.
+     */
     SSTFieldVector<uint32_t> joiner_ips;
-    /** joiner_xxx_ports are the port numbers for the joining nodes.
-      * */
+    /** joiner_xxx_ports are the port numbers for the joining nodes. */
     SSTFieldVector<uint16_t> joiner_gms_ports;
     SSTFieldVector<uint16_t> joiner_rpc_ports;
     SSTFieldVector<uint16_t> joiner_sst_ports;
     SSTFieldVector<uint16_t> joiner_rdmc_ports;
-    /** How many changes to the view have been proposed. Monotonically increases.
+    /**
+     * How many changes to the view have been proposed. Monotonically increases.
      * num_changes - num_committed is the number of pending changes, which should never
      * exceed the number of members in the current view. If num_changes == num_committed
-     * == num_installed, no changes are pending. */
+     * == num_installed, no changes are pending.
+     */
     SSTField<int> num_changes;
     /** How many proposed view changes have reached the commit point. */
     SSTField<int> num_committed;
-    /** How many proposed changes have been seen. Incremented by a member
-     * to acknowledge that it has seen a proposed change.*/
+    /**
+     * How many proposed changes have been seen. Incremented by a member
+     * to acknowledge that it has seen a proposed change.
+     */
     SSTField<int> num_acked;
-    /** How many previously proposed view changes have been installed in the
-     * current view. Monotonically increases, lower bound on num_committed. */
+    /**
+     * How many previously proposed view changes have been installed in the
+     * current view. Monotonically increases, lower bound on num_committed.
+     */
     SSTField<int> num_installed;
-    /** Local count of number of received messages by sender.  For each
+    /**
+     * Local count of number of received messages by sender.  For each
      * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
      */
     SSTFieldVector<int32_t> num_received;
-    /** Set after calling rdmc::wedged(), reports that this member is wedged.
-     * Must be after num_received!*/
+    /**
+     * Set after calling rdmc::wedged(), reports that this member is wedged.
+     * Must be after num_received!
+     */
     SSTField<bool> wedged;
-    /** Array of how many messages to accept from each sender in the current view change */
+    /**
+     * Array of how many messages to accept from each sender in the current
+     * view change.
+     */
     SSTFieldVector<int> global_min;
-    /** Array indicating whether each shard leader (indexed by subgroup number)
-     * has published a global_min for the current view change*/
+    /**
+     * Array indicating whether each shard leader (indexed by subgroup number)
+     * has published a global_min for the current view change
+     */
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
     SSTFieldVector<char> slots;

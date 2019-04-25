@@ -94,7 +94,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(return_pair.results);
     } else {
         throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -105,7 +105,7 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::ordered_send(Args&&... args) {
     if(is_valid()) {
-        size_t msg_size = wrapped_this->template get_size<tag>(std::forward<Args>(args)...);
+        size_t payload_size_for_multicast_send = wrapped_this->template get_size_for_ordered_send<tag>(std::forward<Args>(args)...);
         // // declare send_return_struct outside the lambda 'serializer'
         // // serializer will be called inside multicast_group.cpp, in send
         // // but we need the object after that, outside the lambda
@@ -116,16 +116,13 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                 std::forward<Args>(args)...))>::type;
         rpc::QueryResults<Ret>* results_ptr;
         rpc::PendingResults<Ret>* pending_ptr;
-
+        uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
         auto serializer = [&](char* buffer) {
             std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
                                                    ->multicast_group->get_subgroup_settings()
                                                    .at(subgroup_id)
                                                    .profile.max_msg_size
                                            - sizeof(header);
-            int buffer_offset = group_rpc_manager.populate_nodelist_header({}, buffer, max_payload_size);
-            buffer += buffer_offset;
-
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
@@ -142,9 +139,9 @@ auto Replicated<T>::ordered_send(Args&&... args) {
         std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
         group_rpc_manager.view_manager.view_change_cv.wait(view_read_lock, [&]() {
             return group_rpc_manager.view_manager.curr_view
-                    ->multicast_group->send(subgroup_id, msg_size, serializer, true);
+                    ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
-        group_rpc_manager.finish_rpc_send(*pending_ptr);
+        group_rpc_manager.finish_rpc_send(subgroup_id, *pending_ptr);
         return std::move(*results_ptr);
     } else {
         throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -248,7 +245,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                     }
                 },
                 std::forward<Args>(args)...);
-        group_rpc_manager.finish_p2p_send(dest_node, return_pair.pending);
+        group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(return_pair.results);
     } else {
         throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};

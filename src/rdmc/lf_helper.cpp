@@ -258,7 +258,7 @@ int endpoint::init(struct fi_info *fi) {
         "Failed to open endpoint", REPORT_ON_FAILURE
     );
     if(ret) return ret;
-    dbg_default_info("{}:{} created rdmc endpoint: {}",__FILE__,__func__,(void*)&raw_ep->fid);
+    dbg_default_trace("{}:{} created rdmc endpoint: {}",__FILE__,__func__,(void*)&raw_ep->fid);
     dbg_default_flush();
     /** Construct the smart pointer to manage the endpoint */ 
     ep = unique_ptr<fid_ep, std::function<void(fid_ep *)>>(
@@ -669,7 +669,7 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
   default_context();
   // load_configuration();
 
-  dbg_default_info(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
+  dbg_default_debug(fi_tostr(g_ctxt.hints, FI_TYPE_INFO));
   /** Initialize the fabric, domain and completion queue */
   FAIL_IF_NONZERO_RETRY_EAGAIN(
       fi_getinfo(LF_VERSION, NULL, NULL, 0, g_ctxt.hints, &(g_ctxt.fi)),
