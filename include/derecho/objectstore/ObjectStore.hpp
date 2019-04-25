@@ -12,7 +12,7 @@ using version_t = persistent::version_t;
 // The core API. See `test.cpp` for how to use it.
 class IObjectStoreService : public derecho::IDeserializationContext {
 private:
-    static std::unique_ptr<IObjectStoreService> singleton;
+    static std::shared_ptr<IObjectStoreService> singleton;
 
 public:
     virtual const bool isReplica() = 0;

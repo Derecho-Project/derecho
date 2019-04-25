@@ -115,8 +115,17 @@ private:
     const node_id_t my_id;
     bool is_starting_leader;
     std::optional<tcp::socket> leader_connection;
-    /** The user deserialization context for all objects serialized and deserialized. */
-    std::shared_ptr<IDeserializationContext> user_deserialization_context;
+    /**
+     * The shared pointer holding deserialization context is obsolete. I (Weijia)
+     * removed it because it complicated things: the deserialization context is
+     * generally a big object containing the group handle; however, the group handle
+     * need to hold a shared pointer to the object, which causes a dependency loop
+     * and results in an object indirectly holding a shared pointer to its self.
+     * Another side effect is double free. So I change it back to the raw pointer.
+     * The user deserialization context for all objects serialized and deserialized. */
+    // std::shared_ptr<IDeserializationContext> user_deserialization_context;
+    IDeserializationContext * user_deserialization_context;
+
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
@@ -211,6 +220,9 @@ public:
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
+     * @param deserialization_context The context used for deserialization
+     * purpose. The application is responsible to keep it alive during Group 
+     * object lifetime.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
@@ -219,7 +231,7 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          std::shared_ptr<IDeserializationContext> deserialization_context,
+          IDeserializationContext * deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 

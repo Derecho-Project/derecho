@@ -688,7 +688,7 @@ public:
                                                                       }
                                                                       return subgroup_allocation;
                                                                   }},
-                                                          std::shared_ptr<derecho::IDeserializationContext>{this},
+                                                          this,
                                                           std::vector<derecho::view_upcall_t>{},  // view up-calls
                                                           // factories ...
                                                           [this](persistent::PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
@@ -937,7 +937,7 @@ public:
 };
 
 // The singleton unique pointer
-std::unique_ptr<IObjectStoreService> IObjectStoreService::singleton;
+std::shared_ptr<IObjectStoreService> IObjectStoreService::singleton;
 
 // get the singleton
 // NOTE: caller only get access to this member object. The ownership of this
@@ -947,7 +947,7 @@ IObjectStoreService& IObjectStoreService::getObjectStoreService(int argc, char**
         // step 1: initialize the configuration
         derecho::Conf::initialize(argc, argv);
         // step 2: create the group resources
-        IObjectStoreService::singleton = std::make_unique<ObjectStoreService>(ow);
+        IObjectStoreService::singleton = std::make_shared<ObjectStoreService>(ow);
     }
 
     return *IObjectStoreService::singleton.get();
