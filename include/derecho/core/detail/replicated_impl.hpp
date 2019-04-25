@@ -116,7 +116,6 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                 std::forward<Args>(args)...))>::type;
         rpc::QueryResults<Ret>* results_ptr;
         rpc::PendingResults<Ret>* pending_ptr;
-        uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
         auto serializer = [&](char* buffer) {
             std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
                                                    ->multicast_group->get_subgroup_settings()

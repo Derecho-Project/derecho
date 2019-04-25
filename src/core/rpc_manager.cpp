@@ -200,29 +200,7 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
-<<<<<<< HEAD
-int RPCManager::populate_nodelist_header(const std::vector<node_id_t>& dest_nodes, char* buffer,
-                                         std::size_t& max_payload_size) {
-    int header_size = 0;
-    // Put the list of destination nodes in another layer of "header"
-    ((size_t*)buffer)[0] = dest_nodes.size();
-    buffer += sizeof(size_t);
-    header_size += sizeof(size_t);
-    for(auto& node_id : dest_nodes) {
-        ((node_id_t*)buffer)[0] = node_id;
-        buffer += sizeof(node_id_t);
-        header_size += sizeof(node_id_t);
-    }
-    //Two return values: the size of the header we just created,
-    //and the maximum payload size based on that
-    max_payload_size -= header_size;
-    return header_size;
-}
-
-bool RPCManager::finish_rpc_send(PendingBase& pending_results_handle) {
-=======
 bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle) {
->>>>>>> b06ab08106759212015fc2b46aa2254ed5163455
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
     pending_results_cv.notify_all();
