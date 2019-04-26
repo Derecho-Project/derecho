@@ -72,12 +72,11 @@ persistent::version_t RestartState::ragged_trim_to_latest_version(const int32_t 
 }
 
 RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
-                                       const SubgroupInfo& subgroup_info, const DerechoParams& derecho_params,
+                                       const SubgroupInfo& subgroup_info,
                                        const node_id_t my_id)
         : curr_view(std::move(_curr_view)),
           restart_state(restart_state),
           subgroup_info(subgroup_info),
-          derecho_params(derecho_params),
           last_known_view_members(curr_view->members.begin(), curr_view->members.end()),
           longest_log_versions(curr_view->subgroup_shard_views.size()),
           nodes_with_longest_log(curr_view->subgroup_shard_views.size()),
@@ -260,10 +259,8 @@ int64_t RestartLeaderState::send_restart_view() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
         std::size_t view_buffer_size = mutils::bytes_size(*restart_view);
-        std::size_t params_buffer_size = mutils::bytes_size(derecho_params);
         std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
         char view_buffer[view_buffer_size];
-        char params_buffer[params_buffer_size];
         char leaders_buffer[leaders_buffer_size];
         bool send_success;
         //Within this try block, any send that returns failure throws the ID of the node that failed
@@ -275,15 +272,6 @@ int64_t RestartLeaderState::send_restart_view() {
             }
             mutils::to_bytes(*restart_view, view_buffer);
             send_success = waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
-            send_success = waiting_sockets_iter->second.write(params_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
-            mutils::to_bytes(derecho_params, params_buffer);
-            send_success = waiting_sockets_iter->second.write(params_buffer, params_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }

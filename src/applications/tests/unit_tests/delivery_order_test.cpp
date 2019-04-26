@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
 
     std::unique_ptr<Group<RawObject>> group;
     uint32_t my_rank;
-    uint64_t max_msg_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     volatile bool done = false;
     auto delivery_callback = [&, num_received_msgs_map = std::map<node_id_t, uint32_t>(),
                               received_msgs_index_map = std::map<node_id_t, uint32_t>(),

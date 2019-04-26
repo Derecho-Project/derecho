@@ -10,6 +10,14 @@ namespace derecho {
 
 static const char* default_conf_file = "derecho.cfg";
 
+const std::vector<std::string> Conf::subgroupProfileFields = {
+        "max_payload_size",
+        "max_smc_payload_size",
+        "block_size",
+        "window_size",
+        "rdmc_send_algorithm"
+};
+
 std::unique_ptr<Conf> Conf::singleton = nullptr;
 
 std::atomic<uint32_t> Conf::singleton_initialized_flag = 0;
@@ -29,12 +37,13 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RPC_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_PORT),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_PAYLOAD_SIZE),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_BLOCK_SIZE),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_WINDOW_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_BLOCK_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_HEARTBEAT_MS),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_SEND_ALGORITHM),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM
+),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS),
         // [RDMA]
         MAKE_LONG_OPT_ENTRY(CONF_RDMA_PROVIDER),

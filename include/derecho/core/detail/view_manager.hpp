@@ -158,8 +158,6 @@ private:
     /** Indicates the order that the subgroups should be provisioned;
      * set by Group to be the same order as its template parameters. */
     std::vector<std::type_index> subgroup_type_order;
-    //Parameters stored here, in case we need them again after construction
-    DerechoParams derecho_params;
 
     /** The same set of TCP sockets used by Group and RPCManager. */
     std::shared_ptr<tcp::tcp_connections> tcp_sockets;
@@ -452,7 +450,9 @@ private:
      */
     void construct_multicast_group(CallbackSet callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                   const uint32_t num_received_size);
+                                   const uint32_t num_received_size,
+                                   const uint32_t slot_size);
+
     /**
      * Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
      * and copies over the SST data from the current view.
@@ -461,7 +461,8 @@ private:
      * @param new_num_received_size The size of the num_recieved field in the new SST
      */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-                                    const uint32_t new_num_received_size);
+                                    const uint32_t new_num_received_size,
+                                    const uint32_t new_slot_size);
     /**
      * Initializes curr_view with subgroup information based on the membership
      * functions in subgroup_info. If curr_view would be inadequate based on
@@ -486,10 +487,10 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size for the SST based on the current View's subgroup membership
+     * @return num_received_size and slot_size for the SST based on the current View's subgroup membership
      */
-    static uint32_t derive_subgroup_settings(View& curr_view,
-                                             std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
+                                                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -553,8 +554,6 @@ public:
      * @param my_ip The IP address of the node executing this code
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
-     * @param derecho_params The assorted configuration parameters for this
-     * Derecho group instance, such as message size and logfile name
      * @param group_tcp_sockets The pool of TCP connections to each group member
      * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
@@ -720,10 +719,6 @@ public:
      */
     SharedLockedReference<const View> get_current_view_const();
 
-    /** Gets a read-only reference to the DerechoParams settings,
-     * in case other components need to see them after construction time. */
-    const DerechoParams& get_derecho_params() const { return derecho_params; }
-
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -749,6 +744,14 @@ public:
     void silence();
 
     void debug_print_status() const;
+
+    // UGLY - IMPROVE LATER
+    std::map<subgroup_id_t, uint64_t> max_payload_sizes;
+    std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
+    // max of max_payload_sizes
+    uint64_t view_max_payload_size = 0;
+    unsigned int view_max_window_size = 0;
+    unsigned int view_max_sender_timeout = 0;
 };
 
 } /* namespace derecho */

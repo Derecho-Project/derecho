@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
     int count = atoi(argv[3]);
     struct timespec t1, t2, t3;
 
-    long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     bool is_sending = true;
     long total_num_messages;
     switch(sender_selector) {

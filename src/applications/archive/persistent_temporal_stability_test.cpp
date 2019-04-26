@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     int count = atoi(argv[3]);
     int max_ops = atoi(argv[4]);
     uint64_t si_us = (1000000l / max_ops);
-    int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     bool is_sending = true;
 

@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
     // all are senders except node id's 1 and 2 in shard 0 and nodes >= 9
     if(node_id != 1 && node_id != 2 && node_id <= 8) {
         // random message size between 1 and 100
-        long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+        long long unsigned int max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
         unsigned int msg_size = (rand() % 7 + 2) * (max_msg_size / 10);
         derecho::Replicated<RawObject>& subgroup_handle = managed_group.get_subgroup<RawObject>(my_subgroup_num);
         for(int i = 0; i < num_messages; ++i) {
