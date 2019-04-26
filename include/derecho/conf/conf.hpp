@@ -27,14 +27,15 @@ private:
 #define CONF_DERECHO_RPC_PORT "DERECHO/rpc_port"
 #define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
+#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
+#define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 
 #define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/default/max_payload_size"
 #define CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE "SUBGROUP/default/max_smc_payload_size"
 #define CONF_SUBGROUP_DEFAULT_BLOCK_SIZE "SUBGROUP/default/block_size"
 #define CONF_SUBGROUP_DEFAULT_WINDOW_SIZE "SUBGROUP/default/window_size"
 #define CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM "SUBGROUP/default/rdmc_send_algorithm"
-#define CONF_DERECHO_HEARTBEAT_MS "DERECHO/timeout_heartbeat_ms"
-#define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
+
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
 #define CONF_RDMA_TX_DEPTH "RDMA/tx_depth"
