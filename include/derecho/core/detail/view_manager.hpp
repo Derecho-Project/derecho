@@ -211,6 +211,14 @@ private:
      */
     std::vector<std::vector<int64_t>> prior_view_shard_leaders;
 
+    /**
+     * On a graceful exit, nodes will be agree to leave at some point, where
+     * the view manager should stop throw exception on "failure". Set 
+     * 'bSilence' to keep the view manager calm on detecting intended node
+     * "failure."
+     */
+    std::atomic<bool> bSilent = false;
+
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
     /* ---------------------------- View-management triggers ---------------------------- */
@@ -734,6 +742,11 @@ public:
     void register_initialize_objects_upcall(initialize_rpc_objects_t upcall) {
         initialize_subgroup_objects = std::move(upcall);
     }
+
+    /**
+     * stop complaining about node failures.
+     */
+    void silence();
 
     void debug_print_status() const;
 };

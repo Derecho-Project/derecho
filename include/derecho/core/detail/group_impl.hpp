@@ -316,7 +316,11 @@ void Group<ReplicatedTypes...>::report_failure(const node_id_t who) {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::leave() {
+void Group<ReplicatedTypes...>::leave(bool group_shutdown) {
+    if(group_shutdown) {
+        view_manager.silence();
+        view_manager.barrier_sync();
+    }
     view_manager.leave();
 }
 

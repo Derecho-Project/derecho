@@ -60,8 +60,9 @@ public:
     virtual derecho::rpc::QueryResults<const Object> aio_get(const OID& oid, const uint64_t& ts_us) = 0;
 
     // leave
-    // @PARAM grace - leave gracefully if true (wait for other nodes), false otherwise. Default to true.
-    virtual void leave(bool grace = true) = 0;
+    // @PARAM group_shutdown - for group shutdown, this supresses the failure detection once all nodes agree to leave.
+    //        default to false.
+    virtual void leave(bool group_shutdown = false) = 0;
     virtual const ObjectWatcher& getObjectWatcher() = 0;
 
     // get singleton

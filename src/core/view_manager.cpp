@@ -718,6 +718,11 @@ void ViewManager::register_predicates() {
 /* ------------- 2. Predicate-Triggers That Implement View Management Logic ---------- */
 
 void ViewManager::new_suspicion(DerechoSST& gmsSST) {
+    // keep calm?
+    if (bSilent) {
+        return;
+    }
+
     dbg_default_debug("Suspected[] changed");
     View& Vc = *curr_view;
     int myRank = curr_view->my_rank;
@@ -1857,6 +1862,10 @@ void ViewManager::log_ragged_trim(const int shard_leader_rank,
 /* ------------- 4. Public-Interface methods of ViewManager ------------- */
 
 void ViewManager::report_failure(const node_id_t who) {
+    // keep calm
+    if (bSilent) {
+        return;
+    }
     int r = curr_view->rank_of(who);
     dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, r);
     curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
@@ -1876,6 +1885,10 @@ void ViewManager::report_failure(const node_id_t who) {
     curr_view->gmsSST->put(
             (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
             sizeof(curr_view->gmsSST->suspected[0][r]));
+}
+
+void ViewManager::silence() {
+    bSilent = true;
 }
 
 void ViewManager::leave() {

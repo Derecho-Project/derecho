@@ -921,11 +921,11 @@ public:
         }
     }
 
-    virtual void leave(bool gracefully) {
-        if(gracefully) {
+    virtual void leave(bool group_shutdown) {
+        if(group_shutdown) {
             group.barrier_sync();
         }
-        group.leave();
+        group.leave(group_shutdown);
     }
 
     virtual const ObjectWatcher& getObjectWatcher() {

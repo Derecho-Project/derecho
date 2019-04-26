@@ -277,8 +277,11 @@ public:
     template <typename SubgroupType>
     ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);
 
-    /** Causes this node to cleanly leave the group by setting itself to "failed." */
-    void leave();
+    /** Causes this node to cleanly leave the group by setting itself to "failed."
+     * @param group_shutdown True if all nodes in the group are going to leave.
+     */
+    void leave(bool group_shutdown=true);
+
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
     /**
