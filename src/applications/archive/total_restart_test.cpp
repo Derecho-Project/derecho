@@ -111,6 +111,9 @@ int main(int argc, char** argv) {
             int new_value = rand() % 100;
             // std::cout << "Updating state to " << new_value << std::endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
+            if(counter % 1000 == 0) {
+                std::cout << "Done with counter = " << counter << std::endl;
+            }
         }
     }
     // std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

@@ -7,7 +7,6 @@
 
 #include <derecho/core/detail/p2p_connections.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
-#include <derecho/utils/logger.hpp>
 
 namespace sst {
 P2PConnections::P2PConnections(const P2PParams params)
@@ -19,7 +18,7 @@ P2PConnections::P2PConnections(const P2PParams params)
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(3 * max_msg_size * window_size + sizeof(bool)),
+          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
           prev_mode(num_members) {
     //Figure out my SST index
     my_index = (uint32_t)-1;
@@ -52,6 +51,7 @@ P2PConnections::P2PConnections(const P2PParams params)
     }
 
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
+    debug_print();
 }
 
 P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members)
@@ -63,7 +63,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(3 * max_msg_size * window_size + sizeof(bool)),
+          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
           prev_mode(num_members) {
     old_connections.shutdown_failures_thread();
     //Figure out my SST index
@@ -104,6 +104,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     }
 
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
+    debug_print();
 }
 
 P2PConnections::~P2PConnections() {
@@ -126,27 +127,11 @@ uint64_t P2PConnections::get_max_p2p_size() {
 }
 
 uint64_t P2PConnections::getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num) {
-    switch(type) {
-        case REQUEST_TYPE::RPC_REPLY:
-            return max_msg_size * (2 * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
-        case REQUEST_TYPE::P2P_REPLY:
-            return max_msg_size * (window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
-        case REQUEST_TYPE::P2P_REQUEST:
-            return max_msg_size * (seq_num % window_size + 1) - sizeof(uint64_t);
-    }
-    return 0;
+    return max_msg_size * (type * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
 }
 
 uint64_t P2PConnections::getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num) {
-    switch(type) {
-        case REQUEST_TYPE::RPC_REPLY:
-            return max_msg_size * (2 * window_size + (seq_num % window_size));
-        case REQUEST_TYPE::P2P_REPLY:
-            return max_msg_size * (window_size + (seq_num % window_size));
-        case REQUEST_TYPE::P2P_REQUEST:
-            return max_msg_size * (seq_num++ % window_size);
-    }
-    return 0;
+    return max_msg_size * (type * window_size + (seq_num++ % window_size));
 }
 
 // check if there's a new request from some node
@@ -195,14 +180,10 @@ void P2PConnections::send(uint32_t rank) {
         num_rdma_writes++;
     }
     outgoing_seq_nums_map[type][rank]++;
-
-    if(rank != my_index && (node_id_to_rank[2] == rank || node_id_to_rank[7] == rank)) {
-        debug_print();
-    }
 }
 
 void P2PConnections::check_failures_loop() {
-    pthread_setname_np(pthread_self(), "p2p_timeout_thread");
+    pthread_setname_np(pthread_self(), "p2p_timeout");
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -266,26 +247,30 @@ void P2PConnections::check_failures_loop() {
 }
 
 void P2PConnections::debug_print() {
+    std::cout << "Members: " << std::endl;
+    for(auto m : members) {
+        std::cout << m << " ";
+    }
+    std::cout << std::endl;
+
     for(const auto& type : p2p_request_types) {
-        dbg_default_debug("P2PConnections: Request type {}", type);
-        std::stringstream string_builder;
+        std::cout << "P2PConnections: Request type " << type << std::endl;
         for(uint32_t node = 0; node < num_members; ++node) {
-            string_builder << "Node " << node << std::endl;
-            string_builder << "incoming buffers:";
+            std::cout << "Node " << node << std::endl;
+            std::cout << "incoming seq_nums:";
             for(uint32_t i = 0; i < window_size; ++i) {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
-                string_builder << " " << reinterpret_cast<uint64_t>(
+                std::cout << " " << reinterpret_cast<uint64_t>(
                         const_cast<char*>(incoming_p2p_buffers[node].get()) + offset);
             }
-            string_builder << std::endl << "outgoing buffers:";
+            std::cout << std::endl << "outgoing seq_nums:";
             for(uint32_t i = 0; i < window_size; ++i) {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
-                string_builder << " " << reinterpret_cast<uint64_t>(
+                std::cout << " " << reinterpret_cast<uint64_t>(
                         const_cast<char*>(outgoing_p2p_buffers[node].get()) + offset);
             }
-            dbg_default_debug("{}", string_builder.str());
+	    std::cout << std::endl;
         }
-
     }
 }
 }  // namespace sst
