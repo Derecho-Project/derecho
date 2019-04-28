@@ -33,6 +33,10 @@ void _SSTField::set_row_length(const size_t row_length) {
     this->row_length = row_length;
 }
 
+void _SSTField::set_num_nodes(const uint32_t num_nodes) {
+    this->num_nodes = num_nodes;
+}
+
 template <typename T>
 SSTField<T>::SSTField() : _SSTField(sizeof(T)) {
 }
@@ -53,7 +57,7 @@ volatile T* SSTFieldVector<T>::operator[](const size_t& index) const {
 
 template <typename T>
 size_t SSTFieldVector<T>::size() const {
-    return size;
+    return _size;
 }
 
 template <typename DerivedSST>
@@ -67,14 +71,15 @@ void SST<DerivedSST>::compute_row_length(Field& f, Fields&... rest) {
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::set_bases_and_row_length(volatile char*&){};
+void SST<DerivedSST>::set_field_params(volatile char*&){};
 
 template <typename DerivedSST>
 template <typename Field, typename... Fields>
-void SST<DerivedSST>::set_bases_and_row_length(volatile char*& base, Field& f, Fields&... rest) {
+void SST<DerivedSST>::set_field_params(volatile char*& base, Field& f, Fields&... rest) {
     base += f.set_base(base);
     f.set_row_length(row_length);
-    set_bases_and_row_length(base, rest...);
+    f.set_num_nodes(members.num_nodes);
+    set_field_params(base, rest...);
 }
 
 template <typename DerivedSST>
@@ -83,7 +88,7 @@ void SST<DerivedSST>::initialize_fields(Fields&... fields) {
     compute_row_length(fields...);
     rows = new char[row_length * members.num_nodes];
     volatile char* base = rows;
-    set_bases_and_row_length(base, fields...);
+    set_field_params(base, fields...);
 }
 
 /**

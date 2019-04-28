@@ -30,17 +30,18 @@ class _SSTField {
 
 private:
     size_t set_base(volatile char* const base);
+    void set_row_length(const size_t row_length);
+    void set_num_nodes(const uint32_t num_nodes);
 
 public:
     volatile char* base;
     size_t row_length;
     size_t field_length;
+    uint32_t num_nodes;
 
     _SSTField(const size_t field_length);
 
     char* get_base_address();
-
-    void set_row_length(const size_t row_length);
 };
 
 /**
@@ -54,6 +55,37 @@ public:
     using _SSTField::base;
     using _SSTField::field_length;
     using _SSTField::row_length;
+
+    class SSTFieldIterator {
+        T* ptr;
+        size_t row_length;
+
+    public:
+        SSTFieldIterator(T* ptr, size_t row_length)
+                : ptr(ptr),
+                  row_length(row_length) {
+        }
+        bool operator!=(const SSTFieldIterator& other) const {
+            return ptr != other.ptr;
+        }
+
+        SSTFieldIterator operator++() {
+            ptr = (T*)((char*)ptr + row_length);
+            return *this;
+        }
+
+        T& operator*() const {
+            return *ptr;
+        }
+    };
+
+    SSTFieldIterator begin() const {
+        return SSTFieldIterator((T*)base, row_length);
+    }
+
+    SSTFieldIterator end() const {
+        return SSTFieldIterator((T*)(base + num_nodes * row_length), row_length);
+    }
 
     SSTField();
 
@@ -108,9 +140,9 @@ private:
     void compute_row_length(Field& f, Fields&... rest);
 
     // sets the bases and row length for the SSTFIelds and SSTFieldVectors
-    void set_bases_and_row_length(volatile char*&);
+    void set_field_params(volatile char*&);
     template <typename Field, typename... Fields>
-    void set_bases_and_row_length(volatile char*& base, Field& f, Fields&... rest);
+    void set_field_params(volatile char*& base, Field& f, Fields&... rest);
 
     template <typename... Fields>
     void initialize_fields(Fields&... fields);

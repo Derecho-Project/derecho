@@ -9,6 +9,7 @@ class MRConnectionData {
 };
 
 class MemoryRegion {
+    node::node_id_t remote_id;
     std::weak_ptr<RDMAConnection> rdma_connection;
 
     // send_buf is paired with remote recv_buf and vice-versa

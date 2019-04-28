@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <numeric>
 
 #include "node/node.hpp"
 #include "node/nodeCollection.hpp"
@@ -23,6 +24,10 @@ class mySST : public SST<mySST> {
 public:
     mySST(node::NodeCollection nodes) : SST<mySST>(this, nodes) {
         initialize(count, time);
+
+        std::fill(count.begin(), count.end(), 0);
+        std::fill(time.begin(), time.end(), 0.0);
+        sync_with_members();
     }
     SSTField<uint32_t> count;
     SSTField<double> time;
@@ -40,9 +45,9 @@ int main() {
     // input the ip addresses
     map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
     for(auto i = 0u; i < num_nodes; ++i) {
-      std::string ip;
-      cin >> ip;
-      ip_addrs_and_ports[i] = {ip, port};
+        std::string ip;
+        cin >> ip;
+        ip_addrs_and_ports[i] = {ip, port};
     }
     std::cout << "Using the default port value of " << port << std::endl;
 
@@ -50,34 +55,19 @@ int main() {
 
     // form a group with a subset of all the nodes
     vector<uint32_t> members(num_nodes);
-    for(uint32_t i = 0; i < num_nodes; ++i) {
-        members[i] = i;
-    }
+    std::iota(members.begin(), members.end(), 0);
     node::NodeCollection nodes(members, my_id);
 
     // create a new shared state table with all the members
     mySST sst(nodes);
-    sst.count[nodes.my_rank] = 0;
-    sst.time[nodes.my_rank] = 0.0;
-    sst.update_remote_rows();
-
-    bool ready = false;
-    // wait until all counts are 0
-    while(ready == false) {
-        ready = true;
-        for(uint32_t i = 0; i < nodes.num_nodes; ++i) {
-	  ready = ready && (sst.count[i] == 0);
-        }
-    }
-    sst.sync_with_members();
 
     struct timespec start_time;
     volatile bool done = false;
 
     // the predicate
     auto check_count = [&nodes](const mySST& sst) {
-        for(uint32_t i = 0; i < nodes.num_nodes; ++i) {
-            if(sst.count[i] < sst.count[nodes.my_rank]) {
+        for(auto count : sst.count) {
+            if(count > sst.count[nodes.my_rank]) {
                 return false;
             }
         }
@@ -94,30 +84,26 @@ int main() {
             clock_gettime(CLOCK_REALTIME, &end_time);
             // set the time taken to count
             sst.time[nodes.my_rank] = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec)) / 1e9;
-	    sst.update_remote_rows(sst.time.get_base_address() - sst.get_base_address(), sizeof(sst.time[0]));
+            sst.update_remote_rows(sst.time.get_base_address() - sst.get_base_address(), sizeof(sst.time[0]));
             // node rank 0 finds the average by reading all the times taken by remote nodes
             // Anyway, the values will be quite close as the counting is synchronous
-            if(nodes.my_rank) {
+            if(nodes.my_rank == 0) {
                 bool time_updated = false;
                 while(!time_updated) {
                     time_updated = true;
-                    for(auto i = 0u; i < nodes.num_nodes; ++i) {
-                        time_updated = time_updated && (sst.time[i] != 0.0);
+                    for(auto time : sst.time) {
+                        time_updated = time_updated && (time != 0);
                     }
                 }
 
-                double sum = 0.0;
-                // compute the average
-                for(auto i = 0u; i < nodes.num_nodes; ++i) {
-                    sum += sst.time[i];
-                }
+                double sum = std::accumulate(sst.time.begin(), sst.time.end(), 0.0);
                 ofstream fout;
                 fout.open("data_count_write", ofstream::app);
                 fout << nodes.num_nodes << " " << sum / nodes.num_nodes << endl;
                 fout.close();
-	    }
-	    sst.sync_with_members();
-	    done = true;
+            }
+            sst.sync_with_members();
+            done = true;
         }
     };
 
