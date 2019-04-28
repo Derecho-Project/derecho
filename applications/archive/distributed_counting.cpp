@@ -21,10 +21,11 @@ using namespace sst;
 
 class mySST : public SST<mySST> {
 public:
-  mySST(node::NodeCollection nodes) : SST<mySST>(this, nodes) {
-        initialize(count);
+    mySST(node::NodeCollection nodes) : SST<mySST>(this, nodes) {
+        initialize(count, time);
     }
-    SSTField<int> count;
+    SSTField<uint32_t> count;
+    SSTField<double> time;
 };
 
 int main() {
@@ -38,7 +39,7 @@ int main() {
     uint16_t port = 32567;
     // input the ip addresses
     map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
-    for(uint i = 0; i < num_nodes; ++i) {
+    for(auto i = 0u; i < num_nodes; ++i) {
       std::string ip;
       cin >> ip;
       ip_addrs_and_ports[i] = {ip, port};
@@ -57,107 +58,76 @@ int main() {
     // create a new shared state table with all the members
     mySST sst(nodes);
     sst.count[nodes.my_rank] = 0;
-    sst.update_remote_rows(sst.count.get_base_address() - sst.get_base_address(), sizeof(int));
+    sst.time[nodes.my_rank] = 0.0;
+    sst.update_remote_rows();
 
     bool ready = false;
     // wait until all counts are 0
     while(ready == false) {
         ready = true;
-        for(uint32_t i = 0; i < num_nodes; ++i) {
+        for(uint32_t i = 0; i < nodes.num_nodes; ++i) {
 	  ready = ready && (sst.count[i] == 0);
         }
     }
     sst.sync_with_members();
 
-//     struct timespec start_time;
+    struct timespec start_time;
+    volatile bool done = false;
 
-//     // the predicate
-//     auto f = [num_nodes](const mySST& sst) {
-//         for(uint32_t i = 0; i < num_nodes; ++i) {
-//             if(sst.count[i] < sst.count[my_index]) {
-//                 return false;
-//             }
-//         }
-//         return true;
-//     };
+    // the predicate
+    auto check_count = [&nodes](const mySST& sst) {
+        for(uint32_t i = 0; i < nodes.num_nodes; ++i) {
+            if(sst.count[i] < sst.count[nodes.my_rank]) {
+                return false;
+            }
+        }
+        return true;
+    };
 
-//     // trigger. Increments self value
-//     auto g = [&start_time](mySST& sst) {
-//         ++(sst.count[my_index]);
-//         sst.put((char*)std::addressof(sst.count[0]) - sst.getBaseAddress(), sizeof(int));
-//         if(sst.count[my_index] == 1000000) {
-//             // end timer
-//             struct timespec end_time;
-//             clock_gettime(CLOCK_REALTIME, &end_time);
-//             // my_time is time taken to count
-//             double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec)) / 1e9;
-//             int my_id = sst.get_local_index();
-//             // node 0 finds the average by reading all the times taken by remote nodes
-//             // Anyway, the values will be quite close as the counting is synchronous
-//             if(my_id == 0) {
-//                 int num_nodes = sst.get_num_rows();
-//                 resources* res;
-//                 double times[num_nodes];
-//                 const auto tid = std::this_thread::get_id();
-//                 // get id first
-//                 uint32_t id = util::polling_data.get_index(tid);
-//                 util::polling_data.set_waiting(tid);
+    // trigger. Increments self value
+    auto increment_count = [&start_time, &done, &nodes](mySST& sst) {
+        ++(sst.count[nodes.my_rank]);
+        sst.update_remote_rows(sst.count.get_base_address() - sst.get_base_address(), sizeof(sst.count[0]));
+        if(sst.count[nodes.my_rank] == 1000000) {
+            // end timer
+            struct timespec end_time;
+            clock_gettime(CLOCK_REALTIME, &end_time);
+            // set the time taken to count
+            sst.time[nodes.my_rank] = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec)) / 1e9;
+	    sst.update_remote_rows(sst.time.get_base_address() - sst.get_base_address(), sizeof(sst.time[0]));
+            // node rank 0 finds the average by reading all the times taken by remote nodes
+            // Anyway, the values will be quite close as the counting is synchronous
+            if(nodes.my_rank) {
+                bool time_updated = false;
+                while(!time_updated) {
+                    time_updated = true;
+                    for(auto i = 0u; i < nodes.num_nodes; ++i) {
+                        time_updated = time_updated && (sst.time[i] != 0.0);
+                    }
+                }
 
-//                 // read the other nodes' time
-//                 for(int i = 0; i < num_nodes; ++i) {
-//                     if(i == my_id) {
-//                         times[i] = my_time;
-//                     } else {
-//                         res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double), my_id < i);
-//                         res->post_remote_read(id, sizeof(double));
-//                         free(res);
-//                     }
-//                 }
-//                 for(int i = 0; i < num_nodes; ++i) {
-//                     util::polling_data.get_completion_entry(tid);
-//                 }
-//                 util::polling_data.reset_waiting(tid);
+                double sum = 0.0;
+                // compute the average
+                for(auto i = 0u; i < nodes.num_nodes; ++i) {
+                    sum += sst.time[i];
+                }
+                ofstream fout;
+                fout.open("data_count_write", ofstream::app);
+                fout << nodes.num_nodes << " " << sum / nodes.num_nodes << endl;
+                fout.close();
+	    }
+	    sst.sync_with_members();
+	    done = true;
+        }
+    };
 
-//                 double sum = 0.0;
-//                 // compute the average
-//                 for(int i = 0; i < num_nodes; ++i) {
-//                     sum += times[i];
-//                 }
-//                 ofstream fout;
-//                 fout.open("data_count_write", ofstream::app);
-//                 fout << num_nodes << " " << sum / num_nodes << endl;
-//                 fout.close();
+    // start timer
+    clock_gettime(CLOCK_REALTIME, &start_time);
 
-//                 // sync to tell other nodes to exit
-//                 for(int i = 0; i < num_nodes; ++i) {
-//                     if(i == my_id) {
-//                         continue;
-//                     }
-//                     sync(i);
-//                 }
-//             } else {
-//                 resources* res;
-//                 double no_need;
-//                 res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double), 0);
-//                 sync(0);
-//                 free(res);
-//             }
-// #ifdef USE_VERBS_API
-//             verbs_destroy();
-// #else
-//             lf_destroy();
-// #endif
-//             exit(0);
-//         }
-//     };
+    // register as a recurring predicate
+    sst.predicates.insert(check_count, increment_count, PredicateType::RECURRENT);
 
-//     // start timer
-//     clock_gettime(CLOCK_REALTIME, &start_time);
-
-//     // register as a recurring predicate
-//     sst.predicates.insert(f, g, PredicateType::RECURRENT);
-
-    while(true) {
+    while(!done) {
     }
     return 0;
 }

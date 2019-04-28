@@ -12,6 +12,8 @@
 #include <time.h>
 #include <vector>
 
+#include "sst_registry.hpp"
+
 namespace sst {
 size_t _SSTField::set_base(volatile char* const base) {
     this->base = base;
@@ -36,16 +38,16 @@ SSTField<T>::SSTField() : _SSTField(sizeof(T)) {
 }
 
 template <typename T>
-volatile T& SSTField<T>::operator[](const uint32_t row_index) const {
+volatile T& SSTField<T>::operator[](const size_t row_index) const {
     return ((T&)base[row_index * row_length]);
 }
 
 template <typename T>
-SSTFieldVector<T>::SSTFieldVector(size_t size) : _SSTField(_size * sizeof(T)), _size(_size) {
+SSTFieldVector<T>::SSTFieldVector(size_t _size) : _SSTField(_size * sizeof(T)), _size(_size) {
 }
 
 template <typename T>
-volatile T* SSTFieldVector<T>::operator[](const uint32_t& index) const {
+volatile T* SSTFieldVector<T>::operator[](const size_t& index) const {
     return (T*)(base + index * row_length);
 }
 
@@ -84,12 +86,69 @@ void SST<DerivedSST>::initialize_fields(Fields&... fields) {
     set_bases_and_row_length(base, fields...);
 }
 
+/**
+ * This function is called by the static global predicate thread.
+ * It continuously evaluates predicates one by one, and runs the
+ * trigger functions for each predicate that fires.
+ */
 template <typename DerivedSST>
-SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members)
+void SST<DerivedSST>::evaluate() {
+    if(!start_eval || !initialization_done) {
+        return;
+    }
+    // Take the predicate lock before reading the predicate lists
+    std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
+
+    // one time predicates need to be evaluated only until they become true
+    for(auto& pred : predicates.one_time_predicates) {
+        if(pred != nullptr && (pred->first(*derived_sst_pointer) == true)) {
+            // Copy the trigger pointer locally, so it can continue running without
+            // segfaulting even if this predicate gets deleted when we unlock predicates_lock
+            std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
+            predicates_lock.unlock();
+            (*trigger)(*derived_sst_pointer);
+            predicates_lock.lock();
+            // erase the predicate as it was just found to be true
+            pred.reset();
+        }
+    }
+
+    // recurrent predicates are evaluated each time they are found to be true
+    for(auto& pred : predicates.recurrent_predicates) {
+        if(pred != nullptr && (pred->first(*derived_sst_pointer) == true)) {
+            std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
+            predicates_lock.unlock();
+            (*trigger)(*derived_sst_pointer);
+            predicates_lock.lock();
+        }
+    }
+
+    auto one_time_iter = predicates.one_time_predicates.begin();
+    while(one_time_iter != predicates.one_time_predicates.end()) {
+        if(!*one_time_iter) {
+            one_time_iter = predicates.one_time_predicates.erase(one_time_iter);
+        } else {
+            ++one_time_iter;
+        }
+    }
+    auto recurrent_iter = predicates.recurrent_predicates.begin();
+    while(recurrent_iter != predicates.one_time_predicates.end()) {
+        if(!*recurrent_iter) {
+            recurrent_iter = predicates.one_time_predicates.erase(recurrent_iter);
+        } else {
+            ++recurrent_iter;
+        }
+    }
+}
+
+template <typename DerivedSST>
+SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members, bool start_eval)
         : derived_sst_pointer(derived_sst_pointer),
           row_length(0),
           members(members),
-          memory_regions(members.num_nodes) {
+          memory_regions(members.num_nodes),
+	  start_eval(start_eval) {
+    SSTRegistry::register_sst(this);
 }
 
 /**
@@ -98,8 +157,7 @@ SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection
  */
 template <typename DerivedSST>
 SST<DerivedSST>::~SST() {
-    // unregister predicates - should be just possible when the destructor of predicates is invoked
-    // hopefully
+    SSTRegistry::deregister_sst(this);
 
     delete[](const_cast<char*>(rows));
 }
@@ -107,6 +165,9 @@ SST<DerivedSST>::~SST() {
 template <typename DerivedSST>
 template <typename... Fields>
 void SST<DerivedSST>::initialize(Fields&... fields) {
+    if(initialization_done) {
+        return;
+    }
     //Initialize rows and set the "base" field of each SSTField
     initialize_fields(fields...);
 
@@ -117,6 +178,7 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
                 members.nodes[other_index], local_row_addr,
                 remote_row_addr, row_length);
     }
+    initialization_done = true;
 }
 
 template <typename DerivedSST>
@@ -151,4 +213,10 @@ void SST<DerivedSST>::update_remote_rows(size_t offset, size_t size, bool comple
         memory_region->write_remote(offset, size, completion);
     }
 }
+
+template <typename DerivedSST>
+void SST<DerivedSST>::start_predicate_evaluation() {
+    start_eval = true;
+}
+
 }  // namespace sst

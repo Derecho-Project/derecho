@@ -8,28 +8,25 @@
 #include <iostream>
 #include <list>
 #include <memory>
-#include <mutex>
 #include <numeric>
-#include <stdexcept>
-#include <string.h>
-#include <string>
-#include <thread>
 #include <vector>
 
 #include "node/node.hpp"
 #include "node/nodeCollection.hpp"
+#include "predicate.hpp"
 #include "rdma/memory_region.hpp"
 
-namespace sst {
-using node::node_id_t;
+#include "sst_registry.hpp"
 
+namespace sst {
 constexpr size_t padded_length(const size_t& length) {
-    const uint32_t align_to = 8;
+    const uint8_t align_to = 8;
     return (length < align_to) ? align_to : (length + align_to) | (align_to - 1);
 }
 
 class _SSTField {
-  template <typename T> friend class SST;
+    template <typename T>
+    friend class SST;
 
 private:
     size_t set_base(volatile char* const base);
@@ -61,7 +58,7 @@ public:
     SSTField();
 
     // Tracks down the appropriate row
-    volatile T& operator[](const uint32_t row_index) const;
+    volatile T& operator[](const size_t row_index) const;
 };
 
 /**
@@ -83,14 +80,14 @@ public:
     SSTFieldVector(size_t _size);
 
     // Tracks down the appropriate row
-    volatile T* operator[](const uint32_t& index) const;
+    volatile T* operator[](const size_t& index) const;
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const;
 };
 
 template <class DerivedSST>
-class SST {
+class SST : _SST {
 private:
     DerivedSST* derived_sst_pointer;
 
@@ -98,7 +95,7 @@ private:
     volatile char* rows;
     /** Length of each row in this SST, in bytes. */
     size_t row_length;
-    
+
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
     const node::NodeCollection members;
 
@@ -114,12 +111,16 @@ private:
     void set_bases_and_row_length(volatile char*&);
     template <typename Field, typename... Fields>
     void set_bases_and_row_length(volatile char*& base, Field& f, Fields&... rest);
-  
+
     template <typename... Fields>
     void initialize_fields(Fields&... fields);
+    bool initialization_done = false;
+
+    void evaluate();
+    bool start_eval;
 
 public:
-    SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members);
+    SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members, bool start_eval = true);
 
     ~SST();
 
@@ -136,9 +137,12 @@ public:
     uint32_t get_num_members() const;
     /** Gets the index of the local row in the table. */
     uint32_t get_my_index() const;
-  
+
     /** Update the remote copies of the local row. */
     void update_remote_rows(size_t offset = 0, size_t size = 0, bool completion = false);
+
+    Predicates<DerivedSST> predicates;
+    void start_predicate_evaluation();
 };
 } /* namespace sst */
 
