@@ -51,11 +51,6 @@ public:
  */
 template <typename T>
 class SSTField : public _SSTField {
-public:
-    using _SSTField::base;
-    using _SSTField::field_length;
-    using _SSTField::row_length;
-
     class SSTFieldIterator {
         T* ptr;
         size_t row_length;
@@ -78,6 +73,11 @@ public:
             return *ptr;
         }
     };
+
+public:
+    using _SSTField::base;
+    using _SSTField::field_length;
+    using _SSTField::row_length;
 
     SSTFieldIterator begin() const {
         return SSTFieldIterator((T*)base, row_length);
@@ -104,15 +104,46 @@ class SSTFieldVector : public _SSTField {
 private:
     const size_t _size;
 
+    class SSTFieldIterator {
+        T* ptr;
+        size_t row_length;
+
+    public:
+        SSTFieldIterator(T* ptr, size_t row_length)
+                : ptr(ptr),
+                  row_length(row_length) {
+        }
+        bool operator!=(const SSTFieldIterator& other) const {
+            return ptr != other.ptr;
+        }
+
+        SSTFieldIterator operator++() {
+            ptr = (T*)((char*)ptr + row_length);
+            return *this;
+        }
+
+        T* operator*() const {
+            return ptr;
+        }
+    };
+
 public:
     using _SSTField::base;
     using _SSTField::field_length;
     using _SSTField::row_length;
 
+    SSTFieldIterator begin() const {
+        return SSTFieldIterator((T*)base, row_length);
+    }
+
+    SSTFieldIterator end() const {
+        return SSTFieldIterator((T*)(base + num_nodes * row_length), row_length);
+    }
+
     SSTFieldVector(size_t _size);
 
     // Tracks down the appropriate row
-    volatile T* operator[](const size_t& index) const;
+    volatile T* operator[](const size_t& row_index) const;
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const;

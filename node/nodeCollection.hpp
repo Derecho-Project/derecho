@@ -12,14 +12,12 @@ namespace node {
 class NodeCollection {
     std::map<node_id_t, uint32_t> node_id_to_rank;
 
-    // Credits: https://stackoverflow.com/a/28926968/2938004
     template <typename elementType>
     class Splice {
         elementType* ptr;
         uint32_t my_rank;
         uint32_t num_nodes;
 
-    public:
         class SplicedIterator {
             elementType* ptr;
             uint32_t my_rank;
@@ -47,6 +45,8 @@ class NodeCollection {
                 return *ptr;
             }
         };
+
+    public:
         SplicedIterator begin() const {
             if(my_rank == 0) {
                 return SplicedIterator(ptr + 1, my_rank, 1);

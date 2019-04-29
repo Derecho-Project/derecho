@@ -51,8 +51,8 @@ SSTFieldVector<T>::SSTFieldVector(size_t _size) : _SSTField(_size * sizeof(T)), 
 }
 
 template <typename T>
-volatile T* SSTFieldVector<T>::operator[](const size_t& index) const {
-    return (T*)(base + index * row_length);
+volatile T* SSTFieldVector<T>::operator[](const size_t& row_index) const {
+    return (T*)(base + row_index * row_length);
 }
 
 template <typename T>

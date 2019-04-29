@@ -15,7 +15,7 @@ public:
      * Local count of number of received messages by sender.  For each
      * sender k, received_num[k] is the number received (a.k.a. "locally stable").
      */
-    SSTFieldVector<int32_t> received_num;
+    SSTFieldVector<int32_t> received_nums;
     // MulticastGroup members, related only to tracking message delivery
     /**
      * Sequence numbers are interpreted like a row-major pair:
@@ -43,21 +43,16 @@ public:
      */
     SSTField<msg_id_t> persisted_num;
     /**
-     * reports that this member in this subgroup is wedged.
-     * Must be after num_received!
-     */
-    SSTField<bool> wedged;
-    /**
      * Array of how many messages to accept from each sender in the current
      * view change.
      */
-    SSTFieldVector<msg_id_t> min_accepted_num;
+    SSTFieldVector<msg_id_t> min_accepted_nums;
     /**
      * Boolean indicating whether the shard leader
      * has published a ragged edge for the current view change
      */
     SSTField<bool> ragged_edge_computed;
 
-    SubgroupSST(node::NodeCollection subgroup_members);
+    SubgroupSST(const node::NodeCollection& members);
 };
 }  // namespace subgroup
