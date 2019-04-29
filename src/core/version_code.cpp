@@ -34,9 +34,6 @@ char int64_array[8]{1, 2, 3, 4, 5, 6, 7, 8};
 float a_float = 123.4560001;
 double a_double = 654.3210000987;
 
-// Runtime measurement of structure padding rules
-char** dnull_ptr = 0;
-
 struct s1 {
     char something;
     int16_t the_int;
