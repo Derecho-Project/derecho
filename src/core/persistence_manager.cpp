@@ -51,6 +51,7 @@ void PersistenceManager::start() {
     // if(replicated_objects == nullptr) return;
 
     this->persist_thread = std::thread{[this]() {
+        pthread_setname_np(pthread_self(), "persist");
         do {
             // wait for semaphore
             sem_wait(&persistence_request_sem);

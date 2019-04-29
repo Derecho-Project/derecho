@@ -141,7 +141,7 @@ void SST<DerivedSST>::detect() {
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size) {
     assert(offset + size <= rowLen);
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
@@ -155,7 +155,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, long long 
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size) {
+void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size) {
     assert(offset + size <= rowLen);
     unsigned int num_writes_posted = 0;
     std::vector<bool> posted_write_to(num_members, false);

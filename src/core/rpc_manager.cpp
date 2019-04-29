@@ -22,6 +22,10 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::create_connections() {
+    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+}
+
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
     //Delete receiver functions that were added by this class/subgroup
     for(auto receivers_iterator = receivers->begin();
@@ -268,7 +272,7 @@ void RPCManager::fifo_worker() {
 
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
-    uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
 

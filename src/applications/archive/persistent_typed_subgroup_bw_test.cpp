@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     if(strcmp(argv[1], "half") == 0) sender_selector = 1;
     if(strcmp(argv[1], "one") == 0) sender_selector = 2;
     int num_of_nodes = atoi(argv[2]);
-    int msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     int count = atoi(argv[3]);
     struct timespec t1, t2, t3;
 
