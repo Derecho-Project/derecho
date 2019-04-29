@@ -260,14 +260,12 @@ void P2PConnections::debug_print() {
             std::cout << "incoming seq_nums:";
             for(uint32_t i = 0; i < window_size; ++i) {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
-                std::cout << " " << reinterpret_cast<uint64_t>(
-                        const_cast<char*>(incoming_p2p_buffers[node].get()) + offset);
+                std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
             }
             std::cout << std::endl << "outgoing seq_nums:";
             for(uint32_t i = 0; i < window_size; ++i) {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
-                std::cout << " " << reinterpret_cast<uint64_t>(
-                        const_cast<char*>(outgoing_p2p_buffers[node].get()) + offset);
+                std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
             }
 	    std::cout << std::endl;
         }
