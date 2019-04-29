@@ -51,7 +51,6 @@ P2PConnections::P2PConnections(const P2PParams params)
     }
 
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
-    debug_print();
 }
 
 P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members)
@@ -94,8 +93,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
             for(auto type : p2p_request_types) {
-                incoming_seq_nums_map[type][i] = old_connections.incoming_seq_nums_map[type][i];
-                outgoing_seq_nums_map[type][i] = old_connections.outgoing_seq_nums_map[type][i];
+                incoming_seq_nums_map[type][i] = old_connections.incoming_seq_nums_map[type][old_rank];
+                outgoing_seq_nums_map[type][i] = old_connections.outgoing_seq_nums_map[type][old_rank];
             }
             if(i != my_index) {
                 res_vec[i] = std::move(old_connections.res_vec[old_rank]);
@@ -104,7 +103,6 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     }
 
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
-    debug_print();
 }
 
 P2PConnections::~P2PConnections() {
