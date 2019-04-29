@@ -57,9 +57,9 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
-                sst->slots[i][max_msg_size * j] = 0;
-                (uint64_t&)sst->slots[i][max_msg_size * (j + 1) - sizeof(uint64_t)] = 0;
+            for(uint j = 0; j < window_size; ++j) {
+                sst->slots[i][slots_offset + max_msg_size * j] = 0;
+                (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
             }
         }
         sst->sync_with_members(row_indices);
@@ -120,8 +120,8 @@ public:
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
                 // set size appropriately
-                (uint64_t&)sst->slots[my_row][max_msg_size * (slots_offset + slot + 1) - 2 * sizeof(uint64_t)] = msg_size;
-                return &sst->slots[my_row][max_msg_size * (slots_offset + slot)];
+                (uint64_t&)sst->slots[my_row][slots_offset + (max_msg_size * (slot + 1)) - 2 * sizeof(uint64_t)] = msg_size;
+                return &sst->slots[my_row][slots_offset + (max_msg_size * slot)];
             } else {
                 long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
                 for(auto i : row_indices) {
@@ -140,25 +140,27 @@ public:
     void send() {
         uint32_t slot = num_sent % window_size;
         num_sent++;
-        ((uint64_t&)sst->slots[my_row][max_msg_size * (slots_offset + slot + 1) - sizeof(uint64_t)])++;
+        ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
         sst->put(
-                (char*)std::addressof(sst->slots[0][max_msg_size * (slots_offset + slot)]) - sst->getBaseAddress(),
+                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
                 max_msg_size - sizeof(uint64_t));
         sst->put(
-                (char*)std::addressof(sst->slots[0][max_msg_size * (slots_offset + slot)]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
+                (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
                 sizeof(uint64_t));
     }
 
     void debug_print() {
         using std::cout;
         using std::endl;
+        cout << "Printing slots::next_seq" << endl;
         for(auto i : row_indices) {
-            cout << "Printing slots::next_seq" << endl;
-            for(uint j = slots_offset; j < slots_offset + window_size; ++j) {
-                cout << (uint64_t&)sst->slots[i][max_msg_size * (j + 1) - sizeof(uint64_t)] << " ";
+            for(uint j = 0; j < window_size; ++j) {
+                cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
             }
             cout << endl;
-            cout << "Printing num_received_sst" << endl;
+        }
+        cout << "Printing num_received_sst" << endl;
+        for(auto i : row_indices) {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 cout << sst->num_received_sst[i][j] << " ";
             }

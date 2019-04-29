@@ -78,7 +78,11 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
         //Ensure a view change isn't in progress
         std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
         size_t size;
-        auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
+        std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
+                                               ->multicast_group->get_subgroup_settings()
+                                               .at(subgroup_id)
+                                               .profile.max_msg_size
+                                       - sizeof(header);
         auto return_pair = wrapped_this->template send<tag>(
                 [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
                     size = _size;
@@ -112,8 +116,12 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                 std::forward<Args>(args)...))>::type;
         rpc::QueryResults<Ret>* results_ptr;
         rpc::PendingResults<Ret>* pending_ptr;
-        uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
         auto serializer = [&](char* buffer) {
+            std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
+                                                   ->multicast_group->get_subgroup_settings()
+                                                   .at(subgroup_id)
+                                                   .profile.max_msg_size
+                                           - sizeof(header);
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
@@ -224,10 +232,10 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
         //Ensure a view change isn't in progress
         std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
         size_t size;
-        auto max_payload_size = group_rpc_manager.view_manager.curr_view->multicast_group->max_msg_size - sizeof(header);
         auto return_pair = wrapped_this->template send<tag>(
-                [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
+                [this, &dest_node, &size](size_t _size) -> char* {
                     size = _size;
+                    const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);

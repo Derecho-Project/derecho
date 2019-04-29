@@ -1,6 +1,7 @@
 Full source documentation can be found at https://derecho-project.github.io/.
 
-# Derecho
+
+# Derecho [![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 This is the main repository for the Derecho project. It unifies the RDMC, SST, and Derecho modules under a single, easy-to-use repository. 
 
 ## Intended use cases and assumptions.
@@ -45,15 +46,15 @@ Once cloning is complete, to build the code, `cd` into the `derecho` directory a
 * `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<path-to-install-dir> ..`
 * ``make -j `lscpu | grep "^CPU(" | awk '{print $2}'` ``
 
-This will place the binaries and libraries in the sub-dierectories of `Release`.
+This will place the binaries and libraries in the sub-directories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
 Once the project is built, install it by run:
 * `make install`
 
-By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` priviledge to write to system directories.
+By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` privileges to write to system directories.
 
-Successful installtion will set up the followings in `$DESTDIR`:
+Successful installation will set up the followings in `$DESTDIR`:
 * `include/derecho` - the header files
 * `lib/libderecho.so` - the main shared library
 * `lib/libdpods.so` - the derecho Old-Plain-Data storage library
@@ -349,7 +350,7 @@ public:
 	
 For simplicity, the versioned type is int in this example. You set it up in the same way as a non-versioned member of a replicated object, except that you need to pass the PersistentRegistry from the constructor of the replicated object to the constructor of the `Persistent<T>`. Derecho uses PersistentRegistry to keep track of all the Persistent<T> objects in a single Replicated Object so that it can create versions on updates. The Persistent<T> constructor registers itself in the registry.
 
-By default, the Persistent<T> stores its log in the filesystem (in a folder called .plog in the current directory). Application can specify memory as the storage location by setting the second template parameter: `Persistent<T,ST_MEM>` (or `Volatile<T>` as syntactic sugar). We are working on more store storage types including NVM.
+By default, the Persistent<T> stores its log in the file-system (in a folder called .plog in the current directory). Application can specify memory as the storage location by setting the second template parameter: `Persistent<T,ST_MEM>` (or `Volatile<T>` as syntactic sugar). We are working on more store storage types including NVM.
 
 Once the version vector is set up with Derecho, the application can query the value with the get() APIs in Persistent<T>. In [persistent_temporal_query_test.cpp](https://github.com/Derecho-Project/derecho/blob/master/derecho/experiments/persistent_temporal_query_test.cpp), a temporal query example is illustrated.
 

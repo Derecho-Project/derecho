@@ -46,7 +46,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 std::shared_ptr<IDeserializationContext> deserialization_context,
+                                 IDeserializationContext *deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
@@ -80,7 +80,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager, deserialization_context.get()),
+          rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
@@ -118,6 +118,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     }
     //Once the initial view is committed, we can make RDMA connections
     view_manager.initialize_multicast_groups(callbacks);
+    rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
     view_manager.finish_setup();
@@ -316,7 +317,11 @@ void Group<ReplicatedTypes...>::report_failure(const node_id_t who) {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::leave() {
+void Group<ReplicatedTypes...>::leave(bool group_shutdown) {
+    if(group_shutdown) {
+        view_manager.silence();
+        view_manager.barrier_sync();
+    }
     view_manager.leave();
 }
 

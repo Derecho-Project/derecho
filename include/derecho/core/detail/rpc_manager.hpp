@@ -154,8 +154,8 @@ public:
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               view_manager(group_view_manager),
-              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.derecho_params.window_size, group_view_manager.derecho_params.max_payload_size})),
-              replySendBuffer(new char[group_view_manager.derecho_params.max_payload_size]) {
+              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.view_max_window_size, group_view_manager.view_max_payload_size})),
+              replySendBuffer(new char[group_view_manager.view_max_payload_size + sizeof(header)]) {
         if(deserialization_context_ptr != nullptr) {
             rdv.push_back(deserialization_context_ptr);
         }
@@ -163,6 +163,8 @@ public:
     }
 
     ~RPCManager();
+
+    void create_connections();
 
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P

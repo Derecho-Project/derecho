@@ -6,9 +6,9 @@
 
 #include <vector>
 
+#include <derecho/core/derecho_modes.hpp>
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/derecho_internal.hpp>
-#include <derecho/core/derecho_modes.hpp>
 #include <derecho/core/subgroup_functions.hpp>
 #include <derecho/core/view.hpp>
 
@@ -40,20 +40,17 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
                                            int max_nodes_per_shard) {
     return ShardAllocationPolicy{
-            num_shards, true, min_nodes_per_shard, max_nodes_per_shard,
-            Mode::ORDERED, {}, {}, {}};
+            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, {}, {}, {}};
 }
 
 ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard,
-            Mode::ORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, {}, {}, {}};
 }
 
 ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard) {
     return ShardAllocationPolicy{
-        num_shards, true, nodes_per_shard, nodes_per_shard,
-        Mode::UNORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, {}, {}, {}};
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
@@ -79,11 +76,10 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
         subgroup_allocation_map_t& subgroup_layouts) const {
     //First, determine how many nodes each shard can have based on their policies
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes
-            = compute_standard_shard_sizes(subgroup_type_order, curr_view);
+            = compute_standard_shard_sizes(subgroup_type_order, prev_view, curr_view);
     //Now we can go through and actually allocate nodes to each shard,
     //knowing exactly how many nodes they will get
     if(!prev_view) {
-        //The very first allocation is the easy case
         for(const auto& subgroup_type : subgroup_type_order) {
             //Ignore cross-product-allocated types
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
@@ -93,12 +89,6 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
                     allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes));
         }
     } else {
-        //First determine which nodes will need to get reassigned from one shard to another
-        //(based on their previous shard getting assigned a smaller size)
-        std::list<node_id_t> free_reassigned_nodes = find_reassigned_nodes(
-                subgroup_type_order, prev_view, curr_view, shard_sizes);
-        //Now we can go through and update the subgroups in order, already knowing
-        //whether an earlier subgroup will need to "take" a member from a later one
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
             ++subgroup_type_id) {
             //We need to both iterate through this vector and keep the counter in order to know the type IDs
@@ -108,8 +98,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             }
             subgroup_layouts[subgroup_type] = std::move(
                     update_standard_subgroup_type(subgroup_type, subgroup_type_id,
-                                                  prev_view, curr_view, shard_sizes,
-                                                  free_reassigned_nodes));
+                                                  prev_view, curr_view, shard_sizes));
         }
     }
 }
@@ -117,28 +106,49 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
 std::map<std::type_index, std::vector<std::vector<uint32_t>>>
 DefaultSubgroupAllocator::compute_standard_shard_sizes(
         const std::vector<std::type_index>& subgroup_type_order,
+        const std::unique_ptr<View>& prev_view,
         const View& curr_view) const {
     //First, determine how many nodes we will need for a minimal allocation
     int nodes_needed = 0;
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes;
-    for(const auto& type_and_policy : policies) {
-        if(!std::holds_alternative<SubgroupAllocationPolicy>(type_and_policy.second)) {
+    for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size(); ++subgroup_type_id) {
+        const std::type_index& subgroup_type = subgroup_type_order[subgroup_type_id];
+        //Get the policy for this subgroup type, if and only if it's a "standard" policy
+        if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
             continue;
         }
         const SubgroupAllocationPolicy& subgroup_type_policy
-                = std::get<SubgroupAllocationPolicy>(type_and_policy.second);
-        shard_sizes.emplace(type_and_policy.first,
+                = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+
+        shard_sizes.emplace(subgroup_type,
                             std::vector<std::vector<uint32_t>>(subgroup_type_policy.num_subgroups));
         for(int subgroup_num = 0; subgroup_num < subgroup_type_policy.num_subgroups; ++subgroup_num) {
             const ShardAllocationPolicy& sharding_policy
                     = subgroup_type_policy.identical_subgroups
                               ? subgroup_type_policy.shard_policy_by_subgroup[0]
                               : subgroup_type_policy.shard_policy_by_subgroup[subgroup_num];
-            shard_sizes[type_and_policy.first][subgroup_num].resize(sharding_policy.num_shards);
+            shard_sizes[subgroup_type][subgroup_num].resize(sharding_policy.num_shards);
             for(int shard_num = 0; shard_num < sharding_policy.num_shards; ++shard_num) {
                 int min_shard_size = sharding_policy.even_shards ? sharding_policy.min_nodes_per_shard
                                                                  : sharding_policy.min_num_nodes_by_shard[shard_num];
-                shard_sizes[type_and_policy.first][subgroup_num][shard_num] = min_shard_size;
+                //If there was a previous view, we must include all non-failed nodes from that view
+                if(prev_view) {
+                    const subgroup_id_t previous_assignment_offset
+                            = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)[0];
+                    const SubView& previous_shard_assignment
+                            = prev_view->subgroup_shard_views[previous_assignment_offset + subgroup_num]
+                                                             [shard_num];
+                    int num_nonfailed_nodes = 0;
+                    for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
+                        if(curr_view.rank_of(previous_shard_assignment.members[rank]) != -1) {
+                            num_nonfailed_nodes++;
+                        }
+                    }
+                    if(num_nonfailed_nodes > min_shard_size) {
+                        min_shard_size = num_nonfailed_nodes;
+                    }
+                }
+                shard_sizes[subgroup_type][subgroup_num][shard_num] = min_shard_size;
                 nodes_needed += min_shard_size;
             }
         }
@@ -154,12 +164,12 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
     while(!done_adding) {
         //This starts at true, but if any shard combines it with false, it will be false
         bool all_at_max = true;
-        for(const auto& type_and_policy : policies) {
-            if(!std::holds_alternative<SubgroupAllocationPolicy>(type_and_policy.second)) {
+        for(const auto& subgroup_type : subgroup_type_order) {
+            if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
             const SubgroupAllocationPolicy& subgroup_type_policy
-                    = std::get<SubgroupAllocationPolicy>(type_and_policy.second);
+                    = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
             for(int subgroup_num = 0; subgroup_num < subgroup_type_policy.num_subgroups; ++subgroup_num) {
                 const ShardAllocationPolicy& sharding_policy
                         = subgroup_type_policy.identical_subgroups
@@ -173,12 +183,12 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                         done_adding = true;
                         break;
                     }
-                    if(shard_sizes[type_and_policy.first][subgroup_num][shard_num] < max_shard_members) {
-                        shard_sizes[type_and_policy.first][subgroup_num][shard_num]++;
+                    if(shard_sizes[subgroup_type][subgroup_num][shard_num] < max_shard_members) {
+                        shard_sizes[subgroup_type][subgroup_num][shard_num]++;
                         nodes_needed++;
                     }
                     all_at_max = all_at_max
-                                 && shard_sizes[type_and_policy.first][subgroup_num][shard_num]
+                                 && shard_sizes[subgroup_type][subgroup_num][shard_num]
                                             == max_shard_members;
                 }
             }
@@ -229,8 +239,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
         const subgroup_type_id_t subgroup_type_id,
         const std::unique_ptr<View>& prev_view,
         View& curr_view,
-        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
-        std::list<node_id_t>& free_reassigned_nodes) const {
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
     /* Subgroups of the same type will have contiguous IDs because they were created in order.
      * So the previous assignment is the slice of the previous subgroup_shard_views vector
      * starting at the first subgroup's ID, and extending for num_subgroups entries.
@@ -247,31 +256,20 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             std::vector<node_id_t> next_shard_members;
             std::vector<int> next_is_sender;
             uint32_t allocated_shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
-            //Add as many nodes as possible from the previous assignment
+            //Add all the non-failed nodes from the previous assignment
             for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
                 if(curr_view.rank_of(previous_shard_assignment.members[rank]) == -1) {
                     continue;
-                }
-                //Stop as soon as we reach the allocated size; the remaining live nodes
-                //have already been marked as "reassigned nodes"
-                if(next_shard_members.size() == allocated_shard_size) {
-                    break;
                 }
                 next_shard_members.push_back(previous_shard_assignment.members[rank]);
                 next_is_sender.push_back(previous_shard_assignment.is_sender[rank]);
             }
             //Add additional members if needed
             while(next_shard_members.size() < allocated_shard_size) {
-                //Pull from reassigned_nodes first, since there might not be enough unassigned nodes
-                if(free_reassigned_nodes.size() > 0) {
-                    next_shard_members.push_back(free_reassigned_nodes.front());
-                    free_reassigned_nodes.pop_front();
-                } else {
-                    //This must be true if compute_standard_shard_sizes said our view was adequate
-                    assert(curr_view.next_unassigned_rank < (int)curr_view.members.size());
-                    next_shard_members.push_back(curr_view.members[curr_view.next_unassigned_rank]);
-                    curr_view.next_unassigned_rank++;
-                }
+                //This must be true if compute_standard_shard_sizes said our view was adequate
+                assert(curr_view.next_unassigned_rank < (int)curr_view.members.size());
+                next_shard_members.push_back(curr_view.members[curr_view.next_unassigned_rank]);
+                curr_view.next_unassigned_rank++;
                 //All members start out as senders with the default allocator
                 next_is_sender.push_back(true);
             }
@@ -281,46 +279,6 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
         }
     }
     return next_assignment;
-}
-
-std::list<node_id_t> DefaultSubgroupAllocator::find_reassigned_nodes(
-        const std::vector<std::type_index>& subgroup_type_order,
-        const std::unique_ptr<View>& prev_view, const View& curr_view,
-        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
-    std::list<node_id_t> reassigned_nodes;
-    for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size(); ++subgroup_type_id) {
-        const std::type_index& subgroup_type = subgroup_type_order[subgroup_type_id];
-        if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
-            continue;
-        }
-        //Computed the same way as in update_standard_subgroup_type
-        const subgroup_id_t previous_assignment_offset
-                = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)[0];
-        for(uint32_t subgroup_num = 0; subgroup_num < shard_sizes.at(subgroup_type).size(); ++subgroup_num) {
-            for(uint32_t shard_num = 0; shard_num < shard_sizes.at(subgroup_type)[subgroup_num].size();
-                ++shard_num) {
-                const SubView& previous_shard_assignment
-                        = prev_view->subgroup_shard_views[previous_assignment_offset + subgroup_num]
-                                                         [shard_num];
-                uint32_t allocated_shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
-                uint32_t num_nodes_kept = 0;
-                /* Go through the previous assignment and check if each one is still alive.
-                 * The first allocated_shard_size live nodes can be kept for the next
-                 * assignment, but any beyond that must be reassigned to other shards. */
-                for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
-                    if(curr_view.rank_of(previous_shard_assignment.members[rank]) == -1) {
-                        continue;
-                    }
-                    if(num_nodes_kept < allocated_shard_size) {
-                        num_nodes_kept++;
-                    } else {
-                        reassigned_nodes.push_back(previous_shard_assignment.members[rank]);
-                    }
-                }
-            }
-        }
-    }
-    return reassigned_nodes;
 }
 
 void DefaultSubgroupAllocator::compute_cross_product_memberships(

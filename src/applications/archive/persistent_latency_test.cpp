@@ -68,7 +68,7 @@ int main(int argc, char *argv[]) {
     uint32_t count = (uint32_t)atoi(argv[3]);
     int max_ops = atoi(argv[4]);
     uint64_t si_us = (1000000l / max_ops);
-    uint64_t msg_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     bool is_sending = true;
     uint32_t node_rank = -1;
     // message_pers_ts_us[] is the time when a message with version 'ver' is persisted.
