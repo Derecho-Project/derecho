@@ -10,8 +10,6 @@ namespace node {
 // caches important node id and rank logistics
 // stores lots of redundant data
 class NodeCollection {
-    std::map<node_id_t, uint32_t> node_id_to_rank;
-
     template <typename elementType>
     class Splice {
         elementType* ptr;
@@ -60,6 +58,8 @@ class NodeCollection {
                                                                          my_rank(my_rank),
                                                                          num_nodes(num_nodes) {}
     };
+
+    std::map<node_id_t, uint32_t> node_id_to_rank;
 
 public:
     NodeCollection(const std::vector<node_id_t>& nodes, const node_id_t my_id);

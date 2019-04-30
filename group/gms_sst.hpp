@@ -1,7 +1,7 @@
 #pragma once
 
 #include "sst/sst.hpp"
-#include "node/nodeCollection.hpp"
+#include "node/node_collection.hpp"
 
 namespace group {
 using sst::SSTField;

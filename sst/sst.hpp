@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "node/node.hpp"
-#include "node/nodeCollection.hpp"
+#include "node/node_collection.hpp"
 #include "predicate.hpp"
 #include "rdma/memory_region.hpp"
 
@@ -155,7 +155,7 @@ private:
     DerivedSST* derived_sst_pointer;
 
     /** Pointer to memory where the SST rows are stored. */
-    volatile char* rows;
+    std::unique_ptr<volatile char[]> rows;
     /** Length of each row in this SST, in bytes. */
     size_t row_length;
 

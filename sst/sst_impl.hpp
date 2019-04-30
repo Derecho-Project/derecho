@@ -86,8 +86,8 @@ template <typename DerivedSST>
 template <typename... Fields>
 void SST<DerivedSST>::initialize_fields(Fields&... fields) {
     compute_row_length(fields...);
-    rows = new char[row_length * members.num_nodes];
-    volatile char* base = rows;
+    rows = std::make_unique<volatile char[]>(row_length * members.num_nodes);
+    volatile char* base = rows.get();
     set_field_params(base, fields...);
 }
 
@@ -163,8 +163,6 @@ SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection
 template <typename DerivedSST>
 SST<DerivedSST>::~SST() {
     SSTRegistry::deregister_sst(this);
-
-    delete[](const_cast<char*>(rows));
 }
 
 template <typename DerivedSST>
@@ -177,8 +175,8 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
     initialize_fields(fields...);
 
     for(uint32_t other_index : members.other_ranks) {
-        char* local_row_addr = const_cast<char*>(rows) + row_length * members.my_rank;
-        char* remote_row_addr = const_cast<char*>(rows) + row_length * other_index;
+        char* local_row_addr = const_cast<char*>(rows.get()) + row_length * members.my_rank;
+        char* remote_row_addr = const_cast<char*>(rows.get()) + row_length * other_index;
         memory_regions[other_index] = std::make_unique<rdma::MemoryRegion>(
                 members.nodes[other_index], local_row_addr,
                 remote_row_addr, row_length);
@@ -188,7 +186,7 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
 
 template <typename DerivedSST>
 const char* SST<DerivedSST>::get_base_address() {
-    return const_cast<char*>(rows);
+    return const_cast<char*>(rows.get());
 }
 
 /**

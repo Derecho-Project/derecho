@@ -7,7 +7,7 @@
 #include <numeric>
 
 #include "node/node.hpp"
-#include "node/nodeCollection.hpp"
+#include "node/node_collection.hpp"
 #include "sst/sst.hpp"
 
 using std::cin;

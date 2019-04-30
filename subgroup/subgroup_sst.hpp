@@ -1,7 +1,7 @@
 #pragma once
 
 #include "msg/msg.hpp"
-#include "node/nodeCollection.hpp"
+#include "node/node_collection_with_senders.hpp"
 #include "sst/sst.hpp"
 
 namespace subgroup {
@@ -53,6 +53,6 @@ public:
      */
     SSTField<bool> ragged_edge_computed;
 
-    SubgroupSST(const node::NodeCollection& members);
+    SubgroupSST(const node::NodeCollectionWithSenders& members_with_senders_info);
 };
 }  // namespace subgroup

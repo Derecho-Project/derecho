@@ -1,16 +1,16 @@
 #include "multicast_sst.hpp"
 
-MulticastSST::MulticastSST(const node::nodeCollection& members, size_t slot_size)
+MulticastSST::MulticastSST(const node::NodeCollectionWithSenders& members_with_senders_info, size_t slot_size)
         : window_size(window_size),
           max_msg_size(max_msg_size),
           slots(window_size * max_msg_size),
-          received_num(members.num_nodes) {
-    initialize(slots, received_num);
+          received_nums(members_with_senders_info.num_senders) {
+    initialize(slots, received_nums);
 
     // just initialize received_num, no need to zero slots
-    for(auto row = 0u; row < members.num_nodes; ++row) {
-        for(auto index = 0u; index < members.num_nodes; ++index) {
-            received_num[row][index] = -1;
+    for(auto row = 0u; row < members_with_senders_info.num_nodes; ++row) {
+        for(auto index = 0u; index < members_with_senders_info.num_senders; ++index) {
+            received_nums[row][index] = -1;
         }
     }
     sync_with_members();

@@ -6,4 +6,4 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3")
 include_directories(${derecho_SOURCE_DIR})
 
-ADD_LIBRARY(node SHARED nodeCollection.cpp)
+ADD_LIBRARY(node SHARED node_collection.cpp node_collection_with_senders.cpp)

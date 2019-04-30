@@ -1,4 +1,5 @@
-#include "nodeCollection.hpp"
+#include "node_collection.hpp"
+#include "exception/node_exceptions.hpp"
 
 namespace node {
 uint32_t get_my_rank(const std::vector<node_id_t>& nodes, const node_id_t my_id) {
@@ -7,7 +8,7 @@ uint32_t get_my_rank(const std::vector<node_id_t>& nodes, const node_id_t my_id)
             return rank;
         }
     }
-    throw "my_id not found in members";
+    throw NodeIDNotFound("My id, which is " + std::to_string(my_id) + ", not found in the list of members");
 }
 
 std::vector<uint32_t> get_other_ranks(const uint32_t my_rank, const uint32_t num_nodes) {
@@ -33,6 +34,10 @@ NodeCollection::NodeCollection(const std::vector<node_id_t>& nodes, const node_i
 }
 
 uint32_t NodeCollection::get_rank_of(node_id_t node_id) const {
-    return node_id_to_rank.at(my_id);
+    try {
+        return node_id_to_rank.at(my_id);
+    } catch(std::out_of_range) {
+        throw IDNotInMembers("ID " + std::to_string(node_id) + " not found in the list of memebers");
+    }
 }
 } // namespace node
