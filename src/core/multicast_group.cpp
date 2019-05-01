@@ -32,7 +32,7 @@ MulticastGroup::MulticastGroup(
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         unsigned int sender_timeout,
-	    const subgroup_post_next_version_func_t& post_next_version_callback,
+        const subgroup_post_next_version_func_t& post_next_version_callback,
         const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : members(_members),
@@ -244,7 +244,6 @@ MulticastGroup::MulticastGroup(
 }
 
 bool MulticastGroup::create_rdmc_sst_groups() {
-
     for(const auto& p : subgroup_settings_map) {
         uint32_t subgroup_num = p.first;
         const SubgroupSettings& subgroup_settings = p.second;
@@ -1147,7 +1146,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
                                          long long unsigned int payload_size,
                                          bool cooked_send) {
     long long unsigned int msg_size = payload_size + sizeof(header);
-    const SubgroupSettings &subgroup_settings = subgroup_settings_map.at(subgroup_num);
+    const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
         std::cout << "Can't send messages of size larger than the maximum message "
                      "size which is equal to "
@@ -1308,7 +1307,7 @@ void MulticastGroup::debug_print() {
     cout << "Printing SST" << endl;
     for(const auto& p : subgroup_settings_map) {
         uint32_t subgroup_num = p.first;
-	auto subgroup_settings = p.second;
+        auto subgroup_settings = p.second;
         cout << "Subgroup " << subgroup_num << endl;
         auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
         cout << "Printing seq_num, delivered_num" << endl;
@@ -1319,13 +1318,13 @@ void MulticastGroup::debug_print() {
         for(auto i : shard_sst_indices) {
             uint32_t num_shard_senders = subgroup_settings.senders.size();
             for(uint j = 0; j < num_shard_senders; ++j) {
-	      cout << sst->num_received[i][subgroup_settings.num_received_offset + j] << " ";
+                cout << sst->num_received[i][subgroup_settings.num_received_offset + j] << " ";
             }
-	    cout << endl;
+            cout << endl;
         }
-	cout << "Printing multicastSST fields" << endl;
-	sst_multicast_group_ptrs[subgroup_num]->debug_print();
-	cout << endl;
+        cout << "Printing multicastSST fields" << endl;
+        sst_multicast_group_ptrs[subgroup_num]->debug_print();
+        cout << endl;
     }
 }
 

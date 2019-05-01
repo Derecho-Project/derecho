@@ -24,8 +24,8 @@ PersistenceManager::PersistenceManager(
 
 /** default Constructor
  */
-PersistenceManager::PersistenceManager(const persistence_callback_t& _persistence_callback) : 
-PersistenceManager(nullptr, _persistence_callback) {}
+PersistenceManager::PersistenceManager(const persistence_callback_t& _persistence_callback)
+        : PersistenceManager(nullptr, _persistence_callback) {}
 
 /** default Destructor
  */
@@ -121,7 +121,7 @@ void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, 
 
 /** make a version */
 void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
-                  const persistent::version_t& version, const HLC& mhlc) {
+                                      const persistent::version_t& version, const HLC& mhlc) {
     auto search = ptr_objects_by_subgroup_id->find(subgroup_id);
     if(search != ptr_objects_by_subgroup_id->end()) {
         search->second.get().make_version(version, mhlc);

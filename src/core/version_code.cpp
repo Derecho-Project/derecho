@@ -16,8 +16,9 @@ const uint64_t  compiler = ISCLANG | (__clang_major__ << 16) + __clang_minor__ )
 #endif
 
 const uint64_t derecho_version = ((((static_cast<uint64_t>(derecho::MAJOR_VERSION) << 16)
-        + derecho::MINOR_VERSION) << 32)
-        + derecho::COMMITS_AHEAD_OF_VERSION);
+                                    + derecho::MINOR_VERSION)
+                                   << 32)
+                                  + derecho::COMMITS_AHEAD_OF_VERSION);
 
 /*
  * The following variables are for detection of Endian order for integers.

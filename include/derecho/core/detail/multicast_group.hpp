@@ -73,8 +73,8 @@ struct DerechoParams : public mutils::ByteRepresentable {
             const long long unsigned int block_size,
             bool using_rdmc) {
         auto max_msg_size = max_payload_size + sizeof(header);
-        if (using_rdmc) {
-            if (max_msg_size % block_size != 0) {
+        if(using_rdmc) {
+            if(max_msg_size % block_size != 0) {
                 max_msg_size = (max_msg_size / block_size + 1) * block_size;
             }
         }
@@ -110,7 +110,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
               rpc_port(rpc_port) {
         //if this is initialized above, DerechoParams turns abstract. idk why.
         max_msg_size = compute_max_msg_size(max_payload_size, block_size,
-                max_payload_size > max_smc_payload_size);
+                                            max_payload_size > max_smc_payload_size);
     }
 
     DerechoParams() {}
@@ -124,8 +124,8 @@ struct DerechoParams : public mutils::ByteRepresentable {
         // Use the profile string to search the configuration file for the appropriate
         // settings. If they do not exist, then we should utilize the defaults
         std::string prefix = "SUBGROUP/" + profile + "/";
-        for (auto &field : Conf::subgroupProfileFields) {
-            if (!hasCustomizedConfKey(prefix + field)) {
+        for(auto& field : Conf::subgroupProfileFields) {
+            if(!hasCustomizedConfKey(prefix + field)) {
                 std::cout << "profile " << profile << " not found in SUBGROUP section of derecho conf. Look at derecho-sample.cfg for more information." << std::endl;
                 throw profile + " derecho subgroup profile not found";
             }
@@ -139,14 +139,14 @@ struct DerechoParams : public mutils::ByteRepresentable {
         const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[4]);
         uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
 
-        return DerechoParams {
-            max_payload_size,
-            max_smc_payload_size,
-            block_size,
-            window_size,
-            timeout_ms,
-            DerechoParams::send_algorithm_from_string(algorithm),
-            rpc_port,
+        return DerechoParams{
+                max_payload_size,
+                max_smc_payload_size,
+                block_size,
+                window_size,
+                timeout_ms,
+                DerechoParams::send_algorithm_from_string(algorithm),
+                rpc_port,
         };
     }
 
@@ -452,7 +452,7 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             unsigned int sender_timeout,
-	        const subgroup_post_next_version_func_t& post_next_version_callback,
+            const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,

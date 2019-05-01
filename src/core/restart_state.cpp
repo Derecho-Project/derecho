@@ -2,8 +2,8 @@
 
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/restart_state.hpp>
-#include <derecho/utils/logger.hpp>
 #include <derecho/core/detail/version_code.hpp>
+#include <derecho/utils/logger.hpp>
 //This code needs access to ViewManager's static methods
 #include <derecho/core/detail/view_manager.hpp>
 

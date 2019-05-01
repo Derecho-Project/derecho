@@ -197,14 +197,14 @@ void RPCManager::new_view_callback(const View& new_view) {
         //For each PendingResults in this subgroup, check the departed list of each shard
         //the subgroup, and call set_exception_for_removed_node for the departed nodes
         for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
-                pending_results_iter != fulfilled_pending_results_pair.second.end(); ) {
+            pending_results_iter != fulfilled_pending_results_pair.second.end();) {
             //Garbage-collect PendingResults references that are obsolete
             if(pending_results_iter->get().all_responded()) {
                 pending_results_iter = fulfilled_pending_results_pair.second.erase(pending_results_iter);
             } else {
                 for(uint32_t shard_num = 0;
-                        shard_num < new_view.subgroup_shard_views[subgroup_id].size();
-                        ++shard_num) {
+                    shard_num < new_view.subgroup_shard_views[subgroup_id].size();
+                    ++shard_num) {
                     for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
                         //This will do nothing if removed_id was never in the
                         //shard this PendingResult corresponds to

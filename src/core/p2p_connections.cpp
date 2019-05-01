@@ -2,8 +2,8 @@
 
 #include <cassert>
 #include <cstring>
-#include <sys/time.h>
 #include <sstream>
+#include <sys/time.h>
 
 #include <derecho/core/detail/p2p_connections.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
@@ -29,7 +29,7 @@ P2PConnections::P2PConnections(const P2PParams params)
         node_id_to_rank[members[i]] = i;
     }
 
-    for(auto type: p2p_request_types) {
+    for(auto type : p2p_request_types) {
         incoming_seq_nums_map[type].resize(num_members);
         outgoing_seq_nums_map[type].resize(num_members);
     }
@@ -260,12 +260,13 @@ void P2PConnections::debug_print() {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
                 std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
             }
-            std::cout << std::endl << "outgoing seq_nums:";
+            std::cout << std::endl
+                      << "outgoing seq_nums:";
             for(uint32_t i = 0; i < window_size; ++i) {
                 uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
                 std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
             }
-	    std::cout << std::endl;
+            std::cout << std::endl;
         }
     }
 }

@@ -27,7 +27,7 @@ SubView::SubView(Mode mode,
                  std::vector<int> is_sender,
                  const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
                                               uint16_t>>& member_ips_and_ports,
-                                              const std::string profile)
+                 const std::string profile)
         : mode(mode),
           members(members),
           is_sender(members.size(), 1),
@@ -107,7 +107,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           joined(joined),
           departed(departed),
           num_members(num_members),
-          my_rank(0),              // This will always get overwritten by the receiver after deserializing
+          my_rank(0),  // This will always get overwritten by the receiver after deserializing
           next_unassigned_rank(next_unassigned_rank),
           subgroup_ids_by_type_id(subgroup_ids_by_type_id),
           subgroup_shard_views(subgroup_shard_views),
@@ -175,8 +175,8 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            const Mode mode,
                            const std::vector<int>& is_sender,
                            std::string profile) const {
-  // Make the profile string all uppercase so that it is effectively case-insensitive
-  std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
+    // Make the profile string all uppercase so that it is effectively case-insensitive
+    std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
     std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         int view_rank_of_member = rank_of(with_members[subview_rank]);

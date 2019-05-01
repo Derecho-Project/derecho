@@ -698,7 +698,7 @@ void ViewManager::register_predicates() {
 
 void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     // keep calm?
-    if (bSilent) {
+    if(bSilent) {
         return;
     }
 
@@ -1267,8 +1267,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     view_change_cv.notify_all();
 }
 
-/* ------------- 3. Helper Functions for Predicates and Triggers -------------
- */
+/* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
 void ViewManager::construct_multicast_group(CallbackSet callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
@@ -1501,11 +1500,11 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
             for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
                 SubView& shard_view = curr_type_subviews[subgroup_index][shard_num];
                 shard_view.my_rank = shard_view.rank_of(curr_view.members[curr_view.my_rank]);
-                if (shard_view.my_rank != -1) {
+                if(shard_view.my_rank != -1) {
                     // Initialize my_subgroups
                     curr_view.my_subgroups[curr_subgroup_id] = shard_num;
                 }
-                if (prev_view) {
+                if(prev_view) {
                     // Initialize this shard's SubView.joined and SubView.departed
                     subgroup_id_t prev_subgroup_id = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)
                                                              .at(subgroup_index);
@@ -1523,7 +1522,7 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
 }
 
 std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
-                                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
+                                                                    std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
     uint32_t slot_offset = 0;
     view.my_subgroups.clear();
@@ -1531,7 +1530,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         uint32_t num_shards = view.subgroup_shard_views.at(subgroup_id).size();
         uint32_t max_shard_senders = 0;
         uint32_t slot_size_for_subgroup = 0;
-	    uint64_t max_payload_size = 0;
+        uint64_t max_payload_size = 0;
 
         for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
             SubView& shard_view = view.subgroup_shard_views.at(subgroup_id).at(shard_num);
@@ -1566,7 +1565,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         }  // for(shard_num)
         num_received_offset += max_shard_senders;
         slot_offset += slot_size_for_subgroup;
-	    max_payload_sizes[subgroup_id] = max_payload_size;
+        max_payload_sizes[subgroup_id] = max_payload_size;
         view_max_payload_size = std::max(max_payload_size, view_max_payload_size);
     }  // for(subgroup_id)
 
@@ -1821,12 +1820,12 @@ void ViewManager::deliver_in_order(const int shard_leader_rank,
     // Ragged cleanup is finished, deliver in the implied order
     const View& Vc = *curr_view;
     std::vector<int32_t> max_received_indices(num_shard_senders);
-    whenlog(std::stringstream delivery_order;)
+    whenlog(std::stringstream delivery_order);
     whenlog(if(LoggerFactory::getDefaultLogger()->should_log(spdlog::level::debug)) {
         delivery_order << "Subgroup " << subgroup_num
                        << ", shard " << Vc.my_subgroups.at(subgroup_num)
                        << " ";
-    })
+    });
     for(uint sender_rank = 0; sender_rank < num_shard_senders; sender_rank++) {
         whenlog(if(LoggerFactory::getDefaultLogger()->should_log(spdlog::level::debug)) {
             //This only works if every member is a sender, otherwise the rank will be wrong
@@ -1864,7 +1863,7 @@ void ViewManager::log_ragged_trim(const int shard_leader_rank,
 
 void ViewManager::report_failure(const node_id_t who) {
     // keep calm
-    if (bSilent) {
+    if(bSilent) {
         return;
     }
     int r = curr_view->rank_of(who);

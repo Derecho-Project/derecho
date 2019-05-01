@@ -46,7 +46,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 IDeserializationContext *deserialization_context,
+                                 IDeserializationContext* deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),

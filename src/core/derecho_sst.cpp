@@ -1,6 +1,6 @@
-#include <derecho/core/detail/derecho_sst.hpp>
 #include <atomic>
 #include <cstring>
+#include <derecho/core/detail/derecho_sst.hpp>
 
 namespace derecho {
 
@@ -133,7 +133,7 @@ std::string DerechoSST::to_string() const {
             s << global_min_ready[row] << " ";
         }
         s << "}"
-	  << ", rip = " << rip[row] << std::endl;
+          << ", rip = " << rip[row] << std::endl;
     }
     return s.str();
 }
