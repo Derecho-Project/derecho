@@ -36,6 +36,7 @@ ViewManager::ViewManager(
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
+          disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
@@ -94,6 +95,7 @@ ViewManager::ViewManager(
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
+          disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
@@ -724,7 +726,8 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             last_suspected[q] = gmsSST.suspected[myRank][q];
             dbg_default_debug("Marking {} failed", Vc.members[q]);
 
-            if(!gmsSST.rip[myRank] && Vc.num_failed != 0
+            if(!disable_partitioning_safety
+               && !gmsSST.rip[myRank] && Vc.num_failed != 0
                && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
@@ -736,7 +739,8 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.failed[q] = true;
             Vc.num_failed++;
 
-            if(!gmsSST.rip[myRank] && Vc.num_failed != 0
+            if(!disable_partitioning_safety
+               && !gmsSST.rip[myRank] && Vc.num_failed != 0
                && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
                 throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
             }
@@ -1879,7 +1883,9 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
 
-    if(!curr_view->gmsSST->rip[curr_view->my_rank] && failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
+    if(!disable_partitioning_safety
+       && !curr_view->gmsSST->rip[curr_view->my_rank]
+       && failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
         throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
     }
     curr_view->gmsSST->put(

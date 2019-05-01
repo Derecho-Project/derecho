@@ -142,6 +142,13 @@ private:
     std::thread client_listener_thread;
     std::thread old_view_cleanup_thread;
 
+    /**
+     * A user-configurable option that disables the checks for partitioning events.
+     * It defaults to false, because disabling them is unsafe, but some users might
+     * want to do this for testing purposes.
+     */
+    const bool disable_partitioning_safety;
+
     //Handles for all the predicates the GMS registered with the current view's SST.
     pred_handle suspected_changed_handle;
     pred_handle start_join_handle;
