@@ -123,19 +123,21 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                       });
     if(sender_id == nid) {
         //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
-        int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
-        std::unique_lock<std::mutex> lock(pending_results_mutex);
-        // because of a race condition, toFulfillQueue can genuinely be empty
-        // so we shouldn't assert that it is empty
-        // instead we should sleep on a condition variable and let the main thread that called the orderedSend signal us
-        // although the race condition is infinitely rare
-        pending_results_cv.wait(lock, [&]() { return !pending_results_to_fulfill[subgroup_id].empty(); });
-        //We now know the membership of "all nodes in my shard of the subgroup" in the current view
-        pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
-                view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
-        fulfilled_pending_results[subgroup_id].push_back(
-                std::move(pending_results_to_fulfill[subgroup_id].front()));
-        pending_results_to_fulfill[subgroup_id].pop();
+        const uint32_t my_shard = view_manager.curr_view->my_subgroups.at(subgroup_id);
+        {
+            std::unique_lock<std::mutex> lock(pending_results_mutex);
+            // because of a race condition, pending_results_to_fulfill can genuinely be empty
+            // so before accessing it we should sleep on a condition variable and let the main
+            // thread that called the orderedSend signal us
+            // although the race condition is infinitely rare
+            pending_results_cv.wait(lock, [&]() { return !pending_results_to_fulfill[subgroup_id].empty(); });
+            //We now know the membership of "all nodes in my shard of the subgroup" in the current view
+            pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
+                    view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
+            fulfilled_pending_results[subgroup_id].push_back(
+                    std::move(pending_results_to_fulfill[subgroup_id].front()));
+            pending_results_to_fulfill[subgroup_id].pop();
+        } //release pending_results_mutex
         if(reply_size > 0) {
             //Since this was a self-receive, the reply also goes to myself
             parse_and_receive(
