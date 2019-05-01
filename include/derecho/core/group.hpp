@@ -141,24 +141,34 @@ private:
     rpc::RPCManager rpc_manager;
     /** Maps a type to the Factory for that type. */
     mutils::KindMap<Factory, ReplicatedTypes...> factories;
-    /** Maps each type T to a map of (index -> Replicated<T>) for that type's
+    /**
+     * Maps each type T to a map of (index -> Replicated<T>) for that type's
      * subgroup(s). If this node is not a member of a subgroup for a type, the
      * map will have no entry for that type and index. (Instead, external_callers
      * will have an entry for that type-index pair). If this node is a member
      * of a subgroup, the Replicated<T> will refer to the one shard that this
-     * node belongs to. */
+     * node belongs to.
+     */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> replicated_objects;
-    /** Maps each type T to a map of (index -> ExternalCaller<T>) for the
+    /**
+     * Maps each type T to a map of (index -> ExternalCaller<T>) for the
      * subgroup(s) of that type that this node is not a member of. The
      * ExternalCaller for subgroup i of type T can be used to contact any member
-     * of any shard of that subgroup, so shards are not indexed. */
+     * of any shard of that subgroup, so shards are not indexed.
+     */
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
-    /** Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
+    /**
+     * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
      * index X is a reference to the Replicated<T> for this node's shard of
      * subgroup X, which may or may not be valid. The references are the abstract
-     * base type ReplicatedObject because they are only used for send/receive_object.
+     * base type ReplicatedObject because they are only used for state transfer, not
+     * ordered sends. Since the values in this map are references to objects that
+     * are owned by replicated_objects, it is NOT thread-safe to use it outside of
+     * view_manager's predicates - a reference may become temporarily null during a
+     * view change if the Replicated<T> it points to is deleted by the view change.
      * Note that this is a std::map solely so that we can initialize it out-of-order;
-     * its keys are continuous integers starting at 0 and it should be a std::vector. */
+     * its keys are continuous integers starting at 0 and it should be a std::vector.
+     */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
 
     /**

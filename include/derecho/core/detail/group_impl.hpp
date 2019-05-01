@@ -59,7 +59,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
               return std::nullopt;
           }()),
           user_deserialization_context(deserialization_context),
-          persistence_manager(callbacks.local_persistence_callback),
+          persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           view_manager([&]() {
@@ -220,8 +220,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
-    //Give PersistenceManager some pointers
-    persistence_manager.set_objects(objects_by_subgroup_id);
+    //Give PersistenceManager this pointer to break the circular dependency
     persistence_manager.set_view_manager(view_manager);
     //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();

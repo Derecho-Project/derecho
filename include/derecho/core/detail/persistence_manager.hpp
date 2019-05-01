@@ -41,31 +41,22 @@ private:
     /** persistence callback */
     persistence_callback_t persistence_callback;
     /** Replicated Objects handle: TODO:make it safer */
-    std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>* ptr_objects_by_subgroup_id;
+    std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_by_subgroup_id;
     /** View Manager pointer. Need to access the SST for the purpose of updating persisted_num*/
     ViewManager* view_manager;
 
 public:
     /** Constructor
-     * @param pro pointer to the objects_by_subgroup_id.
+     * @param objects_map reference to the objects_by_subgroup_id from Group.
      */
     PersistenceManager(
-            std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>* pro,
+            std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
             const persistence_callback_t& _persistence_callback);
 
-    /** default Constructor
-     */
-    PersistenceManager(const persistence_callback_t& _persistence_callback);
 
     /** default Destructor
      */
     virtual ~PersistenceManager();
-
-    /**
-     * Set the 'objects_by_subgroup_id' in case we can't get the replicated_object
-     * 
-     */
-    void set_objects(std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& ro);
 
     void set_view_manager(ViewManager& view_manager);
 

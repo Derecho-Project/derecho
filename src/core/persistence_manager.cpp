@@ -8,37 +8,25 @@
 namespace derecho {
 
 /** Constructor
- * @param pro pointer to the objects_by_subgroup_id.
+ * @param objects_map reference to the objects_by_subgroup_id from Group.
  */
 PersistenceManager::PersistenceManager(
-        std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>* pro,
+        std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
         const persistence_callback_t& _persistence_callback)
         : thread_shutdown(false),
           persistence_callback(_persistence_callback),
-          ptr_objects_by_subgroup_id(pro) {
+          objects_by_subgroup_id(objects_map) {
     // initialize semaphore
     if(sem_init(&persistence_request_sem, 1, 0) != 0) {
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
 }
 
-/** default Constructor
- */
-PersistenceManager::PersistenceManager(const persistence_callback_t& _persistence_callback)
-        : PersistenceManager(nullptr, _persistence_callback) {}
 
 /** default Destructor
  */
 PersistenceManager::~PersistenceManager() {
     sem_destroy(&persistence_request_sem);
-}
-
-/**
- * Set the 'objects_by_subgroup_id' in case we can't get the replicated_object
- * 
- */
-void PersistenceManager::set_objects(std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& ro) {
-    this->ptr_objects_by_subgroup_id = &ro;
 }
 
 void PersistenceManager::set_view_manager(ViewManager& view_manager) {
@@ -72,8 +60,8 @@ void PersistenceManager::start() {
 
             // persist
             try {
-                auto search = ptr_objects_by_subgroup_id->find(subgroup_id);
-                if(search != ptr_objects_by_subgroup_id->end()) {
+                auto search = objects_by_subgroup_id.find(subgroup_id);
+                if(search != objects_by_subgroup_id.end()) {
                     search->second.get().persist(version);
                 }
                 // read lock the view
@@ -122,8 +110,8 @@ void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, 
 /** make a version */
 void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
                                       const persistent::version_t& version, const HLC& mhlc) {
-    auto search = ptr_objects_by_subgroup_id->find(subgroup_id);
-    if(search != ptr_objects_by_subgroup_id->end()) {
+    auto search = objects_by_subgroup_id.find(subgroup_id);
+    if(search != objects_by_subgroup_id.end()) {
         search->second.get().make_version(version, mhlc);
     }
 }
