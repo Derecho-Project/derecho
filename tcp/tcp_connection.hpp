@@ -5,9 +5,9 @@
 #include <string>
 #include <optional>
 
-namespace tcp {
+#include "tcp.hpp"
 
-typedef std::string ip_addr_t;
+namespace tcp {
 
 struct exception {};
 struct connection_failure : public exception {};

@@ -16,7 +16,7 @@ struct RDMAConnectionData {
     // low-level libfabric fields - not shown
 };
 
-void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_addr_t, uint16_t>>& ip_addrs_and_ports);
+void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_addr_t, tcp::port_t>>& ip_addrs_and_ports, const failure_upcall_t& failure_upcall = nullptr);
 
 // instead of defining add, remove etc. separately, I have defined get_connections to access the static pointer connections
 // call add_node, remove_node etc. directly on the return value of get_connections, for example,
@@ -37,8 +37,6 @@ class RDMAConnection {
 
     // if the remote node has failed
     std::atomic<bool> is_broken = false;
-    // upcall to application
-    const failure_upcall_t& failure_upcall;
 
     // libfabric endpoint
     struct fid_ep* ep;
@@ -47,7 +45,7 @@ class RDMAConnection {
 
     // private constructor
     // no one except RDMAConnectionManager can create an RDMAConnection
-    RDMAConnection(node_id_t remote_id, const failure_upcall_t& failure_upcall);
+    RDMAConnection(node_id_t remote_id);
     RDMAConnection(const RDMAConnection&) = delete;
     RDMAConnection(RDMAConnection&&) = delete;
 
@@ -64,13 +62,13 @@ class RDMAConnectionManager {
     friend class MemoryRegion;
     static std::map<node_id_t, std::shared_ptr<RDMAConnection>> rdma_connections;
     static std::mutex rdma_connections_mutex;
-
     static std::shared_ptr<RDMAConnection> get(node_id_t remote_id);
 
 public:
+    static failure_upcall_t failure_upcall;
     RDMAConnectionManager(const RDMAConnectionManager&) = delete;
     RDMAConnectionManager(RDMAConnectionManager&&) = delete;
-    static void add(node_id_t remote_id, const failure_upcall_t& failure_upcall = nullptr);
+    static void add(node_id_t remote_id);
     static void remove(node_id_t remote_id);
 };
 }  // namespace rdma

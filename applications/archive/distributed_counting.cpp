@@ -6,9 +6,12 @@
 #include <map>
 #include <numeric>
 
+#include "conf/conf.hpp"
+#include "initialize.hpp"
 #include "node/node.hpp"
 #include "node/node_collection.hpp"
 #include "sst/sst.hpp"
+#include "tcp/tcp.hpp"
 
 using std::cin;
 using std::cout;
@@ -33,29 +36,23 @@ public:
     SSTField<double> time;
 };
 
-int main() {
-    // input number of nodes and the local node rank
-    std::cout << "Enter my_id and num_nodes" << std::endl;
-    node::node_id_t my_id;
-    uint32_t num_nodes;
-    cin >> my_id >> num_nodes;
-
-    std::cout << "Input the IP addresses" << std::endl;
-    uint16_t port = 32567;
-    // input the ip addresses
-    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
-    for(auto i = 0u; i < num_nodes; ++i) {
-        std::string ip;
-        cin >> ip;
-        ip_addrs_and_ports[i] = {ip, port};
+int main(int argc, char* argv[]) {
+    if(argc < 2) {
+        cout << "Usage: " << argv[0] << " <num_nodes>" << endl;
+        return -1;
     }
-    std::cout << "Using the default port value of " << port << std::endl;
+    // the number of nodes for this test
+    const uint32_t num_nodes = std::stoi(argv[1]);
+
+    const std::map<uint32_t, std::pair<tcp::ip_addr_t, tcp::port_t>> ip_addrs_and_ports = initialize(num_nodes);
+    uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
     rdma::initialize(my_id, ip_addrs_and_ports);
 
-    // form a group with a subset of all the nodes
-    vector<uint32_t> members(num_nodes);
-    std::iota(members.begin(), members.end(), 0);
+    std::vector<uint32_t> members;
+    for(auto p : ip_addrs_and_ports) {
+        members.push_back(p.first);
+    }
     node::NodeCollection nodes(members, my_id);
 
     // create a new shared state table with all the members

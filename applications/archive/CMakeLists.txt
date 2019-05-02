@@ -8,5 +8,5 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall 
 include_directories(${derecho_SOURCE_DIR})
 
 # distributed_counting
-add_executable(distributed_counting distributed_counting.cpp)
-target_link_libraries(distributed_counting sst)
+add_executable(distributed_counting distributed_counting.cpp initialize.cpp)
+target_link_libraries(distributed_counting sst conf)
