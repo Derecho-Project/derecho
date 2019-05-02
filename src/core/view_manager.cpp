@@ -1879,12 +1879,12 @@ void ViewManager::report_failure(const node_id_t who) {
     if(bSilent) {
         return;
     }
-    int r = curr_view->rank_of(who);
-    dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, r);
-    curr_view->gmsSST->suspected[curr_view->my_rank][r] = true;
+    const int failed_rank = curr_view->rank_of(who);
+    dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, failed_rank);
+    curr_view->gmsSST->suspected[curr_view->my_rank][failed_rank] = true;
     int failed_cnt = 0;
     int rip_cnt = 0;
-    for(r = 0; r < (int)curr_view->gmsSST->suspected.size(); r++) {
+    for(std::size_t r = 0; r < curr_view->gmsSST->suspected.size(); r++) {
         if(curr_view->gmsSST->rip[r]) {
             ++rip_cnt;
         } else if(curr_view->gmsSST->suspected[curr_view->my_rank][r]) {
@@ -1902,8 +1902,8 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
     curr_view->gmsSST->put(
-            (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
-            sizeof(curr_view->gmsSST->suspected[0][r]));
+            (char*)std::addressof(curr_view->gmsSST->suspected[0][failed_rank]) - curr_view->gmsSST->getBaseAddress(),
+            sizeof(curr_view->gmsSST->suspected[0][failed_rank]));
 }
 
 void ViewManager::silence() {
