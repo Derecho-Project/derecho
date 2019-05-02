@@ -8,6 +8,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -DN
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall -ggdb -gdwarf-3 -DNOLOG")
 
 add_subdirectory(applications)
+add_subdirectory(conf)
 add_subdirectory(group)
 add_subdirectory(node)
 add_subdirectory(rdma)
