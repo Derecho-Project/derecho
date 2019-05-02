@@ -75,8 +75,7 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
-        //Ensure a view change isn't in progress
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+        //TODO: Throw an exception if dest_node isn't in the current View
         size_t size;
         std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
                                                ->multicast_group->get_subgroup_settings()
@@ -229,8 +228,7 @@ template <rpc::FunctionTag tag, typename... Args>
 auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         assert(dest_node != node_id);
-        //Ensure a view change isn't in progress
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
+        //TODO: Throw an exception if dest_node isn't in the current View
         size_t size;
         auto return_pair = wrapped_this->template send<tag>(
                 [this, &dest_node, &size](size_t _size) -> char* {

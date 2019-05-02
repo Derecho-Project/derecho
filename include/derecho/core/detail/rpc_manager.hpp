@@ -62,6 +62,10 @@ class RPCManager {
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnections> connections;
 
+    /**
+     * This provides mutual exclusion between the P2P listening thread
+     * and the view-change thread, guarding the P2P connections pointer.
+     */
     std::mutex p2p_connections_mutex;
     /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;

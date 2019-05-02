@@ -189,9 +189,12 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     }
 }
 
+//This is always called while holding a write lock on view_manager.view_mutex
 void RPCManager::new_view_callback(const View& new_view) {
-    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-    connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+    {
+        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+        connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+    }
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
@@ -228,16 +231,36 @@ bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending
 }
 
 volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
-    auto dest_rank = connections->get_node_rank(dest_id);
     volatile char* buf;
+    int curr_vid = -1;
+    uint32_t dest_rank = 0;
     do {
+        //This lock also prevents connections from being reassigned (because that happens
+        //in new_view_callback), so we don't need p2p_connections_mutex
+        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        //Check to see if the view changed between iterations of the loop, and re-get the rank
+        if(curr_vid != view_manager.curr_view->vid) {
+            try {
+                dest_rank = connections->get_node_rank(dest_id);
+            } catch(std::out_of_range& map_error) {
+                throw node_removed_from_group_exception(dest_id);
+            }
+            curr_vid = view_manager.curr_view->vid;
+        }
         buf = connections->get_sendbuffer_ptr(dest_rank, type);
     } while(!buf);
     return buf;
 }
 
 void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
-    connections->send(connections->get_node_rank(dest_id));
+    try {
+        //This lock also prevents connections from being reassigned (because that happens
+        //in new_view_callback), so we don't need p2p_connections_mutex
+        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        connections->send(connections->get_node_rank(dest_id));
+    } catch(std::out_of_range& map_error) {
+        throw node_removed_from_group_exception(dest_id);
+    }
     pending_results_handle.fulfill_map({dest_id});
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     fulfilled_pending_results[dest_subgroup_id].push_back(pending_results_handle);

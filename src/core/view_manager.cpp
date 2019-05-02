@@ -726,10 +726,14 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             last_suspected[q] = gmsSST.suspected[myRank][q];
             dbg_default_debug("Marking {} failed", Vc.members[q]);
 
-            if(!disable_partitioning_safety
-               && !gmsSST.rip[myRank] && Vc.num_failed != 0
+            if(!gmsSST.rip[myRank] && Vc.num_failed != 0
                && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
-                throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                if(disable_partitioning_safety) {
+                    dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_left + 1 = {}",
+                                     Vc.num_failed - num_left, Vc.num_members - num_left + 1);
+                } else {
+                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                }
             }
 
             dbg_default_debug("GMS telling SST to freeze row {}", q);
@@ -739,10 +743,14 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
             Vc.failed[q] = true;
             Vc.num_failed++;
 
-            if(!disable_partitioning_safety
-               && !gmsSST.rip[myRank] && Vc.num_failed != 0
+            if(!gmsSST.rip[myRank] && Vc.num_failed != 0
                && (Vc.num_failed - num_left >= (Vc.num_members - num_left + 1) / 2)) {
-                throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                if(disable_partitioning_safety) {
+                    dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. num_failed - num_left = {} but num_members - num_left + 1 = {}",
+                                     Vc.num_failed - num_left, Vc.num_members - num_left + 1);
+                } else {
+                    throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+                }
             }
 
             // push change to gmsSST.suspected[myRank]
@@ -1269,6 +1277,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
+    dbg_default_debug("Done with view change to view {}", curr_view->vid);
 }
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
@@ -1883,10 +1892,14 @@ void ViewManager::report_failure(const node_id_t who) {
         }
     }
 
-    if(!disable_partitioning_safety
-       && !curr_view->gmsSST->rip[curr_view->my_rank]
+    if(!curr_view->gmsSST->rip[curr_view->my_rank]
        && failed_cnt != 0 && (failed_cnt >= (curr_view->num_members - rip_cnt + 1) / 2)) {
-        throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+        if(disable_partitioning_safety) {
+            dbg_default_warn("Potential partitioning event, but partitioning safety is disabled. failed_cnt = {} but num_members - rip_cnt + 1 = {}",
+                             failed_cnt, curr_view->num_members - rip_cnt + 1);
+        } else {
+            throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
+        }
     }
     curr_view->gmsSST->put(
             (char*)std::addressof(curr_view->gmsSST->suspected[0][r]) - curr_view->gmsSST->getBaseAddress(),
