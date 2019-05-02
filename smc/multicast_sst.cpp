@@ -1,9 +1,10 @@
 #include "multicast_sst.hpp"
 
-MulticastSST::MulticastSST(const node::NodeCollectionWithSenders& members_with_senders_info, size_t slot_size)
-        : window_size(window_size),
-          max_msg_size(max_msg_size),
-          slots(window_size * max_msg_size),
+namespace smc {
+
+MulticastSST::MulticastSST(const node::NodeCollectionWithSenders& members_with_senders_info, size_t slots_size)
+        : sst::SST<MulticastSST>(this, members_with_senders_info),
+          slots(slots_size),
           received_nums(members_with_senders_info.num_senders) {
     initialize(slots, received_nums);
 
@@ -15,8 +16,4 @@ MulticastSST::MulticastSST(const node::NodeCollectionWithSenders& members_with_s
     }
     sync_with_members();
 }
-
-bool MulticastSST::send(size_t msg_size, const std::function<void(char* buf)>& msg_generator) {
-    std::lock_guard<std::mutex> lock(msg_send_mutex);
-    
-}
+}  // namespace smc

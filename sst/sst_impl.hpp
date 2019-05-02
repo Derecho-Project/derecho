@@ -12,31 +12,7 @@
 #include <time.h>
 #include <vector>
 
-#include "sst_registry.hpp"
-
 namespace sst {
-size_t _SSTField::set_base(volatile char* const base) {
-    this->base = base;
-    return padded_length(field_length);
-}
-
-_SSTField::_SSTField(const size_t field_length) : base(nullptr),
-                                                  row_length(0),
-                                                  field_length(field_length) {
-}
-
-char* _SSTField::get_base_address() {
-    return const_cast<char*>(base);
-}
-
-void _SSTField::set_row_length(const size_t row_length) {
-    this->row_length = row_length;
-}
-
-void _SSTField::set_num_nodes(const uint32_t num_nodes) {
-    this->num_nodes = num_nodes;
-}
-
 template <typename T>
 SSTField<T>::SSTField() : _SSTField(sizeof(T)) {
 }
@@ -185,8 +161,8 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
 }
 
 template <typename DerivedSST>
-const char* SST<DerivedSST>::get_base_address() {
-    return const_cast<char*>(rows.get());
+const char* SST<DerivedSST>::get_base_address(uint32_t row_index) {
+    return const_cast<char*>(rows.get()) + row_index * row_length;
 }
 
 /**
@@ -211,6 +187,9 @@ uint32_t SST<DerivedSST>::get_my_index() const {
 
 template <typename DerivedSST>
 void SST<DerivedSST>::update_remote_rows(size_t offset, size_t size, bool completion) {
+    if(size == 0) {
+        size = row_length - offset;
+    }
     assert(offset + size <= row_length);
     for(auto& memory_region : members.filter_self(memory_regions)) {
         memory_region->write_remote(offset, size, completion);

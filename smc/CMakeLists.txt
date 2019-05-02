@@ -6,5 +6,5 @@ SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -O3 -Wall")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -std=c++1z -Wall -O3 -ggdb -gdwarf-3")
 include_directories(${derecho_SOURCE_DIR})
 
-ADD_LIBRARY(sst SHARED sst.cpp sst_registry.cpp)
-TARGET_LINK_LIBRARIES(sst rdma node pthread)
+ADD_LIBRARY(smc SHARED multicast_sst.cpp smc_group.cpp)
+TARGET_LINK_LIBRARIES(smc sst)

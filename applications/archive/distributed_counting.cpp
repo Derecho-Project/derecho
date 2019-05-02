@@ -111,7 +111,7 @@ int main() {
     clock_gettime(CLOCK_REALTIME, &start_time);
 
     // register as a recurring predicate
-    sst.predicates.insert(check_count, increment_count, PredicateType::RECURRENT);
+    sst.predicates.insert(check_count, increment_count);
 
     while(!done) {
     }

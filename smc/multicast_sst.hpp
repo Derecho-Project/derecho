@@ -4,16 +4,15 @@
 #include "node/node_collection_with_senders.hpp"
 #include "sst/sst.hpp"
 
-class MulticastSST : public SST<MulticastSST> {
+namespace smc {
+using sst::SSTField;
+using sst::SSTFieldVector;
+
+class MulticastSST : public sst::SST<MulticastSST> {
+public:
     SSTFieldVector<char> slots;
     SSTFieldVector<msg::msg_id_t> received_nums;
-    size_t window_size;
-    size_t max_msg_size;
-    msg::msg_id_t initiated_num = -1;
-    msg::msg_id_t completed_num = -1;
-    // only one send at a time
-    std::mutex msg_send_mutex;
-public:
-    MulticastSST(const node::NodeCollectionWithSenders& members_with_senders_info, size_t window_size, size_t max_msg_size);
-    bool send(size_t msg_size, const std::function<void(char* buf)>& msg_generator);
+
+    MulticastSST(const node::NodeCollectionWithSenders& members_with_senders_info, size_t slots_size);
 };
+}  // namespace smc

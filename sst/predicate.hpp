@@ -67,7 +67,7 @@ public:
 
     /** Inserts a single (predicate, trigger) pair to the appropriate predicate list. */
     pred_handle insert(pred predicate, trig trigger,
-                       PredicateType type = PredicateType::ONE_TIME);
+                       PredicateType type = PredicateType::RECURRENT);
 
     /** Removes a (predicate, trigger) pair previously registered with insert(). */
     void remove(pred_handle& pred);

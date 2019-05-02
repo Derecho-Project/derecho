@@ -41,7 +41,7 @@ public:
 
     _SSTField(const size_t field_length);
 
-    char* get_base_address();
+    const char* get_base_address();
 };
 
 /**
@@ -190,8 +190,8 @@ public:
     template <typename... Fields>
     void initialize(Fields&... fields);
 
-    // returns the start of the rows
-    const char* get_base_address();
+    // returns the start of the row at row_index
+    const char* get_base_address(uint32_t row_index = 0);
 
     /** Does an RDMA sync with every other member of the SST. */
     void sync_with_members() const;

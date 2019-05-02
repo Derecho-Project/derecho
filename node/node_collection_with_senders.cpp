@@ -1,4 +1,5 @@
 #include "node_collection_with_senders.hpp"
+
 #include <numeric>
 
 namespace node {
