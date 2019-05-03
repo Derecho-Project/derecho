@@ -20,7 +20,7 @@ void initialize(node_id_t my_id, const std::map<node_id_t, std::pair<tcp::ip_add
 
 // instead of defining add, remove etc. separately, I have defined get_connections to access the static pointer connections
 // call add_node, remove_node etc. directly on the return value of get_connections, for example,
-// get_connections().add_node(new_id, new_ip_addr_and_port)
+// get_connections()->add_node(new_id, new_ip_addr_and_port)
 tcp::TCPConnectionManager* get_connections();
 
 template <typename T>

@@ -16,6 +16,7 @@ void SSTRegistry::deregister_sst(_SST* sst) {
 }
 
 void SSTRegistry::evaluate() {
+    SSTRegistry::predicate_thread.detach();
     while(true) {
         std::lock_guard<std::mutex> lock(ssts_mutex);
         for(auto sst : ssts) {
