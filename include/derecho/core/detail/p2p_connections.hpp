@@ -23,13 +23,14 @@ struct P2PParams {
 };
 
 enum REQUEST_TYPE {
-    P2P_REPLY,
+    P2P_REPLY = 0,
     P2P_REQUEST,
     RPC_REPLY
 };
 static const REQUEST_TYPE p2p_request_types[] = {P2P_REPLY,
                                                  P2P_REQUEST,
                                                  RPC_REPLY};
+static const uint8_t num_request_types = 3;
 
 class P2PConnections {
     const std::vector<uint32_t> members;
@@ -64,5 +65,6 @@ public:
     std::optional<std::pair<uint32_t, char*>> probe_all();
     char* get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type);
     void send(uint32_t rank);
+    void debug_print();
 };
 }  // namespace sst

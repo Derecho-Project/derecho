@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstring>
+#include <sstream>
 #include <sys/time.h>
 
 #include <derecho/core/detail/p2p_connections.hpp>
@@ -17,7 +18,7 @@ P2PConnections::P2PConnections(const P2PParams params)
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(3 * max_msg_size * window_size + sizeof(bool)),
+          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
           prev_mode(num_members) {
     //Figure out my SST index
     my_index = (uint32_t)-1;
@@ -28,7 +29,7 @@ P2PConnections::P2PConnections(const P2PParams params)
         node_id_to_rank[members[i]] = i;
     }
 
-    for(auto type: p2p_request_types) {
+    for(auto type : p2p_request_types) {
         incoming_seq_nums_map[type].resize(num_members);
         outgoing_seq_nums_map[type].resize(num_members);
     }
@@ -61,7 +62,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(3 * max_msg_size * window_size + sizeof(bool)),
+          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
           prev_mode(num_members) {
     old_connections.shutdown_failures_thread();
     //Figure out my SST index
@@ -92,8 +93,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
             for(auto type : p2p_request_types) {
-                incoming_seq_nums_map[type][i] = old_connections.incoming_seq_nums_map[type][i];
-                outgoing_seq_nums_map[type][i] = old_connections.outgoing_seq_nums_map[type][i];
+                incoming_seq_nums_map[type][i] = old_connections.incoming_seq_nums_map[type][old_rank];
+                outgoing_seq_nums_map[type][i] = old_connections.outgoing_seq_nums_map[type][old_rank];
             }
             if(i != my_index) {
                 res_vec[i] = std::move(old_connections.res_vec[old_rank]);
@@ -124,27 +125,11 @@ uint64_t P2PConnections::get_max_p2p_size() {
 }
 
 uint64_t P2PConnections::getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num) {
-    switch(type) {
-        case REQUEST_TYPE::RPC_REPLY:
-            return max_msg_size * (2 * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
-        case REQUEST_TYPE::P2P_REPLY:
-            return max_msg_size * (window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
-        case REQUEST_TYPE::P2P_REQUEST:
-            return max_msg_size * (seq_num % window_size + 1) - sizeof(uint64_t);
-    }
-    return 0;
+    return max_msg_size * (type * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
 }
 
 uint64_t P2PConnections::getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num) {
-    switch(type) {
-        case REQUEST_TYPE::RPC_REPLY:
-            return max_msg_size * (2 * window_size + (seq_num % window_size));
-        case REQUEST_TYPE::P2P_REPLY:
-            return max_msg_size * (window_size + (seq_num % window_size));
-        case REQUEST_TYPE::P2P_REQUEST:
-            return max_msg_size * (seq_num++ % window_size);
-    }
-    return 0;
+    return max_msg_size * (type * window_size + (seq_num++ % window_size));
 }
 
 // check if there's a new request from some node
@@ -196,7 +181,7 @@ void P2PConnections::send(uint32_t rank) {
 }
 
 void P2PConnections::check_failures_loop() {
-    pthread_setname_np(pthread_self(), "p2p_timeout_thread");
+    pthread_setname_np(pthread_self(), "p2p_timeout");
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
@@ -256,6 +241,33 @@ void P2PConnections::check_failures_loop() {
             num_completions++;
         }
         util::polling_data.reset_waiting(tid);
+    }
+}
+
+void P2PConnections::debug_print() {
+    std::cout << "Members: " << std::endl;
+    for(auto m : members) {
+        std::cout << m << " ";
+    }
+    std::cout << std::endl;
+
+    for(const auto& type : p2p_request_types) {
+        std::cout << "P2PConnections: Request type " << type << std::endl;
+        for(uint32_t node = 0; node < num_members; ++node) {
+            std::cout << "Node " << node << std::endl;
+            std::cout << "incoming seq_nums:";
+            for(uint32_t i = 0; i < window_size; ++i) {
+                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+                std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
+            }
+            std::cout << std::endl
+                      << "outgoing seq_nums:";
+            for(uint32_t i = 0; i < window_size; ++i) {
+                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+                std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
+            }
+            std::cout << std::endl;
+        }
     }
 }
 }  // namespace sst

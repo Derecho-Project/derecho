@@ -142,6 +142,13 @@ private:
     std::thread client_listener_thread;
     std::thread old_view_cleanup_thread;
 
+    /**
+     * A user-configurable option that disables the checks for partitioning events.
+     * It defaults to false, because disabling them is unsafe, but some users might
+     * want to do this for testing purposes.
+     */
+    const bool disable_partitioning_safety;
+
     //Handles for all the predicates the GMS registered with the current view's SST.
     pred_handle suspected_changed_handle;
     pred_handle start_join_handle;
@@ -158,8 +165,6 @@ private:
     /** Indicates the order that the subgroups should be provisioned;
      * set by Group to be the same order as its template parameters. */
     std::vector<std::type_index> subgroup_type_order;
-    //Parameters stored here, in case we need them again after construction
-    DerechoParams derecho_params;
 
     /** The same set of TCP sockets used by Group and RPCManager. */
     std::shared_ptr<tcp::tcp_connections> tcp_sockets;
@@ -210,6 +215,14 @@ private:
      * may be empty otherwise.
      */
     std::vector<std::vector<int64_t>> prior_view_shard_leaders;
+
+    /**
+     * On a graceful exit, nodes will be agree to leave at some point, where
+     * the view manager should stop throw exception on "failure". Set 
+     * 'bSilence' to keep the view manager calm on detecting intended node
+     * "failure."
+     */
+    std::atomic<bool> bSilent = false;
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
@@ -307,15 +320,12 @@ private:
      * @param subgroup_num The subgroup ID to compute the ragged trim for
      * @param num_received_offset The offset into the SST's num_received field
      * that corresponds to the specified subgroup's entries in it
-     * @param shard_members The IDs of the members of this node's shard in the
-     * specified subgroup
      * @param num_shard_senders The number of nodes in that shard that are active
      * senders in the current epoch
      */
     void log_ragged_trim(const int shard_leader_rank,
                          const subgroup_id_t subgroup_num,
                          const uint32_t num_received_offset,
-                         const std::vector<node_id_t>& shard_members,
                          const uint num_shard_senders);
     /**
      * Reads the global_min for the specified subgroup from the SST (assuming it
@@ -360,15 +370,12 @@ private:
      * of the specified subgroup
      * @param num_received_offset The offset into the SST's num_received field
      * that corresponds to the specified subgroup's entries in it
-     * @param shard_members The IDs of the members of this node's shard in the
-     * specified subgroup
      * @param num_shard_senders The number of nodes in that shard that are active
      * senders in the current epoch
      */
     void follower_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
                                       uint shard_leader_rank,
                                       const uint32_t num_received_offset,
-                                      const std::vector<node_id_t>& shard_members,
                                       uint num_shard_senders);
 
     /* -- Static helper methods that implement chunks of view-management functionality -- */
@@ -444,7 +451,9 @@ private:
      */
     void construct_multicast_group(CallbackSet callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
-                                   const uint32_t num_received_size);
+                                   const uint32_t num_received_size,
+                                   const uint32_t slot_size);
+
     /**
      * Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
      * and copies over the SST data from the current view.
@@ -453,7 +462,8 @@ private:
      * @param new_num_received_size The size of the num_recieved field in the new SST
      */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-                                    const uint32_t new_num_received_size);
+                                    const uint32_t new_num_received_size,
+                                    const uint32_t new_slot_size);
     /**
      * Initializes curr_view with subgroup information based on the membership
      * functions in subgroup_info. If curr_view would be inadequate based on
@@ -478,10 +488,10 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size for the SST based on the current View's subgroup membership
+     * @return num_received_size and slot_size for the SST based on the current View's subgroup membership
      */
-    static uint32_t derive_subgroup_settings(View& curr_view,
-                                             std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+    std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
+                                                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -545,8 +555,6 @@ public:
      * @param my_ip The IP address of the node executing this code
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
-     * @param derecho_params The assorted configuration parameters for this
-     * Derecho group instance, such as message size and logfile name
      * @param group_tcp_sockets The pool of TCP connections to each group member
      * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
@@ -712,10 +720,6 @@ public:
      */
     SharedLockedReference<const View> get_current_view_const();
 
-    /** Gets a read-only reference to the DerechoParams settings,
-     * in case other components need to see them after construction time. */
-    const DerechoParams& get_derecho_params() const { return derecho_params; }
-
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
     void add_view_upcall(const view_upcall_t& upcall);
@@ -735,7 +739,20 @@ public:
         initialize_subgroup_objects = std::move(upcall);
     }
 
+    /**
+     * stop complaining about node failures.
+     */
+    void silence();
+
     void debug_print_status() const;
+
+    // UGLY - IMPROVE LATER
+    std::map<subgroup_id_t, uint64_t> max_payload_sizes;
+    std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
+    // max of max_payload_sizes
+    uint64_t view_max_payload_size = 0;
+    unsigned int view_max_window_size = 0;
+    unsigned int view_max_sender_timeout = 0;
 };
 
 } /* namespace derecho */

@@ -46,7 +46,7 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 std::shared_ptr<IDeserializationContext> deserialization_context,
+                                 IDeserializationContext* deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
@@ -59,7 +59,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
               return std::nullopt;
           }()),
           user_deserialization_context(deserialization_context),
-          persistence_manager(callbacks.local_persistence_callback),
+          persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           view_manager([&]() {
@@ -80,7 +80,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                      _view_upcalls);
               }
           }()),
-          rpc_manager(view_manager, deserialization_context.get()),
+          rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
@@ -118,6 +118,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     }
     //Once the initial view is committed, we can make RDMA connections
     view_manager.initialize_multicast_groups(callbacks);
+    rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
     view_manager.finish_setup();
@@ -219,8 +220,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
 
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
-    //Give PersistenceManager some pointers
-    persistence_manager.set_objects(objects_by_subgroup_id);
+    //Give PersistenceManager this pointer to break the circular dependency
     persistence_manager.set_view_manager(view_manager);
     //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
@@ -316,7 +316,11 @@ void Group<ReplicatedTypes...>::report_failure(const node_id_t who) {
 }
 
 template <typename... ReplicatedTypes>
-void Group<ReplicatedTypes...>::leave() {
+void Group<ReplicatedTypes...>::leave(bool group_shutdown) {
+    if(group_shutdown) {
+        view_manager.silence();
+        view_manager.barrier_sync();
+    }
     view_manager.leave();
 }
 

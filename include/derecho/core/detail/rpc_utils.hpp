@@ -98,7 +98,7 @@ struct node_removed_from_group_exception : public derecho_exception {
     node_removed_from_group_exception(node_id_t who)
             : derecho_exception(std::string("Node with ID ")
                                 + std::to_string(who)
-                                + std::string(" has been removed from the group")),
+                                + std::string(" has been removed from the group.")),
               who(who) {}
 };
 
@@ -336,6 +336,7 @@ public:
     virtual void fulfill_map(const node_list_t&) = 0;
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
+    virtual bool all_responded() const = 0;
     virtual ~PendingBase() {}
 };
 
@@ -373,6 +374,16 @@ public:
         dbg_default_debug("Deleted PendingResults at address {:p}", reinterpret_cast<void*>(this));
         dbg_default_flush();
     }
+
+    /**
+     * Constructs and returns a QueryResults representing the "future" end of
+     * the response promises in this PendingResults.
+     * @return A new QueryResults holding a set of futures for this RPC function call
+     */
+    QueryResults<Ret> get_future() {
+        return QueryResults<Ret>{promise_for_pending_map.get_future()};
+    }
+
     /**
      * Fill pending_map and reply_promises with one promise/future pair for
      * each node that was contacted in this RPC call
@@ -426,6 +437,12 @@ public:
         }
     }
 
+    /**
+     * Fulfills a promise for a single node's reply by setting the value that
+     * the node returned for the RPC call
+     * @param nid The node that responded to the RPC call
+     * @param v The value that it returned as the result of the RPC function
+     */
     void set_value(const node_id_t& nid, const Ret& v) {
         std::lock_guard<std::mutex> lock(reply_promises_are_ready_mutex);
         responded_nodes.insert(nid);
@@ -437,6 +454,12 @@ public:
         reply_promises.at(nid).set_value(v);
     }
 
+    /**
+     * Fulfills a promise for a single node's reply by setting an exception that
+     * was thrown by the RPC function call.
+     * @param nid The node that responded to the RPC call with an exception
+     * @param e The exception_ptr that the RPC function call returned
+     */
     void set_exception(const node_id_t& nid, const std::exception_ptr e) {
         responded_nodes.insert(nid);
         if(reply_promises.size() == 0) {
@@ -445,8 +468,12 @@ public:
         reply_promises.at(nid).set_exception(e);
     }
 
-    QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{promise_for_pending_map.get_future()};
+    /**
+     * @return True if all destination nodes for this RPC function call have
+     * responded, either by sending a reply or by being removed from the group
+     */
+    bool all_responded() const {
+        return map_fulfilled && (responded_nodes == dest_nodes);
     }
 };
 
@@ -463,6 +490,10 @@ private:
     bool map_fulfilled = false;
 
 public:
+    QueryResults<void> get_future() {
+        return QueryResults<void>(promise_for_pending_map.get_future());
+    }
+
     void fulfill_map(const node_list_t& sent_nodes) {
         auto nodes_sent_set = std::make_unique<std::set<node_id_t>>();
         for(const node_id_t& node : sent_nodes) {
@@ -481,8 +512,8 @@ public:
         }
     }
 
-    QueryResults<void> get_future() {
-        return QueryResults<void>(promise_for_pending_map.get_future());
+    bool all_responded() const {
+        return map_fulfilled;
     }
 };
 

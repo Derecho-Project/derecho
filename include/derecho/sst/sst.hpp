@@ -31,7 +31,7 @@ namespace sst {
 
 const int alignTo = sizeof(long);
 
-constexpr int padded_len(const int& len) {
+constexpr size_t padded_len(const size_t& len) {
     return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
 }
 
@@ -39,12 +39,12 @@ constexpr int padded_len(const int& len) {
 class _SSTField {
 public:
     volatile char* base;
-    int rowLen;
-    int field_len;
+    size_t rowLen;
+    size_t field_len;
 
-    _SSTField(const int field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
+    _SSTField(const size_t field_len) : base(nullptr), rowLen(0), field_len(field_len) {}
 
-    int set_base(volatile char* const base) {
+    size_t set_base(volatile char* const base) {
         this->base = base;
         return padded_len(field_len);
     }
@@ -53,7 +53,7 @@ public:
         return const_cast<char*>(base);
     }
 
-    void set_rowLen(const int& _rowLen) { rowLen = _rowLen; }
+    void set_rowLen(const size_t& _rowLen) { rowLen = _rowLen; }
 };
 
 /**
@@ -72,15 +72,15 @@ public:
     }
 
     // Tracks down the appropriate row
-    volatile T& operator[](const int row_idx) const { return ((T&)base[row_idx * rowLen]); }
+    volatile T& operator[](const size_t row_idx) const { return ((T&)base[row_idx * rowLen]); }
 
     // Getter
-    volatile T const& operator()(const int row_idx) const {
+    volatile T const& operator()(const size_t row_idx) const {
         return *(T*)(base + row_idx * rowLen);
     }
 
     // Setter
-    void operator()(const int row_idx, T const v) { *(T*)(base + row_idx * rowLen) = v; }
+    void operator()(const size_t row_idx, T const v) { *(T*)(base + row_idx * rowLen) = v; }
 };
 
 /**
@@ -104,14 +104,14 @@ public:
     }
 
     // Tracks down the appropriate row
-    volatile T* operator[](const int& idx) const { return (T*)(base + idx * rowLen); }
+    volatile T* operator[](const size_t& idx) const { return (T*)(base + idx * rowLen); }
 
     /** Just like std::vector::size(), returns the number of elements in this vector. */
     size_t size() const { return length; }
 
-    void __attribute__((noinline)) debug_print(int row_num) {
+    void __attribute__((noinline)) debug_print(size_t row_num) {
         volatile T* arr = (*this)[row_num];
-        for(unsigned int j = 0; j < length; ++j) {
+        for(size_t j = 0; j < length; ++j) {
             std::cout << arr[j] << " ";
         }
         std::cout << std::endl;
@@ -187,7 +187,7 @@ private:
     volatile char* rows;
     // char* snapshot;
     /** Length of each row in this SST, in bytes. */
-    int rowLen;
+    size_t rowLen;
     /** List of nodes in the SST; indexes are row numbers, values are node IDs. */
     const std::vector<uint32_t>& members;
     /** Equal to members.size() */
@@ -340,34 +340,34 @@ public:
     }
 
     /** Writes a contiguous subset of the local row to all remote nodes. */
-    void put(long long int offset, long long int size) {
+    void put(size_t offset, size_t size) {
         put(all_indices, offset, size);
     }
 
-    void put_with_completion(long long int offset, long long int size) {
+    void put_with_completion(size_t offset, size_t size) {
         put_with_completion(all_indices, offset, size);
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
-    void put(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+    void put(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 
-    void put_with_completion(const std::vector<uint32_t> receiver_ranks, long long int offset, long long int size);
+    void put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 
 private:
     using char_p = volatile char*;
 
-    void compute_rowLen(int&) {}
+    void compute_rowLen(size_t&) {}
 
     template <typename Field, typename... Fields>
-    void compute_rowLen(int& rowLen, Field& f, Fields&... rest) {
+    void compute_rowLen(size_t& rowLen, Field& f, Fields&... rest) {
         rowLen += padded_len(f.field_len);
         compute_rowLen(rowLen, rest...);
     }
 
-    void set_bases_and_rowLens(char_p&, const int) {}
+    void set_bases_and_rowLens(char_p&, const size_t) {}
 
     template <typename Field, typename... Fields>
-    void set_bases_and_rowLens(char_p& base, const int rlen, Field& f, Fields&... rest) {
+    void set_bases_and_rowLens(char_p& base, const size_t rlen, Field& f, Fields&... rest) {
         base += f.set_base(base);
         f.set_rowLen(rlen);
         set_bases_and_rowLens(base, rlen, rest...);

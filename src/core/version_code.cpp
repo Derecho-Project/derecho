@@ -16,8 +16,9 @@ const uint64_t  compiler = ISCLANG | (__clang_major__ << 16) + __clang_minor__ )
 #endif
 
 const uint64_t derecho_version = ((((static_cast<uint64_t>(derecho::MAJOR_VERSION) << 16)
-        + derecho::MINOR_VERSION) << 32)
-        + derecho::COMMITS_AHEAD_OF_VERSION);
+                                    + derecho::MINOR_VERSION)
+                                   << 32)
+                                  + derecho::COMMITS_AHEAD_OF_VERSION);
 
 /*
  * The following variables are for detection of Endian order for integers.
@@ -34,41 +35,31 @@ char int64_array[8]{1, 2, 3, 4, 5, 6, 7, 8};
 float a_float = 123.4560001;
 double a_double = 654.3210000987;
 
-// Runtime measurement of structure padding rules
-char** dnull_ptr = 0;
-
 struct s1 {
     char something;
     int16_t the_int;
 };
-
-const uint64_t int16_offset = reinterpret_cast<const uint64_t>(
-        &reinterpret_cast<struct s1*>(dnull_ptr)->the_int);
+const uint64_t int16_offset = (uint64_t)offsetof(struct s1, the_int);
 
 struct s2 {
     char something;
     int32_t the_int;
 };
-
-const uint64_t int32_offset = reinterpret_cast<const uint64_t>(
-        &reinterpret_cast<struct s2*>(dnull_ptr)->the_int);
+const uint64_t int32_offset = (uint64_t)offsetof(struct s2, the_int);
 
 struct s3 {
     char something;
     int64_t the_int;
 };
 
-const uint64_t int64_offset1 = reinterpret_cast<const uint64_t>(
-        &reinterpret_cast<struct s3*>(dnull_ptr)->the_int);
+const uint64_t int64_offset1 = (uint64_t)offsetof(struct s3, the_int);
 
 struct s4 {
     char something;
     float fsomething;
     int64_t the_int;
 };
-
-const uint64_t int64_offset2 = reinterpret_cast<const uint64_t>(
-        &reinterpret_cast<struct s4*>(dnull_ptr)->the_int);
+const uint64_t int64_offset2 = (uint64_t)offsetof(struct s4, the_int);
 
 struct s5 {
     char something;
@@ -76,8 +67,7 @@ struct s5 {
     int64_t the_int;
 };
 
-const uint64_t int64_offset3 = reinterpret_cast<const uint64_t>(
-        &reinterpret_cast<struct s5*>(dnull_ptr)->the_int);
+const uint64_t int64_offset3 = (uint64_t)offsetof(struct s5, the_int);
 
 uint64_t int_offset_hash = mix(int64_offset3,
                                mix(int64_offset2,

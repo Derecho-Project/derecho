@@ -115,8 +115,17 @@ private:
     const node_id_t my_id;
     bool is_starting_leader;
     std::optional<tcp::socket> leader_connection;
-    /** The user deserialization context for all objects serialized and deserialized. */
-    std::shared_ptr<IDeserializationContext> user_deserialization_context;
+    /**
+     * The shared pointer holding deserialization context is obsolete. I (Weijia)
+     * removed it because it complicated things: the deserialization context is
+     * generally a big object containing the group handle; however, the group handle
+     * need to hold a shared pointer to the object, which causes a dependency loop
+     * and results in an object indirectly holding a shared pointer to its self.
+     * Another side effect is double free. So I change it back to the raw pointer.
+     * The user deserialization context for all objects serialized and deserialized. */
+    // std::shared_ptr<IDeserializationContext> user_deserialization_context;
+    IDeserializationContext * user_deserialization_context;
+
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
@@ -132,24 +141,34 @@ private:
     rpc::RPCManager rpc_manager;
     /** Maps a type to the Factory for that type. */
     mutils::KindMap<Factory, ReplicatedTypes...> factories;
-    /** Maps each type T to a map of (index -> Replicated<T>) for that type's
+    /**
+     * Maps each type T to a map of (index -> Replicated<T>) for that type's
      * subgroup(s). If this node is not a member of a subgroup for a type, the
      * map will have no entry for that type and index. (Instead, external_callers
      * will have an entry for that type-index pair). If this node is a member
      * of a subgroup, the Replicated<T> will refer to the one shard that this
-     * node belongs to. */
+     * node belongs to.
+     */
     mutils::KindMap<replicated_index_map, ReplicatedTypes...> replicated_objects;
-    /** Maps each type T to a map of (index -> ExternalCaller<T>) for the
+    /**
+     * Maps each type T to a map of (index -> ExternalCaller<T>) for the
      * subgroup(s) of that type that this node is not a member of. The
      * ExternalCaller for subgroup i of type T can be used to contact any member
-     * of any shard of that subgroup, so shards are not indexed. */
+     * of any shard of that subgroup, so shards are not indexed.
+     */
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
-    /** Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
+    /**
+     * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
      * index X is a reference to the Replicated<T> for this node's shard of
      * subgroup X, which may or may not be valid. The references are the abstract
-     * base type ReplicatedObject because they are only used for send/receive_object.
+     * base type ReplicatedObject because they are only used for state transfer, not
+     * ordered sends. Since the values in this map are references to objects that
+     * are owned by replicated_objects, it is NOT thread-safe to use it outside of
+     * view_manager's predicates - a reference may become temporarily null during a
+     * view change if the Replicated<T> it points to is deleted by the view change.
      * Note that this is a std::map solely so that we can initialize it out-of-order;
-     * its keys are continuous integers starting at 0 and it should be a std::vector. */
+     * its keys are continuous integers starting at 0 and it should be a std::vector.
+     */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
 
     /**
@@ -203,14 +222,16 @@ private:
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
-     * the leader. The DerechoParams will be passed through to construct
-     * the underlying DerechoGroup. If they specify a filename, the group will
+     * the leader. If they specify a filename, the group will
      * run in persistent mode and log all messages to disk.
      *
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
+     * @param deserialization_context The context used for deserialization
+     * purpose. The application is responsible to keep it alive during Group 
+     * object lifetime.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
      * @param factories A variable number of Factory functions, one for each
@@ -219,7 +240,7 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          std::shared_ptr<IDeserializationContext> deserialization_context,
+          IDeserializationContext * deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 
@@ -265,8 +286,11 @@ public:
     template <typename SubgroupType>
     ShardIterator<SubgroupType> get_shard_iterator(uint32_t subgroup_index = 0);
 
-    /** Causes this node to cleanly leave the group by setting itself to "failed." */
-    void leave();
+    /** Causes this node to cleanly leave the group by setting itself to "failed."
+     * @param group_shutdown True if all nodes in the group are going to leave.
+     */
+    void leave(bool group_shutdown=true);
+
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();
     /**

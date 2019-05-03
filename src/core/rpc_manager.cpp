@@ -22,6 +22,10 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::create_connections() {
+    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+}
+
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
     //Delete receiver functions that were added by this class/subgroup
     for(auto receivers_iterator = receivers->begin();
@@ -58,14 +62,15 @@ std::exception_ptr RPCManager::receive_message(
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
-    // int offset = indx.is_reply ? 1 : 0;
-    // long int invocation_id = ((long int*)(buf + offset))[0];
-    // whenlog(logger->trace("Received an RPC message from {} with opcode: {{ class_id=typeinfo for {}, subgroup_id={}, function_id={}, is_reply={} }}, invocation id: {}",)
-    //               received_from, indx.class_id.name(), indx.subgroup_id, indx.function_id, indx.is_reply, invocation_id);
+    auto receiver_function_entry = receivers->find(indx);
+    if(receiver_function_entry == receivers->end()) {
+        dbg_default_error("Received an RPC message with an invalid RPC opcode! Opcode was ({}, {}, {}, {}).",
+                          indx.class_id, indx.subgroup_id, indx.function_id, indx.is_reply);
+        //TODO: We should reply with some kind of "no such method" error in this case
+        return std::exception_ptr{};
+    }
     std::size_t reply_header_size = header_space();
-    //TODO: Check that the given Opcode is actually in our receivers map,
-    //and reply with a "no such method error" if it is not
-    recv_ret reply_return = receivers->at(indx)(
+    recv_ret reply_return = receiver_function_entry->second(
             &rdv, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
                 return out_alloc(size + reply_header_size) + reply_header_size;
@@ -188,9 +193,26 @@ void RPCManager::new_view_callback(const View& new_view) {
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
-        for(auto& pending : fulfilled_pending_results_pair.second) {
-            for(auto removed_id : new_view.departed) {
-                pending.get().set_exception_for_removed_node(removed_id);
+        const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
+        //For each PendingResults in this subgroup, check the departed list of each shard
+        //the subgroup, and call set_exception_for_removed_node for the departed nodes
+        for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
+            pending_results_iter != fulfilled_pending_results_pair.second.end();) {
+            //Garbage-collect PendingResults references that are obsolete
+            if(pending_results_iter->get().all_responded()) {
+                pending_results_iter = fulfilled_pending_results_pair.second.erase(pending_results_iter);
+            } else {
+                for(uint32_t shard_num = 0;
+                    shard_num < new_view.subgroup_shard_views[subgroup_id].size();
+                    ++shard_num) {
+                    for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
+                        //This will do nothing if removed_id was never in the
+                        //shard this PendingResult corresponds to
+                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        pending_results_iter->get().set_exception_for_removed_node(removed_id);
+                    }
+                }
+                pending_results_iter++;
             }
         }
     }
@@ -268,7 +290,7 @@ void RPCManager::fifo_worker() {
 
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
-    uint64_t max_payload_size = getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
+    uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
 

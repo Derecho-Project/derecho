@@ -43,39 +43,56 @@ struct CallbackSet {
 };
 
 /**
+ * The header for an individual multicast message, which will always be the
+ * first sizeof(header) bytes in the message's data buffer.
+ */
+struct __attribute__((__packed__)) header {
+    uint32_t header_size;
+    int32_t index;
+    uint64_t timestamp;
+    bool cooked_send;
+};
+
+/**
  * Bundles together a set of low-level parameters for configuring Derecho groups.
  * All of the parameters except max payload size and block size have sensible
  * defaults, but the correct block size to set depends on the user's desired max
  * payload size.
  */
 struct DerechoParams : public mutils::ByteRepresentable {
-    long long unsigned int max_payload_size;
-    long long unsigned int max_smc_payload_size;
+    long long unsigned int max_msg_size;
+    long long unsigned int sst_max_msg_size;
     long long unsigned int block_size;
     unsigned int window_size;
     unsigned int heartbeat_ms;
     rdmc::send_algorithm rdmc_send_algorithm;
     uint32_t rpc_port;
 
-    DerechoParams() {
-        max_payload_size = derecho::getConfUInt64(CONF_DERECHO_MAX_PAYLOAD_SIZE);
-        max_smc_payload_size = std::min((uint64_t)max_payload_size, derecho::getConfUInt64(CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE));
-        block_size = derecho::getConfUInt64(CONF_DERECHO_BLOCK_SIZE);
-        window_size = derecho::getConfUInt32(CONF_DERECHO_WINDOW_SIZE);
-        heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
-        std::string rdmc_send_algorithm_string = derecho::getConfString(CONF_DERECHO_RDMC_SEND_ALGORITHM);
+    static long long unsigned int compute_max_msg_size(
+            const long long unsigned int max_payload_size,
+            const long long unsigned int block_size,
+            bool using_rdmc) {
+        auto max_msg_size = max_payload_size + sizeof(header);
+        if(using_rdmc) {
+            if(max_msg_size % block_size != 0) {
+                max_msg_size = (max_msg_size / block_size + 1) * block_size;
+            }
+        }
+        return max_msg_size;
+    }
+
+    static rdmc::send_algorithm send_algorithm_from_string(const std::string& rdmc_send_algorithm_string) {
         if(rdmc_send_algorithm_string == "binomial_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::BINOMIAL_SEND;
+            return rdmc::send_algorithm::BINOMIAL_SEND;
         } else if(rdmc_send_algorithm_string == "chain_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::CHAIN_SEND;
+            return rdmc::send_algorithm::CHAIN_SEND;
         } else if(rdmc_send_algorithm_string == "sequential_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::SEQUENTIAL_SEND;
+            return rdmc::send_algorithm::SEQUENTIAL_SEND;
         } else if(rdmc_send_algorithm_string == "tree_send") {
-            rdmc_send_algorithm = rdmc::send_algorithm::TREE_SEND;
+            return rdmc::send_algorithm::TREE_SEND;
         } else {
             throw "wrong value for RDMC send algorithm: " + rdmc_send_algorithm_string + ". Check your config file.";
         }
-        rpc_port = derecho::getConfUInt32(CONF_DERECHO_RPC_PORT);
     }
 
     DerechoParams(long long unsigned int max_payload_size,
@@ -85,28 +102,56 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int heartbeat_ms,
                   rdmc::send_algorithm rdmc_send_algorithm,
                   uint32_t rpc_port)
-            : max_payload_size(max_payload_size),
-              max_smc_payload_size(max_smc_payload_size),
+            : sst_max_msg_size(max_smc_payload_size + sizeof(header)),
               block_size(block_size),
               window_size(window_size),
               heartbeat_ms(heartbeat_ms),
               rdmc_send_algorithm(rdmc_send_algorithm),
               rpc_port(rpc_port) {
+        //if this is initialized above, DerechoParams turns abstract. idk why.
+        max_msg_size = compute_max_msg_size(max_payload_size, block_size,
+                                            max_payload_size > max_smc_payload_size);
     }
 
-    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_payload_size, max_smc_payload_size, block_size, window_size,
-                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
-};
+    DerechoParams() {}
 
-/**
- * The header for an individual multicast message, which will always be the
- * first sizeof(header) bytes in the message's data buffer.
- */
-struct __attribute__((__packed__)) header {
-    uint32_t header_size;
-    int32_t index;
-    uint64_t timestamp;
-    bool cooked_send;
+    /**
+     * Constructs DerechoParams specifying subgroup metadata for specified profile.
+     * @param profile Name of profile in the configuration file to use.
+     * @return DerechoParams.
+     */
+    static DerechoParams from_profile(const std::string& profile) {
+        // Use the profile string to search the configuration file for the appropriate
+        // settings. If they do not exist, then we should utilize the defaults
+        std::string prefix = "SUBGROUP/" + profile + "/";
+        for(auto& field : Conf::subgroupProfileFields) {
+            if(!hasCustomizedConfKey(prefix + field)) {
+                std::cout << "profile " << profile << " not found in SUBGROUP section of derecho conf. Look at derecho-sample.cfg for more information." << std::endl;
+                throw profile + " derecho subgroup profile not found";
+            }
+        }
+
+        uint32_t max_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[0]);
+        uint32_t max_smc_payload_size = getConfUInt32(prefix + Conf::subgroupProfileFields[1]);
+        uint32_t block_size = getConfUInt32(prefix + Conf::subgroupProfileFields[2]);
+        uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[3]);
+        uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
+        const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[4]);
+        uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
+
+        return DerechoParams{
+                max_payload_size,
+                max_smc_payload_size,
+                block_size,
+                window_size,
+                timeout_ms,
+                DerechoParams::send_algorithm_from_string(algorithm),
+                rpc_port,
+        };
+    }
+
+    DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_msg_size, sst_max_msg_size, block_size, window_size,
+                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
 };
 
 /**
@@ -179,8 +224,11 @@ struct SubgroupSettings {
     int sender_rank;
     /** The offset of this node's num_received counter within the subgroup's SST section */
     uint32_t num_received_offset;
+    /** The offset of this node's slot within the subgroup's SST section */
+    uint32_t slot_offset;
     /** The operation mode of the subgroup */
     Mode mode;
+    DerechoParams profile;
 };
 
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
@@ -199,27 +247,12 @@ private:
     const unsigned int num_members;
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
-
-public:
-    /** Block size used for message transfer.
-     * we keep it simple; one block size for messages from all senders */
-    const long long unsigned int block_size;
-    // maximum size of any message that can be sent
-    const long long unsigned int max_msg_size;
-    // maximum size of message that can be sent using SST multicast
-    const long long unsigned int sst_max_msg_size;
-    /** Send algorithm for constructing a multicast from point-to-point unicast.
-     *  Binomial pipeline by default. */
-    const rdmc::send_algorithm rdmc_send_algorithm;
-    const unsigned int window_size;
-
-private:
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
     const CallbackSet callbacks;
     uint32_t total_num_subgroups;
     /** Maps subgroup IDs (for subgroups this node is a member of) to an immutable
      * set of configuration options for that subgroup. */
-    const std::map<subgroup_id_t, SubgroupSettings> subgroup_settings;
+    const std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     /** Used for synchronizing receives by RDMC and SST */
     std::vector<std::list<int32_t>> received_intervals;
     /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
@@ -369,19 +402,19 @@ private:
     /* Predicate functions for receiving and delivering messages, parameterized by subgroup.
      * register_predicates will create and bind one of these for each subgroup. */
 
-    void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                           const uint32_t num_shard_members, DerechoSST& sst);
 
-    void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
                              volatile char* data, uint64_t size);
 
-    bool receiver_predicate(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    bool receiver_predicate(const SubgroupSettings& subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                             uint32_t num_shard_senders, const DerechoSST& sst);
 
-    void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& curr_subgroup_settings,
+    void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
@@ -405,7 +438,6 @@ public:
      * Group
      * @param subgroup_settings_by_id A list of SubgroupSettings, one for each
      * subgroup this node belongs to, indexed by subgroup ID
-     * @param derecho_params The parameters for multicasts in this group
      * @param post_next_version_callback The callback for posting the upcoming
      *        version to be delivered in a subgroup.
      * @param persistence_manager_callbacks The callbacks to PersistenceManager
@@ -419,7 +451,7 @@ public:
             CallbackSet callbacks,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-            const DerechoParams derecho_params,
+            unsigned int sender_timeout,
             const subgroup_post_next_version_func_t& post_next_version_callback,
             const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
@@ -456,17 +488,13 @@ public:
     void wedge();
     /** Debugging function; prints the current state of the SST to stdout. */
     void debug_print();
-    static long long unsigned int compute_max_msg_size(
-            const long long unsigned int max_payload_size,
-            const long long unsigned int block_size,
-            bool using_rdmc);
 
     /**
      * @return a map from subgroup ID to SubgroupSettings for only those subgroups
      * that this node belongs to.
      */
     const std::map<subgroup_id_t, SubgroupSettings>& get_subgroup_settings() {
-        return subgroup_settings;
+        return subgroup_settings_map;
     }
     std::vector<uint32_t> get_shard_sst_indices(subgroup_id_t subgroup_num);
 };

@@ -27,13 +27,15 @@ private:
 #define CONF_DERECHO_RPC_PORT "DERECHO/rpc_port"
 #define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
-#define CONF_DERECHO_MAX_PAYLOAD_SIZE "DERECHO/max_payload_size"
-#define CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE "DERECHO/max_smc_payload_size"
-#define CONF_DERECHO_BLOCK_SIZE "DERECHO/block_size"
-#define CONF_DERECHO_WINDOW_SIZE "DERECHO/window_size"
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
-#define CONF_DERECHO_RDMC_SEND_ALGORITHM "DERECHO/rdmc_send_algorithm"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
+#define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
+
+#define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/default/max_payload_size"
+#define CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE "SUBGROUP/default/max_smc_payload_size"
+#define CONF_SUBGROUP_DEFAULT_BLOCK_SIZE "SUBGROUP/default/block_size"
+#define CONF_SUBGROUP_DEFAULT_WINDOW_SIZE "SUBGROUP/default/window_size"
+#define CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM "SUBGROUP/default/rdmc_send_algorithm"
 
 #define CONF_RDMA_PROVIDER "RDMA/provider"
 #define CONF_RDMA_DOMAIN "RDMA/domain"
@@ -64,13 +66,15 @@ private:
             {CONF_DERECHO_RPC_PORT, "28366"},
             {CONF_DERECHO_SST_PORT, "37683"},
             {CONF_DERECHO_RDMC_PORT, "31675"},
-            {CONF_DERECHO_MAX_PAYLOAD_SIZE, "10240"},
-            {CONF_DERECHO_MAX_SMC_PAYLOAD_SIZE, "10240"},
-            {CONF_DERECHO_BLOCK_SIZE, "1048576"},
-            {CONF_DERECHO_WINDOW_SIZE, "16"},
-            {CONF_DERECHO_HEARTBEAT_MS, "1"},
-            {CONF_DERECHO_RDMC_SEND_ALGORITHM, "binomial_send"},
+            {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
+            {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
+            // [SUBGROUP/<subgroupname>]
+            {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
+            {CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE, "10240"},
+            {CONF_SUBGROUP_DEFAULT_BLOCK_SIZE, "1048576"},
+            {CONF_SUBGROUP_DEFAULT_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_HEARTBEAT_MS, "1"},
             // [RDMA]
             {CONF_RDMA_PROVIDER, "sockets"},
             {CONF_RDMA_DOMAIN, "eth0"},
@@ -180,6 +184,9 @@ public:
     static void initialize(int argc, char* argv[],
                            const char* conf_file = nullptr);
     static const Conf* get() noexcept;
+
+    // Defines fields used for loading subgroup profiles in multicast_group.h
+    static const std::vector<std::string> subgroupProfileFields;
 
 private:
     // singleton

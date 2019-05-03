@@ -92,24 +92,29 @@ int main(int argc, char** argv) {
                 // int curr_state = 0;
                 for(auto& reply_pair : replies) {
                     try {
-                        // curr_state =
+                        dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
                         reply_pair.second.get();
                     } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                        std::cout << "No query reply due to node_removed_from_group_exception: " << ex.what() << std::endl;
+                        dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
                     } catch(derecho::rpc::sender_removed_from_group_exception& ex2) {
-                        std::cout << "No query reply due to sender_removed_from_group_exception: " << ex2.what() << std::endl;
+                        dbg_default_warn("No query reply due to sender_removed_from_group_exception: {}", ex2.what());
                     }
                 }
                 // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
             } catch(derecho::rpc::sender_removed_from_group_exception& ex) {
-                std::cout << "Query send aborted due to sender_removed_from_group_exception: " << ex.what() << std::endl;
+                dbg_default_warn("Query send aborted due to sender_removed_from_group_exception: {}", ex.what());
             }
+
+	    std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
             //This ensures the state changes with every update from every node
             // int new_value = counter * 10 + node_id;
             int new_value = rand() % 100;
             // std::cout << "Updating state to " << new_value << std::endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
+            // if(counter % 1000 == 0) {
+	    std::cout << "Done with counter = " << counter << std::endl;
+            // }
         }
     }
     // std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

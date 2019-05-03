@@ -50,7 +50,7 @@ namespace spdk {
 // per log metadata
 typedef union log_metadata {
     struct {
-        uint8_t name[256]; // name of the log
+        uint8_t name[256]; // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
         uint32_t id;       // log index
         uint32_t segment_table[SPDK_NUM_SEGMENTS]; // (128 K entries) x 4 Bytes/entry = 512KB
         int64_t head;  // head index

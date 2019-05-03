@@ -136,3 +136,6 @@ target_link_libraries(rdma_two_sided derecho)
 # membership_tests
 add_executable(membership_tests membership_tests.cpp)
 target_link_libraries(membership_tests derecho)
+
+add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
+target_link_libraries(custom_subgroup_profiles_test derecho)
