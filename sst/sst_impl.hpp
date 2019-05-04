@@ -129,16 +129,6 @@ SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection
           members(members),
           memory_regions(members.num_nodes),
 	  start_eval(start_eval) {
-    SSTRegistry::register_sst(this);
-}
-
-/**
- * Destructor for the SST object; sets thread_shutdown to true and waits for
- * background threads to exit cleanly.
- */
-template <typename DerivedSST>
-SST<DerivedSST>::~SST() {
-    SSTRegistry::deregister_sst(this);
 }
 
 template <typename DerivedSST>
@@ -154,7 +144,7 @@ void SST<DerivedSST>::initialize(Fields&... fields) {
         char* local_row_addr = const_cast<char*>(rows.get()) + row_length * members.my_rank;
         char* remote_row_addr = const_cast<char*>(rows.get()) + row_length * other_index;
         memory_regions[other_index] = std::make_unique<rdma::MemoryRegion>(
-                members.nodes[other_index], local_row_addr,
+                members[other_index], local_row_addr,
                 remote_row_addr, row_length);
     }
     initialization_done = true;

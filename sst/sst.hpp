@@ -150,7 +150,7 @@ public:
 };
 
 template <class DerivedSST>
-class SST : _SST {
+class SST : public _SST {
 private:
     DerivedSST* derived_sst_pointer;
 
@@ -184,8 +184,6 @@ private:
 
 public:
     SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members, bool start_eval = true);
-
-    ~SST();
 
     template <typename... Fields>
     void initialize(Fields&... fields);

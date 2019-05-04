@@ -5,6 +5,14 @@ std::set<_SST*> SSTRegistry::ssts;
 std::mutex SSTRegistry::ssts_mutex;
 std::thread SSTRegistry::predicate_thread(SSTRegistry::evaluate);
 
+_SST::_SST() {
+    SSTRegistry::register_sst(this);
+}
+
+_SST::~_SST(){
+    SSTRegistry::deregister_sst(this);
+}
+
 void SSTRegistry::register_sst(_SST* sst) {
     std::lock_guard<std::mutex> lock(ssts_mutex);
     ssts.insert(sst);

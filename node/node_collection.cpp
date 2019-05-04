@@ -33,6 +33,14 @@ NodeCollection::NodeCollection(const std::vector<node_id_t>& nodes, const node_i
     }
 }
 
+const node_id_t& NodeCollection::operator[](const size_t rank) const {
+    return nodes[rank];
+}
+
+const node_id_t& NodeCollection::at(const size_t rank) const {
+    return nodes.at(rank);
+}
+
 uint32_t NodeCollection::get_rank_of(node_id_t node_id) const {
     try {
         return node_id_to_rank.at(my_id);

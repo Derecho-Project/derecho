@@ -68,7 +68,7 @@ void SMCGroup::receive_message() {
             header* h = (header*)(buf);
             if(h->index == received_num + 1) {
                 buf += h->header_size;
-                receive_upcall(members_with_senders_info.nodes[rank_of_sender],
+                receive_upcall(members_with_senders_info[rank_of_sender],
                                h->index, buf, h->msg_size);
                 sst.received_nums[members_with_senders_info.my_rank][sender_rank]++;
                 received_nums_updated = true;

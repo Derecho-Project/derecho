@@ -76,6 +76,8 @@ public:
     // used by the SST for example, when it updates all remote rows
     const std::vector<uint32_t> other_ranks;
 
+    const node_id_t& operator[](const size_t rank) const;
+    const node_id_t& at(const size_t rank) const;
     uint32_t get_rank_of(node_id_t node_id) const;
 
     template <typename elementType>
