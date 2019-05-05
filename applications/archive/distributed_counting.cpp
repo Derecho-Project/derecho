@@ -49,6 +49,8 @@ int main(int argc, char* argv[]) {
 
     rdma::initialize(my_id, ip_addrs_and_ports);
 
+    throw "hello world";
+
     std::vector<uint32_t> members;
     for(auto p : ip_addrs_and_ports) {
         members.push_back(p.first);
