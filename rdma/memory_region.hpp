@@ -6,6 +6,9 @@
 
 namespace rdma {
 class MRConnectionData {
+public:
+    uint64_t           mr_key; // local memory key
+    uint64_t           vaddr;  // virtual addr
 };
 
 class MemoryRegion {
@@ -17,6 +20,19 @@ class MemoryRegion {
     char* recv_buf;
     char* remote_send_buf;
     char* remote_recv_buf;
+
+    /** memory region for remote writer */
+    struct fid_mr* write_mr;
+    /** memory region for remote writer */
+    struct fid_mr* read_mr;
+    /** key for local read buffer */
+    uint64_t mr_lrkey;
+    /** key for local write buffer */
+    uint64_t mr_lwkey;
+    /** key for remote write buffer */
+    uint64_t mr_rwkey;
+    /** remote write memory address */
+    fi_addr_t remote_fi_addr;
 
     size_t size;
 
