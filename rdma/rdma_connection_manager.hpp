@@ -62,7 +62,7 @@ class RDMAConnection {
     void breakConnection();
 
     // update remote_addr with data from local_addr for size size
-    bool write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion);
+    bool write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion, uint64_t remote_write_key, uint64_t local_read_key);
 
     // barrier with the remote end
     bool sync() const;

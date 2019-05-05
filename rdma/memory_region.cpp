@@ -124,7 +124,7 @@ bool MemoryRegion::write_remote(size_t offset, size_t size, bool with_completion
     }
     assert(offset + size <= this->size);
     return shared_rdma_connection->write_remote(send_buf + offset, remote_recv_buf + offset,
-                                                size, with_completion);
+                                                size, with_completion, mr_rwkey, mr_lrkey);
 }
 
 bool MemoryRegion::sync() const {

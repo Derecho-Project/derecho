@@ -270,13 +270,38 @@ RDMAConnection::RDMAConnection(node_id_t my_id, node_id_t remote_id) : my_id(my_
 }
 
 // not complete - will need to provide local/remote mr_key etc.
-bool RDMAConnection::write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion) {
+bool RDMAConnection::write_remote(char* local_addr, char* remote_addr, size_t size, bool with_completion, uint64_t remote_write_key, uint64_t local_read_key) {
     if(!is_broken) {
         // post a remote write to the NIC
-        // not shown
-        bool failure = false;
+        int ret = 0;
+
+        struct iovec msg_iov;
+        struct fi_rma_iov rma_iov;
+        struct fi_msg_rma msg;
+
+        msg_iov.iov_base = local_addr;
+        msg_iov.iov_len = size;
+
+        rma_iov.addr = (uint64_t) remote_addr;
+        rma_iov.len = size;
+        rma_iov.key = remote_write_key;
+
+        msg.msg_iov = &msg_iov;
+        msg.desc = (void**)&local_read_key;
+        msg.iov_count = 1;
+        msg.addr = 0;  // not used for a connection endpoint
+        msg.rma_iov = &rma_iov;
+        msg.rma_iov_count = 1;
+        // msg.context = (void*)ctxt; // questionable change
+        msg.context = NULL;
+        msg.data = 0l;  // not used
+
+        FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_writemsg(this->ep, &msg, (with_completion) ? FI_COMPLETION : 0),
+                                     "fi_writemsg failed.",
+                                     REPORT_ON_FAILURE);
+
         /* if a failure happens*/
-        if(failure) {
+        if(ret) {
             // call the failure upcall only once
             if(!is_broken.exchange(true)) {
                 if(RDMAConnectionManager::failure_upcall) {
