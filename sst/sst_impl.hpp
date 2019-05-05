@@ -113,9 +113,9 @@ void SST<DerivedSST>::evaluate() {
         }
     }
     auto recurrent_iter = predicates.recurrent_predicates.begin();
-    while(recurrent_iter != predicates.one_time_predicates.end()) {
+    while(recurrent_iter != predicates.recurrent_predicates.end()) {
         if(!*recurrent_iter) {
-            recurrent_iter = predicates.one_time_predicates.erase(recurrent_iter);
+            recurrent_iter = predicates.recurrent_predicates.erase(recurrent_iter);
         } else {
             ++recurrent_iter;
         }
