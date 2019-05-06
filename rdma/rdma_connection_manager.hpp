@@ -16,6 +16,47 @@
 
 namespace rdma {
 
+/**
+ * Internal Tools
+ */
+#define CRASH_WITH_MESSAGE(...)       \
+    do {                              \
+        fprintf(stderr, __VA_ARGS__); \
+        fflush(stderr);               \
+        exit(-1);                     \
+    } while(0);
+// Test tools
+enum NextOnFailure {
+    REPORT_ON_FAILURE = 0,
+    CRASH_ON_FAILURE = 1
+};
+#define FAIL_IF_NONZERO_RETRY_EAGAIN(x, desc, next)                                     \
+    do {                                                                                \
+        int64_t _int64_r_;                                                              \
+        do {                                                                            \
+            _int64_r_ = (int64_t)(x);                                                   \
+        } while(_int64_r_ == -FI_EAGAIN);                                               \
+        if(_int64_r_ != 0) {                                                            \
+            fprintf(stderr, "%s:%d,ret=%ld,%s\n", __FILE__, __LINE__, _int64_r_, desc); \
+            if(next == CRASH_ON_FAILURE) {                                              \
+                fflush(stderr);                                                         \
+                exit(-1);                                                               \
+            }                                                                           \
+        }                                                                               \
+    } while(0)
+#define FAIL_IF_ZERO(x, desc, next)                                  \
+    do {                                                             \
+        int64_t _int64_r_ = (int64_t)(x);                            \
+        if(_int64_r_ == 0) {                                         \
+            fprintf(stderr, "%s:%d,%s\n", __FILE__, __LINE__, desc); \
+            if(next == CRASH_ON_FAILURE) {                           \
+                fflush(stderr);                                      \
+                exit(-1);                                            \
+            }                                                        \
+        }                                                            \
+    } while(0)
+
+
 using node::node_id_t;
 typedef std::function<void(node_id_t)> failure_upcall_t;
 
