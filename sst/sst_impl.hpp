@@ -78,48 +78,23 @@ void SST<DerivedSST>::evaluate() {
         return;
     }
     // Take the predicate lock before reading the predicate lists
-    std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
+    std::lock_guard<std::recursive_mutex> predicates_lock(predicates.predicate_mutex);
 
     // one time predicates need to be evaluated only until they become true
-    for(auto& pred : predicates.one_time_predicates) {
-        if(pred != nullptr && (pred->first(*derived_sst_pointer) == true)) {
-            // Copy the trigger pointer locally, so it can continue running without
-            // segfaulting even if this predicate gets deleted when we unlock predicates_lock
-            std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
-            predicates_lock.unlock();
-            (*trigger)(*derived_sst_pointer);
-            predicates_lock.lock();
-            // erase the predicate as it was just found to be true
-            pred.reset();
+    for(auto pred_iter = predicates.predicates.begin(); pred_iter != predicates.predicates.end(); ++pred_iter) {
+        auto& pred = *pred_iter;
+        if((pred.pred(*derived_sst_pointer) == true)) {
+            (pred.trig)(*derived_sst_pointer);
+            if(pred.type == PredicateType::ONE_TIME) {
+                predicates.to_remove.push_back(pred_iter);
+            }
         }
     }
 
-    // recurrent predicates are evaluated each time they are found to be true
-    for(auto& pred : predicates.recurrent_predicates) {
-        if(pred != nullptr && (pred->first(*derived_sst_pointer) == true)) {
-            std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
-            predicates_lock.unlock();
-            (*trigger)(*derived_sst_pointer);
-            predicates_lock.lock();
-        }
+    for(auto iter: predicates.to_remove) {
+        predicates.predicates.erase(iter);
     }
-
-    auto one_time_iter = predicates.one_time_predicates.begin();
-    while(one_time_iter != predicates.one_time_predicates.end()) {
-        if(!*one_time_iter) {
-            one_time_iter = predicates.one_time_predicates.erase(one_time_iter);
-        } else {
-            ++one_time_iter;
-        }
-    }
-    auto recurrent_iter = predicates.recurrent_predicates.begin();
-    while(recurrent_iter != predicates.recurrent_predicates.end()) {
-        if(!*recurrent_iter) {
-            recurrent_iter = predicates.recurrent_predicates.erase(recurrent_iter);
-        } else {
-            ++recurrent_iter;
-        }
-    }
+    predicates.to_remove.clear();
 }
 
 template <typename DerivedSST>
@@ -129,6 +104,12 @@ SST<DerivedSST>::SST(DerivedSST* derived_sst_pointer, const node::NodeCollection
           members(members),
           memory_regions(members.num_nodes),
 	  start_eval(start_eval) {
+    SSTRegistry::register_sst(this);
+}
+
+template <typename DerivedSST>
+SST<DerivedSST>::~SST() {
+    SSTRegistry::deregister_sst(this);
 }
 
 template <typename DerivedSST>

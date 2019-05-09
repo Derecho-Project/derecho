@@ -6,11 +6,11 @@ std::mutex SSTRegistry::ssts_mutex;
 std::thread SSTRegistry::predicate_thread(SSTRegistry::evaluate);
 
 _SST::_SST() {
-    SSTRegistry::register_sst(this);
+    // SSTRegistry::register_sst(this);
 }
 
 _SST::~_SST(){
-    SSTRegistry::deregister_sst(this);
+    // SSTRegistry::deregister_sst(this);
 }
 
 void SSTRegistry::register_sst(_SST* sst) {

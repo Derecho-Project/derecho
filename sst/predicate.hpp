@@ -5,6 +5,7 @@
 #include <list>
 #include <mutex>
 #include <utility>
+#include <vector>
 
 #include "sst.hpp"
 
@@ -17,45 +18,58 @@ class SST;
 enum class PredicateType {
     /** One-time predicates only fire once; they are deleted once they become true. */
     ONE_TIME,
-    /** Recurrent predicates persist as long as the SST instance and fire their
-   * triggers every time they are true. */
+    /** Recurrent predicates persist as long as the SST instance (or until they are removed) and 
+     * fire their triggers every time they are true. */
     RECURRENT
 };
 
 template <class DerivedSST>
 class Predicates {
-    using pred = std::function<bool(const DerivedSST&)>;
-    using trig = std::function<void(DerivedSST&)>;
-    using pred_list = std::list<std::unique_ptr<std::pair<pred, std::shared_ptr<trig>>>>;
-    /** Predicate list for one-time predicates. */
-    pred_list one_time_predicates;
-    /** Predicate list for recurrent predicates */
-    pred_list recurrent_predicates;
     // SST needs to read these predicate lists directly
     friend class SST<DerivedSST>;
 
-    std::mutex predicate_mutex;
+    using pred_t = std::function<bool(const DerivedSST&)>;
+    using trig_t = std::function<void(DerivedSST&)>;
+
+    class Predicate {
+    public:
+        const pred_t pred;
+        const trig_t trig;
+        const PredicateType type;
+        Predicate(const pred_t& pred, const trig_t& trig, PredicateType& type)
+                : pred(pred),
+                  trig(trig),
+                  type(type) {
+        }
+    };
+
+    using pred_list = std::list<Predicate>;
+
+    /** Predicate list for all predicates */
+    pred_list predicates;
+
+    std::recursive_mutex predicate_mutex;
+
+    std::vector<typename pred_list::iterator> to_remove;
 
 public:
     class pred_handle {
         bool valid;
         typename pred_list::iterator iter;
-        PredicateType type;
         friend class Predicates;
 
     public:
-        pred_handle() : valid(false), type(PredicateType::ONE_TIME) {}
-        pred_handle(typename pred_list::iterator iter, PredicateType type)
-                : valid{true}, iter{iter}, type{type} {}
+        pred_handle() : valid(false) {}
+        pred_handle(typename pred_list::iterator iter)
+                : valid{true}, iter{iter} {}
         pred_handle(pred_handle&) = delete;
         pred_handle(pred_handle&& other)
-                : pred_handle(std::move(other.iter), other.type) {
+                : pred_handle(std::move(other.iter)) {
             other.valid = false;
         }
         pred_handle& operator=(pred_handle&) = delete;
         pred_handle& operator=(pred_handle&& other) {
             iter = std::move(other.iter);
-            type = other.type;
             valid = true;
             other.valid = false;
             return *this;
@@ -66,14 +80,14 @@ public:
     };
 
     /** Inserts a single (predicate, trigger) pair to the appropriate predicate list. */
-    pred_handle insert(pred predicate, trig trigger,
+    pred_handle insert(const pred_t& pred, const trig_t& trig,
                        PredicateType type = PredicateType::RECURRENT);
 
     /** Removes a (predicate, trigger) pair previously registered with insert(). */
-    void remove(pred_handle& pred);
+    void remove(pred_handle& handle);
 
-    /** Deletes all predicates, including evolvers and their triggers. */
-    void clear();
+    // /** Deletes all predicates, including evolvers and their triggers. */
+    // void clear();
 };
 
 } /* namespace sst */

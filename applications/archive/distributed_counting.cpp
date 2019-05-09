@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     // the predicate
     auto check_count = [&nodes](const mySST& sst) {
         for(auto count : sst.count) {
-            if(count > sst.count[nodes.my_rank]) {
+            if(count < sst.count[nodes.my_rank]) {
                 return false;
             }
         }

@@ -184,6 +184,7 @@ private:
 
 public:
     SST(DerivedSST* derived_sst_pointer, const node::NodeCollection& members, bool start_eval = true);
+    ~SST();
 
     template <typename... Fields>
     void initialize(Fields&... fields);
