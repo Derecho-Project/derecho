@@ -344,6 +344,28 @@ public:
         put(all_indices, offset, size);
     }
 
+    /** Writes a specific local field to all remote nodes */
+    template<typename T>
+    void put(SSTField<T>& field) {
+        put(all_indices, field.get_base() - getBaseAddress(), sizeof(field[0]));
+    }
+
+    /** Writes a specific local vector field to all remote nodes. */
+    template<typename T>
+    void put(SSTFieldVector<T>& vec_field) {
+        put(all_indices, vec_field.get_base() - getBaseAddress(),
+            sizeof(vec_field[0][0]) * vec_field.size());
+    }
+
+    /** Writes only a single element of a vector field to all remote nodes */
+    template<typename T>
+    void put(SSTFieldVector<T>& vec_field, std::size_t index) {
+        put(all_indices,
+            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(vec_field[0][index])))
+            - getBaseAddress(),
+            sizeof(vec_field[0][index]));
+    }
+
     void put_with_completion(size_t offset, size_t size) {
         put_with_completion(all_indices, offset, size);
     }
