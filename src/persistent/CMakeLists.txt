@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}  -O0 -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 
-add_library(persistent OBJECT Persistent.cpp PersistLog.cpp FilePersistLog.cpp SPDKPersistLog.cpp HLC.cpp)
+add_library(persistent OBJECT Persistent.cpp PersistLog.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
 target_include_directories(persistent PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
