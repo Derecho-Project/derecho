@@ -909,18 +909,14 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
     /* breaking the above put statement into individual put calls, to be sure that
      * if we were relying on any ordering guarantees, we won't run into issue when
      * guarantees do not hold*/
-    gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.joiner_ips.get_base() - gmsSST.changes.get_base());
+    gmsSST.put(gmsSST.changes);
+    //This pushes the contiguous set of joiner_xxx_ports fields all at once
     gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
                gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
-    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_committed.get_base() - gmsSST.num_changes.get_base());
-    gmsSST.put(gmsSST.num_committed.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_acked.get_base() - gmsSST.num_committed.get_base());
-    gmsSST.put(gmsSST.num_acked.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_installed.get_base() - gmsSST.num_acked.get_base());
-    gmsSST.put(gmsSST.num_installed.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_received.get_base() - gmsSST.num_installed.get_base());
+    gmsSST.put(gmsSST.num_changes);
+    gmsSST.put(gmsSST.num_committed);
+    gmsSST.put(gmsSST.num_acked);
+    gmsSST.put(gmsSST.num_installed);
     dbg_default_debug("Wedging current view.");
     curr_view->wedge();
     dbg_default_debug("Done wedging current view.");
@@ -1442,12 +1438,10 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, tcp::socket& client_socket) {
     /* breaking the above put statement into individual put calls, to be sure
      * that if we were relying on any ordering guarantees, we won't run into
      * issue when guarantees do not hold*/
-    gmsSST.put(gmsSST.changes.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.joiner_ips.get_base() - gmsSST.changes.get_base());
+    gmsSST.put(gmsSST.changes);
     gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
                gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
-    gmsSST.put(gmsSST.num_changes.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_committed.get_base() - gmsSST.num_changes.get_base());
+    gmsSST.put(gmsSST.num_changes);
     return true;
 }
 
@@ -2011,9 +2005,7 @@ void ViewManager::report_failure(const node_id_t who) {
             throw derecho_exception("Potential partitioning event: this node is no longer in the majority and must shut down!");
         }
     }
-    curr_view->gmsSST->put(
-            (char*)std::addressof(curr_view->gmsSST->suspected[0][failed_rank]) - curr_view->gmsSST->getBaseAddress(),
-            sizeof(curr_view->gmsSST->suspected[0][failed_rank]));
+    curr_view->gmsSST->put(curr_view->gmsSST->suspected, failed_rank);
 }
 
 void ViewManager::silence() {
@@ -2026,10 +2018,7 @@ void ViewManager::leave() {
     curr_view->multicast_group->wedge();
     curr_view->gmsSST->predicates.clear();
     gmssst::set(curr_view->gmsSST->suspected[curr_view->my_rank][curr_view->my_rank], true);
-    curr_view->gmsSST->put(
-            (char*)std::addressof(curr_view->gmsSST->suspected[0][curr_view->my_rank])
-                    - curr_view->gmsSST->getBaseAddress(),
-            sizeof(curr_view->gmsSST->suspected[0][curr_view->my_rank]));
+    curr_view->gmsSST->put(curr_view->gmsSST->suspected, curr_view->my_rank);
     curr_view->gmsSST->rip[curr_view->my_rank] = true;
     curr_view->gmsSST->put_with_completion(curr_view->gmsSST->rip.get_base() - curr_view->gmsSST->getBaseAddress(),
                                            sizeof(curr_view->gmsSST->rip[0]));

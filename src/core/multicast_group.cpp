@@ -365,13 +365,11 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
                         sst->seq_num[member_index][subgroup_num] = new_seq_num;
                         sst->put(shard_sst_indices,
-                                 (char*)std::addressof(sst->seq_num[0][subgroup_num]) - sst->getBaseAddress(),
-                                 sizeof(decltype(sst->seq_num)::value_type));
+                                 sst->seq_num, subgroup_num);
                     }
                     sst->put(shard_sst_indices,
-                             (char*)std::addressof(sst->num_received[0][subgroup_settings.num_received_offset + sender_rank])
-                                     - sst->getBaseAddress(),
-                             sizeof(decltype(sst->num_received)::value_type));
+                             sst->num_received,
+                             subgroup_settings.num_received_offset + sender_rank);
                 }
             };
             // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
@@ -586,8 +584,7 @@ void MulticastGroup::deliver_messages_upto(
     }
     gmssst::set(sst->delivered_num[member_index][subgroup_num], max_seq_num);
     sst->put(get_shard_sst_indices(subgroup_num),
-             (char*)std::addressof(sst->delivered_num[0][subgroup_num]) - sst->getBaseAddress(),
-             sizeof(decltype(sst->delivered_num)::value_type));
+             sst->delivered_num, subgroup_num);
     if(non_null_msgs_delivered) {
         //Call the persistence_manager_post_persist_func
         std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
@@ -750,8 +747,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     if(new_seq_num > sst.seq_num[member_index][subgroup_num]) {
         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
         sst.seq_num[member_index][subgroup_num] = new_seq_num;
-        sst.put((char*)std::addressof(sst.seq_num[0][subgroup_num]) - sst.getBaseAddress(),
-                sizeof(decltype(sst.seq_num)::value_type));
+        sst.put(sst.seq_num, subgroup_num);
     }
     sst.put((char*)std::addressof(sst.num_received[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
             sizeof(decltype(sst.num_received)::value_type) * num_shard_senders);
@@ -817,8 +813,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     }
     if(update_sst) {
         sst.put(get_shard_sst_indices(subgroup_num),
-                (char*)std::addressof(sst.delivered_num[0][subgroup_num]) - sst.getBaseAddress(),
-                sizeof(decltype(sst.delivered_num)::value_type));
+                sst.delivered_num, subgroup_num);
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
             std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
