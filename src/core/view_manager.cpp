@@ -1895,10 +1895,8 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
-    Vc.gmsSST->put(
-            Vc.multicast_group->get_shard_sst_indices(subgroup_num),
-            (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
-            sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
+    Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
+                   Vc.gmsSST->global_min_ready, subgroup_num);
 
     if(any_persistent_objects) {
         log_ragged_trim(myRank, subgroup_num, num_received_offset, num_shard_senders);
@@ -1925,10 +1923,8 @@ void ViewManager::follower_ragged_edge_cleanup(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
-    Vc.gmsSST->put(
-            Vc.multicast_group->get_shard_sst_indices(subgroup_num),
-            (char*)std::addressof(Vc.gmsSST->global_min_ready[0][subgroup_num]) - Vc.gmsSST->getBaseAddress(),
-            sizeof(Vc.gmsSST->global_min_ready[0][subgroup_num]));
+    Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_num),
+                   Vc.gmsSST->global_min_ready, subgroup_num);
 }
 
 void ViewManager::deliver_in_order(const int shard_leader_rank,
