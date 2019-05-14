@@ -635,7 +635,7 @@ public:
             const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
-            std::unique_ptr<PersistLog>& log_ptr = nullptr,
+            std::unique_ptr<PersistLog>& log_ptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}}) noexcept(false)
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}

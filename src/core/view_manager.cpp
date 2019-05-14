@@ -1718,7 +1718,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
             departed, my_new_rank, next_unassigned_rank,
             curr_view->subgroup_type_order);
     next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
-    return std::move(next_view);
+    return next_view;
 }
 
 vector_int64_2d ViewManager::old_shard_leaders_by_new_ids(const View& curr_view,

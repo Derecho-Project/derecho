@@ -78,7 +78,7 @@ int main() {
     }
 
     else {
-        auto g = [node_rank](mySST& sst) {
+        auto g = [](mySST& sst) {
             cout << "Exiting" << endl;
             exit(0);
         };

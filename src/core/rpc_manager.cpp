@@ -165,7 +165,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
+                        [this, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
                             reply_size = _size;
                             if(reply_size <= buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(

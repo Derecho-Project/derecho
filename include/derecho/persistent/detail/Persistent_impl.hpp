@@ -445,7 +445,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
         bzero(buf, size);
         mutils::to_bytes(v, buf);
         this->m_pLog->append((void*)buf, size, ver, mhlc);
-        delete buf;
+        delete[] buf;
     }
 }
 

@@ -64,7 +64,7 @@ int main(int argc, char** argv) {
                 // std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
 
-    const int num_shards = 2;
+    const int num_shards = 1;
     const int desired_nodes_per_shard = 3;
     const int fault_tolerance = 1;
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({

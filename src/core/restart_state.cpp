@@ -482,7 +482,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
                                             joiner_ids, departed, my_new_rank, next_unassigned_rank,
                                             curr_view->subgroup_type_order);
     next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
-    return std::move(next_view);
+    return next_view;
 }
 
 bool RestartLeaderState::contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids, const View& last_view) {

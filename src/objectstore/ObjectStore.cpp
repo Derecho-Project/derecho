@@ -626,7 +626,7 @@ static std::vector<node_id_t> parseReplicaList(
         }
         s = e + 1;
     }
-    return std::move(replicas);
+    return replicas;
 }
 
 class ObjectStoreService : public IObjectStoreService {
@@ -754,9 +754,9 @@ public:
         dbg_default_debug("aio_put object id={}, mode={}, force_client={}", object.oid, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_put<VolatileUnloggedObjectStore>(object, force_client));
+                return this->template _aio_put<VolatileUnloggedObjectStore>(object, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_put<PersistentLoggedObjectStore>(object, force_client));
+                return this->template _aio_put<PersistentLoggedObjectStore>(object, force_client);
             default:
                 dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'put' in unsupported mode");
@@ -859,23 +859,23 @@ public:
         derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ver, force_client);
         decltype(results)::ReplyMap& replies = results.get();
         // should we check reply consistency?
-        return std::move(replies.begin()->second.get());
+        return replies.begin()->second.get();
     }
 
     template <typename T>
     Object _bio_get(const OID& oid, const uint64_t& ts_us) {
         derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ts_us);
         decltype(results)::ReplyMap& replies = results.get();
-        return std::move(replies.begin()->second.get());
+        return replies.begin()->second.get();
     }
 
     virtual Object bio_get(const OID& oid, const version_t& ver, const bool& force_client) {
         dbg_default_debug("bio_get object id={}, ver={}, mode={}, force_client={}", oid, ver, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, ver, force_client));
+                return this->template _bio_get<VolatileUnloggedObjectStore>(oid, ver, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, ver, force_client));
+                return this->template _bio_get<PersistentLoggedObjectStore>(oid, ver, force_client);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -886,9 +886,9 @@ public:
         dbg_default_debug("bio_get object id={}, ts_us={}.", oid, ts_us);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+                return this->template _bio_get<VolatileUnloggedObjectStore>(oid, ts_us);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, ts_us));
+                return this->template _bio_get<PersistentLoggedObjectStore>(oid, ts_us);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -899,9 +899,9 @@ public:
         dbg_default_debug("aio_get object id={}, ver={}, mode={}, force_client={}", oid, ver, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ver, force_client));
+                return this->template _aio_get<VolatileUnloggedObjectStore>(oid, ver, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ver, force_client));
+                return this->template _aio_get<PersistentLoggedObjectStore>(oid, ver, force_client);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -912,9 +912,9 @@ public:
         dbg_default_debug("aio_get object id={}, ts_us={}.", oid, ts_us);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+                return this->template _aio_get<VolatileUnloggedObjectStore>(oid, ts_us);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ts_us));
+                return this->template _aio_get<PersistentLoggedObjectStore>(oid, ts_us);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");

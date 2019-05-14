@@ -149,7 +149,7 @@ public:
      * template parameter. This is true if any field of the user object T is
      * persistent.
      */
-    constexpr bool is_persistent() const {
+    virtual bool is_persistent() const {
         return has_persistent_fields<T>::value;
     }
 

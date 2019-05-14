@@ -269,7 +269,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             rdmc::completion_callback_t rdmc_receive_handler;
             rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank,
                                     subgroup_settings, node_id,
-                                    num_shard_members, num_shard_senders,
+                                    num_shard_senders,
                                     shard_sst_indices](char* data, size_t size) {
                 assert(this->sst);
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
@@ -395,7 +395,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 //Create a group in which this node is the sender, and only self-receives happen
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this](size_t length) -> rdmc::receive_destination {
+                           [](size_t length) -> rdmc::receive_destination {
                                assert_always(false);
                                return {nullptr, 0};
                            },
@@ -408,7 +408,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             } else {
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this, subgroup_num, node_id, sender_rank, num_shard_senders](size_t length) {
+                           [this, subgroup_num, node_id](size_t length) {
                                std::lock_guard<std::mutex> lock(msg_state_mtx);
                                assert(!free_message_buffers[subgroup_num].empty());
                                //Create a Message struct to receive the data into.
@@ -857,7 +857,7 @@ void MulticastGroup::register_predicates() {
                                                                   sst::PredicateType::RECURRENT));
 
         if(subgroup_settings.mode != Mode::UNORDERED) {
-            auto delivery_pred = [this](const DerechoSST& sst) { return true; };
+            auto delivery_pred = [](const DerechoSST& sst) { return true; };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
                 delivery_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
@@ -865,7 +865,7 @@ void MulticastGroup::register_predicates() {
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig,
                                                                       sst::PredicateType::RECURRENT));
 
-            auto persistence_pred = [this](const DerechoSST& sst) { return true; };
+            auto persistence_pred = [](const DerechoSST& sst) { return true; };
             auto persistence_trig = [this, subgroup_num, subgroup_settings, num_shard_members, version_seen = (persistent::version_t)INVALID_VERSION](DerechoSST& sst) mutable {
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
@@ -915,7 +915,7 @@ void MulticastGroup::register_predicates() {
                     }
                     return true;
                 };
-                auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
+                auto sender_trig = [this](DerechoSST& sst) {
                     sender_cv.notify_all();
                 };
                 sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
