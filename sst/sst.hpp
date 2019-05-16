@@ -31,13 +31,13 @@ class _SSTField {
 private:
     size_t set_base(volatile char* const base);
     void set_row_length(const size_t row_length);
-    void set_num_nodes(const uint32_t num_nodes);
+    void set_num_rows(const uint32_t num_rows);
 
 public:
     volatile char* base;
     size_t row_length;
     size_t field_length;
-    uint32_t num_nodes;
+    uint32_t num_rows;
 
     _SSTField(const size_t field_length);
 
@@ -84,7 +84,7 @@ public:
     }
 
     SSTFieldIterator end() const {
-        return SSTFieldIterator((T*)(base + num_nodes * row_length), row_length);
+        return SSTFieldIterator((T*)(base + num_rows * row_length), row_length);
     }
 
     SSTField();
@@ -137,7 +137,7 @@ public:
     }
 
     SSTFieldIterator end() const {
-        return SSTFieldIterator((T*)(base + num_nodes * row_length), row_length);
+        return SSTFieldIterator((T*)(base + num_rows * row_length), row_length);
     }
 
     SSTFieldVector(size_t _size);

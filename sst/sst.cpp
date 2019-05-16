@@ -19,7 +19,7 @@ void _SSTField::set_row_length(const size_t row_length) {
     this->row_length = row_length;
 }
 
-void _SSTField::set_num_nodes(const uint32_t num_nodes) {
-    this->num_nodes = num_nodes;
+void _SSTField::set_num_rows(const uint32_t num_rows) {
+    this->num_rows = num_rows;
 }
 }  // namespace sst

@@ -14,7 +14,8 @@ MemoryRegion::MemoryRegion(node::node_id_t remote_id, char* send_buf, char* recv
         : remote_id(remote_id),
           rdma_connection(RDMAConnectionManager::get(remote_id)),
           send_buf(send_buf),
-          recv_buf(recv_buf) {
+          recv_buf(recv_buf),
+	  size(size) {
     std::shared_ptr<RDMAConnection> shared_rdma_connection = rdma_connection.lock();
     if(!shared_rdma_connection) {
         throw RDMAConnectionRemoved("RDMA Connection to " + std::to_string(remote_id) + " has been removed");

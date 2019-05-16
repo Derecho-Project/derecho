@@ -54,7 +54,7 @@ template <typename Field, typename... Fields>
 void SST<DerivedSST>::set_field_params(volatile char*& base, Field& f, Fields&... rest) {
     base += f.set_base(base);
     f.set_row_length(row_length);
-    f.set_num_nodes(members.num_nodes);
+    f.set_num_rows(members.num_nodes);
     set_field_params(base, rest...);
 }
 

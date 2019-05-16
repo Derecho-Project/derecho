@@ -8,7 +8,7 @@ using sst::SSTField;
 using sst::SSTFieldVector;
 
 class GMSSST : public sst::SST<GMSSST> {
-public:
+    friend class ViewManager;
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
     SSTField<int32_t> vid;

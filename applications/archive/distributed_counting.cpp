@@ -62,9 +62,12 @@ int main(int argc, char* argv[]) {
     volatile bool done = false;
 
     // the predicate
-    auto check_count = [&nodes](const mySST& sst) {
+    auto check_count = [&done, &nodes](const mySST& sst) {
+        if(done) {
+            return false;
+        }
         for(auto count : sst.count) {
-            if(count < sst.count[nodes.my_rank]) {
+            if(sst.count[nodes.my_rank] > count) {
                 return false;
             }
         }
@@ -74,6 +77,7 @@ int main(int argc, char* argv[]) {
     // trigger. Increments self value
     auto increment_count = [&start_time, &done, &nodes](mySST& sst) {
         ++(sst.count[nodes.my_rank]);
+        std::cout << sst.count[nodes.my_rank] << std::endl;
         sst.update_remote_rows(sst.count.get_base_address() - sst.get_base_address(), sizeof(sst.count[0]));
         if(sst.count[nodes.my_rank] == 1000000) {
             // end timer
@@ -112,5 +116,6 @@ int main(int argc, char* argv[]) {
 
     while(!done) {
     }
+    sst.sync_with_members();
     return 0;
 }
