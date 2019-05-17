@@ -79,10 +79,17 @@ Applications need to tell the Derecho library which node is the initial leader w
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 
-There are three options to control the size of messages: **max_payload_size**, **max_smc_payload_size**, and **block_size**.
-No message bigger than **max_payload_size** will be sent by Derecho. Messages equal to or smaller than **max_smc_payload_size** will be sent through SST multicast (SMC), which is more suitable than RDMC for small messages. **block_size** defines the size of unit sent in RDMC (messages bigger than **block_size** will be split internally and sent in a pipeline).
+Three message-size options control the memory footprint and performance of Derecho.  In all cases, larger values will increase the memory (DRAM) footprint of the application, and it is fairly easy to end up with a huge memory size if you just pick giant values.  The defaults keep the memory size smaller, but can reduce performance if an application is sending high rates of larger messages.
 
-Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+The options are named **max_payload_size**, **max_smc_payload_size**, and **block_size**. 
+
+No message bigger than **max_payload_size** will be sent by Derecho. 
+
+To understand the other two options, it helps to remember that internally, Derecho makes use of two sub-protocols when it transmits your data.  One sub-protocol is optimized for small messages, and is called SMC.  Messages equal to or smaller than **max_smc_payload_size** will be sent using SMC.  Normally **max_smc_payload_size** is set to a small value, like 1K, but we have tested with values up to 10K.  This limit should not be made much larger – performance will suffer and memory would bloat.
+
+Larger messages are sent via RDMC, our “big object” protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size – it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
+
+More information about Derecho parameter setting can be found in the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
