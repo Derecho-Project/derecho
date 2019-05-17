@@ -1143,10 +1143,9 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     long long unsigned int msg_size = payload_size + sizeof(header);
     const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
-        std::cout << "Can't send messages of size larger than the maximum message "
-                     "size which is equal to "
-                  << subgroup_settings.profile.max_msg_size << std::endl;
-        return nullptr;
+        std::string exp_msg("Can't send messages of size larger than the maximum message size which is equal to ");
+        exp_msg += subgroup_settings.profile.max_msg_size;
+        throw derecho_exception(exp_msg);
     }
 
     std::vector<node_id_t> shard_members = subgroup_settings.members;
