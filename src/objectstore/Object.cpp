@@ -92,18 +92,18 @@ namespace objectstore{
     }
 
     // constructor 0 : copy constructor
-    Object::Object(const OID& _oid, const Blob& _blob) : ver(INVALID_VERSION),
+    Object::Object(const OID& _oid, const Blob& _blob) : ver(INVALID_VERSION,0),
                                                  oid(_oid),
                                                  blob(_blob) {}
     // constructor 0.5 : copy constructor
-    Object::Object(const persistent::version_t _ver, const OID& _oid, const Blob& _blob) : ver(_ver), oid(_oid), blob(_blob) {}
+    Object::Object(const std::tuple<persistent::version_t,uint64_t> _ver, const OID& _oid, const Blob& _blob) : ver(_ver), oid(_oid), blob(_blob) {}
 
     // constructor 1 : copy consotructor
-    Object::Object(const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(INVALID_VERSION),
+    Object::Object(const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(INVALID_VERSION,0),
                                                                               oid(_oid),
                                                                               blob(_b, _s) {}
     // constructor 1.5 : copy constructor
-    Object::Object(const persistent::version_t _ver, const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(_ver), oid(_oid), blob(_b, _s) {}
+    Object::Object(const std::tuple<persistent::version_t,uint64_t> _ver, const uint64_t _oid, const char* const _b, const std::size_t _s) : ver(_ver), oid(_oid), blob(_b, _s) {}
 
     // constructor 2 : move constructor
     Object::Object(Object&& other) : ver(other.ver),
@@ -114,5 +114,5 @@ namespace objectstore{
                                   oid(other.oid),
                                   blob(other.blob) {}
     // constructor 4 : default invalid constructor
-    Object::Object() : ver(INVALID_VERSION), oid(INV_OID) {}
+    Object::Object() : ver(INVALID_VERSION,0), oid(INV_OID) {}
 }
