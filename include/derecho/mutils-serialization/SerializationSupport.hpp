@@ -588,6 +588,13 @@ std::size_t to_bytes(const std::pair<T, V> &pair, char *buffer) {
   return bytes_size(pair);
 }
 
+template <typename...T>
+std::size_t to_bytes(const std::tuple<T...> &tuple, char *buffer) {
+  std::size_t index = 0;
+  post_object(post_to_buffer(index, buffer),tuple);
+  return bytes_size(tuple);
+}
+
 template <typename T> std::size_t to_bytes(const std::set<T> &s, char *_v) {
   std::size_t index = 0;
   auto size = bytes_size(s);
