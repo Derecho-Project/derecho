@@ -781,18 +781,18 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
                 gmsSST.put(gmsSST.num_changes);
             }
         }
-        //Determine if the detected failures made me the new leader, and register the takeover predicate
-        if(my_rank == Vc.find_rank_of_leader() && my_rank != old_leader_rank) {
-            dbg_default_debug("The current leader failed, so this node will take over as leader");
-            auto leader_change_finished = [this](const DerechoSST& sst) {
-                return curr_view->i_am_leader() && previous_leaders_suspected(sst, *curr_view);
-            };
-            auto leader_change_trigger = [this](DerechoSST& sst) {
-                new_leader_takeover(sst);
-            };
-            gmsSST.predicates.insert(leader_change_finished, leader_change_trigger,
-                                     sst::PredicateType::ONE_TIME);
-        }
+    }
+    //Determine if the detected failures made me the new leader, and register the takeover predicate
+    if(my_rank == Vc.find_rank_of_leader() && my_rank != old_leader_rank) {
+        dbg_default_debug("The current leader failed, so this node will take over as leader");
+        auto leader_change_finished = [this](const DerechoSST& sst) {
+            return curr_view->i_am_leader() && previous_leaders_suspected(sst, *curr_view);
+        };
+        auto leader_change_trigger = [this](DerechoSST& sst) {
+            new_leader_takeover(sst);
+        };
+        gmsSST.predicates.insert(leader_change_finished, leader_change_trigger,
+                                 sst::PredicateType::ONE_TIME);
     }
 }
 
