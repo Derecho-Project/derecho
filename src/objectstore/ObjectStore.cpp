@@ -222,9 +222,15 @@ public:
     DEFAULT_SERIALIZE(objects);
 
     static std::unique_ptr<VolatileUnloggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const* buf) {
-        return std::make_unique<VolatileUnloggedObjectStore>(
-                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+// OPTION ONE to test
+//        return std::make_unique<VolatileUnloggedObjectStore>(
+//                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf)),
+//                dsm->mgr<IObjectStoreService>().getObjectWatcher());
+        auto ptr_to_objects = mutils::from_bytes<decltype(objects)>(dsm, buf);
+        auto ptr_to_return = std::make_unique<VolatileUnloggedObjectStore>(std::move(*ptr_to_objects),
                 dsm->mgr<IObjectStoreService>().getObjectWatcher());
+        ptr_to_objects.release(); // to avoid double free.
+        return ptr_to_return;
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(VolatileUnloggedObjectStore);
@@ -572,8 +578,14 @@ public:
 
     static std::unique_ptr<PersistentLoggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const*
                                                                                                                 buf) {
-        return std::make_unique<PersistentLoggedObjectStore>(
-                std::move(*mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf).get()));
+// OPTION ONE to be tested
+//        return std::make_unique<PersistentLoggedObjectStore>(
+//                std::move(*mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf)));
+// OPTION TWO
+        auto ptr_to_persistent_objectstore = mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf);
+        auto ptr_to_return = std::make_unique<PersistentLoggedObjectStore>(std::move(*ptr_to_persistent_objectstore));
+        ptr_to_persistent_objectstore.release(); // to avoid double free.
+        return ptr_to_return;
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(PersistentLoggedObjectStore);
