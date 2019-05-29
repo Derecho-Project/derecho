@@ -129,11 +129,10 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         }
 
         // lock_t l{map_lock};
-        dbg_default_info("About to prepare results_vector entry for RPC call message with invocation ID {}", invocation_id);
         results_vector[invocation_id].reset();
         PendingResults<Ret>& pending_results = results_vector[invocation_id];
 
-        dbg_default_info("Ready to send an RPC call message with invocation ID {}", invocation_id);
+        dbg_default_trace("Ready to send an RPC call message with invocation ID {}", invocation_id);
         return send_return{size, serialized_args, pending_results.get_future(),
                            pending_results};
     }
@@ -183,7 +182,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if(is_exception) {
             results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
         } else {
-            dbg_default_info("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);
+            dbg_default_trace("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);
             results_vector[invocation_id].set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(invocation_id)));
         }
         return recv_ret{Opcode(), 0, nullptr, nullptr};

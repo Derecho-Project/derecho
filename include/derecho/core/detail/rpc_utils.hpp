@@ -371,10 +371,7 @@ private:
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
-    virtual ~PendingResults() {
-        dbg_default_debug("Deleted PendingResults at address {:p}", reinterpret_cast<void*>(this));
-        dbg_default_flush();
-    }
+    virtual ~PendingResults() {}
 
     /**
      * Constructs and returns a QueryResults representing the "future" end of
