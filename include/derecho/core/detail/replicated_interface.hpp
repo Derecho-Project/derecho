@@ -23,7 +23,7 @@ public:
     virtual const persistent::version_t get_minimum_latest_persisted_version() noexcept(false) = 0;
     virtual void persist(const persistent::version_t version) noexcept(false) = 0;
     virtual void truncate(const persistent::version_t& latest_version) = 0;
-    virtual void post_next_version(const persistent::version_t& version) = 0;
+    virtual void post_next_version(const persistent::version_t& version, const uint64_t& msg_ts) = 0;
 };
 
 }  // namespace derecho

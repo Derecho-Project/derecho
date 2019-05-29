@@ -354,15 +354,20 @@ private:
      * @param msg A reference to the message
      * @param subgroup_num The ID of the subgroup this message is in
      * @param version The version assigned to the message
+     * @param msg_ts The timestamp of the message
      */
-    void deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version);
+    void deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+        const persistent::version_t& version, const uint64_t& msg_timestamp);
+
     /**
      * Same as the other deliver_message, but for the SSTMessage type
      * @param msg A reference to the message to deliver
      * @param subgroup_num The ID of the subgroup this message is in
      * @param version The version assigned to the message
+     * @param msg_ts The timestamp of this message
      */
-    void deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version);
+    void deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+        const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     /**
      * Enqueues a single message for persistence with the persistence manager.
@@ -372,20 +377,24 @@ private:
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
      * @param version The version assigned to the message
+     * @param msg_ts The timestamp of this message
      * @return true if a new version was created
      * false if the message is a null message
      */
-    bool version_message(RDMCMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp);
+    bool version_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+        const persistent::version_t& version, const uint64_t& msg_timestamp);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
      * with PersistenceManager
      * @param subgroup_num The ID of the subgroup this message is in
      * @param version The version assigned to the message
+     * @param msg_ts The timestamp of this message
      * @return true if a new version was created
      * false if the message is a null message
      */
-    bool version_message(SSTMessage& msg, subgroup_id_t subgroup_num, persistent::version_t version, uint64_t msg_timestamp);
+    bool version_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+        const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;

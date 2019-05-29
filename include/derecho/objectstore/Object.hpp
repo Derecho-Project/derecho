@@ -9,6 +9,7 @@
 #include <time.h>
 #include <vector>
 #include <optional>
+#include <tuple>
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
@@ -71,7 +72,7 @@ using OID = uint64_t;
 
 class Object : public mutils::ByteRepresentable {
 public:
-    mutable persistent::version_t ver;  // object version
+    mutable std::tuple<persistent::version_t,uint64_t> ver;  // object version
     OID oid;                            // object_id
     Blob blob;                          // the object
 
@@ -83,13 +84,13 @@ public:
     Object(const OID& _oid, const Blob& _blob);
 
     // constructor 0.5 : copy constructor
-    Object(const persistent::version_t _ver, const OID& _oid, const Blob& _blob);
+    Object(const std::tuple<persistent::version_t,uint64_t> _ver, const OID& _oid, const Blob& _blob);
 
     // constructor 1 : copy consotructor
     Object(const uint64_t _oid, const char* const _b, const std::size_t _s);
 
     // constructor 1.5 : copy constructor
-    Object(const persistent::version_t _ver, const uint64_t _oid, const char* const _b, const std::size_t _s);
+    Object(const std::tuple<persistent::version_t,uint64_t> _ver, const uint64_t _oid, const char* const _b, const std::size_t _s);
 
     // TODO: we need a move version for the deserializer.
 
@@ -121,7 +122,8 @@ inline std::ostream& operator<<(std::ostream& out, const Blob& b) {
 }
 
 inline std::ostream& operator<<(std::ostream& out, const Object& o) {
-    out << "Object{ver: 0x" << std::hex << o.ver << std::dec << ", id:"
+    out << "Object{ver: 0x" << std::hex << std::get<0>(o.ver) << std::dec 
+        << ", ts: " << std::get<1>(o.ver) << ", id:"
         << o.oid << ", data:" << o.blob << "}";
     return out;
 }

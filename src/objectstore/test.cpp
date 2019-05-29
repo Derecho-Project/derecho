@@ -46,15 +46,19 @@ int main(int argc, char** argv) {
                          try {
                              if(use_aio) {
                                  // asynchronous api
-                                 derecho::rpc::QueryResults<persistent::version_t> results = oss.aio_put(object);
+                                 derecho::rpc::QueryResults<std::tuple<persistent::version_t,uint64_t>> results = oss.aio_put(object);
                                  decltype(results)::ReplyMap& replies = results.get();
                                  std::cout << "aio returns:" << std::endl;
                                  for(auto& reply_pair : replies) {
-                                     std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
+                                     std::tuple<persistent::version_t,uint64_t> res = reply_pair.second.get();
+                                     std::cout << reply_pair.first << ": version=" << std::get<0>(res) 
+                                               << ", timestamp=" << std::get<1>(res) << std::endl;
                                  }
                              } else {
+                                 std::tuple<persistent::version_t,uint64_t> result = oss.bio_put(object);
                                  // synchronous api
-                                 std::cout << "version:" << oss.bio_put(object) << std::endl;
+                                 std::cout << "version:" << std::get<0>(result) 
+                                           << ", timestamp:" << std::get<1>(result) << std::endl;
                              }
                          } catch(...) {
                              return false;
@@ -127,15 +131,18 @@ int main(int argc, char** argv) {
                          try {
                              if(use_aio) {
                                  // asynchronous api
-                                 derecho::rpc::QueryResults<version_t> results = oss.aio_remove(std::stol(args));
+                                 derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> results = oss.aio_remove(std::stol(args));
                                  decltype(results)::ReplyMap& replies = results.get();
                                  std::cout << "aio returns:" << std::endl;
                                  for(auto& reply_pair : replies) {
-                                     std::cout << reply_pair.first << ":" << reply_pair.second.get() << std::endl;
+                                     std::tuple<version_t,uint64_t> res = reply_pair.second.get();
+                                     std::cout << reply_pair.first << ": version=" << std::get<0>(res)
+                                               << ", timestamp=" << std::get<1>(res) << std::endl;
                                  }
                              } else {
-                                 version_t ver = oss.bio_remove(std::stol(args));
-                                 std::cout << "version:" << ver << std::endl;
+                                 std::tuple<version_t,uint64_t> ver = oss.bio_remove(std::stol(args));
+                                 std::cout << "version:" << std::get<0>(ver)
+                                           << ", timestamp:" << std::get<1>(ver) << std::endl;
                              }
                          } catch(...) {
                              return false;

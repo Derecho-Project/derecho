@@ -453,15 +453,16 @@ void MulticastGroup::initialize_sst_row() {
     sst->sync_with_members();
 }
 
-void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version) {
+void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version,
+                                     const uint64_t& msg_ts_us) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // cooked send
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version);
+        post_next_version_callback(subgroup_num, version, msg_ts_us);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
@@ -474,15 +475,16 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     }
 }
 
-void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version) {
+void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version,
+                                     const uint64_t& msg_ts_us) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // cooked send
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version);
+        post_next_version_callback(subgroup_num, version, msg_ts_us);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
@@ -495,8 +497,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     }
 }
 
-bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version, const uint64_t& msg_timestamp) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // null message filter
@@ -517,8 +519,8 @@ bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     return true;
 }
 
-bool MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version, const uint64_t& msg_timestamp) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // null message filter
@@ -566,7 +568,7 @@ void MulticastGroup::deliver_messages_upto(
             char* buf = msg.message_buffer.buffer.get();
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -577,7 +579,7 @@ void MulticastGroup::deliver_messages_upto(
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
         }
@@ -789,7 +791,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -803,7 +805,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());

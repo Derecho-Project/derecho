@@ -1346,9 +1346,9 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, num_subgroups, subgroup_settings,
             view_max_sender_timeout,
-            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
             },
             persistence_manager_callbacks, curr_view->failed);
 }
@@ -1368,9 +1368,9 @@ void ViewManager::transition_multicast_group(
             next_view->members, next_view->members[next_view->my_rank],
             next_view->gmsSST, std::move(*curr_view->multicast_group), num_subgroups,
             new_subgroup_settings,
-            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver) {
+            [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver);
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver,msg_ts);
             },
             persistence_manager_callbacks, next_view->failed);
 
