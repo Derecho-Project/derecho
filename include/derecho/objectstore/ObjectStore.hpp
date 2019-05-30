@@ -29,6 +29,10 @@ public:
     // version for the others. To use the client API uniformly, the user can
     // set the 'force_client' parameter to true.
     //
+    //
+    // The following API may throw an exception of type "derecho::rpc::remote_exception_occurred",
+    // see include/derecho/core/detail/rpc_utils.hpp:83
+    //
     // 1 - blocking put
     // @PARAM object - const reference of the object to be inserted. If
     //        corresponding object id exists, the object is replaced
