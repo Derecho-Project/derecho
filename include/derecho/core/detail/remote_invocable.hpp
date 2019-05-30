@@ -176,7 +176,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         // More on May-7th (Weijia):
         // We don't need to lock the results container (now results_vector)
         // anymore. The vector is initialized at the beginning. The p2p rpc
-        // reuse the slot by reseting it. No deleting, insertion, or 
+        // reuse the slot by reseting it. No deleting, insertion, or
         // replacement operations at all. But we still need a better garbage
         // collection mechanism.
         if(is_exception) {

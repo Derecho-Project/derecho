@@ -137,7 +137,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             fulfilled_pending_results[subgroup_id].push_back(
                     std::move(pending_results_to_fulfill[subgroup_id].front()));
             pending_results_to_fulfill[subgroup_id].pop();
-        } //release pending_results_mutex
+        }  //release pending_results_mutex
         if(reply_size > 0) {
             //Since this was a self-receive, the reply also goes to myself
             parse_and_receive(
@@ -333,7 +333,7 @@ void RPCManager::p2p_receive_loop() {
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
             p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-	    connections->update_incoming_seq_num();
+            connections->update_incoming_seq_num();
         }
     }
     // stop fifo worker.

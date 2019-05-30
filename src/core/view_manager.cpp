@@ -1370,7 +1370,7 @@ void ViewManager::transition_multicast_group(
             new_subgroup_settings,
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver,msg_ts);
+                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
             },
             persistence_manager_callbacks, next_view->failed);
 

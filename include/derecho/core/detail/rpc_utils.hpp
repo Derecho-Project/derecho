@@ -389,7 +389,6 @@ public:
      */
     void fulfill_map(const node_list_t& who) {
         dbg_default_trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
-        dbg_default_flush();
         std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises_map;
         for(const auto& e : who) {
