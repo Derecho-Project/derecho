@@ -204,6 +204,12 @@ private:
      * Otherwise this will be a null pointer. */
     std::unique_ptr<RestartState> restart_state;
 
+    /**
+     * True if this node is the current leader and is fully active (i.e. has
+     * finished "waking up"), false otherwise.
+     */
+    bool active_leader;
+
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
@@ -236,6 +242,12 @@ private:
     void leader_start_join(DerechoSST& gmsSST);
     /** Runs on non-leaders to redirect confused new members to the current leader. */
     void redirect_join_attempt(DerechoSST& gmsSST);
+    /**
+     * Runs once on a node that becomes a leader due to a failure. Searches for
+     * and re-proposes changes proposed by prior leaders, as well as suspicions
+     * noticed by this node before it became the leader.
+     */
+    void new_leader_takeover(DerechoSST& gmsSST);
     /**
      * Runs only on the group leader and updates num_committed when all non-failed
      * members have acked a proposed view change.
@@ -291,7 +303,7 @@ private:
      * @return True if the join succeeded, false if it failed because the
      *         client's ID was already in use.
      */
-    bool receive_join(tcp::socket& client_socket);
+    bool receive_join(DerechoSST& gmsSST, tcp::socket& client_socket);
     /**
      * Updates the TCP connections pool to reflect the joined and departed
      * members in a new view. Removes connections to departed members, and
@@ -378,11 +390,25 @@ private:
                                       const uint32_t num_received_offset,
                                       uint num_shard_senders);
 
+
     /* -- Static helper methods that implement chunks of view-management functionality -- */
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
+    static bool previous_leaders_suspected(const DerechoSST& gmsSST, const View& curr_view);
+
+    /**
+     * Searches backwards from this node's row in the SST to lower-ranked rows,
+     * looking for proposed changes not in this node's changes list, assuming
+     * this node is the current leader and the lower-ranked rows are failed
+     * prior leaders. If a lower-ranked row has more changes, or different
+     * changes, copies that node's changes array to the local row.
+     * @param gmsSST
+     * @return True if there was a prior leader with changes to copy, false if
+     * no prior proposals were found.
+     */
+    static bool copy_prior_leader_proposals(DerechoSST& gmsSST);
 
     /**
      * Constructs the next view from the current view and the set of committed

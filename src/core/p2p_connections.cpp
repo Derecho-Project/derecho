@@ -30,8 +30,8 @@ P2PConnections::P2PConnections(const P2PParams params)
     }
 
     for(auto type : p2p_request_types) {
-        incoming_seq_nums_map[type].resize(num_members);
-        outgoing_seq_nums_map[type].resize(num_members);
+        incoming_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
+        outgoing_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
     }
 
     for(uint i = 0; i < num_members; ++i) {
@@ -75,8 +75,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     }
 
     for(auto type : p2p_request_types) {
-        incoming_seq_nums_map[type].resize(num_members);
-        outgoing_seq_nums_map[type].resize(num_members);
+        incoming_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
+        outgoing_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
     }
 
     for(uint i = 0; i < num_members; ++i) {
@@ -93,8 +93,8 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
             incoming_p2p_buffers[i] = std::move(old_connections.incoming_p2p_buffers[old_rank]);
             outgoing_p2p_buffers[i] = std::move(old_connections.outgoing_p2p_buffers[old_rank]);
             for(auto type : p2p_request_types) {
-                incoming_seq_nums_map[type][i] = old_connections.incoming_seq_nums_map[type][old_rank];
-                outgoing_seq_nums_map[type][i] = old_connections.outgoing_seq_nums_map[type][old_rank];
+                incoming_seq_nums_map[type][i].store(old_connections.incoming_seq_nums_map[type][old_rank]);
+                outgoing_seq_nums_map[type][i].store(old_connections.outgoing_seq_nums_map[type][old_rank]);
             }
             if(i != my_index) {
                 res_vec[i] = std::move(old_connections.res_vec[old_rank]);
@@ -135,11 +135,19 @@ uint64_t P2PConnections::getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num) {
 // check if there's a new request from some node
 char* P2PConnections::probe(uint32_t rank) {
     for(auto type : p2p_request_types) {
-        if((uint64_t&)incoming_p2p_buffers[rank][getOffsetSeqNum(type, incoming_seq_nums_map[type][rank])] == incoming_seq_nums_map[type][rank] + 1) {
-            return const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBuf(type, incoming_seq_nums_map[type][rank]++);
+        if((uint64_t&)incoming_p2p_buffers[rank][getOffsetSeqNum(type, incoming_seq_nums_map[type][rank])]
+           == incoming_seq_nums_map[type][rank] + 1) {
+	    last_type = type;
+	    last_rank = rank;
+            return const_cast<char*>(incoming_p2p_buffers[rank].get())
+                   + getOffsetBuf(type, incoming_seq_nums_map[type][rank]);
         }
     }
     return nullptr;
+}
+
+void P2PConnections::update_incoming_seq_num() {
+    incoming_seq_nums_map[last_type][last_rank]++;
 }
 
 // check if there's a new request from any node
@@ -149,15 +157,24 @@ std::optional<std::pair<uint32_t, char*>> P2PConnections::probe_all() {
         if(buf && buf[0]) {
             return std::pair<uint32_t, char*>(members[rank], buf);
         }
+	else if(buf) {
+	    // this means that we have a null reply
+	    // we don't need to process it, but we still want to increment the seq num
+       	    update_incoming_seq_num();
+	}
     }
     return {};
 }
 
 char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
     prev_mode[rank] = type;
-    if(type != REQUEST_TYPE::P2P_REQUEST || (int32_t)incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY][rank] > (int32_t)(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_size)) {
-        (uint64_t&)outgoing_p2p_buffers[rank][getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank])] = outgoing_seq_nums_map[type][rank] + 1;
-        return const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetBuf(type, outgoing_seq_nums_map[type][rank]);
+    if(type != REQUEST_TYPE::P2P_REQUEST
+       || static_cast<int32_t>(incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY][rank])
+                  > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_size)) {
+        (uint64_t&)outgoing_p2p_buffers[rank][getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank])]
+                = outgoing_seq_nums_map[type][rank] + 1;
+        return const_cast<char*>(outgoing_p2p_buffers[rank].get())
+               + getOffsetBuf(type, outgoing_seq_nums_map[type][rank]);
     }
     return nullptr;
 }
@@ -173,8 +190,10 @@ void P2PConnections::send(uint32_t rank) {
                     const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]),
                     sizeof(uint64_t));
     } else {
-        res_vec[rank]->post_remote_write(getOffsetBuf(type, outgoing_seq_nums_map[type][rank]), max_msg_size - sizeof(uint64_t));
-        res_vec[rank]->post_remote_write(getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]), sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(getOffsetBuf(type, outgoing_seq_nums_map[type][rank]),
+                                         max_msg_size - sizeof(uint64_t));
+        res_vec[rank]->post_remote_write(getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]),
+                                         sizeof(uint64_t));
         num_rdma_writes++;
     }
     outgoing_seq_nums_map[type][rank]++;

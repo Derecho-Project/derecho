@@ -94,8 +94,9 @@ private:
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     _Group* group;
-    /** The version number being processed */
+    /** The version number being processed and corresponding timestamp */
     persistent::version_t next_version = INVALID_VERSION;
+    uint64_t next_timestamp_us = 0;
 
 public:
     /**
@@ -149,7 +150,7 @@ public:
      * template parameter. This is true if any field of the user object T is
      * persistent.
      */
-    constexpr bool is_persistent() const {
+    virtual bool is_persistent() const {
         return has_persistent_fields<T>::value;
     }
 
@@ -286,15 +287,16 @@ public:
     /**
      * Post the next version to be handled.
      */
-    virtual void post_next_version(const persistent::version_t& version) {
+    virtual void post_next_version(const persistent::version_t& version, const uint64_t & ts_us) {
         next_version = version;
+        next_timestamp_us = ts_us;
     }
 
     /**
      * Get the next version to be handled.
      */
-    virtual persistent::version_t get_next_version() {
-        return next_version;
+    virtual std::tuple<persistent::version_t,uint64_t> get_next_version() {
+        return std::tie(next_version,next_timestamp_us);
     }
 
     /**

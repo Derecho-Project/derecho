@@ -117,7 +117,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
     }
 }
 
-int View::rank_of_leader() const {
+int View::find_rank_of_leader() const {
     for(int r = 0; r < num_members; ++r) {
         if(!failed[r]) {
             return r;
@@ -207,7 +207,7 @@ int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id,
 }
 
 bool View::i_am_leader() const {
-    return (rank_of_leader() == my_rank);  // True if I know myself to be the leader
+    return (find_rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
 bool View::i_am_new_leader() {

@@ -269,7 +269,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             rdmc::completion_callback_t rdmc_receive_handler;
             rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank,
                                     subgroup_settings, node_id,
-                                    num_shard_members, num_shard_senders,
+                                    num_shard_senders,
                                     shard_sst_indices](char* data, size_t size) {
                 assert(this->sst);
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
@@ -365,13 +365,11 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
                         sst->seq_num[member_index][subgroup_num] = new_seq_num;
                         sst->put(shard_sst_indices,
-                                 (char*)std::addressof(sst->seq_num[0][subgroup_num]) - sst->getBaseAddress(),
-                                 sizeof(decltype(sst->seq_num)::value_type));
+                                 sst->seq_num, subgroup_num);
                     }
                     sst->put(shard_sst_indices,
-                             (char*)std::addressof(sst->num_received[0][subgroup_settings.num_received_offset + sender_rank])
-                                     - sst->getBaseAddress(),
-                             sizeof(decltype(sst->num_received)::value_type));
+                             sst->num_received,
+                             subgroup_settings.num_received_offset + sender_rank);
                 }
             };
             // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
@@ -397,7 +395,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 //Create a group in which this node is the sender, and only self-receives happen
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this](size_t length) -> rdmc::receive_destination {
+                           [](size_t length) -> rdmc::receive_destination {
                                assert_always(false);
                                return {nullptr, 0};
                            },
@@ -410,7 +408,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             } else {
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this, subgroup_num, node_id, sender_rank, num_shard_senders](size_t length) {
+                           [this, subgroup_num, node_id](size_t length) {
                                std::lock_guard<std::mutex> lock(msg_state_mtx);
                                assert(!free_message_buffers[subgroup_num].empty());
                                //Create a Message struct to receive the data into.
@@ -455,15 +453,16 @@ void MulticastGroup::initialize_sst_row() {
     sst->sync_with_members();
 }
 
-void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version) {
+void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version,
+                                     const uint64_t& msg_ts_us) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // cooked send
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version);
+        post_next_version_callback(subgroup_num, version, msg_ts_us);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
@@ -476,15 +475,16 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     }
 }
 
-void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version) {
+void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version,
+                                     const uint64_t& msg_ts_us) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // cooked send
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version);
+        post_next_version_callback(subgroup_num, version, msg_ts_us);
         rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
@@ -497,8 +497,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, subgroup_id_t subgroup_num
     }
 }
 
-bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version, const uint64_t& msg_timestamp) {
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // null message filter
@@ -519,8 +519,8 @@ bool MulticastGroup::version_message(RDMCMessage& msg, subgroup_id_t subgroup_nu
     return true;
 }
 
-bool MulticastGroup::version_message(SSTMessage& msg, subgroup_id_t subgroup_num,
-                                     persistent::version_t version, uint64_t msg_timestamp) {
+bool MulticastGroup::version_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
+                                     const persistent::version_t& version, const uint64_t& msg_timestamp) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // null message filter
@@ -568,7 +568,7 @@ void MulticastGroup::deliver_messages_upto(
             char* buf = msg.message_buffer.buffer.get();
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -579,15 +579,14 @@ void MulticastGroup::deliver_messages_upto(
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
         }
     }
     gmssst::set(sst->delivered_num[member_index][subgroup_num], max_seq_num);
     sst->put(get_shard_sst_indices(subgroup_num),
-             (char*)std::addressof(sst->delivered_num[0][subgroup_num]) - sst->getBaseAddress(),
-             sizeof(decltype(sst->delivered_num)::value_type));
+             sst->delivered_num, subgroup_num);
     if(non_null_msgs_delivered) {
         //Call the persistence_manager_post_persist_func
         std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
@@ -750,8 +749,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     if(new_seq_num > sst.seq_num[member_index][subgroup_num]) {
         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
         sst.seq_num[member_index][subgroup_num] = new_seq_num;
-        sst.put((char*)std::addressof(sst.seq_num[0][subgroup_num]) - sst.getBaseAddress(),
-                sizeof(decltype(sst.seq_num)::value_type));
+        sst.put(sst.seq_num, subgroup_num);
     }
     sst.put((char*)std::addressof(sst.num_received[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
             sizeof(decltype(sst.num_received)::value_type) * num_shard_senders);
@@ -793,7 +791,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -807,7 +805,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -817,8 +815,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     }
     if(update_sst) {
         sst.put(get_shard_sst_indices(subgroup_num),
-                (char*)std::addressof(sst.delivered_num[0][subgroup_num]) - sst.getBaseAddress(),
-                sizeof(decltype(sst.delivered_num)::value_type));
+                sst.delivered_num, subgroup_num);
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
             std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
@@ -862,7 +859,7 @@ void MulticastGroup::register_predicates() {
                                                                   sst::PredicateType::RECURRENT));
 
         if(subgroup_settings.mode != Mode::UNORDERED) {
-            auto delivery_pred = [this](const DerechoSST& sst) { return true; };
+            auto delivery_pred = [](const DerechoSST& sst) { return true; };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
                 delivery_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
@@ -870,7 +867,7 @@ void MulticastGroup::register_predicates() {
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig,
                                                                       sst::PredicateType::RECURRENT));
 
-            auto persistence_pred = [this](const DerechoSST& sst) { return true; };
+            auto persistence_pred = [](const DerechoSST& sst) { return true; };
             auto persistence_trig = [this, subgroup_num, subgroup_settings, num_shard_members, version_seen = (persistent::version_t)INVALID_VERSION](DerechoSST& sst) mutable {
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
@@ -920,7 +917,7 @@ void MulticastGroup::register_predicates() {
                     }
                     return true;
                 };
-                auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
+                auto sender_trig = [this](DerechoSST& sst) {
                     sender_cv.notify_all();
                 };
                 sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
@@ -1148,10 +1145,9 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     long long unsigned int msg_size = payload_size + sizeof(header);
     const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
-        std::cout << "Can't send messages of size larger than the maximum message "
-                     "size which is equal to "
-                  << subgroup_settings.profile.max_msg_size << std::endl;
-        return nullptr;
+        std::string exp_msg("Can't send messages of size larger than the maximum message size which is equal to ");
+        exp_msg += subgroup_settings.profile.max_msg_size;
+        throw derecho_exception(exp_msg);
     }
 
     std::vector<node_id_t> shard_members = subgroup_settings.members;

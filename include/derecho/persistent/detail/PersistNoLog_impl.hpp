@@ -6,7 +6,7 @@
 
 namespace persistent {
 
-template <typename ObjectType, StorageType storageType = ST_FILE>
+template <typename ObjectType, StorageType storageType>
 void saveNoLogObjectInFile(
         ObjectType& obj,
         const char* object_name) noexcept(false) {
@@ -29,7 +29,7 @@ void saveNoLogObjectInFile(
         throw PERSIST_EXP_OPEN_FILE(errno);
     }
     ssize_t nWrite = write(fd, buf, size);
-    delete buf;
+    delete[] buf;
     if(nWrite != (ssize_t)size) {
         throw PERSIST_EXP_WRITE_FILE(errno);
     }
@@ -40,7 +40,7 @@ void saveNoLogObjectInFile(
     }
 }
 
-template <typename ObjectType, StorageType storageType = ST_FILE>
+template <typename ObjectType, StorageType storageType>
 std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         const char* object_name,
         mutils::DeserializationManager* dm) noexcept(false) {
@@ -83,7 +83,7 @@ std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
 
     // 2 - deserialize
     std::unique_ptr<ObjectType> ret = mutils::from_bytes<ObjectType>(dm, buf);
-    delete buf;
+    delete[] buf;
 
     return ret;
 }

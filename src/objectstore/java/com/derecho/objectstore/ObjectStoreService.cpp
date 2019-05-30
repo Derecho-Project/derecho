@@ -35,7 +35,8 @@ JNIEXPORT jboolean JNICALL Java_com_derecho_objectstore_ObjectStoreService_remov
                                                                             std::cout << "watcher: " << oid << "->" << object << std::endl;
                                                                         });
     try {
-        return oss.bio_remove(oid);
+        oss.bio_remove(oid);
+        return true;
     } catch(...) {
         std::cout << "error in remove" << std::endl;
         return false;

@@ -85,8 +85,8 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] = std::move(
-                    allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes));
+            subgroup_layouts[subgroup_type] =
+                    allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
         }
     } else {
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
@@ -96,9 +96,9 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] = std::move(
+            subgroup_layouts[subgroup_type] =
                     update_standard_subgroup_type(subgroup_type, subgroup_type_id,
-                                                  prev_view, curr_view, shard_sizes));
+                                                  prev_view, curr_view, shard_sizes);
         }
     }
 }

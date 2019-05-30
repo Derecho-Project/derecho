@@ -61,13 +61,13 @@ public:
     //        'put' operation finish.
     // @RETURN
     //     return the version of the new object
-    virtual version_t put(const Object& object) = 0;
+    virtual std::tuple<version_t,uint64_t> put(const Object& object) = 0;
     // remove an object
     // @PARAM oid
     //     the object id
     // @RETURN
     //     return the version of the remove operation.
-    virtual version_t remove(const OID& oid) = 0;
+    virtual std::tuple<version_t,uint64_t> remove(const OID& oid) = 0;
     // get an object
     // @PARAM oid
     //     the object id
@@ -98,13 +98,13 @@ public:
     // @PARAM oid
     // @RETURN
     //     return the version of the new object
-    virtual version_t orderedPut(const Object& object) = 0;
+    virtual std::tuple<version_t,uint64_t> orderedPut(const Object& object) = 0;
     // Perform an ordered 'remove' in the subgroup
     // @PARAM oid
     //     the object id
     // @RETURN
     //     return the version of the remove operation
-    virtual version_t orderedRemove(const OID& oid) = 0;
+    virtual std::tuple<version_t,uint64_t> orderedRemove(const OID& oid) = 0;
     // Perform an ordered 'get' in the subgroup
     // @PARAM oid
     //     the object id
@@ -133,17 +133,17 @@ public:
                            get,
                            get_by_time);
 
-    inline version_t get_version() {
+    inline std::tuple<version_t,uint64_t> get_version() {
         derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         return subgroup_handle.get_next_version();
     }
 
     // @override IObjectStoreAPI::put
-    virtual version_t put(const Object& object) {
+    virtual std::tuple<version_t,uint64_t> put(const Object& object) {
         derecho::Replicated<VolatileUnloggedObjectStore>& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
         auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
         decltype(results)::ReplyMap& replies = results.get();
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         // TODO: should we verify consistency of the versions?
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
@@ -151,11 +151,11 @@ public:
         return vRet;
     }
     // @override IObjectStoreAPI::remove
-    virtual version_t remove(const OID& oid) {
+    virtual std::tuple<version_t,uint64_t> remove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<VolatileUnloggedObjectStore>();
-        derecho::rpc::QueryResults<version_t> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
+        derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         // TODO: should we verify consistency of the versions?
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
@@ -187,9 +187,9 @@ public:
 
     // This is for REGISTER_RPC_FUNCTIONS
     // @override IReplica::orderedPut
-    virtual version_t orderedPut(const Object& object) {
-        version_t version = get_version();
-        dbg_default_info("orderedPut object:{},version:0x{:x}", object.oid, version);
+    virtual std::tuple<version_t,uint64_t> orderedPut(const Object& object) {
+        std::tuple<version_t,uint64_t> version = get_version();
+        dbg_default_info("orderedPut object:{},version:0x{:x},timestamp:{}", object.oid, std::get<0>(version), std::get<1>(version));
         this->objects.erase(object.oid);
         object.ver = version;
         this->objects.emplace(object.oid, object);  // copy constructor
@@ -200,9 +200,9 @@ public:
         return object.ver;
     }
     // @override IReplica::orderedRemove
-    virtual version_t orderedRemove(const OID& oid) {
-        version_t version = get_version();
-        dbg_default_info("orderedRemove object:{},version:0x{:x}", oid, version);
+    virtual std::tuple<version_t,uint64_t> orderedRemove(const OID& oid) {
+        auto version = get_version();
+        dbg_default_info("orderedRemove object:{},version:0x{:x},timestamp:{}", oid, std::get<0>(version), std::get<1>(version));
         if(this->objects.erase(oid)) {
             object_watcher(oid, inv_obj);
         }
@@ -210,7 +210,8 @@ public:
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
-        dbg_default_info("orderedGet object:{},version:0x{:x}", oid, get_version());
+        auto version = get_version();
+        dbg_default_info("orderedGet object:{},version:0x{:x},timestamp:{}", oid, std::get<0>(version), std::get<1>(version));
         if(objects.find(oid) != objects.end()) {
             return objects.at(oid);
         } else {
@@ -221,9 +222,15 @@ public:
     DEFAULT_SERIALIZE(objects);
 
     static std::unique_ptr<VolatileUnloggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const* buf) {
-        return std::make_unique<VolatileUnloggedObjectStore>(
-                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf).get()),
+// OPTION ONE to test
+//        return std::make_unique<VolatileUnloggedObjectStore>(
+//                std::move(*mutils::from_bytes<decltype(objects)>(dsm, buf)),
+//                dsm->mgr<IObjectStoreService>().getObjectWatcher());
+        auto ptr_to_objects = mutils::from_bytes<decltype(objects)>(dsm, buf);
+        auto ptr_to_return = std::make_unique<VolatileUnloggedObjectStore>(std::move(*ptr_to_objects),
                 dsm->mgr<IObjectStoreService>().getObjectWatcher());
+        ptr_to_objects.release(); // to avoid double free.
+        return ptr_to_return;
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(VolatileUnloggedObjectStore);
@@ -473,18 +480,18 @@ public:
                            get_by_time);
 
     // @override IReplica::orderedPut
-    virtual version_t orderedPut(const Object& object) {
+    virtual std::tuple<version_t,uint64_t> orderedPut(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
         object.ver = subgroup_handle.get_next_version();
-        dbg_default_info("orderedPut object:{},version:0x{:x}", object.oid, object.ver);
+        dbg_default_info("orderedPut object:{},version:0x{:x},timestamp:{}", object.oid, std::get<0>(object.ver), std::get<1>(object.ver));
         this->persistent_objectstore->orderedPut(object);
         return object.ver;
     }
     // @override IReplica::orderedRemove
-    virtual version_t orderedRemove(const OID& oid) {
+    virtual std::tuple<version_t,uint64_t> orderedRemove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-        version_t vRet = subgroup_handle.get_next_version();
-        dbg_default_info("orderedRemove object:{},version:0x{:x}", oid, vRet);
+        std::tuple<version_t,uint64_t> vRet = subgroup_handle.get_next_version();
+        dbg_default_info("orderedRemove object:{},version:0x{:x},timestamp:{}", oid, std::get<0>(vRet), std::get<1>(vRet));
         this->persistent_objectstore->orderedRemove(oid);
         return vRet;
     }
@@ -492,27 +499,28 @@ public:
     virtual const Object orderedGet(const OID& oid) {
 #ifndef NDEBUG
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
+        auto version = subgroup_handle.get_next_version();
+        dbg_default_info("orderedGet object:{},version:0x{:x},timestamp:{}", oid, std::get<0>(version), std::get<1>(version));
 #endif
-        dbg_default_info("orderedGet object:{},version:0x{:x}", oid, subgroup_handle.get_next_version());
         return this->persistent_objectstore->orderedGet(oid);
     }
     // @override IObjectStoreAPI::put
-    virtual version_t put(const Object& object) {
+    virtual std::tuple<version_t,uint64_t> put(const Object& object) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
         auto results = subgroup_handle.ordered_send<RPC_NAME(orderedPut)>(object);
         decltype(results)::ReplyMap& replies = results.get();
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
         }
         return vRet;
     }
     // @override IObjectStoreAPI::remove
-    virtual version_t remove(const OID& oid) {
+    virtual std::tuple<version_t,uint64_t> remove(const OID& oid) {
         auto& subgroup_handle = group->template get_subgroup<PersistentLoggedObjectStore>();
-        derecho::rpc::QueryResults<version_t> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
+        derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> results = subgroup_handle.template ordered_send<RPC_NAME(orderedRemove)>(oid);
         decltype(results)::ReplyMap& replies = results.get();
-        bool vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
         }
@@ -570,8 +578,14 @@ public:
 
     static std::unique_ptr<PersistentLoggedObjectStore> from_bytes(mutils::DeserializationManager* dsm, char const*
                                                                                                                 buf) {
-        return std::make_unique<PersistentLoggedObjectStore>(
-                std::move(*mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf).get()));
+// OPTION ONE to be tested
+//        return std::make_unique<PersistentLoggedObjectStore>(
+//                std::move(*mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf)));
+// OPTION TWO
+        auto ptr_to_persistent_objectstore = mutils::from_bytes<decltype(persistent_objectstore)>(dsm, buf);
+        auto ptr_to_return = std::make_unique<PersistentLoggedObjectStore>(std::move(*ptr_to_persistent_objectstore));
+        ptr_to_persistent_objectstore.release(); // to avoid double free.
+        return ptr_to_return;
     }
 
     DEFAULT_DESERIALIZE_NOALLOC(PersistentLoggedObjectStore);
@@ -626,7 +640,7 @@ static std::vector<node_id_t> parseReplicaList(
         }
         s = e + 1;
     }
-    return std::move(replicas);
+    return replicas;
 }
 
 class ObjectStoreService : public IObjectStoreService {
@@ -706,7 +720,7 @@ public:
     }
 
     template <typename T>
-    derecho::rpc::QueryResults<version_t> _aio_put(const Object& object, const bool& force_client) {
+    derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> _aio_put(const Object& object, const bool& force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica && !force_client) {
             // replica server can do ordered send
@@ -721,11 +735,11 @@ public:
     }
 
     template <typename T>
-    version_t _bio_put(const Object& object, const bool& force_client) {
-        derecho::rpc::QueryResults<version_t> results = this->template _aio_put<T>(object, force_client);
+    std::tuple<version_t,uint64_t> _bio_put(const Object& object, const bool& force_client) {
+        derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> results = this->template _aio_put<T>(object, force_client);
         decltype(results)::ReplyMap& replies = results.get();
 
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
         }
@@ -733,9 +747,9 @@ public:
     }
 
     // blocking put
-    virtual version_t bio_put(const Object& object, const bool& force_client) {
+    virtual std::tuple<version_t,uint64_t> bio_put(const Object& object, const bool& force_client) {
         dbg_default_debug("bio_put object id={}, mode={}, force_client={}", object.oid, mode, force_client);
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
                 vRet = this->template _bio_put<VolatileUnloggedObjectStore>(object, force_client);
@@ -750,13 +764,13 @@ public:
     }
 
     // non-blocking put
-    virtual derecho::rpc::QueryResults<version_t> aio_put(const Object& object, const bool& force_client) {
+    virtual derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> aio_put(const Object& object, const bool& force_client) {
         dbg_default_debug("aio_put object id={}, mode={}, force_client={}", object.oid, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_put<VolatileUnloggedObjectStore>(object, force_client));
+                return this->template _aio_put<VolatileUnloggedObjectStore>(object, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_put<PersistentLoggedObjectStore>(object, force_client));
+                return this->template _aio_put<PersistentLoggedObjectStore>(object, force_client);
             default:
                 dbg_default_error("Cannot execute 'put' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'put' in unsupported mode");
@@ -764,7 +778,7 @@ public:
     }
 
     template <typename T>
-    derecho::rpc::QueryResults<version_t> _aio_remove(const OID& oid, const bool& force_client) {
+    derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> _aio_remove(const OID& oid, const bool& force_client) {
         std::lock_guard<std::mutex> guard(write_mutex);
         if(bReplica && !force_client) {
             // replica server can do ordered send
@@ -779,11 +793,11 @@ public:
     }
 
     template <typename T>
-    version_t _bio_remove(const OID& oid, const bool& force_client) {
-        derecho::rpc::QueryResults<version_t> results = this->template _aio_remove<T>(oid, force_client);
+    std::tuple<version_t,uint64_t> _bio_remove(const OID& oid, const bool& force_client) {
+        derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> results = this->template _aio_remove<T>(oid, force_client);
         decltype(results)::ReplyMap& replies = results.get();
 
-        version_t vRet = INVALID_VERSION;
+        std::tuple<version_t,uint64_t> vRet(INVALID_VERSION,0);
         for(auto& reply_pair : replies) {
             vRet = reply_pair.second.get();
         }
@@ -791,7 +805,7 @@ public:
     }
 
     // blocking remove
-    virtual version_t bio_remove(const OID& oid, const bool& force_client) {
+    virtual std::tuple<version_t,uint64_t> bio_remove(const OID& oid, const bool& force_client) {
         dbg_default_debug("bio_remove object id={}, mode={}, force_client={}", oid, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
@@ -805,7 +819,7 @@ public:
     }
 
     // non-blocking remove
-    virtual derecho::rpc::QueryResults<version_t> aio_remove(const OID& oid, const bool& force_client) {
+    virtual derecho::rpc::QueryResults<std::tuple<version_t,uint64_t>> aio_remove(const OID& oid, const bool& force_client) {
         dbg_default_debug("aio_remove object id={}, mode={}, force_client={}", oid, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
@@ -859,23 +873,23 @@ public:
         derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ver, force_client);
         decltype(results)::ReplyMap& replies = results.get();
         // should we check reply consistency?
-        return std::move(replies.begin()->second.get());
+        return replies.begin()->second.get();
     }
 
     template <typename T>
     Object _bio_get(const OID& oid, const uint64_t& ts_us) {
         derecho::rpc::QueryResults<const Object> results = this->template _aio_get<T>(oid, ts_us);
         decltype(results)::ReplyMap& replies = results.get();
-        return std::move(replies.begin()->second.get());
+        return replies.begin()->second.get();
     }
 
     virtual Object bio_get(const OID& oid, const version_t& ver, const bool& force_client) {
         dbg_default_debug("bio_get object id={}, ver={}, mode={}, force_client={}", oid, ver, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, ver, force_client));
+                return this->template _bio_get<VolatileUnloggedObjectStore>(oid, ver, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, ver, force_client));
+                return this->template _bio_get<PersistentLoggedObjectStore>(oid, ver, force_client);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -886,9 +900,9 @@ public:
         dbg_default_debug("bio_get object id={}, ts_us={}.", oid, ts_us);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _bio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+                return this->template _bio_get<VolatileUnloggedObjectStore>(oid, ts_us);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _bio_get<PersistentLoggedObjectStore>(oid, ts_us));
+                return this->template _bio_get<PersistentLoggedObjectStore>(oid, ts_us);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -899,9 +913,9 @@ public:
         dbg_default_debug("aio_get object id={}, ver={}, mode={}, force_client={}", oid, ver, mode, force_client);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ver, force_client));
+                return this->template _aio_get<VolatileUnloggedObjectStore>(oid, ver, force_client);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ver, force_client));
+                return this->template _aio_get<PersistentLoggedObjectStore>(oid, ver, force_client);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");
@@ -912,9 +926,9 @@ public:
         dbg_default_debug("aio_get object id={}, ts_us={}.", oid, ts_us);
         switch(this->mode) {
             case VOLATILE_UNLOGGED:
-                return std::move(this->template _aio_get<VolatileUnloggedObjectStore>(oid, ts_us));
+                return this->template _aio_get<VolatileUnloggedObjectStore>(oid, ts_us);
             case PERSISTENT_LOGGED:
-                return std::move(this->template _aio_get<PersistentLoggedObjectStore>(oid, ts_us));
+                return this->template _aio_get<PersistentLoggedObjectStore>(oid, ts_us);
             default:
                 dbg_default_error("Cannot execute 'get' in unsupported mode {}.", mode);
                 throw derecho::derecho_exception("Cannot execute 'get' in unsupported mode {}.'");

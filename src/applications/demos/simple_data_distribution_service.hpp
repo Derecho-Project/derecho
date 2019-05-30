@@ -49,12 +49,14 @@ class IConnectionListener {
 public:
     virtual void onData(const char* data, size_t len) = 0;
     virtual void onError(uint64_t error_code) = 0;
+    virtual ~IConnectionListener() = default;
 };
 
 class IMessageProducer {
     const std::string topic;
 public:
     IMessageProducer(std::string _topic):topic(_topic){}
+    virtual ~IMessageProducer() = default;
     // write a message
     virtual bool write(const char* data, size_t len) = 0;
     virtual bool close() = 0;
@@ -84,6 +86,7 @@ class IMessageConsumer {
     const std::string topic;
 public:
     IMessageConsumer(std::string _topic):topic(_topic){}
+    virtual ~IMessageConsumer() = default;
     // set data handler
     virtual void setDataHandler(std::shared_ptr<IConnectionListener> dh) = 0;
     virtual std::shared_ptr<IConnectionListener> getDataHandler() = 0;
@@ -109,6 +112,7 @@ public:
     virtual IMessageConsumer& createConsumer(const std::string & topic) = 0;
     // IConnection does not own the producer
     virtual std::unique_ptr<IMessageProducer> createProducer(const std::string & topic) = 0;
+    virtual ~IConnection() = default;
 };
 
 class DataDistributionService: public IConnection {

@@ -161,7 +161,7 @@ public:
     /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
     /** Returns the rank of this View's leader, based on failed[]. */
-    int rank_of_leader() const;
+    int find_rank_of_leader() const;
     /** @return rank_of_leader() == my_rank */
     bool i_am_leader() const;
     /** Determines whether this node is the new leader after a view change. */
