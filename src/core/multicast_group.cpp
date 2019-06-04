@@ -568,7 +568,7 @@ void MulticastGroup::deliver_messages_upto(
             char* buf = msg.message_buffer.buffer.get();
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -579,7 +579,7 @@ void MulticastGroup::deliver_messages_upto(
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
         }
@@ -791,7 +791,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -805,7 +805,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
