@@ -1,7 +1,7 @@
 
 
 #include <iostream>
-#include "derecho/derecho.h"
+#include <derecho/core/derecho.hpp>
 
 #ifdef __CDT_PARSER__
 #define REGISTER_RPC_FUNCTIONS(...)
@@ -55,62 +55,33 @@ int main(int argc, char** argv) {
 
     derecho::Conf::initialize(argc, argv);
 
-    //derecho::SubgroupInfo subgroup_config(derecho::DefaultSubgroupAllocator(
-    //        {{std::type_index(typeid(TestObject)),
-    //            derecho::one_subgroup_policy(derecho::even_sharding_policy(num_shards,nodes_per_shard))
-    //        }}));
-    //Hacky custom allocator to allow shards to continue operating with 1 failed node
-    derecho::SubgroupInfo subgroup_config([num_shards, nodes_per_shard](const std::type_index& subgroup_type,
-                                                                        const std::unique_ptr<derecho::View>& prev_view,
-                                                                        derecho::View& curr_view) {
-        const uint num_subgroups = 1;
-        const uint minimum_members_per_shard = nodes_per_shard - 1;
-        derecho::subgroup_shard_layout_t layout_vector(num_subgroups);
-        std::set<node_id_t> sorted_view_members(curr_view.members.begin(), curr_view.members.end());
-        for(uint subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
-            for(uint shard_num = 0; shard_num < num_shards; ++shard_num) {
-                //For testing only, the node IDs for each shard must be members_per_shard sequential integers,
-                //starting at 0 for the first shard. i.e. {0, 1, 2}, {3, 4, 5} for 3-member shards
-                std::set<node_id_t> desired_members;
-                for(uint member_index = 0; member_index < nodes_per_shard; ++member_index) {
-                    desired_members.emplace((subgroup_num * num_shards * nodes_per_shard)
-                                            + (shard_num * nodes_per_shard)
-                                            + member_index);
-                }
-                std::vector<node_id_t> subview_members;
-                std::set_intersection(desired_members.begin(), desired_members.end(),
-                                      sorted_view_members.begin(), sorted_view_members.end(),
-                                      std::back_inserter(subview_members));
-                if(subview_members.size() < minimum_members_per_shard) {
-                    throw derecho::subgroup_provisioning_exception();
-                }
-                layout_vector[subgroup_num].push_back(curr_view.make_subview(subview_members));
-            }
-        }
-        return layout_vector;
-    });
+    const uint minimum_members_per_shard = nodes_per_shard - 1;
+    derecho::SubgroupInfo subgroup_config(derecho::DefaultSubgroupAllocator({
+        {std::type_index(typeid(TestObject)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                num_shards, minimum_members_per_shard, nodes_per_shard))}
+    }));
 
-    struct timespec start_time;
+
     // start timer
-    clock_gettime(CLOCK_REALTIME, &start_time);
+    auto start_time = std::chrono::high_resolution_clock::now();
     derecho::Group<TestObject> group(derecho::CallbackSet{nullptr}, subgroup_config, nullptr,
                                      std::vector<derecho::view_upcall_t>{},
                                      [](PersistentRegistry* pr) { return std::make_unique<TestObject>(pr); });
 
-    // std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
+    std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
     while(group.get_members().size() < num_shards * nodes_per_shard) {
     }
     group.barrier_sync();
 
-    struct timespec end_time;
-    clock_gettime(CLOCK_REALTIME, &end_time);
+     // end timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> time_in_ms = end_time - start_time;
 
-    double time_in_ms = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e3 + ((double)end_time.tv_nsec - start_time.tv_nsec) / 1e6;
     uint32_t my_rank = group.get_my_rank();
     if (my_rank == 0) {
         std::ofstream fout;
         fout.open("restart_data_transfer_times", std::ofstream::app);
-        fout << updates_behind << " " << update_size << " " << time_in_ms << std::endl;
+        fout << updates_behind << " " << update_size << " " << time_in_ms.count() << std::endl;
 	fout.close();
     }
 

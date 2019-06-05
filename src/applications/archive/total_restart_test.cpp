@@ -44,7 +44,7 @@ class PersistentThing : public mutils::ByteRepresentable, public derecho::Persis
 public:
     PersistentThing(Persistent<int64_t>& init_state) : state(std::move(init_state)) {}
     PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<int64_t>(); }, nullptr, registry) {}
-    int read_state() {
+    int64_t read_state() {
         return *state;
     }
     void change_state(int64_t new_int) {
@@ -139,9 +139,6 @@ int main(int argc, char** argv) {
             int new_value = rand() % 100;
             // cout << "Updating state to " << new_value << endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
-            if(counter % 1000 == 0) {
-                std::cout << "Done with counter = " << counter << std::endl;
-            }
         }
     }
 
