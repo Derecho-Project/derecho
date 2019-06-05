@@ -8,6 +8,7 @@
  */
 #include <iostream>
 #include <time.h>
+#include <chrono>
 
 #include <derecho/core/derecho.hpp>
 
@@ -38,15 +39,15 @@ public:
 };
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
-    Persistent<int> state;
+    Persistent<int64_t> state;
 
 public:
-    PersistentThing(Persistent<int>& init_state) : state(std::move(init_state)) {}
-    PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<int>(); }, nullptr, registry) {}
+    PersistentThing(Persistent<int64_t>& init_state) : state(std::move(init_state)) {}
+    PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<int64_t>(); }, nullptr, registry) {}
     int read_state() {
         return *state;
     }
-    void change_state(int new_int) {
+    void change_state(int64_t new_int) {
         *state = new_int;
     }
     void print_log() {
@@ -89,32 +90,37 @@ int main(int argc, char** argv) {
                 // cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << endl;
             }};
 
-    const int num_shards = 2;
-    const int desired_nodes_per_shard = 3;
-    const int fault_tolerance = 1;
+    const int num_shards = num_nodes / members_per_shard;
+    const int fault_tolerance = 0;
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
         {std::type_index(typeid(PersistentThing)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
-                num_shards, desired_nodes_per_shard - fault_tolerance, desired_nodes_per_shard))}
+                num_shards, members_per_shard - fault_tolerance, members_per_shard))}
     }));
 
     auto thing_factory = [](PersistentRegistry* pr) {
         return std::make_unique<PersistentThing>(pr);
     };
 
-    std::ofstream fout;
-    fout.open("metadata_data", std::ofstream::app);
-    fout << num_nodes << " " << members_per_shard << " ";
-    fout.close();
-
+    auto start_time = std::chrono::high_resolution_clock::now();
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
-    auto my_rank = group.get_my_rank();
-    if(my_rank <= 5) {
+    // end timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> time_in_ms = end_time - start_time;
+    uint32_t my_rank = group.get_my_rank();
+    if (my_rank == 0) {
+        std::ofstream fout;
+        fout.open("total_restart_data", std::ofstream::app);
+        fout << num_nodes << " " << members_per_shard << " " << time_in_ms.count() << std::endl;
+        fout.close();
+    }
+
+    if(my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         while (true) {
-            derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
-            derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
+            derecho::rpc::QueryResults<int64_t> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
+            derecho::rpc::QueryResults<int64_t>::ReplyMap& replies = results.get();
             // int curr_state = 0;
             for(auto& reply_pair : replies) {
                 try {
