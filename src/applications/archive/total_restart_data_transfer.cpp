@@ -82,10 +82,10 @@ int main(int argc, char** argv) {
         std::ofstream fout;
         fout.open("restart_data_transfer_times", std::ofstream::app);
         fout << updates_behind << " " << update_size << " " << time_in_ms.count() << std::endl;
-	fout.close();
+        fout.close();
+        std::cout << "Done writing the time measurement" << std::endl;
     }
 
-    std::cout << "Done writing the time measurement" << std::endl;
     
     std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
             group.get_my_shard<TestObject>(0));

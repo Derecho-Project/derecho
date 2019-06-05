@@ -114,7 +114,9 @@ int main(int argc, char** argv) {
         fout.open("total_restart_data", std::ofstream::app);
         fout << num_nodes << " " << members_per_shard << " " << time_in_ms.count() << std::endl;
         fout.close();
+        std::cout << "Done writing the time measurement" << std::endl;
     }
+
 
     if(my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
