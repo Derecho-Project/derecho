@@ -30,6 +30,7 @@ uint64_t ViewManager::metadata_bytes_sent = 0;
 uint64_t ViewManager::metadata_bytes_received = 0;
 uint64_t ViewManager::log_bytes_sent = 0;
 uint64_t ViewManager::log_bytes_received = 0;
+std::array<std::chrono::high_resolution_clock::time_point, 4> ViewManager::restart_timepoints = {{}};
 
 /* Leader/Restart Leader Constructor */
 ViewManager::ViewManager(
