@@ -865,10 +865,8 @@ isolate leaderVC = {
     invariant [onlyLeadersAreWoke]  forall L:replica. (woke(L, V) & ~suspected(L, L, L, V))
                                            -> isActive(V) & nset.contains(L, members(V)) & leader(L, L, V)
     invariant [initialLeader] nset.contains(0, members(V)) -> woke(0, V)
-    #invariant [neverSuspectMajority] isActive(V) & nset.contains(N, members(V)) & ~suspected(N, N, N, V)  & 
-    #                            (nset.contains(P, S) <-> (nset.contains(P, members(V)) & ~suspected(N, N, P, V)))
-    #                            -> nset.majority(S, members(V))
-    invariant [neverSuspectMajorityOrr] nset.majority(S, members(V)) & ~suspected(N, N, N, V) & nset.contains(N2, S) & nset.contains(N2, members(V)) -> ~suspected(N, N, P, V)
+    invariant [neverSuspectMajority] suspected(N, N, N, V) | (exists S:nset. nset.majority(S, members(V)) & nset.contains(N, S) & 
+                                 nset.contains(P, S) & (nset.contains(P, members(V)) -> ~suspected(N, N, P, V))
     invariant [echoMakesSense0] last_rcv_index(O, N, S, V) <= last_snt_index(S, V) & last_rcv_index(O, N, S, V) <= last_rcv_index(N, N, S, V) 
     invariant [echoMakesSense1] ~ragged_trim_computed(O, N, L, V) -> min_last_rcvd(O, N, L, S, V)=0
     invariant [echoMakesSense2] ~ragged_trim_computed(O, N, L, V) | ~ragged_trim_computed(N, N, L, V) | 
