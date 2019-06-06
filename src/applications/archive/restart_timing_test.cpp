@@ -76,14 +76,15 @@ int main(int argc, char** argv) {
                                      std::vector<derecho::view_upcall_t>{},
                                      [](PersistentRegistry* pr) { return std::make_unique<TestObject>(pr); });
 
+    auto constructor_done_time = std::chrono::high_resolution_clock::now();
 //    std::cout << "Waiting for all " << (num_shards * nodes_per_shard) << " members to join before starting updates" << std::endl;
     while(group.get_members().size() < num_shards * nodes_per_shard) {
     }
     group.barrier_sync();
 
      // end timer
-    auto end_time = std::chrono::high_resolution_clock::now();
-    milliseconds_fp total_time = end_time - start_time;
+    auto sync_done_time = std::chrono::high_resolution_clock::now();
+    milliseconds_fp total_time = sync_done_time - start_time;
 
     uint32_t my_rank = group.get_my_rank();
     if (my_rank == 0) {
@@ -95,13 +96,15 @@ int main(int argc, char** argv) {
                 ViewManager::restart_timepoints[1];
         milliseconds_fp commit_time = ViewManager::restart_timepoints[3] -
                 ViewManager::restart_timepoints[2];
-        milliseconds_fp finish_setup_time = end_time - ViewManager::restart_timepoints[3];
+        milliseconds_fp finish_setup_time = constructor_done_time - ViewManager::restart_timepoints[3];
+        milliseconds_fp barrier_time = sync_done_time - constructor_done_time;
         std::ofstream fout;
         fout.open("restart_data_transfer_times", std::ofstream::app);
         fout << updates_behind << " " << update_size << " "
                 << quorum_time.count() << " " << truncation_time.count() << " "
                 << transfer_time.count() << " " << commit_time.count() << " "
-                << finish_setup_time.count() << " " << total_time.count() << std::endl;
+                << finish_setup_time.count() << " " << barrier_time.count() << " "
+                << total_time.count() << std::endl;
         fout.close();
         std::cout << "Done writing the time measurement" << std::endl;
     }

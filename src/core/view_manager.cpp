@@ -561,6 +561,7 @@ void ViewManager::await_first_view(const node_id_t my_id) {
         }
     } while(joiner_failed);
 
+    restart_timepoints[0] = std::chrono::high_resolution_clock::now();
     dbg_default_trace("Decided on initial view: {}", curr_view->debug_string());
     //At this point, we have successfully sent an initial view to all joining nodes, so we can commit it
     //There's no state-transfer step to do, so we don't have to wait for state transfer to complete
@@ -617,9 +618,9 @@ bool ViewManager::leader_prepare_initial_view(bool& leader_has_quorum) {
             //The out-parameter will tell the leader if it also needs to wait for more joins
             return false;
         }
-        //At this point we know state transfer is done
-        restart_timepoints[2] = std::chrono::high_resolution_clock::now();
     }
+    //At this point we know state transfer is done
+    restart_timepoints[2] = std::chrono::high_resolution_clock::now();
     return true;
 }
 
@@ -631,8 +632,8 @@ void ViewManager::leader_commit_initial_view() {
         curr_view = restart_leader_state_machine->take_restart_view();
         //After sending the commit messages, it's safe to discard the restart state
         restart_leader_state_machine.reset();
-        restart_timepoints[3] = std::chrono::high_resolution_clock::now();
     }
+    restart_timepoints[3] = std::chrono::high_resolution_clock::now();
 }
 
 void ViewManager::initialize_rdmc_sst() {
