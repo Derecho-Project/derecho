@@ -24,6 +24,8 @@
 
 using namespace persistent;
 using derecho::Replicated;
+using std::cout;
+using std::endl;
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
@@ -55,6 +57,19 @@ public:
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "restart");
     srand(getpid());
+    int num_args = 2;
+    if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
+        cout << "Invalid command line arguments." << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes members_per_shard" << endl;
+        return -1;
+    }
+
+    const uint num_nodes = std::stoi(argv[argc - num_args]);
+    const uint members_per_shard = std::stoi(argv[argc - num_args + 1]);
+    if(num_nodes < members_per_shard) {
+        cout << "Must have at least " << members_per_shard << " members" << endl;
+        return -1;
+    }
 
     derecho::Conf::initialize(argc, argv);
 
@@ -64,12 +79,11 @@ int main(int argc, char** argv) {
                 // std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
 
-    const int num_shards = 2;
-    const int desired_nodes_per_shard = 3;
+    const int num_shards = num_nodes / members_per_shard;
     const int fault_tolerance = 1;
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
         {std::type_index(typeid(PersistentThing)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
-                num_shards, desired_nodes_per_shard - fault_tolerance, desired_nodes_per_shard))}
+                num_shards, members_per_shard - fault_tolerance, members_per_shard))}
     }));
 
 
@@ -82,7 +96,7 @@ int main(int argc, char** argv) {
                                           thing_factory);
 
     auto my_rank = group.get_my_rank();
-    if(my_rank <= 5) {
+    if(my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {

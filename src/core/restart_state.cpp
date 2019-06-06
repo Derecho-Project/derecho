@@ -356,11 +356,23 @@ void RestartLeaderState::send_abort() {
 int64_t RestartLeaderState::send_prepare() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        bool send_success;
+        bool socket_success;
         try {
             dbg_default_debug("Sending view prepare message to node {}", waiting_sockets_iter->first);
-            send_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
-            if(!send_success) {
+            socket_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
+            if(!socket_success) {
+                throw waiting_sockets_iter->first;
+            }
+            //Wait for an acknowledgment, to make sure the node has finished state transfer
+            CommitMessage response;
+            socket_success = waiting_sockets_iter->second.read(response);
+            if(!socket_success) {
+                throw waiting_sockets_iter->first;
+            }
+            if(response == CommitMessage::ACK) {
+                dbg_default_debug("Node {} acknowledged Prepare", waiting_sockets_iter->first);
+            } else {
+                dbg_default_warn("Node {} responded to Prepare with something other than Ack!", waiting_sockets_iter->first);
                 throw waiting_sockets_iter->first;
             }
         } catch(node_id_t failed_node) {

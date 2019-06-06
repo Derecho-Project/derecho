@@ -253,8 +253,13 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
     }
     if(commit_message == CommitMessage::PREPARE) {
         dbg_default_debug("Leader sent PREPARE");
-        //On success, replace commit_message with the second message, which is either Commit or Abort
-        bool success = leader_connection.read(commit_message);
+        bool success = leader_connection.write(CommitMessage::ACK);
+        if(!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
+        //After a successful Prepare, replace commit_message with the second message,
+        //which is either Commit or Abort
+        success = leader_connection.read(commit_message);
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }

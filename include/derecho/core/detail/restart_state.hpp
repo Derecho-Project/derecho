@@ -38,7 +38,8 @@ struct RaggedTrim : public mutils::ByteRepresentable {
 enum class CommitMessage {
     PREPARE,  //!< PREPARE
     COMMIT,   //!< COMMIT
-    ABORT     //!< ABORT
+    ABORT,    //!< ABORT
+    ACK       //!< ACK
 };
 
 /**
