@@ -154,3 +154,7 @@ target_link_libraries(membership_tests derecho)
 
 add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
+
+#timing experiment
+add_executable(restart_timing_test restart_timing_test.cpp)
+target_link_libraries(restart_timing_test derecho)

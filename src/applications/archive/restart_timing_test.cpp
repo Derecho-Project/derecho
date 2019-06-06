@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
     int num_args = 3;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_shards updates_behind update_size" << endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_shards updates_behind update_size" << std::endl;
         return -1;
     }
 
