@@ -299,7 +299,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             out[0] = false;
             ((long int*)(out + 1))[0] = invocation_id;
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
-            dbg_default_info("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
+            dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(...) {
             char* out = out_alloc(sizeof(long int) + 1);

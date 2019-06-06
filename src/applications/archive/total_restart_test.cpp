@@ -25,6 +25,8 @@
 
 using namespace persistent;
 using derecho::Replicated;
+using std::cout;
+using std::endl;
 
 using std::cout;
 using std::endl;
@@ -92,6 +94,7 @@ int main(int argc, char** argv) {
 
     const int num_shards = num_nodes / members_per_shard;
     const int fault_tolerance = 0;
+    const int fault_tolerance = 1;
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
         {std::type_index(typeid(PersistentThing)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
                 num_shards, members_per_shard - fault_tolerance, members_per_shard))}
@@ -116,7 +119,6 @@ int main(int argc, char** argv) {
         fout.close();
         std::cout << "Done writing the time measurement" << std::endl;
     }
-
 
     if(my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
