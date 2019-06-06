@@ -1,4 +1,9 @@
-
+/**
+ * @file restart_timing_test.cpp
+ * Used to record the timing breakdown data for total restart experiments
+ * @date Jun 5, 2019
+ * @author edward
+ */
 
 #include <iostream>
 #include <derecho/core/derecho.hpp>
@@ -11,6 +16,8 @@
 
 using namespace persistent;
 using derecho::Replicated;
+//like std::chrono::milliseconds, but floating-point instead of integer
+using milliseconds_fp = std::chrono::duration<double, std::milli>;
 
 /** A test object like PersistentThing in total_restart_test,
  * but whose state can be much larger than an int. */
@@ -41,17 +48,19 @@ std::string make_random_string(uint length) {
 }
 
 int main(int argc, char** argv) {
-    //Get custom arguments from the end of the arguments list
-//    const uint num_shards = std::stoi(argv[argc - 4]);
-//    const uint nodes_per_shard = std::stoi(argv[argc - 3]);
-//    const uint updates_behind = std::stoi(argv[argc - 2]);
-//    const uint update_size = std::stoi(argv[argc - 1]);
-    const uint num_shards = 3;
-    const uint nodes_per_shard = 3;
-    const uint updates_behind = std::stoi(argv[argc - 2]);
-    const uint update_size = std::stoi(argv[argc - 1]);
     unsigned int pid = getpid();
     srand(pid);
+    int num_args = 3;
+    if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
+        std::cout << "Invalid command line arguments." << std::endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_shards updates_behind update_size" << endl;
+        return -1;
+    }
+
+    const uint nodes_per_shard = 3;
+    const uint num_shards = std::stoi(argv[argc - num_args]);
+    const uint updates_behind = std::stoi(argv[argc - num_args + 1]);
+    const uint update_size = std::stoi(argv[argc - num_args + 2]);
 
     derecho::Conf::initialize(argc, argv);
 
@@ -60,7 +69,6 @@ int main(int argc, char** argv) {
         {std::type_index(typeid(TestObject)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
                 num_shards, minimum_members_per_shard, nodes_per_shard))}
     }));
-
 
     // start timer
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -75,18 +83,30 @@ int main(int argc, char** argv) {
 
      // end timer
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> time_in_ms = end_time - start_time;
+    milliseconds_fp total_time = end_time - start_time;
 
     uint32_t my_rank = group.get_my_rank();
     if (my_rank == 0) {
+        using namespace derecho;
+        milliseconds_fp quorum_time = ViewManager::restart_timepoints[0] - start_time;
+        milliseconds_fp truncation_time = ViewManager::restart_timepoints[1] -
+                ViewManager::restart_timepoints[0];
+        milliseconds_fp transfer_time = ViewManager::restart_timepoints[2] -
+                ViewManager::restart_timepoints[1];
+        milliseconds_fp commit_time = ViewManager::restart_timepoints[3] -
+                ViewManager::restart_timepoints[2];
+        milliseconds_fp finish_setup_time = end_time - ViewManager::restart_timepoints[3];
         std::ofstream fout;
         fout.open("restart_data_transfer_times", std::ofstream::app);
-        fout << updates_behind << " " << update_size << " " << time_in_ms.count() << std::endl;
+        fout << updates_behind << " " << update_size << " "
+                << quorum_time.count() << " " << truncation_time.count() << " "
+                << transfer_time.count() << " " << commit_time.count() << " "
+                << finish_setup_time.count() << " " << total_time.count() << std::endl;
         fout.close();
         std::cout << "Done writing the time measurement" << std::endl;
     }
 
-    
+
     std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
             group.get_my_shard<TestObject>(0));
     uint my_shard_rank;

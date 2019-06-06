@@ -4,6 +4,8 @@
  * @date Apr 22, 2016
  */
 
+#include <chrono>
+
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <spdlog/async.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -96,6 +98,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                                         old_shard_leaders);
         //These functions are no-ops if we're not doing total restart
         view_manager.truncate_logs();
+        ViewManager::restart_timepoints[1] = std::chrono::high_resolution_clock::now();
         view_manager.send_logs();
         receive_objects(subgroups_and_leaders_to_receive);
         if(is_starting_leader) {
@@ -107,6 +110,8 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                 view_manager.await_rejoining_nodes(my_id);
             }
         } else {
+            //Mark state transfer done, at least locally
+            ViewManager::restart_timepoints[2] = std::chrono::high_resolution_clock::now();
             //This will wait for a new view to be sent if the view was aborted
             initial_view_confirmed = view_manager.check_view_committed(leader_connection.value());
         }

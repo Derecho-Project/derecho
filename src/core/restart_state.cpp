@@ -120,6 +120,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             node_id_t joiner_id = 0;
             client_socket->read(joiner_id);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
+            ViewManager::metadata_bytes_received += sizeof(node_id_t);
             ViewManager::metadata_bytes_sent += sizeof(JoinResponse);
             dbg_default_debug("Node {} rejoined", joiner_id);
             rejoined_node_ids.emplace(joiner_id);
@@ -312,11 +313,13 @@ int64_t RestartLeaderState::send_restart_view() {
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += sizeof(leaders_buffer_size);
             mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
             send_success = waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
             if(!send_success) {
                 throw waiting_sockets_iter->first;
             }
+            ViewManager::metadata_bytes_sent += leaders_buffer_size;
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
             waiting_sockets_iter++;
         } catch(node_id_t failed_node) {
@@ -360,6 +363,7 @@ void RestartLeaderState::send_abort() {
     for(const node_id_t& member_sent_view : members_sent_restart_view) {
         dbg_default_debug("Sending view abort message to node {}", member_sent_view);
         waiting_join_sockets.at(member_sent_view).write(CommitMessage::ABORT);
+        ViewManager::metadata_bytes_sent += sizeof(CommitMessage);
     }
 }
 

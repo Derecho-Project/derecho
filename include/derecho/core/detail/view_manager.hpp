@@ -772,6 +772,14 @@ public:
     static uint64_t metadata_bytes_sent;
     static uint64_t log_bytes_sent;
     static uint64_t log_bytes_received;
+    /*
+     * Timing measurement array. Points are:
+     * 0 - initial quorum reached
+     * 1 - truncated logs
+     * 2 - state transfer finished (send and receive)
+     * 3 - commit finished
+     */
+    static std::array<std::chrono::high_resolution_clock::time_point, 4> restart_timepoints;
     /**
      * stop complaining about node failures.
      */

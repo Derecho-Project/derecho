@@ -157,6 +157,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
         }
         success = leader_connection.write(my_id);
         if(!success) throw derecho_exception("Failed to send ID to the leader! Leader has crashed.");
+        metadata_bytes_sent += sizeof(my_id);
         success = leader_connection.read(leader_response);
         if(!success) throw derecho_exception("Failed to read initial response from leader! Leader has crashed.");
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
@@ -280,6 +281,7 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
     if(!success) {
         throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
     }
+    metadata_bytes_received += sizeof(CommitMessage);
     if(commit_message == CommitMessage::PREPARE) {
         dbg_default_debug("Leader sent PREPARE");
         bool success = leader_connection.write(CommitMessage::ACK);
@@ -292,6 +294,7 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
+        metadata_bytes_received += sizeof(CommitMessage);
     }
     //This checks if either the first or the second message was Abort
     if(commit_message == CommitMessage::ABORT) {
@@ -596,6 +599,7 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
             quorum_achieved = restart_leader_state_machine->resend_view_until_quorum_lost();
         }
     }
+    restart_timepoints[0] = std::chrono::high_resolution_clock::now();
     dbg_default_debug("Successfully sent restart view {} to all restarted nodes", restart_leader_state_machine->get_restart_view().vid);
     prior_view_shard_leaders = restart_state->restart_shard_leaders;
     //Now control will return to Group to do state transfer before confirming this view
@@ -612,6 +616,8 @@ bool ViewManager::leader_prepare_initial_view(bool& leader_has_quorum) {
             //The out-parameter will tell the leader if it also needs to wait for more joins
             return false;
         }
+        //At this point we know state transfer is done
+        restart_timepoints[2] = std::chrono::high_resolution_clock::now();
     }
     return true;
 }
@@ -624,6 +630,7 @@ void ViewManager::leader_commit_initial_view() {
         curr_view = restart_leader_state_machine->take_restart_view();
         //After sending the commit messages, it's safe to discard the restart state
         restart_leader_state_machine.reset();
+        restart_timepoints[3] = std::chrono::high_resolution_clock::now();
     }
 }
 
