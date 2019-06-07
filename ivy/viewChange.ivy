@@ -844,10 +844,15 @@ isolate leaderVC = {
     export push_rows
   
     invariant [viewNumbers] forall V1:view, V2:view. (V1<V2 <-> vn(V1) < vn(V2)) & (V1=V2 <-> vn(V1)=vn(V2)) & (V=0 <-> vn(V)=0)
-    invariant [viewSucc] (V1 < V2 & (V3 > V1 & V3 < V2 -> V3=V2)) <-> view.succ(V2, V1)
-    invariant [countSucc] (C1 < C2 & (C3 > C1 & C3 < C2 -> C3=C2)) <-> count.succ(C2, C1)
+    invariant [viewSucc] (V1 < V2 & (V3 > V1 & V3 < V2 -> V3=V2)) <-> view.succ(V1, V2)
+    invariant [countSucc] (C1 < C2 & (C3 > C1 & C3 < C2 -> C3=C2)) <-> count.succ(C1, C2)
+    invariant [replicaSucc] (R1 < R2 & (R3 > R1 & R3 < R2 -> R3=R2)) <-> replica.succ(R1, R2)
     invariant [addsPfun] adds(O, N, L, K, Q1) & adds(O, N, L, K, Q2) -> Q1 = Q2
     invariant [removesPfun] removes(O, N, L, K, Q1) & removes(O, N, L, K, Q2) -> Q1 = Q2
+    invariant [nset0] nset.contains(N,0) <-> N=0
+    invariant [view0] members(0)=0
+    invariant [leader0] leader(0,0,0)
+    invariant [active0] isActive(0)
     invariant [transitiveActive] (V1 < V2 & V2 < V3 & isActive(V1) & isActive(V3)) 
                                            -> isActive(V2)
     invariant [leaderIsInTheView] (isActive(V) & nset.contains(N, members(V)) & leader(N, L, V))
@@ -882,8 +887,8 @@ isolate leaderVC = {
                               -> last_rcv_index(O, N, S, V)=0 | last_rcv_index(O, N, S, V)=last_rcv_index(N, N, S, V)
     invariant [minMakesSense] isActive(V) & nset.contains(N, members(V)) & nset.contains(M, members(V)) & nset.contains(L, members(V)) & nset.contains(S, members(V)) 
                                           -> (min_last_rcvd(N, M, L, S, V) <= last_rcv_index(L, L, S, V))
-    invariant [numChangesMakesSense] num_changes(O, N, L)>0 -> (num_changes(L, L, L) > 0 & leader(L, L, V) & leader(N, L, V))
-    invariant [wedgedMakesSense] wedged(N, N, V) -> (suspected(N, N, P, V) | (leader(N, L, V) & num_changes(N, N, L)>vn(V)))
+    invariant [numChangesMakesSense] (leader(N, L, V) & ~N=L & num_changes(O, N, L) >= K & K > 0) -> num_changes(L, L, L) >= K
+    invariant [wedgedMakesSense] (wedged(N, N, V) & (nset.contains(P, members(V))) -> ~suspected(N, N, P, V)) -> (leader(N, L, V) & num_changes(N, N, L)>vn(V))
     invariant [wedgedBeforeTrimComputed] ragged_trim_computed(N, N, L, V) -> (wedged(N, N, V) | suspected(N, N, N, V))
     invariant [trimComputedBeforeCommit] forall L:replica, N:replica, V:view. (ragged_trim_committed(L, N, N1, V) & ~suspected(L, L, L, V))
                               -> (nset.contains(L, members(V)) & nset.contains(N, members(V)) & (forall N1. nset.contains(N1, members(V)) 
@@ -894,6 +899,8 @@ isolate leaderVC = {
                               -> num_committed(N, N, L) >= vn(V2)
     invariant [nextViewAfterAllTrim]   (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N1, L, V1) 
                               -> ragged_trim_committed(N, N, L, V1)
+    invariant [addOrRemove] (num_changes(O, N, L) >= K & K > 0) & adds(O, N, L, K, A) & removes(O, N, L, K, R) ->
+                              (exists M. nset.contains(M, A) | nset.contains(M, R))
     invariant [nextViewFromPriorView] (V1<V2 & (V3>V1 & V3<V2 -> V3=V2) & removes(O, N, L, vn(V2), R) & adds(O, N, L, vn(V2), A)) ->
                               ((nset.contains(P, members(V1)) -> (nset.contains(P, members(V2)) | nset.contains(P, R))) &
                                (nset.contains(P, members(V2)) -> (nset.contains(P, members(V1)) | nset.contains(P, A))))
