@@ -41,16 +41,16 @@ public:
 };
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
-    Persistent<int64_t> state;
+    Persistent<std::string> state;
 
 public:
-    PersistentThing(Persistent<int64_t>& init_state) : state(std::move(init_state)) {}
-    PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<int64_t>(); }, nullptr, registry) {}
-    int64_t read_state() {
+    PersistentThing(Persistent<std::string>& init_state) : state(std::move(init_state)) {}
+    PersistentThing(PersistentRegistry* registry) : state([]() { return std::make_unique<std::string>(); }, nullptr, registry) {}
+    std::string read_state() {
         return *state;
     }
-    void change_state(int64_t new_int) {
-        *state = new_int;
+    void change_state(const std::string& new_stuff) {
+        *state = new_stuff;
     }
     void print_log() {
         int64_t num_versions = state.getNumOfVersions();
@@ -67,8 +67,17 @@ public:
     REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state, print_log);
 };
 
+std::string make_random_string(uint length) {
+    std::stringstream string;
+    for(uint i = 0; i < length; ++i) {
+        char next = 'a'+ (rand() % 26);
+        string << next;
+    }
+    return string.str();
+}
+
 int main(int argc, char** argv) {
-    pthread_setname_np(pthread_self(), "restart");
+    pthread_setname_np(pthread_self(), "restart_test");
     srand(getpid());
     int num_args = 2;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
@@ -120,12 +129,13 @@ int main(int argc, char** argv) {
         std::cout << "Done writing the time measurement" << std::endl;
     }
 
+    const int update_size = 1024;
+
     if(my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         while (true) {
-            derecho::rpc::QueryResults<int64_t> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
-            derecho::rpc::QueryResults<int64_t>::ReplyMap& replies = results.get();
-            // int curr_state = 0;
+            derecho::rpc::QueryResults<std::string> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
+            derecho::rpc::QueryResults<std::string>::ReplyMap& replies = results.get();
             for(auto& reply_pair : replies) {
                 try {
                     dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
@@ -134,19 +144,17 @@ int main(int argc, char** argv) {
                     dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
                 }
             }
-            // cout << "Current state according to ordered_send: " << curr_state << endl;
 
 //            std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-            //This ensures the state changes with every update from every node
-            // int new_value = counter * 10 + node_id;
-            int new_value = rand() % 100;
+            std::string new_value = make_random_string(update_size);
             // cout << "Updating state to " << new_value << endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         }
     }
 
+    std::cout << "Done with main, waiting..." << std::endl;
     while(true) {
-      
     }
+    return 0;
 }

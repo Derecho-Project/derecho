@@ -42,10 +42,6 @@ std::string make_random_string(uint length) {
 
 int main(int argc, char** argv) {
     //Get custom arguments from the end of the arguments list
-//    const uint num_shards = std::stoi(argv[argc - 4]);
-//    const uint nodes_per_shard = std::stoi(argv[argc - 3]);
-//    const uint updates_behind = std::stoi(argv[argc - 2]);
-//    const uint update_size = std::stoi(argv[argc - 1]);
     const uint num_shards = 3;
     const uint nodes_per_shard = 3;
     const uint updates_behind = std::stoi(argv[argc - 2]);

@@ -30,7 +30,9 @@ public:
                                                      nullptr,
                                                      registry) {}
     void update(const int update_num, const int sender, const std::string& new_state) {
-        // std::cout << "Received update " << update_num << " from " << sender << std::endl;
+        if(update_num % 200 == 0) {
+            std::cout << "Received update " << update_num << " from " << sender << std::endl;
+        }
         *state = new_state;
     }
     DEFAULT_SERIALIZATION_SUPPORT(TestObject, state);
@@ -86,28 +88,25 @@ int main(int argc, char** argv) {
     auto sync_done_time = std::chrono::high_resolution_clock::now();
     milliseconds_fp total_time = sync_done_time - start_time;
 
-    uint32_t my_rank = group.get_my_rank();
-    if (my_rank == 0) {
-        using namespace derecho;
-        milliseconds_fp quorum_time = ViewManager::restart_timepoints[0] - start_time;
-        milliseconds_fp truncation_time = ViewManager::restart_timepoints[1] -
-                ViewManager::restart_timepoints[0];
-        milliseconds_fp transfer_time = ViewManager::restart_timepoints[2] -
-                ViewManager::restart_timepoints[1];
-        milliseconds_fp commit_time = ViewManager::restart_timepoints[3] -
-                ViewManager::restart_timepoints[2];
-        milliseconds_fp finish_setup_time = constructor_done_time - ViewManager::restart_timepoints[3];
-        milliseconds_fp barrier_time = sync_done_time - constructor_done_time;
-        std::ofstream fout;
-        fout.open("restart_data_transfer_times", std::ofstream::app);
-        fout << updates_behind << " " << update_size << " "
-                << quorum_time.count() << " " << truncation_time.count() << " "
-                << transfer_time.count() << " " << commit_time.count() << " "
-                << finish_setup_time.count() << " " << barrier_time.count() << " "
-                << total_time.count() << std::endl;
-        fout.close();
-        std::cout << "Done writing the time measurement" << std::endl;
-    }
+    using derecho::ViewManager;
+    milliseconds_fp quorum_time = ViewManager::restart_timepoints[0] - start_time;
+    milliseconds_fp truncation_time = ViewManager::restart_timepoints[1] -
+            ViewManager::restart_timepoints[0];
+    milliseconds_fp transfer_time = ViewManager::restart_timepoints[2] -
+            ViewManager::restart_timepoints[1];
+    milliseconds_fp commit_time = ViewManager::restart_timepoints[3] -
+            ViewManager::restart_timepoints[2];
+    milliseconds_fp finish_setup_time = constructor_done_time - ViewManager::restart_timepoints[3];
+    milliseconds_fp barrier_time = sync_done_time - constructor_done_time;
+    std::ofstream fout;
+    fout.open("restart_data_transfer_times", std::ofstream::app);
+    fout << updates_behind << " " << update_size << " "
+            << quorum_time.count() << " " << truncation_time.count() << " "
+            << transfer_time.count() << " " << commit_time.count() << " "
+            << finish_setup_time.count() << " " << barrier_time.count() << " "
+            << total_time.count() << std::endl;
+    fout.close();
+    std::cout << "Done writing the time measurement" << std::endl;
 
 
     std::vector<node_id_t> my_shard_members = group.get_subgroup_members<TestObject>(0).at(
@@ -122,7 +121,9 @@ int main(int argc, char** argv) {
     uint num_updates = 1000 + updates_behind;
     std::string new_value = make_random_string(update_size);
     for(uint counter = 0; counter < num_updates - updates_behind; ++counter) {
-        // std::cout << "counter = " << counter << std::endl;
+        if(counter % 100 == 0) {
+            std::cout << "counter = " << counter << std::endl;
+        }
         derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
     }
     group.barrier_sync();
@@ -138,7 +139,7 @@ int main(int argc, char** argv) {
         std::cin >> n;
         std::string new_value = make_random_string(update_size);
         for(uint counter = num_updates - updates_behind; counter < num_updates; ++counter) {
-            // std::cout << "counter = " << counter << std::endl;
+            std::cout << "counter = " << counter << std::endl;
             derecho::rpc::QueryResults<void> result = obj_handle.ordered_send<RPC_NAME(update)>(counter, my_id, new_value);
         }
     }
