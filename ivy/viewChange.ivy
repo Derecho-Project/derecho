@@ -401,9 +401,6 @@ isolate leaderVC = {
         done(N, V) := false;
         next(V1, V2) := false;
         isFinal(V) := false;
-        count.succ(C1, C2) := C2=C1+1;
-        view.succ(V1, V2) := V2=V1+1;
-        replica.succ(R1, R2) := R2=R1+1;
     }
 
     # Node n in view v sends a message
@@ -848,22 +845,22 @@ isolate leaderVC = {
     export leader_ragged_trim_commits
     export push_rows
   
-    invariant [c1] count.succ(0, 1)
-    invariant [v1] view.succ(0, 1)
-    invariant [r1] replica.succ(0, 1)
     invariant [view0] members(0)=0
     invariant [leader0] leader(0,0,0)
     invariant [active0] isActive(0)
     invariant [vn0] V=0 -> vn(V)=0
+    invariant [nset0] nset.contains(N,0) <-> N=0
+    invariant [c1] exists A:count, B:count. count.succ(A, B)
+    invariant [v1] exists A:view, B:view. view.succ(A, B)
+    invariant [r1] exists A:replica, B:replica. replica.succ(A, B)
     invariant [activeK] forall V1:view, V2:view. (V1<V2 & isActive(V2)) -> isActive(V1)
     invariant [viewSucc] next(V1, V2) <-> (isActive(V1) & isActive(V2) & view.succ(V1, V2) & count.succ(vn(V1), vn(V2)))
     invariant [vk1] (vn(V0)=K & count.succ(K, vn(V1)) & isActive(V1)) -> next(V0, V1)
     invariant [vs] count.succ(vn(V1), vn(V2)) <-> view.succ(V1, V2)
-    invariant [existsSucc] (~VK=V0 & isActive(VK) & vn(VKM1)=vn(VK)-1) -> next(0, 1) & next(VKM1, VK)
+    invariant [existsSucc] (isActive(VKM1) & isActive(VK) & vn(VKM1)+1=vn(VK)) -> next(0, 1) & next(VKM1, VK)
     invariant [addsPfun] adds(O, N, L, K, Q1) & adds(O, N, L, K, Q2) -> Q1 = Q2
     invariant [removesPfun] removes(O, N, L, K, Q1) & removes(O, N, L, K, Q2) -> Q1 = Q2
     invariant [addsAdvance] (adds(O, N, L, K, Q) & nset.contains(A, Q) & vn(V)=K) -> (forall B:replica. nset.contains(B, members(V)) -> A<B)
-    invariant [nset0] nset.contains(N,0) <-> N=0
     invariant [transitiveActive] (V1 < V2 & V2 < V3 & isActive(V1) & isActive(V3)) 
                                            -> isActive(V2)
     invariant [leaderIsInTheView] (isActive(V) & nset.contains(N, members(V)) & leader(N, L, V))
@@ -890,8 +887,8 @@ isolate leaderVC = {
     invariant [echoMakesSense4] removes(O, N, L, K, Q) -> (Q = eSet | removes(L, L, L, K, Q))
     invariant [echoMakesSense5] num_changes(O, N, L) <= num_changes(N, N, L) & (num_changes(N, N, L)>0 -> num_changes(N, N, L) <= num_changes(L, L, L))
     invariant [echoMakesSense6] num_committed(O, N, L) <= num_committed(N, N, L) & (num_committed(O, N, L)>0 -> num_committed(O, N, L) <= num_committed(L, L, L))
-    invariant [echoMakesSense7] ragged_trim_computed(O, N, L, V) -> ragged_trim_computed(N, N, L, V) & ragged_trim_computed(L, L, L, V)
-    invariant [echoMakesSense8] ragged_trim_committed(O, N, L, V) -> ragged_trim_committed(N, N, L, V) & ragged_trim_committed(L, L, L, V)
+    invariant [echoMakesSense7] ragged_trim_computed(O, N, L, V) -> (ragged_trim_computed(N, N, L, V) & ragged_trim_computed(L, L, L, V))
+    invariant [echoMakesSense8] ragged_trim_committed(O, N, L, V) -> (ragged_trim_committed(N, N, L, V) & ragged_trim_committed(L, L, L, V))
     invariant [echoMakesSense9] wedged(O, N, V) -> wedged(N, N, V)
     invariant [deliveredMakesSense] delivered(N, C, S, V) -> (C <= last_rcv_index(N, N, S, V))
     invariant [lastRcvdMakesSense] isActive(V) & nset.contains(O, members(V)) & nset.contains(N, members(V)) & nset.contains(S, members(V)) 
