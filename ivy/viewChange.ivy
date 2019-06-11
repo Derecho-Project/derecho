@@ -845,18 +845,17 @@ isolate leaderVC = {
     export leader_ragged_trim_commits
     export push_rows
   
+    invariant [counts] exists C1:count, C2:count. count.succ(C1, C2)
+    invariant [views] exists V1:view, V2:view. view.succ(V1, V2)
+    invariant [replicas] exists R1:replica, R2:replica. replica.succ(R1, R2)
     invariant [view0] members(0)=0
     invariant [leader0] leader(0,0,0)
     invariant [active0] isActive(0)
     invariant [vn0] V=0 -> vn(V)=0
     invariant [nset0] nset.contains(N,0) <-> N=0
-    invariant [c1] exists A:count, B:count. count.succ(A, B)
-    invariant [v1] exists A:view, B:view. view.succ(A, B)
-    invariant [r1] exists A:replica, B:replica. replica.succ(A, B)
     invariant [activeK] forall V1:view, V2:view. (V1<V2 & isActive(V2)) -> isActive(V1)
-    invariant [viewSucc] next(V1, V2) <-> (isActive(V1) & isActive(V2) & view.succ(V1, V2) & count.succ(vn(V1), vn(V2)))
-    invariant [vk1] (vn(V0)=K & count.succ(K, vn(V1)) & isActive(V1)) -> next(V0, V1)
-    invariant [vs] count.succ(vn(V1), vn(V2)) <-> view.succ(V1, V2)
+    invariant [successiveViews] next(V1, V2) <-> (isActive(V1) & isActive(V2) & vn(V1)+1 = vn(V2))
+    invariant [vk1] (isActive(V0) & vn(V0)=K & K+1=vn(V1) & isActive(V1)) -> next(V0, V1)
     invariant [existsSucc] (isActive(VKM1) & isActive(VK) & vn(VKM1)+1=vn(VK)) -> next(0, 1) & next(VKM1, VK)
     invariant [addsPfun] adds(O, N, L, K, Q1) & adds(O, N, L, K, Q2) -> Q1 = Q2
     invariant [removesPfun] removes(O, N, L, K, Q1) & removes(O, N, L, K, Q2) -> Q1 = Q2
