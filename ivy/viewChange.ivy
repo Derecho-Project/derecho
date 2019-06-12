@@ -693,139 +693,165 @@ isolate leaderVC = {
         isActive(v) := true;
     }
 
-    # Orr came up with this idea to model the memory behavior of the RDMA SST.  We pick random numbers and propagate varying portions of the SST
-    # The updates preserve the SST rules about guarded objects, which is the key to why this is useful and why it works.  So for example perhaps
-    # with rand=1 we copy A, B.  Then with rand=4 we copy A, B, C, D.  Very clever guy, this Orr person!
-    relation rand(N:replica)
-    action push_rows(s:replica, r:replica, v:view) = {
+    # Orr came up with this idea to model the memory behavior of the RDMA SST.  
+    action push_rows0(s:replica, r:replica, v:view) = {
         assume isActive(v) & ~isFinal(v);
         assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
         assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
-        if * {
-            last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v);
-            suspected(r, s, N, v) := suspected(s, s, N, v);
-            if leader(s, s, v) {
-                    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-            };
-            num_changes(r, s, N) := num_changes(s, s, N);
-            num_committed(r, s, N) := num_committed(s, s, N);
-            wedged(r, s, v) := wedged(s, s, v);
-            min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
-            ragged_trim_computed(r, s, N, v) := ragged_trim_computed(s, s, N, v);
-        }
-        else {
-            if * {
-                    # 1
-                rand(N) := *;
-                last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v) if rand(N) else old last_rcv_index(r, s, N, v);
-            }
-            else {
-                    if * {
-                        # 2
-                        last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v);
-                        wedged(r, s, v) := wedged(s, s, v);
-                    } else {
-                        if * {
-                            # 3
-                            rand(N) := *;
-                            suspected(r, s, N, v) := suspected(s, s, N, v) if rand(N) else old suspected(r, s, N, v);
-                        } else {
-                            if * {
-                                # 4
-                                suspected(r, s, N, v) := suspected(s, s, N, v);
-                                wedged(r, s, v) := wedged(s, s, v);
-                        } else {
-                                if * {
-                                    # 5
-                                    if leader(s, s, v) {
-                                        adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                        removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                    };
-                                } else {
-                                    if * {
-                                        # 6
-                                        if leader(s, s, v) {
-                                            adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                            removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                        };
-                                        num_changes(r, s, N) := num_changes(s, s, N);
-                                    } else {
-                                        if * {
-                                            # 7
-                                            if leader(s, s, v) {
-                                                adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                            };
-                                            num_changes(r, s, N) := num_changes(s, s, N);
-                                        } else {
-                                            if * {
-                                                # 8
-                                                if leader(s, s, v) {
-                                                    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                                };
-                                                num_changes(r, s, N) := num_changes(s, s, N);
-                                                num_committed(r, s, N) := num_committed(s, s, N);
-                                            } else {
-                                                if * {
-                                                    # 9
-                                                    if leader(s, s, v) {
-                                                        adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                        removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                                    };
-                                                    num_changes(r, s, N) := num_changes(s, s, N);
-                                                    num_committed(r, s, N) := num_committed(s, s, N);
-                                                    wedged(r, s, v) := wedged(s, s, v);
-                                                } else {
-                                                    if * {
-                                                        # 10
-                                                            if leader(s, s, v) {
-                                                                adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                                removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                                            };
-                                                            num_changes(r, s, N) := num_changes(s, s, N);
-                                                            num_committed(r, s, N) := num_committed(s, s, N);
-                                                            wedged(r, s, v) := wedged(s, s, v);
-                                                    } else {
-                                                        if * {
-                                                            # 11
-                                                                if leader(s, s, v) {
-                                                                    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                                    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                                                };
-                                                                num_changes(r, s, N) := num_changes(s, s, N);
-                                                                num_committed(r, s, N) := num_committed(s, s, N);
-                                                                wedged(r, s, v) := wedged(s, s, v);
-                                                                min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
-                                                        }
-                                                        else {
-                                                            if * {
-                                                                # 12
-                                                                    if leader(s, s, v) {
-                                                                        adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
-                                                                        removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
-                                                                    };
-                                                                    num_changes(r, s, N) := num_changes(s, s, N);
-                                                                    num_committed(r, s, N) := num_committed(s, s, N);
-                                                                    wedged(r, s, v) := wedged(s, s, v);
-                                                                    min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
-                                                                    ragged_trim_computed(r, s, N, v) := ragged_trim_computed(s, s, N, v);
-                                                            }
-                                                            else {
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-            }
-        }
+        last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v);
+        suspected(r, s, N, v) := suspected(s, s, N, v);
+        if leader(s, s, v) {
+            adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+            removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+        num_changes(r, s, N) := num_changes(s, s, N);
+        num_committed(r, s, N) := num_committed(s, s, N);
+        wedged(r, s, v) := wedged(s, s, v);
+        min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
+        ragged_trim_computed(r, s, N, v) := ragged_trim_computed(s, s, N, v);
+    }
+
+    action push_rows1T(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v)
+    }
+
+    action push_rows1F(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	last_rcv_index(r, s, N, v) := old last_rcv_index(r, s, N, v);
+    }
+
+    action push_rows2(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	last_rcv_index(r, s, N, v) := last_rcv_index(s, s, N, v);
+	wedged(r, s, v) := wedged(s, s, v);
+    }
+
+    action push_rows3T(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        suspected(r, s, N, v) := suspected(s, s, N, v);
+    }
+
+    action push_rows3F(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        suspected(r, s, N, v) := old suspected(r, s, N, v);
+    }
+    
+    action push_rows4(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	suspected(r, s, N, v) := suspected(s, s, N, v);
+	wedged(r, s, v) := wedged(s, s, v);
+    }
+
+    action push_rows5(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        if leader(s, s, v) {
+            adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+            removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+    }
+    
+    action push_rows6(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+	};
+	num_changes(r, s, N) := num_changes(s, s, N);
+    }
+
+    action push_rows7(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+        num_changes(r, s, N) := num_changes(s, s, N);
+    }
+    
+    action push_rows8(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+	};
+	num_changes(r, s, N) := num_changes(s, s, N);
+	num_committed(r, s, N) := num_committed(s, s, N);
+    }
+`
+    action push_rows9(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+        num_changes(r, s, N) := num_changes(s, s, N);
+        num_committed(r, s, N) := num_committed(s, s, N);
+        wedged(r, s, v) := wedged(s, s, v);
+    }
+
+    action push_rows10(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+        num_changes(r, s, N) := num_changes(s, s, N);
+        num_committed(r, s, N) := num_committed(s, s, N);
+        wedged(r, s, v) := wedged(s, s, v);
+    }
+
+    action push_rows11(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+	if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+	};
+	num_changes(r, s, N) := num_changes(s, s, N);
+	num_committed(r, s, N) := num_committed(s, s, N);
+	wedged(r, s, v) := wedged(s, s, v);
+	min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
+    }
+
+    action push_rows12(s:replica, r:replica, v:view) = {
+        assume isActive(v) & ~isFinal(v);
+        assume ~suspected(r, r, s, v) & ~suspected(r, r, r, v);
+        assume ~suspected(s, s, r, v) & ~suspected(s, s, s, v);
+        if leader(s, s, v) {
+	    adds(r, s, N, vn(v), Q) := adds(s, s, N, vn(v), Q);
+	    removes(r, s, N, vn(v), Q) := removes(s, s, N, vn(v), Q);
+        };
+        num_changes(r, s, N) := num_changes(s, s, N);
+        num_committed(r, s, N) := num_committed(s, s, N);
+        wedged(r, s, v) := wedged(s, s, v);
+        min_last_rcvd(r, N, L, S, v) := min_last_rcvd(s, N, L, S, v);
+        ragged_trim_computed(r, s, N, v) := ragged_trim_computed(s, s, N, v);
     }
 
     export newViewUpdate
@@ -843,89 +869,102 @@ isolate leaderVC = {
     export leader_computes_ragged_min
     export non_leader_computes_ragged_min
     export leader_ragged_trim_commits
-    export push_rows
+    export push_rows1T
+    export push_rows1F
+    export push_rows2
+    export push_rows3T
+    export push_rows3F
+    export push_rows4
+    export push_rows5
+    export push_rows6
+    export push_rows7
+    export push_rows8
+    export push_rows9
+    export push_rows10
+    export push_rows11
+    export push_rows12
   
-    invariant [counts] exists C1:count, C2:count. count.succ(C1, C2)
-    invariant [views] exists V1:view, V2:view. view.succ(V1, V2)
-    invariant [replicas] exists R1:replica, R2:replica. replica.succ(R1, R2)
-    invariant [view0] members(0)=0
-    invariant [leader0] leader(0,0,0)
-    invariant [active0] isActive(0)
-    invariant [vn0] V=0 -> vn(V)=0
-    invariant [nset0] nset.contains(N,0) <-> N=0
-    invariant [activeK] forall V1:view, V2:view. (V1<V2 & isActive(V2)) -> isActive(V1)
-    invariant [successiveViews] next(V1, V2) <-> (isActive(V1) & isActive(V2) & vn(V1)+1 = vn(V2))
-    invariant [vk1] (isActive(V0) & vn(V0)=K & K+1=vn(V1) & isActive(V1)) -> next(V0, V1)
-    invariant [existsSucc] (isActive(VKM1) & isActive(VK) & vn(VKM1)+1=vn(VK)) -> next(0, 1) & next(VKM1, VK)
-    invariant [addsPfun] adds(O, N, L, K, Q1) & adds(O, N, L, K, Q2) -> Q1 = Q2
-    invariant [removesPfun] removes(O, N, L, K, Q1) & removes(O, N, L, K, Q2) -> Q1 = Q2
-    invariant [addsAdvance] (adds(O, N, L, K, Q) & nset.contains(A, Q) & vn(V)=K) -> (forall B:replica. nset.contains(B, members(V)) -> A<B)
-    invariant [transitiveActive] (V1 < V2 & V2 < V3 & isActive(V1) & isActive(V3)) 
+    invariant [H:counts] exists C1:count, C2:count. count.succ(C1, C2)
+    invariant [H:views] exists V1:view, V2:view. view.succ(V1, V2)
+    invariant [H:replicas] exists R1:replica, R2:replica. replica.succ(R1, R2)
+    invariant [S:view0] members(0)=0
+    invariant [S:leader0] leader(0,0,0)
+    invariant [S:active0] isActive(0)
+    invariant [S:vn0] V=0 -> vn(V)=0
+    invariant [S:nset0] nset.contains(N,0) <-> N=0
+    invariant [H:activeK] forall V1:view, V2:view. (V1<V2 & isActive(V2)) -> isActive(V1)
+    invariant [H:successiveViews] next(V1, V2) <-> (isActive(V1) & isActive(V2) & count.next(vn) = vn(V2))
+    invariant [H:vk1] (isActive(V0) & vn(V0)=K & count.next(K)=vn(V1) & isActive(V1)) -> next(V0, V1)
+    invariant [H:existsSucc] (isActive(VKM1) & isActive(VK) & count.next(vn(VKM1))=vn(VK)) -> next(0, 1) & next(VKM1, VK)
+    invariant [H:addsPfun] adds(O, N, L, K, Q1) & adds(O, N, L, K, Q2) -> Q1 = Q2
+    invariant [H:removesPfun] removes(O, N, L, K, Q1) & removes(O, N, L, K, Q2) -> Q1 = Q2
+    invariant [H:addsAdvance] (adds(O, N, L, K, Q) & nset.contains(A, Q) & vn(V)=K) -> (forall B:replica. nset.contains(B, members(V)) -> A<B)
+    invariant [H:transitiveActive] (V1 < V2 & V2 < V3 & isActive(V1) & isActive(V3)) 
                                            -> isActive(V2)
-    invariant [leaderIsInTheView] (isActive(V) & nset.contains(N, members(V)) & leader(N, L, V))
+    invariant [H:leaderIsInTheView] (isActive(V) & nset.contains(N, members(V)) & leader(N, L, V))
                                            -> nset.contains(L, members(V))
-    invariant [onlyOneLeader] (isActive(V) & nset.contains(N, members(V)) & leader(N, L1, V) & leader(N, L2, V))
+    invariant [H:onlyOneLeader] (isActive(V) & nset.contains(N, members(V)) & leader(N, L1, V) & leader(N, L2, V))
                                            -> L1 = L2 | (L1 < L2 & suspected(N, N, L1, V)) | (L2 < L1 & suspected(N, N, L2, V))
-    invariant [activeNodesHaveALeader] (isActive(V) & nset.contains(N, members(V)) & nset.contains(L, members(V)) & leader(N, L, V))
+    invariant [H:activeNodesHaveALeader] (isActive(V) & nset.contains(N, members(V)) & nset.contains(L, members(V)) & leader(N, L, V))
                                            -> (forall N2. N2 >= L | ~nset.contains(N2, members(V)) | suspected(N, N, N2, V))
-    invariant [activeViewsOverlap] (isActive(V1) & isActive(V2) & isActive(V3) & V1 < V2 & V2 < V3 & nset.contains(N, members(V1)) & nset.contains(N, members(V3))) 
+    invariant [H:activeViewsOverlap] (isActive(V1) & isActive(V2) & isActive(V3) & V1 < V2 & V2 < V3 & nset.contains(N, members(V1)) & nset.contains(N, members(V3))) 
                                            -> nset.contains(N, members(V2))
-    invariant [leadersSuspectPrior] forall L:replica, N:replica, V:view. (isActive(V) & nset.contains(L, members(V)) & nset.contains(N, members(V)) & leader(L, L, V))
+    invariant [H:leadersSuspectPrior] forall L:replica, N:replica, V:view. (isActive(V) & nset.contains(L, members(V)) & nset.contains(N, members(V)) & leader(L, L, V))
                                            -> N >= L | suspected(L, L, N, V)
-    invariant [onlyLeadersAreWoke]  forall L:replica. (woke(L, V) & ~suspected(L, L, L, V))
+    invariant [H:onlyLeadersAreWoke]  forall L:replica. (woke(L, V) & ~suspected(L, L, L, V))
                                            -> isActive(V) & nset.contains(L, members(V)) & leader(L, L, V)
-    invariant [initialLeader] nset.contains(0, members(V)) -> woke(0, V)
-    invariant [neverSuspectMajority] ~nset.contains(N, members(V)) | suspected(N, N, N, V) | 
+    invariant [H:initialLeader] nset.contains(0, members(V)) -> woke(0, V)
+    invariant [H:neverSuspectMajority] ~nset.contains(N, members(V)) | suspected(N, N, N, V) | 
                                (myMajority(N, S, V) & nset.contains(P, S) & ~suspected(N, N, P, V))
-    invariant [echoMakesSense0] last_rcv_index(O, N, S, V) <= last_snt_index(S, V) & last_rcv_index(O, N, S, V) <= last_rcv_index(N, N, S, V) 
-    invariant [echoMakesSense1] ~ragged_trim_computed(O, N, L, V) -> min_last_rcvd(O, N, L, S, V)=0
-    invariant [echoMakesSense2] ~ragged_trim_computed(O, N, L, V) | ~ragged_trim_computed(N, N, L, V) | 
+    invariant [H:echoMakesSense0] last_rcv_index(O, N, S, V) <= last_snt_index(S, V) & last_rcv_index(O, N, S, V) <= last_rcv_index(N, N, S, V) 
+    invariant [H:echoMakesSense1] ~ragged_trim_computed(O, N, L, V) -> min_last_rcvd(O, N, L, S, V)=0
+    invariant [H:echoMakesSense2] ~ragged_trim_computed(O, N, L, V) | ~ragged_trim_computed(N, N, L, V) | 
                                 (min_last_rcvd(O, N, L, S, V)=min_last_rcvd(N, N, L, S, V) & 
                                 (leader(L, L, V) & min_last_rcvd(O, N, L, S, V)=min_last_rcvd(L, L, L, S, V)))
-    invariant [echoMakesSense3] adds(O, N, L, K, Q) -> (Q = eSet | adds(L, L, L, K, Q))
-    invariant [echoMakesSense4] removes(O, N, L, K, Q) -> (Q = eSet | removes(L, L, L, K, Q))
-    invariant [echoMakesSense5] num_changes(O, N, L) <= num_changes(N, N, L) & (num_changes(N, N, L)>0 -> num_changes(N, N, L) <= num_changes(L, L, L))
-    invariant [echoMakesSense6] num_committed(O, N, L) <= num_committed(N, N, L) & (num_committed(O, N, L)>0 -> num_committed(O, N, L) <= num_committed(L, L, L))
-    invariant [echoMakesSense7] ragged_trim_computed(O, N, L, V) -> (ragged_trim_computed(N, N, L, V) & ragged_trim_computed(L, L, L, V))
-    invariant [echoMakesSense8] ragged_trim_committed(O, N, L, V) -> (ragged_trim_committed(N, N, L, V) & ragged_trim_committed(L, L, L, V))
-    invariant [echoMakesSense9] wedged(O, N, V) -> wedged(N, N, V)
-    invariant [deliveredMakesSense] delivered(N, C, S, V) -> (C <= last_rcv_index(N, N, S, V))
-    invariant [lastRcvdMakesSense] isActive(V) & nset.contains(O, members(V)) & nset.contains(N, members(V)) & nset.contains(S, members(V)) 
+    invariant [H:echoMakesSense3] adds(O, N, L, K, Q) -> (Q = eSet | adds(L, L, L, K, Q))
+    invariant [H:echoMakesSense4] removes(O, N, L, K, Q) -> (Q = eSet | removes(L, L, L, K, Q))
+    invariant [H:echoMakesSense5] num_changes(O, N, L) <= num_changes(N, N, L) & (num_changes(N, N, L)>0 -> num_changes(N, N, L) <= num_changes(L, L, L))
+    invariant [H:echoMakesSense6] num_committed(O, N, L) <= num_committed(N, N, L) & (num_committed(O, N, L)>0 -> num_committed(O, N, L) <= num_committed(L, L, L))
+    invariant [H:echoMakesSense7] ragged_trim_computed(O, N, L, V) -> (ragged_trim_computed(N, N, L, V) & ragged_trim_computed(L, L, L, V))
+    invariant [H:echoMakesSense8] ragged_trim_committed(O, N, L, V) -> (ragged_trim_committed(N, N, L, V) & ragged_trim_committed(L, L, L, V))
+    invariant [H:echoMakesSense9] wedged(O, N, V) -> wedged(N, N, V)
+    invariant [S:deliveredMakesSense] delivered(N, C, S, V) -> (C <= last_rcv_index(N, N, S, V))
+    invariant [H:lastRcvdMakesSense] isActive(V) & nset.contains(O, members(V)) & nset.contains(N, members(V)) & nset.contains(S, members(V)) 
                               -> last_rcv_index(O, N, S, V)=0 | last_rcv_index(O, N, S, V)=last_rcv_index(N, N, S, V)
-    invariant [minMakesSense] isActive(V) & nset.contains(N, members(V)) & nset.contains(M, members(V)) & nset.contains(L, members(V)) & nset.contains(S, members(V)) 
+    invariant [H:minMakesSense] isActive(V) & nset.contains(N, members(V)) & nset.contains(M, members(V)) & nset.contains(L, members(V)) & nset.contains(S, members(V)) 
                                           -> (min_last_rcvd(N, M, L, S, V) <= last_rcv_index(L, L, S, V))
-    invariant [numChangesMakesSense] (leader(N, L, V) & ~N=L & num_changes(O, N, L) >= K & K > 0) -> num_changes(L, L, L) >= K
-    invariant [wedgedMakesSense] (wedged(N, N, V) & (nset.contains(P, members(V))) -> ~suspected(N, N, P, V)) -> (leader(N, L, V) & num_changes(N, N, L)>vn(V))
-    invariant [wedgedBeforeTrimComputed] ragged_trim_computed(N, N, L, V) -> (wedged(N, N, V) | suspected(N, N, N, V))
-    invariant [trimComputedBeforeCommit] forall L:replica, N:replica, V:view. (ragged_trim_committed(L, N, N1, V) & ~suspected(L, L, L, V))
+    invariant [H:numChangesMakesSense] (leader(N, L, V) & ~N=L & num_changes(O, N, L) >= K & K > 0) -> num_changes(L, L, L) >= K
+    invariant [H:wedgedMakesSense] (wedged(N, N, V) & (nset.contains(P, members(V))) -> ~suspected(N, N, P, V)) -> (leader(N, L, V) & num_changes(N, N, L)>vn(V))
+    invariant [H:wedgedBeforeTrimComputed] ragged_trim_computed(N, N, L, V) -> (wedged(N, N, V) | suspected(N, N, N, V))
+    invariant [H:trimComputedBeforeCommit] forall L:replica, N:replica, V:view. (ragged_trim_committed(L, N, N1, V) & ~suspected(L, L, L, V))
                               -> (nset.contains(L, members(V)) & nset.contains(N, members(V)) & (forall N1. nset.contains(N1, members(V)) 
                                                                                                               -> ragged_trim_computed(L, N, N1, V)))
-    invariant [leaderCommittedTrimFirst] forall N:replica. (~suspected(N, N, N, V) & leader(N, L, V) & ragged_trim_committed(N, N, L, V))
+    invariant [H:leaderCommittedTrimFirst] forall N:replica. (~suspected(N, N, N, V) & leader(N, L, V) & ragged_trim_committed(N, N, L, V))
                               -> ragged_trim_committed(N, L, L, V)
-    invariant [nextViewAfterAllCommit] (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N, L, V1) 
+    invariant [S:nextViewAfterAllCommit] (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N, L, V1) 
                               -> num_committed(N, N, L) >= vn(V2)
-    invariant [nextViewAfterAllTrim]   (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N1, L, V1) 
+    invariant [S:nextViewAfterAllTrim]   (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N1, L, V1) 
                               -> ragged_trim_committed(N, N, L, V1)
-    invariant [addOrRemove] (num_changes(O, N, L) >= K & K > 0) & adds(O, N, L, K, A) & removes(O, N, L, K, R) ->
+    invariant [H:addOrRemove] (num_changes(O, N, L) >= K & K > 0) & adds(O, N, L, K, A) & removes(O, N, L, K, R) ->
                               (exists M. nset.contains(M, A) | nset.contains(M, R))
-    invariant [nextViewFromPriorView] (V1<V2 & (V3>V1 & V3<V2 -> V3=V2) & removes(O, N, L, vn(V2), R) & adds(O, N, L, vn(V2), A)) ->
+    invariant [S:nextViewFromPriorView] (V1<V2 & (V3>V1 & V3<V2 -> V3=V2) & removes(O, N, L, vn(V2), R) & adds(O, N, L, vn(V2), A)) ->
                               ((nset.contains(P, members(V1)) -> (nset.contains(P, members(V2)) | nset.contains(P, R))) &
                                (nset.contains(P, members(V2)) -> (nset.contains(P, members(V1)) | nset.contains(P, A))))
-    invariant [transitiveSuspicion] suspected(N, F, F, V) -> suspected(N, N, F, V)
-    invariant [gotCommitSomewhere] exists N:replica, S:replica, L: replica.
+    invariant [H:transitiveSuspicion] suspected(N, F, F, V) -> suspected(N, N, F, V)
+    invariant [H:gotCommitSomewhere] exists N:replica, S:replica, L: replica.
                               ragged_trim_committed(N, N, L, V) -> ((leader(L, L, V) & made_a_commit_decision(L, V)) & 
                               (N=L | (copied_a_commit_decision(N, S, V) & nset.contains(S, members(V)))) &
                               nset.contains(N, members(V)) & nset.contains(L, members(V)))
-    invariant [commitHappenedSomewhere] copied_a_commit_decision(N, S, V) ->
+    invariant [H:commitHappenedSomewhere] copied_a_commit_decision(N, S, V) ->
                               ((leader(S, S, V) & made_a_commit_decision(S, V)) & nset.contains(N, members(V)) & nset.contains(S, members(V)))
-    invariant [trimSafety] forall L1:replica, L2:replica, N1:replica, N2:replica, N3:replica, V:view. 
+    invariant [H:trimSafety] forall L1:replica, L2:replica, N1:replica, N2:replica, N3:replica, V:view. 
                               (~suspected(N1, N1, N1, V) & ragged_trim_committed(N1, N1, L1, V) & ragged_trim_committed(N2, N2, L2, V) &
                               (made_a_commit_decision(N1, V) | copied_a_commit_decision(N1, N, V)) &
                               nset.contains(L1, members(V)) & nset.contains(L2, members(V)) & nset.contains(N1, members(V)) & nset.contains(N2, members(V)))
                               -> (min_last_rcvd(N1, N1, L1, N3, V) = min_last_rcvd(N2, N2, L2, N3, V))
-    invariant [viewSafety] forall N1:replica, N2:replica, V1:view, V2:view. (nset.contains(N1, members(V1)) & nset.contains(N2, members(V2)) & (vn(V1)=vn(V2)))
+    invariant [S:viewSafety] forall N1:replica, N2:replica, V1:view, V2:view. (nset.contains(N1, members(V1)) & nset.contains(N2, members(V2)) & (vn(V1)=vn(V2)))
                               -> (nset.contains(N, members(V1)) <-> nset.contains(N, members(V2)))
-    invariant [deliverSameMsgs] (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & 
+    invariant [S:deliverSameMsgs] (V1 < V2 & (V1 < V & V <= V2 -> V=V2)) & isActive(V1) & isActive(V2) & 
                               nset.contains(N1, members(V1)) & done(N1, V1) & nset.contains(N2, members(V1)) & done(N2, V1) & isFinal(V1)
                               -> delivered(N1, C, S, V1) = delivered(N2, C, S, V1)
 
