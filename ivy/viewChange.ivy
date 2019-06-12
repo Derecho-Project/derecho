@@ -685,8 +685,15 @@ isolate leaderVC = {
         # Now, confirm that there is some majority set q from ov that is still present in the new view
         assume nset.majority(q, members(ov)) & nset.contains(N, q) -> nset.contains(N, res);
         # Success!  We can activate our new view (in fact isActive is just a helper variable to enable the relevant invariants)
+        if(nset.contains(n, adds)) {
+            # First perform "state transfer": We just copy delivered from some existing member to the new one.  In Derecho
+            # this step would actually copy the state from some existing node (I'm using l, the leader), to n
+            var l: replica;
+            assume nset.contains(l, members(v)) & leader(n, l, v);
+            delivered(n, C, S, v) := delivered(l, C, S, v);
+        };
         # We copy the suspicions, but everything else remains in the initial state
-        suspected(n, n, F, v) := suspected(n, n, F, ov);
+        if(nset.contains(N, add) suspected(n, n, F, v) := suspected(n, n, F, ov);
         isFinal(ov) := true;
         assume myMajority(N, S, v) <-> (nset.majority(S, members(v)) & (nset.contains(P, S) -> ~suspected(N, N, P, v)));
         next(ov, v) := true;
