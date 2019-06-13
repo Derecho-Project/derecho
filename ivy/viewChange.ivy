@@ -604,6 +604,7 @@ isolate leaderVC = {
         assume woke(l, v);
         assume forall N. ~suspected(l, l, N, v) & num_changes(l, N, l) >= cmin;
         assume exists N. ~suspected(l, l, N, v) & num_changes(l, N, l) = cmin;
+        assume num_committed(l, l, l) < cmin;
         num_committed(l, l, l) := cmin;
     }
 
@@ -861,34 +862,34 @@ isolate leaderVC = {
     }
 
     export newViewUpdate
-    #export snd_msg
-    #export rcv_msg
-    #export deliver_msg
-    #export finished
-    #export suspect
-    #export propagate
-    #export leader_awakes
-    #export propose
-    #export copy_leader_changes
-    #export min_num_acked
-    #export copy_leader_committed
-    #export leader_computes_ragged_min
-    #export non_leader_computes_ragged_min
-    #export leader_ragged_trim_commits
-    #export push_rows1T
-    #export push_rows1F
-    #export push_rows2
-    #export push_rows3T
-    #export push_rows3F
-    #export push_rows4
-    #export push_rows5
-    #export push_rows6
-    #export push_rows7
-    #export push_rows8
-    #export push_rows9
-    #export push_rows10
-    #export push_rows11
-    #export push_rows12
+    export snd_msg
+    export rcv_msg
+    export deliver_msg
+    export finished
+    export suspect
+    export propagate
+    export leader_awakes
+    export propose
+    export copy_leader_changes
+    export min_num_acked
+    export copy_leader_committed
+    export leader_computes_ragged_min
+    export non_leader_computes_ragged_min
+    export leader_ragged_trim_commits
+    export push_rows1T
+    export push_rows1F
+    export push_rows2
+    export push_rows3T
+    export push_rows3F
+    export push_rows4
+    export push_rows5
+    export push_rows6
+    export push_rows7
+    export push_rows8
+    export push_rows9
+    export push_rows10
+    export push_rows11
+    export push_rows12
   
     invariant [S_nset0] nset.contains(N,0) <-> N=0
     invariant [S_view0] members(0)=0
@@ -908,8 +909,7 @@ isolate leaderVC = {
     invariant [H_addsAdvance] adds(O, N, L, V, Q) -> ((nset.contains(P, Q) & nset.contains(R, members(V))) -> P>R)
     invariant [H_transitiveActive] (V1 < V2 & V2 < V3 & isActive(V1) & isActive(V3)) 
                                            -> isActive(V2)
-    invariant [H_leaderIsInTheView] (isActive(V) & nset.contains(N, members(V)) & leader(N, L, V))
-                                           -> nset.contains(L, members(V))
+    #invariant [H_leaderIsInTheView] leader(N, L, V) -> nset.contains(L, members(V))
     invariant [H_onlyOneLeader] (isActive(V) & nset.contains(N, members(V)) & leader(N, L1, V) & leader(N, L2, V))
                                            -> L1 = L2 | (L1 < L2 & suspected(N, N, L1, V)) | (L2 < L1 & suspected(N, N, L2, V))
     invariant [H_activeNodesHaveALeader] (isActive(V) & nset.contains(N, members(V)) & nset.contains(L, members(V)) & leader(N, L, V))
@@ -941,7 +941,6 @@ isolate leaderVC = {
     invariant [H_minMakesSense] isActive(V) & nset.contains(N, members(V)) & nset.contains(M, members(V)) & nset.contains(L, members(V)) & nset.contains(S, members(V)) 
                                           -> (min_last_rcvd(N, M, L, S, V) <= last_rcv_index(L, L, S, V))
     invariant [H_numChangesMakesSense] (leader(N, L, V) & ~N=L & num_changes(O, N, L) >= K & K > 0) -> num_changes(L, L, L) >= K
-    invariant [H_wedgedMakesSense] (wedged(N, N, V) & (nset.contains(P, members(V))) -> ~suspected(N, N, P, V)) -> (leader(N, L, V) & num_changes(N, N, L)>vn(V))
     invariant [H_wedgedBeforeTrimComputed] ragged_trim_computed(N, N, L, V) -> (wedged(N, N, V) | suspected(N, N, N, V))
     invariant [H_trimComputedBeforeCommit] forall L:replica, N:replica, V:view. (ragged_trim_committed(L, N, N1, V) & ~suspected(L, L, L, V))
                               -> (nset.contains(L, members(V)) & nset.contains(N, members(V)) & (forall N1. nset.contains(N1, members(V)) 
@@ -949,7 +948,7 @@ isolate leaderVC = {
     invariant [H_leaderCommittedTrimFirst] forall N:replica. (~suspected(N, N, N, V) & leader(N, L, V) & ragged_trim_committed(N, N, L, V))
                               -> ragged_trim_committed(N, L, L, V)
     invariant [S_nextViewAfterAllCommit] viewSeq(V1, V2) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N, L, V1) & ~suspected(L, L, N, V1)
-                              -> num_committed(N, N, L) >= vn(V2)
+                              -> num_committed(N, N, L) >= vn(V1)
     invariant [S_nextViewAfterAllTrim] viewSeq(V1, V2) & isActive(V1) & isActive(V2) & nset.contains(N, members(V1)) & leader(N1, L, V1)  & ~suspected(L, L, N1, V1)
                               -> ragged_trim_committed(N, N, L, V1)
     invariant [H_addOrRemove] (num_changes(O, N, L) >= K & K > 0) & vn(V)=K & adds(O, N, L, V, A) & removes(O, N, L, V, R) ->
