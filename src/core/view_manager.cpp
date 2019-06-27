@@ -271,6 +271,8 @@ void ViewManager::receive_view_and_leaders(const node_id_t my_id, tcp::socket& l
     //Set up non-serialized fields of curr_view
     curr_view->subgroup_type_order = subgroup_type_order;
     curr_view->my_rank = curr_view->rank_of(my_id);
+
+    restart_timepoints[0] = std::chrono::high_resolution_clock::now();
 }
 
 bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
@@ -308,6 +310,7 @@ bool ViewManager::check_view_committed(tcp::socket& leader_connection) {
         //so we can run state transfer again.
         reinit_tcp_connections(*curr_view, my_id);
     }
+    restart_timepoints[3] = std::chrono::high_resolution_clock::now();
     //Unless the final message was Commit, we need to retry state transfer
     return (commit_message == CommitMessage::COMMIT);
 }
@@ -1375,6 +1378,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     curr_view->gmsSST->start_predicate_evaluation();
     view_change_cv.notify_all();
     dbg_default_debug("Done with view change to view {}", curr_view->vid);
+    std::cout << "View " << curr_view->vid << " installed." << std::endl;
 }
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
@@ -2029,6 +2033,7 @@ void ViewManager::report_failure(const node_id_t who) {
         return;
     }
     const int failed_rank = curr_view->rank_of(who);
+    std::cout << "Node ID " << who << " failure reported." << std::endl;
     dbg_default_debug("Node ID {} failure reported; marking suspected[{}]", who, failed_rank);
     gmssst::set(curr_view->gmsSST->suspected[curr_view->my_rank][failed_rank], true);
     int failed_cnt = 0;
