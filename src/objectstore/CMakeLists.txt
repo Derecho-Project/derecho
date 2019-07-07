@@ -45,7 +45,7 @@ add_dependencies(dpods_perf dpods)
 
 # make install
 install(TARGETS dpods EXPORT dpods
-        LIBRARY DESTINATION lib)
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY
         ${CMAKE_SOURCE_DIR}/include/derecho/objectstore
         DESTINATION include/derecho)
