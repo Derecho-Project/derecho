@@ -87,7 +87,7 @@ add_dependencies(derecho
 
 # make install
 install(TARGETS derecho EXPORT derecho
-        LIBRARY DESTINATION lib)
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY
         include/derecho/conf
         include/derecho/core
