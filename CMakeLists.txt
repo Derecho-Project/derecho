@@ -12,6 +12,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -DNOLOG")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wall -ggdb -gdwarf-3 -DNOLOG")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+if ( NOT DEFINED CMAKE_INSTALL_LIBDIR )
+    set( CMAKE_INSTALL_LIBDIR lib )
+endif ( )
+
 include(GetGitRevisionDescription)
 
 # mutils_FOUND 

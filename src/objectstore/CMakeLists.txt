@@ -12,6 +12,12 @@ set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb -gdwarf-3 -D_DEBUG
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb -gdwarf-3 -D_DEBUG -D_PERFORMANCE_DEBUG")
 
+
+if ( NOT DEFINED CMAKE_INSTALL_LIBDIR )
+    set( CMAKE_INSTALL_LIBDIR lib )
+endif ( )
+
+
 # objectstore library
 add_library(dpods SHARED ObjectStore.cpp Object.cpp)
 target_include_directories(dpods PRIVATE
