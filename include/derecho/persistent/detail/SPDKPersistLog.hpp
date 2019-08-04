@@ -6,7 +6,12 @@
 #endif
 
 #include "PersistLog.hpp"
+#include "spdk/env.h"
+#include "spdk/nvme.h"
 #include <bitset>
+#include <pthread.h>
+#include <queue>
+#include <thread>
 #include <unordered_map>
 
 namespace persistent {
@@ -32,54 +37,51 @@ namespace spdk {
  * 
  */
 
-
-
 // TODO hardcoded sizes for now
-#define SPDK_NUM_LOGS_SUPPORTED (1UL<<10)  // support 1024 logs
-#define SPDK_SEGMENT_SIZE (1ULL<<23)       // segment size is 8 MB
-#define SPDK_LOG_ADDRESS_SPACE (1ULL<<40)  // address space per log is 1TB
+#define SPDK_NUM_LOGS_SUPPORTED (1UL << 10)  // support 1024 logs
+#define SPDK_SEGMENT_SIZE (1ULL << 26)       // segment size is 64 MB
+#define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH 2000
+#define SPDK_DATA_ADDRESS_TABLE_LENGTH 14000
+#define SPDK_LOG_ADDRESS_SPACE (1ULL << 40)  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
-        ((SPDK_LOG_ADDRESS_SPACE/SPDK_NUM_LOGS_SUPPORTED) - \
-        256) // maximum number of segments in one log = (128 K - 256),
-             // the space for 256 index (or 1KB) is reserved for the other
-             // metadata
-#define SPDK_LOG_METADATA_SIZE \
-        ((SPDK_LOG_ADDRESS_SPACE/SPDK_NUM_LOGS_SUPPORTED)*sizeof(uint32_t))
-        // SPDK_LOG_METADATA_SIZE = 512 KB
+    ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)  // maximum number of segments in one log = (128 K - 256),     \
+                                                                // the space for 256 index (or 1KB) is reserved for the other \
+                                                                // metadata
+// #define SPDK_LOG_METADATA_SIZE \
+//     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) * sizeof(uint32_t))
+// SPDK_LOG_METADATA_SIZE = 512 KB
+#define SPDK_LOG_METADATA_SIZE (1ULL << 15)
 
-// per log metadata
-typedef union log_metadata {
-    struct {
-        uint8_t name[256]; // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
-        uint32_t id;       // log index
-        uint32_t segment_table[SPDK_NUM_SEGMENTS]; // (128 K entries) x 4 Bytes/entry = 512KB
-        int64_t head;  // head index
-        int64_t tail;  // tail index
-        int64_t ver;   // latest version number
-    } fields;
-    uint8_t bytes[SPDK_LOG_METADATA_SIZE];
-    // bool operator
-    bool operator==(const union log_metadata& other) {
-        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
-    }
-} LogMetadata;
+#define NUM_DATA_PLANE 1
+#define NUM_CONTROL_PLANE 1
 
 // global metadata include segment management information. It exists both in
 // NVMe and memory.
 // - GlobalMetaDataPers is the data struct in NVMe.
 typedef struct global_metadata_pers {
+    int num_logs = SPDK_NUM_LOGS_SUPPORTED;
+    int log_entry_at_table_len = SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
+    int data_at_table_len = SPDK_DATA_ADDRESS_TABLE_LENGTH;
+    int segment_size = SPDK_SEGMENT_SIZE;
     LogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
 } GlobalMetadataPers;
 // SPDK_NUM_RESERVED_SEGMENTS are the number of segments reserved for the
 // global metadata at the beginning of SPDK address space.
-#define SPDK_NUM_RESERVED_SEGMENTS (((sizeof(GlobalMetadataPers)-1)/SPDK_SEGMENT_SIZE) + 1)
+#define SPDK_NUM_RESERVED_SEGMENTS (((sizeof(GlobalMetadataPers) - 1) / SPDK_SEGMENT_SIZE) + 1)
 // - GlobalMetaData is the data structure in memory, not necessary to be
 //   aligned with segments. This data needs to be constructed from the NVMe
 //   contents during initialization.
-typedef union global_metadata {
+typedef struct global_metadata {
+    int num_logs = SPDK_NUM_LOGS_SUPPORTED;
+    int log_entry_at_table_len = SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
+    int data_at_table_len = SPDK_DATA_ADDRESS_TABLE_LENGTH;
+    int segment_size = SPDK_SEGMENT_SIZE;
     std::unordered_map<std::string, uint32_t> log_name_to_id;
     LogMetadata logs[SPDK_NUM_LOGS_SUPPORTED];
-    std::bitset<SPDK_NUM_SEGMENTS> segments;
+    int64_t smallest_data_address;
+    std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
+    pthread_mutex_t segment_assignment_lock;
+    pthread_mutex_t metadata_entry_assignment_lock;
 } GlobalMetadata;
 
 // log entry format
@@ -94,11 +96,133 @@ typedef union log_entry {
     uint8_t bytes[64];
 } LogEntry;
 
+// per log metadata
+typedef union log_metadata {
+    struct {
+        uint8_t name[256];  // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
+        uint32_t id;        // log index
+        int64_t head;       // head index
+        int64_t tail;       // tail index
+        int64_t ver;        // latest version number
+        pthread_rwlock_t head_lock;
+        pthread_rwlock_t tail_lock;
+        bool inuse;
+    } fields;
+    uint8_t bytes[SPDK_LOG_METADATA_SIZE];
+    // bool operator
+    bool operator==(const union log_metadata& other) {
+        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
+    }
+} LogMetadata;
+
+typedef union persist_thread_log_metadata {
+    struct {
+        uint32_t id;                                                               // log index
+        uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];  // segment address translation table. (128 K entries) x 4 Bytes/entry = 512KB
+        uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
+    } fields;
+    uint8_t bytes[SPDK_LOG_METADATA_SIZE];
+} PTLogMetadata;
+
+// SPDK info
+typedef struct SpdkInfo {
+    struct spdk_nvme_ctrlr* ctrlr;
+    struct spdk_nvme_ns* ns;
+    //struct spdk_nvme_qpair* qpair;
+    uint32_t sector_size;
+};
+
+// Data write request
+typedef struct persist_data_request_t {
+    char* buf;
+    uint64_t request_id;
+    uint16_t part_id;
+    uint16_t part_num;
+    std::atomic<int>* completed;
+    bool handled;
+};
+
+// Control write request
+typedef struct persist_control_request_t {
+    char* buf;
+    uint16_t part_num;
+    uint64_t request_id;
+    std::atomic<int>* completed;
+    bool handled;
+};
+
 // Persistent log interfaces
 class SPDKPersistLog : public PersistLog {
+private:
+    class PersistThread {
+    protected:
+        /** SPDK general info */
+        static SpdkInfo general_spdk_info;
+        /** SPDK queue for data planes */
+        static spdk_nvme_qpair* SpdkQpair_data[NUM_DATA_PLANE];
+        /** SPDK queue for control planes */
+        static spdk_nvme_qpair* SpdkQpair_control[NUM_CONTROL_PLANE];
+        /** Threads corresponding to data planes */
+        static std::thread data_plane[NUM_DATA_PLANE];
+        /** Threads corresponding to control planes */
+        static std::thread control_plane[NUM_CONTROL_PLANE];
+        /** Data write request queue */
+        static std::queue<persist_data_request_t> data_write_queue;
+        /** Control write request queue */
+        static std::queue<persist_control_request_t> control_write_queue;
+        /** A map from request_id to completion info */
+        // static std::map<uint64_t, bool*> completion_map;
+        /** A set of completed data write request id */
+        // static std::set<int> completed_set;
+        /** Segment usage table */
+        static std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
+        /** Array of lot metadata entry */
+        static PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+        static pthread_mutex_t segment_assignment_lock;
+        static pthread_mutex_t metadata_entry_assignment_lock;
+        static sem_t new_data_request;
+        static condition_variable data_request_completed;
+        static uint64_t compeleted_request_id;
+        static std::mutex control_queue_mtx;
+        static std::mutex data_queue_mtx;
+
+        static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
+                             struct spdk_nvme_ctrlr_opts* opts);
+        static void attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
+                              struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts);
+        static void data_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+        static void control_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+
+    public:
+        /**
+         * Constructor
+         */
+        PersistThread();
+        /**
+         * Destructor
+         */
+        virtual ~PersistThread();
+        /**
+         * Load metadata entry and log entries of a given log from persistent memory.
+         * @param name - name of the log
+         */
+        void load(const std::string& name);
+    };
+
 protected:
+    // Global metadata
+    GlobalMetadata m_currGlobalMetadata;
     // log metadata
     LogMetadata m_currLogMetadata;
+    // SPDK info
+    SpdkInfo m_currSpdkInfo;
+
+    void head_rlock() noexcept(false);
+    void head_wlock() noexcept(false);
+    void tail_rlock() noexcept(false);
+    void tail_wlock() noexcept(false);
+    void head_unlock() noexcept(false);
+    void tail_unlock() noexcept(false);
 
 public:
     // Constructor:
