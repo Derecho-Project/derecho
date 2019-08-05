@@ -39,7 +39,8 @@ namespace spdk {
 
 // TODO hardcoded sizes for now
 #define SPDK_NUM_LOGS_SUPPORTED (1UL << 10)  // support 1024 logs
-#define SPDK_SEGMENT_SIZE (1ULL << 26)       // segment size is 64 MB
+#define SPDK_SEGMENT_BIT 26
+#define SPDK_SEGMENT_SIZE (1ULL << 26)  // segment size is 64 MB
 #define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH 2000
 #define SPDK_DATA_ADDRESS_TABLE_LENGTH 14000
 #define SPDK_LOG_ADDRESS_SPACE (1ULL << 40)  // address space per log is 1TB
@@ -129,26 +130,30 @@ typedef struct SpdkInfo {
     struct spdk_nvme_ctrlr* ctrlr;
     struct spdk_nvme_ns* ns;
     //struct spdk_nvme_qpair* qpair;
-    uint32_t sector_size;
+    uint32_t sector_bit;
 };
 
 // Data write request
 typedef struct persist_data_request_t {
-    char* buf;
+    void* buf;
     uint64_t request_id;
     uint16_t part_id;
     uint16_t part_num;
     std::atomic<int>* completed;
     bool handled;
+    uint64_t lba;
+    uint32_t lba_count;
 };
 
 // Control write request
 typedef struct persist_control_request_t {
-    char* buf;
+    void* buf;
     uint16_t part_num;
     uint64_t request_id;
     std::atomic<int>* completed;
     bool handled;
+    uint64_t lba;
+    uint32_t lba_count;
 };
 
 // Persistent log interfaces
@@ -170,19 +175,19 @@ private:
         static std::queue<persist_data_request_t> data_write_queue;
         /** Control write request queue */
         static std::queue<persist_control_request_t> control_write_queue;
-        /** A map from request_id to completion info */
-        // static std::map<uint64_t, bool*> completion_map;
-        /** A set of completed data write request id */
-        // static std::set<int> completed_set;
         /** Segment usage table */
         static std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
         /** Array of lot metadata entry */
         static PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+        /** Last completd request id */
+        static uint64_t compeleted_request_id;
+        /** Last assigned request id */
+        static uint64_t assigned_request_id;
         static pthread_mutex_t segment_assignment_lock;
         static pthread_mutex_t metadata_entry_assignment_lock;
         static sem_t new_data_request;
         static condition_variable data_request_completed;
-        static uint64_t compeleted_request_id;
+
         static std::mutex control_queue_mtx;
         static std::mutex data_queue_mtx;
 
@@ -207,15 +212,26 @@ private:
          * @param name - name of the log
          */
         void load(const std::string& name);
+        /**
+         * Submit data_request and control_request. Data offset must be ailgned
+         * with spdk sector size.
+         * @param id - id of the log
+         * @param data - data to be appended
+         * @param data_offset - offset of the data w.r.t virtual data space
+         * @param log - log entry to be appended
+         * @param log_offset - offset of the log entry w.r.t virtual log entry space
+         * @param metadata - updated metadata
+         */
+        void append(const uint32_t& id, char* data, const uint64_t& data_offset,
+                    const uint64_t& data_size, void* log,
+                    const uint64_t& log_offset, void* metadata);
     };
 
 protected:
-    // Global metadata
-    GlobalMetadata m_currGlobalMetadata;
     // log metadata
     LogMetadata m_currLogMetadata;
-    // SPDK info
-    SpdkInfo m_currSpdkInfo;
+    // Persistence Thread
+    inline static PersistThread persist_thread;
 
     void head_rlock() noexcept(false);
     void head_wlock() noexcept(false);
