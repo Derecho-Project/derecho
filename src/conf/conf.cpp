@@ -95,8 +95,10 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
 // should we force the user to call Conf::initialize() by throw an expcetion
 // for uninitialized configuration?
 const Conf* Conf::get() noexcept {
-    while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED)
-        Conf::initialize(1, nullptr, nullptr);
+    while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED) {
+        char *empty_arg[1] = {nullptr};
+        Conf::initialize(0, empty_arg, nullptr);
+    }
     return Conf::singleton.get();
 }
 
