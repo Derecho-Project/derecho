@@ -5,39 +5,39 @@ using namespace std;
 namespace persistent {
 namespace spdk {
 void SPDKPersistLog::head_rlock() noexcept(false) {
-    while(pthread_rwlock_rdlock(&this->m_currLogMetadata.fields.head_lock) != 0)
+    while(pthread_rwlock_rdlock(&this->m_currLogMetadata.head_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::head_wlock() noexcept(false) {
-    while(pthread_rwlock_wrlock(&this->m_currLogMetadata.fields.head_lock) != 0)
+    while(pthread_rwlock_wrlock(&this->m_currLogMetadata.head_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::head_unlock() noexcept(false) {
-    while(pthread_rwlock_unlock(&this->m_currLogMetadata.fields.head_lock) != 0)
+    while(pthread_rwlock_unlock(&this->m_currLogMetadata.head_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::tail_rlock() noexcept(false) {
-    while(pthread_rwlock_rdlock(&this->m_currLogMetadata.fields.tail_lock) != 0)
+    while(pthread_rwlock_rdlock(&this->m_currLogMetadata.tail_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::tail_wlock() noexcept(false) {
-    while(pthread_rwlock_wrlock(&this->m_currLogMetadata.fields.tail_lock) != 0)
+    while(pthread_rwlock_wrlock(&this->m_currLogMetadata.tail_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::tail_unlock() noexcept(false) {
-    while(pthread_rwlock_unlock(&this->m_currLogMetadata.fields.tail_lock) != 0)
+    while(pthread_rwlock_unlock(&this->m_currLogMetadata.tail_lock) != 0)
         ;
 }
 
 void SPDKPersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     tail_wlock();
     // Step 0: update metadata entry
-    this->m_currLogMetadata.fields.ver = ver;
+    this->m_currLogMetadata.persist_metadata_info->ver = ver;
     // Step 1: write the update to disk
 
     tail_unlock();
@@ -94,7 +94,6 @@ void SPDKPersistLog::PersistThread::control_write_request_complete(void* args,
         free(data_write_queue.front().buf);
         data_write_queue.pop();
     }
-    free(control_request->buf);
     free(control_request->completed);
     compeleted_request_id = control_request->request_id;
     control_write_queue.pop();
@@ -175,26 +174,26 @@ SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
 
 void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const uint64_t& data_offset,
                                            const uint64_t& data_size, void* log,
-                                           const uint64_t& log_offset, void* metadata) {
+                                           const uint64_t& log_offset, PTLogMetadataInfo metadata) {
     // Step 0: extract virtual segment number and sector number
     uint64_t virtual_data_segment = data_offset >> SPDK_SEGMENT_BIT;
     uint64_t data_sector = data_offset & (1 << (64 - SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
-    uint64_t virtual_log_segment = data_offset >> SPDK_SEGMENT_BIT;
-    uint64_t log_sector = data_offset & (1 << (64 - SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
+    uint64_t virtual_log_segment = log_offset >> SPDK_SEGMENT_BIT;
+    uint64_t log_sector = log_offset & (1 << (64 - SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
 
     // Step 1: Calculate needed segment number
     int needed_segment = 0;
-    if(log_metadata_entries[id].fields.segment_log_entry_at_table[virtual_log_segment] == 0) {
+    if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
         needed_segment++;
     }
     int needed_data_sector = data_size >> general_spdk_info.sector_bit;
-    if(log_metadata_entries[id].fields.segment_data_at_table[virtual_data_segment] == 0) {
+    if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment] == 0) {
         needed_segment += needed_data_sector / (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit));
     } else {
         needed_segment += (needed_data_sector + data_sector) / (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) - 1;
     }
 
-    uint16_t physical_data_segment = log_metadata_entries[id].fields.segment_data_at_table[virtual_data_segment];
+    uint16_t physical_data_segment = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment];
     uint64_t physical_data_sector = physical_data_segment * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + data_sector;
 
     // Step 2: Assign needed segments
@@ -216,11 +215,11 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
             //TODO: throw exception
         }
         // Assign segements
-        if(log_metadata_entries[id].fields.segment_log_entry_at_table[virtual_log_segment] == 0) {
+        if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
             for(int i = 0; i < SPDK_NUM_SEGMENTS; i++) {
                 if(segment_usage_table[i] == 0) {
                     segment_usage_table[i] = 1;
-                    log_metadata_entries[id].fields.segment_log_entry_at_table[virtual_log_segment] = i;
+                    global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] = i;
                     needed_segment--;
                     break;
                 }
@@ -236,7 +235,7 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
             for(int i = 0; i < SPDK_NUM_SEGMENTS; i++) {
                 if(segment_usage_table[i] == 0) {
                     segment_usage_table[i] = 1;
-                    log_metadata_entries[id].fields.segment_data_at_table[data_assignment_start] = i;
+                    global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[data_assignment_start] = i;
                     needed_segment--;
                     data_assignment_start++;
                     if(needed_segment == 0) {
@@ -258,7 +257,7 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
     log_entry_request.part_num = part_num;
     log_entry_request.completed = &completed;
     log_entry_request.handled = false;
-    log_entry_request.lba = log_metadata_entries[id].fields.segment_log_entry_at_table[virtual_log_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + log_sector;
+    log_entry_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + log_sector;
     log_entry_request.lba_count = 1;
     data_write_queue.push(log_entry_request);
     sem_post(&new_data_request);
@@ -271,7 +270,7 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
         data_request.part_num = part_num;
         data_request.completed = &completed;
         data_request.handled = false;
-        data_request.lba = log_metadata_entries[id].fields.segment_data_at_table[virtual_data_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + data_sector;
+        data_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + data_sector;
         data_request.lba_count = (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) - data_sector;
         data_write_queue.push(data_request);
         sem_post(&new_data_request);
@@ -296,7 +295,7 @@ int64_t
 SPDKPersistLog::getLength() noexcept(false) {
     head_rlock();
     tail_rlock();
-    int64_t len = (this->m_currLogMetadata.fields.tail - this->m_currLogMetadata.fields.head) / 64;
+    int64_t len = (this->m_currLogMetadata.persist_metadata_info->tail - this->m_currLogMetadata.persist_metadata_info->head) / 64;
     tail_unlock();
     head_unlock();
 
@@ -305,7 +304,7 @@ SPDKPersistLog::getLength() noexcept(false) {
 
 int64_t SPDKPersistLog::getEarliestIndex() noexcept(false) {
     head_rlock();
-    int64_t idx = this->m_currLogMetadata.fields.head / 64;
+    int64_t idx = this->m_currLogMetadata.persist_metadata_info->head / 64;
     head_unlock();
 
     return idx;
@@ -313,7 +312,7 @@ int64_t SPDKPersistLog::getEarliestIndex() noexcept(false) {
 
 int64_t SPDKPersistLog::getLatestIndex() noexcept(false) {
     tail_rlock();
-    int64_t idx = this->m_currLogMetadata.fields.tail / 64;
+    int64_t idx = this->m_currLogMetadata.persist_metadata_info->tail / 64;
     tail_unlock();
 
     return idx;

@@ -59,30 +59,27 @@ namespace spdk {
 // global metadata include segment management information. It exists both in
 // NVMe and memory.
 // - GlobalMetaDataPers is the data struct in NVMe.
-typedef struct global_metadata_pers {
-    int num_logs = SPDK_NUM_LOGS_SUPPORTED;
-    int log_entry_at_table_len = SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
-    int data_at_table_len = SPDK_DATA_ADDRESS_TABLE_LENGTH;
-    int segment_size = SPDK_SEGMENT_SIZE;
-    LogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
-} GlobalMetadataPers;
+// typedef struct global_metadata_pers {
+//     LogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+// } GlobalMetadataPers;
 // SPDK_NUM_RESERVED_SEGMENTS are the number of segments reserved for the
 // global metadata at the beginning of SPDK address space.
 #define SPDK_NUM_RESERVED_SEGMENTS (((sizeof(GlobalMetadataPers) - 1) / SPDK_SEGMENT_SIZE) + 1)
 // - GlobalMetaData is the data structure in memory, not necessary to be
 //   aligned with segments. This data needs to be constructed from the NVMe
 //   contents during initialization.
-typedef struct global_metadata {
-    int num_logs = SPDK_NUM_LOGS_SUPPORTED;
-    int log_entry_at_table_len = SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
-    int data_at_table_len = SPDK_DATA_ADDRESS_TABLE_LENGTH;
-    int segment_size = SPDK_SEGMENT_SIZE;
-    std::unordered_map<std::string, uint32_t> log_name_to_id;
-    LogMetadata logs[SPDK_NUM_LOGS_SUPPORTED];
-    int64_t smallest_data_address;
-    std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
-    pthread_mutex_t segment_assignment_lock;
-    pthread_mutex_t metadata_entry_assignment_lock;
+// typedef struct global_metadata {
+//     std::unordered_map<std::string, uint32_t> log_name_to_id;
+//     LogMetadata logs[SPDK_NUM_LOGS_SUPPORTED];
+//     int64_t smallest_data_address;
+
+// } GlobalMetadata;
+
+typedef union global_metadata {
+    struct {
+        PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+    } fields;
+    uint8_t bytes[SPDK_SEGMENT_SIZE];
 } GlobalMetadata;
 
 // log entry format
@@ -98,29 +95,44 @@ typedef union log_entry {
 } LogEntry;
 
 // per log metadata
-typedef union log_metadata {
-    struct {
-        uint8_t name[256];  // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
-        uint32_t id;        // log index
-        int64_t head;       // head index
-        int64_t tail;       // tail index
-        int64_t ver;        // latest version number
-        pthread_rwlock_t head_lock;
-        pthread_rwlock_t tail_lock;
-        bool inuse;
-    } fields;
-    uint8_t bytes[SPDK_LOG_METADATA_SIZE];
+typedef struct log_metadata {
+    PTLogMetadataInfo* persist_metadata_info;
+    pthread_rwlock_t head_lock;
+    pthread_rwlock_t tail_lock;
     // bool operator
-    bool operator==(const union log_metadata& other) {
-        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
+    bool operator==(const struct log_metadata& other) {
+        return (this->persist_metadata->fields.head == other.persist_metadata->fields.head)
+               && (this->persist_metadata->fields.tail == other.persist_metadata->fields.tail)
+               && (this->persist_metadata->fields.ver == other.persist_metadata->fields.ver);
     }
 } LogMetadata;
 
+typedef struct persist_thread_log_metadata_info {
+    uint8_t name[256];
+    uint32_t id;
+    int64_t head;
+    int64_t tail;
+    int64_t ver;
+    bool inuse;
+} PTLogMetadataInfo;
+
+typedef struct persist_thread_log_metadata_address {
+    uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];
+    uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
+} PTLogMetadataAddress;
+
 typedef union persist_thread_log_metadata {
     struct {
-        uint32_t id;                                                               // log index
-        uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];  // segment address translation table. (128 K entries) x 4 Bytes/entry = 512KB
-        uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
+        // uint8_t name[256];  // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
+        // uint32_t id;        // log index
+        // int64_t head;       // head index
+        // int64_t tail;       // tail index
+        // int64_t ver;        // latest version number
+        // bool inuse;
+        // uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];  // segment address translation table. (128 K entries) x 4 Bytes/entry = 512KB
+        // uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
+        PTLogMetadataInfo log_metadata_info;
+        PTLogMetadataAddress log_metadata_address;
     } fields;
     uint8_t bytes[SPDK_LOG_METADATA_SIZE];
 } PTLogMetadata;
@@ -147,7 +159,7 @@ typedef struct persist_data_request_t {
 
 // Control write request
 typedef struct persist_control_request_t {
-    void* buf;
+    PTLogMetadataInfo buf;
     uint16_t part_num;
     uint64_t request_id;
     std::atomic<int>* completed;
@@ -178,7 +190,7 @@ private:
         /** Segment usage table */
         static std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
         /** Array of lot metadata entry */
-        static PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+        static GlobalMetadata global_metadata;
         /** Last completd request id */
         static uint64_t compeleted_request_id;
         /** Last assigned request id */
@@ -224,7 +236,7 @@ private:
          */
         void append(const uint32_t& id, char* data, const uint64_t& data_offset,
                     const uint64_t& data_size, void* log,
-                    const uint64_t& log_offset, void* metadata);
+                    const uint64_t& log_offset, PTLogMetadataInfo metadata);
     };
 
 protected:
