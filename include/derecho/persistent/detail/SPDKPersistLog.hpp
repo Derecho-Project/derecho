@@ -94,45 +94,53 @@ typedef union log_entry {
     uint8_t bytes[64];
 } LogEntry;
 
-// per log metadata
+/**Per log metadata */
 typedef struct log_metadata {
+    /**Info part of metadata entry */
     PTLogMetadataInfo* persist_metadata_info;
+    /**Lock on head field */
     pthread_rwlock_t head_lock;
+    /**Lock on tail field */
     pthread_rwlock_t tail_lock;
     // bool operator
     bool operator==(const struct log_metadata& other) {
-        return (this->persist_metadata->fields.head == other.persist_metadata->fields.head)
-               && (this->persist_metadata->fields.tail == other.persist_metadata->fields.tail)
-               && (this->persist_metadata->fields.ver == other.persist_metadata->fields.ver);
+        return (this->persist_metadata_info->head == other.persist_metadata_info->head)
+               && (this->persist_metadata_info->tail == other.persist_metadata_info->tail)
+               && (this->persist_metadata_info->ver == other.persist_metadata_info->ver);
     }
 } LogMetadata;
 
+/**Info part of log metadata entries stored in persist thread. */
 typedef struct persist_thread_log_metadata_info {
+    /**Name of the log */
     uint8_t name[256];
+    /**Log index */
     uint32_t id;
+    /**Head index */
     int64_t head;
+    /**Tail index */
     int64_t tail;
+    /**Latest version number */
     int64_t ver;
+    /**Whether the metadata entry is occupied */
     bool inuse;
 } PTLogMetadataInfo;
 
+/**Address transalation part of log metadata entries stored in persist thread */
 typedef struct persist_thread_log_metadata_address {
+    /**Log entry segment address translation table */
     uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];
+    /**Data segment address translation table */
     uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
 } PTLogMetadataAddress;
 
+/**Log metadata entry stored in persist thread */
 typedef union persist_thread_log_metadata {
     struct {
-        // uint8_t name[256];  // name of the log, char string or std string both should be fine its not performance sensitive and string is more flexible
-        // uint32_t id;        // log index
-        // int64_t head;       // head index
-        // int64_t tail;       // tail index
-        // int64_t ver;        // latest version number
-        // bool inuse;
-        // uint16_t segment_log_entry_at_table[SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];  // segment address translation table. (128 K entries) x 4 Bytes/entry = 512KB
-        // uint16_t segment_data_at_table[SPDK_DATA_ADDRESS_TABLE_LENGTH];
-        PTLogMetadataInfo log_metadata_info;
+        /**Address part of the entry */
         PTLogMetadataAddress log_metadata_address;
+        /**Info part of the entry */
+        PTLogMetadataInfo log_metadata_info;
     } fields;
     uint8_t bytes[SPDK_LOG_METADATA_SIZE];
 } PTLogMetadata;
@@ -152,7 +160,6 @@ typedef struct persist_data_request_t {
     uint16_t part_id;
     uint16_t part_num;
     std::atomic<int>* completed;
-    bool handled;
     uint64_t lba;
     uint32_t lba_count;
 };
@@ -163,7 +170,6 @@ typedef struct persist_control_request_t {
     uint16_t part_num;
     uint64_t request_id;
     std::atomic<int>* completed;
-    bool handled;
     uint64_t lba;
     uint32_t lba_count;
 };
@@ -183,10 +189,18 @@ private:
         static std::thread data_plane[NUM_DATA_PLANE];
         /** Threads corresponding to control planes */
         static std::thread control_plane[NUM_CONTROL_PLANE];
+
         /** Data write request queue */
         static std::queue<persist_data_request_t> data_write_queue;
+        //static std::queue<persist_data_request_t> in_progress_data_write_queue;
         /** Control write request queue */
         static std::queue<persist_control_request_t> control_write_queue;
+        //static std::queue<persist_control_request_t> in_progress_control_write_queue;
+        static std::mutex control_queue_mtx;
+        //static std::mutex in_progress_control_queue_mtx;
+        static std::mutex data_queue_mtx;
+        //static std::mutex in_progress_data_queue_mtx;
+
         /** Segment usage table */
         static std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
         /** Array of lot metadata entry */
@@ -199,9 +213,6 @@ private:
         static pthread_mutex_t metadata_entry_assignment_lock;
         static sem_t new_data_request;
         static condition_variable data_request_completed;
-
-        static std::mutex control_queue_mtx;
-        static std::mutex data_queue_mtx;
 
         static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                              struct spdk_nvme_ctrlr_opts* opts);

@@ -81,6 +81,8 @@ void SPDKPersistLog::PersistThread::data_write_request_complete(void* args,
     if(data_request->completed->load() == data_request->part_num) {
         data_request_completed.notify_all();
     }
+    free(data_request->buf);
+    delete data_request;
 }
 
 void SPDKPersistLog::PersistThread::control_write_request_complete(void* args,
@@ -90,13 +92,17 @@ void SPDKPersistLog::PersistThread::control_write_request_complete(void* args,
         exit(1);
     }
     persist_control_request_t* control_request = (persist_control_request_t*)args;
-    while(data_write_queue.front().request_id == control_request->request_id) {
-        free(data_write_queue.front().buf);
-        data_write_queue.pop();
-    }
     free(control_request->completed);
     compeleted_request_id = control_request->request_id;
-    control_write_queue.pop();
+    delete control_request;
+}
+
+uint64_t segment_address_log_location(const uint32_t& id, const uint16_t& virtual_log_segment) {
+    return id * sizeof(persist_thread_log_metadata) + virtual_log_segment * sizeof(uint16_t);
+}
+
+uint64_t segment_address_data_location(const uint32_t& id, const uint16_t& virtual_data_segment) {
+    return id * sizeof(persist_thread_log_metadata) + SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH * sizeof(uint16_t) + virtual_data_segment * sizeof(uint16_t);
 }
 
 SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
@@ -138,19 +144,22 @@ SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
     // Step 3: initialize other fields
     compeleted_request_id = -1;
     assigned_request_id = -1;
+    segment_usage_table.reset();
+    segment_usage_table[0].flip();
     // Step 3: initialize threads
     for(int i = 0; i < NUM_DATA_PLANE; i++) {
-        data_plane[i] = thread([]() {
+        data_plane[i] = thread([i]() {
             do {
                 sem_wait(&new_data_request);
                 std::unique_lock<std::mutex> lck(data_queue_mtx);
-                // TODO: Process data write request
+                persist_data_request_t data_request = data_write_queue.front();
+                spdk_nvme_ns_cmd_write(general_spdk_info.ns, SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_write_request_complete, (void*)&data_request, NULL);
                 lck.release();
             } while(true);
         });
     }
     for(int i = 0; i < NUM_CONTROL_PLANE; i++) {
-        control_plane[i] = thread([]() {
+        control_plane[i] = thread([i]() {
             do {
                 // Wait until available compeleted data request
                 std::unique_lock<std::mutex> lck(control_queue_mtx);
@@ -158,10 +167,8 @@ SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
                 persist_control_request_t control_request = control_write_queue.front();
                 do {
                     if(control_request.completed->load() == control_request.part_num) {
-                        if(!control_request.handled) {
-                            control_request.handled = true;
-                            //TODO: submit control write request
-                        }
+                        spdk_nvme_ns_cmd_write(general_spdk_info.ns, SpdkQpair_control[i], &control_request.buf, control_request.lba, control_request.lba_count, control_write_request_complete, (void*)&control_request, NULL);
+                        control_write_queue.pop();
                     } else {
                         break;
                     }
@@ -177,14 +184,17 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
                                            const uint64_t& log_offset, PTLogMetadataInfo metadata) {
     // Step 0: extract virtual segment number and sector number
     uint64_t virtual_data_segment = data_offset >> SPDK_SEGMENT_BIT;
-    uint64_t data_sector = data_offset & (1 << (64 - SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
+    uint64_t data_sector = data_offset & (1 << SPDK_SEGMENT_BIT - 1) >> general_spdk_info.sector_bit;
     uint64_t virtual_log_segment = log_offset >> SPDK_SEGMENT_BIT;
-    uint64_t log_sector = log_offset & (1 << (64 - SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
+    uint64_t log_sector = log_offset & (1 << SPDK_SEGMENT_BIT - 1) >> general_spdk_info.sector_bit;
 
     // Step 1: Calculate needed segment number
+    //TODO: using data_sector index as condition?
     int needed_segment = 0;
+    int part_num = 0;
     if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
         needed_segment++;
+        part_num++;
     }
     int needed_data_sector = data_size >> general_spdk_info.sector_bit;
     if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment] == 0) {
@@ -196,98 +206,128 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
     uint16_t physical_data_segment = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment];
     uint64_t physical_data_sector = physical_data_segment * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + data_sector;
 
-    // Step 2: Assign needed segments
-    if(needed_segment > 0) {
-        if(pthread_mutex_lock(&segment_assignment_lock) != 0) {
-            // failed to grab the lock
-        }
-        int available_segment = 0;
-        for(int i = 0; i < SPDK_NUM_SEGMENTS; i++) {
-            if(segment_usage_table[i] == 0) {
-                available_segment++;
-                if(available_segment == needed_segment) {
-                    break;
-                }
-            }
-        }
-        // Not enough available segments
-        if(available_segment < needed_segment) {
-            //TODO: throw exception
-        }
-        // Assign segements
-        if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
-            for(int i = 0; i < SPDK_NUM_SEGMENTS; i++) {
-                if(segment_usage_table[i] == 0) {
-                    segment_usage_table[i] = 1;
-                    global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] = i;
-                    needed_segment--;
-                    break;
-                }
-            }
-        }
-        if(needed_segment > 0) {
-            int data_assignment_start;
-            if(physical_data_sector == 0) {
-                data_assignment_start = virtual_data_segment;
-            } else {
-                data_assignment_start = virtual_data_segment + 1;
-            }
-            for(int i = 0; i < SPDK_NUM_SEGMENTS; i++) {
-                if(segment_usage_table[i] == 0) {
-                    segment_usage_table[i] = 1;
-                    global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[data_assignment_start] = i;
-                    needed_segment--;
-                    data_assignment_start++;
-                    if(needed_segment == 0) {
-                        break;
-                    }
-                }
-            }
-        }
+    if(pthread_mutex_lock(&segment_assignment_lock) != 0) {
+        // failed to grab the lock
     }
-    // Step 3: Submit data request
+
+    // Step 2: search for available segment
+    int seg_index = 1;
+    std::set<uint16_t> available_segment_index;
+    while(available_segment_index.size() < needed_segment) {
+        if(segment_usage_table[seg_index] == 0) {
+            available_segment_index.insert(seg_index);
+        }
+        seg_index++;
+    }
+    if(available_segment_index.size() < needed_segment) {
+        //TODO: throw excpetion
+    }
+
+    //Calculate part num
+    int data_assignment_start;
+    if(physical_data_sector == 0) {
+        data_assignment_start = virtual_data_segment;
+    } else {
+        data_assignment_start = virtual_data_segment + 1;
+    }
+    part_num += segment_address_data_location(id, data_assignment_start + available_segment_index.size() - part_num) >> general_spdk_info.sector_bit - segment_address_data_location(id, data_assignment_start) >> general_spdk_info.sector_bit;
+    part_num += (needed_data_sector + data_sector) / (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit));
+
+    // Step 3: Submit data request for segment address translation table update
+    std::atomic<int> completed;
     uint64_t request_id = assigned_request_id + 1;
     assigned_request_id++;
-    uint16_t part_num = (needed_data_sector + data_sector) / (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit));
-    std::atomic<int> completed;
+    uint16_t part_id = 0;
+
+    std::set<uint16_t>::iterator it = available_segment_index.begin();
+    if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
+        global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] = *it;
+        segment_usage_table[*it] = 1;
+        uint64_t offset = segment_address_log_location(id, virtual_log_segment);
+        persist_data_request_t data_request;
+        data_request.request_id = request_id;
+        data_request.completed = &completed;
+        data_request.part_id = part_id;
+        data_request.buf = new char[1 >> general_spdk_info.sector_bit];
+        data_request.lba = offset >> general_spdk_info.sector_bit;
+        data_request.lba_count = 1;
+        char* start = (char*)&global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] - (offset & (1 << general_spdk_info.sector_bit - 1));
+        std::copy(start, start + (1 << general_spdk_info.sector_bit), data_request.buf);
+        std::unique_lock<std::mutex> lck(data_queue_mtx);
+        data_write_queue.push(data_request);
+        lck.release();
+        sem_post(&new_data_request);
+        it++;
+        part_id++;
+    }
+
+    uint64_t next_sector = segment_address_data_location(id, data_assignment_start) >> general_spdk_info.sector_bit;
+    while(it != available_segment_index.end()) {
+        global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[data_assignment_start] = *it;
+        segment_usage_table[*it] = 1;
+        uint64_t offset = segment_address_data_location(id, data_assignment_start);
+        if(offset >> general_spdk_info.sector_bit == next_sector) {
+            persist_data_request_t data_request;
+            data_request.request_id = request_id;
+            data_request.completed = &completed;
+            data_request.part_id = part_id;
+            data_request.buf = new char[1 >> general_spdk_info.sector_bit];
+            data_request.lba = offset >> general_spdk_info.sector_bit;
+            data_request.lba_count = 1;
+            char* start = (char*)&global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[data_assignment_start] - (offset & (1 << general_spdk_info.sector_bit - 1));
+            std::copy(start, start + (1 << general_spdk_info.sector_bit), data_request.buf);
+            std::unique_lock<std::mutex> lck(data_queue_mtx);
+            data_write_queue.push(data_request);
+            lck.release();
+            sem_post(&new_data_request);
+            part_id++;
+            next_sector += (1 >> general_spdk_info.sector_bit - offset & (1 << general_spdk_info.sector_bit - 1)) / sizeof(uint16_t);
+        }
+        it++;
+        data_assignment_start++;
+    }
+    pthread_mutex_unlock(&segment_assignment_lock);
+
+    // Step 4: Submit data request
     persist_data_request_t log_entry_request;
     log_entry_request.request_id = request_id;
     log_entry_request.buf = log;
-    log_entry_request.part_id = 0;
+    log_entry_request.part_id = part_id;
     log_entry_request.part_num = part_num;
     log_entry_request.completed = &completed;
-    log_entry_request.handled = false;
     log_entry_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + log_sector;
     log_entry_request.lba_count = 1;
+    std::unique_lock<std::mutex> lck(data_queue_mtx);
     data_write_queue.push(log_entry_request);
+    lck.release();
     sem_post(&new_data_request);
+    part_id++;
 
-    for(int i = 1; i < part_num; i++) {
+    while(part_id < part_num) {
         persist_data_request_t data_request;
         data_request.request_id = request_id;
         data_request.buf = data;
-        data_request.part_id = i;
+        data_request.part_id = part_id;
         data_request.part_num = part_num;
         data_request.completed = &completed;
-        data_request.handled = false;
         data_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment] * (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) + data_sector;
         data_request.lba_count = (SPDK_SEGMENT_SIZE / (1 << general_spdk_info.sector_bit)) - data_sector;
+        std::unique_lock<std::mutex> lck(data_queue_mtx);
         data_write_queue.push(data_request);
         sem_post(&new_data_request);
+        lck.release();
         data_sector = 0;
         virtual_data_segment++;
         data += data_request.lba_count * (1 << general_spdk_info.sector_bit);
     }
     //Step 4: Submit control request
-    //TODO: metadata address
     persist_control_request_t metadata_request;
     metadata_request.request_id = request_id;
     metadata_request.buf = metadata;
     metadata_request.part_num = part_num;
     metadata_request.completed = &completed;
-    metadata_request.lba;
+    metadata_request.lba = id * (SPDK_LOG_METADATA_SIZE / (1 << general_spdk_info.sector_bit));
     metadata_request.lba_count = 1;
-    metadata_request.handled = false;
     control_write_queue.push(metadata_request);
 }
 
