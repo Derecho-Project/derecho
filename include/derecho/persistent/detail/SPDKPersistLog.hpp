@@ -41,8 +41,8 @@ namespace spdk {
 #define SPDK_NUM_LOGS_SUPPORTED (1UL << 10)  // support 1024 logs
 #define SPDK_SEGMENT_BIT 26
 #define SPDK_SEGMENT_SIZE (1ULL << 26)  // segment size is 64 MB
-#define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH 2000
-#define SPDK_DATA_ADDRESS_TABLE_LENGTH 14000
+#define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH (1ULL << 11)
+#define SPDK_DATA_ADDRESS_TABLE_LENGTH (3 * 1ULL << 12)
 #define SPDK_LOG_ADDRESS_SPACE (1ULL << 40)  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)  // maximum number of segments in one log = (128 K - 256),     \
@@ -55,6 +55,9 @@ namespace spdk {
 
 #define NUM_DATA_PLANE 1
 #define NUM_CONTROL_PLANE 1
+
+#define PAGE_SIZE (1ULL << 12)
+#define PAGE_BIT 12
 
 // global metadata include segment management information. It exists both in
 // NVMe and memory.
@@ -104,26 +107,29 @@ typedef struct log_metadata {
     pthread_rwlock_t tail_lock;
     // bool operator
     bool operator==(const struct log_metadata& other) {
-        return (this->persist_metadata_info->head == other.persist_metadata_info->head)
-               && (this->persist_metadata_info->tail == other.persist_metadata_info->tail)
-               && (this->persist_metadata_info->ver == other.persist_metadata_info->ver);
+        return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
+               && (this->persist_metadata_info->fields.tail == other.persist_metadata_info->fields.tail)
+               && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
     }
 } LogMetadata;
 
 /**Info part of log metadata entries stored in persist thread. */
-typedef struct persist_thread_log_metadata_info {
-    /**Name of the log */
-    uint8_t name[256];
-    /**Log index */
-    uint32_t id;
-    /**Head index */
-    int64_t head;
-    /**Tail index */
-    int64_t tail;
-    /**Latest version number */
-    int64_t ver;
-    /**Whether the metadata entry is occupied */
-    bool inuse;
+typedef union persist_thread_log_metadata_info {
+    struct {
+        /**Name of the log */
+        uint8_t name[256];
+        /**Log index */
+        uint32_t id;
+        /**Head index */
+        int64_t head;
+        /**Tail index */
+        int64_t tail;
+        /**Latest version number */
+        int64_t ver;
+        /**Whether the metadata entry is occupied */
+        bool inuse;
+    } fields;
+    uint8_t bytes[PAGE_SIZE];
 } PTLogMetadataInfo;
 
 /**Address transalation part of log metadata entries stored in persist thread */
@@ -151,6 +157,7 @@ typedef struct SpdkInfo {
     struct spdk_nvme_ns* ns;
     //struct spdk_nvme_qpair* qpair;
     uint32_t sector_bit;
+    uint32_t sector_size;
 };
 
 // Data write request
@@ -189,6 +196,7 @@ private:
         static std::thread data_plane[NUM_DATA_PLANE];
         /** Threads corresponding to control planes */
         static std::thread control_plane[NUM_CONTROL_PLANE];
+        std::unordered_map<std::string, uint32_t> log_name_to_id;
 
         /** Data write request queue */
         static std::queue<persist_data_request_t> data_write_queue;
@@ -214,12 +222,16 @@ private:
         static sem_t new_data_request;
         static condition_variable data_request_completed;
 
+        static bool initialized;
+        static bool loaded;
+
         static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                              struct spdk_nvme_ctrlr_opts* opts);
         static void attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                               struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts);
         static void data_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
         static void control_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+        static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
     public:
         /**
@@ -234,7 +246,7 @@ private:
          * Load metadata entry and log entries of a given log from persistent memory.
          * @param name - name of the log
          */
-        void load(const std::string& name);
+        void load(const std::string& name, LogMetadata* log_metadata);
         /**
          * Submit data_request and control_request. Data offset must be ailgned
          * with spdk sector size.
