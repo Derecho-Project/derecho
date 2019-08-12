@@ -59,6 +59,10 @@ namespace spdk {
 #define PAGE_SIZE (1ULL << 12)
 #define PAGE_BIT 12
 
+#define NEXT_LOG_ENTRY m_currLogMetadata.log_entry[m_currLogMetadata.persist_metadata_info->fields.tail]
+#define METADATA m_currLogMetadata.persist_metadata_info->fields
+#define LOG m_currLogMetadata.log_entry
+
 // global metadata include segment management information. It exists both in
 // NVMe and memory.
 // - GlobalMetaDataPers is the data struct in NVMe.
@@ -103,10 +107,7 @@ typedef struct log_metadata {
     PTLogMetadataInfo* persist_metadata_info;
     /**Log entries*/
     LogEntry* log_entry;
-    /**Lock on head field */
-    pthread_rwlock_t head_lock;
-    /**Lock on tail field */
-    pthread_rwlock_t tail_lock;
+
     // bool operator
     bool operator==(const struct log_metadata& other) {
         return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
@@ -200,18 +201,19 @@ private:
         static std::thread data_plane[NUM_DATA_PLANE];
         /** Threads corresponding to control planes */
         static std::thread control_plane[NUM_CONTROL_PLANE];
+        /** Map log name to log id */
         std::unordered_map<std::string, uint32_t> log_name_to_id;
+        /** Map log id to log entry space*/
+        static std::map<uint32_t, LogEntry*> id_to_log;
 
         /** Data write request queue */
         static std::queue<persist_data_request_t> data_write_queue;
-        //static std::queue<persist_data_request_t> in_progress_data_write_queue;
         /** Control write request queue */
         static std::queue<persist_control_request_t> control_write_queue;
-        //static std::queue<persist_control_request_t> in_progress_control_write_queue;
+        /** Control write queue mutex */
         static std::mutex control_queue_mtx;
-        //static std::mutex in_progress_control_queue_mtx;
+        /** Data write queue mutex */
         static std::mutex data_queue_mtx;
-        //static std::mutex in_progress_data_queue_mtx;
 
         /** Segment usage table */
         static std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
@@ -221,23 +223,23 @@ private:
         static uint64_t compeleted_request_id;
         /** Last assigned request id */
         static uint64_t assigned_request_id;
+        /** Lock for changing segment usage table */
         static pthread_mutex_t segment_assignment_lock;
+        /** Lock for assigning new metadata entry */
         static pthread_mutex_t metadata_entry_assignment_lock;
-        static pthread_mutex_t metadata_load_lock;
+        /** Semapore of new data request */
         static sem_t new_data_request;
         static condition_variable data_request_completed;
-
-        static std::map<uint32_t, LogEntry*> id_to_log;
-
-        static bool initialized;
-        static bool loaded;
 
         static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                              struct spdk_nvme_ctrlr_opts* opts);
         static void attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                               struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts);
+        /** Default callback for data write request*/
         static void data_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+        /** Default callback for control write request*/
         static void control_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+        /** Release segemnts held by log entries and data before head of the log*/
         static void release_segments(void* args, const struct spdk_nvme_cpl* completion);
         static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
@@ -253,6 +255,7 @@ private:
         /**
          * Load metadata entry and log entries of a given log from persistent memory.
          * @param name - name of the log
+         * @param log_metadata - pointer to metadata held by the log
          */
         void load(const std::string& name, LogMetadata* log_metadata);
         /**
@@ -271,6 +274,10 @@ private:
 
         void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata, bool garbage_collection);
         void release(std::set<uint16_t> data_segments, std::set<uint16_t> log_segments);
+
+        static bool initialized;
+        static bool loaded;
+        static pthread_mutex_t metadata_load_lock;
     };
 
 protected:
@@ -278,6 +285,10 @@ protected:
     LogMetadata m_currLogMetadata;
     // Persistence Thread
     inline static PersistThread persist_thread;
+    /**Lock on head field */
+    pthread_rwlock_t head_lock;
+    /**Lock on tail field */
+    pthread_rwlock_t tail_lock;
 
     void head_rlock() noexcept(false);
     void head_wlock() noexcept(false);
@@ -285,6 +296,8 @@ protected:
     void tail_wlock() noexcept(false);
     void head_unlock() noexcept(false);
     void tail_unlock() noexcept(false);
+    int64_t upper_bound(const version_t& ver);
+    int64_t upper_bound(const HLC& hlc);
 
 public:
     // Constructor:
