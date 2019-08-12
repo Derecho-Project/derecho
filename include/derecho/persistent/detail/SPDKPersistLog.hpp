@@ -43,7 +43,7 @@ namespace spdk {
 #define SPDK_SEGMENT_SIZE (1ULL << 26)  // segment size is 64 MB
 #define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH (1ULL << 11)
 #define SPDK_DATA_ADDRESS_TABLE_LENGTH (3 * 1ULL << 12)
-#define SPDK_LOG_ADDRESS_SPACE (1ULL << 40)  // address space per log is 1TB
+#define SPDK_LOG_ADDRESS_SPACE (1ULL << (SPDK_SEGMENT_BIT + 11))  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)  // maximum number of segments in one log = (128 K - 256),     \
                                                                 // the space for 256 index (or 1KB) is reserved for the other \
@@ -101,6 +101,8 @@ typedef union log_entry {
 typedef struct log_metadata {
     /**Info part of metadata entry */
     PTLogMetadataInfo* persist_metadata_info;
+    /**Log entries*/
+    LogEntry* log_entry;
     /**Lock on head field */
     pthread_rwlock_t head_lock;
     /**Lock on tail field */
@@ -179,6 +181,8 @@ typedef struct persist_control_request_t {
     std::atomic<int>* completed;
     uint64_t lba;
     uint32_t lba_count;
+    spdk_nvme_cmd_cb cb_fn;
+    void* args;
 };
 
 // Persistent log interfaces
@@ -219,8 +223,11 @@ private:
         static uint64_t assigned_request_id;
         static pthread_mutex_t segment_assignment_lock;
         static pthread_mutex_t metadata_entry_assignment_lock;
+        static pthread_mutex_t metadata_load_lock;
         static sem_t new_data_request;
         static condition_variable data_request_completed;
+
+        static std::map<uint32_t, LogEntry*> id_to_log;
 
         static bool initialized;
         static bool loaded;
@@ -231,6 +238,7 @@ private:
                               struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts);
         static void data_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
         static void control_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+        static void release_segments(void* args, const struct spdk_nvme_cpl* completion);
         static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
     public:
@@ -260,6 +268,9 @@ private:
         void append(const uint32_t& id, char* data, const uint64_t& data_offset,
                     const uint64_t& data_size, void* log,
                     const uint64_t& log_offset, PTLogMetadataInfo metadata);
+
+        void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata, bool garbage_collection);
+        void release(std::set<uint16_t> data_segments, std::set<uint16_t> log_segments);
     };
 
 protected:
