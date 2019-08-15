@@ -13,6 +13,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <condition_variable>
 
 namespace persistent {
 
@@ -82,40 +83,6 @@ namespace spdk {
 
 // } GlobalMetadata;
 
-typedef union global_metadata {
-    struct {
-        PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
-    } fields;
-    uint8_t bytes[SPDK_SEGMENT_SIZE];
-} GlobalMetadata;
-
-// log entry format
-typedef union log_entry {
-    struct {
-        int64_t ver;     // version of the data
-        uint64_t dlen;   // length of the data
-        uint64_t ofst;   // offset of the data in the memory buffer
-        uint64_t hlc_r;  // realtime component of hlc
-        uint64_t hlc_l;  // logic component of hlc
-    } fields;
-    uint8_t bytes[64];
-} LogEntry;
-
-/**Per log metadata */
-typedef struct log_metadata {
-    /**Info part of metadata entry */
-    PTLogMetadataInfo* persist_metadata_info;
-    /**Log entries*/
-    LogEntry* log_entry;
-
-    // bool operator
-    bool operator==(const struct log_metadata& other) {
-        return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
-               && (this->persist_metadata_info->fields.tail == other.persist_metadata_info->fields.tail)
-               && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
-    }
-} LogMetadata;
-
 /**Info part of log metadata entries stored in persist thread. */
 typedef union persist_thread_log_metadata_info {
     struct {
@@ -153,6 +120,40 @@ typedef union persist_thread_log_metadata {
     } fields;
     uint8_t bytes[SPDK_LOG_METADATA_SIZE];
 } PTLogMetadata;
+
+typedef union global_metadata {
+    struct {
+        PTLogMetadata log_metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+    } fields;
+    uint8_t bytes[SPDK_SEGMENT_SIZE];
+} GlobalMetadata;
+
+// log entry format
+typedef union log_entry {
+    struct {
+        int64_t ver;     // version of the data
+        uint64_t dlen;   // length of the data
+        uint64_t ofst;   // offset of the data in the memory buffer
+        uint64_t hlc_r;  // realtime component of hlc
+        uint64_t hlc_l;  // logic component of hlc
+    } fields;
+    uint8_t bytes[64];
+} LogEntry;
+
+/**Per log metadata */
+typedef struct log_metadata {
+    /**Info part of metadata entry */
+    PTLogMetadataInfo* persist_metadata_info;
+    /**Log entries*/
+    LogEntry* log_entry;
+
+    // bool operator
+    bool operator==(const struct log_metadata& other) {
+        return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
+               && (this->persist_metadata_info->fields.tail == other.persist_metadata_info->fields.tail)
+               && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
+    }
+} LogMetadata;
 
 // SPDK info
 typedef struct SpdkInfo {
@@ -229,7 +230,7 @@ private:
         static pthread_mutex_t metadata_entry_assignment_lock;
         /** Semapore of new data request */
         static sem_t new_data_request;
-        static condition_variable data_request_completed;
+        static std::condition_variable data_request_completed;
 
         static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                              struct spdk_nvme_ctrlr_opts* opts);
