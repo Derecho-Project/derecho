@@ -14,6 +14,7 @@
 #include <thread>
 #include <unordered_map>
 #include <condition_variable>
+#include <atomic>
 
 namespace persistent {
 
@@ -46,18 +47,19 @@ namespace spdk {
 #define SPDK_DATA_ADDRESS_TABLE_LENGTH (3 * 1ULL << 12)
 #define SPDK_LOG_ADDRESS_SPACE (1ULL << (SPDK_SEGMENT_BIT + 11))  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
-    ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)  // maximum number of segments in one log = (128 K - 256),     \
-                                                                // the space for 256 index (or 1KB) is reserved for the other \
-                                                                // metadata
-// #define SPDK_LOG_METADATA_SIZE \
-//     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) * sizeof(uint32_t))
-// SPDK_LOG_METADATA_SIZE = 512 KB
+    ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)  
+/** maximum number of segments in one log = (128 K - 256),     \
+* the space for 256 index (or 1KB) is reserved for the other \
+* metadata*/
+/** #define SPDK_LOG_METADATA_SIZE \
+*     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) * sizeof(uint32_t))
+* SPDK_LOG_METADATA_SIZE = 512 KB*/
 #define SPDK_LOG_METADATA_SIZE (1ULL << 15)
 
 #define NUM_DATA_PLANE 1
 #define NUM_CONTROL_PLANE 1
 
-#define PAGE_SIZE (1ULL << 12)
+//#define PAGE_SIZE (1ULL << 12)
 #define PAGE_BIT 12
 
 #define NEXT_LOG_ENTRY m_currLogMetadata.log_entry[m_currLogMetadata.persist_metadata_info->fields.tail]
@@ -306,7 +308,7 @@ public:
     // to make sure if this named log(by "name" in the template
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
-    SPDKPersistLog(const std::string& name) noexcept(true) : PersistLog(name){};
+    SPDKPersistLog(const std::string& name) noexcept(true);
     // Destructor
     virtual ~SPDKPersistLog() noexcept(true);
     /** Persistent Append

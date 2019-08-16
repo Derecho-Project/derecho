@@ -1,4 +1,5 @@
 #include <derecho/persistent/detail/SPDKPersistLog.hpp>
+#include <cmath>
 
 using namespace std;
 
@@ -48,7 +49,7 @@ void SPDKPersistLog::PersistThread::attach_cb(void* cb_ctx, const struct spdk_nv
     int num_ns = spdk_nvme_ctrlr_get_num_ns(ctrlr);
     for(int nsid = 1; nsid <= num_ns; nsid++) {
         ns = spdk_nvme_ctrlr_get_ns(ctrlr, nsid);
-        if(ns = NULL) {
+        if(ns == NULL) {
             continue;
         }
         if(!spdk_nvme_ns_is_active(ns)) {
@@ -56,7 +57,7 @@ void SPDKPersistLog::PersistThread::attach_cb(void* cb_ctx, const struct spdk_nv
         }
         general_spdk_info.ns = ns;
         general_spdk_info.sector_size = spdk_nvme_ns_get_sector_size(ns);
-        general_spdk_info.sector_bit = log2(general_spdk_info.sector_size);
+        general_spdk_info.sector_bit = std::log2(general_spdk_info.sector_size);
         break;
     }
     // TODO: if no available ns, throw an exception
@@ -102,7 +103,7 @@ uint64_t segment_address_data_location(const uint32_t& id, const uint16_t& virtu
     return id * sizeof(persist_thread_log_metadata) + SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH * sizeof(uint16_t) + virtual_data_segment * sizeof(uint16_t);
 }
 
-SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
+SPDKPersistLog::PersistThread::PersistThread() {
     // Step 0: initialize spdk nvme info
     struct spdk_env_opts opts;
     spdk_env_opts_init(&opts);
@@ -169,7 +170,7 @@ SPDKPersistLog::PersistThread::PersistThread() noexcept(true) {
                 data_request_completed.wait(lck);
                 persist_control_request_t control_request = control_write_queue.front();
                 do {
-                    if(control_request.completed->load() == control_request.part_num) {
+                    if(*control_request.completed == control_request.part_num) {
                         if(control_request.cb_fn == NULL) {
                             spdk_nvme_ns_cmd_write(general_spdk_info.ns, SpdkQpair_control[i], &control_request.buf, control_request.lba, control_request.lba_count, control_write_request_complete, (void*)&control_request, NULL);
                         } else {
@@ -202,15 +203,15 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
                                            const uint64_t& log_offset, PTLogMetadataInfo metadata) {
     // Step 0: extract virtual segment number and sector number
     uint64_t virtual_data_segment = data_offset >> SPDK_SEGMENT_BIT % SPDK_DATA_ADDRESS_TABLE_LENGTH;
-    uint64_t data_sector = data_offset & (1 << SPDK_SEGMENT_BIT - 1) >> general_spdk_info.sector_bit;
+    uint64_t data_sector = data_offset & ((1 << SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
     uint64_t virtual_log_segment = log_offset >> SPDK_SEGMENT_BIT % SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
-    uint64_t log_sector = log_offset & (1 << SPDK_SEGMENT_BIT - 1) >> general_spdk_info.sector_bit;
+    uint64_t log_sector = log_offset & ((1 << SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
 
     // Step 1: Calculate needed segment number
     //TODO: using data_sector index as condition?
     //TODO: add ring buffer logic
-    int needed_segment = 0;
-    int part_num = 0;
+    uint16_t needed_segment = 0;
+    uint16_t part_num = 0;
     if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment] == 0) {
         needed_segment++;
         part_num++;
@@ -253,7 +254,7 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
     if(available_segment_index.size() > part_num) {
         part_num++;
     }
-    part_num += segment_address_data_location(id, data_assignment_start + available_segment_index.size() - part_num) >> PAGE_BIT - segment_address_data_location(id, data_assignment_start) >> PAGE_BIT;
+    part_num += (segment_address_data_location(id, data_assignment_start + available_segment_index.size() - part_num) >> PAGE_BIT) - (segment_address_data_location(id, data_assignment_start) >> PAGE_BIT);
     if(needed_data_sector > 0) {
         part_num++;
     }
@@ -277,8 +278,8 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
         data_request.buf = new char[PAGE_SIZE];
         data_request.lba = offset >> general_spdk_info.sector_bit;
         data_request.lba_count = PAGE_SIZE / general_spdk_info.sector_size;
-        char* start = (char*)&global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[virtual_log_segment >> (PAGE_BIT - 1) << (PAGE_BIT - 1)];
-        std::copy(start, start + PAGE_SIZE, data_request.buf);
+        char* start = (char*)global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table;
+        std::copy(start, start + PAGE_SIZE,(char *)data_request.buf);
         std::unique_lock<std::mutex> lck(data_queue_mtx);
         data_write_queue.push(data_request);
         lck.release();
@@ -301,13 +302,13 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
             data_request.lba = offset >> general_spdk_info.sector_bit;
             data_request.lba_count = PAGE_SIZE / general_spdk_info.sector_size;
             char* start = (char*)&global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[data_assignment_start >> (PAGE_BIT - 1) << (PAGE_BIT - 1)];
-            std::copy(start, start + PAGE_SIZE, data_request.buf);
+            std::copy(start, start + PAGE_SIZE,(char *)data_request.buf);
             std::unique_lock<std::mutex> lck(data_queue_mtx);
             data_write_queue.push(data_request);
             lck.release();
             sem_post(&new_data_request);
             part_id++;
-            next_sector += (PAGE_SIZE - offset & (PAGE_SIZE - 1)) >> general_spdk_info.sector_bit;
+            next_sector += (PAGE_SIZE - (offset & (PAGE_SIZE - 1))) >> general_spdk_info.sector_bit;
         }
         it++;
         data_assignment_start++;
@@ -337,7 +338,7 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
         data_request.part_num = part_num;
         data_request.completed = &completed;
         data_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_data_at_table[virtual_data_segment] * (SPDK_SEGMENT_SIZE / general_spdk_info.sector_size) + data_sector;
-        data_request.lba_count = 1 >> (SPDK_SEGMENT_BIT - general_spdk_info.sector_bit) - data_sector;
+        data_request.lba_count = (1 >> (SPDK_SEGMENT_BIT - general_spdk_info.sector_bit)) - data_sector;
         std::unique_lock<std::mutex> lck(data_queue_mtx);
         data_write_queue.push(data_request);
         sem_post(&new_data_request);
@@ -355,16 +356,16 @@ void SPDKPersistLog::PersistThread::append(const uint32_t& id, char* data, const
     metadata_request.lba = (id * SPDK_LOG_METADATA_SIZE) >> general_spdk_info.sector_bit;
     metadata_request.lba_count = 1 >> (PAGE_BIT - general_spdk_info.sector_bit);
     metadata_request.cb_fn = NULL;
-    std::unique_lock<std::mutex> lck(control_queue_mtx);
+    std::unique_lock<std::mutex> clck(control_queue_mtx);
     control_write_queue.push(metadata_request);
-    lck.release();
+    clck.release();
 }
 
 void SPDKPersistLog::PersistThread::release_segments(void* args, const struct spdk_nvme_cpl* completion) {
     PTLogMetadataInfo* metadata = (PTLogMetadataInfo*)args;
     //Step 0: release log_segments until metadata.head; release data_segments until
-    int log_seg = max(metadata->fields.head >> SPDK_SEGMENT_BIT - 1, (int64_t)0);
-    int data_seg = max((uint64_t)(id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT - 1, (uint64_t)0);
+    int log_seg = max((metadata->fields.head >> SPDK_SEGMENT_BIT) - 1, (int64_t)0);
+    int data_seg = max((uint64_t)((id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT) - 1, (uint64_t)0);
     if(pthread_mutex_lock(&segment_assignment_lock) != 0) {
         //TODO: throw exception
     }
@@ -387,34 +388,36 @@ void SPDKPersistLog::PersistThread::release_segments(void* args, const struct sp
 
     if(log_seg > 0) {
         for(int i = 0; i < log_seg * sizeof(uint16_t) / PAGE_SIZE + 1; i++) {
-            persist_control_request_t metadata_request;
+            persist_data_request_t metadata_request;
             metadata_request.request_id = request_id;
-            char* start = (char*)&global_metadata.fields.log_metadata_entries[metadata->fields.id].fields.log_metadata_address.segment_log_entry_at_table[i * PAGE_SIZE / sizeof(uint16_t)];
-            std::copy(start, start + PAGE_SIZE, metadata_request.buf);
+            metadata_request.buf = new char[PAGE_SIZE];
+	    char* start = (char*)&global_metadata.fields.log_metadata_entries[metadata->fields.id].fields.log_metadata_address.segment_log_entry_at_table[i * PAGE_SIZE / sizeof(uint16_t)];
+            std::copy(start, start + PAGE_SIZE,(char *)metadata_request.buf);
             metadata_request.part_num = 0;
             metadata_request.completed = 0;
-            metadata_request.cb_fn = NULL;
+            //metadata_request.cb_fn = NULL;
             metadata_request.lba = (metadata->fields.id * SPDK_LOG_METADATA_SIZE + sizeof(PTLogMetadataInfo) + i * PAGE_SIZE) >> general_spdk_info.sector_bit;
             metadata_request.lba_count = 1 >> (PAGE_BIT - general_spdk_info.sector_bit);
             std::unique_lock<std::mutex> lck(control_queue_mtx);
-            control_write_queue.push(metadata_request);
+            data_write_queue.push(metadata_request);
             data_request_completed.notify_all();
             lck.release();
         }
     }
     if(data_seg > 0) {
         for(int i = 0; i < data_seg * sizeof(uint16_t) / PAGE_SIZE + 1; i++) {
-            persist_control_request_t metadata_request;
+            persist_data_request_t metadata_request;
             metadata_request.request_id = request_id;
+            metadata_request.buf = new char[PAGE_SIZE];
             char* start = (char*)&global_metadata.fields.log_metadata_entries[metadata->fields.id].fields.log_metadata_address.segment_data_at_table[i * PAGE_SIZE / sizeof(uint16_t)];
-            std::copy(start, start + PAGE_SIZE, metadata_request.buf);
+            std::copy(start, start + PAGE_SIZE, (char *) metadata_request.buf);
             metadata_request.part_num = 0;
             metadata_request.completed = 0;
-            metadata_request.cb_fn = NULL;
+            //metadata_request.cb_fn = NULL;
             metadata_request.lba = (metadata->fields.id * SPDK_LOG_METADATA_SIZE + sizeof(PTLogMetadataInfo) + SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH * sizeof(uint16_t) + i * PAGE_SIZE) >> general_spdk_info.sector_bit;
             metadata_request.lba_count = 1 >> (PAGE_BIT - general_spdk_info.sector_bit);
             std::unique_lock<std::mutex> lck(control_queue_mtx);
-            control_write_queue.push(metadata_request);
+            data_write_queue.push(metadata_request);
             data_request_completed.notify_all();
             lck.release();
         }
@@ -444,7 +447,7 @@ void SPDKPersistLog::PersistThread::update_metadata(const uint32_t& id, PTLogMet
     std::unique_lock<std::mutex> lck(control_queue_mtx);
     control_write_queue.push(metadata_request);
     data_request_completed.notify_all();
-    lck.release;
+    lck.release();
 }
 
 void SPDKPersistLog::PersistThread::load(const string& name, LogMetadata* log_metadata) {
@@ -537,7 +540,7 @@ void SPDKPersistLog::PersistThread::load(const string& name, LogMetadata* log_me
     }
 }  // namespace spdk
 
-SPDKPersistLog::SPDKPersistLog(const std::string& name) : PersistLog(name) {
+SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : PersistLog(name) {
     while(!persist_thread.initialized)
         ;
     //Initialize locks
@@ -554,8 +557,8 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) : PersistLog(name) {
     }
     persist_thread.load(name, &this->m_currLogMetadata);
     pthread_mutex_unlock(&persist_thread.metadata_load_lock);
-    tail_unlock;
-    head_unlock;
+    tail_unlock();
+    head_unlock();
 }
 
 void SPDKPersistLog::append(const void* pdata,
@@ -565,7 +568,7 @@ void SPDKPersistLog::append(const void* pdata,
     tail_wlock();
     if(ver <= METADATA.ver) {
         //TODO: throw an exception
-        tail_unlock;
+        tail_unlock();
         head_unlock();
     }
     NEXT_LOG_ENTRY.fields.dlen = size;
@@ -596,7 +599,7 @@ void SPDKPersistLog::advanceVersion(const version_t& ver) {
     tail_wlock();
     if(ver <= METADATA.ver) {
         //TODO: throw an exception
-        tail_unlock;
+        tail_unlock();
         head_unlock();
     }
     METADATA.ver = ver;
