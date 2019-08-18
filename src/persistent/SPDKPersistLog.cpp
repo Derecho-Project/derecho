@@ -187,6 +187,22 @@ int64_t SPDKPersistLog::upper_bound(const version_t& ver) {
     return begin;
 }
 
+int64_t SPDKPersistLog::lower_bound(const version_t& ver) {
+    int64_t begin = METADATA.head;
+    int64_t end = METADATA.tail - 1;
+    while(begin <= end) {
+        int mid = (begin + end) / 2;
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        int64_t curr_ver = mid_entry->fields.ver;
+        if(ver <= curr_ver) {
+            end = mid - 1;
+        } else {
+            begin = mid;
+        }
+    }
+    return begin;
+}
+
 int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
     int64_t begin = METADATA.head;
     int64_t end = METADATA.tail - 1;
@@ -197,6 +213,22 @@ int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
             begin = mid + 1;
         } else {
             end = mid;
+        }
+    }
+    return begin;
+}
+
+int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
+    int64_t begin = METADATA.head;
+    int64_t end = METADATA.tail - 1;
+    while(begin <= end) {
+        int mid = (begin + end) / 2;
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        int64_t curr_ver = mid_entry->fields.ver;
+        if(!(mid_entry->fields.hlc_r < hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r < hlc.m_logic))) {
+            end = mid - 1;
+        } else {
+            begin = mid;
         }
     }
     return begin;
@@ -233,6 +265,35 @@ const version_t SPDKPersistLog::getLastPersisted() {
 
 const version_t SPDKPersistLog::persist(bool preLocked = false) {
     return persist_thread.id_to_last_version[METADATA.id];
+}
+
+const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
+    head_rlock();
+    tail_rlock();
+    int64_t index = lower_bound(ver);
+    void* buf = persist_thread.read_data(METADATA.id, index);
+    head_unlock();
+    tail_unlock();
+    return buf;
+}
+
+const void* SPDKPersistLog::getEntry(const HLC& hlc) noexcept(false) {
+    head_rlock();
+    tail_rlock();
+    int64_t index = lower_bound(hlc);
+    void* buf = persist_thread.read_data(METADATA.id, index);
+    head_unlock();
+    tail_unlock();
+    return buf;
+}
+
+const void* SPDKPersistLog::getEntryByIndex(const int64_t& eno) noexcept(false) {
+    head_rlock();
+    tail_rlock();
+    void* buf = persist_thread.read_data(METADATA.id, eno);
+    head_unlock();
+    tail_unlock();
+    return buf;
 }
 
 }  // namespace spdk

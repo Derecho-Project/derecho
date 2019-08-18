@@ -93,6 +93,8 @@ protected:
     void tail_unlock() noexcept(false);
     int64_t upper_bound(const version_t& ver);
     int64_t upper_bound(const HLC& hlc);
+    int64_t lower_bound(const version_t& ver);
+    int64_t lower_bound(const HLC& hlc);
 
 public:
     // Constructor:
