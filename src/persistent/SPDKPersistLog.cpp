@@ -65,22 +65,24 @@ void SPDKPersistLog::append(const void* pdata,
         tail_unlock();
         head_unlock();
     }
-    NEXT_LOG_ENTRY.fields.dlen = size;
-    NEXT_LOG_ENTRY.fields.ver = ver;
-    NEXT_LOG_ENTRY.fields.hlc_l = mhlc.m_rtc_us;
-    NEXT_LOG_ENTRY.fields.hlc_l = mhlc.m_logic;
+    LogEntry* next_log_entry = persist_thread.read_entry(METADATA.id, METADATA.tail);
+    next_log_entry->fields.dlen = size;
+    next_log_entry->fields.ver = ver;
+    next_log_entry->fields.hlc_l = mhlc.m_rtc_us;
+    next_log_entry->fields.hlc_l = mhlc.m_logic;
+    LogEntry* last_entry = persist_thread.read_entry(METADATA.id, METADATA.tail - 1);
     if(METADATA.tail - METADATA.head == 0) {
-        NEXT_LOG_ENTRY.fields.ofst = 0;
+        next_log_entry->fields.ofst = 0;
     } else {
-        NEXT_LOG_ENTRY.fields.ofst = LOG[METADATA.tail - 1].fields.ofst + LOG[METADATA.tail - 1].fields.dlen;
+        next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
     }
 
     METADATA.ver = ver;
     METADATA.tail++;
 
     persist_thread.append(METADATA.id,
-                          (char*)pdata, LOG[METADATA.tail - 1].fields.ofst,
-                          LOG[METADATA.tail - 1].fields.dlen, &LOG[METADATA.tail - 1],
+                          (char*)pdata, last_entry->fields.ofst,
+                          last_entry->fields.dlen, &next_log_entry,
                           METADATA.tail - 1,
                           *m_currLogMetadata.persist_metadata_info);
 
@@ -134,7 +136,9 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
     int64_t end = METADATA.tail - 1;
     int res = -1;
     while(begin <= end) {
-        int64_t curr_ver = LOG[(begin + end) / 2].fields.ver;
+        int64_t mid = (begin + end) / 2;
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        int64_t curr_ver = mid_entry->fields.ver;
         if(curr_ver == ver) {
             res = (begin + end) / 2;
             break;
@@ -154,7 +158,8 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
 
 version_t SPDKPersistLog::getEarliestVersion() noexcept(false) {
     head_rlock();
-    version_t ver = LOG[METADATA.head].fields.ver;
+    LogEntry* earliest_entry = persist_thread.read_entry(METADATA.id, METADATA.head);
+    version_t ver = earliest_entry->fields.ver;
     head_unlock();
     return ver;
 }
@@ -171,7 +176,9 @@ int64_t SPDKPersistLog::upper_bound(const version_t& ver) {
     int64_t end = METADATA.tail - 1;
     while(begin <= end) {
         int mid = (begin + end) / 2;
-        if(ver >= LOG[mid].fields.ver) {
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        int64_t curr_ver = mid_entry->fields.ver;
+        if(ver >= curr_ver) {
             begin = mid + 1;
         } else {
             end = mid;
@@ -185,7 +192,8 @@ int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
     int64_t end = METADATA.tail - 1;
     while(begin <= end) {
         int mid = (begin + end) / 2;
-        if(!(LOG[mid].fields.hlc_r > hlc.m_rtc_us || (LOG[mid].fields.hlc_r == hlc.m_rtc_us && LOG[mid].fields.hlc_r > hlc.m_logic))) {
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r > hlc.m_logic))) {
             begin = mid + 1;
         } else {
             end = mid;

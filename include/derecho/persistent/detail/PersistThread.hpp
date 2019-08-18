@@ -120,8 +120,6 @@ struct persist_control_request_t {
 typedef struct log_metadata {
     /**Info part of metadata entry */
     PTLogMetadataInfo* persist_metadata_info;
-    /**Log entries*/
-    LogEntry* log_entry;
 
     // bool operator
     bool operator==(const struct log_metadata& other) {
@@ -216,7 +214,9 @@ public:
                 const uint64_t& log_offset, PTLogMetadataInfo metadata);
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata, bool garbage_collection);
-    void release(std::set<uint16_t> data_segments, std::set<uint16_t> log_segments);
+
+    LogEntry* read_entry(const uint32_t& id, const uint64_t& index);
+    void* read_data(const uint32_t& id, const uint64_t& index);
 
     static bool initialized;
     static bool loaded;

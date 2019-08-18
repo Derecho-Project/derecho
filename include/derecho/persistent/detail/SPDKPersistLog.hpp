@@ -52,9 +52,7 @@ namespace spdk {
 #define NUM_DATA_PLANE 1
 #define NUM_CONTROL_PLANE 1
 
-#define NEXT_LOG_ENTRY m_currLogMetadata.log_entry[m_currLogMetadata.persist_metadata_info->fields.tail]
 #define METADATA m_currLogMetadata.persist_metadata_info->fields
-#define LOG m_currLogMetadata.log_entry
 
 // global metadata include segment management information. It exists both in
 // NVMe and memory.
