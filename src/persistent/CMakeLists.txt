@@ -7,6 +7,11 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 set(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS_DEBUG}  -O0 -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
+include_directories(/home/yd246/spdk/include)
+link_directories(/home/yd246/spdk/build/lib)
+link_libraries(spdk_nvme)
+link_libraries(spdk_env)
+link_libraries(spdk_vmd)
 
 add_library(persistent OBJECT Persistent.cpp PersistLog.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
 target_include_directories(persistent PRIVATE
