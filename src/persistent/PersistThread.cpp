@@ -25,6 +25,7 @@ pthread_mutex_t PersistThread::metadata_entry_assignment_lock;
 sem_t PersistThread::new_data_request;
 std::condition_variable PersistThread::data_request_completed;
 
+static std::map<uint32_t, int64_t> id_to_last_version;
 bool PersistThread::initialized;
 bool PersistThread::loaded;
 pthread_mutex_t PersistThread::metadata_load_lock;
@@ -88,6 +89,7 @@ void PersistThread::control_write_request_complete(void* args,
         exit(1);
     }
     persist_control_request_t* control_request = (persist_control_request_t*)args;
+    id_to_last_version.insert(std::pair<uint32_t, int64_t>(control_request->buf.fields.id, control_request->buf.fields.ver));
     free(control_request->completed);
     compeleted_request_id = control_request->request_id;
     delete control_request;
@@ -367,6 +369,7 @@ void PersistThread::append(const uint32_t& id, char* data, const uint64_t& data_
 
 void PersistThread::release_segments(void* args, const struct spdk_nvme_cpl* completion) {
     PTLogMetadataInfo* metadata = (PTLogMetadataInfo*)args;
+    id_to_last_version.insert(std::pair<uint32_t, int64_t>(metadata->fields.id, metadata->fields.ver));
     //Step 0: release log_segments until metadata.head; release data_segments until
     int log_seg = std::max((metadata->fields.head >> SPDK_SEGMENT_BIT) - 1, (int64_t)0);
     int data_seg = std::max((uint64_t)((id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT) - 1, (uint64_t)0);
@@ -488,6 +491,7 @@ void PersistThread::load(const std::string& name, LogMetadata* log_metadata) {
             if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.inuse) {
                 //Step 2_1: Update log_name_to_id
                 log_name_to_id.insert(std::pair<std::string, uint32_t>((char*)global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.name, id));
+                id_to_last_version.insert(std::pair<uint32_t, int64_t>(id, global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.ver));
 
                 //Step 2_2: Update segment_usage_array
                 for(int index = 0; index < SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH; index++) {

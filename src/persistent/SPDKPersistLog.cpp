@@ -227,5 +227,13 @@ void SPDKPersistLog::trim(const HLC& hlc) {
     trimByIndex(idx);
 }
 
+const version_t SPDKPersistLog::getLastPersisted() {
+    return persist_thread.id_to_last_version[METADATA.id];
+}
+
+const version_t SPDKPersistLog::persist(bool preLocked = false) {
+    return persist_thread.id_to_last_version[METADATA.id];
+}
+
 }  // namespace spdk
 }  // namespace persistent

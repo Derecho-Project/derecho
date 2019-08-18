@@ -218,6 +218,8 @@ public:
     LogEntry* read_entry(const uint32_t& id, const uint64_t& index);
     void* read_data(const uint32_t& id, const uint64_t& index);
 
+
+    static std::map<uint32_t, int64_t> id_to_last_version;
     static bool initialized;
     static bool loaded;
     static pthread_mutex_t metadata_load_lock;
