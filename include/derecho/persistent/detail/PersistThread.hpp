@@ -144,7 +144,7 @@ protected:
     /** Threads corresponding to control planes */
     static std::thread control_plane[NUM_CONTROL_PLANE];
     /** Map log name to log id */
-    std::unordered_map<std::string, uint32_t> log_name_to_id;
+    static std::unordered_map<std::string, uint32_t> log_name_to_id;
     /** Map log id to log entry space*/
     static std::map<uint32_t, LogEntry*> id_to_log;
 

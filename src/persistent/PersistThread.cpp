@@ -3,6 +3,28 @@
 
 namespace persistent {
 namespace spdk {
+
+SpdkInfo PersistThread::general_spdk_info;
+spdk_nvme_qpair* PersistThread::SpdkQpair_data[NUM_DATA_PLANE];
+spdk_nvme_qpair* PersistThread::SpdkQpair_control[NUM_CONTROL_PLANE];
+std::thread PersistThread::data_plane[NUM_DATA_PLANE];
+std::thread PersistThread::control_plane[NUM_CONTROL_PLANE];
+std::unordered_map<std::string, uint32_t> PersistThread::log_name_to_id;
+std::map<uint32_t, LogEntry*> PersistThread::id_to_log;
+std::queue<persist_data_request_t> PersistThread::data_write_queue;
+std::queue<persist_control_request_t> PersistThread::control_write_queue;
+std::mutex PersistThread::control_queue_mtx;
+std::mutex PersistThread::data_queue_mtx;
+
+std::bitset<SPDK_NUM_SEGMENTS> PersistThread::segment_usage_table;
+GlobalMetadata PersistThread::global_metadata;
+uint64_t PersistThread::compeleted_request_id;
+uint64_t PersistThread::assigned_request_id;
+pthread_mutex_t PersistThread::segment_assignment_lock;
+pthread_mutex_t PersistThread::metadata_entry_assignment_lock;
+sem_t PersistThread::new_data_request;
+std::condition_variable PersistThread::data_request_completed;
+
 bool PersistThread::probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                              struct spdk_nvme_ctrlr_opts* opts) {
     return true;

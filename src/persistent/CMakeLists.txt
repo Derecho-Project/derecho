@@ -13,7 +13,7 @@ link_libraries(spdk_nvme)
 link_libraries(spdk_env)
 link_libraries(spdk_vmd)
 
-add_library(persistent OBJECT Persistent.cpp PersistLog.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
+add_library(persistent OBJECT Persistent.cpp PersistLog.cpp PersistThread.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
 target_include_directories(persistent PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
