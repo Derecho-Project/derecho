@@ -76,7 +76,8 @@ target_link_libraries(derecho
     stdc++fs ${libfabric_LIBRARIES} 
     ${mutils_LIBRARIES} 
     ${mutils-containers_LIBRARIES}
-    ${mutils-tasks_LIBRARIES})
+    ${mutils-tasks_LIBRARIES}
+    spdk_nvme spdk_env_dpdk spdk_vmd spdk_log spdk_util spdk_sock dpdk uuid numa dl)
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
