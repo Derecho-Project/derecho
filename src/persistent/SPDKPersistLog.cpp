@@ -1,3 +1,4 @@
+#include <derecho/core/derecho_exception.hpp>
 #include <derecho/persistent/detail/SPDKPersistLog.hpp>
 
 using namespace std;
@@ -40,15 +41,15 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
         ;
     //Initialize locks
     if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
-        //TODO
+        throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
     if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
-        //TODO
+        throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
     head_wlock();
     tail_wlock();
     if(pthread_mutex_lock(&persist_thread.metadata_load_lock)) {
-        //TODO
+        throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
     persist_thread.load(name, &this->m_currLogMetadata);
     pthread_mutex_unlock(&persist_thread.metadata_load_lock);
@@ -62,9 +63,16 @@ void SPDKPersistLog::append(const void* pdata,
     head_rlock();
     tail_wlock();
     if(ver <= METADATA.ver) {
-        //TODO: throw an exception
+        //throw an exception
         tail_unlock();
         head_unlock();
+        throw derecho::derecho_exception("the version to append is smaller than the current version.");
+    }
+    if(((METADATA.tail + 1) >> SPDK_SEGMENT_BIT) == (METADATA.head >> SPDK_SEGMENT_BIT)) {
+        //throw an exception
+        tail_unlock();
+        head_unlock();
+        throw derecho::derecho_exception("Ran out of log space.");
     }
     LogEntry* next_log_entry = persist_thread.read_entry(METADATA.id, METADATA.tail);
     next_log_entry->fields.dlen = size;
@@ -95,9 +103,9 @@ void SPDKPersistLog::advanceVersion(const version_t& ver) {
     head_rlock();
     tail_wlock();
     if(ver <= METADATA.ver) {
-        //TODO: throw an exception
         tail_unlock();
         head_unlock();
+        throw derecho::derecho_exception("the version to append is smaller than the current version.");
     }
     METADATA.ver = ver;
     persist_thread.update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, false);
@@ -152,7 +160,8 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
         }
     }
     if(res == -1) {
-        // TODO: Failed to find the version
+        // Failed to find the version
+        throw derecho::derecho_exception("Failed to find the version.");
     }
     head_unlock();
     tail_unlock();

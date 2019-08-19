@@ -1,4 +1,5 @@
 #include <cmath>
+#include <derecho/core/derecho_exception.hpp>
 #include <derecho/persistent/detail/PersistThread.hpp>
 
 namespace persistent {
@@ -55,14 +56,17 @@ void PersistThread::attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id*
         general_spdk_info.sector_bit = std::log2(general_spdk_info.sector_size);
         break;
     }
-    // TODO: if no available ns, throw an exception
+    // if no available ns, throw an exception
+    if(general_spdk_info.ns == NULL) {
+        throw derecho::derecho_exception("No available namespace");
+    }
 }
 
 void PersistThread::data_write_request_complete(void* args,
                                                 const struct spdk_nvme_cpl* completion) {
-    // TODO: if error occured
+    // if error occured
     if(spdk_nvme_cpl_is_error(completion)) {
-        exit(1);
+        throw derecho::derecho_exception("data write request failed.");
     }
     persist_data_request_t* data_request = (persist_data_request_t*)args;
     data_request->completed++;
@@ -75,18 +79,24 @@ void PersistThread::data_write_request_complete(void* args,
 
 void PersistThread::load_request_complete(void* args,
                                           const struct spdk_nvme_cpl* completion) {
+    if(spdk_nvme_cpl_is_error(completion)) {
+        throw derecho::derecho_exception("data write request failed.");
+    }
     *(bool*)args = true;
 }
 
 void PersistThread::dummy_request_complete(void* args,
                                            const struct spdk_nvme_cpl* completion) {
+    if(spdk_nvme_cpl_is_error(completion)) {
+        throw derecho::derecho_exception("dummy request failed.");
+    }
 }
 
 void PersistThread::control_write_request_complete(void* args,
                                                    const struct spdk_nvme_cpl* completion) {
-    // TODO: if error occured
+    // if error occured
     if(spdk_nvme_cpl_is_error(completion)) {
-        exit(1);
+        throw derecho::derecho_exception("control write request failed.");
     }
     persist_control_request_t* control_request = (persist_control_request_t*)args;
     id_to_last_version.insert(std::pair<uint32_t, int64_t>(control_request->buf.fields.id, control_request->buf.fields.ver));
@@ -109,35 +119,41 @@ PersistThread::PersistThread() {
     spdk_env_opts_init(&opts);
     if(spdk_env_init(&opts) < 0) {
         // Failed to initialize spdk env, throw an exception
-        return;
+        throw derecho::derecho_exception("Failed to initialize spdk namespace.");
     }
     int res = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
     if(res != 0) {
-        //TODO: initialization of nvme ctrlr failed
+        //initialization of nvme ctrlr failed
+        throw derecho::derecho_exception("Failed to initialize nvme ctrlr.");
     }
     // Step 1: get qpair for each plane
     for(int i = 0; i < NUM_DATA_PLANE; i++) {
         SpdkQpair_data[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
         if(SpdkQpair_data[i] == NULL) {
-            //TODO: qpair initialization failed
+            //qpair initialization failed
+            throw derecho::derecho_exception("Failed to initialize data qpair.");
         }
     }
     for(int i = 0; i < NUM_CONTROL_PLANE; i++) {
         SpdkQpair_control[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
         if(SpdkQpair_control[i] == NULL) {
-            //TODO: qpair initialization failed
+            //qpair initialization failed
+            throw derecho::derecho_exception("Failed to initialize control qpair.");
         }
     }
 
     // Step 2: initialize sem and locks
     if(sem_init(&new_data_request, 0, 0) != 0) {
-        // TODO: sem init failed
+        // sem init failed
+        throw derecho::derecho_exception("Failed to initialize new_data_request semaphore.");
     }
     if(pthread_mutex_init(&segment_assignment_lock, NULL) != 0) {
-        //TODO: mutex init failed
+        // mutex init failed
+        throw derecho::derecho_exception("Failed to initialize mutex.");
     }
     if(pthread_mutex_init(&metadata_entry_assignment_lock, NULL) != 0) {
-        //TODO: mutex init failed
+        // mutex init failed
+        throw derecho::derecho_exception("Failed to initialize mutex.");
     }
     // Step 3: initialize other fields
     compeleted_request_id = -1;
@@ -214,7 +230,6 @@ void PersistThread::append(const uint32_t& id, char* data, const uint64_t& data_
     uint64_t log_sector = log_offset & ((1 << SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
 
     // Step 1: Calculate needed segment number
-    //TODO: using data_sector index as condition?
     //TODO: add ring buffer logic
     uint16_t needed_segment = 0;
     uint16_t part_num = 0;
@@ -234,6 +249,7 @@ void PersistThread::append(const uint32_t& id, char* data, const uint64_t& data_
 
     if(pthread_mutex_lock(&segment_assignment_lock) != 0) {
         // failed to grab the lock
+        throw derecho::derecho_exception("Failed to grab segment assignment lock.");
     }
 
     // Step 2: search for available segment
@@ -246,7 +262,8 @@ void PersistThread::append(const uint32_t& id, char* data, const uint64_t& data_
         seg_index++;
     }
     if(available_segment_index.size() < needed_segment) {
-        //TODO: throw excpetion
+        pthread_mutex_unlock(&segment_assignment_lock);
+        throw derecho::derecho_exception("Available segments are not enough.");
     }
 
     //Calculate part num
@@ -374,7 +391,8 @@ void PersistThread::release_segments(void* args, const struct spdk_nvme_cpl* com
     int log_seg = std::max((metadata->fields.head >> SPDK_SEGMENT_BIT) - 1, (int64_t)0);
     int data_seg = std::max((uint64_t)((id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT) - 1, (uint64_t)0);
     if(pthread_mutex_lock(&segment_assignment_lock) != 0) {
-        //TODO: throw exception
+        //throw exception
+        throw derecho::derecho_exception("Failed to grab segment assignment lock.");
     }
     for(int i = 0; i < log_seg; i++) {
         segment_usage_table[global_metadata.fields.log_metadata_entries[metadata->fields.id].fields.log_metadata_address.segment_log_entry_at_table[i]] = 0;
@@ -542,7 +560,8 @@ void PersistThread::load(const std::string& name, LogMetadata* log_metadata) {
     } catch(const std::out_of_range& oor) {
         // Find an unused metadata entry
         if(pthread_mutex_lock(&metadata_entry_assignment_lock) != 0) {
-            //TODO: throw an exception
+            // throw an exception
+            throw derecho::derecho_exception("Failed to grab metadata entry assignment lock.");
         }
         for(int index = 0; index < SPDK_NUM_LOGS_SUPPORTED; index++) {
             if(!global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse) {
@@ -555,8 +574,9 @@ void PersistThread::load(const std::string& name, LogMetadata* log_metadata) {
                 return;
             }
         }
-        //TODO: no available metadata entry
+        //no available metadata entry
         pthread_mutex_unlock(&metadata_entry_assignment_lock);
+        throw derecho::derecho_exception("No available metadata entry.");
     }
 }
 
