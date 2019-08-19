@@ -4,7 +4,6 @@ using namespace std;
 
 namespace persistent {
 namespace spdk {
-PersistThread SPDKPersistLog::persist_thread;
 
 void SPDKPersistLog::head_rlock() noexcept(false) {
     while(pthread_rwlock_rdlock(&this->head_lock) != 0)
@@ -267,7 +266,7 @@ const version_t SPDKPersistLog::getLastPersisted() {
     return persist_thread.id_to_last_version[METADATA.id];
 }
 
-const version_t SPDKPersistLog::persist(bool preLocked = false) {
+const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
     return persist_thread.id_to_last_version[METADATA.id];
 }
 
@@ -336,7 +335,7 @@ size_t SPDKPersistLog::to_bytes(char* buf, const version_t& ver) {
             ofst += sizeof(LogEntry);
             // Write data
             void* data = persist_thread.read_data(METADATA.id, index);
-            std::copy((void*)(buf + ofst), (void*)(buf + ofst + log_entry->fields.dlen), data);
+            std::copy((char*)(buf + ofst), (char*)(buf + ofst + log_entry->fields.dlen), (char*)data);
             ofst += log_entry->fields.dlen;
             index++;
         }

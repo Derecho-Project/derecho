@@ -25,7 +25,7 @@ pthread_mutex_t PersistThread::metadata_entry_assignment_lock;
 sem_t PersistThread::new_data_request;
 std::condition_variable PersistThread::data_request_completed;
 
-static std::map<uint32_t, int64_t> id_to_last_version;
+std::map<uint32_t, int64_t> PersistThread::id_to_last_version;
 bool PersistThread::initialized;
 bool PersistThread::loaded;
 pthread_mutex_t PersistThread::metadata_load_lock;
@@ -515,15 +515,15 @@ void PersistThread::load(const std::string& name, LogMetadata* log_metadata) {
         uint32_t id = log_name_to_id.at(name);
         log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
         LogEntry* log_entry = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE);
-        int num_log_segment = log_metadata->persist_metadata_info->fields.tail >> SPDK_SEGMENT_BIT - log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT + 1;
+        int num_log_segment = (log_metadata->persist_metadata_info->fields.tail >> SPDK_SEGMENT_BIT) - (log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + 1;
         bool completed[num_log_segment];
         uint64_t request_id = assigned_request_id + 1;
         assigned_request_id++;
         for(int i = 0; i < num_log_segment; i++) {
             persist_data_request_t logentry_request;
             logentry_request.request_id = request_id;
-            logentry_request.buf = (void*)&log_entry[log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT + i * SPDK_SEGMENT_SIZE / sizeof(uint16_t)];
-            logentry_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT + i] * (1 >> (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit));
+            logentry_request.buf = (void*)&log_entry[(log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + i * SPDK_SEGMENT_SIZE / sizeof(uint16_t)];
+            logentry_request.lba = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_address.segment_log_entry_at_table[(log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + i] * (1 >> (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit));
             logentry_request.lba_count = 1 >> (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit);
             logentry_request.cb_fn = load_request_complete;
             logentry_request.args = (void*)&completed[i];
@@ -571,7 +571,7 @@ void* PersistThread::read_data(const uint32_t& id, const uint64_t& index) {
     uint64_t virtual_data_segment = data_offset >> SPDK_SEGMENT_BIT % SPDK_DATA_ADDRESS_TABLE_LENGTH;
     uint64_t data_sector = data_offset & ((1 << SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
 
-    int part_num = (data_offset + log_entry->fields.dlen) >> SPDK_SEGMENT_BIT - data_offset >> SPDK_SEGMENT_BIT + 1;
+    int part_num = ((data_offset + log_entry->fields.dlen) >> SPDK_SEGMENT_BIT) - (data_offset >> SPDK_SEGMENT_BIT) + 1;
     bool completed[part_num];
     int request_id = assigned_request_id + 1;
     assigned_request_id++;
