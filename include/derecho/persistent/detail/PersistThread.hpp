@@ -143,8 +143,6 @@ protected:
     static std::thread control_plane[NUM_CONTROL_PLANE];
     /** Map log name to log id */
     static std::unordered_map<std::string, uint32_t> log_name_to_id;
-    /** Map log id to log entry space*/
-    static std::map<uint32_t, LogEntry*> id_to_log;
 
     /** Data write request queue */
     static std::queue<persist_data_request_t> data_write_queue;
@@ -218,8 +216,9 @@ public:
     LogEntry* read_entry(const uint32_t& id, const uint64_t& index);
     void* read_data(const uint32_t& id, const uint64_t& index);
 
-
     static std::map<uint32_t, int64_t> id_to_last_version;
+    /** Map log id to log entry space*/
+    static std::map<uint32_t, LogEntry*> id_to_log;
     static bool initialized;
     static bool loaded;
     static pthread_mutex_t metadata_load_lock;

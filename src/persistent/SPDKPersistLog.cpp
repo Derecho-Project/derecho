@@ -4,6 +4,8 @@ using namespace std;
 
 namespace persistent {
 namespace spdk {
+PersistThread SPDKPersistLog::persist_thread;
+
 void SPDKPersistLog::head_rlock() noexcept(false) {
     while(pthread_rwlock_rdlock(&this->head_lock) != 0)
         ;
@@ -100,6 +102,8 @@ void SPDKPersistLog::advanceVersion(const version_t& ver) {
     }
     METADATA.ver = ver;
     persist_thread.update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, false);
+    tail_unlock();
+    head_unlock();
 }
 
 int64_t
@@ -250,12 +254,12 @@ void SPDKPersistLog::trimByIndex(const int64_t& idx) {
 }
 
 void SPDKPersistLog::trim(const version_t& ver) {
-    int64_t idx = upper_bound(ver);
+    int64_t idx = lower_bound(ver);
     trimByIndex(idx);
 }
 
 void SPDKPersistLog::trim(const HLC& hlc) {
-    int64_t idx = upper_bound(hlc);
+    int64_t idx = lower_bound(hlc);
     trimByIndex(idx);
 }
 
@@ -272,8 +276,8 @@ const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
     tail_rlock();
     int64_t index = lower_bound(ver);
     void* buf = persist_thread.read_data(METADATA.id, index);
-    head_unlock();
     tail_unlock();
+    head_unlock();
     return buf;
 }
 
@@ -282,8 +286,8 @@ const void* SPDKPersistLog::getEntry(const HLC& hlc) noexcept(false) {
     tail_rlock();
     int64_t index = lower_bound(hlc);
     void* buf = persist_thread.read_data(METADATA.id, index);
-    head_unlock();
     tail_unlock();
+    head_unlock();
     return buf;
 }
 
@@ -291,9 +295,139 @@ const void* SPDKPersistLog::getEntryByIndex(const int64_t& eno) noexcept(false) 
     head_rlock();
     tail_rlock();
     void* buf = persist_thread.read_data(METADATA.id, eno);
+    tail_unlock();
+    head_unlock();
+    return buf;
+}
+
+size_t SPDKPersistLog::bytes_size(const int64_t& ver) {
+    head_rlock();
+    tail_rlock();
+    int64_t index = upper_bound(ver);
+    size_t bsize = sizeof(int64_t) + sizeof(int64_t);
+    if(index != INVALID_INDEX) {
+        while(index < METADATA.tail) {
+            LogEntry* log_entry = persist_thread.read_entry(METADATA.id, index);
+            bsize += sizeof(LogEntry) + log_entry->fields.dlen;
+            index++;
+        }
+    }
     head_unlock();
     tail_unlock();
-    return buf;
+    return bsize;
+}
+
+size_t SPDKPersistLog::to_bytes(char* buf, const version_t& ver) {
+    head_rlock();
+    tail_rlock();
+    int64_t index = upper_bound(ver);
+    size_t ofst = 0;
+    // latest version
+    *(int64_t*)(buf + ofst) = METADATA.ver;
+    ofst += sizeof(int64_t);
+    // num of log entries
+    *(int64_t*)(buf + ofst) = (index == INVALID_INDEX) ? 0 : (METADATA.tail - index);
+    ofst += sizeof(int64_t);
+    if(index != INVALID_INDEX) {
+        while(index < METADATA.tail) {
+            // Write log entry
+            LogEntry* log_entry = persist_thread.read_entry(METADATA.id, index);
+            std::copy((LogEntry*)(buf + ofst), (LogEntry*)(buf + ofst + sizeof(LogEntry)), log_entry);
+            ofst += sizeof(LogEntry);
+            // Write data
+            void* data = persist_thread.read_data(METADATA.id, index);
+            std::copy((void*)(buf + ofst), (void*)(buf + ofst + log_entry->fields.dlen), data);
+            ofst += log_entry->fields.dlen;
+            index++;
+        }
+    }
+    tail_unlock();
+    head_unlock();
+    return ofst;
+}
+
+void SPDKPersistLog::post_object(const std::function<void(char const* const, std::size_t)>& f,
+                                 const version_t& ver) {
+    head_rlock();
+    tail_rlock();
+    int64_t index = upper_bound(ver);
+    //latest version
+    int64_t latest_version = METADATA.ver;
+    f((char*)&latest_version, sizeof(int64_t));
+    //num logs
+    int64_t nr_log_entry = (index == INVALID_INDEX) ? 0 : (METADATA.tail - index);
+    f((char*)&nr_log_entry, sizeof(int64_t));
+    if(index != INVALID_INDEX) {
+        while(index < METADATA.tail) {
+            // Post Log entry
+            LogEntry* log_entry = persist_thread.read_entry(METADATA.id, index);
+            f((char*)&log_entry, sizeof(LogEntry));
+            // Post data
+            void* data = persist_thread.read_data(METADATA.id, index);
+            f((char*)&data, log_entry->fields.dlen);
+            index++;
+        }
+    }
+    tail_unlock();
+    head_unlock();
+}
+
+void SPDKPersistLog::applyLogTail(char const* v) {
+    head_rlock();
+    tail_wlock();
+    size_t ofst = 0;
+    //latest version
+    int64_t latest_version = *(int64_t*)(v + ofst);
+    ofst += sizeof(int64_t);
+    //num logs
+    int64_t nr_log_entry = *(int64_t*)(v + ofst);
+    ofst += sizeof(int64_t);
+    while(nr_log_entry--) {
+        LogEntry* log_entry = (LogEntry*)(v + ofst);
+        ofst += sizeof(LogEntry);
+        if(log_entry->fields.ver <= METADATA.ver) {
+            ofst += log_entry->fields.dlen;
+            continue;
+        } else {
+            void* data = (void*)(v + ofst);
+
+            LogEntry* next_log_entry
+                    = persist_thread.read_entry(METADATA.id, METADATA.tail);
+            std::copy(next_log_entry, next_log_entry + sizeof(LogEntry), log_entry);
+            LogEntry* last_entry = persist_thread.read_entry(METADATA.id, METADATA.tail - 1);
+            if(METADATA.tail - METADATA.head == 0) {
+                next_log_entry->fields.ofst = 0;
+            } else {
+                next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
+            }
+
+            METADATA.ver = log_entry->fields.ver;
+            METADATA.tail++;
+
+            persist_thread.append(METADATA.id,
+                                  (char*)data, last_entry->fields.ofst,
+                                  last_entry->fields.dlen, &next_log_entry,
+                                  METADATA.tail - 1,
+                                  *m_currLogMetadata.persist_metadata_info);
+            ofst += log_entry->fields.dlen;
+        }
+    }
+    tail_unlock();
+    head_unlock();
+}
+
+void SPDKPersistLog::truncate(const version_t& ver) {
+    head_rlock();
+    tail_wlock();
+    int64_t index = upper_bound(ver);
+    METADATA.tail = index;
+    persist_thread.update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, false);
+    tail_unlock();
+    head_unlock();
+}
+
+SPDKPersistLog::~SPDKPersistLog() {
+    free(persist_thread.id_to_log[METADATA.id]);
 }
 
 }  // namespace spdk
