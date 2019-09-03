@@ -21,6 +21,8 @@
 #define SPDK_LOG_ADDRESS_SPACE (1ULL << (SPDK_SEGMENT_BIT + 11))  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)
+#define LOG_AT_TABLE(idx) global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table
+#define DATA_AT_TABLE(idx) global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table
 
 namespace persistent {
 

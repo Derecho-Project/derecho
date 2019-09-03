@@ -86,7 +86,7 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
     switch(storageType) {
         // file system
         case ST_FILE:
-            this->m_pLog = std::make_unique<file::FilePersistLog>(object_name);
+            this->m_pLog = std::make_unique<spdk::SPDKPersistLog>(object_name);
             if(this->m_pLog == nullptr) {
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
@@ -123,7 +123,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)              // truncate persistent versions.
-                );
+        );
     }
 }
 
@@ -243,11 +243,9 @@ auto Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
         const Func& fun,
         mutils::DeserializationManager* dm) noexcept(false) {
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            return f(*this->getByIndex(idx, dm));
-        }
-    else {
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        return f(*this->getByIndex(idx, dm));
+    } else {
         return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
     }
 };
@@ -257,19 +255,17 @@ template <typename ObjectType,
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
         mutils::DeserializationManager* dm) noexcept(false) {
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            // ObjectType* ot = new ObjectType{};
-            std::unique_ptr<ObjectType> p = ObjectType::create(dm);
-            // TODO: accelerate this by checkpointing
-            for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-                const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-                p->applyDelta(entry_data);
-            }
-
-            return p;
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        // ObjectType* ot = new ObjectType{};
+        std::unique_ptr<ObjectType> p = ObjectType::create(dm);
+        // TODO: accelerate this by checkpointing
+        for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
+            const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
+            p->applyDelta(entry_data);
         }
-    else {
+
+        return p;
+    } else {
         return mutils::from_bytes<ObjectType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
     }
 };
@@ -285,12 +281,10 @@ auto Persistent<ObjectType, storageType>::get(
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
-            return f(*this->get(ver, dm));
-        }
-    else {
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
+        return f(*this->get(ver, dm));
+    } else {
         return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
     }
 };
@@ -305,11 +299,9 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         throw PERSIST_EXP_INV_VERSION;
     }
 
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            return getByIndex(idx, dm);
-        }
-    else {
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        return getByIndex(idx, dm);
+    } else {
         return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
     }
 }
@@ -343,15 +335,13 @@ auto Persistent<ObjectType, storageType>::get(
         throw PERSIST_EXP_BEYOND_GSF;
     }
 
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            int64_t idx = this->m_pLog->getHLCIndex(hlc);
-            if(idx == INVALID_INDEX) {
-                throw PERSIST_EXP_INV_HLC;
-            }
-            return getByIndex(idx, fun, dm);
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        int64_t idx = this->m_pLog->getHLCIndex(hlc);
+        if(idx == INVALID_INDEX) {
+            throw PERSIST_EXP_INV_HLC;
         }
-    else {
+        return getByIndex(idx, fun, dm);
+    } else {
         char* pdat = (char*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_HLC;
@@ -369,15 +359,13 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
         throw PERSIST_EXP_BEYOND_GSF;
     }
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            int64_t idx = this->m_pLog->getHLCIndex(hlc);
-            if(idx == INVALID_INDEX) {
-                throw PERSIST_EXP_INV_HLC;
-            }
-            return getByIndex(idx, dm);
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        int64_t idx = this->m_pLog->getHLCIndex(hlc);
+        if(idx == INVALID_INDEX) {
+            throw PERSIST_EXP_INV_HLC;
         }
-    else {
+        return getByIndex(idx, dm);
+    } else {
         char const* pdat = (char const*)this->m_pLog->getEntry(hlc);
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_HLC;
@@ -426,13 +414,11 @@ template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
-    if
-        constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
-                this->m_pLog->append((const void* const)buf, len, ver, mhlc);
-            });
-        }
-    else {
+    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
+            this->m_pLog->append((const void* const)buf, len, ver, mhlc);
+        });
+    } else {
         // ObjectType does not support Delta, logging the whole current state.
         auto size = mutils::bytes_size(v);
         char* buf = new char[size];
@@ -613,5 +599,5 @@ const typename std::enable_if<(storageType == ST_FILE), version_t>::type getMini
     mlpv = file::FilePersistLog::getMinimumLatestPersistedVersion(PersistentRegistry::generate_prefix(subgroup_type, subgroup_index, shard_num));
     return mlpv;
 }
-}
+}  // namespace persistent
 #endif  //PERSISTENT_IMPL_HPP
