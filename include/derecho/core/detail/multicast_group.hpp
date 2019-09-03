@@ -28,6 +28,7 @@
 #include <spdlog/spdlog.h>
 
 namespace derecho {
+typedef uint32_t message_token_t;
 
 /**
  * Bundles together a set of callback functions for message delivery events.
@@ -265,17 +266,21 @@ private:
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
     bool rdmc_sst_groups_created = false;
-    /** Stores message buffers not currently in use. Protected by
-     * msg_state_mtx */
+    /** Stores message buffers not currently in use. Protected by msg_state_mtx */
     std::map<uint32_t, std::vector<MessageBuffer>> free_message_buffers;
 
     /** Index to be used the next time get_sendbuffer_ptr is called.
      * When next_message is not none, then next_message.index = future_message_index-1 */
     std::vector<message_id_t> future_message_indices;
 
-    /** next_message is the message that will be sent when send is called the next time.
-     * It is std::nullopt when there is no message to send. */
-    std::vector<std::optional<RDMCMessage>> next_sends;
+    /** next_message[subgroup_num] are the messages for which a buffer has been allocated.
+      * One of them will be sent when send is called the next time.
+      * if this is empty, then there's no message to send. */
+    std::vector<std::map<message_token_t, RDMCMessage>> next_sends;
+    std::vector<message_token_t> token_counts;
+    /** hacks galore
+      * To support out of order RDMC sends (for the deferred case). */
+    std::vector<message_id_t> true_message_indices;
     std::map<uint32_t, bool> pending_sst_sends;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
@@ -299,8 +304,8 @@ private:
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> non_persistent_sst_messages;
 
     std::vector<message_id_t> next_message_to_deliver;
-    std::mutex msg_state_mtx;
-    std::condition_variable sender_cv;
+    std::recursive_mutex msg_state_mtx;
+    std::condition_variable_any sender_cv;
 
     /** The time, in milliseconds, that a sender can wait to send a message before it is considered failed. */
     unsigned int sender_timeout;
@@ -324,8 +329,6 @@ private:
     std::list<pred_handle> delivery_pred_handles;
     std::list<pred_handle> persistence_pred_handles;
     std::list<pred_handle> sender_pred_handles;
-
-    std::vector<bool> last_transfer_medium;
 
     /** post the next version to a subgroup just before deliver a message so
      * that the user code know the current version being handled. */
@@ -430,9 +433,9 @@ private:
 
     // Internally used to automatically send a NULL message
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
-    /* Get a pointer into the current buffer, to write data into it before sending
-     * Now this is a private function, called by send internally */
-    char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
+    /* Get a pointer into the current buffer, to write data into it before sending */
+    char* get_sst_buffer(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
+    bool get_buffer_common_checks(subgroup_id_t subgroup_num);
 
 public:
     /**
@@ -490,6 +493,12 @@ public:
     bool send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(char* buf)>& msg_generator, bool cooked_send);
     bool check_pending_sst_sends(subgroup_id_t subgroup_num);
+
+    /** can obtain multiple rdmc buffers to enable "zero-copy" */
+    std::pair<message_token_t, char*> get_rdmc_buffer(
+            subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);
+    /** explicitly send one rdmc buffer obtained by calling get_rdmc_buffer */
+    bool rdmc_send(subgroup_id_t subgroup_num, message_token_t token);
 
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 

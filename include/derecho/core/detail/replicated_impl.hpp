@@ -143,6 +143,16 @@ void Replicated<T>::send(unsigned long long int payload_size,
 }
 
 template <typename T>
+std::pair<message_token_t, char*> Replicated<T>::get_buffer(unsigned long long int payload_size) {
+    return group_rpc_manager.view_manager.get_buffer(subgroup_id, payload_size, false);
+}
+
+template <typename T>
+void Replicated<T>::send(message_token_t token) {
+    group_rpc_manager.view_manager.send(subgroup_id, token);
+}
+
+template <typename T>
 std::size_t Replicated<T>::object_size() const {
     return mutils::bytes_size(**user_object_ptr);
 }

@@ -202,6 +202,9 @@ public:
      */
     void send(unsigned long long int payload_size, const std::function<void(char* buf)>& msg_generator);
 
+    std::pair<message_token_t, char*> get_buffer(unsigned long long int payload_size);
+    void send(message_token_t token);
+
     /**
      * @return The serialized size of the object, of type T, that holds the
      * state of this Replicated<T>.

@@ -2035,6 +2035,20 @@ void ViewManager::send(subgroup_id_t subgroup_num, long long unsigned int payloa
     });
 }
 
+std::pair<message_token_t, char*> ViewManager::get_buffer(subgroup_id_t subgroup_num,
+                                                          unsigned long long int payload_size,
+                                                          bool cooked_send) {
+    shared_lock_t lock(view_mutex);
+    return curr_view->multicast_group->get_rdmc_buffer(subgroup_num, payload_size, cooked_send);
+}
+
+void ViewManager::send(subgroup_id_t subgroup_num, message_token_t token) {
+    shared_lock_t lock(view_mutex);
+    view_change_cv.wait(lock, [&]() {
+        return curr_view->multicast_group->rdmc_send(subgroup_num, token);
+    });
+}
+
 const uint64_t ViewManager::compute_global_stability_frontier(subgroup_id_t subgroup_num) {
     shared_lock_t lock(view_mutex);
     return curr_view->multicast_group->compute_global_stability_frontier(subgroup_num);

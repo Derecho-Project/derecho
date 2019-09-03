@@ -728,6 +728,12 @@ public:
     void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(char* buf)>& msg_generator, bool cooked_send = false);
 
+    std::pair<message_token_t, char*> get_buffer(subgroup_id_t subgroup_num,
+                                                 unsigned long long int payload_size,
+						 bool cooked_send);
+
+    void send(subgroup_id_t subgroup_num, message_token_t token);
+
     const uint64_t compute_global_stability_frontier(subgroup_id_t subgroup_num);
 
     /**
