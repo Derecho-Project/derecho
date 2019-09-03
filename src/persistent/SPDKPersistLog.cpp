@@ -145,7 +145,7 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
     tail_rlock();
     int64_t begin = METADATA.head;
     int64_t end = METADATA.tail - 1;
-    int res = -1;
+    int64_t res = -1;
     while(begin <= end) {
         int64_t mid = (begin + end) / 2;
         LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
@@ -159,12 +159,39 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
             end = (begin + end) / 2 - 1;
         }
     }
+    tail_unlock();
+    head_unlock();
     if(res == -1) {
         // Failed to find the version
         throw derecho::derecho_exception("Failed to find the version.");
     }
-    head_unlock();
+    return res;
+}
+
+int64_t SPDKPersistLog::getHLCIndex(const HLC& hlc) noexcept(false) {
+    head_rlock();
+    tail_rlock();
+    int64_t begin = METADATA.head;
+    int64_t end = METADATA.tail - 1;
+    int64_t res = -1;
+    while(begin <= end) {
+        int mid = (begin + end) / 2;
+        LogEntry* mid_entry = persist_thread.read_entry(METADATA.id, mid);
+        if(mid_entry->fields.hlc_r == hlc.m_rtc_us) {
+            res = mid;
+            break;
+        } else if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r > hlc.m_logic))) {
+            begin = mid + 1;
+        } else {
+            end = mid;
+        }
+    }
     tail_unlock();
+    head_unlock();
+    if(res == -1) {
+        // Failed to find the version
+        throw derecho::derecho_exception("Failed to find the hlc.");
+    }
     return res;
 }
 

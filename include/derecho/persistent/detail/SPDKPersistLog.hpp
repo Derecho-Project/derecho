@@ -138,6 +138,8 @@ public:
     // Get the Index corresponding to a version
     virtual int64_t getVersionIndex(const version_t& ver);
 
+    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
+
     // Get the Earlist version
     virtual version_t getEarliestVersion() noexcept(false);
 
