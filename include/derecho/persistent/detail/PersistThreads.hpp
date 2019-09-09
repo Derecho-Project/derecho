@@ -22,8 +22,8 @@
 #define SPDK_LOG_ADDRESS_SPACE (1ULL << (SPDK_SEGMENT_BIT + 11))  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)
-#define LOG_AT_TABLE(idx) m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table
-#define DATA_AT_TABLE(idx) m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table
+#define LOG_AT_TABLE(idx) (m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
+#define DATA_AT_TABLE(idx) (m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
 
 namespace persistent {
 
@@ -172,7 +172,8 @@ protected:
     /** Semapore of new data request */
     sem_t new_data_request;
     std::condition_variable data_request_completed;
-
+    int initialize_threads();
+    
     /** Singleton Design Patern */
     static PersistThreads* m_PersistThread;
     static bool initialized;
