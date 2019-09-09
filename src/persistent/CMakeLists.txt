@@ -17,7 +17,7 @@ set(DERECHO_COMMITS_AHEAD ${CMAKE_MATCH_4})
 set(DERECHO_COMMIT_HASH ${CMAKE_MATCH_5})
 configure_file(../core/git_version.cpp.in git_version.cpp)
 
-add_library(persistent OBJECT Persistent.cpp PersistLog.cpp PersistThread.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
+add_library(persistent OBJECT Persistent.cpp PersistLog.cpp PersistThreads.cpp FilePersistLog.cpp SPDKPersistLog.cpp SPDKPersistTool.cpp HLC.cpp)
 target_include_directories(persistent PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>

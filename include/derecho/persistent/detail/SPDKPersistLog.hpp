@@ -6,7 +6,7 @@
 #endif
 
 #include "PersistLog.hpp"
-#include "PersistThread.hpp"
+#include "PersistThreads.hpp"
 #include "spdk/env.h"
 #include "spdk/nvme.h"
 #include <atomic>
@@ -78,8 +78,6 @@ class SPDKPersistLog : public PersistLog {
 protected:
     // log metadata
     LogMetadata m_currLogMetadata;
-    // Persistence Thread
-    inline static PersistThread persist_thread;
     /**Lock on head field */
     pthread_rwlock_t head_lock;
     /**Lock on tail field */
