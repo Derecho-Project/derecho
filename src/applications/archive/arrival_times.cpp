@@ -130,13 +130,18 @@ int main() {
         if (num_received == last_received)
             return;
 
-        std::cout << num_received << " " << last_received << endl;
+        // std::cout << num_received << " " << last_received << endl;
 
-
+	// find the next number after sent which %256 will give num_received
+	if (num_received > last_received) {
+	  sent += (num_received - last_received);
+	}
+	else {
+	  sent += (256 - last_received + num_received);
+	}
         //Here I received a new message
-        clock_gettime(CLOCK_REALTIME, &arrival_times[sent+1]);
+        clock_gettime(CLOCK_REALTIME, &arrival_times[sent]);
         last_received = num_received;
-        ++sent;
         
         /* Also here: if I missed messages, how can I be sure
          * that I will enter this condition?
