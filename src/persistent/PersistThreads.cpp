@@ -1,7 +1,7 @@
 #include <cmath>
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/persistent/detail/PersistThreads.hpp>
-
+#include <iostream>
 namespace persistent {
 namespace spdk {
 
@@ -9,20 +9,27 @@ PersistThreads* PersistThreads::m_PersistThread;
 bool PersistThreads::initialized;
 bool PersistThreads::loaded;
 pthread_mutex_t PersistThreads::metadata_load_lock;
-std::mutex initialization_lock;
+std::mutex PersistThreads::initialization_lock;
+std::map<uint32_t, LogEntry*> PersistThreads::id_to_log;
 
 bool PersistThreads::probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                               struct spdk_nvme_ctrlr_opts* opts) {
+    std::printf("Attaching to %s\n", trid->traddr);
+    std::cout.flush();
     return true;
 }
 
 void PersistThreads::attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                                struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts) {
     struct spdk_nvme_ns* ns;
+    std::printf("Attached to %s\n", trid->traddr);
+    std::cout.flush();
     // Step 0: store the ctrlr
     m_PersistThread->general_spdk_info.ctrlr = ctrlr;
     // Step 1: register one of the namespaces
     int num_ns = spdk_nvme_ctrlr_get_num_ns(ctrlr);
+    std::printf("Using %d namespaces.\n", num_ns);
+    std::cout.flush();
     for(int nsid = 1; nsid <= num_ns; nsid++) {
         ns = spdk_nvme_ctrlr_get_ns(ctrlr, nsid);
         if(ns == NULL) {
@@ -31,6 +38,9 @@ void PersistThreads::attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id
         if(!spdk_nvme_ns_is_active(ns)) {
             continue;
         }
+        std::printf("  Namespace ID: %d size: %juGB\n", spdk_nvme_ns_get_id(ns),
+	       spdk_nvme_ns_get_size(ns) / 1000000000);
+        std::cout.flush();
         m_PersistThread->general_spdk_info.ns = ns;
         m_PersistThread->general_spdk_info.sector_size = spdk_nvme_ns_get_sector_size(ns);
         m_PersistThread->general_spdk_info.sector_bit = std::log2(m_PersistThread->general_spdk_info.sector_size);
@@ -95,14 +105,21 @@ uint64_t segment_address_data_location(const uint32_t& id, const uint16_t& virtu
 
 PersistThreads* PersistThreads::get() {
     if(initialized) {
+        std::printf("PersistThreads initialized. Returning it.\n");
+        std::cout.flush();
         return m_PersistThread;
     } else {
+        std::printf("PersistThreads not initialized.\n");
+        std::cout.flush();
         // Step 0: Grab the initialization lock
         initialization_lock.lock();
+        std::printf("Grabbed initialization lock.\n");
+        std::cout.flush();
         if(initialized) {
             initialization_lock.unlock();
             return m_PersistThread;
         }
+        m_PersistThread = new PersistThreads;
         // Step 1: initialize spdk nvme info
         struct spdk_env_opts opts;
         spdk_env_opts_init(&opts);
@@ -110,26 +127,39 @@ PersistThreads* PersistThreads::get() {
             // Failed to initialize spdk env, throw an exception
             throw derecho::derecho_exception("Failed to initialize spdk namespace.");
         }
+        std::printf("Initialized nvme namespace.\n");
+        std::cout.flush();
         int res = spdk_nvme_probe(NULL, NULL, probe_cb, attach_cb, NULL);
         if(res != 0) {
             //initialization of nvme ctrlr failed
             throw derecho::derecho_exception("Failed to initialize nvme ctrlr.");
         }
+        std::printf("Initialized nvme ctrlr.");
+        std::cout.flush();
         // Step 1: get qpair for each plane
         for(int i = 0; i < NUM_DATA_PLANE; i++) {
-            m_PersistThread->SpdkQpair_data[i] = spdk_nvme_ctrlr_alloc_io_qpair(m_PersistThread->general_spdk_info.ctrlr, NULL, 0);
+            std::printf("qpair %d. ", i);
+            std::cout.flush();
+            m_PersistThread->SpdkQpair_data[i]=spdk_nvme_ctrlr_alloc_io_qpair(m_PersistThread->general_spdk_info.ctrlr, NULL, 0);
+            std::printf("qpair %d allocated.\n ", i);
+            std::cout.flush();
             if(m_PersistThread->SpdkQpair_data[i] == NULL) {
                 //qpair initialization failed
                 throw derecho::derecho_exception("Failed to initialize data qpair.");
             }
         }
         for(int i = 0; i < NUM_CONTROL_PLANE; i++) {
+            std::printf("control qpair %d. ", i);
+            std::cout.flush();
             m_PersistThread->SpdkQpair_control[i] = spdk_nvme_ctrlr_alloc_io_qpair(m_PersistThread->general_spdk_info.ctrlr, NULL, 0);
+            std::printf("control qpair %d allocated.\n", i);
             if(m_PersistThread->SpdkQpair_control[i] == NULL) {
                 //qpair initialization failed
                 throw derecho::derecho_exception("Failed to initialize control qpair.");
             }
         }
+        std::printf("Initialized qpair.\n");
+        std::cout.flush();
 
         // Step 2: initialize sem and locks
         if(sem_init(&m_PersistThread->new_data_request, 0, 0) != 0) {
@@ -144,12 +174,16 @@ PersistThreads* PersistThreads::get() {
             // mutex init failed
             throw derecho::derecho_exception("Failed to initialize mutex.");
         }
+        
+        std::printf("Initialized sem and locks.\n");
+        std::cout.flush();
         // Step 3: initialize other fields
         m_PersistThread->compeleted_request_id = -1;
         m_PersistThread->assigned_request_id = -1;
         m_PersistThread->segment_usage_table.reset();
         m_PersistThread->segment_usage_table[0].flip();
-        initialized = false;
+        std::printf("Initialized other fields.\n");
+        std::cout.flush();
         // Step 3: initialize threads
         for(int i = 0; i < NUM_DATA_PLANE; i++) {
             m_PersistThread->data_plane[i] = std::thread([i]() {
@@ -165,11 +199,17 @@ PersistThreads* PersistThreads::get() {
                     lck.release();
                 } while(true);
             });
+            m_PersistThread->data_plane[i].detach();
+            std::printf("Initialized data_plane %d.\n", i);
+            std::cout.flush();
             std::thread thread([i]() {
                 do {
                     spdk_nvme_qpair_process_completions(m_PersistThread->SpdkQpair_control[i], 0);
                 } while(true);
             });
+            thread.detach();
+            std::printf("Initialized polling thread %d.\n", i);
+            std::cout.flush();
         }
         for(int i = 0; i < NUM_CONTROL_PLANE; i++) {
             m_PersistThread->control_plane[i] = std::thread([i]() {
@@ -198,14 +238,22 @@ PersistThreads* PersistThreads::get() {
                     lck.release();
                 } while(true);
             });
+            m_PersistThread->control_plane[i].detach();
+            std::printf("Initialized control plane %d.\n", i);
+            std::cout.flush();
             std::thread thread([i]() {
                 do {
                     spdk_nvme_qpair_process_completions(m_PersistThread->SpdkQpair_control[i], 0);
                 } while(true);
             });
+            thread.detach();
+            std::printf("INitialized polling thread %d.\n", i);
+            std::cout.flush();
         }
         initialized = true;
         initialization_lock.unlock();
+        std::printf("Released lock.\n");
+        std::cout.flush();
         return m_PersistThread;
     }
 }
@@ -474,6 +522,7 @@ void PersistThreads::update_metadata(const uint32_t& id, PTLogMetadataInfo metad
 void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
     if(!loaded) {
         //Step 0: submit read request for the segment of all global data
+        
         char* buf = (char*)malloc(SPDK_SEGMENT_SIZE);
         bool completed = false;
         persist_data_request_t metadata_request;
@@ -486,6 +535,7 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         metadata_request.args = (void*)&completed;
         std::unique_lock<std::mutex> mlck(data_queue_mtx);
         data_write_queue.push(metadata_request);
+        sem_post(&new_data_request);
         mlck.release();
 
         //Step 1: Wait until the request is completed

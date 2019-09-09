@@ -1,5 +1,6 @@
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/persistent/detail/SPDKPersistLog.hpp>
+#include <iostream>
 
 using namespace std;
 
@@ -46,14 +47,24 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
     }
     head_wlock();
     tail_wlock();
+    std::printf("Started loading log %s.\n", &name);
+    std::cout.flush();
     PersistThreads::get();
+    std::printf("Finished getting PersistThreads.\n");
+    std::cout.flush();
     if(pthread_mutex_lock(&PersistThreads::get()->metadata_load_lock)) {
         throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
+    std::printf("Grabbed metadata_load_lock. Start loading log.\n");
+    std::cout.flush();
     PersistThreads::get()->load(name, &this->m_currLogMetadata);
+    std::printf("Finished loading log. Releasing locks.\n");
+    std::cout.flush();
     pthread_mutex_unlock(&PersistThreads::get()->metadata_load_lock);
     tail_unlock();
     head_unlock();
+    std::printf("Locks released.\n");
+    std::cout.flush();
 }
 
 void SPDKPersistLog::append(const void* pdata,
