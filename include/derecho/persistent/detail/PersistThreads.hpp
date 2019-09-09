@@ -105,6 +105,7 @@ struct persist_data_request_t {
     uint32_t lba_count;
     spdk_nvme_cmd_cb cb_fn;
     void* args;
+    bool is_write;
 };
 
 // Control write request
