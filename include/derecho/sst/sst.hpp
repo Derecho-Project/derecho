@@ -380,6 +380,19 @@ public:
         put_with_completion(all_indices, offset, size);
     }
 
+    /** Writes a specific local field to all remote nodes */
+    template <typename T>
+    void put_with_completion(SSTField<T>& field) {
+        put_with_completion(all_indices, field.get_base() - getBaseAddress(), sizeof(field[0]));
+    }
+
+    /** Writes a specific local vector field to all remote nodes. */
+    template <typename T>
+    void put_with_completion(SSTFieldVector<T>& vec_field) {
+        put_with_completion(all_indices, vec_field.get_base() - getBaseAddress(),
+            sizeof(vec_field[0][0]) * vec_field.size());
+    }
+
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
     void put(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 
