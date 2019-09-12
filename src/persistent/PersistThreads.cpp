@@ -2,6 +2,11 @@
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/persistent/detail/PersistThreads.hpp>
 #include <iostream>
+
+#define DUMMY_CB 1
+#define COMPLETED_CB 2
+const uint32_t MAX_LBA_COUNT = 4096;
+
 namespace persistent {
 namespace spdk {
 
@@ -97,6 +102,65 @@ void PersistThreads::control_write_request_complete(void* args,
     m_PersistThread->compeleted_request_id = control_request->request_id;
     delete control_request;
 }
+
+int PersistThreads::write_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode) {
+    uint32_t offset = 0;
+    std::queue<bool*> completed_queue;
+    while (offset < data_length) {
+        persist_data_request_t data_request;
+        uint16_t size = std::min(data_length - offset, MAX_LBA_COUNT >> general_spdk_info.sector_bit);
+        data_request.buf = buf + offset;
+        data_request.lba = lba_index + (offset << general_spdk_info.sector_bit);
+        data_request.lba_count = size << general_spdk_info.sector_bit;
+        // Use different callback function based on input mode
+        switch (mode) {
+            case DUMMY_CB:
+                {
+		    data_request.cb_fn = dummy_request_complete;
+                    data_request.is_write = true;
+                }                
+                break;
+
+            case COMPLETED_CB:
+                {                
+                    bool completed = false;
+                    data_request.cb_fn = load_request_complete;
+                    data_request.args = (void*)&completed;
+                    completed_queue.push(&completed);
+                } 
+                break;
+            
+            default:
+                break;
+        }
+        // Push the request to the data queue
+        std::unique_lock<std::mutex> mlck(data_queue_mtx);
+        data_write_queue.push(data_request);
+        sem_post(&new_data_request);
+        mlck.release();
+        offset += size;
+    }
+
+    // Wait for completion
+    switch (mode) {
+        case DUMMY_CB:
+            return 0;
+
+        case COMPLETED_CB:
+            while (completed_queue.size() > 0) {
+                bool* completed_ptr = completed_queue.front();
+                completed_queue.pop();
+                while (!*completed_ptr);
+                free(completed_ptr);
+            }
+            return 0;
+
+        default:
+            return 0;
+    }
+}
+    
+ 
 
 uint64_t segment_address_log_location(const uint32_t& id, const uint16_t& virtual_log_segment) {
     return id * sizeof(persist_thread_log_metadata) + virtual_log_segment * sizeof(uint16_t);
@@ -232,7 +296,7 @@ int PersistThreads::initialize_threads() {
                             std::cout.flush();
                             int rc = spdk_nvme_ns_cmd_read(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_request.cb_fn, data_request.args, 0);
                             if (rc != 0){
-                               std::printf("Failed to initialize read io.\n");
+//                               std::printf("Failed to initialize read io. lba_count: %d, max_io: %d, stripe: %d, qrequest: %d\n", data_request.lba_count, general_spdk_info.ns->sectors_per_max_io, general_spdk_info.ns->sectors_per_stripe, SpdkQpair_data[i]->ctrlr->opts.io_queue_requests);
                                std::cout.flush();
                             }
                         } else {
@@ -240,7 +304,7 @@ int PersistThreads::initialize_threads() {
                             std::cout.flush();
                             int rc = spdk_nvme_ns_cmd_read(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_request.cb_fn, data_request.args, 0);
                             if (rc != 0){
-                              std::fprintf(stderr, "Failed to initialize read io %d.\n", rc);
+                              std::fprintf(stderr, "Failed to initialize read io %d with lba_count %d.\n", rc, data_request.lba_count);
                               std::cout.flush();
                             }
                         }
@@ -300,9 +364,9 @@ int PersistThreads::initialize_threads() {
             });
             thread.detach();
             std::printf("INitialized polling thread %d.\n", i);
-            std::cout.flush();
-            return 0; 
-       }
+            std::cout.flush(); 
+        }
+	return 0;
 }
 
 PersistThreads::PersistThreads() {}

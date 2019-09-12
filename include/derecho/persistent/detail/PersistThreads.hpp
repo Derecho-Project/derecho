@@ -179,6 +179,7 @@ protected:
     static bool initialized;
     static std::mutex initialization_lock;
 
+    /** Static functions for Spdk Callback */
     static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                          struct spdk_nvme_ctrlr_opts* opts);
     static void attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
@@ -192,34 +193,37 @@ protected:
     static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
     static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
+    int write_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
+//    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
+
 public:
     /**
-         * Constructor
-         */
+     * Constructor
+     */
     PersistThreads();
     /**
-         * Destructor
-         */
+     * Destructor
+     */
     virtual ~PersistThreads();
     /**
-         * Load metadata entry and log entries of a given log from persistent memory.
-         * @param name - name of the log
-         * @param log_metadata - pointer to metadata held by the log
-         */
+     * Load metadata entry and log entries of a given log from persistent memory.
+     * @param name - name of the log
+     * @param log_metadata - pointer to metadata held by the log
+     */
     void load(const std::string& name, LogMetadata* log_metadata);
     /**
-         * Submit data_request and control_request. Data offset must be ailgned
-         * with spdk sector size.
-         * @param id - id of the log
-         * @param data - data to be appended
-         * @param data_offset - offset of the data w.r.t virtual data space
-         * @param log - log entry to be appended
-         * @param log_offset - offset of the log entry w.r.t virtual log entry space
-         * @param metadata - updated metadata
-         */
+     * Submit data_request and control_request. Data offset must be ailgned
+     * with spdk sector size.
+     * @param id - id of the log
+     * @param data - data to be appended
+     * @param data_offset - offset of the data w.r.t virtual data space
+     * @param log - log entry to be appended
+     * @param log_offset - offset of the log entry w.r.t virtual log entry space
+     * @param metadata - updated metadata
+     */
     void append(const uint32_t& id, char* data, const uint64_t& data_offset,
-                const uint64_t& data_size, void* log,
-                const uint64_t& log_offset, PTLogMetadataInfo metadata);
+		    const uint64_t& data_size, void* log,
+		    const uint64_t& log_offset, PTLogMetadataInfo metadata);
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata, bool garbage_collection);
 
