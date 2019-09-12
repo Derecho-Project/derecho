@@ -1,0 +1,9 @@
+# Hashes of file build rules.
+fec5cbe243e4d43526b4035ab47445c2 src/conf/CMakeFiles/format_conf
+ea39656722efeecfa28eac3c4c2ec315 src/core/CMakeFiles/format_derecho
+b0979ebbf47a12d77eb7b5ebaaf61021 src/mutils-serialization/CMakeFiles/format_mutils-serialization
+eada584793eec77c3ba5cc379199377f src/persistent/CMakeFiles/format_persistent
+e6cd5c24d1cd48dde0cad7276b63664c src/rdmc/CMakeFiles/format_rdmc
+f67a9423cbb695349d7d00d0f3f43fd2 src/sst/CMakeFiles/format_sst
+8c5e500ff6c48ce5418b428d0bceec20 src/tcp/CMakeFiles/format_tcp
+05346bf49e70c15e247f086f71bba40c src/utils/CMakeFiles/format_utils

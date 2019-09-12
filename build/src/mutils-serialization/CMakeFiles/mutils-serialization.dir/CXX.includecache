@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../include/derecho/mutils-serialization/SerializationMacros.hpp
+mutils/macro_utils.hpp
+-
+
+../include/derecho/mutils-serialization/SerializationSupport.hpp
+mutils/macro_utils.hpp
+-
+mutils/mutils.hpp
+-
+mutils/tuple_extras.hpp
+-
+mutils/type_utils.hpp
+-
+SerializationMacros.hpp
+../include/derecho/mutils-serialization/SerializationMacros.hpp
+context_ptr.hpp
+../include/derecho/mutils-serialization/context_ptr.hpp
+cstring
+-
+vector
+-
+tuple
+-
+
+../include/derecho/mutils-serialization/context_ptr.hpp
+memory
+-
+type_traits
+-
+
+/home/lorenzo/derecho/src/mutils-serialization/SerializationSupport.cpp
+derecho/mutils-serialization/SerializationSupport.hpp
+-
+string.h
+-
+

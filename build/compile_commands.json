@@ -1,0 +1,442 @@
+[
+{
+  "directory": "/home/lorenzo/derecho/build/src/mutils-serialization",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/mutils-serialization -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -DSPDLOG_TRACE_ON   -o CMakeFiles/mutils-serialization.dir/SerializationSupport.cpp.o -c /home/lorenzo/derecho/src/mutils-serialization/SerializationSupport.cpp",
+  "file": "/home/lorenzo/derecho/src/mutils-serialization/SerializationSupport.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/conf",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/conf -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3   -o CMakeFiles/conftst.dir/test.cpp.o -c /home/lorenzo/derecho/src/conf/test.cpp",
+  "file": "/home/lorenzo/derecho/src/conf/test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/conf",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/conf -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3   -o CMakeFiles/conftst.dir/conf.cpp.o -c /home/lorenzo/derecho/src/conf/conf.cpp",
+  "file": "/home/lorenzo/derecho/src/conf/conf.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/conf",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/conf -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -D_DEBUG -DSPDLOG_TRACE_ON -ggdb -gdwarf-3   -o CMakeFiles/conf.dir/conf.cpp.o -c /home/lorenzo/derecho/src/conf/conf.cpp",
+  "file": "/home/lorenzo/derecho/src/conf/conf.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/utils",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/utils  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/utils.dir/logger.cpp.o -c /home/lorenzo/derecho/src/utils/logger.cpp",
+  "file": "/home/lorenzo/derecho/src/utils/logger.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/derecho_sst.cpp.o -c /home/lorenzo/derecho/src/core/derecho_sst.cpp",
+  "file": "/home/lorenzo/derecho/src/core/derecho_sst.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/view.cpp.o -c /home/lorenzo/derecho/src/core/view.cpp",
+  "file": "/home/lorenzo/derecho/src/core/view.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/view_manager.cpp.o -c /home/lorenzo/derecho/src/core/view_manager.cpp",
+  "file": "/home/lorenzo/derecho/src/core/view_manager.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/rpc_manager.cpp.o -c /home/lorenzo/derecho/src/core/rpc_manager.cpp",
+  "file": "/home/lorenzo/derecho/src/core/rpc_manager.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/p2p_connections.cpp.o -c /home/lorenzo/derecho/src/core/p2p_connections.cpp",
+  "file": "/home/lorenzo/derecho/src/core/p2p_connections.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/multicast_group.cpp.o -c /home/lorenzo/derecho/src/core/multicast_group.cpp",
+  "file": "/home/lorenzo/derecho/src/core/multicast_group.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/subgroup_functions.cpp.o -c /home/lorenzo/derecho/src/core/subgroup_functions.cpp",
+  "file": "/home/lorenzo/derecho/src/core/subgroup_functions.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/connection_manager.cpp.o -c /home/lorenzo/derecho/src/core/connection_manager.cpp",
+  "file": "/home/lorenzo/derecho/src/core/connection_manager.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/restart_state.cpp.o -c /home/lorenzo/derecho/src/core/restart_state.cpp",
+  "file": "/home/lorenzo/derecho/src/core/restart_state.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/persistence_manager.cpp.o -c /home/lorenzo/derecho/src/core/persistence_manager.cpp",
+  "file": "/home/lorenzo/derecho/src/core/persistence_manager.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/version_code.cpp.o -c /home/lorenzo/derecho/src/core/version_code.cpp",
+  "file": "/home/lorenzo/derecho/src/core/version_code.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/core",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/core  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/core.dir/git_version.cpp.o -c /home/lorenzo/derecho/build/src/core/git_version.cpp",
+  "file": "/home/lorenzo/derecho/build/src/core/git_version.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/rdmc",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/rdmc -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/rdmc.dir/rdmc.cpp.o -c /home/lorenzo/derecho/src/rdmc/rdmc.cpp",
+  "file": "/home/lorenzo/derecho/src/rdmc/rdmc.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/rdmc",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/rdmc -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/rdmc.dir/util.cpp.o -c /home/lorenzo/derecho/src/rdmc/util.cpp",
+  "file": "/home/lorenzo/derecho/src/rdmc/util.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/rdmc",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/rdmc -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/rdmc.dir/group_send.cpp.o -c /home/lorenzo/derecho/src/rdmc/group_send.cpp",
+  "file": "/home/lorenzo/derecho/src/rdmc/group_send.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/rdmc",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/rdmc -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/rdmc.dir/schedule.cpp.o -c /home/lorenzo/derecho/src/rdmc/schedule.cpp",
+  "file": "/home/lorenzo/derecho/src/rdmc/schedule.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/rdmc",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/rdmc -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/rdmc.dir/lf_helper.cpp.o -c /home/lorenzo/derecho/src/rdmc/lf_helper.cpp",
+  "file": "/home/lorenzo/derecho/src/rdmc/lf_helper.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/sst",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/sst -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/sst.dir/lf.cpp.o -c /home/lorenzo/derecho/src/sst/lf.cpp",
+  "file": "/home/lorenzo/derecho/src/sst/lf.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/sst",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/sst -I/home/lorenzo/derecho/include  -std=c++1z -fPIC -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/sst.dir/poll_utils.cpp.o -c /home/lorenzo/derecho/src/sst/poll_utils.cpp",
+  "file": "/home/lorenzo/derecho/src/sst/poll_utils.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/tcp",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/tcp  -std=c++1z -Wall -fPIC -D_REENTRANT -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3   -o CMakeFiles/tcp.dir/tcp.cpp.o -c /home/lorenzo/derecho/src/tcp/tcp.cpp",
+  "file": "/home/lorenzo/derecho/src/tcp/tcp.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/persistent",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/persistent -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3  -O0 -ggdb -gdwarf-3   -o CMakeFiles/persistent_test.dir/test.cpp.o -c /home/lorenzo/derecho/src/persistent/test.cpp",
+  "file": "/home/lorenzo/derecho/src/persistent/test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/persistent",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/persistent -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3  -O0 -ggdb -gdwarf-3   -o CMakeFiles/persistent.dir/Persistent.cpp.o -c /home/lorenzo/derecho/src/persistent/Persistent.cpp",
+  "file": "/home/lorenzo/derecho/src/persistent/Persistent.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/persistent",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/persistent -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3  -O0 -ggdb -gdwarf-3   -o CMakeFiles/persistent.dir/PersistLog.cpp.o -c /home/lorenzo/derecho/src/persistent/PersistLog.cpp",
+  "file": "/home/lorenzo/derecho/src/persistent/PersistLog.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/persistent",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/persistent -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3  -O0 -ggdb -gdwarf-3   -o CMakeFiles/persistent.dir/FilePersistLog.cpp.o -c /home/lorenzo/derecho/src/persistent/FilePersistLog.cpp",
+  "file": "/home/lorenzo/derecho/src/persistent/FilePersistLog.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/persistent",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/persistent -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -D_REENTRANT -D_GNU_SOURCE -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -g -O0 -Wall -ggdb -gdwarf-3  -O0 -ggdb -gdwarf-3   -o CMakeFiles/persistent.dir/HLC.cpp.o -c /home/lorenzo/derecho/src/persistent/HLC.cpp",
+  "file": "/home/lorenzo/derecho/src/persistent/HLC.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/objectstore",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/dpods_test.dir/test.cpp.o -c /home/lorenzo/derecho/src/objectstore/test.cpp",
+  "file": "/home/lorenzo/derecho/src/objectstore/test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/objectstore",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/dpods_perf.dir/performance.cpp.o -c /home/lorenzo/derecho/src/objectstore/performance.cpp",
+  "file": "/home/lorenzo/derecho/src/objectstore/performance.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/objectstore",
+  "command": "/usr/bin/g++-7  -Ddpods_EXPORTS -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -fPIC   -o CMakeFiles/dpods.dir/ObjectStore.cpp.o -c /home/lorenzo/derecho/src/objectstore/ObjectStore.cpp",
+  "file": "/home/lorenzo/derecho/src/objectstore/ObjectStore.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/objectstore",
+  "command": "/usr/bin/g++-7  -Ddpods_EXPORTS -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -fPIC   -o CMakeFiles/dpods.dir/Object.cpp.o -c /home/lorenzo/derecho/src/objectstore/Object.cpp",
+  "file": "/home/lorenzo/derecho/src/objectstore/Object.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_latency_test.dir/persistent_latency_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_latency_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_latency_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_temporal_stability_test.dir/persistent_temporal_stability_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_temporal_stability_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_temporal_stability_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_temporal_send_test.dir/persistent_temporal_send_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_temporal_send_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_temporal_send_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/subgroup_test.dir/subgroup_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/subgroup_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/subgroup_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/volatile_typed_subgroup_bw_test.dir/volatile_typed_subgroup_bw_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/volatile_typed_subgroup_bw_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/volatile_typed_subgroup_bw_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_vector.dir/persistent_vector.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_vector.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_vector.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/volatile_temporal_stability_test.dir/volatile_temporal_stability_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/volatile_temporal_stability_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/volatile_temporal_stability_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_typed_subgroup_bw_test.dir/persistent_typed_subgroup_bw_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_typed_subgroup_bw_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_typed_subgroup_bw_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/total_restart_test.dir/total_restart_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/total_restart_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/total_restart_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/test_write.dir/test_write.cpp.o -c /home/lorenzo/derecho/src/applications/archive/test_write.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/test_write.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/long_subgroup_test.dir/long_subgroup_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/long_subgroup_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/long_subgroup_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/objstore.dir/objstore.cpp.o -c /home/lorenzo/derecho/src/applications/archive/objstore.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/objstore.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/volatile_temporal_send_test.dir/volatile_temporal_send_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/volatile_temporal_send_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/volatile_temporal_send_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/derecho_caller_test.dir/derecho_caller_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/derecho_caller_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/derecho_caller_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/scaling_subgroup_test.dir/scaling_subgroup_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/scaling_subgroup_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/scaling_subgroup_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/p2p_send_test.dir/p2p_send_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/p2p_send_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/p2p_send_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/subgroup_scaling_test.dir/subgroup_scaling_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/subgroup_scaling_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/subgroup_scaling_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/subgroup_scaling_test.dir/aggregate_bandwidth.cpp.o -c /home/lorenzo/derecho/src/applications/archive/aggregate_bandwidth.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/aggregate_bandwidth.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/asynchronous_dht.dir/asynchronous_dht.cpp.o -c /home/lorenzo/derecho/src/applications/archive/asynchronous_dht.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/asynchronous_dht.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/custom_subgroup_profiles_test.dir/custom_subgroup_profiles_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/custom_subgroup_profiles_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/custom_subgroup_profiles_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/simple_predicate.dir/simple_predicate.cpp.o -c /home/lorenzo/derecho/src/applications/archive/simple_predicate.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/simple_predicate.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/typed_subgroup_test.dir/typed_subgroup_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/typed_subgroup_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/typed_subgroup_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/arrival_times.dir/arrival_times.cpp.o -c /home/lorenzo/derecho/src/applications/archive/arrival_times.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/arrival_times.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/arrival_times.dir/initialize.cpp.o -c /home/lorenzo/derecho/src/applications/archive/initialize.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/initialize.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/sst_test.dir/sst_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/sst_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/sst_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/server_client_p2p.dir/server_client_p2p.cpp.o -c /home/lorenzo/derecho/src/applications/archive/server_client_p2p.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/server_client_p2p.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_typed_subgroup_test.dir/persistent_typed_subgroup_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_typed_subgroup_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_typed_subgroup_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/persistent_rejoin_test.dir/persistent_rejoin_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/persistent_rejoin_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/persistent_rejoin_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/typed_subgroup_bw_test.dir/typed_subgroup_bw_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/typed_subgroup_bw_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/typed_subgroup_bw_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/shard_iterator_p2p_test.dir/shard_iterator_p2p_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/shard_iterator_p2p_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/shard_iterator_p2p_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/smart_membership_function_test.dir/smart_membership_function_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/smart_membership_function_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/smart_membership_function_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/simple_send.dir/simple_send.cpp.o -c /home/lorenzo/derecho/src/applications/archive/simple_send.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/simple_send.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/debug_failure_test.dir/debug_failure_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/debug_failure_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/debug_failure_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/count_write.dir/count_write.cpp.o -c /home/lorenzo/derecho/src/applications/archive/count_write.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/count_write.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/rdma_for_ml.dir/rdma_for_ml.cpp.o -c /home/lorenzo/derecho/src/applications/archive/rdma_for_ml.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/rdma_for_ml.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/write_avg_time.dir/write_avg_time.cpp.o -c /home/lorenzo/derecho/src/applications/archive/write_avg_time.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/write_avg_time.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/write_avg_time.dir/compute_nodes_list.cpp.o -c /home/lorenzo/derecho/src/applications/archive/compute_nodes_list.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/compute_nodes_list.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/p2p_latency_test.dir/p2p_latency_test.cpp.o -c /home/lorenzo/derecho/src/applications/archive/p2p_latency_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/p2p_latency_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/rdma_two_sided.dir/rdma_two_sided.cpp.o -c /home/lorenzo/derecho/src/applications/archive/rdma_two_sided.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/rdma_two_sided.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/archive",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/archive  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/membership_tests.dir/membership_tests.cpp.o -c /home/lorenzo/derecho/src/applications/archive/membership_tests.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/archive/membership_tests.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/demos",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/applications/demos -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/simple_replicated_objects.dir/simple_replicated_objects.cpp.o -c /home/lorenzo/derecho/src/applications/demos/simple_replicated_objects.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/demos/simple_replicated_objects.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/demos",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/applications/demos -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/random_messages.dir/random_messages.cpp.o -c /home/lorenzo/derecho/src/applications/demos/random_messages.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/demos/random_messages.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/demos",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/applications/demos -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/dds_demo.dir/simple_data_distribution_service.cpp.o -c /home/lorenzo/derecho/src/applications/demos/simple_data_distribution_service.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/demos/simple_data_distribution_service.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/demos",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/applications/demos -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/dds_demo.dir/dds_demo.cpp.o -c /home/lorenzo/derecho/src/applications/demos/dds_demo.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/demos/dds_demo.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/demos",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/src/applications/demos -I/home/lorenzo/derecho/include  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/overlapping_replicated_objects.dir/overlapping_replicated_objects.cpp.o -c /home/lorenzo/derecho/src/applications/demos/overlapping_replicated_objects.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/demos/overlapping_replicated_objects.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/unit_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/tests/unit_tests  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/rpc_reply_maps.dir/rpc_reply_maps.cpp.o -c /home/lorenzo/derecho/src/applications/tests/unit_tests/rpc_reply_maps.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/unit_tests/rpc_reply_maps.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/unit_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/tests/unit_tests  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/rpc_function_types.dir/rpc_function_types.cpp.o -c /home/lorenzo/derecho/src/applications/tests/unit_tests/rpc_function_types.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/unit_tests/rpc_function_types.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/unit_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/tests/unit_tests  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/cooked_send_test.dir/cooked_send_test.cpp.o -c /home/lorenzo/derecho/src/applications/tests/unit_tests/cooked_send_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/unit_tests/cooked_send_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/unit_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/tests/unit_tests  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/delivery_order_test.dir/delivery_order_test.cpp.o -c /home/lorenzo/derecho/src/applications/tests/unit_tests/delivery_order_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/unit_tests/delivery_order_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/unit_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include -I/home/lorenzo/derecho/src/applications/tests/unit_tests  -fPIC -std=c++1z -Wall -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/subgroup_function_tester.dir/subgroup_function_tester.cpp.o -c /home/lorenzo/derecho/src/applications/tests/unit_tests/subgroup_function_tester.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/unit_tests/subgroup_function_tester.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/performance_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/latency_test.dir/latency_test.cpp.o -c /home/lorenzo/derecho/src/applications/tests/performance_tests/latency_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/performance_tests/latency_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/performance_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/latency_test.dir/aggregate_latency.cpp.o -c /home/lorenzo/derecho/src/applications/tests/performance_tests/aggregate_latency.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/performance_tests/aggregate_latency.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/performance_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/bandwidth_test.dir/bandwidth_test.cpp.o -c /home/lorenzo/derecho/src/applications/tests/performance_tests/bandwidth_test.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/performance_tests/bandwidth_test.cpp"
+},
+{
+  "directory": "/home/lorenzo/derecho/build/src/applications/tests/performance_tests",
+  "command": "/usr/bin/g++-7   -I/home/lorenzo/derecho/include  -std=c++1z -Wall -fPIC -g -O0 -Wall -ggdb -gdwarf-3 -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG -O0 -ggdb -gdwarf-3 -D_DEBUG   -o CMakeFiles/bandwidth_test.dir/aggregate_bandwidth.cpp.o -c /home/lorenzo/derecho/src/applications/tests/performance_tests/aggregate_bandwidth.cpp",
+  "file": "/home/lorenzo/derecho/src/applications/tests/performance_tests/aggregate_bandwidth.cpp"
+}
+]

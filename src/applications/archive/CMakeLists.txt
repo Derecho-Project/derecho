@@ -151,3 +151,7 @@ target_link_libraries(membership_tests derecho)
 
 add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
+
+#arrival times
+add_executable(arrival_times arrival_times.cpp initialize.cpp)
+target_link_libraries(arrival_times derecho)

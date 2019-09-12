@@ -4,10 +4,11 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <pthread.h>
+#include <thread>
 #include <limits>
+#include <string>
 
-#include <derecho/core/derecho.hpp>
+#include "initialize.h"
 #include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/sst/sst.hpp>
 //Since all SST instances are named sst, we can use this convenient hack
@@ -25,163 +26,212 @@ using namespace sst;
 
 class mySST : public SST<mySST> {
 public:
-    mySST(const vector<uint32_t>& _members, uint32_t my_rank, long long unsigned int _msg_size = 1000) : SST<mySST>(this, SSTParams{_members, my_rank}),
+    mySST(const vector<uint32_t>& _members, uint32_t my_rank, uint64_t _msg_size) : SST<mySST>(this, SSTParams{_members, my_rank}),
                                                                 msg(_msg_size) 
     {
-        SSTInit(msg);
+        SSTInit(msg, heartbeat);
     }
-    SSTFieldVector<char> msg;
+    SSTFieldVector<unsigned char> msg;
+    SSTField<bool> heartbeat;
 };
 
-int main() {
-    // input number of nodes and the local node rank
-    std::cout << "Enter node_rank and num_nodes" << std::endl;
-    uint32_t node_rank, num_nodes;
-    cin >> node_rank >> num_nodes;
-
-    // input message size
-    std::cout << "Enter message size" << std::endl;
-    long long unsigned int msg_size;
-    cin >> msg_size;
-
-    // input message size
-    std::cout << "Enter message number" << std::endl;
-    uint msg_number;
-    cin >> msg_number;
-
-    std::cout << "Input the IP addresses" << std::endl;
-    uint16_t port = 32567;
-    // input the ip addresses
-    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
-    for(uint i = 0; i < num_nodes; ++i) {
-      std::string ip;
-      cin >> ip;
-      ip_addrs_and_ports[i] = {ip, port};
+int main(int argc, char* argv[]) {
+    
+    if(argc != 5) {
+        std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders>  <number of msgs> <sender_sleep_time_ms>" << endl;
+        return -1;
     }
-    std::cout << "Using the default port value of " << port << std::endl;
+
+    const uint32_t num_nodes = std::atoi(argv[1]);
+    const uint32_t num_senders = std::atoi(argv[2]);
+    const uint64_t num_msgs = std::atoi(argv[3]);
+    const uint32_t sleep_time = std::atoi(argv[4]);
+
+    if(num_senders > num_nodes || num_senders == 0) {
+        std::cout << "Num senders must be more than zero and less or equal than num_nodes" << endl;
+        return -1;
+    }
+
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE);
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(initialize(num_nodes), node_id);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(initialize(num_nodes), node_id);
 #endif
 
-    // form a group with a subset of all the nodes
+
+    // form a group with all the nodes
     vector<uint32_t> members(num_nodes);
     for(unsigned int i = 0; i < num_nodes; ++i) {
         members[i] = i;
     }
 
+    //form a subset of senders
+    vector<uint32_t> senders(num_senders);
+    for(unsigned int i = 0; i < num_senders; ++i) {
+        senders[i] = i;
+    }
+
     // create a new shared state table with all the members
-    mySST sst(members, node_rank, msg_size);
+    mySST sst(members, node_id, msg_size);
     
-    //messages sent/received
-    uint sent = 0;
-    uint last_received = 0;
-
-    // initalization (?)
+    // initalization
     for(uint i = 0; i < msg_size; i++)
-        sst.msg[node_rank][i] = 0;
-    sst.put((char*)std::addressof(sst.msg[0][0]) - sst.getBaseAddress(), msg_size*sizeof(char));
-    
+        sst.msg[node_id][i] = 0;
+    sst.put((char*)std::addressof(sst.msg[0][0]) - sst.getBaseAddress(), msg_size*sizeof(unsigned char));
 
-    //Vector of arrival times for each message
-    std::vector<struct timespec> arrival_times(msg_number);
-
-    //sender trigger
-    auto sender_trigger =  [msg_size, msg_number, &sent] (mySST& sst) {
-        
-        sst.msg[0][msg_size-1] = (sst.msg[0][msg_size-1] + 1) % std::numeric_limits<char>::max();
-        sst.put((char*)std::addressof(sst.msg[0][0]) - sst.getBaseAddress(), msg_size*sizeof(char));            
-        ++sent;
-        
-        if(sent == msg_number) {
-            sync(1);
-        
-#ifdef USE_VERBS_API
-            verbs_destroy();
-#else
-            lf_destroy();
-#endif
-            exit(0);
+    auto check_failures_loop = [&sst]() {
+        pthread_setname_np(pthread_self(), "check_failures");
+        while(true) {
+            std::this_thread::sleep_for(std::chrono::microseconds(1000));
+            sst.put_with_completion((char*)std::addressof(sst.heartbeat[0]) - sst.getBaseAddress(), sizeof(bool));
         }
     };
+
+    std::thread failures_thread = std::thread(check_failures_loop);
     
-    // receiver trigger
-    // @param arrival_times: vector. Index i corresponds to the arrival of message i-th
-    // @param msg_size: size of a single message
-    // @param msg_number: total number of messages expected from the sender
-    // @param last_received: index of the last received message
-    // @param sent: actual number of messages received so far
-    auto receiver_trigger = [&arrival_times, msg_size, msg_number, &last_received, &sent] (mySST& sst) {
+    //sender action - just send
+    auto sender =  [=] (mySST& sst) {
+        pthread_setname_np(pthread_self(), "sender");
+
+        //just for debug
+        std::cout << "Sender " << node_id << " started" << endl;
         
-        //read
-        uint num_received = sst.msg[0][msg_size-1];
+        uint64_t sent = 0;
 
-        //check if is new
-        /* So far, I use a %256 arithmetic. So if I miss many messages,
-         * it is possible that num received > last_received, but still
-         * I have a message which is new. Then, we have a problem: what
-         * if I have exactly 256 messages lost? I can't detect that there
-         * is a new message. That's why I want to change this way to 
-         * send the sequence number. But for now, that is.
-         */
-        if (num_received == last_received)
-            return;
+        for(unsigned int i = 0; i < num_msgs; i++) {
+ 
+            sst.msg[node_id][msg_size-1] = (sst.msg[node_id][msg_size-1] + 1) % (std::numeric_limits<unsigned char>::max()+1);
+            sst.put((char*)std::addressof(sst.msg[0][0]) - sst.getBaseAddress(), msg_size*sizeof(unsigned char));            
+            ++sent;
+            
+            if(sleep_time > 0)
+            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+        }
+    };
 
-        // std::cout << num_received << " " << last_received << endl;
 
-	// find the next number after sent which %256 will give num_received
-	if (num_received > last_received) {
-	  sent += (num_received - last_received);
-	}
-	else {
-	  sent += (256 - last_received + num_received);
-	}
-        //Here I received a new message
-        clock_gettime(CLOCK_REALTIME, &arrival_times[sent]);
-        last_received = num_received;
+    //receiver action
+    auto receiver = [=](mySST& sst, uint32_t sender_id) {
+
+        pthread_setname_np(pthread_self(), ("receiver@" + std::to_string(sender_id)).c_str());
+
+        //just for debug
+        std::cout << "Receiver " << sender_id << " started" << endl;
         
-        /* Also here: if I missed messages, how can I be sure
-         * that I will enter this condition?
-         */
-        if(sent == msg_number) {                     
-            double sum = 0.0;
-            double time;
-            ofstream fout;
-            fout.open("arrival_times_record", ofstream::app);
-            // compute the average and print values
-            for(uint i = 1; i < sent; ++i) {
-                time = ((arrival_times[i].tv_sec * 1e9 + arrival_times[i].tv_nsec) - (arrival_times[i-1].tv_sec * 1e9 + arrival_times[i-1].tv_nsec)) / 1e9;
-                sum += time;
-                fout << time << endl;
+        //index of the last received message (%256)
+        uint8_t last_received = 0;
+        //index of the newly received message (%256)
+        uint8_t actual_received = 0;
+        //index of the total number of received message (actual #)
+        uint64_t highest_received = 0;
+
+
+        vector<struct timespec> arrival_times(num_msgs, {0});
+
+        // //Just for debug
+        // uint64_t tests = 0;
+
+        while(highest_received < num_msgs) {
+
+            actual_received = sst.msg[sender_id][msg_size-1];
+
+            if (actual_received == last_received) {
+
+                // //For debug
+                // if (++tests > 1000000000) {
+                //     std::cout << "Timed out: highest(" << highest_received << "), actual(" << (int)actual_received << "), last(" << (int)last_received << ")" << endl;
+                //     break;
+                // }
+
+                continue;
             }
-                                
-            fout << "Average inter-arrival time (" << msg_number << " msgs): " << (sum / msg_number)/1e9 << endl;
-            fout.close();
-            sync(0);        
+
+            else if (actual_received > last_received)
+	            highest_received += actual_received - last_received;
+	        
+	        else
+	            highest_received += 256 - last_received + actual_received;
+	        
+            //Here I received a new message
+            clock_gettime(CLOCK_REALTIME, &arrival_times[highest_received-1]);
+            last_received = actual_received;
+
+        }
+
+        //print results
+        double sum = 0.0;
+        double time;
+        uint64_t missed_msgs = 0;
+        uint64_t last_valid_time = 0;
+        bool already_received = false;
+
+        ofstream fout;
+        fout.open("time_records_" + std::to_string(sender_id), ofstream::app);
+        fout << "Times recorded for sender " << sender_id << endl;
+        // compute the average and print values
+        // i consider only non-missed messages.
+        
+        for(uint64_t i = 0; i < num_msgs; ++i) {
+            if(arrival_times[i].tv_sec == 0) {
+                missed_msgs++;
+                if(!already_received)
+                    last_valid_time++;
+            }
+            else {
+                if (!already_received)
+                    already_received = true;
+                else {
+                    time = ((arrival_times[i].tv_sec * 1e9 + arrival_times[i].tv_nsec) - (arrival_times[last_valid_time].tv_sec * 1e9 + arrival_times[last_valid_time].tv_nsec)) / 1e9;
+                    sum += time;
+                    fout << time << endl;
+                }
+                last_valid_time = i;
+            }
+        }              
+        fout << "Average inter-arrival time (" << num_msgs << " msgs): " << (sum / (num_msgs-missed_msgs))/1e9 << endl;
+        fout << "Missed messages: " << missed_msgs << endl;
+        fout.close();
+    };
+    
+    /* Receiver threads 
+     * For the moment, ONE receiver thread for each sender.
+     * Then, # of receiver threads per sender will be a 
+     * parameter. (TODO)
+    */
+    vector<std::thread> receiver_threads;
+    for(uint32_t i = 0; i < num_senders; i++) {
+        receiver_threads.emplace_back(std::thread(receiver, std::ref(sst), i));
+    }
+
+    // Sender thread, if node_id is a sender.
+    // Creates the thread and waits for termination
+    for(unsigned int i = 0; i < num_senders; i++)
+        if(i == node_id) {
+            //thread creation 
+            std::thread sender_thread(sender, std::ref(sst));
+
+            //wait for thread termination
+            sender_thread.join();
+            std::cout << "Sender " << node_id << " joined" << endl;
+
+            break;
+        }
+
+    //Wait for the receivers
+    for (auto &th : receiver_threads) {
+      th.join();
+      std::cout << "Receiver joined" << endl;
+    }
+
 #ifdef USE_VERBS_API
             verbs_destroy();
 #else
             lf_destroy();
 #endif
-            exit(0);
-        }
-    };
-
-    //sender
-    if(LOCAL == 0) {
-        sst.predicates.insert([](const mySST& sst){/*sleep(1);*/ return true;}, sender_trigger, PredicateType::RECURRENT);
-    }
-    //receiver
-    else {  
-        //start time
-        clock_gettime(CLOCK_REALTIME, &arrival_times[0]);
-        sst.predicates.insert([](const mySST& sst){return true;}, receiver_trigger, PredicateType::RECURRENT);
-    }
-
-    while(true) {
-    }
+    
     return 0;
 }
