@@ -31,7 +31,7 @@ public:
               msg(_msg_size) {
         SSTInit(msg, heartbeat);
     }
-    SSTFieldVector<unsigned char> msg;
+    SSTFieldVector<uint64_t> msg;
     SSTField<bool> heartbeat;
 };
 
@@ -53,7 +53,6 @@ int main(int argc, char* argv[]) {
 
     const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     const uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE);
-
     const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
     // initialize the rdma resources
@@ -83,12 +82,14 @@ int main(int argc, char* argv[]) {
     sst.put(sst.msg);
     sst.sync_with_members();
 
-    auto check_failures_loop = [&sst]() {
+    volatile bool shutdown = false;
+    auto check_failures_loop = [&]() {
         pthread_setname_np(pthread_self(), "check_failures");
-        while(true) {
+        while(!shutdown) {
             std::this_thread::sleep_for(std::chrono::microseconds(1000));
             sst.put_with_completion(sst.heartbeat);
         }
+        std::cout << "Failure thread exiting ..." << endl;
     };
 
     std::thread failures_thread = std::thread(check_failures_loop);
@@ -100,7 +101,7 @@ int main(int argc, char* argv[]) {
         uint64_t sent = 0;
 
         for(unsigned int i = 0; i < num_msgs; i++) {
-            sst.msg[node_id][msg_size - 1] = (sst.msg[node_id][msg_size - 1] + 1) % (std::numeric_limits<unsigned char>::max() + 1);
+            ++sst.msg[node_id][msg_size - 1];
             sst.put(sst.msg);
             ++sent;
 
@@ -114,65 +115,37 @@ int main(int argc, char* argv[]) {
     auto receiver = [&](const uint32_t sender_rank) {
         pthread_setname_np(pthread_self(), ("receiver@" + std::to_string(sender_rank)).c_str());
 
-        //index of the last received message (%256)
-        uint8_t last_received = 0;
-        //index of the newly received message (%256)
-        uint8_t actual_received = 0;
-        //index of the total number of received message (actual #)
-        uint64_t highest_received = 0;
+        //index of the last received message
+        uint64_t last_received = 0;
+        //index of the newly received message
+        uint64_t actual_received = 0;
 
         vector<struct timespec> arrival_times(num_msgs, {0});
 
-        while(highest_received < num_msgs) {
+        while(actual_received < num_msgs) {
             actual_received = sst.msg[sender_rank][msg_size - 1];
 
             if(actual_received == last_received) {
                 continue;
             }
-
-            else if(actual_received > last_received) {
-                highest_received += actual_received - last_received;
-            }
-
-            else {
-                highest_received += 256 - last_received + actual_received;
-            }
-
             //Here I received a new message
-            clock_gettime(CLOCK_REALTIME, &arrival_times[highest_received - 1]);
+            clock_gettime(CLOCK_REALTIME, &arrival_times[actual_received - 1]);
             last_received = actual_received;
         }
 
-        //print results
-        double sum = 0.0;
-        double time;
+        //print results in the format: [msg_index] [arrival time]
         uint64_t missed_msgs = 0;
-        uint64_t last_valid_time = 0;
-        bool already_received = false;
-
         ofstream fout;
-        fout.open("time_records_" + std::to_string(sender_rank), ofstream::app);
+        fout.open("time_records_" + std::to_string(sender_rank));
         fout << "Times recorded for sender " << sender_rank << endl;
-        // compute the average and print values
-        // i consider only non-missed messages.
-
-        for(uint64_t i = 0; i < num_msgs; ++i) {
+        for(uint64_t i = 0; i < num_msgs; i++) {
             if(arrival_times[i].tv_sec == 0) {
                 missed_msgs++;
-                if(!already_received)
-                    last_valid_time++;
             } else {
-                if(!already_received)
-                    already_received = true;
-                else {
-                    time = ((arrival_times[i].tv_sec * 1e9 + arrival_times[i].tv_nsec) - (arrival_times[last_valid_time].tv_sec * 1e9 + arrival_times[last_valid_time].tv_nsec)) / 1e9;
-                    sum += time;
-                    fout << time << endl;
-                }
-                last_valid_time = i;
+                uint64_t time = arrival_times[i].tv_sec * (uint64_t)1e9 + arrival_times[i].tv_nsec;
+                fout << (i + 1) << " " << time << endl;
             }
         }
-        fout << "Average inter-arrival time (" << num_msgs << " msgs): " << (sum / (num_msgs - missed_msgs)) / 1e9 << endl;
         fout << "Missed messages: " << missed_msgs << endl;
         fout.close();
     };
@@ -201,8 +174,10 @@ int main(int argc, char* argv[]) {
     //Wait for the receivers
     for(auto& th : receiver_threads) {
         th.join();
-        std::cout << "Receiver joined" << endl;
     }
+
+    shutdown = true;
+    failures_thread.join();
 
     sst.sync_with_members();
 
