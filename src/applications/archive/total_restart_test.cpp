@@ -96,7 +96,7 @@ int main(int argc, char** argv) {
                                           thing_factory);
 
     auto my_rank = group.get_my_rank();
-    if(my_rank <= num_shards * members_per_shard) {
+    if((uint32_t) my_rank <= num_shards * members_per_shard) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {
