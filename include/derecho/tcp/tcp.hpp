@@ -4,6 +4,9 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <derecho/conf/conf.hpp>
+#include <list>
+#include <mutils/mutils.hpp>
 
 namespace tcp {
 
@@ -127,6 +130,36 @@ public:
         }
 
         return write((char*)&local, sizeof(T)) && read((char*)&remote, sizeof(T));
+    }
+
+    // IP address prefixes
+    static std::vector<std::string> get_failure_map() {
+        const std::string& failure_map_string =
+                derecho::getConfString(CONF_DERECHO_FAILURE_MAP);
+        const std::list<std::string>& failure_map_split =
+                mutils::split(failure_map_string, ',', 0);
+        std::vector<std::string> failure_map(failure_map_split.begin(), failure_map_split.end());
+        return failure_map;
+    }
+
+    static bool ip_prefix_matches(const std::string& ip, const std::string& prefix) {
+        return ip.find(prefix) == 0;
+    }
+
+    static bool fails_together(const std::string& ip1, const std::string& ip2, const std::vector<std::string>& failure_map) {
+        const std::string* prefix1 = nullptr;
+        const std::string* prefix2 = nullptr;
+
+        for (const std::string& prefix : failure_map) {
+            if (prefix1 == nullptr && ip_prefix_matches(ip1, prefix))
+                prefix1 = &prefix;
+            if (prefix2 == nullptr && ip_prefix_matches(ip2, prefix))
+                prefix2 = &prefix;
+        }
+
+        if (prefix1 == nullptr || prefix2 == nullptr)
+            return false;
+        return prefix1 == prefix2;
     }
 };
 

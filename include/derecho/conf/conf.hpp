@@ -30,6 +30,7 @@ private:
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
+#define CONF_DERECHO_FAILURE_MAP "DERECHO/failure_map"
 
 #define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_payload_size"
 #define CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_smc_payload_size"
@@ -62,6 +63,7 @@ private:
             {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
+            {CONF_DERECHO_FAILURE_MAP, ""},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
             {CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE, "10240"},
