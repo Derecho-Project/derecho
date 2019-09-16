@@ -165,12 +165,6 @@ int main() {
                 sync(0);
                 free(res);
             }
-#ifdef USE_VERBS_API
-            verbs_destroy();
-#else
-            lf_destroy();
-#endif
-            exit(0);
         }
     };
 

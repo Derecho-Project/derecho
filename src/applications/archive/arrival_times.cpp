@@ -246,12 +246,6 @@ int main(int argc, char* argv[]) {
 
     sst.sync_with_members();
 
-#ifdef USE_VERBS_API
-    verbs_destroy();
-#else
-    lf_destroy();
-#endif
-
     //Here we still get the termination issue...
     return 0;
 }
