@@ -655,14 +655,15 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         std::printf("Read completed.\n");
         std::cout.flush();
         //Step 2: Construct log_name_to_id and segment usage array
+	size_t ofst = 0;
         for(size_t id = 0; id < SPDK_NUM_LOGS_SUPPORTED; id++) {
             //Step 2_0: copy data into metadata entry
-            global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info = *(PTLogMetadataInfo*)buf;
-            buf += sizeof(PTLogMetadataInfo);
-            std::copy(buf, buf + sizeof(uint16_t) * SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH, (uint8_t*)&LOG_AT_TABLE(id));
-            buf += sizeof(uint16_t) * SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
-            std::copy(buf, buf + sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH, (uint8_t*)&DATA_AT_TABLE(id));
-            buf += sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH;
+            global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info = *(PTLogMetadataInfo*)(buf + ofst);
+            ofst += sizeof(PTLogMetadataInfo);
+            std::copy(buf + ofst, buf + ofst + sizeof(uint16_t) * SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH, (uint8_t*)&LOG_AT_TABLE(id));
+            ofst += sizeof(uint16_t) * SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
+            std::copy(buf + ofst, buf + ofst + sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH, (uint8_t*)&DATA_AT_TABLE(id));
+            ofst += sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH;
 
             if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.inuse) {
                 //Step 2_1: Update log_name_to_id
@@ -682,8 +683,10 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
                 }
             }
         }
-        free(buf);
+        spdk_free(buf);
         loaded = true;
+	std::printf("Metadata segment loaded.\n");
+	std::cout.flush();
     }
 
     //Step 3: Update log_metadata
