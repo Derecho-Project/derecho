@@ -193,7 +193,7 @@ protected:
     static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
     static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
-    int update_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode, bool is_write);
+    int update_segment(char* buf, uint32_t data_length, uint64_t lba_index, int mode, bool is_write);
 //    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
 
 public:
@@ -232,7 +232,7 @@ public:
 
     std::map<uint32_t, int64_t> id_to_last_version;
     /** Map log id to log entry space*/
-    static std::map<uint32_t, LogEntry*> id_to_log;
+    std::map<uint32_t, LogEntry*> id_to_log;
     static bool loaded;
     static pthread_mutex_t metadata_load_lock;
 

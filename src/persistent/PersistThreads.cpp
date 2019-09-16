@@ -15,7 +15,7 @@ bool PersistThreads::initialized;
 bool PersistThreads::loaded;
 pthread_mutex_t PersistThreads::metadata_load_lock;
 std::mutex PersistThreads::initialization_lock;
-std::map<uint32_t, LogEntry*> PersistThreads::id_to_log;
+//std::map<uint32_t, LogEntry*> PersistThreads::id_to_log;
 
 
 bool PersistThreads::probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
@@ -101,7 +101,7 @@ void PersistThreads::control_write_request_complete(void* args,
     delete control_request;
 }
 
-int PersistThreads::update_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode, bool is_write) {
+int PersistThreads::update_segment(char* buf, uint32_t data_length, uint64_t lba_index, int mode, bool is_write) {
     uint32_t offset = 0;
     std::queue<bool*> completed_queue;
     while (offset < data_length) {
@@ -548,7 +548,7 @@ void PersistThreads::release_segments(void* args, const struct spdk_nvme_cpl* co
     m_PersistThread->id_to_last_version.insert(std::pair<uint32_t, int64_t>(metadata->fields.id, metadata->fields.ver));
     //Step 0: release log_segments until metadata.head; release data_segments until
     int log_seg = std::max((metadata->fields.head >> SPDK_SEGMENT_BIT) - 1, (int64_t)0);
-    int data_seg = std::max((uint64_t)((id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT) - 1, (uint64_t)0);
+    int data_seg = std::max((uint64_t)((m_PersistThread->id_to_log[metadata->fields.id][metadata->fields.head - 1].fields.ofst + m_PersistThread->id_to_log[metadata->fields.id]->fields.dlen) >> SPDK_SEGMENT_BIT) - 1, (uint64_t)0);
     if(pthread_mutex_lock(&m_PersistThread->segment_assignment_lock) != 0) {
         //throw exception
         throw derecho::derecho_exception("Failed to grab segment assignment lock.");
@@ -692,7 +692,9 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
     //Step 3: Update log_metadata
     try {
         uint32_t id = log_name_to_id.at(name);
-        log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
+        std::printf("Log with existing metadata entry.\n");
+	std::cout.flush();
+	log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
         LogEntry* log_entry = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE);
         int num_log_segment = (log_metadata->persist_metadata_info->fields.tail >> SPDK_SEGMENT_BIT) - (log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + 1;
         bool completed[num_log_segment];
@@ -720,20 +722,28 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         release_segments((void*)&log_metadata, NULL);
         return;
     } catch(const std::out_of_range& oor) {
-        // Find an unused metadata entry
+        std::printf("Log without existing metadata entry.\n");
+	std::cout.flush();
+	// Find an unused metadata entry
         if(pthread_mutex_lock(&metadata_entry_assignment_lock) != 0) {
             // throw an exception
             throw derecho::derecho_exception("Failed to grab metadata entry assignment lock.");
         }
-        for(size_t index = 0; index < SPDK_NUM_LOGS_SUPPORTED; index++) {
+        for(uint32_t index = 0; index < SPDK_NUM_LOGS_SUPPORTED; index++) {
             if(!global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse) {
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse = true;
+                std::printf("Found metadata entry not occupied.\n");
+		std::cout.flush();
+		global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse = true;
                 log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info;
                 log_name_to_id.insert(std::pair<std::string, uint32_t>(name, index));
                 pthread_mutex_unlock(&metadata_entry_assignment_lock);
-                LogEntry* log_entry = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE);
-                id_to_log.insert(std::pair<uint32_t, LogEntry*>(index, log_entry));
-                return;
+                std::printf("Updated metadata inuse field. Released lock.\n");
+		std::cout.flush();
+		id_to_log[index] = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE);
+		//id_to_log.insert(std::pair<uint32_t, LogEntry*>(index, log_entry));
+                std::printf("Inserted to id_to_log.\n");
+		std::cout.flush();
+		return;
             }
         }
         //no available metadata entry
