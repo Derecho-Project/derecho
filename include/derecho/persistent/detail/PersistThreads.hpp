@@ -193,7 +193,7 @@ protected:
     static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
     static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
-    int write_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
+    int update_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode, bool is_write);
 //    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
 
 public:

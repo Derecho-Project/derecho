@@ -75,8 +75,6 @@ void PersistThreads::data_write_request_complete(void* args,
 
 void PersistThreads::load_request_complete(void* args,
                                            const struct spdk_nvme_cpl* completion) {
-    std::printf("Load request completed.\n");
-    std::cout.flush();
     if(spdk_nvme_cpl_is_error(completion)) {
         throw derecho::derecho_exception("data write request failed.");
     }
@@ -103,30 +101,33 @@ void PersistThreads::control_write_request_complete(void* args,
     delete control_request;
 }
 
-int PersistThreads::write_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode) {
+int PersistThreads::update_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode, bool is_write) {
     uint32_t offset = 0;
     std::queue<bool*> completed_queue;
     while (offset < data_length) {
         persist_data_request_t data_request;
-        uint16_t size = std::min(data_length - offset, MAX_LBA_COUNT >> general_spdk_info.sector_bit);
+	uint32_t size = std::min(data_length - offset, MAX_LBA_COUNT << general_spdk_info.sector_bit);
         data_request.buf = buf + offset;
-        data_request.lba = lba_index + (offset << general_spdk_info.sector_bit);
-        data_request.lba_count = size << general_spdk_info.sector_bit;
+        data_request.lba = lba_index + (offset >> general_spdk_info.sector_bit);
+        data_request.lba_count = size >> general_spdk_info.sector_bit;
+	std::cout.flush();
+	bool completed = false;
         // Use different callback function based on input mode
         switch (mode) {
             case DUMMY_CB:
                 {
 		    data_request.cb_fn = dummy_request_complete;
-                    data_request.is_write = true;
+                    data_request.is_write = is_write;
+		    completed = true;
                 }                
                 break;
 
             case COMPLETED_CB:
                 {                
-                    bool completed = false;
                     data_request.cb_fn = load_request_complete;
                     data_request.args = (void*)&completed;
                     completed_queue.push(&completed);
+		    data_request.is_write = is_write;
                 } 
                 break;
             
@@ -134,11 +135,15 @@ int PersistThreads::write_segment(char* buf, uint32_t data_length, uint16_t lba_
                 break;
         }
         // Push the request to the data queue
+	std::cout.flush();
         std::unique_lock<std::mutex> mlck(data_queue_mtx);
         data_write_queue.push(data_request);
+        std::printf("Pushed data request!\n");
+	std::cout.flush();
         sem_post(&new_data_request);
-        mlck.release();
+        mlck.unlock();
         offset += size;
+	while(!completed);
     }
 
     // Wait for completion
@@ -151,7 +156,6 @@ int PersistThreads::write_segment(char* buf, uint32_t data_length, uint16_t lba_
                 bool* completed_ptr = completed_queue.front();
                 completed_queue.pop();
                 while (!*completed_ptr);
-                free(completed_ptr);
             }
             return 0;
 
@@ -275,7 +279,7 @@ int PersistThreads::initialize_threads() {
                     sem_wait(&new_data_request);
                     std::printf("Done waiting for new.\n");
                     std::cout.flush();
-                    //std::unique_lock<std::mutex> lck(m_PersistThread->data_queue_mtx);
+                    std::unique_lock<std::mutex> lck(m_PersistThread->data_queue_mtx);
                     persist_data_request_t data_request = data_write_queue.front();
                     if(data_request.is_write) {
                         std::printf("Get new data write request.\n");
@@ -287,7 +291,7 @@ int PersistThreads::initialize_threads() {
                         }
                         std::printf("Submitted new data write request.\n");
                         std::cout.flush();
-                        //lck.release();
+                        lck.unlock();
                     } else {
                         std::printf("Get new data read request.\n");
                         std::cout.flush();
@@ -310,7 +314,7 @@ int PersistThreads::initialize_threads() {
                         }
                         std::printf("Submitted new data read request.\n");
                         std::cout.flush();
-                        //lck.release();
+                        lck.unlock();
                     }
 
                 } while(true);
@@ -320,7 +324,7 @@ int PersistThreads::initialize_threads() {
             std::cout.flush();
             std::thread thread([&]() {
                 do {
-                    spdk_nvme_qpair_process_completions(SpdkQpair_control[i], 0);
+                    spdk_nvme_qpair_process_completions(SpdkQpair_data[i], 0);
                 } while(true);
             });
             thread.detach();
@@ -637,29 +641,16 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         //Step 0: submit read request for the segment of all global data
         std::printf("metadata not loaded. load the metadata.\n");
         std::cout.flush();
-        char* buf = (char*)malloc(SPDK_SEGMENT_SIZE);
-        bool completed = false;
-        persist_data_request_t metadata_request;
-        metadata_request.request_id = assigned_request_id + 1;
-        assigned_request_id++;
-        metadata_request.buf = buf;
-        metadata_request.lba = 0;
-        metadata_request.lba_count = SPDK_SEGMENT_SIZE / general_spdk_info.sector_size;
-        metadata_request.cb_fn = load_request_complete;
-        metadata_request.is_write = false;
-        metadata_request.args = (void*)&completed;
-        std::unique_lock<std::mutex> mlck(data_queue_mtx);
-        data_write_queue.push(metadata_request);
+        char* buf = (char*)spdk_malloc(SPDK_SEGMENT_SIZE, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+        update_segment(buf, SPDK_SEGMENT_SIZE, 20, COMPLETED_CB, false);
         std::printf("Submitted data request for log metadata.\n");
         std::cout.flush();
-        sem_post(&new_data_request);
-        mlck.release();
         
          
         //Step 1: Wait until the request is completed
-        while(!completed){
-          spdk_nvme_qpair_process_completions(SpdkQpair_data[0], 0);
-        }
+       // while(!completed){
+       //   spdk_nvme_qpair_process_completions(SpdkQpair_data[0], 0);
+       // }
 
         std::printf("Read completed.\n");
         std::cout.flush();
