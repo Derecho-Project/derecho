@@ -37,28 +37,23 @@ public:
 
 int main(int argc, char* argv[]) {
     if(argc < 6 || argc > 7) {
-        std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <sender_sleep_time_ms> <window size> [<threads_per_receiver>]" << endl;
+        std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <sender_sleep_time_ms> <window size>" << endl;
         return -1;
     }
 
     const uint32_t num_nodes = std::atoi(argv[1]);
     const uint32_t num_senders = std::atoi(argv[2]);
-    const uint64_t num_msgs = std::atoi(argv[3]);
+    uint64_t num_msgs = std::atoi(argv[3]); 
     const uint32_t sleep_time = std::atoi(argv[4]);
     const uint32_t window_size = std::atoi(argv[5]);  //Now window size is an input param - later we could use the derecho.cfg file
-    uint8_t threads_per_rcv = 1;
-    if(argc == 7)
-        threads_per_rcv = std::atoi(argv[6]);
-
+    
     if(num_senders > num_nodes || num_senders == 0) {
         std::cout << "Num senders must be more than zero and less or equal than num_nodes" << endl;
         return -1;
     }
 
-    if(threads_per_rcv > window_size || threads_per_rcv < 1) {
-        std::cout << "Num threads per receiver should be at most equal to the window size and at least one." << endl;
-        return -1;
-    }
+    // Make num_msg a multiple of window size
+    num_msgs += (num_msgs % window_size)==0? 0 : window_size - (num_msgs % window_size);
 
     const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     const uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE);
@@ -116,15 +111,11 @@ int main(int argc, char* argv[]) {
             // I compute the nex one and subtract sizeof(uint64_t)
             sst.msg[node_id][(i % window_size + 1) * msg_size - 1] = sent + 1;
 
-            /* Here I did not find an API to send multiple fields
-             * of a SSTVectorField. I could send just the last bytes
-             * with: 
-             *  sst.put(sst.msg, (i % window_size + 1) * msg_size - 1);
-             * But then I would send only a message of size sizeof(uint64_t)
-             * instead of a message of size msg_size.
+            /* Check here the message size, which is actually 
+             * msg_size * sizeof(uint64_t)
              */
 
-            sst.put((char*)std::addressof(sst.msg[0][(i % window_size) * msg_size]) - sst.getBaseAddress(), msg_size*sizeof(uint64_t));
+            sst.put((char*)std::addressof(sst.msg[0][(i % window_size) * msg_size]) - sst.getBaseAddress(), msg_size * sizeof(uint64_t));
             ++sent;
 
             if(sleep_time > 0) {
@@ -134,70 +125,43 @@ int main(int argc, char* argv[]) {
     };
 
     vector<vector<struct timespec>> arrival_times(num_senders, vector<struct timespec>(num_msgs, {0}));
-    vector<bool> all_received(num_senders, false);
-
+    
     //receiver action
-    auto receiver = [&](const uint32_t sender_rank, const uint32_t thread_id, const uint32_t start_window, const uint32_t num_windows) {
-        pthread_setname_np(pthread_self(), ("receiver" + std::to_string(thread_id) + "@" + std::to_string(sender_rank)).c_str());
+    auto receiver = [&](const uint32_t sender_rank, const uint32_t slot) {
+        pthread_setname_np(pthread_self(), ("receiver" + std::to_string(slot) + "@" + std::to_string(sender_rank)).c_str());
 
         //indexes of the last received message
-        vector<uint64_t> last_received(num_windows, 0);
+        uint64_t last_received = 0;
         //indexes of the newly received message
-        vector<uint64_t> actual_received(num_windows, 0);
-        //total received by this thread
-        uint64_t highest_received = 0;
+        uint64_t actual_received = 0;
+        //total to be received
+        uint64_t max_msg_index = num_msgs - window_size + 1 + slot ;
+        //index_of_msg
+        uint64_t index_of_msg = (slot + 1) * msg_size - 1;
 
-        /* Iter - used to choose from which window I need to read
-         * Alternatively, I could have used a "for" loop inside the
-         * "while" loop (maybe less efficient?)
-         */
-        for(uint64_t iter = 0; highest_received < num_msgs && !all_received[sender_rank]; iter++) {
-            //window offset: where should I read
-            uint32_t offset = iter % num_windows;
-            //compute which index to be read
-            uint32_t index_seq_number = (start_window + offset + 1) * msg_size - 1;
-            //read
-            actual_received[offset] = sst.msg[sender_rank][index_seq_number];
+        while(actual_received < max_msg_index) {
 
-            if(actual_received[offset] == last_received[offset]) {
+            actual_received = sst.msg[sender_rank][index_of_msg];
+
+            if(actual_received == last_received) {
                 continue;
             }
-            highest_received = actual_received[offset];
-
+        
             //Here I received a new message
-            clock_gettime(CLOCK_REALTIME, &arrival_times[sender_rank][highest_received - 1]);
-            last_received[offset] = actual_received[offset];
-        }
-        //The first thread to finish ends the others for the same sender
-        if(highest_received >= num_msgs) {
-            all_received[sender_rank] = true;
+            clock_gettime(CLOCK_REALTIME, &arrival_times[sender_rank][actual_received - 1]);
+            last_received = actual_received;
         }
     };
 
     /* Receiver threads 
-     * <threads_per_rcv> receiver threads for each sender.
-     * The following code aims at evenly distributing the
-     * # of windows observed by each thread.
-     * So if I have 5 slots and 3 threads, slots per thread
-     * will be 2, 2, 1 and not 1, 1, 3.
-    */
+     * One thread per slot per receiver
+     */
     vector<vector<std::thread>> receiver_threads(num_nodes);
 
-    uint32_t base_window, remaining_windows;
-    uint32_t win_per_thread = window_size / threads_per_rcv;
     for(uint32_t i = 0; i < num_senders; i++) {
         receiver_threads[i] = vector<std::thread>();
-        base_window = 0;
-        remaining_windows = window_size % threads_per_rcv;
-        for(uint32_t j = 0; j < threads_per_rcv; j++) {
-            if(remaining_windows > 0) {
-                receiver_threads[i].emplace_back(std::thread(receiver, i, j, base_window, win_per_thread + 1));
-                remaining_windows--;
-                base_window += win_per_thread + 1;
-            } else {
-                receiver_threads[i].emplace_back(std::thread(receiver, i, j, base_window, win_per_thread));
-                base_window += win_per_thread;
-            }
+        for(uint32_t j = 0; j < window_size; j++) {
+            receiver_threads[i].emplace_back(std::thread(receiver, i, j));
         }
     }
 
@@ -214,12 +178,12 @@ int main(int argc, char* argv[]) {
 
     //Wait for the receivers
     for(uint32_t i = 0; i < num_senders; i++) {
-        for(uint32_t j = 0; j < threads_per_rcv; j++) {
+        for(uint32_t j = 0; j < window_size; j++) {
             receiver_threads[i][j].join();
             std::cout << "Thread " << j << " for receiver " << i << " joined" << endl;
         }
     }
-  
+
     //Print results in the format: [msg_index] [arrival time]
     for(unsigned int i = 0; i < num_senders; i++) {
         //vector to keep track of which message I missed
@@ -229,15 +193,16 @@ int main(int argc, char* argv[]) {
         fout << "Times recorded for sender " << i << endl;
         for(uint64_t j = 0; j < num_msgs; j++) {
             if(arrival_times[i][j].tv_sec == 0) {
-                missed_msgs.push_back(j+1);
+                missed_msgs.push_back(j + 1);
             } else {
                 uint64_t time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
                 fout << (j + 1) << " " << time << endl;
             }
         }
         fout << "Missed messages: " << missed_msgs.size() << endl;
-        for(const auto& m : missed_msgs)
-            fout << (int)m << endl;
+        // If we need to print which are the missed messages
+        // for(const auto& m : missed_msgs)
+        //     fout << (int)m << endl;
         fout.close();
     }
 
@@ -246,6 +211,5 @@ int main(int argc, char* argv[]) {
 
     sst.sync_with_members();
 
-    //Here we still get the termination issue...
     return 0;
 }
