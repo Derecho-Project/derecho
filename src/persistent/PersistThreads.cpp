@@ -5,6 +5,7 @@
 
 #define DUMMY_CB 1
 #define COMPLETED_CB 2
+#define LBA_PER_SEG (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit)
 const uint32_t MAX_LBA_COUNT = 4096;
 
 namespace persistent {
@@ -138,12 +139,11 @@ int PersistThreads::update_segment(char* buf, uint32_t data_length, uint64_t lba
 	std::cout.flush();
         std::unique_lock<std::mutex> mlck(data_queue_mtx);
         data_write_queue.push(data_request);
-        std::printf("Pushed data request!\n");
 	std::cout.flush();
         sem_post(&new_data_request);
         mlck.unlock();
         offset += size;
-	while(!completed);
+	//while(!completed);
     }
 
     // Wait for completion
@@ -226,7 +226,11 @@ int PersistThreads::initialize_threads() {
         for(int i = 0; i < NUM_DATA_PLANE; i++) {
             std::printf("qpair %d. ", i);
             std::cout.flush();
-            SpdkQpair_data[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
+	    struct spdk_nvme_io_qpair_opts opts;
+	    spdk_nvme_ctrlr_get_default_io_qpair_opts(general_spdk_info.ctrlr, &opts, sizeof(opts));
+            opts.io_queue_size = 1024;
+	    opts.io_queue_requests = 2048;
+            SpdkQpair_data[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, &opts, sizeof(opts));
             std::printf("qpair %d allocated.\n ", i);
             std::cout.flush();
             if(SpdkQpair_data[i] == NULL) {
@@ -237,7 +241,11 @@ int PersistThreads::initialize_threads() {
         for(int i = 0; i < NUM_CONTROL_PLANE; i++) {
             std::printf("control qpair %d. ", i);
             std::cout.flush();
-            SpdkQpair_control[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
+	    struct spdk_nvme_io_qpair_opts opts;
+            spdk_nvme_ctrlr_get_default_io_qpair_opts(general_spdk_info.ctrlr, &opts, sizeof(opts));
+	    opts.io_queue_size = 1024;
+	    opts.io_queue_requests = 2048;
+	    SpdkQpair_control[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, &opts, sizeof(opts));
             std::printf("control qpair %d allocated.\n", i);
             if(SpdkQpair_control[i] == NULL) {
                 //qpair initialization failed
@@ -274,46 +282,30 @@ int PersistThreads::initialize_threads() {
         for(int i = 0; i < NUM_DATA_PLANE; i++) {
             data_plane[i] = std::thread([&]() {
                 do {
-                    std::printf("Waiting for new data request.\n");
-                    std::cout.flush();
                     sem_wait(&new_data_request);
-                    std::printf("Done waiting for new.\n");
-                    std::cout.flush();
                     std::unique_lock<std::mutex> lck(m_PersistThread->data_queue_mtx);
                     persist_data_request_t data_request = data_write_queue.front();
                     if(data_request.is_write) {
-                        std::printf("Get new data write request.\n");
-                        std::cout.flush();
                         if(data_request.cb_fn == NULL) {
                             spdk_nvme_ns_cmd_write(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_write_request_complete, (void*)&data_request, 0);
                         } else {
                             spdk_nvme_ns_cmd_write(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_request.cb_fn, data_request.args, 0);
                         }
-                        std::printf("Submitted new data write request.\n");
-                        std::cout.flush();
                         lck.unlock();
                     } else {
-                        std::printf("Get new data read request.\n");
                         std::cout.flush();
                         if(data_request.cb_fn == NULL) {
-                            std::printf("Get new data read request without given callback.\n");
-                            std::cout.flush();
                             int rc = spdk_nvme_ns_cmd_read(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_request.cb_fn, data_request.args, 0);
                             if (rc != 0){
-//                               std::printf("Failed to initialize read io. lba_count: %d, max_io: %d, stripe: %d, qrequest: %d\n", data_request.lba_count, general_spdk_info.ns->sectors_per_max_io, general_spdk_info.ns->sectors_per_stripe, SpdkQpair_data[i]->ctrlr->opts.io_queue_requests);
                                std::cout.flush();
                             }
                         } else {
-                            std::printf("Get new data request with given callback.\n");
-                            std::cout.flush();
                             int rc = spdk_nvme_ns_cmd_read(general_spdk_info.ns,SpdkQpair_data[i], data_request.buf, data_request.lba, data_request.lba_count, data_request.cb_fn, data_request.args, 0);
                             if (rc != 0){
                               std::fprintf(stderr, "Failed to initialize read io %d with lba_count %d.\n", rc, data_request.lba_count);
                               std::cout.flush();
                             }
                         }
-                        std::printf("Submitted new data read request.\n");
-                        std::cout.flush();
                         lck.unlock();
                     }
 
@@ -642,16 +634,10 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         std::printf("metadata not loaded. load the metadata.\n");
         std::cout.flush();
         char* buf = (char*)spdk_malloc(SPDK_SEGMENT_SIZE, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-        update_segment(buf, SPDK_SEGMENT_SIZE, 20, COMPLETED_CB, false);
+        update_segment(buf, SPDK_SEGMENT_SIZE, 0, COMPLETED_CB, false);
         std::printf("Submitted data request for log metadata.\n");
         std::cout.flush();
-        
          
-        //Step 1: Wait until the request is completed
-       // while(!completed){
-       //   spdk_nvme_qpair_process_completions(SpdkQpair_data[0], 0);
-       // }
-
         std::printf("Read completed.\n");
         std::cout.flush();
         //Step 2: Construct log_name_to_id and segment usage array
@@ -695,27 +681,17 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         std::printf("Log with existing metadata entry.\n");
 	std::cout.flush();
 	log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
-        LogEntry* log_entry = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE);
+        LogEntry *log_entry = (LogEntry *)malloc(SPDK_LOG_ADDRESS_SPACE);
         int num_log_segment = (log_metadata->persist_metadata_info->fields.tail >> SPDK_SEGMENT_BIT) - (log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + 1;
-        bool completed[num_log_segment];
-        uint64_t request_id = assigned_request_id + 1;
-        assigned_request_id++;
-        for(int i = 0; i < num_log_segment; i++) {
-            persist_data_request_t logentry_request;
-            logentry_request.request_id = request_id;
-            logentry_request.buf = (void*)&log_entry[(log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + i * SPDK_SEGMENT_SIZE / sizeof(uint16_t)];
-            logentry_request.lba = LOG_AT_TABLE(id)[(log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT) + i] * (1 >> (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit));
-            logentry_request.lba_count = 1 >> (SPDK_SEGMENT_BIT >> general_spdk_info.sector_bit);
-            logentry_request.cb_fn = load_request_complete;
-            logentry_request.is_write = false;
-            logentry_request.args = (void*)&completed[i];
-            std::unique_lock<std::mutex> lck(data_queue_mtx);
-            data_write_queue.push(logentry_request);
-            lck.release();
-        }
-        for(int i = 0; i < num_log_segment; i++) {
-            while(!completed[i])
-                ;
+        size_t offset = 0;
+	for(int i = 0; i < num_log_segment; i++) {
+	    uint64_t lba = (LOG_AT_TABLE(id)[log_metadata->persist_metadata_info->fields.head >> SPDK_SEGMENT_BIT] + i) * LBA_PER_SEG;
+	    uint32_t size = SPDK_SEGMENT_SIZE - ((log_metadata->persist_metadata_info->fields.head + offset) & ((1 << SPDK_SEGMENT_BIT) - 1)); 
+	    char *buf = (char *)spdk_malloc(size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+	    update_segment(buf, size, lba, COMPLETED_CB, false);
+	    std::copy(buf, buf + size, (char *)log_entry + (log_metadata->persist_metadata_info->fields.head + offset));
+	    offset += size;
+	    spdk_free(buf);
         }
         id_to_log.insert(std::pair<uint32_t, LogEntry*>(id, log_entry));
         PTLogMetadataInfo log_metadata = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
