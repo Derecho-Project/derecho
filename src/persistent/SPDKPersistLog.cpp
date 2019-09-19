@@ -39,12 +39,16 @@ void SPDKPersistLog::tail_unlock() noexcept(false) {
 
 SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : PersistLog(name) {
     //Initialize locks
+    std::printf("Started initializing locks %s.\n", &name);
+    std::cout.flush();
     if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
-    if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
+    if(pthread_rwlock_init(&this->tail_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
+    std::printf("Started grabbing head/tail locks %s.\n", &name);
+    std::cout.flush();    
     head_wlock();
     tail_wlock();
     std::printf("Started loading log %s.\n", &name);
