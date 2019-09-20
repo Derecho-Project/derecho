@@ -834,39 +834,9 @@ LogEntry* PersistThreads::read_entry(const uint32_t& id, const uint64_t& index) 
 
 void* PersistThreads::read_data(const uint32_t& id, const uint64_t& index) {
     LogEntry* log_entry = read_entry(id, index);
-    void* buf = malloc(log_entry->fields.dlen);
+    char* buf = (char*)spdk_malloc(log_entry->fields.dlen, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
     uint64_t data_offset = log_entry->fields.ofst;
-    uint64_t virtual_data_segment = data_offset >> SPDK_SEGMENT_BIT % SPDK_DATA_ADDRESS_TABLE_LENGTH;
-    uint64_t data_sector = data_offset & ((1 << SPDK_SEGMENT_BIT) - 1) >> general_spdk_info.sector_bit;
-
-    int part_num = ((data_offset + log_entry->fields.dlen) >> SPDK_SEGMENT_BIT) - (data_offset >> SPDK_SEGMENT_BIT) + 1;
-    bool completed[part_num];
-    int request_id = assigned_request_id + 1;
-    assigned_request_id++;
-    for(int i = 0; i < part_num; i++) {
-        persist_data_request_t data_request;
-        data_request.request_id = request_id;
-        data_request.buf = buf;
-        data_request.lba = DATA_AT_TABLE(id)[virtual_data_segment] * (SPDK_SEGMENT_SIZE >> general_spdk_info.sector_bit) + data_sector;
-        data_request.lba_count = (SPDK_SEGMENT_SIZE >> general_spdk_info.sector_bit) - data_sector;
-        data_request.cb_fn = load_request_complete;
-        data_request.is_write = false;
-        data_request.args = (void*)&completed[i];
-        std::unique_lock<std::mutex> lck(data_queue_mtx);
-        data_write_queue.push(data_request);
-        lck.release();
-        virtual_data_segment++;
-        data_sector = 0;
-        int inc = ((SPDK_SEGMENT_SIZE >> general_spdk_info.sector_bit) - data_sector) >> general_spdk_info.sector_bit;
-        buf = (void*)((char*)buf + inc);
-    }
-
-    for(int i = 0; i < part_num; i++) {
-        while(!completed[i])
-            ;
-    }
-
-    buf = (void*)((char*)buf - log_entry->fields.dlen);
+    non_atomic_rw(buf, log_entry->fields.dlen, data_offset, BLOCKING, DATA, false, id);
     return buf;
 }
 
