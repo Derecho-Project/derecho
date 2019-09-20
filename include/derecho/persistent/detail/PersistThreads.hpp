@@ -195,6 +195,7 @@ protected:
 
     int update_segment(char* buf, uint32_t data_length, uint64_t lba_index, int mode, bool is_write);
 //    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
+    int non_atomic_rw(char* buf, uint32_t data_length, uint64_t virtaddress, int blocking_mode, int content_type, bool is_write, int id);
 
 public:
     /**
