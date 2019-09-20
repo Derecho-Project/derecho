@@ -110,14 +110,21 @@ struct persist_data_request_t {
 
 // Control write request
 struct persist_control_request_t {
-    PTLogMetadataInfo buf;
+    void* buf;
     uint16_t part_num;
     uint64_t request_id;
-    std::atomic<int>* completed;
+    bool* completed;
     uint64_t lba;
     uint32_t lba_count;
     spdk_nvme_cmd_cb cb_fn;
     void* args;
+};
+
+struct atomic_sub_req {
+    char* buf;
+    uint32_t data_length;
+    uint64_t virtaddress;
+    int content_type;
 };
 
 /**Per log metadata */
@@ -196,6 +203,7 @@ protected:
     int update_segment(char* buf, uint32_t data_length, uint64_t lba_index, int mode, bool is_write);
 //    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
     int non_atomic_rw(char* buf, uint32_t data_length, uint64_t virtaddress, int blocking_mode, int content_type, bool is_write, int id);
+    int atomic_w(std::vector<atomic_sub_req> sub_requests, char* atomic_buf, uint32_t atomic_dl, uint64_t atomic_virtaddress, int content_type, int id);
 
 public:
     /**
