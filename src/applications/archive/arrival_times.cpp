@@ -45,20 +45,27 @@ public:
 #endif
 
 int main(int argc, char* argv[]) {
-    if(argc != 6) {
-        std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <sender_sleep_time_ms> <window size>" << endl;
+    if(argc != 8) {
+        std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <msg size> <sender_sleep_time_ms> <window size> <num_thread_per_recv>" << endl;
         return -1;
     }
 
     const uint32_t num_nodes = std::atoi(argv[1]);
     const uint32_t num_senders = std::atoi(argv[2]);
     uint64_t num_msgs = std::atoll(argv[3]);
-    const uint32_t sleep_time = std::atoi(argv[4]);
+    const uint32_t msg_size = std::atoi(argv[4]);
+    const uint32_t sleep_time = std::atoi(argv[5]);
     // window_size is an input param - not to be confused with window_size from the derecho.cfg file
-    const uint32_t window_size = std::atoi(argv[5]);
+    const uint32_t window_size = std::atoi(argv[6]);
+    const uint32_t num_thread_per_recv = std::atoi(argv[7]);
 
     if(num_senders <= 0 || num_senders > num_nodes) {
         std::cout << "Num senders must be more than zero and less or equal than num_nodes" << endl;
+        return -1;
+    }
+
+    if(num_thread_per_recv <= 0 || num_thread_per_recv > window_size) {
+        std::cout << "Num threads per recv must be more than zero and less or equal than window size" << endl;
         return -1;
     }
 
@@ -66,7 +73,6 @@ int main(int argc, char* argv[]) {
     num_msgs = ((num_msgs - 1) / window_size + 1) * window_size;
 
     const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    const uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE);
     const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
     // initialize the rdma resources
@@ -154,12 +160,13 @@ int main(int argc, char* argv[]) {
     };
 
     /* Receiver threads 
-     * One thread per slot per receiver
+     * One thread per slot per receiver if thread_per_recv == window_size
+     * Otherwise, we monitor only the first thread_per_recv slots
      */
     vector<vector<std::thread>> receiver_threads(num_nodes);
     for(uint32_t i = 0; i < num_senders; i++) {
         receiver_threads[i] = vector<std::thread>();
-        for(uint32_t j = 0; j < window_size; j++) {
+        for(uint32_t j = 0; j < num_thread_per_recv; j++) {
             receiver_threads[i].emplace_back(std::thread(receiver_loop, i, j));
         }
     }
@@ -185,37 +192,39 @@ int main(int argc, char* argv[]) {
     }
 
     {
+        //Print only the second half of the messages
+        uint64_t last_valid_time = send_times[num_msgs / 2 - 1].tv_sec * (uint64_t)1e9 + send_times[num_msgs / 2 - 1].tv_nsec;
         ofstream fout("send_times");
-        for(uint i = 0; i < num_msgs; i++) {
+        for(uint i = num_msgs / 2; i < num_msgs; i++) {
             uint64_t time = send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec;
-            fout << i << " " << time << endl;
+            fout << i << " " << time % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << endl;
+            last_valid_time = time;
         }
     }
 
-    //Print results in the format: [msg_index] [arrival time]
+    //Print results in the format: [msg_index] [arrival time] [diff from previous time]
     for(uint i = 0; i < num_senders; i++) {
         //vector to keep track of which message I missed
         vector<uint64_t> missed_msgs;
         ofstream fout("receive_times_" + std::to_string(i));
-        fout << "Times recorded for sender " << i << endl;
-        for(uint64_t j = 0; j < num_msgs; j++) {
+        //fout << "Times recorded for sender " << i << endl;
+        //Print only the second half of the messages
+        uint64_t last_valid_time = arrival_times[i][num_msgs / 2 - 1].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - 1].tv_nsec;
+        for(uint64_t j = num_msgs / 2; j < num_msgs; j++) {
             if(arrival_times[i][j].tv_sec == 0) {
                 missed_msgs.push_back(j + 1);
             } else {
                 uint64_t time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
-                fout << j << " " << time << endl;
+                fout << j << " " << time % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << endl;
+                last_valid_time = time;
             }
         }
-        fout << "Missed messages: " << missed_msgs.size() << endl;
-
-        // If we need to print which are the missed messages
-        // for(const auto& m : missed_msgs)
-        //     fout << (int)m << endl;
+        //fout << "Missed messages: " << missed_msgs.size() << endl;
     }
 
     shutdown = true;
     failures_thread.join();
     sst.sync_with_members();
-    
+
     return 0;
 }
