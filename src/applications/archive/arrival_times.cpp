@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
 
     //Wait for the receivers
     for(uint32_t i = 0; i < num_senders; i++) {
-        for(uint32_t j = 0; j < window_size; j++) {
+        for(uint32_t j = 0; j < num_thread_per_recv; j++) {
             receiver_threads[i][j].join();
             DEBUG_MSG("Thread " << j << " for receiver " << i << " joined");
         }
