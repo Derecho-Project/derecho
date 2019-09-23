@@ -209,7 +209,11 @@ int main(int argc, char* argv[]) {
         ofstream fout("receive_times_" + std::to_string(i));
         //fout << "Times recorded for sender " << i << endl;
         //Print only the second half of the messages
-        uint64_t last_valid_time = arrival_times[i][num_msgs / 2 - 1].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - 1].tv_nsec;
+        uint64_t last_valid_time = arrival_times[i][num_msgs / 2 - 1 - (window_size - num_thread_per_recv)].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - 1 - (window_size - num_thread_per_recv)].tv_nsec;
+        //This loop to avoid the first interval to be huge
+        for(unsigned int i = 2 + (window_size - num_thread_per_recv); last_valid_time == 0; i+= 1+(window_size - num_thread_per_recv)) {
+            last_valid_time = arrival_times[i][num_msgs / 2 - i].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - i].tv_nsec;
+        }
         for(uint64_t j = num_msgs / 2; j < num_msgs; j++) {
             if(arrival_times[i][j].tv_sec == 0) {
                 missed_msgs.push_back(j + 1);
