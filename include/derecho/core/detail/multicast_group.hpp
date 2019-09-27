@@ -360,7 +360,7 @@ private:
      * @param msg_ts The timestamp of the message
      */
     void deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     /**
      * Same as the other deliver_message, but for the SSTMessage type
@@ -370,7 +370,7 @@ private:
      * @param msg_ts The timestamp of this message
      */
     void deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     /**
      * Enqueues a single message for persistence with the persistence manager.
@@ -385,7 +385,7 @@ private:
      * false if the message is a null message
      */
     bool version_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
@@ -397,7 +397,7 @@ private:
      * false if the message is a null message
      */
     bool version_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;

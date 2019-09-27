@@ -62,7 +62,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
        return value mechanism.
      */
 
-    #define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
+#define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
     PendingResults<Ret> results_vector[MAX_CONCURRENT_RPCS_PER_INVOKER];
     std::atomic<unsigned short> invocation_id_sequencer;
     // std::mutex map_lock; - we don't need a lock on the result map anymore.
@@ -117,7 +117,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         std::size_t invocation_id = invocation_id_sequencer++;
         invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
         std::size_t size = mutils::bytes_size(invocation_id);
-        size += (mutils::bytes_size(remote_args) +...+ 0);
+        size += (mutils::bytes_size(remote_args) + ... + 0);
 
         char* serialized_args = out_alloc(size);
         {
@@ -603,10 +603,26 @@ public:
         return function_call_size + remote_invocation_utilities::header_space();
     }
 
+    template <FunctionTag>
+    std::size_t get_header_size_for_ordered_send() {
+        long int invocation_id = 0;
+        return mutils::bytes_size(invocation_id) + remote_invocation::utilities::header_space();
+    }
+
     template <FunctionTag Tag, typename... Args>
     auto* getReturnType(Args&&... args) {
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
         return this->get_invoker(choice, args...).returnRet();
+    }
+
+    template <FunctionTag Tag, typename Ret, typename... Args>
+    auto prepare_send(char* buffer, std::size_t size, rpc::PendingResults<Ret>*& pending_ptr) {
+        using namespace remote_invocation_utilities;
+        constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
+        auto& invoker = this->get_invoker(choice, args...);
+        //TODO: is "size - header_space()" the right argument here?
+        populate_header(buffer, size - header_space(), invoker.invoke_opcode, nid, 0);
+        return prepare_return = invoker.prep_send(buffer + header_space(), size - header_space());
     }
 
     /**
@@ -625,7 +641,7 @@ public:
 
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
         auto& invoker = this->get_invoker(choice, args...);
-        const auto header_size = header_space();
+        constexpr const auto header_size = header_space();
         auto sent_return = invoker.send(
                 [&out_alloc, &header_size](std::size_t size) {
                     return out_alloc(size + header_size) + header_size;

@@ -548,7 +548,7 @@ namespace remote_invocation_utilities {
 #define _RPC_HEADER_FLAG_CASCADE (0)
 #define _RPC_HEADER_FLAG_RESERVED (1)
 
-inline std::size_t header_space() {
+constexpr inline std::size_t header_space() {
     return sizeof(std::size_t) + sizeof(Opcode) + sizeof(node_id_t) + sizeof(uint32_t);
     //            size                  operation        from                flags
 }
@@ -591,5 +591,13 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
 
 }  // namespace rpc
 }  // namespace derecho
+
+namespace mutils {
+struct Finally {
+    std::function<void()> f;
+    Finally(std::function<void()> f) : f(f) {}
+    ~Finally() { f(); }
+};
+}  // namespace mutils
 
 #define CT_STRING(...) derecho::rpc::String<MACRO_GET_STR(#__VA_ARGS__)>
