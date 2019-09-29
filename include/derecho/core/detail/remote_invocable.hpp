@@ -21,6 +21,9 @@ namespace derecho {
 
 namespace rpc {
 
+template <typename Ret>
+using PendingResults_ptr = PendingResults<Ret>*;
+
 /** defined in rpc_manager.h */
 bool in_rpc_handler();
 
@@ -76,6 +79,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             const Args&...) {
         return *this;
     }
+    inline RemoteInvoker get_invoker(RemoteInvoker const* const) { return *this; }
 
     using barray = char*;
     using cbarray = const char*;
@@ -133,6 +137,21 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         dbg_default_trace("Ready to send an RPC call message with invocation ID {}", invocation_id);
         return send_return{size, serialized_args, pending_results.get_future(),
                            pending_results};
+    }
+
+    auto prep_send(char* buffer, std::size_t size, rpc::PendingResults_ptr<Ret>& pending_ptr, std::function<void()> send) {
+        std::size_t invocation_id = invocation_id_sequencer++;
+        invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
+        //TODO: DEBUG. The invocation_id might have been factored into the size already. Must check to be sure.
+        mutils::to_bytes(invocation_id, buffer);
+        results_vector[invocation_id].reset();
+        pending_ptr = results_vector[invocation_id];
+        dbg_default_trace("Prep Send done for RPC call message with invocation ID {}", invocation_id);
+        return rpc::message_builder<Ret, Args...>{
+                pending_ptr->get_future(),
+                send,
+                (unsigned char*)(buffer + sizeof(mutils::bytes_size(invocation_id))),
+                size - sizeof(mutils::bytes_size(invocation_id))};
     }
 
     /**
@@ -606,7 +625,7 @@ public:
     template <FunctionTag>
     std::size_t get_header_size_for_ordered_send() {
         long int invocation_id = 0;
-        return mutils::bytes_size(invocation_id) + remote_invocation::utilities::header_space();
+        return mutils::bytes_size(invocation_id) + remote_invocation_utilities::header_space();
     }
 
     template <FunctionTag Tag, typename... Args>
@@ -616,13 +635,15 @@ public:
     }
 
     template <FunctionTag Tag, typename Ret, typename... Args>
-    auto prepare_send(char* buffer, std::size_t size, rpc::PendingResults<Ret>*& pending_ptr) {
+    auto prepare_send(char* buffer, std::size_t size, rpc::PendingResults_ptr<Ret>& pending_ptr, std::function<void()> send) {
         using namespace remote_invocation_utilities;
         constexpr std::integral_constant<FunctionTag, Tag>* choice{nullptr};
-        auto& invoker = this->get_invoker(choice, args...);
+        using invoker_t = std::decay_t<decltype(this->get_invoker(choice, std::declval<std::decay_t<Args>>...))>;
+        constexpr invoker_t const* const specific_choice{nullptr};
+        auto& invoker = this->get_invoker(specific_choice);
         //TODO: is "size - header_space()" the right argument here?
         populate_header(buffer, size - header_space(), invoker.invoke_opcode, nid, 0);
-        return prepare_return = invoker.prep_send(buffer + header_space(), size - header_space());
+        return invoker.prep_send(buffer + header_space(), size - header_space(), pending_ptr, send);
     }
 
     /**

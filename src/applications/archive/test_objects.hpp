@@ -27,8 +27,7 @@
  * Example replicated object, containing some serializable state and providing
  * two RPC methods.
  */
-struct Foo{
-
+struct Foo {
     int state;
 
     int read_state() {

@@ -17,6 +17,7 @@
 #include "detail/replicated_interface.hpp"
 #include "detail/rpc_manager.hpp"
 #include "detail/rpc_utils.hpp"
+#include "detail/simple-allocator/message-builder.hpp"
 
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/tcp/tcp.hpp>
@@ -207,7 +208,7 @@ public:
      * of the RPC function being invoked.
      */
     template <rpc::FunctionTag tag, typename... Args>
-    auto prepare_ordered_send(std::size_t payload_size = message_builder<Args...>::estimated_size::value);
+    auto prepare_ordered_send(std::size_t payload_size = derecho_allocator::message_builder<Args...>::estimated_size::value);
 
     /**
      * Submits a call to send a "raw" (byte array) message in a multicast to

@@ -24,6 +24,7 @@
 #include "../derecho_exception.hpp"
 #include "../derecho_type_definitions.hpp"
 #include "derecho_internal.hpp"
+#include "simple-allocator/message-builder.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
 #include <mutils/macro_utils.hpp>
@@ -588,6 +589,27 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
     flags = reinterpret_cast<const uint32_t*>(reply_buf + offset)[0];
 }
 }  // namespace remote_invocation_utilities
+
+template <typename Ret, typename... Args>
+struct message_builder {
+    derecho_allocator::message_builder<std::decay_t<Args>...> b;
+    QueryResults<Ret> query_results;
+    std::function<void()> send_internal;
+    message_builder(QueryResults<Ret> query_results,
+                    std::function<void()> send,
+                    unsigned char* serial_region,
+                    std::size_t size)
+            : b(serial_region, size),
+              query_results(query_results),
+              send_internal(send) {
+    }
+
+    QueryResults<Ret> send(const Args&... args) {
+        b.serialize(args...);
+        send_internal();
+        return std::move(query_results);
+    }
+};
 
 }  // namespace rpc
 }  // namespace derecho
