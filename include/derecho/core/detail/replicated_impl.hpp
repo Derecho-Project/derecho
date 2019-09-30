@@ -136,14 +136,16 @@ auto Replicated<T>::ordered_send(Args&&... args) {
     }
 }
 
+template <typename T, rpc::FunctionTag tag, typename... Args>
+using ret_of_send = typename std::remove_pointer<decltype(Replicated<T>{}.wrapped_this->template getReturnType<tag>(std::declval<Args>()...))>::type;
+
 template <typename T>
-template <rpc::FunctionTag tag, typename... Args>
+template <rpc::FunctionTag tag>
 auto Replicated<T>::prepare_ordered_send(const std::size_t requested_payload_size) {
     if(is_valid()) {
         const std::size_t header_size = wrapped_this->template get_header_size_for_ordered_send<tag>();
         const std::size_t payload_size = requested_payload_size + header_size;
-        assert(payload_size >= derecho_allocator::message_builder<Args...>::static_size::value);
-        using Ret = std::decay_t<decltype(*wrapped_this->template getReturnType<tag>(std::declval<Args>()...))>;
+        using Ret = std::remove_pointer_t<decltype(wrapped_this->template getReturnType<tag>())>;
         rpc::PendingResults<Ret>* pending_ptr;
         mutils::Finally f{[&] {
             assert(pending_ptr);
@@ -158,16 +160,19 @@ auto Replicated<T>::prepare_ordered_send(const std::size_t requested_payload_siz
                     throw payload_size_exceeded{};
                 }
                 auto buffer = group_rpc_manager.view_manager.curr_view->multicast_group->get_rdmc_buffer(subgroup_id, payload_size, true);
-                return wrapped_this->template prepare_send<tag, Ret, Args...>(
-                        buffer.second,
-                        payload_size,
-                        pending_ptr,
-                        [this, token = buffer.first] {
+                return [&]() /*-> rpc::message_builder<Ret, Args...>*/ {
+                    return wrapped_this->template prepare_send<tag, Ret>(
+                            buffer.second,
+                            payload_size,
+                            pending_ptr,
+                            [this, token = buffer.first] {
                             //Code to actually send the buffer when we're finally ready to do that.
                     std::shared_lock<std::shared_timed_mutex> lock(group_rpc_manager.view_manager.view_mutex);
                     group_rpc_manager.view_manager.view_change_cv.wait(lock, [&]() {
                         return group_rpc_manager.view_manager.curr_view->multicast_group->rdmc_send(subgroup_id, token);
                     }); });
+                }
+                ();
             }
         }
     } else {

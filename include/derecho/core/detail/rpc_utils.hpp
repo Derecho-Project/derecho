@@ -601,8 +601,8 @@ struct message_builder {
                     unsigned char* serial_region,
                     std::size_t size)
             : b(serial_region, size),
-              query_results(query_results),
-              send_internal(send) {
+              query_results(std::move(query_results)),
+              send_internal(std::move(send)) {
     }
 
     template <std::size_t s, typename... CArgs>

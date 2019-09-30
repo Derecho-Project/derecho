@@ -1,6 +1,7 @@
 .vscode
 .idea
 cmake-build-debug/
+ubuntu-debug
 
 *~
 script_copy.sh

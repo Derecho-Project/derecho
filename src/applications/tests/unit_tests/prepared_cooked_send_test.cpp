@@ -121,7 +121,7 @@ int main(int argc, char* argv[]) {
         }
         map<node_id_t, vector<pair<uint, uint>>> msgs_map;
         for(uint i = 0; i < num_msgs * num_nodes; i += num_entries) {
-            auto bldr = cookedMessagesHandle.prepare_ordered_send<RPC_NAME(get_msgs)>();
+            auto bldr = cookedMessagesHandle.prepare_ordered_send<RPC_NAME(get_msgs)>(1024);
             auto fst = bldr.template build_arg<0>(i);
             auto scnd = bldr.template build_arg<1>(i + num_entries);
             auto&& results = bldr.send(fst, scnd);

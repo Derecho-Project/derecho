@@ -207,8 +207,8 @@ public:
      * @return An instance of rpc::QueryResults<Ret>, where Ret is the return type
      * of the RPC function being invoked.
      */
-    template <rpc::FunctionTag tag, typename... Args>
-    auto prepare_ordered_send(std::size_t payload_size = derecho_allocator::message_builder<Args...>::estimated_size::value);
+    template <rpc::FunctionTag tag>
+    auto prepare_ordered_send(std::size_t payload_size);
 
     /**
      * Submits a call to send a "raw" (byte array) message in a multicast to
