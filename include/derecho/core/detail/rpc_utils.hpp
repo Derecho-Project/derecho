@@ -590,6 +590,7 @@ inline void retrieve_header(mutils::RemoteDeserialization_v* rdv,
 }
 }  // namespace remote_invocation_utilities
 
+using derecho_allocator::arg_ptr;
 template <typename Ret, typename... Args>
 struct message_builder {
     derecho_allocator::message_builder<std::decay_t<Args>...> b;
@@ -604,7 +605,12 @@ struct message_builder {
               send_internal(send) {
     }
 
-    QueryResults<Ret> send(const Args&... args) {
+    template <std::size_t s, typename... CArgs>
+    decltype(auto) build_arg(CArgs&&... cargs) {
+        return b.template build_arg<s, CArgs...>(std::forward<CArgs>(cargs)...);
+    }
+
+    QueryResults<Ret> send(const arg_ptr<Args>&... args) {
         b.serialize(args...);
         send_internal();
         return std::move(query_results);
