@@ -63,7 +63,6 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
     // 1     2                      3                          4
     //[seq#][time since 1st arrived][time since last received][missed msgs since last received]
     for(uint i = 0; i < num_senders; i++) {
-    
         ofstream fout("receive_times_" + std::to_string(i));
 
         //vector to keep track of which message I missed
@@ -80,22 +79,21 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
             if(arrival_times[i][j].tv_sec == 0) {
                 missed_msgs.push_back(j + 1);
             } else {
-                // if message #j is the first received, set the "0" of column #2 to the arrival time 
+                // if message #j is the first received, set the "0" of column #2 to the arrival time
                 // of this message. E.g. if msg #4 is received as the first, column #2 will report for
                 // every other message the time since the reception of message #4. This is done for a
                 // better representation of times in the graphs. But it could be a problem for comparisons,
-                // so later it should be changed. 
+                // so later it should be changed.
                 if(last_valid_message == (uint64_t)-1) {
                     first_valid_time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
                 }
                 uint64_t time = (arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec);
-                fout << j << " " << (time - first_valid_time) % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << " " << (int)(j - last_valid_message - 1 - (window_size - num_thread_per_recv)) << endl;
+                fout << j << " " << (time - first_valid_time) % (uint64_t)1e9 << " " << (int)(time - first_valid_time - last_valid_time) << " " << (int)(j - last_valid_message - 1 - (window_size - num_thread_per_recv)) << endl;
                 last_valid_time = time;
                 last_valid_message = j;
             }
         }
     }
-
 }
 
 int main(int argc, char* argv[]) {
@@ -245,11 +243,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
-
     //Print results
     print_results(num_msgs, num_senders, window_size, num_thread_per_recv, send_times, arrival_times);
 
-   
     shutdown = true;
     failures_thread.join();
     sst.sync_with_members();
