@@ -16,4 +16,11 @@ libtoolize
 make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
 make install
 cd ..
-rm -rf libfabric
+echo "Cleanup by executing 'rm -rf libfabric'? [Y/n]"
+read c
+if [[ $c == [nN] ]];
+then
+    echo "keep libfabric"
+else
+    rm -rf libfabric
+fi

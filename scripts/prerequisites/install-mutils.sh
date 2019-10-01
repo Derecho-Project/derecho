@@ -16,4 +16,11 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} ..
 make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
 make install
 cd ../..
-rm -rf mutils
+echo "Cleanup by executing 'rm -rf mutils'? [Y/n]"
+read c
+if [[ $c == [nN] ]];
+then
+    echo "keep mutils"
+else
+    rm -rf mutils
+fi

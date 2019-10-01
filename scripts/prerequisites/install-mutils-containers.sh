@@ -16,4 +16,12 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} ..
 make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
 make install
 cd ../..
-rm -rf mutils-containers
+echo "Cleanup by executing 'rm -rf mutils-containers'? [Y/n]"
+read c
+if [[ $c == [nN] ]];
+then
+    echo "keep mutils-containers"
+else
+    rm -rf mutils-containers
+fi
+
