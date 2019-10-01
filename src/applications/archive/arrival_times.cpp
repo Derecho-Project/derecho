@@ -44,6 +44,60 @@ public:
     } while(false)
 #endif
 
+//Prints results
+void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size, uint32_t num_thread_per_recv, vector<struct timespec>& send_times, vector<vector<struct timespec>>& arrival_times) {
+    //Sender inter-arrival times
+    // [seq#][time since 1st send][time since last sent]
+    {
+        uint64_t last_valid_time = send_times[0].tv_sec * (uint64_t)1e9 + send_times[0].tv_nsec;
+        uint64_t first_time = send_times[0].tv_sec * (uint64_t)1e9 + send_times[0].tv_nsec;
+        ofstream fout("send_times");
+        for(uint i = num_msgs / 2; i < num_msgs; i++) {
+            uint64_t time = send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec;
+            fout << i << " " << (time - first_time) % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << endl;
+            last_valid_time = time;
+        }
+    }
+
+    //Receivers inter-arrival times and missed messages
+    // 1     2                      3                          4
+    //[seq#][time since 1st arrived][time since last received][missed msgs since last received]
+    for(uint i = 0; i < num_senders; i++) {
+    
+        ofstream fout("receive_times_" + std::to_string(i));
+
+        //vector to keep track of which message I missed
+        vector<uint64_t> missed_msgs;
+        //useful for column #2 and #3 respectively
+        uint64_t last_valid_time = 0;
+        uint64_t first_valid_time = arrival_times[i][0].tv_sec * (uint64_t)1e9 + arrival_times[i][0].tv_nsec;
+        //Useful for printing missed messages counter in the file: seq# of last received
+        //In case of single thread and a window of n, if I get a message, I consider all the
+        //previous (n-1) received. If I miss it, I consider missed also all the previous n-1 ones.
+        uint64_t last_valid_message = (uint64_t)-1;
+
+        for(uint64_t j = 0; j < num_msgs; j++) {
+            if(arrival_times[i][j].tv_sec == 0) {
+                missed_msgs.push_back(j + 1);
+            } else {
+                // if message #j is the first received, set the "0" of column #2 to the arrival time 
+                // of this message. E.g. if msg #4 is received as the first, column #2 will report for
+                // every other message the time since the reception of message #4. This is done for a
+                // better representation of times in the graphs. But it could be a problem for comparisons,
+                // so later it should be changed. 
+                if(last_valid_message == (uint64_t)-1) {
+                    first_valid_time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
+                }
+                uint64_t time = (arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec);
+                fout << j << " " << (time - first_valid_time) % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << " " << (int)(j - last_valid_message - 1 - (window_size - num_thread_per_recv)) << endl;
+                last_valid_time = time;
+                last_valid_message = j;
+            }
+        }
+    }
+
+}
+
 int main(int argc, char* argv[]) {
     if(argc != 8) {
         std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <msg size> <sender_sleep_time_ms> <window size> <num_thread_per_recv>" << endl;
@@ -191,41 +245,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    {
-        //Print only the second half of the messages
-        uint64_t last_valid_time = send_times[num_msgs / 2 - 1].tv_sec * (uint64_t)1e9 + send_times[num_msgs / 2 - 1].tv_nsec;
-        ofstream fout("send_times");
-        for(uint i = num_msgs / 2; i < num_msgs; i++) {
-            uint64_t time = send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec;
-            fout << i << " " << time % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << endl;
-            last_valid_time = time;
-        }
-    }
 
-    //Print results in the format: [msg_index] [arrival time] [diff from previous time]
-    for(uint i = 0; i < num_senders; i++) {
-        //vector to keep track of which message I missed
-        vector<uint64_t> missed_msgs;
-        ofstream fout("receive_times_" + std::to_string(i));
-        //fout << "Times recorded for sender " << i << endl;
-        //Print only the second half of the messages
-        uint64_t last_valid_time = arrival_times[i][num_msgs / 2 - 1 - (window_size - num_thread_per_recv)].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - 1 - (window_size - num_thread_per_recv)].tv_nsec;
-        //This loop to avoid the first interval to be huge
-        for(unsigned int i = 2 + (window_size - num_thread_per_recv); last_valid_time == 0; i+= 1+(window_size - num_thread_per_recv)) {
-            last_valid_time = arrival_times[i][num_msgs / 2 - i].tv_sec * (uint64_t)1e9 + arrival_times[i][num_msgs / 2 - i].tv_nsec;
-        }
-        for(uint64_t j = num_msgs / 2; j < num_msgs; j++) {
-            if(arrival_times[i][j].tv_sec == 0) {
-                missed_msgs.push_back(j + 1);
-            } else {
-                uint64_t time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
-                fout << j << " " << time % (uint64_t)1e9 << " " << (int)(time - last_valid_time) << endl;
-                last_valid_time = time;
-            }
-        }
-        //fout << "Missed messages: " << missed_msgs.size() << endl;
-    }
+    //Print results
+    print_results(num_msgs, num_senders, window_size, num_thread_per_recv, send_times, arrival_times);
 
+   
     shutdown = true;
     failures_thread.join();
     sst.sync_with_members();
