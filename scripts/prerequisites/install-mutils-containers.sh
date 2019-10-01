@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu
 INSTALL_PREFIX="/usr/local"
 if [[ $# -gt 0 ]]; then
     INSTALL_PREFIX=$1
