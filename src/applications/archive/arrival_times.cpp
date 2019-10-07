@@ -45,7 +45,7 @@ public:
 #endif
 
 //Prints results
-void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size, uint32_t num_thread_per_recv, vector<struct timespec>& send_times, vector<vector<struct timespec>>& arrival_times) {
+void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size, uint32_t num_thread_per_recv, uint32_t msg_size, int sleep_time, vector<struct timespec>& send_times, vector<vector<struct timespec>>& arrival_times) {
     //Sender inter-arrival times
     // [seq#][time since 1st send][time since last sent]
     {
@@ -59,21 +59,20 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
         }
     }
 
-    //Receivers inter-arrival times and missed messages
-    // 1     2                      3                          4
-    //[seq#][time since 1st arrived][time since last received][missed msgs since last received]
     for(uint i = 0; i < num_senders; i++) {
+        // File format:
+        // 1     2                      3                          4
+        //[seq#][time since 1st arrived][time since last received][missed msgs since last received]
         ofstream fout("receive_times_" + std::to_string(i));
-
         //vector to keep track of which message I missed
         vector<uint64_t> missed_msgs;
-        //useful for column #2 and #3 respectively
+        //useful for column #2 and #3 respectively of "receive" file
         uint64_t last_valid_time = 0;
-        uint64_t first_valid_time = arrival_times[i][0].tv_sec * (uint64_t)1e9 + arrival_times[i][0].tv_nsec;
+        uint64_t first_valid_time = 0;
         //Useful for printing missed messages counter in the file: seq# of last received
         //In case of single thread and a window of n, if I get a message, I consider all the
         //previous (n-1) received. If I miss it, I consider missed also all the previous n-1 ones.
-        uint64_t last_valid_message = (uint64_t)-1;
+        uint64_t last_valid_message = (uint64_t)(-1- (window_size - num_thread_per_recv));
 
         for(uint64_t j = 0; j < num_msgs; j++) {
             if(arrival_times[i][j].tv_sec == 0) {
@@ -84,11 +83,12 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
                 // every other message the time since the reception of message #4. This is done for a
                 // better representation of times in the graphs. But it could be a problem for comparisons,
                 // so later it should be changed.
-                if(last_valid_message == (uint64_t)-1) {
+                if(last_valid_message == (uint64_t)(-1- (window_size - num_thread_per_recv))) {
                     first_valid_time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
+                    last_valid_time = arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec;
                 }
                 uint64_t time = (arrival_times[i][j].tv_sec * (uint64_t)1e9 + arrival_times[i][j].tv_nsec);
-                fout << j << " " << (time - first_valid_time) % (uint64_t)1e9 << " " << (int)(time - first_valid_time - last_valid_time) << " " << (int)(j - last_valid_message - 1 - (window_size - num_thread_per_recv)) << endl;
+                fout << j << " " << (time - first_valid_time) % (uint64_t)1e9 << " " << (double)((int)(time - last_valid_time))/window_size << " " << (int)(j - last_valid_message - 1 - (window_size - num_thread_per_recv)) << endl;
                 last_valid_time = time;
                 last_valid_message = j;
             }
@@ -99,6 +99,7 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
 int main(int argc, char* argv[]) {
     if(argc != 8) {
         std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <msg size> <sender_sleep_time_ms> <window size> <num_thread_per_recv>" << endl;
+        std::cout << "Sleep time: 0 no wait, >0 ms, <0 for loop" << endl;
         return -1;
     }
 
@@ -106,7 +107,7 @@ int main(int argc, char* argv[]) {
     const uint32_t num_senders = std::atoi(argv[2]);
     uint64_t num_msgs = std::atoll(argv[3]);
     const uint32_t msg_size = std::atoi(argv[4]);
-    const uint32_t sleep_time = std::atoi(argv[5]);
+    const int sleep_time = std::atoi(argv[5]);
     // window_size is an input param - not to be confused with window_size from the derecho.cfg file
     const uint32_t window_size = std::atoi(argv[6]);
     const uint32_t num_thread_per_recv = std::atoi(argv[7]);
@@ -182,6 +183,9 @@ int main(int argc, char* argv[]) {
             if(sleep_time > 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
             }
+            else if (sleep_time < 0) {
+                for(int wait=0; wait<1000; ++wait){}
+            }
         }
     };
 
@@ -244,7 +248,7 @@ int main(int argc, char* argv[]) {
     }
 
     //Print results
-    print_results(num_msgs, num_senders, window_size, num_thread_per_recv, send_times, arrival_times);
+    print_results(num_msgs, num_senders, window_size, num_thread_per_recv, msg_size, sleep_time, send_times, arrival_times);
 
     shutdown = true;
     failures_thread.join();
