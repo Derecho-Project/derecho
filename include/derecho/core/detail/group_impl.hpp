@@ -38,6 +38,15 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
     return *((Replicated<ReplicatedType>*)ret);
 }
 
+template <typename ReplicatedType>
+ExternalCaller<ReplicatedType>&
+GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_external_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
+                                &ret);
+    return *((ExternalCaller<ReplicatedType>*)ret);
+}
+
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
                                                        uint32_t subgroup_num,
