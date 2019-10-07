@@ -23,6 +23,12 @@ auto& _Group::get_subgroup(uint32_t subgroup_num) {
             ->get_subgroup(subgroup_num);
 }
 
+template <typename SubgroupType>
+auto& _Group::get_nonmember_subgroup(uint32_t subgroup_num) {
+    return (dynamic_cast<GroupProjection<SubgroupType>*>(this))
+           ->get_nonmember_subgroup(subgroup_num);
+}
+
 template <typename ReplicatedType>
 Replicated<ReplicatedType>&
 GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
@@ -39,6 +45,16 @@ void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
     ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
                       ? &get_subgroup<ReplicatedTypes>(subgroup_num)
                       : *ret)),
+     ...);
+}
+
+template <typename...ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type,
+                                                            uint32_t subgroup_num,
+                                                            void** ret) {
+    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+             ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_num)
+             : *ret)),
      ...);
 }
 

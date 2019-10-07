@@ -138,7 +138,7 @@ public:
         HLC hlc{query_us, 0};
         try {
             return *pers_bytes.get(hlc);
-        } catch(std::exception e) {
+        } catch(std::exception& e) {
             std::cout << "query_pers_bytes failed:" << e.what() << std::endl;
         }
         return Bytes();

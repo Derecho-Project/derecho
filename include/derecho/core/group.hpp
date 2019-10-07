@@ -72,15 +72,19 @@ public:
     virtual ~_Group() = default;
     template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_num = 0);
+    template <typename SubgroupType>
+    auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
 };
 
 template <typename ReplicatedType>
 class GroupProjection : public virtual _Group {
 protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+    virtual void set_external_caller_pointer(std::type_index, uint32_t, void**) = 0;
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
+    ExternalCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
 };
 
 class GroupReference {
@@ -104,6 +108,7 @@ template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
     void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
 
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
