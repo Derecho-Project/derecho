@@ -155,3 +155,8 @@ target_link_libraries(custom_subgroup_profiles_test derecho)
 #arrival times
 add_executable(arrival_times arrival_times.cpp initialize.cpp)
 target_link_libraries(arrival_times derecho)
+
+
+#missed counters
+add_executable(missed_counters missed_counters.cpp initialize.cpp)
+target_link_libraries(missed_counters derecho)
