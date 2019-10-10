@@ -10,8 +10,8 @@
 #include <thread>
 #include <unordered_map>
 
-#define NUM_DATA_PLANE 1
-#define NUM_CONTROL_PLANE 1
+#define NUM_IO_THREAD 1
+#define NUM_METADATA_THREAD 1
 
 #define SPDK_NUM_LOGS_SUPPORTED (1UL << 10)  // support 1024 logs
 #define SPDK_SEGMENT_BIT 26
@@ -97,27 +97,21 @@ typedef union log_entry {
 // Data write request
 struct persist_data_request_t {
     void* buf;
-    uint64_t request_id;
-    uint16_t part_id;
-    uint16_t part_num;
-    std::atomic<int>* completed;
     uint64_t lba;
     uint32_t lba_count;
     spdk_nvme_cmd_cb cb_fn;
     void* args;
-    bool is_write;
+    int request_type;
 };
 
 // Control write request
-struct persist_control_request_t {
+struct persist_metadata_request_t {
     void* buf;
-    uint16_t part_num;
-    uint64_t request_id;
-    bool* completed;
     uint64_t lba;
     uint32_t lba_count;
     spdk_nvme_cmd_cb cb_fn;
     void* args;
+    int request_type;
 };
 
 struct atomic_sub_req {
@@ -125,6 +119,14 @@ struct atomic_sub_req {
     uint32_t data_length;
     uint64_t virtaddress;
     int content_type;
+};
+
+struct data_write_cbfn_args {
+    uint32_t id;            //Log id
+    int64_t ver;            //Log version the request is attached to
+    void* buf;              //Pointer to write buffer
+    atomic<int>* completed; //Number of completed sub request
+    int num_sub_req;        //Number of sub requests
 };
 
 /**Per log metadata */
@@ -142,66 +144,80 @@ typedef struct log_metadata {
 
 class PersistThreads {
 protected:
+    //----------------------------SPDK Related Info--------------------------------
     /** SPDK general info */
     SpdkInfo general_spdk_info;
-    /** SPDK queue for data planes */
-    spdk_nvme_qpair* SpdkQpair_data[NUM_DATA_PLANE];
-    /** SPDK queue for control planes */
-    spdk_nvme_qpair* SpdkQpair_control[NUM_CONTROL_PLANE];
-    /** Threads corresponding to data planes */
-    std::thread data_plane[NUM_DATA_PLANE];
-    /** Threads corresponding to control planes */
-    std::thread control_plane[NUM_CONTROL_PLANE];
+    /** SPDK qpair for threads handling io requests. */
+    spdk_nvme_qpair* SpdkQpair_threads[NUM_DATA_LOGENTRY_THREAD];
+   
+    //-----------------------IO request handling threads---------------------------
+    /** Threads handling io requests. */
+    std::thread io_threads[NUM_DATA_LOGENTRY_THREAD];
+    /** Data and log entry io request queue. */
+    std::queue<persist_data_request_t> io_queue;
+    /** Data write queue mutex */
+    std::mutex io_queue_mtx;
+    /** Semapore of new io request */
+    sem_t new_io_request;
+    
+    //------------------------Metadata entries of each log-------------------------
+    /** Array of all up-to-date metadata entries. */
+    GlobalMetadata global_metadata;
+    /** Array of all to-be-written metadata entries with highest ver w.r.t each PersitLog. */
+    PTLogMetadataInfo to_write_metadata[SPDK_NUM_LOGS_SUPPORTED];
+    /** Array of highest ver that has been written for each PersistLog. */
+    atomic<int64_t> last_written_ver[SPDK_NUM_LOGS_SUPPORTED];
+    
+    //-------------------General Info on segment usage and logs--------------------
     /** Map log name to log id */
     std::unordered_map<std::string, uint32_t> log_name_to_id;
-
-    /** Data write request queue */
-    std::queue<persist_data_request_t> data_write_queue;
-    /** Control write request queue */
-    std::queue<persist_control_request_t> control_write_queue;
-    /** Control write queue mutex */
-    std::mutex control_queue_mtx;
-    /** Data write queue mutex */
-    std::mutex data_queue_mtx;
-
     /** Segment usage table */
     std::bitset<SPDK_NUM_SEGMENTS> segment_usage_table;
-    /** Array of lot metadata entry */
-    GlobalMetadata global_metadata;
-    /** Last completd request id */
-    uint64_t compeleted_request_id;
-    /** Last assigned request id */
-    uint64_t assigned_request_id;
     /** Lock for changing segment usage table */
     pthread_mutex_t segment_assignment_lock;
     /** Lock for assigning new metadata entry */
     pthread_mutex_t metadata_entry_assignment_lock;
-    /** Semapore of new data request */
-    sem_t new_data_request;
-    std::condition_variable data_request_completed;
-    int initialize_threads();
     
-    /** Singleton Design Patern */
+    //------------------------Destructor related fields---------------------------- 
+    /** Whether destructor is called. */
+    std::atomic<bool> destructed;
+    /** Boolean of data all done */
+    std::atomic<bool> io_request_all_done;
+    
+    //-------------------------Singleton Design Patern-----------------------------
     static PersistThreads* m_PersistThread;
     static bool initialized;
     static std::mutex initialization_lock;
-
-    /** Static functions for Spdk Callback */
+    int initialize_threads();
+    
+    //-------------------------SPDK call back functions----------------------------
+    /** Spdk device probing callback function. */
     static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                          struct spdk_nvme_ctrlr_opts* opts);
+    /** Spdk device ataching callback function. */
     static void attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
                           struct spdk_nvme_ctrlr* ctrlr, const struct spdk_nvme_ctrlr_opts* opts);
-    /** Default callback for data write request*/
+    
+    /** Data and log entry write request callback function. 
+     * @param args - a pointer to data_write_cbfn_args.
+     */
     static void data_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
-    /** Default callback for control write request*/
-    static void control_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+    
+    /** Read request callback function.
+     * @param args - a pointer to an atomic boolean
+     */
+    static void read_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+    
+    /** Metadata write request callback function. 
+     * @param args - a pair of log id and the version written. 
+     */
+    static void metadata_write_request_complete(void* args, const struct spdk_nvme_cpl* completion);
+    
+    /** Dummy callback function. Used if the completion does not matter. */
+    static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion); 
     /** Release segemnts held by log entries and data before head of the log*/
     static void release_segments(void* args, const struct spdk_nvme_cpl* completion);
-    static void load_request_complete(void* args, const struct spdk_nvme_cpl* completion);
-    static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion);
 
-    int update_segment(char* buf, uint32_t data_length, uint64_t lba_index, int mode, bool is_write);
-//    int read_segment(char* buf, uint32_t data_length, uint16_t lba_index, int mode);
     int non_atomic_rw(char* buf, uint32_t data_length, uint64_t virtaddress, int blocking_mode, int content_type, bool is_write, int id);
     int atomic_w(std::vector<atomic_sub_req> sub_requests, char* atomic_buf, uint32_t atomic_dl, uint64_t atomic_virtaddress, int content_type, int id);
 
