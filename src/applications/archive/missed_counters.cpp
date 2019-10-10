@@ -43,40 +43,85 @@ public:
     } while(false)
 #endif
 
-void print_average(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank, vector<vector<uint64_t>>& received_msgs) {
+void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank, vector<vector<uint64_t>>& received_msgs) {
     // what do we really want?
-    // [sum_missed_messages_local][sum_missed_mesages_remote]
+    // [sum_missed_messages_local][num_intervals_with_missed][sum_missed_mesages_remote][num_intervals_with_missed]
 
     ofstream fout("missed_results");
 
     uint64_t count_missed = 0;
-    uint64_t last_received = (uint64_t)-1;
+    uint64_t num_intervals_with_missed = 0;
 
-    //count missed local
-    for(uint64_t m : received_msgs[my_rank]) {
-        count_missed += m - last_received - 1;
-        last_received = m;
+    // count local
+
+    // get logic size of the vector:
+    uint64_t logic_size = 1;
+    for(uint64_t i = 1; i < received_msgs[my_rank].size(); i++) {
+        if(received_msgs[my_rank][i] > received_msgs[my_rank][i - 1]) {
+            logic_size++;
+        } else
+            break;
+    }
+    // get start index (> num_msgs/2)
+    uint64_t start_index = 0;
+    for(uint64_t i = 0; i < logic_size; i++) {
+        if(received_msgs[my_rank][i] > num_msgs / 2) {
+            start_index = i;
+            break;
+        }
     }
 
-    fout << count_missed << " ";
+    // actual count - here I change the vector, as I'm
+    // interested in the SECOND HALF of the messages
+    received_msgs[my_rank][start_index - 1] = num_msgs / 2;
+    for(uint64_t j = start_index; j < logic_size; j++) {
+        count_missed += received_msgs[my_rank][j] - received_msgs[my_rank][j - 1] - 1;
+        if(received_msgs[my_rank][j] - received_msgs[my_rank][j - 1] - 1 > 0) {
+            num_intervals_with_missed++;
+        }
+    }
 
-    //count missed remote
+    fout << count_missed << " " << num_intervals_with_missed << " ";
+
+    // count missed remote
     count_missed = 0;
+    num_intervals_with_missed = 0;
 
     for(uint32_t i = 0; i < num_nodes; i++) {
         if(i == my_rank) {
             continue;
         }
 
-        last_received = (uint64_t)-1;
+        // get logic size of the vector
+        logic_size = 1;
+        for(uint64_t j = 1; j < received_msgs[i].size(); j++) {
+            if(received_msgs[i][j] > received_msgs[i][j - 1]) {
+                logic_size++;
+            } else
+                break;
+        }
 
-        for(uint64_t m : received_msgs[i]) {
-            count_missed += m - last_received - 1;
-            last_received = m;
+        // get start index (> num_msgs/2)
+        start_index = 0;
+        for(uint64_t j = 0; j < logic_size; j++) {
+            if(received_msgs[i][j] > num_msgs / 2) {
+                start_index = j;
+                break;
+            }
+        }
+
+        // actual count - here I change the vector, as I'm
+        // interested in the SECOND HALF of the messages
+        received_msgs[i][start_index - 1] = num_msgs / 2;
+        for(uint64_t j = start_index; j < logic_size; j++) {
+            count_missed += received_msgs[i][j] - received_msgs[i][j - 1] - 1;
+            if(received_msgs[i][j] - received_msgs[i][j - 1] - 1 > 0) {
+                num_intervals_with_missed++;
+            }
         }
     }
 
-    fout << count_missed << endl;
+    fout << count_missed << " " << num_intervals_with_missed << endl;
     fout.close();
 }
 
@@ -143,7 +188,8 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), "sender");
         DEBUG_MSG("Sender started");
 
-        for(uint64_t i = 0; i < num_msgs; i++) {
+        //Sender starts from 1 - to avoid overlow problems in reception
+        for(uint64_t i = 1; i <= num_msgs; i++) {
             sst.counter[my_rank]++;
             sst.put(sst.counter);
         }
@@ -152,26 +198,29 @@ int main(int argc, char* argv[]) {
     };
 
     //vector of received messages
-    vector<vector<uint64_t>> received_msgs(num_nodes, vector<uint64_t>());
+    vector<vector<uint64_t>> received_msgs(num_nodes, vector<uint64_t>(num_msgs, 0));
 
     auto receiver_loop = [&]() {
         pthread_setname_np(pthread_self(), "receiver");
         DEBUG_MSG("Received started");
 
         //index of the last received message
-        vector<uint64_t> last_received(num_nodes, (uint64_t)-1);
+        vector<uint64_t> last_received(num_nodes, 0);
         //index of the newly received message
-        vector<uint64_t> actual_received(num_nodes, 0);
+        uint64_t actual_received;
+        //vector of indexes
+        vector<uint64_t> j(num_nodes, 0);
 
-        while(std::all_of(actual_received.begin(), actual_received.end(), [&](int n) { return n < (int)num_msgs; })) {
+        while(!std::all_of(last_received.begin(), last_received.end(), [&](int n) { return n == (int)num_msgs; })) {
             for(uint32_t i = 0; i < num_nodes; i++) {
-                actual_received[i] = (uint64_t&)sst.counter[i];
+                actual_received = (uint64_t&)sst.counter[i];
 
-                if(actual_received[i] == last_received[i]) {
+                if(actual_received == last_received[i]) {
                     continue;
                 }
-                received_msgs[i].push_back(actual_received[i]);
-                last_received = actual_received;
+                received_msgs[i][j[i]] = actual_received;
+                j[i]++;
+                last_received[i] = actual_received;
             }
         }
         DEBUG_MSG("Receiver finished");
@@ -193,7 +242,7 @@ int main(int argc, char* argv[]) {
     sst.sync_with_members();
 
     // print results
-    print_average(num_nodes, num_msgs, my_rank, received_msgs);
-    
+    print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
+
     return 0;
 }
