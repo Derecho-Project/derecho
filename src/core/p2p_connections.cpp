@@ -5,6 +5,7 @@
 #include <sstream>
 #include <sys/time.h>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/p2p_connections.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
 
@@ -201,11 +202,13 @@ void P2PConnections::send(uint32_t rank) {
 
 void P2PConnections::check_failures_loop() {
     pthread_setname_np(pthread_self(), "p2p_timeout");
+
+    uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
     while(!thread_shutdown) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
         if(num_rdma_writes < 1000) {
             continue;
         }

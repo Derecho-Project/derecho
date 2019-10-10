@@ -569,6 +569,10 @@ namespace sst{
   void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
     dbg_default_trace("Polling thread starting.");
+
+    struct timespec last_time, cur_time;
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
     while(!shutdown) {
         auto ce = lf_poll_completion();
         if (shutdown) {
@@ -576,7 +580,19 @@ namespace sst{
         }
         if (ce.first != 0xFFFFFFFF) {
           util::polling_data.insert_completion_entry(ce.first, ce.second);
-        } // else we don't know who sent the message, so just drop it.
+
+          // update last time
+          clock_gettime(CLOCK_REALTIME, &last_time);
+        } else {
+            clock_gettime(CLOCK_REALTIME, &cur_time);
+            // check if the system has been inactive for enough time to induce sleep
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            if(time_elapsed_in_ms > 1) {
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+            }
+        }
     }
     dbg_default_trace("Polling thread ending.");
   }
@@ -594,7 +610,19 @@ namespace sst{
     struct fi_cq_entry entry;
     int poll_result = 0;
 
+    struct timespec last_time, cur_time;
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
     while(!shutdown) {
+        clock_gettime(CLOCK_REALTIME, &cur_time);
+        // check if the system has been inactive for enough time to induce sleep
+        double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                    + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+        if(time_elapsed_in_ms > 1) {
+            using namespace std::chrono_literals;
+            std::this_thread::sleep_for(1ms);
+        }
+
         poll_result = 0;
         for(int i = 0; i < 50; ++i) {
             poll_result = fi_cq_read(g_ctxt.cq, &entry, 1);
