@@ -87,7 +87,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        return nullptr;
+                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                     }
                 },
                 std::forward<Args>(args)...);
@@ -116,7 +116,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                         if(size <= max_payload_size) {
                             return buffer;
                         } else {
-                            return nullptr;
+                            throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                         }
                     },
                     std::forward<Args>(args)...);
@@ -229,7 +229,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        return nullptr;
+                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                     }
                 },
                 std::forward<Args>(args)...);
