@@ -129,7 +129,7 @@ uint64_t P2PConnections::getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num) {
 }
 
 uint64_t P2PConnections::getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num) {
-    return max_msg_size * (type * window_size + (seq_num++ % window_size));
+    return max_msg_size * (type * window_size + (seq_num % window_size));
 }
 
 // check if there's a new request from some node
