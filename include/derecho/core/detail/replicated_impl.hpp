@@ -75,7 +75,6 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
-        assert(dest_node != node_id);
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
             throw invalid_node_exception("Cannot send a p2p request to node "
                     + std::to_string(dest_node) + ": it is not a member of the Group.");
