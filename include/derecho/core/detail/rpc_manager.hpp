@@ -75,10 +75,6 @@ class RPCManager {
     std::map<subgroup_id_t, std::queue<PendingBase_ref>> pending_results_to_fulfill;
     std::map<subgroup_id_t, std::list<PendingBase_ref>> fulfilled_pending_results;
 
-    /** This is not accessed outside invocations of rpc_message_handler,
-     * it's just a member so it won't be newly allocated every time. */
-    std::unique_ptr<char[]> replySendBuffer;
-
     bool thread_start = false;
     /** Mutex for thread_start_cv. */
     std::mutex thread_start_mutex;
@@ -157,9 +153,7 @@ public:
             // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
-              view_manager(group_view_manager),
-              connections(std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, group_view_manager.view_max_window_size, group_view_manager.view_max_payload_size})),
-              replySendBuffer(new char[group_view_manager.view_max_payload_size + sizeof(header)]) {
+              view_manager(group_view_manager) {
         if(deserialization_context_ptr != nullptr) {
             rdv.push_back(deserialization_context_ptr);
         }

@@ -23,7 +23,14 @@ RPCManager::~RPCManager() {
 }
 
 void RPCManager::create_connections() {
-    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{
+            nid,
+            {nid},
+	    getConfUInt32(CONF_DERECHO_MAX_P2P_WINDOW_SIZE),
+            view_manager.view_max_rpc_window_size,
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(CONF_DERECHO_MAX_RPC_REPLY_PAYLOAD_SIZE) + sizeof(header)});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
@@ -112,7 +119,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     parse_and_receive(msg_buf, buffer_size,
                       [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
                           reply_size = size;
-                          if(reply_size <= connections->get_max_p2p_size()) {
+                          if(reply_size <= connections->get_max_p2p_reply_size()) {
                               reply_buf = (char*)connections->get_sendbuffer_ptr(
                                       connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;

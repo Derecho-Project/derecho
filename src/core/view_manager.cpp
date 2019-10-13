@@ -1350,7 +1350,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
             curr_view->gmsSST, callbacks, num_subgroups, subgroup_settings,
-            view_max_sender_timeout,
+            getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
                 subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
@@ -1604,8 +1604,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
             uint64_t payload_size = profile.max_msg_size - sizeof(header);
             max_payload_size = std::max(payload_size, max_payload_size);
             slot_size_for_subgroup = std::max(slot_size_for_shard, slot_size_for_subgroup);
-            view_max_window_size = std::max(profile.window_size, view_max_window_size);
-            view_max_sender_timeout = std::max(profile.heartbeat_ms, view_max_sender_timeout);
+            view_max_rpc_window_size = std::max(profile.window_size, view_max_rpc_window_size);
 
             //Initialize my_rank in the SubView for this node's ID
             shard_view.my_rank = shard_view.rank_of(view.members[view.my_rank]);
@@ -1629,7 +1628,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         num_received_offset += max_shard_senders;
         slot_offset += slot_size_for_subgroup;
         max_payload_sizes[subgroup_id] = max_payload_size;
-        view_max_payload_size = std::max(max_payload_size, view_max_payload_size);
+        view_max_rpc_payload_size = std::max(max_payload_size, view_max_rpc_payload_size);
     }  // for(subgroup_id)
 
     return {num_received_offset, slot_offset};

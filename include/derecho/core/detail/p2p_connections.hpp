@@ -18,8 +18,11 @@ namespace sst {
 struct P2PParams {
     uint32_t my_node_id;
     std::vector<uint32_t> members;
-    uint32_t window_size;
-    uint64_t max_p2p_size;
+    uint32_t p2p_window_size;
+    uint32_t rpc_window_size;
+    uint64_t max_p2p_reply_size;
+    uint64_t max_p2p_request_size;
+    uint64_t max_rpc_reply_size;
 };
 
 enum REQUEST_TYPE {
@@ -37,8 +40,6 @@ class P2PConnections {
     const std::uint32_t num_members;
     const uint32_t my_node_id;
     uint32_t my_index;
-    const uint32_t window_size;
-    const uint32_t max_msg_size;
     std::map<uint32_t, uint32_t> node_id_to_rank;
     // one element per member for P2P
     std::vector<std::unique_ptr<volatile char[]>> incoming_p2p_buffers;
@@ -51,6 +52,9 @@ class P2PConnections {
     std::thread timeout_thread;
     uint64_t getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num);
     uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num);
+    uint32_t window_sizes[num_request_types];
+    uint32_t max_msg_sizes[num_request_types];
+    uint64_t offsets[num_request_types];
     char* probe(uint32_t rank);
     REQUEST_TYPE last_type;
     uint32_t last_rank;
@@ -63,7 +67,7 @@ public:
     ~P2PConnections();
     void shutdown_failures_thread();
     uint32_t get_node_rank(uint32_t node_id);
-    uint64_t get_max_p2p_size();
+    uint64_t get_max_p2p_reply_size();
     std::optional<std::pair<uint32_t, char*>> probe_all();
     void update_incoming_seq_num();
     char* get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type);

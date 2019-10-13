@@ -776,9 +776,8 @@ public:
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
     // max of max_payload_sizes
-    uint64_t view_max_payload_size = 0;
-    unsigned int view_max_window_size = 0;
-    unsigned int view_max_sender_timeout = 0;
+    uint64_t view_max_rpc_payload_size = 0;
+    uint32_t view_max_rpc_window_size = 0;
 };
 
 } /* namespace derecho */
