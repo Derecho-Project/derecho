@@ -58,14 +58,14 @@ MulticastGroup::MulticastGroup(
         node_id_to_sst_index[members[i]] = i;
     }
 
-    for(const auto p : subgroup_settings_by_id) {
-        subgroup_id_t id = p.first;
-        const SubgroupSettings& settings = p.second;
-        auto num_shard_members = settings.members.size();
-        while(free_message_buffers[id].size() < settings.profile.window_size * num_shard_members) {
-            free_message_buffers[id].emplace_back(settings.profile.max_msg_size);
-        }
-    }
+    // for(const auto p : subgroup_settings_by_id) {
+    //     subgroup_id_t id = p.first;
+    //     const SubgroupSettings& settings = p.second;
+    //     auto num_shard_members = settings.members.size();
+    //     while(free_message_buffers[id].size() < settings.profile.window_size * num_shard_members) {
+    //         free_message_buffers[id].emplace_back(settings.profile.max_msg_size);
+    //     }
+    // }
 
     initialize_sst_row();
     bool no_member_failed = true;
@@ -141,27 +141,13 @@ MulticastGroup::MulticastGroup(
         return std::move(msg);
     };
 
-    for(const auto p : subgroup_settings_by_id) {
-        subgroup_id_t id = p.first;
-        const SubgroupSettings& settings = p.second;
-        auto num_shard_members = settings.members.size();
-        while(free_message_buffers[id].size() < settings.profile.window_size * num_shard_members) {
-            free_message_buffers[id].emplace_back(settings.profile.max_msg_size);
-        }
-    }
-
     // Reclaim RDMCMessageBuffers from the old group, and supplement them with
     // additional if the group has grown.
     std::lock_guard<std::mutex> lock(old_group.msg_state_mtx);
     for(const auto p : subgroup_settings_by_id) {
         const subgroup_id_t subgroup_num = p.first;
-        const SubgroupSettings& settings = p.second;
-        auto num_shard_members = settings.members.size();
         // for later: don't move extra message buffers
         free_message_buffers[subgroup_num].swap(old_group.free_message_buffers[subgroup_num]);
-        while(free_message_buffers[subgroup_num].size() < settings.profile.window_size * num_shard_members) {
-            free_message_buffers[subgroup_num].emplace_back(settings.profile.max_msg_size);
-        }
     }
 
     for(auto& msg : old_group.current_receives) {
@@ -187,11 +173,15 @@ MulticastGroup::MulticastGroup(
     }
     old_group.locally_stable_rdmc_messages.clear();
 
-    for(auto& p : old_group.locally_stable_sst_messages) {
-        if(p.second.size() == 0) {
-            continue;
-        }
-    }
+    // for(const auto p : subgroup_settings_by_id) {
+    //     subgroup_id_t id = p.first;
+    //     const SubgroupSettings& settings = p.second;
+    //     auto num_shard_members = settings.members.size();
+    //     while(free_message_buffers[id].size() < settings.profile.window_size * num_shard_members) {
+    //         free_message_buffers[id].emplace_back(settings.profile.max_msg_size);
+    //     }
+    // }
+
     old_group.locally_stable_sst_messages.clear();
 
     // Any messages that were being sent should be re-attempted.
@@ -408,9 +398,12 @@ bool MulticastGroup::create_rdmc_sst_groups() {
             } else {
                 if(!rdmc::create_group(
                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this, subgroup_num, node_id](size_t length) {
+                           [this, subgroup_num, node_id, max_msg_size=subgroup_settings.profile.max_msg_size](size_t length) {
                                std::lock_guard<std::mutex> lock(msg_state_mtx);
-                               assert(!free_message_buffers[subgroup_num].empty());
+                               // assert(!free_message_buffers[subgroup_num].empty());
+			       if(free_message_buffers[subgroup_num].empty()) {
+				   free_message_buffers[subgroup_num].emplace_back(max_msg_size);
+			       }
                                //Create a Message struct to receive the data into.
                                RDMCMessage msg;
                                msg.sender_id = node_id;
@@ -793,7 +786,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
             deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
-            // free the message buffer only after it version_message has been called
+            // free the message buffer only after version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_rdmc_seq_num;
             locally_stable_rdmc_messages[subgroup_num].erase(locally_stable_rdmc_messages[subgroup_num].begin());
@@ -1131,6 +1124,9 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         msg.sender_id = members[member_index];
         msg.index = future_message_indices[subgroup_num];
         msg.size = msg_size;
+        if(free_message_buffers[subgroup_num].empty()) {
+            free_message_buffers[subgroup_num].emplace_back(profile.max_msg_size);
+        }
         msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
         free_message_buffers[subgroup_num].pop_back();
 
@@ -1208,7 +1204,8 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         }
 
         if(free_message_buffers[subgroup_num].empty()) {
-            return nullptr;
+            free_message_buffers[subgroup_num].emplace_back(
+                    subgroup_settings.profile.max_msg_size);
         }
 
         if(pending_sst_sends[subgroup_num] || next_sends[subgroup_num]) {
@@ -1347,6 +1344,11 @@ void MulticastGroup::debug_print() {
         cout << "Printing multicastSST fields" << endl;
         sst_multicast_group_ptrs[subgroup_num]->debug_print();
         cout << endl;
+    }
+
+    std::cout << "Printing memory usage of free_message_buffers" << std::endl;
+    for(const auto& p : free_message_buffers) {
+        std::cout << "Subgroup " << p.first << ", Number of free buffers " << p.second.size() << std::endl;
     }
 }
 
