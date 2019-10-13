@@ -1603,6 +1603,9 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
             uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + 2 * sizeof(uint64_t));
             uint64_t payload_size = profile.max_msg_size - sizeof(header);
             max_payload_size = std::max(payload_size, max_payload_size);
+            view_max_rpc_reply_payload_size = std::max(
+                    profile.max_reply_msg_size - sizeof(header),
+                    view_max_rpc_reply_payload_size);
             slot_size_for_subgroup = std::max(slot_size_for_shard, slot_size_for_subgroup);
             view_max_rpc_window_size = std::max(profile.window_size, view_max_rpc_window_size);
 
@@ -1628,7 +1631,6 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         num_received_offset += max_shard_senders;
         slot_offset += slot_size_for_subgroup;
         max_payload_sizes[subgroup_id] = max_payload_size;
-        view_max_rpc_payload_size = std::max(max_payload_size, view_max_rpc_payload_size);
     }  // for(subgroup_id)
 
     return {num_received_offset, slot_offset};

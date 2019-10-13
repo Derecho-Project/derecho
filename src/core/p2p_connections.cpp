@@ -42,8 +42,6 @@ P2PConnections::P2PConnections(const P2PParams params)
     }
     p2p_buf_size += sizeof(bool);
 
-    std::cout << "P2P buf size is " << p2p_buf_size << std::endl;
-
     for(auto type : p2p_request_types) {
         incoming_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
         outgoing_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));

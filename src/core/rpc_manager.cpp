@@ -26,11 +26,11 @@ void RPCManager::create_connections() {
     connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{
             nid,
             {nid},
-	    getConfUInt32(CONF_DERECHO_MAX_P2P_WINDOW_SIZE),
+	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
             view_manager.view_max_rpc_window_size,
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
-            getConfUInt64(CONF_DERECHO_MAX_RPC_REPLY_PAYLOAD_SIZE) + sizeof(header)});
+            view_manager.view_max_rpc_reply_payload_size + sizeof(header)});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
