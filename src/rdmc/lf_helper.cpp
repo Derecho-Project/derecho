@@ -604,7 +604,6 @@ static void polling_loop() {
                 
                 if (num_completions == 0 || num_completions == -FI_EAGAIN) {
                     pollfd file_descriptor;
-                    std::cout << "go to interrupt mode..." << std::endl;
                     fi_control(&g_ctxt.cq->fid, FI_GETWAIT, &file_descriptor);
                     int rc = 0;
                     while (rc == 0 && !polling_loop_shutdown_flag) {
