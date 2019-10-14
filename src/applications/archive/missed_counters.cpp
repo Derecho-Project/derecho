@@ -57,7 +57,7 @@ void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank,
     // get logic size of the vector:
     uint64_t logic_size = 1;
     for(uint64_t i = 1; i < received_msgs[my_rank].size(); i++) {
-        if(received_msgs[my_rank][i] > received_msgs[my_rank][i - 1]) {
+        if(received_msgs[my_rank][i] > received_msgs[my_rank][i - 1] /* || received_msgs[my_rank][i-1] > num_msgs */) { // <--- second part of condition is due to the problem
             logic_size++;
         } else
             break;
@@ -65,7 +65,7 @@ void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank,
     // get start index (> num_msgs/2)
     uint64_t start_index = 0;
     for(uint64_t i = 0; i < logic_size; i++) {
-        if(received_msgs[my_rank][i] > num_msgs / 2) {
+        if(received_msgs[my_rank][i] > num_msgs / 2 /* && received_msgs[my_rank][i] <= num_msgs */) {  // <--- second part of condition is due to the problem
             start_index = i;
             break;
         }
@@ -87,6 +87,9 @@ void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank,
     count_missed = 0;
     num_intervals_with_missed = 0;
 
+    // //DEBUG
+    // fout << endl << "COUNT MISSED: " << count_missed << endl;
+
     for(uint32_t i = 0; i < num_nodes; i++) {
         if(i == my_rank) {
             continue;
@@ -95,27 +98,49 @@ void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank,
         // get logic size of the vector
         logic_size = 1;
         for(uint64_t j = 1; j < received_msgs[i].size(); j++) {
-            if(received_msgs[i][j] > received_msgs[i][j - 1]) {
+            if(received_msgs[i][j] > received_msgs[i][j - 1]  /* || received_msgs[i][j-1] > num_msgs */) { // <--- second part of condition is due to the problem
                 logic_size++;
             } else
                 break;
         }
 
-        // get start index (> num_msgs/2)
+        // //DEBUG
+        // fout << "LOGIC SIZE: " << logic_size << endl;
+
+        // get start index (> num_msgs/2)      
         start_index = 0;
         for(uint64_t j = 0; j < logic_size; j++) {
-            if(received_msgs[i][j] > num_msgs / 2) {
+            if(received_msgs[i][j] > num_msgs / 2 /* && received_msgs[i][j] <= num_msgs */) {  // <--- second part of condition is due to the problem
+        
+                // //DEBUG
+                // fout << received_msgs[i][j] << " > " << num_msgs / 2 << endl;
+        
                 start_index = j;
                 break;
             }
         }
 
+        // //DEBUG
+        // fout << "START INDEX: " << start_index << endl;
+
         // actual count - here I change the vector, as I'm
         // interested in the SECOND HALF of the messages
-        received_msgs[i][start_index - 1] = num_msgs / 2;
+        received_msgs[i][start_index - 1] = num_msgs / 2;   //<--- if start index is 0? Unlikely but to be addressed later
         for(uint64_t j = start_index; j < logic_size; j++) {
+
+            // //DEBUG
+            // fout << received_msgs[i][j] << endl;
+            // if(received_msgs[my_rank][j - 1] > num_msgs)
+            //     continue;
+            // //ENDDEBUG
+
+
             count_missed += received_msgs[i][j] - received_msgs[i][j - 1] - 1;
             if(received_msgs[i][j] - received_msgs[i][j - 1] - 1 > 0) {
+
+                // //DEBUG
+                // fout << "COUNT: " << count_missed << endl;
+                
                 num_intervals_with_missed++;
             }
         }
@@ -154,7 +179,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     // form a group with all the nodes
-    // all nodes will send and receive
+    // all will send and receive
     vector<uint32_t> members;
     for(auto p : ip_addrs_and_ports) {
         members.push_back(p.first);
@@ -171,6 +196,14 @@ int main(int argc, char* argv[]) {
     sst.heartbeat[my_rank] = 0;
     sst.put();
     sst.sync_with_members();
+    
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+
+    //DEBUG
+    for(uint32_t i=0; i<num_nodes; i++) {
+        std::cout << sst.counter[i] << endl;
+    }
+    std::cout << endl;
 
     // failures detection thread
     volatile bool shutdown = false;
@@ -207,11 +240,18 @@ int main(int argc, char* argv[]) {
         //index of the last received message
         vector<uint64_t> last_received(num_nodes, 0);
         //index of the newly received message
-        uint64_t actual_received;
+        uint64_t actual_received = 0;
         //vector of indexes
         vector<uint64_t> j(num_nodes, 0);
 
-        while(!std::all_of(last_received.begin(), last_received.end(), [&](int n) { return n == (int)num_msgs; })) {
+        for(uint32_t i=0; i<num_nodes; i++) {
+            std::cerr << sst.counter[i] << endl;
+        }
+        std::cerr << endl;
+
+        
+        
+        while( ! std::all_of(last_received.begin(), last_received.end(), [&](uint64_t n) { return n == num_msgs; })) {
             for(uint32_t i = 0; i < num_nodes; i++) {
                 actual_received = (uint64_t&)sst.counter[i];
 
