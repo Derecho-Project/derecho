@@ -25,6 +25,17 @@ enum PORT_TYPE { GMS = 1,
                  RDMC };
 
 /**
+ * Failure correlation set.
+ */
+struct FCS {
+    fcs_id_t fcs_id;
+    std::vector<node_id_t> nodes;
+    bool operator< (const FCS& other) const {
+        return nodes.size() < other.nodes.size();
+    }
+};
+
+/**
  * The subset of a View associated with a single shard, or a single subgroup if
  * the subgroup is non-sharded.
  */
@@ -121,7 +132,9 @@ public:
     /** The rank of the lowest-ranked member that is not assigned to a subgroup
      * in this View. Members with this rank or higher can be assumed to be
      * available to assign to any subgroup and will not appear in any SubView. */
-    int32_t next_unassigned_rank;
+    int32_t next_unassigned_rank; //TODO delete if we only support failure map, out-of-order assignment
+    /** Failure correlation sets for nodes, indexed by SST rank. */
+    std::vector<fcs_id_t> fcs_ids;
     /** RDMC manager object used for sending multicasts */
     std::unique_ptr<MulticastGroup> multicast_group;
     /** Pointer to the SST instance used by the GMS in this View */
@@ -182,7 +195,7 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(View, vid, members, member_ips_and_ports,
                                   failed, num_failed, joined, departed,
-                                  num_members, next_unassigned_rank,
+                                  num_members, next_unassigned_rank, fcs_ids,
                                   subgroup_ids_by_type_id, subgroup_shard_views, my_subgroups);
 
     /**
@@ -196,6 +209,7 @@ public:
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members,
          const int32_t next_unassigned_rank,
+         const std::vector<fcs_id_t>& fcs_ids,
          const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
          const std::vector<std::vector<SubView>>& subgroup_shard_views,
          const std::map<subgroup_id_t, uint32_t>& my_subgroups);
@@ -207,6 +221,7 @@ public:
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t my_rank,
          const int32_t next_unassigned_rank,
+         const std::vector<fcs_id_t>& fcs_ids,
          const std::vector<std::type_index>& subgroup_type_order);
 };
 

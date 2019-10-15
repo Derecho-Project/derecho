@@ -96,6 +96,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<node_id_t>& departed,
            const int32_t num_members,
            const int32_t next_unassigned_rank,
+           const std::vector<fcs_id_t>& fcs_ids,
            const std::map<subgroup_type_id_t, std::vector<subgroup_id_t>>& subgroup_ids_by_type_id,
            const std::vector<std::vector<SubView>>& subgroup_shard_views,
            const std::map<subgroup_id_t, uint32_t>& my_subgroups)
@@ -109,6 +110,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           num_members(num_members),
           my_rank(0),  // This will always get overwritten by the receiver after deserializing
           next_unassigned_rank(next_unassigned_rank),
+          fcs_ids(fcs_ids),
           subgroup_ids_by_type_id(subgroup_ids_by_type_id),
           subgroup_shard_views(subgroup_shard_views),
           my_subgroups(my_subgroups) {
@@ -132,6 +134,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
            const std::vector<node_id_t>& departed,
            const int32_t my_rank,
            const int32_t next_unassigned_rank,
+           const std::vector<fcs_id_t>& fcs_ids,
            const std::vector<std::type_index>& subgroup_type_order)
         : vid(vid),
           members(members),
@@ -143,6 +146,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
           num_members(members.size()),
           my_rank(my_rank),
           next_unassigned_rank(next_unassigned_rank),
+          fcs_ids(fcs_ids),
           subgroup_type_order(subgroup_type_order) {
     for(int rank = 0; rank < num_members; ++rank) {
         node_id_to_rank[members[rank]] = rank;

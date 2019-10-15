@@ -48,12 +48,14 @@ namespace derecho {
  * @param joiner_ids The IDs of new nodes that are joining
  * @param joiner_ips The IP addresses of the new nodes that are joining, in the
  * same order as their corresponding IDs
+ * @param joiner_fcs_ids The FCS IDs of new nodes that are joining
  * @return A new View with the joins and leaves applied
  */
 std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::set<int>& leave_ranks,
                                      const std::vector<node_id_t>& joiner_ids,
-                                     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports);
+                                     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports,
+                                     const std::vector<fcs_id_t>& joiner_fcs_ids);
 
 /**
  * Prints the membership of a subgroup/shard layout to stdout

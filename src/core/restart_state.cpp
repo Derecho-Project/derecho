@@ -490,9 +490,10 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
         throw derecho_exception("Recovery leader wasn't in the next view it computed?!?!");
     }
 
+    //TODO fix fcs_ids
     auto next_view = std::make_unique<View>(curr_view->vid + 1, members, member_ips_and_ports, failed,
                                             joiner_ids, departed, my_new_rank, next_unassigned_rank,
-                                            curr_view->subgroup_type_order);
+                                            curr_view->fcs_ids, curr_view->subgroup_type_order);
     next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
     return next_view;
 }

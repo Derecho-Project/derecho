@@ -35,6 +35,8 @@ using message_id_t = int32_t;
  * parameters.
  */
 using subgroup_type_id_t = uint32_t;
+/** Type alias for FCS IDs stored in View. */
+using fcs_id_t = uint16_t;
 
 /** Alias for the type of std::function that is used for message delivery event callbacks. */
 // using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int, persistent::version_t)>;
