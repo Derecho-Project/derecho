@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package sospdemo;
+
+service FrontEndService {
+    /* 1 - perform inference */
+    rpc Whatsthis(stream PhotoRequest) returns (PhotoReply) {}
+    /* 2 - upload a model */
+    rpc InstallModel(stream InstallModelRequest) returns (ModelReply) {}
+    /* 3 - remove a model */
+    rpc RemoveModel(RemoveModelRequest) returns (ModelReply) {}
+}
+
+/* photo request */
+message PhotoRequest {
+    message PhotoMetadata {
+        uint32 tag = 1;
+        uint32 photo_size = 2;
+    }
+    oneof photo_chunk {
+        PhotoMetadata metadata = 1;
+        bytes file_data = 2;
+    }
+}
+
+message PhotoReply {
+    string desc = 1;
+}
+
+/* model operations */
+message InstallModelRequest {
+    message ModelMetadata {
+        uint32 tag = 1;
+        uint32 synset_size = 2;
+        uint32 symbol_size = 3;
+        uint32 params_size = 4;
+    }
+    oneof model_chunk {
+        ModelMetadata metadata = 1;
+        bytes file_data = 2;
+    }
+}
+
+message RemoveModelRequest {
+    uint32 tag = 1;
+}
+
+message ModelReply {
+    int32 error_code = 1;
+    string error_desc = 2;
+}
