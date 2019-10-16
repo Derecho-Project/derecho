@@ -1342,9 +1342,10 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
 
     curr_view->gmsSST = std::make_shared<DerechoSST>(
-            sst::SSTParams(curr_view->members, curr_view->members[curr_view->my_rank],
-                           [this](const uint32_t node_id) { report_failure(node_id); },
-                           curr_view->failed, false),
+            sst::SSTParams(
+                    curr_view->members, curr_view->members[curr_view->my_rank],
+                    [this](const uint32_t node_id) { report_failure(node_id); },
+                    curr_view->failed, false),
             num_subgroups, num_received_size, slot_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
@@ -1364,9 +1365,10 @@ void ViewManager::transition_multicast_group(
     const auto num_subgroups = next_view->subgroup_shard_views.size();
 
     next_view->gmsSST = std::make_shared<DerechoSST>(
-            sst::SSTParams(next_view->members, next_view->members[next_view->my_rank],
-                           [this](const uint32_t node_id) { report_failure(node_id); },
-                           next_view->failed, false),
+            sst::SSTParams(
+                    next_view->members, next_view->members[next_view->my_rank],
+                    [this](const uint32_t node_id) { report_failure(node_id); },
+                    next_view->failed, false),
             num_subgroups, new_num_received_size, new_slot_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
@@ -2063,6 +2065,12 @@ std::vector<std::vector<node_id_t>> ViewManager::get_subgroup_members(subgroup_t
         subgroup_members.push_back(shard_view.members);
     }
     return subgroup_members;
+}
+
+std::size_t ViewManager::get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
+    shared_lock_t read_lock(view_mutex);
+    subgroup_id_t subgroup_id = curr_view->subgroup_ids_by_type_id.at(subgroup_type).at(subgroup_index);
+    return curr_view->subgroup_shard_views.at(subgroup_id).size();
 }
 
 int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index) {
