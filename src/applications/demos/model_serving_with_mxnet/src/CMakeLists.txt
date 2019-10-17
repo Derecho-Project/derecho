@@ -21,6 +21,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O0 -ggdb")
 #
 # find_package(Protobuf CONFIG REQUIRED)
 find_package(Protobuf MODULE REQUIRED)
+find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin)
 message(STATUS "Using protobuf ${protobuf_VERSION}")
 
 # TODO: cmake system in grpc is incomplete we don't check it for now.
@@ -48,7 +49,7 @@ add_custom_command(
     COMMAND ${Protobuf_PROTOC_EXECUTABLE}
     ARGS "--proto_path=${PROTO_PATH}"
          "--grpc_out=${GENERATED_PROTOBUF_PATH}"
-         "--plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin"
+         "--plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}"
          "${FRONT_END_PROTO}"
     DEPENDS "${FRONT_END_PROTO}"
     )
