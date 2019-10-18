@@ -60,6 +60,9 @@ struct ShardAllocationPolicy {
     /** If even_shards is true, this is the delivery mode that will be used for
      * every shard. (Ignored if even_shards is false). */
     Mode shards_mode;
+    /** If even_shards is true, this is the profile that will be used for every
+     * shard. (Ignore if even_shards is false). */
+    std::string shards_profile;
     /** If even_shards is false, this will contain an entry for each shard
      * indicating the minimum number of members it should have.
      * (Ignored if even_shards is true). */
@@ -71,6 +74,10 @@ struct ShardAllocationPolicy {
      * indicating which delivery mode it should use. (Ignored if even_shards is
      * true). */
     std::vector<Mode> modes_by_shard;
+    /** If even_shards is false, this will contain an entry for each shard
+     * indicating which profile it should use. (Ignored if even_shards is
+     * true). */
+    std::vector<std::string> profiles_by_shard;
 };
 
 /**
@@ -152,11 +159,14 @@ ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard)
  * shard; the ith shard can have up to max_nodes_by_shard[i] members.
  * @param delivery_modes_by_shard A vector specifying the delivery mode (Raw or
  * Ordered) for each shard, in the same order as the other vectors.
+ * @param profiles_by_shard A vector specifying the profile (defined in configuration
+ * file) for each shard, in the same order as the other vectors.
  * @return A ShardAllocationPolicy that specifies these shard sizes and modes.
  */
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
                                            const std::vector<int>& max_nodes_by_shard,
-                                           const std::vector<Mode>& delivery_modes_by_shard);
+                                           const std::vector<Mode>& delivery_modes_by_shard,
+                                           const std::vector<std::string>& profiles_by_shard);
 
 /**
  * Returns a SubgroupAllocationPolicy for a replicated type that only has a

@@ -40,25 +40,26 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
                                            int max_nodes_per_shard) {
     return ShardAllocationPolicy{
-            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, {}, {}, {}};
+            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, "default", {}, {}, {}, {}};
 }
 
 ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, "default", {}, {}, {}, {}};
 }
 
 ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, "default", {}, {}, {}, {}};
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
                                            const std::vector<int>& max_nodes_by_shard,
-                                           const std::vector<Mode>& delivery_modes_by_shard) {
+                                           const std::vector<Mode>& delivery_modes_by_shard,
+                                           const std::vector<std::string>& profiles_by_shard) {
     return ShardAllocationPolicy{static_cast<int>(min_nodes_by_shard.size()), false, -1, -1,
-                                 Mode::ORDERED, min_nodes_by_shard, max_nodes_by_shard,
-                                 delivery_modes_by_shard};
+                                 Mode::ORDERED, "default", min_nodes_by_shard, max_nodes_by_shard,
+                                 delivery_modes_by_shard, profiles_by_shard};
 }
 
 SubgroupAllocationPolicy one_subgroup_policy(const ShardAllocationPolicy& policy) {
@@ -225,10 +226,14 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             Mode delivery_mode = sharding_policy.even_shards
                                          ? sharding_policy.shards_mode
                                          : sharding_policy.modes_by_shard[shard_num];
+            std::string profile = sharding_policy.shards_profile;
+            if (!sharding_policy.even_shards) {
+                profile = sharding_policy.profiles_by_shard[shard_num];
+            }
             //Put the SubView at the end of subgroup_allocation[subgroup_num]
             //Since we go through shards in order, this is at index shard_num
             subgroup_allocation[subgroup_num].emplace_back(
-                    curr_view.make_subview(desired_nodes, delivery_mode));
+                    curr_view.make_subview(desired_nodes, delivery_mode, {}, profile));
         }
     }
     return subgroup_allocation;

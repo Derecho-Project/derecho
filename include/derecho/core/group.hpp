@@ -73,8 +73,10 @@ protected:
 
 public:
     virtual ~_Group() = default;
+
     template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_num = 0);
+
     template <typename SubgroupType>
     auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
 
