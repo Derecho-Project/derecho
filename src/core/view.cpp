@@ -34,8 +34,7 @@ SubView::SubView(Mode mode,
           member_ips_and_ports(member_ips_and_ports),
           my_rank(-1),
           profile(profile) {
-    // if the sender information is not provided, assume that all members are
-    // senders
+    // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
         this->is_sender = is_sender;
     }
@@ -226,6 +225,11 @@ bool View::i_am_new_leader() {
     return true;
 }
 
+/*
+ * I believe this is made obsolete by the new_leader_takeover trigger, which
+ * accomplishes the same goal of ensuring that prior leaders' proposals are
+ * in this node's changes list if this node just became the new leader.
+ */
 void View::merge_changes() {
     int myRank = my_rank;
     // Merge the change lists
@@ -248,7 +252,7 @@ void View::merge_changes() {
             // proposed change
             for(int c = gmsSST->num_committed[myRank];
                 c < gmsSST->num_changes[myRank] && !found; c++) {
-                if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
+                if(gmsSST->changes[myRank][c % gmsSST->changes.size()].change_id == members[n]) {
                     // Already listed
                     found = true;
                 }
@@ -260,7 +264,7 @@ void View::merge_changes() {
 
         if(!found) {
             gmssst::set(gmsSST->changes[myRank][gmsSST->num_changes[myRank] % gmsSST->changes.size()],
-                        members[n]);
+                        make_change_proposal(members[myRank], members[n]));
             gmssst::increment(gmsSST->num_changes[myRank]);
         }
     }
@@ -284,6 +288,10 @@ void View::wedge() {
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put(gmsSST->wedged.get_base() - gmsSST->getBaseAddress(),
                 sizeof(gmsSST->wedged[0]));
+}
+
+bool View::is_wedged() {
+    return gmsSST->wedged[my_rank];
 }
 
 std::string View::debug_string() const {

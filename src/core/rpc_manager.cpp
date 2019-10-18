@@ -199,7 +199,7 @@ void RPCManager::new_view_callback(const View& new_view) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
-        //For each PendingResults in this subgroup, check the departed list of each shard
+        //For each PendingResults in this subgroup, check the departed list of each shard in
         //the subgroup, and call set_exception_for_removed_node for the departed nodes
         for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
             pending_results_iter != fulfilled_pending_results_pair.second.end();) {

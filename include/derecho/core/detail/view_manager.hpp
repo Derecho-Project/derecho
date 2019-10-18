@@ -150,7 +150,8 @@ private:
     const bool disable_partitioning_safety;
 
     //Handles for all the predicates the GMS registered with the current view's SST.
-    pred_handle suspected_changed_handle;
+    pred_handle leader_suspicion_handle;
+    pred_handle follower_suspicion_handle;
     pred_handle start_join_handle;
     pred_handle reject_join_handle;
     pred_handle change_commit_ready_handle;
@@ -234,12 +235,17 @@ private:
 
     /* ---------------------------- View-management triggers ---------------------------- */
     /**
-     * Called when there is a new failure suspicion. Updates the suspected[]
-     * array and, for the leader, proposes new views to exclude failed members.
+     * Called on non-leaders when there is a new failure suspicion. Updates the
+     * suspected[] and failed[] arrays but does not propose any changes.
      */
     void new_suspicion(DerechoSST& gmsSST);
-    /** Runs only on the group leader; proposes new views to include new members. */
-    void leader_start_join(DerechoSST& gmsSST);
+    /**
+     * Runs only on the group leader; called whenever there is either a new
+     * suspicion or a new join attempt, and proposes a batch of changes to
+     * add and remove members. This always wedges the current view.
+     */
+    void propose_changes(DerechoSST& gmsSST);
+
     /** Runs on non-leaders to redirect confused new members to the current leader. */
     void redirect_join_attempt(DerechoSST& gmsSST);
     /**
@@ -300,10 +306,20 @@ private:
 
     /**
      * Assuming this node is the leader, handles a join request from a client.
+     * @param client_socket A TCP socket connected to the joining client
      * @return True if the join succeeded, false if it failed because the
      *         client's ID was already in use.
      */
     bool receive_join(DerechoSST& gmsSST, tcp::socket& client_socket);
+
+    /**
+     * Assuming the suspected[] array in the SST has changed, searches through
+     * it to find new suspicions, marks the suspected nodes as failed in the
+     * current View, and wedges the current View.
+     * @return A list of the SST ranks corresponding to nodes that have just
+     * been marked as failed (i.e. the new suspicions)
+     */
+    std::vector<int> process_suspicions(DerechoSST& gmsSST);
     /**
      * Updates the TCP connections pool to reflect the joined and departed
      * members in a new view. Removes connections to departed members, and
@@ -395,6 +411,7 @@ private:
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
+    static bool changes_includes_end_of_view(const DerechoSST& gmsSST, const int rank_of_leader);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
     static bool previous_leaders_suspected(const DerechoSST& gmsSST, const View& curr_view);
 
