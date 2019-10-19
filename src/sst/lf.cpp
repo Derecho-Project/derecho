@@ -646,7 +646,7 @@ namespace sst{
       if (eentry.op_context == NULL) {
         dbg_default_error("\top_context:NULL");
       } else {
-#ifndef NDEBUG
+#ifndef NOLOG
         struct lf_sender_ctxt *sctxt = (struct lf_sender_ctxt *)eentry.op_context;
 #endif
         dbg_default_error("\top_context:ce_idx={},remote_id={}",sctxt->ce_idx,sctxt->remote_id);
@@ -667,7 +667,7 @@ namespace sst{
       dbg_default_error("\ttag={}",eentry.tag);
       dbg_default_error("\tolen={}",eentry.olen);
       dbg_default_error("\terr={}",eentry.err);
-#ifndef NDEBUG
+#ifndef NOLOG
       char errbuf[1024];
 #endif
       dbg_default_error("\tprov_errno={}:{}",eentry.prov_errno,
