@@ -294,6 +294,8 @@ private:
 
     /** Messages that are currently being received. */
     std::map<std::pair<subgroup_id_t, node_id_t>, RDMCMessage> current_receives;
+    /** Receiver lambdas for shards that have only one member. */
+    std::map<subgroup_id_t, std::function<void(char*, size_t)>> singleton_shard_receive_handlers;
 
     /** Messages that have finished sending/receiving but aren't yet globally stable.
      * Organized by [subgroup number] -> [sequence number] -> [message] */
@@ -308,8 +310,8 @@ private:
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> non_persistent_sst_messages;
 
     std::vector<message_id_t> next_message_to_deliver;
-    std::mutex msg_state_mtx;
-    std::condition_variable sender_cv;
+    std::recursive_mutex msg_state_mtx;
+    std::condition_variable_any sender_cv;
 
     /** The time, in milliseconds, that a sender can wait to send a message before it is considered failed. */
     unsigned int sender_timeout;
