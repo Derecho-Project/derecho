@@ -22,7 +22,7 @@
 
 #include <derecho/utils/logger.hpp>
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG) || !defined(NDEBUG)
   #include <derecho/utils/time.h>
 #endif  //_PERFORMANCE_DEBUG
 

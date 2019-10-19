@@ -22,6 +22,7 @@
 #include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/tcp/tcp.hpp>
 #include <derecho/sst/detail/lf.hpp>
+#include <derecho/sst/detail/sst_impl.hpp>
 
 using std::cout;
 using std::endl;

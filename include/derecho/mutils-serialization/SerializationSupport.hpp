@@ -55,7 +55,7 @@ struct ByteRepresentable {
    */
     virtual std::size_t bytes_size() const = 0;
 
-#ifndef NDEBUG
+#ifdef MUTILS_DEBUG
     /**
    * If this object requires context in order to correctly
    * deserialize, this method will associate that context
@@ -315,7 +315,7 @@ std::enable_if_t<std::is_pod<BR>::value> post_object(const F& f, const BR& br,
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
                  const ByteRepresentable& br);
 
-#ifndef NDEBUG
+#ifdef MUTILS_DEBUG
 /**
  * Calls b.ensure_registered(dm) when b is a ByteRepresentable;
  * returns true when b is POD.
@@ -433,7 +433,7 @@ struct marshalled : public ByteRepresentable {
     }
     std::size_t bytes_size() const { return size; }
 
-#ifndef NDEBUG
+#ifdef MUTILS_DEBUG
 
     void ensure_registered(DeserializationManager&) {}
 
@@ -619,7 +619,7 @@ std::size_t to_bytes(const std::map<K, V>& m, char* buffer) {
 }
 // end to_bytes section
 
-#ifndef NDEBUG
+#ifdef MUTILS_DEBUG
 // ensure_registered definitions -- these could go anywhere since they don't
 // depend on any other functions
 void ensure_registered(const std::vector<bool>& v, DeserializationManager& dm);
@@ -828,7 +828,7 @@ std::unique_ptr<type_check<is_tuple, T>> from_bytes(DeserializationManager* ctx,
 template <typename T>
 std::enable_if_t<is_vector<T>::value, std::unique_ptr<T>>
 from_bytes(DeserializationManager* ctx, char const* v) {
-#ifndef NDEBUG
+#ifdef MUTILS_DEBUG
     const static std::string typenonce = type_name<T>();
     const auto typenonce_size = bytes_size(typenonce);
     auto remote_string = *from_bytes<std::string>(ctx, v);

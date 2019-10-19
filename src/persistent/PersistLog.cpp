@@ -4,13 +4,13 @@
 
 namespace persistent {
 
-PersistLog::PersistLog(const std::string &name) noexcept(true) : m_sName(name) {
+PersistLog::PersistLog(const std::string& name) noexcept(true) : m_sName(name) {
 }
 
 PersistLog::~PersistLog() noexcept(true) {
 }
 
-#ifndef NDEBUG
+#ifdef DERECHO_DEBUG
 void PersistLog::dump_hidx() {
     dbg_default_trace("number of entry in hidx:{}.log_len={}.", hidx.size(), getLength());
     for(auto itr = hidx.cbegin(); itr != hidx.cend(); itr++) {
@@ -18,4 +18,4 @@ void PersistLog::dump_hidx() {
     }
 }
 #endif  //NDEBUG
-}
+}  // namespace persistent
