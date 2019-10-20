@@ -7,6 +7,7 @@
 #include <optional>
 #include <thread>
 #include <vector>
+#include <derecho/tcp/tcp.hpp>
 
 #ifdef USE_VERBS_API
 #include <derecho/sst/detail/verbs.hpp>
@@ -18,6 +19,7 @@ namespace sst {
 struct P2PParams {
     uint32_t my_node_id;
     std::vector<uint32_t> members;
+    std::vector<ip_addr_t> ip_addr;
     uint32_t p2p_window_size;
     uint32_t rpc_window_size;
     uint64_t max_p2p_reply_size;
@@ -41,6 +43,8 @@ class P2PConnections {
     const uint32_t my_node_id;
     uint32_t my_index;
     std::map<uint32_t, uint32_t> node_id_to_rank;
+    std::map<uint32_t, ip_addr_t> node_id_to_ip_addr;
+
     // one element per member for P2P
     std::vector<std::unique_ptr<volatile char[]>> incoming_p2p_buffers;
     std::vector<std::unique_ptr<volatile char[]>> outgoing_p2p_buffers;
@@ -50,6 +54,7 @@ class P2PConnections {
     std::vector<REQUEST_TYPE> prev_mode;
     std::atomic<bool> thread_shutdown{false};
     std::thread timeout_thread;
+    std::thread tcp_connections_thread;
     uint64_t getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num);
     uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num);
     uint32_t window_sizes[num_request_types];
@@ -60,12 +65,15 @@ class P2PConnections {
     uint32_t last_rank;
     uint32_t num_rdma_writes = 0;
     void check_failures_loop();
+    void init_p2p_buffers(uint32_t rank);
+    uint16_t tcp_port = 25095;
+    void check_tcp_connections();
 
 public:
     P2PConnections(const P2PParams params);
-    P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members);
+    P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members, const std::vector<ip_addr_t> ip_addr_new_members);
     ~P2PConnections();
-    void shutdown_failures_thread();
+    void shutdown_threads();
     uint32_t get_node_rank(uint32_t node_id);
     uint64_t get_max_p2p_reply_size();
     std::optional<std::pair<uint32_t, char*>> probe_all();

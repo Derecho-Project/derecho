@@ -139,6 +139,9 @@ int main(int argc, char* argv[]) {
                            &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
+
+    while(true){}
+
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 

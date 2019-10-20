@@ -26,6 +26,7 @@ void RPCManager::create_connections() {
     connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{
             nid,
             {nid},
+            {(ip_addr_t)getConfString(CONF_DERECHO_LOCAL_IP)},
 	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
             view_manager.view_max_rpc_window_size,
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
@@ -200,7 +201,13 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 void RPCManager::new_view_callback(const View& new_view) {
     {
         std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-        connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+
+        std::vector<ip_addr_t> ip_addr(new_view.members.size());
+        for(uint32_t i = 0; i < new_view.members.size(); i++) {
+            ip_addr[i] = std::get<0>(new_view.member_ips_and_ports[i]);
+        }
+
+        connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members, ip_addr);
     }
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
