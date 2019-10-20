@@ -51,7 +51,7 @@ P2PConnections::P2PConnections(const P2PParams params)
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
     tcp_connections_thread = std::thread(&P2PConnections::check_tcp_connections, this);
     tcp_connections_thread.detach();
-    std::cout << "TCP Conn started" << std::endl;
+    // std::cout << "TCP Conn started" << std::endl;
 }
 
 P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vector<uint32_t> new_members, const std::vector<ip_addr_t> ip_addr_new_members)
@@ -109,7 +109,7 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
     timeout_thread = std::thread(&P2PConnections::check_failures_loop, this);
     tcp_connections_thread = std::thread(&P2PConnections::check_tcp_connections, this);
     tcp_connections_thread.detach();
-    std::cout << "TCP Conn thread started" << std::endl;
+    // std::cout << "TCP Conn thread started" << std::endl;
 }
 
 P2PConnections::~P2PConnections() {
@@ -124,7 +124,7 @@ void P2PConnections::shutdown_threads() {
     if(timeout_thread.joinable()) {
         timeout_thread.join();
     }
-    std::cout << "Timeout thread terminated" << std::endl;
+    // std::cout << "Timeout thread terminated" << std::endl;
 
     tcp::socket s(node_id_to_ip_addr[my_node_id], tcp_port);
     node_id_t id;
@@ -132,7 +132,7 @@ void P2PConnections::shutdown_threads() {
     if(tcp_connections_thread.joinable()) {
         tcp_connections_thread.join();
     }
-    std::cout << "TCP Conn thread terminated" << std::endl;
+//     std::cout << "TCP Conn thread terminated" << std::endl;
 }
 
 uint32_t P2PConnections::get_node_rank(uint32_t node_id) {
@@ -193,7 +193,7 @@ char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
     if(type != REQUEST_TYPE::P2P_REQUEST
        || static_cast<int32_t>(incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY][rank])
                   > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_sizes[P2P_REQUEST])) {
-        std::cout << "In P2PConnections::get_sendbuffer_ptr with rank = " << rank << ", type = " << type << std::endl;
+        // std::cout << "In P2PConnections::get_sendbuffer_ptr with rank = " << rank << ", type = " << type << std::endl;
 
         // lazy allocation of the buffer
         if(outgoing_p2p_buffers[rank] == nullptr) {
@@ -237,8 +237,7 @@ void P2PConnections::init_p2p_buffers(uint32_t rank, bool initiator) {
         // contact the other part
         if(initiator) {
             std::string server_ip = node_id_to_ip_addr[node_id_to_rank[rank]];
-            std::cout << "Contacting node " << node_id_to_rank[rank] << " (rank " << rank << ") (IP: " << server_ip << ")" << std::endl;
-
+            // std::cout << "Contacting node " << node_id_to_rank[rank] << " (rank " << rank << ") (IP: " << server_ip << ")" << std::endl;
             tcp::socket s(server_ip, tcp_port);
             uint32_t remote_id;
             s.exchange<uint32_t>(my_node_id, remote_id);
@@ -253,7 +252,7 @@ void P2PConnections::init_p2p_buffers(uint32_t rank, bool initiator) {
                                                     const_cast<char*>(outgoing_p2p_buffers[rank].get()),
                                                     p2p_buf_size, p2p_buf_size, rank > my_index);
 #endif
-        std::cout << "Established connection with remote id " << members[rank] << std::endl;
+        // std::cout << "Established connection with remote id " << members[rank] << std::endl;
     }
 }
 
@@ -332,7 +331,7 @@ void P2PConnections::check_tcp_connections() {
         node_id_t client_id;
         s.exchange(my_node_id, client_id);
         uint32_t remote_rank = node_id_to_rank.at(client_id);
-        std::cout << "Received a connection request from node id " << client_id << std::endl;
+        // std::cout << "Received a connection request from node id " << client_id << std::endl;
         assert(!outgoing_p2p_buffers[remote_rank]);
         if(client_id == my_node_id) {
             break;
