@@ -65,7 +65,7 @@ class P2PConnections {
     uint32_t last_rank;
     uint32_t num_rdma_writes = 0;
     void check_failures_loop();
-    void init_p2p_buffers(uint32_t rank);
+    void init_p2p_buffers(uint32_t rank, bool initiator);
     uint16_t tcp_port = 25095;
     void check_tcp_connections();
 

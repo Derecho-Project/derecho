@@ -117,7 +117,7 @@ P2PConnections::~P2PConnections() {
 }
 
 void P2PConnections::shutdown_threads() {
-    if (thread_shutdown) {
+    if(thread_shutdown) {
         return;
     }
     thread_shutdown = true;
@@ -125,7 +125,7 @@ void P2PConnections::shutdown_threads() {
         timeout_thread.join();
     }
     std::cout << "Timeout thread terminated" << std::endl;
-    
+
     tcp::socket s(node_id_to_ip_addr[my_node_id], tcp_port);
     node_id_t id;
     s.exchange(my_node_id, id);
@@ -193,10 +193,11 @@ char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
     if(type != REQUEST_TYPE::P2P_REQUEST
        || static_cast<int32_t>(incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY][rank])
                   > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_sizes[P2P_REQUEST])) {
-        
+        std::cout << "In P2PConnections::get_sendbuffer_ptr with rank = " << rank << ", type = " << type << std::endl;
+
         // lazy allocation of the buffer
         if(outgoing_p2p_buffers[rank] == nullptr) {
-            init_p2p_buffers(rank);
+            init_p2p_buffers(rank, true);
         }
         assert(outgoing_p2p_buffers[rank]);
 
@@ -228,142 +229,143 @@ void P2PConnections::send(uint32_t rank) {
     outgoing_seq_nums_map[type][rank]++;
 }
 
-void P2PConnections::init_p2p_buffers(uint32_t rank) {
+void P2PConnections::init_p2p_buffers(uint32_t rank, bool initiator) {
     incoming_p2p_buffers[rank] = std::make_unique<volatile char[]>(p2p_buf_size);
     outgoing_p2p_buffers[rank] = std::make_unique<volatile char[]>(p2p_buf_size);
 
     if(rank != my_index) {
-        
         // contact the other part
-        std::string server_ip = node_id_to_ip_addr[node_id_to_rank[rank]];
-        std::cout << "Contacting node " << node_id_to_rank[rank] << " (rank " << rank << ") (IP: " << server_ip << ")" << std::endl;
-        tcp::socket s(server_ip, tcp_port);
-        uint32_t remote_id;
-        s.exchange<uint32_t>(my_node_id, remote_id);
+        if(initiator) {
+            std::string server_ip = node_id_to_ip_addr[node_id_to_rank[rank]];
+            std::cout << "Contacting node " << node_id_to_rank[rank] << " (rank " << rank << ") (IP: " << server_ip << ")" << std::endl;
 
+            tcp::socket s(server_ip, tcp_port);
+            uint32_t remote_id;
+            s.exchange<uint32_t>(my_node_id, remote_id);
+        }
         // init resources
 #ifdef USE_VERBS_API
-        res_vec[rank] = std::make_unique<resources>(rank, const_cast<char*>(incoming_p2p_buffers[rank].get()),
+        res_vec[rank] = std::make_unique<resources>(members[rank], const_cast<char*>(incoming_p2p_buffers[rank].get()),
                                                     const_cast<char*>(outgoing_p2p_buffers[rank].get()),
                                                     p2p_buf_size, p2p_buf_size);
 #else
-        res_vec[rank] = std::make_unique<resources>(rank, const_cast<char*>(incoming_p2p_buffers[rank].get()),
+        res_vec[rank] = std::make_unique<resources>(members[rank], const_cast<char*>(incoming_p2p_buffers[rank].get()),
                                                     const_cast<char*>(outgoing_p2p_buffers[rank].get()),
                                                     p2p_buf_size, p2p_buf_size, rank > my_index);
-    }
 #endif
+        std::cout << "Established connection with remote id " << members[rank] << std::endl;
     }
+}
 
-    void P2PConnections::check_failures_loop() {
-        pthread_setname_np(pthread_self(), "p2p_timeout");
+void P2PConnections::check_failures_loop() {
+    pthread_setname_np(pthread_self(), "p2p_timeout");
 
-        uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
-        const auto tid = std::this_thread::get_id();
-        // get id first
-        uint32_t ce_idx = util::polling_data.get_index(tid);
-        while(!thread_shutdown) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
-            if(num_rdma_writes < 1000) {
-                continue;
-            }
-            num_rdma_writes = 0;
+    uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
+    const auto tid = std::this_thread::get_id();
+    // get id first
+    uint32_t ce_idx = util::polling_data.get_index(tid);
+    while(!thread_shutdown) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
+        if(num_rdma_writes < 1000) {
+            continue;
+        }
+        num_rdma_writes = 0;
 
-            util::polling_data.set_waiting(tid);
+        util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-            struct verbs_sender_ctxt sctxt[num_members];
+        struct verbs_sender_ctxt sctxt[num_members];
 #else
         struct lf_sender_ctxt sctxt[num_members];
 #endif
 
-            for(uint rank = 0; rank < num_members; ++rank) {
-                if(rank == my_index) {
-                    continue;
-                }
-
-                sctxt[rank].remote_id = rank;
-                sctxt[rank].ce_idx = ce_idx;
-
-                res_vec[rank]->post_remote_write_with_completion(&sctxt[rank], p2p_buf_size - sizeof(bool), sizeof(bool));
+        for(uint rank = 0; rank < num_members; ++rank) {
+            if(rank == my_index) {
+                continue;
             }
 
-            /** Completion Queue poll timeout in millisec */
-            const int MAX_POLL_CQ_TIMEOUT = 2000;
-            unsigned long start_time_msec;
-            unsigned long cur_time_msec;
-            struct timeval cur_time;
+            sctxt[rank].remote_id = rank;
+            sctxt[rank].ce_idx = ce_idx;
 
-            // wait for completion for a while before giving up of doing it ..
-            gettimeofday(&cur_time, NULL);
-            start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+            res_vec[rank]->post_remote_write_with_completion(&sctxt[rank], p2p_buf_size - sizeof(bool), sizeof(bool));
+        }
 
-            uint32_t num_completions = 0;
-            while(num_completions < num_members - 1) {
-                std::optional<std::pair<int32_t, int32_t>> ce;
-                while(true) {
-                    // check if polling result is available
-                    ce = util::polling_data.get_completion_entry(tid);
-                    if(ce) {
-                        break;
-                    }
-                    gettimeofday(&cur_time, NULL);
-                    cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
-                    if((cur_time_msec - start_time_msec) >= MAX_POLL_CQ_TIMEOUT) {
-                        break;
-                    }
-                }
-                if(!ce) {
+        /** Completion Queue poll timeout in millisec */
+        const int MAX_POLL_CQ_TIMEOUT = 2000;
+        unsigned long start_time_msec;
+        unsigned long cur_time_msec;
+        struct timeval cur_time;
+
+        // wait for completion for a while before giving up of doing it ..
+        gettimeofday(&cur_time, NULL);
+        start_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+
+        uint32_t num_completions = 0;
+        while(num_completions < num_members - 1) {
+            std::optional<std::pair<int32_t, int32_t>> ce;
+            while(true) {
+                // check if polling result is available
+                ce = util::polling_data.get_completion_entry(tid);
+                if(ce) {
                     break;
                 }
-                num_completions++;
+                gettimeofday(&cur_time, NULL);
+                cur_time_msec = (cur_time.tv_sec * 1000) + (cur_time.tv_usec / 1000);
+                if((cur_time_msec - start_time_msec) >= MAX_POLL_CQ_TIMEOUT) {
+                    break;
+                }
             }
-            util::polling_data.reset_waiting(tid);
-        }
-    }
-
-    void P2PConnections::check_tcp_connections() {
-
-        tcp::connection_listener cl(tcp_port);
-        tcp::socket s;
-
-        while(true) {
-            s = cl.accept();
-            node_id_t client_id;
-            s.exchange(my_node_id, client_id);
-            uint32_t remote_rank = node_id_to_rank.at(client_id);
-            assert(!outgoing_p2p_buffers[remote_rank]);
-            if(client_id == my_node_id) {
+            if(!ce) {
                 break;
             }
-            else {
-                init_p2p_buffers(remote_rank);
-            }
+            num_completions++;
+        }
+        util::polling_data.reset_waiting(tid);
+    }
+}
+
+void P2PConnections::check_tcp_connections() {
+    tcp::connection_listener cl(tcp_port);
+    tcp::socket s;
+
+    while(true) {
+        s = cl.accept();
+        node_id_t client_id;
+        s.exchange(my_node_id, client_id);
+        uint32_t remote_rank = node_id_to_rank.at(client_id);
+        std::cout << "Received a connection request from node id " << client_id << std::endl;
+        assert(!outgoing_p2p_buffers[remote_rank]);
+        if(client_id == my_node_id) {
+            break;
+        } else {
+            init_p2p_buffers(remote_rank, false);
         }
     }
+}
 
-    void P2PConnections::debug_print() {
-        std::cout << "Members: " << std::endl;
-        for(auto m : members) {
-            std::cout << m << " ";
-        }
-        std::cout << std::endl;
+void P2PConnections::debug_print() {
+    std::cout << "Members: " << std::endl;
+    for(auto m : members) {
+        std::cout << m << " ";
+    }
+    std::cout << std::endl;
 
-        for(const auto& type : p2p_request_types) {
-            std::cout << "P2PConnections: Request type " << type << std::endl;
-            for(uint32_t node = 0; node < num_members; ++node) {
-                std::cout << "Node " << node << std::endl;
-                std::cout << "incoming seq_nums:";
-                for(uint32_t i = 0; i < window_sizes[type]; ++i) {
-                    uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
-                    std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
-                }
-                std::cout << std::endl
-                          << "outgoing seq_nums:";
-                for(uint32_t i = 0; i < window_sizes[type]; ++i) {
-                    uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
-                    std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
-                }
-                std::cout << std::endl;
+    for(const auto& type : p2p_request_types) {
+        std::cout << "P2PConnections: Request type " << type << std::endl;
+        for(uint32_t node = 0; node < num_members; ++node) {
+            std::cout << "Node " << node << std::endl;
+            std::cout << "incoming seq_nums:";
+            for(uint32_t i = 0; i < window_sizes[type]; ++i) {
+                uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
+                std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
             }
+            std::cout << std::endl
+                      << "outgoing seq_nums:";
+            for(uint32_t i = 0; i < window_sizes[type]; ++i) {
+                uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
+                std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
+            }
+            std::cout << std::endl;
         }
     }
+}
 }  // namespace sst
