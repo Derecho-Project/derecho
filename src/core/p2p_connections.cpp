@@ -39,11 +39,11 @@ P2PConnections::P2PConnections(const P2PParams params)
         outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
         if(i != my_index) {
 #ifdef USE_VERBS_API
-            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+            res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      p2p_buf_size, p2p_buf_size);
 #else
-            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+            res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      p2p_buf_size, p2p_buf_size, i > my_index);
 #endif
