@@ -24,3 +24,6 @@ target_link_libraries(overlapping_replicated_objects derecho)
 # simple_data_distribution_service (dds)
 add_executable(dds_demo simple_data_distribution_service.cpp dds_demo.cpp)
 target_link_libraries(dds_demo dpods)
+
+add_executable(fcs_failure fcs_failure.cpp)
+target_link_libraries(fcs_failure derecho)
