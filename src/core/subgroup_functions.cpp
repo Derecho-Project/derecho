@@ -37,11 +37,20 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
     return subgroup_layouts;
 }
 
+ShardAllocationPolicy flexible_even_shards(const std::string& profile) {
+    const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+    int num_shards = getConfUInt32(conf_profile_prefix + num_shards_profile_field);
+    int min_nodes = getConfUInt32(conf_profile_prefix + min_nodes_profile_field);
+    int max_nodes = getConfUInt32(conf_profile_prefix + max_nodes_profile_field);
+    return flexible_even_shards(num_shards, min_nodes, max_nodes, profile);
+}
+
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
                                            int max_nodes_per_shard, const std::string& profile) {
     return ShardAllocationPolicy{
             num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
+
 
 ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
                                         const std::string& profile) {
@@ -53,6 +62,19 @@ ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard,
                                             const std::string& profile) {
     return ShardAllocationPolicy{
             num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, profile, {}, {}, {}, {}};
+}
+
+ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_modes_by_shard,
+                                          const std::vector<std::string>& profiles_by_shard) {
+    std::vector<int> min_nodes_by_shard;
+    std::vector<int> max_nodes_by_shard;
+    for(const std::string& profile : profiles_by_shard) {
+        const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+        min_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + min_nodes_profile_field));
+        max_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + max_nodes_profile_field));
+    }
+    return custom_shards_policy(min_nodes_by_shard, max_nodes_by_shard,
+                                delivery_modes_by_shard, profiles_by_shard);
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
