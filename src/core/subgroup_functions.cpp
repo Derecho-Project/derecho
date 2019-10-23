@@ -280,7 +280,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             }
             next_assignment[subgroup_num].emplace_back(curr_view.make_subview(next_shard_members,
                                                                               previous_shard_assignment.mode,
-                                                                              next_is_sender));
+                                                                              next_is_sender,
+                                                                              previous_shard_assignment.profile));
         }
     }
     return next_assignment;
