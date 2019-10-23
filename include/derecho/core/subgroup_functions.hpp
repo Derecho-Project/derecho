@@ -129,7 +129,8 @@ struct CrossProductPolicy {
  * @return A ShardAllocationPolicy value with these parameters
  */
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
-                                           int max_nodes_per_shard);
+                                           int max_nodes_per_shard,
+                                           const std::string& profile = "default");
 
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards shards with
@@ -139,7 +140,8 @@ ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_sha
  * @param nodes_per_shard The number of nodes per shard to request.
  * @return A ShardAllocationPolicy value with these parameters.
  */
-ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
+                                        const std::string& profile = "default");
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards shards with
  * the same fixed number of nodes in each shard, and every shard running in
@@ -148,7 +150,8 @@ ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard);
  * @param nodes_per_shard The number of nodes per shard to request.
  * @return A ShardAllocationPolicy value with these parameters.
  */
-ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard,
+                                            const std::string& profile = "default");
 /**
  * Returns a ShardAllocationPolicy for a subgroup that has a different number of
  * members in each shard, and possibly has each shard in a different delivery mode.

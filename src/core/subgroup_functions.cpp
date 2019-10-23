@@ -38,19 +38,21 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 }
 
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
-                                           int max_nodes_per_shard) {
+                                           int max_nodes_per_shard, const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, "default", {}, {}, {}, {}};
+            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
 
-ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard) {
+ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
+                                        const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, "default", {}, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
 
-ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard) {
+ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard,
+                                            const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, "default", {}, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, profile, {}, {}, {}, {}};
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
