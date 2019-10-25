@@ -5,14 +5,17 @@ OUTPUT_FILENAME = "register_rpc_functions.h"
 
 ### Boilerplate Code Templates ###
 pragma_once = '#pragma once\n'
-includes = ('#include <tuple>\n')
+includes = ('#include <derecho/core/detail/rpc_utils.hpp>\n#include <tuple>\n')
 register_functions_begin = '#define REGISTER_RPC_FUNCTIONS{count}(classname, {args_list}) \\\n'
 register_functions_declaration = '    static auto register_functions() {\\\n'
 register_functions_one = '        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a));\\\n'
 register_functions_first_line = '        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\\\n'
 register_functions_mid_line = '                               derecho::rpc::tag<CT_STRING({method})::hash()>(& classname :: {method}),\\\n'
 register_functions_last_line = '                               derecho::rpc::tag<CT_STRING({method})::hash()>(& classname :: {method}));\\\n'
-register_functions_end = '    } \n'
+register_functions_enum_begin = '    } \\\n enum class rpc : unsigned long long {'
+register_functions_enum_one = ' a = CT_STRING(a)::hash()'
+register_functions_enum_fmt = '        {method} = CT_STRING({method})::hash()'
+register_functions_enum_end = '};\n'
 
 ### Comment block that goes at the top of the file ###
 header_comments = """
@@ -77,5 +80,10 @@ with open(OUTPUT_FILENAME, 'w') as output:
             output.write(register_functions_last_line.format(method=method_vars[-1]))
         else:
             output.write(register_functions_one)
-        output.write(register_functions_end)
+        output.write(register_functions_enum_begin)
+        output.write(register_functions_enum_one)
+        for method_num in range(1,curr_num_methods):
+            output.write(',\\\n')
+            output.write(register_functions_enum_fmt.format(method=method_vars[method_num]))
+        output.write(register_functions_enum_end)
     output.write(file_footer)
