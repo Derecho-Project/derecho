@@ -200,6 +200,11 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     persistence_manager.start();
 }
 
+//nope there's two now
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories)
+        : Group({}, subgroup_info, nullptr, {}, factories...) {}
+
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
     // shutdown the persistence manager

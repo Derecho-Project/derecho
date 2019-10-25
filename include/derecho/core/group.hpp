@@ -245,8 +245,7 @@ private:
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
-     * the leader. If they specify a filename, the group will
-     * run in persistent mode and log all messages to disk.
+     * the leader. 
      *
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
@@ -266,6 +265,18 @@ public:
           IDeserializationContext* deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
+
+    /**
+     * Constructor that starts a new managed Derecho group with this node as
+     * the leader. 
+     *
+     * @param subgroup_info The set of functions that define how membership in
+     * each subgroup and shard will be determined in this group.
+     * @param factories A variable number of Factory functions, one for each
+     * template parameter of Group, providing a way to construct instances of
+     * each Replicated Object
+     */
+    Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories);
 
     ~Group();
 
