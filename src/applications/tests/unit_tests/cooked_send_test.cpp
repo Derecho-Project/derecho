@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     };
 
-    auto cooked_subgroup_factory = [](persistent::PersistentRegistry*) { return std::make_unique<CookedMessages>(); };
+    auto cooked_subgroup_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<CookedMessages>(); };
 
     SubgroupInfo subgroup_info(subgroup_membership_function);
     volatile bool done = false;

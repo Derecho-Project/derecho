@@ -705,8 +705,8 @@ public:
                                                           this,
                                                           std::vector<derecho::view_upcall_t>{},  // view up-calls
                                                           // factories ...
-                                                          [this](persistent::PersistentRegistry*) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
-                                                          [this](persistent::PersistentRegistry* pr) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }) {
+                                                          [this](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<VolatileUnloggedObjectStore>(object_watcher); },
+                                                          [this](persistent::PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<PersistentLoggedObjectStore>(pr, *this); }) {
         // Unimplemented yet:
         if(mode == PERSISTENT_UNLOGGED || mode == VOLATILE_LOGGED) {
             // log it

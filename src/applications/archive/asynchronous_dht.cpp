@@ -97,7 +97,7 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto HashTableGenerator = [&](PersistentRegistry*) { return std::make_unique<HashTable<std::string>>(); };
+    auto HashTableGenerator = [&](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<HashTable<std::string>>(); };
     derecho::Group<HashTable<std::string>> group({}, subgroup_function, nullptr,
                                                  std::vector<derecho::view_upcall_t>{announce_groups_provisioned},
                                                  HashTableGenerator);

@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
     };
 
     const int INIT_STATE = 100;
-    auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*) { return std::make_unique<State>(INIT_STATE); };
+    auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<State>(INIT_STATE); };
     SubgroupInfo subgroup_info{state_membership_function};
 
     std::mutex main_mutex;

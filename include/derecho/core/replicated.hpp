@@ -56,7 +56,7 @@ struct RawObject {
  * An implementation of Factory<T> for RawObject, which is trivial because
  * RawObjects have no state.
  */
-inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegistry*) {
+inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegistry*, subgroup_id_t) {
     return std::make_unique<RawObject>();
 }
 

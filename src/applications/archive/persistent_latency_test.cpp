@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [](PersistentRegistry *pr, derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group {
                 callback_set, subgroup_info, nullptr,

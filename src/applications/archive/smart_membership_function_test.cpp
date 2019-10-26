@@ -72,8 +72,8 @@ using std::endl;
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
-    auto load_balancer_factory = [](persistent::PersistentRegistry*) { return std::make_unique<LoadBalancer>(); };
-    auto cache_factory = [](persistent::PersistentRegistry*) { return std::make_unique<Cache>(); };
+    auto load_balancer_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<LoadBalancer>(); };
+    auto cache_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<Cache>(); };
 
     derecho::SubgroupAllocationPolicy load_balancer_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(1, 3));
     derecho::SubgroupAllocationPolicy cache_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(3, 3));

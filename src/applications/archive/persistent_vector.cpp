@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         return subgroup_allocation;
     }};
 
-    auto pfoo_factory = [](PersistentRegistry* pr) { return std::make_unique<PFoo>(pr); };
+    auto pfoo_factory = [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<PFoo>(pr); };
 
     derecho::Group<PFoo> group(callback_set, subgroup_info, nullptr,
                                std::vector<derecho::view_upcall_t>{},

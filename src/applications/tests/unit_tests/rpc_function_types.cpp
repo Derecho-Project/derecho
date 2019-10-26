@@ -68,8 +68,8 @@ int main(int argc, char** argv) {
         {std::type_index(typeid(ConstTest)), one_subgroup_policy(fixed_even_shards(1, 3))},
         {std::type_index(typeid(ReferenceTest)), one_subgroup_policy(fixed_even_shards(1, 3))}
     }));
-    auto const_test_factory = [](persistent::PersistentRegistry*) { return std::make_unique<ConstTest>(); };
-    auto reference_test_factory = [](persistent::PersistentRegistry*) { return std::make_unique<ReferenceTest>(); };
+    auto const_test_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<ConstTest>(); };
+    auto reference_test_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<ReferenceTest>(); };
 
     derecho::Group<ConstTest, ReferenceTest> group(derecho::CallbackSet{}, subgroup_function, nullptr,
                                                    std::vector<derecho::view_upcall_t>{},
