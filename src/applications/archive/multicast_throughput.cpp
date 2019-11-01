@@ -1,13 +1,13 @@
 #include <chrono>
+#include <derecho/sst/multicast_sst.hpp>
 #include <iostream>
 #include <memory>
 #include <thread>
 #include <vector>
 
-#include "derecho/experiments/aggregate_bandwidth.h"
-#include "derecho/experiments/log_results.h"
-#include "sst/multicast.h"
-#include "sst/multicast_sst.h"
+#include "aggregate_bandwidth.hpp"
+#include "initialize.h"
+#include "log_results.hpp"
 
 using namespace std;
 using namespace sst;
@@ -25,38 +25,36 @@ struct exp_results {
     }
 };
 
+#ifndef NDEBUG
+#define DEBUG_MSG(str)                 \
+    do {                               \
+        std::cout << str << std::endl; \
+    } while(false)
+#else
+#define DEBUG_MSG(str) \
+    do {               \
+    } while(false)
+#endif
+
 int main(int argc, char* argv[]) {
     constexpr uint max_msg_size = 1, window_size = 1000;
     const unsigned int num_messages = 1000000;
     if(argc < 2) {
         cout << "Insufficient number of command line arguments" << endl;
-        cout << "Enter num_senders" << endl;
+        cout << "Usage: " << argv[0] << " <num_nodes> <num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender)>" << endl;
         cout << "Thank you" << endl;
         exit(1);
     }
-    int num_senders_selector = atoi(argv[1]);
-
-    // input number of nodes and the local node rank
-    std::cout << "Enter my_rank and num_nodes" << std::endl;
-    uint32_t node_rank, num_nodes;
-    cin >> node_rank >> num_nodes;
-
-    std::cout << "Input the IP addresses" << std::endl;
-    uint16_t port = 32567;
-    // input the ip addresses
-    map<uint32_t, std::pair<std::string, uint16_t>> ip_addrs_and_ports;
-    for(uint i = 0; i < num_nodes; ++i) {
-      std::string ip;
-      cin >> ip;
-      ip_addrs_and_ports[i] = {ip, port};
-    }
-    std::cout << "Using the default port value of " << port << std::endl;
+    uint32_t num_nodes = atoi(argv[1]);
+    int num_senders_selector = atoi(argv[2]);
+    const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
     verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, node_id);
 #endif
 
     std::vector<uint32_t> members(num_nodes);
@@ -75,9 +73,11 @@ int main(int argc, char* argv[]) {
     }
 
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
-            sst::SSTParams(members, node_rank),
+            sst::SSTParams(members, node_id),
             window_size,
             num_senders, max_msg_size);
+
+    uint32_t node_rank = sst->get_local_index();
 
     auto check_failures_loop = [&sst]() {
         pthread_setname_np(pthread_self(), "check_failures");
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    auto receiver_pred = [window_size, num_nodes, node_rank](const multicast_sst& sst) {
+    auto receiver_pred = [&](const multicast_sst& sst) {
         return true;
     };
     vector<int64_t> last_max_num_received(num_senders, -1);
@@ -156,6 +156,9 @@ int main(int argc, char* argv[]) {
         }
     }
     sst::multicast_group<multicast_sst> g(sst, indices, window_size, max_msg_size, is_sender);
+
+    DEBUG_MSG("Group created");
+    
     // now
     sst->predicates.insert(receiver_pred, receiver_trig,
                            sst::PredicateType::RECURRENT);

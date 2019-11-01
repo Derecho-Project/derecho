@@ -156,7 +156,10 @@ target_link_libraries(custom_subgroup_profiles_test derecho)
 add_executable(arrival_times arrival_times.cpp initialize.cpp)
 target_link_libraries(arrival_times derecho)
 
-
 #missed counters
 add_executable(missed_counters missed_counters.cpp initialize.cpp)
 target_link_libraries(missed_counters derecho)
+
+#multicast throughput
+add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
+target_link_libraries(multicast_throughput derecho)
