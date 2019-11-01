@@ -163,3 +163,7 @@ target_link_libraries(missed_counters derecho)
 #multicast throughput
 add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
 target_link_libraries(multicast_throughput derecho)
+
+#rdma issues
+add_executable(rdma_issue rdma_issue.cpp initialize.cpp)
+target_link_libraries(rdma_issue derecho)

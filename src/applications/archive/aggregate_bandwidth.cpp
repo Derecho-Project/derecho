@@ -9,7 +9,7 @@ double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,
                            double bw) {
     ResultSST sst(sst::SSTParams(members, node_rank));
     sst.bw[node_rank] = bw;
-    sst.put();
+    sst.put_with_completion();
     sst.sync_with_members();
     double total_bw = 0.0;
     unsigned int num_nodes = members.size();
