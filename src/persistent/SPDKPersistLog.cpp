@@ -39,7 +39,7 @@ void SPDKPersistLog::tail_unlock() noexcept(false) {
 
 SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : PersistLog(name) {
     //Initialize locks
-    std::printf("Started initializing locks %s.\n", &name);
+    std::printf("Started initializing locks %s.\n", name);
     std::cout.flush();
     if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
@@ -47,11 +47,11 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
     if(pthread_rwlock_init(&this->tail_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
-    std::printf("Started grabbing head/tail locks %s.\n", &name);
+    std::printf("Started grabbing head/tail locks %s.\n", name);
     std::cout.flush();    
     head_wlock();
     tail_wlock();
-    std::printf("Started loading log %s.\n", &name);
+    std::printf("Started loading log %s.\n", name);
     std::cout.flush();
     PersistThreads::get();
     std::printf("Finished getting PersistThreads.\n");
@@ -82,33 +82,41 @@ void SPDKPersistLog::append(const void* pdata,
         head_unlock();
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
     }
-    if(((METADATA.tail + 1) >> SPDK_SEGMENT_BIT) == (METADATA.head >> SPDK_SEGMENT_BIT)) {
+    if((((sizeof(LogEntry) * METADATA.tail) >> SPDK_SEGMENT_BIT) - ((sizeof(LogEntry) * METADATA.head) >> SPDK_SEGMENT_BIT)) > SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH) {
         //throw an exception
         tail_unlock();
         head_unlock();
         throw derecho::derecho_exception("Ran out of log space.");
     }
     LogEntry* next_log_entry = PersistThreads::get()->read_entry(METADATA.id, METADATA.tail);
-    next_log_entry->fields.dlen = size;
+    next_log_entry->fields.dlen = size; 
     next_log_entry->fields.ver = ver;
     next_log_entry->fields.hlc_l = mhlc.m_rtc_us;
     next_log_entry->fields.hlc_l = mhlc.m_logic;
-    LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, METADATA.tail - 1);
+    std::printf("Added next_log_entry. \n");
+    std::cout.flush();
+    LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, (METADATA.tail - 1));
     if(METADATA.tail - METADATA.head == 0) {
         next_log_entry->fields.ofst = 0;
     } else {
         next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
     }
-
+    
+    std::printf("append with tail at %d\n", METADATA.tail);
+    std::cout.flush();
     METADATA.ver = ver;
     METADATA.tail++;
+    std::printf("Updated ver and tail to tail %d. \n", METADATA.tail);
+    std::cout.flush();
 
     PersistThreads::get()->append(METADATA.id,
-                                  (char*)pdata, last_entry->fields.ofst,
-                                  last_entry->fields.dlen, &next_log_entry,
-                                  METADATA.tail - 1,
+                                  (char*)pdata, 
+                                  next_log_entry->fields.dlen, &next_log_entry,
+                                  (METADATA.tail - 1) % SPDK_LOG_ADDRESS_SPACE,
                                   *m_currLogMetadata.persist_metadata_info);
 
+    std::printf("Called append. \n");
+    std::cout.flush();
     tail_unlock();
     head_unlock();
 }
@@ -122,7 +130,7 @@ void SPDKPersistLog::advanceVersion(const version_t& ver) {
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
     }
     METADATA.ver = ver;
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, false);
+    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();
     head_unlock();
 }
@@ -148,7 +156,7 @@ int64_t SPDKPersistLog::getEarliestIndex() noexcept(false) {
 
 int64_t SPDKPersistLog::getLatestIndex() noexcept(false) {
     tail_rlock();
-    int64_t idx = METADATA.tail;
+    int64_t idx = METADATA.tail - 1;
     tail_unlock();
 
     return idx;
@@ -165,12 +173,12 @@ int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
         LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
         int64_t curr_ver = mid_entry->fields.ver;
         if(curr_ver == ver) {
-            res = (begin + end) / 2;
+            res = mid;
             break;
         } else if(curr_ver > ver) {
-            begin = (begin + end) / 2 + 1;
+            end = mid - 1;
         } else if(curr_ver < ver) {
-            end = (begin + end) / 2 - 1;
+            begin = mid + 1;
         }
     }
     tail_unlock();
@@ -197,7 +205,7 @@ int64_t SPDKPersistLog::getHLCIndex(const HLC& hlc) noexcept(false) {
         } else if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r > hlc.m_logic))) {
             begin = mid + 1;
         } else {
-            end = mid;
+            end = mid - 1;
         }
     }
     tail_unlock();
@@ -227,15 +235,18 @@ version_t SPDKPersistLog::getLatestVersion() noexcept(false) {
 int64_t SPDKPersistLog::upper_bound(const version_t& ver) {
     int64_t begin = METADATA.head;
     int64_t end = METADATA.tail - 1;
-    while(begin <= end) {
+    while(begin < end) {
         int mid = (begin + end) / 2;
         LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
         int64_t curr_ver = mid_entry->fields.ver;
         if(ver >= curr_ver) {
             begin = mid + 1;
         } else {
-            end = mid;
+            end = mid - 1;
         }
+    }
+    if ((PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.ver == ver) {
+	begin = begin - 1;
     }
     return begin;
 }
@@ -250,10 +261,13 @@ int64_t SPDKPersistLog::lower_bound(const version_t& ver) {
         if(ver <= curr_ver) {
             end = mid - 1;
         } else {
-            begin = mid;
+            begin = mid + 1;
         }
     }
-    return begin;
+    if ((PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.ver == ver) {
+	end = end + 1;
+    }
+    return end;
 }
 
 int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
@@ -262,11 +276,14 @@ int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
     while(begin <= end) {
         int mid = (begin + end) / 2;
         LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-        if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r > hlc.m_logic))) {
+	if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_l > hlc.m_logic))) {
             begin = mid + 1;
         } else {
-            end = mid;
+            end = mid - 1;
         }
+    }
+    if ((PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.hlc_r == hlc.m_rtc_us && (PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.hlc_l == hlc.m_logic) {
+	begin = begin - 1;
     }
     return begin;
 }
@@ -277,14 +294,16 @@ int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
     while(begin <= end) {
         int mid = (begin + end) / 2;
         LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-        int64_t curr_ver = mid_entry->fields.ver;
-        if(!(mid_entry->fields.hlc_r < hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_r < hlc.m_logic))) {
+        if(!(mid_entry->fields.hlc_r < hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_l < hlc.m_logic))) {
             end = mid - 1;
         } else {
-            begin = mid;
+            begin = mid + 1;
         }
     }
-    return begin;
+    if ((PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_r == hlc.m_rtc_us && (PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_l == hlc.m_logic) {
+	end = end + 1;	
+    }
+    return end;
 }
 
 void SPDKPersistLog::trimByIndex(const int64_t& idx) {
@@ -297,13 +316,15 @@ void SPDKPersistLog::trimByIndex(const int64_t& idx) {
     }
 
     METADATA.head = idx + 1;
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, true);
+    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();
     head_unlock();
 }
 
 void SPDKPersistLog::trim(const version_t& ver) {
     int64_t idx = lower_bound(ver);
+    std::printf("Trimming by %d\n", idx);
+    std::cout.flush();
     trimByIndex(idx);
 }
 
@@ -313,11 +334,11 @@ void SPDKPersistLog::trim(const HLC& hlc) {
 }
 
 const version_t SPDKPersistLog::getLastPersisted() {
-    return PersistThreads::get()->id_to_last_version[METADATA.id];
+    return PersistThreads::get()->last_written_ver[METADATA.id];
 }
 
 const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
-    return PersistThreads::get()->id_to_last_version[METADATA.id];
+    return PersistThreads::get()->last_written_ver[METADATA.id];
 }
 
 const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
@@ -327,6 +348,11 @@ const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
     void* buf = PersistThreads::get()->read_data(METADATA.id, index);
     tail_unlock();
     head_unlock();
+    return buf;
+}
+
+void* SPDKPersistLog::getLBA(const uint64_t& lba_index) {
+    void* buf = PersistThreads::get()->read_lba(lba_index);
     return buf;
 }
 
@@ -340,12 +366,25 @@ const void* SPDKPersistLog::getEntry(const HLC& hlc) noexcept(false) {
     return buf;
 }
 
+LogEntry SPDKPersistLog::getLogEntry(const int64_t& idx) {
+    head_rlock();
+    tail_rlock();
+    LogEntry* log_entry = PersistThreads::get()->read_entry(METADATA.id, idx);
+    tail_unlock();
+    head_unlock();
+    return (*log_entry);
+}
+
 const void* SPDKPersistLog::getEntryByIndex(const int64_t& eno) noexcept(false) {
     head_rlock();
     tail_rlock();
     void* buf = PersistThreads::get()->read_data(METADATA.id, eno);
+    std::printf("..1\n");
+    std::cout.flush();
     tail_unlock();
     head_unlock();
+    std::printf("..2\n");
+    std::cout.flush();
     return buf;
 }
 
@@ -454,7 +493,7 @@ void SPDKPersistLog::applyLogTail(char const* v) {
             METADATA.tail++;
 
             PersistThreads::get()->append(METADATA.id,
-                                          (char*)data, last_entry->fields.ofst,
+                                          (char*)data,
                                           last_entry->fields.dlen, &next_log_entry,
                                           METADATA.tail - 1,
                                           *m_currLogMetadata.persist_metadata_info);
@@ -470,7 +509,18 @@ void SPDKPersistLog::truncate(const version_t& ver) {
     tail_wlock();
     int64_t index = upper_bound(ver);
     METADATA.tail = index;
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info, false);
+    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
+    tail_unlock();
+    head_unlock();
+}
+
+void SPDKPersistLog::zeroout() {
+    head_wlock();
+    tail_wlock();
+    METADATA.head = 0;
+    METADATA.tail = 0;
+    METADATA.inuse = false;
+    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();
     head_unlock();
 }

@@ -150,6 +150,8 @@ public:
     // Get a version by entry number return both length and buffer
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
 
+    virtual void* getLBA(const uint64_t& lba_index);
+
     // Get the latest version equal or earlier than ver.
     virtual const void* getEntry(const version_t& ver) noexcept(false);
 
@@ -158,6 +160,7 @@ public:
     // Get a version specified by hlc
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
 
+    LogEntry getLogEntry(const int64_t& idx);
     /**
      * Persist the log till specified version
      * @return - the version till which has been persisted.
@@ -221,6 +224,8 @@ public:
      * @param ver - all log entry strict after ver will be truncated.
      */
     virtual void truncate(const version_t& ver) noexcept(false);
+
+    virtual void zeroout();
 };
 
 }  // namespace spdk
