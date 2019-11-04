@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     // create the SST
     mySST sst(members, node_id);
     uint32_t my_rank = sst.get_local_index();
-    
+
     // initialize my own counter
     sst.counter[my_rank] = 0;
 
