@@ -162,7 +162,8 @@ static void default_context() {
     /** Set the completion format to contain additional context */ 
     g_ctxt.cq_attr.format = FI_CQ_FORMAT_DATA;
     /** Use a file descriptor as the wait object (see polling_loop)*/
-    g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
+    // g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
+    g_ctxt.cq_attr.wait_obj = FI_WAIT_FD;
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = MAX_LF_ADDR_SIZE;
 
@@ -594,19 +595,21 @@ static void polling_loop() {
             do {
                 if(polling_loop_shutdown_flag) return;
                 num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get(), max_cq_entries);
-            } while(num_completions == 0 && get_time() < poll_end);
+            } while((num_completions == 0 || num_completions == -FI_EAGAIN) && get_time() < poll_end);
 
-            if (num_completions == 0) {
+            if (num_completions == 0 || num_completions == -FI_EAGAIN) {
                 /** Need ibv_req_notify_cq equivalent here? */
             
                 num_completions = fi_cq_read(g_ctxt.cq, cq_entries.get(), max_cq_entries);
                 
-                if (num_completions == 0) {
+                if (num_completions == 0 || num_completions == -FI_EAGAIN) {
                     pollfd file_descriptor;
                     fi_control(&g_ctxt.cq->fid, FI_GETWAIT, &file_descriptor);
                     int rc = 0;
                     while (rc == 0 && !polling_loop_shutdown_flag) {
                         if(polling_loop_shutdown_flag) return;
+                        file_descriptor.events = POLLIN|POLLERR|POLLHUP;
+                        file_descriptor.revents = 0;
                         rc = poll(&file_descriptor, 1, 50);
                     }
 

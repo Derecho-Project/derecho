@@ -453,13 +453,13 @@ template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver) noexcept(false) {
     HLC mhlc;  // generate a default timestamp for it.
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
 #endif
     this->set(v, ver, mhlc);
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
     clock_gettime(CLOCK_REALTIME, &t2);
     cnt_in_set++;
     ns_in_set += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
@@ -476,7 +476,7 @@ void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept
 template <typename ObjectType,
           StorageType storageType>
 const int64_t Persistent<ObjectType, storageType>::persist() noexcept(false) {
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
     const int64_t ret = this->m_pLog->persist();
@@ -547,7 +547,7 @@ void Persistent<ObjectType, storageType>::applyLogTail(mutils::DeserializationMa
     this->m_pLog->applyLogTail(v);
 }
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::print_performance_stat() {

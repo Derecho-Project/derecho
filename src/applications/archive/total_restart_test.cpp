@@ -101,7 +101,7 @@ int main(int argc, char** argv) {
 	return 1;
     }
 
-    if((uint32_t) my_rank <= num_shards * members_per_shard) {
+    if(static_cast<unsigned>(my_rank) <= (num_shards * members_per_shard)) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {

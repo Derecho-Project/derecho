@@ -37,28 +37,53 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
     return subgroup_layouts;
 }
 
+ShardAllocationPolicy flexible_even_shards(const std::string& profile) {
+    const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+    int num_shards = getConfUInt32(conf_profile_prefix + num_shards_profile_field);
+    int min_nodes = getConfUInt32(conf_profile_prefix + min_nodes_profile_field);
+    int max_nodes = getConfUInt32(conf_profile_prefix + max_nodes_profile_field);
+    return flexible_even_shards(num_shards, min_nodes, max_nodes, profile);
+}
+
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
-                                           int max_nodes_per_shard) {
+                                           int max_nodes_per_shard, const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, {}, {}, {}};
+            num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
 
-ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard) {
+
+ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
+                                        const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
 
-ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard) {
+ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard,
+                                            const std::string& profile) {
     return ShardAllocationPolicy{
-            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, {}, {}, {}};
+            num_shards, true, nodes_per_shard, nodes_per_shard, Mode::UNORDERED, profile, {}, {}, {}, {}};
+}
+
+ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_modes_by_shard,
+                                          const std::vector<std::string>& profiles_by_shard) {
+    std::vector<int> min_nodes_by_shard;
+    std::vector<int> max_nodes_by_shard;
+    for(const std::string& profile : profiles_by_shard) {
+        const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+        min_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + min_nodes_profile_field));
+        max_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + max_nodes_profile_field));
+    }
+    return custom_shards_policy(min_nodes_by_shard, max_nodes_by_shard,
+                                delivery_modes_by_shard, profiles_by_shard);
 }
 
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
                                            const std::vector<int>& max_nodes_by_shard,
-                                           const std::vector<Mode>& delivery_modes_by_shard) {
+                                           const std::vector<Mode>& delivery_modes_by_shard,
+                                           const std::vector<std::string>& profiles_by_shard) {
     return ShardAllocationPolicy{static_cast<int>(min_nodes_by_shard.size()), false, -1, -1,
-                                 Mode::ORDERED, min_nodes_by_shard, max_nodes_by_shard,
-                                 delivery_modes_by_shard};
+                                 Mode::ORDERED, "default", min_nodes_by_shard, max_nodes_by_shard,
+                                 delivery_modes_by_shard, profiles_by_shard};
 }
 
 SubgroupAllocationPolicy one_subgroup_policy(const ShardAllocationPolicy& policy) {
@@ -225,10 +250,14 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             Mode delivery_mode = sharding_policy.even_shards
                                          ? sharding_policy.shards_mode
                                          : sharding_policy.modes_by_shard[shard_num];
+            std::string profile = sharding_policy.shards_profile;
+            if (!sharding_policy.even_shards) {
+                profile = sharding_policy.profiles_by_shard[shard_num];
+            }
             //Put the SubView at the end of subgroup_allocation[subgroup_num]
             //Since we go through shards in order, this is at index shard_num
             subgroup_allocation[subgroup_num].emplace_back(
-                    curr_view.make_subview(desired_nodes, delivery_mode));
+                    curr_view.make_subview(desired_nodes, delivery_mode, {}, profile));
         }
     }
     return subgroup_allocation;
@@ -275,7 +304,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             }
             next_assignment[subgroup_num].emplace_back(curr_view.make_subview(next_shard_members,
                                                                               previous_shard_assignment.mode,
-                                                                              next_is_sender));
+                                                                              next_is_sender,
+                                                                              previous_shard_assignment.profile));
         }
     }
     return next_assignment;

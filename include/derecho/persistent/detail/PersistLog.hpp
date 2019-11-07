@@ -60,9 +60,9 @@ public:
     const std::string m_sName;
     // HLCIndex
     std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
-#ifndef NDEBUG
+#ifdef DERECHO_DEBUG
     void dump_hidx();
-#endif  //NDEBUG
+#endif  //DERECHO_DEBUG
     // Constructor:
     // Remark: the constructor will check the persistent storage
     // to make sure if this named log(by "name" in the template

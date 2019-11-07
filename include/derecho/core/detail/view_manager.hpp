@@ -390,7 +390,6 @@ private:
                                       const uint32_t num_received_offset,
                                       uint num_shard_senders);
 
-
     /* -- Static helper methods that implement chunks of view-management functionality -- */
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
@@ -716,6 +715,7 @@ public:
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+    std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     /**
      * If this node is a member of the given subgroup (identified by its type
      * and index), returns the number of the shard this node belongs to.
@@ -776,9 +776,8 @@ public:
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
     // max of max_payload_sizes
-    uint64_t view_max_payload_size = 0;
-    unsigned int view_max_window_size = 0;
-    unsigned int view_max_sender_timeout = 0;
+    uint64_t view_max_rpc_reply_payload_size = 0;
+    uint32_t view_max_rpc_window_size = 0;
 };
 
 } /* namespace derecho */
