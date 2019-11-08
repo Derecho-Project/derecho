@@ -99,7 +99,7 @@ void print_results(uint64_t num_msgs, uint32_t num_senders, uint32_t window_size
 int main(int argc, char* argv[]) {
     if(argc != 8) {
         std::cout << "Usage: " << argv[0] << " <num. nodes> <num. senders> <num. msgs> <msg size> <sender_sleep_time_ms> <window size> <num_thread_per_recv>" << endl;
-        std::cout << "Sleep time: 0 no wait, >0 ms, <0 for loop" << endl;
+        std::cout << "Sleep time: 0 no wait, > 0 ms, < 0 for loop" << endl;
         return -1;
     }
 
