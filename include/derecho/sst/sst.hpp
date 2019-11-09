@@ -29,10 +29,17 @@ using sst::resources;
 
 namespace sst {
 
-const int alignTo = sizeof(long);
+// strongly assumes that no counter in the SST row 
+// is greater than sizeof(long long), typically 8 bytes
+const int alignTo = sizeof(long long);
 
 constexpr size_t padded_len(const size_t& len) {
-    return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
+    if (len % alignTo == 0) {
+        return len;
+    }
+    else {
+        return (len / alignTo + 1) * alignTo;
+    }
 }
 
 /** Internal helper class, never exposed to the client. */
@@ -378,6 +385,19 @@ public:
 
     void put_with_completion(size_t offset, size_t size) {
         put_with_completion(all_indices, offset, size);
+    }
+
+    /** Writes a specific local field to all remote nodes */
+    template <typename T>
+    void put_with_completion(SSTField<T>& field) {
+        put_with_completion(all_indices, field.get_base() - getBaseAddress(), sizeof(field[0]));
+    }
+
+    /** Writes a specific local vector field to all remote nodes. */
+    template <typename T>
+    void put_with_completion(SSTFieldVector<T>& vec_field) {
+        put_with_completion(all_indices, vec_field.get_base() - getBaseAddress(),
+            sizeof(vec_field[0][0]) * vec_field.size());
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
