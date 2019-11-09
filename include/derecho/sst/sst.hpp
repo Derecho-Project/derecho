@@ -29,10 +29,17 @@ using sst::resources;
 
 namespace sst {
 
-const int alignTo = sizeof(long);
+// strongly assumes that no counter in the SST row 
+// is greater than sizeof(long long), typically 8 bytes
+const int alignTo = sizeof(long long);
 
 constexpr size_t padded_len(const size_t& len) {
-    return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
+    if (len % alignTo == 0) {
+        return len;
+    }
+    else {
+        return (len / alignTo + 1) * alignTo;
+    }
 }
 
 /** Internal helper class, never exposed to the client. */
@@ -166,6 +173,11 @@ private:
         rows = new char[rowLen * num_members];
 
         std::cout << "Address: " <<  (void*)rows << std::endl;
+	std::cout << "Row length: " << rowLen << std::endl;
+
+	for (uint i = 0; i < num_members; ++i) {
+	    std::cout << "Address of row " << i << " = " << (void*)(const_cast<char*>(rows) + i * rowLen) << std::endl;
+	}
 
         // snapshot = new char[rowLen * num_members];
         volatile char* base = rows;

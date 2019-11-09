@@ -1,3 +1,4 @@
+#include <bitset>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -42,6 +43,17 @@ public:
     do {               \
     } while(false)
 #endif
+
+void print_binary(uint64_t num) {
+    std::bitset<16> bin(num);
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+          std::cout << bin[15 - i * 4 - j];
+      }
+      std::cout << " ";
+    }
+    std::cout << std::endl;
+}
 
 void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank, vector<vector<uint64_t>>& received_msgs) {
     // what do we really want?
@@ -247,14 +259,20 @@ int main(int argc, char* argv[]) {
     for(uint32_t i = 0; i < num_nodes; i++) {
         for(uint j = 1; j < num_msgs; j++) {
             if(received_msgs[i][j] < received_msgs[i][j-1] && received_msgs[i][j]!= 0) {
-                std::cout << "[" << node_id << "] ERROR!! Received " << received_msgs[i][j] << " after " << received_msgs[i][j-1] << " from node_ranked " << i << endl;
-                std::cout << received_msgs[i][j-1] << " " << received_msgs[i][j] << " " << received_msgs[i][j+1] << std::endl;
+                std::cout << "ERROR!! from node_ranked " << i << ", id " << members[i] << endl;
+		print_binary(received_msgs[i][j-1]);
+		print_binary(received_msgs[i][j]);
+		print_binary(received_msgs[i][j+1]);
             }   
         }
     }
 
-    // print results
-    print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
+    while(true) {
+
+    }
+
+    // // print results
+    // print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
 
     return 0;
 }
