@@ -190,8 +190,7 @@ int main(int argc, char* argv[]) {
         pthread_setname_np(pthread_self(), "sender");
         DEBUG_MSG("Sender started");
 
-        //Sender starts from 1 - to avoid overflow problems in reception
-        for(uint64_t i = 1; i <= num_msgs; i++) {
+        for(uint64_t i = 0; i < num_msgs; i++) {
             sst.counter[my_rank]++;
             sst.put(sst.counter);
         }
@@ -215,7 +214,7 @@ int main(int argc, char* argv[]) {
 
         while(!std::all_of(last_received.begin(), last_received.end(), [&](uint64_t n) { return n == num_msgs; })) {
             for(uint32_t i = 0; i < num_nodes; i++) {
-                actual_received = (uint64_t&)sst.counter[i];
+                actual_received = sst.counter[i];
                 if(actual_received == last_received[i]) {
                     continue;
                 }
@@ -249,6 +248,7 @@ int main(int argc, char* argv[]) {
         for(uint j = 1; j < num_msgs; j++) {
             if(received_msgs[i][j] < received_msgs[i][j-1] && received_msgs[i][j]!= 0) {
                 std::cout << "[" << node_id << "] ERROR!! Received " << received_msgs[i][j] << " after " << received_msgs[i][j-1] << " from node_ranked " << i << endl;
+                std::cout << received_msgs[i][j-1] << " " << received_msgs[i][j] << " " << received_msgs[i][j+1] << std::endl;
             }   
         }
     }
