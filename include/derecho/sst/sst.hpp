@@ -171,14 +171,6 @@ private:
         rowLen = 0;
         compute_rowLen(rowLen, fields...);
         rows = new char[rowLen * num_members];
-
-        std::cout << "Address: " <<  (void*)rows << std::endl;
-	std::cout << "Row length: " << rowLen << std::endl;
-
-	for (uint i = 0; i < num_members; ++i) {
-	    std::cout << "Address of row " << i << " = " << (void*)(const_cast<char*>(rows) + i * rowLen) << std::endl;
-	}
-
         // snapshot = new char[rowLen * num_members];
         volatile char* base = rows;
         set_bases_and_rowLens(base, rowLen, fields...);

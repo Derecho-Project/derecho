@@ -44,17 +44,6 @@ public:
     } while(false)
 #endif
 
-void print_binary(uint64_t num) {
-    std::bitset<16> bin(num);
-    for (int i = 0; i < 4; ++i) {
-      for (int j = 0; j < 4; ++j) {
-          std::cout << bin[15 - i * 4 - j];
-      }
-      std::cout << " ";
-    }
-    std::cout << std::endl;
-}
-
 void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank, vector<vector<uint64_t>>& received_msgs) {
     // what do we really want?
     // [sum_missed_messages_local][num_intervals_with_missed][sum_missed_mesages_remote][num_intervals_with_missed]
@@ -127,7 +116,6 @@ void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank,
         // actual count - here I change the vector, as I'm
         // interested in the SECOND HALF of the messages
         received_msgs[i][start_index - 1] = num_msgs / 2;  //<--- if start index is 0? Unlikely but would be a problem
-                                                           // ACTUALLY IT IS A PROBLEM in case of non monotonicity...
         for(uint64_t j = start_index; j < logic_size; j++) {
             count_missed += received_msgs[i][j] - received_msgs[i][j - 1] - 1;
             if(received_msgs[i][j] - received_msgs[i][j - 1] - 1 > 0) {
@@ -253,26 +241,8 @@ int main(int argc, char* argv[]) {
     failures_thread.join();
     sst.sync_with_members();
 
-    // This part shows the problem of non-monotonicity,
-    // that sometimes appears together with a bad error
-    // on program exit...
-    for(uint32_t i = 0; i < num_nodes; i++) {
-        for(uint j = 1; j < num_msgs; j++) {
-            if(received_msgs[i][j] < received_msgs[i][j-1] && received_msgs[i][j]!= 0) {
-                std::cout << "ERROR!! from node_ranked " << i << ", id " << members[i] << endl;
-		print_binary(received_msgs[i][j-1]);
-		print_binary(received_msgs[i][j]);
-		print_binary(received_msgs[i][j+1]);
-            }   
-        }
-    }
-
-    while(true) {
-
-    }
-
-    // // print results
-    // print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
+    // print results
+    print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
 
     return 0;
 }
