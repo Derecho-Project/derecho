@@ -65,6 +65,7 @@ add_subdirectory(src/rdmc)
 add_subdirectory(src/sst)
 add_subdirectory(src/tcp)
 add_subdirectory(src/persistent)
+add_subdirectory(src/mincostflow)
 
 # make libderecho.so
 add_library(derecho SHARED
@@ -75,7 +76,8 @@ add_library(derecho SHARED
     $<TARGET_OBJECTS:rdmc>
     $<TARGET_OBJECTS:sst>
     $<TARGET_OBJECTS:tcp>
-    $<TARGET_OBJECTS:persistent>)
+    $<TARGET_OBJECTS:persistent>
+    $<TARGET_OBJECTS:mincostflow>)
 target_link_libraries(derecho
     rdmacm ibverbs rt pthread atomic
     stdc++fs ${libfabric_LIBRARIES} 
@@ -88,7 +90,7 @@ set_target_properties(derecho PROPERTIES
 )
 add_dependencies(derecho
     mutils-serialization conf utils core
-    rdmc sst tcp persistent)
+    rdmc sst tcp persistent mincostflow)
 
 # make install
 install(TARGETS derecho EXPORT derecho
@@ -102,6 +104,7 @@ install(DIRECTORY
         include/derecho/sst
         include/derecho/tcp
         include/derecho/utils
+        include/derecho/mincostflow
         DESTINATION include/derecho)
 
 include(CMakePackageConfigHelpers)
@@ -137,3 +140,4 @@ add_subdirectory(src/objectstore)
 
 # applications
 add_subdirectory(src/applications)
+

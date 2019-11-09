@@ -25,3 +25,6 @@ target_link_libraries(delivery_order_test derecho)
 
 add_executable(subgroup_function_tester subgroup_function_tester.cpp)
 target_link_libraries(subgroup_function_tester derecho)
+
+add_executable(mincostflow_tester mincostflow_tester.cpp)
+target_link_libraries(mincostflow_tester derecho)

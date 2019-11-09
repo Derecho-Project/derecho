@@ -8,20 +8,13 @@ int main(int argc, char* argv[]) {
     pthread_setname_np(pthread_self(), "fcs_failure");
     srand(getpid());
 
-    if(argc < 2) {
-        std::cout << "Usage: " << argv[0] << " <num_nodes> [configuration options...]" << std::endl;
-        return -1;
-    }
-    // the number of nodes for this test
-    const uint32_t num_nodes = std::stoi(argv[1]);
-
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
 
     // Use the standard layout manager provided by derecho
     // allocate a single subgroup with a single shard consisting of all the nodes
-    SubgroupAllocationPolicy all_nodes_one_subgroup_policy =
-            one_subgroup_policy(fixed_even_shards(1, num_nodes, num_nodes));
+    SubgroupAllocationPolicy all_nodes_one_subgroup_policy = one_subgroup_policy(
+            custom_shards_policy({3, 2}, {3, 2}, {3, 2}, {Mode::UNORDERED, Mode::UNORDERED}));
     SubgroupInfo one_raw_group(DefaultSubgroupAllocator({{std::type_index(typeid(RawObject)),
                                                           all_nodes_one_subgroup_policy}}));
 
@@ -31,6 +24,17 @@ int main(int argc, char* argv[]) {
         if (view.num_members != num_members) {
             std::cout << "Members: " << view.members << std::endl;
             num_members = view.num_members;
+
+            for (const auto& subgroup : view.subgroup_shard_views) {
+                for (const auto& shard : subgroup) {
+                    std::cout << "Shard members: ";
+                    std::cout << shard.members.size() << std::endl;
+                    for (auto m : shard.members) {
+                        std::cout << m << " ";
+                    }
+                    std::cout << std::endl;
+                }
+            }
         }
     };
 

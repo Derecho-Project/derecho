@@ -12,7 +12,9 @@
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "subgroup_info.hpp"
+#include "derecho/mincostflow/mincostflow.hpp"
 
+using namespace mincostflow;
 namespace derecho {
 
 /**
@@ -255,7 +257,6 @@ protected:
      * Helper function for allocate_fcs_subgroup_type() and update_fcs_subgroup_type(),
      * @param subgroup_type The subgroup type to allocate members for
      * @param prev_assignment The previous node memberships. Can be empty
-     * @param prev_fcs_ids The fcs_ids belonging to previous nodes. Can be empty
      * @param curr_view The current view
      * @param min_shard_sizes The map of minimum membership sizes for every subgroup and shard
      * @return A subgroup layout for this subgroup type
@@ -263,7 +264,6 @@ protected:
     subgroup_shard_layout_t update_fcs(
             const std::type_index subgroup_type,
             const std::vector<std::vector<SubView>>& prev_assignment,
-            const std::vector<fcs_id_t>& prev_fcs_ids,
             View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const;
 
@@ -302,6 +302,21 @@ protected:
             const std::unique_ptr<View>& prev_view,
             View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+
+    FcsAllocator to_fcs_allocator(
+            const std::type_index subgroup_type,
+            const std::vector<std::vector<SubView>>& prev_assignment,
+            View& curr_view,
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const;
+    subgroup_shard_layout_t from_shard_vertices(
+            const std::unordered_set<Shard>& shards_vertices,
+            const std::type_index subgroup_type,
+            const std::vector<std::vector<SubView>>& prev_assignment,
+            View& curr_view,
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const;
+    std::unordered_map<node_id_t, derecho::fcs_id_t> to_node_to_fcs_map(const View& view) const;
+    std::unordered_map<derecho::fcs_id_t, std::unordered_set<node_id_t>> to_fcs_to_nodes_map(
+            const std::unordered_map<node_id_t, derecho::fcs_id_t>& node_to_fcs) const;
 
     /**
      * Creates and returns an initial membership allocation for a single

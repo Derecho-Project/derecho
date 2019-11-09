@@ -50,4 +50,8 @@ struct invalid_subgroup_exception : public derecho_exception {
 struct invalid_node_exception : public derecho_exception {
     invalid_node_exception(const std::string& message) : derecho_exception(message) {}
 };
+
+struct fcs_allocation_exception : public derecho_exception {
+    fcs_allocation_exception(const std::string& message) : derecho_exception(message) {}
+};
 }  // namespace derecho

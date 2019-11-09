@@ -12,6 +12,7 @@
 #include <derecho/core/subgroup_functions.hpp>
 #include <derecho/core/view.hpp>
 
+using namespace mincostflow;
 namespace derecho {
 
 subgroup_allocation_map_t one_subgroup_entire_view(const std::vector<std::type_index>& subgroup_type_order,
@@ -250,135 +251,143 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
 subgroup_shard_layout_t DefaultSubgroupAllocator::update_fcs(
         const std::type_index subgroup_type,
         const std::vector<std::vector<SubView>>& prev_assignment,
-        const std::vector<fcs_id_t>& prev_fcs_ids,
         View& curr_view,
         const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const {
-    const SubgroupAllocationPolicy& subgroup_type_policy
-            = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    FcsAllocator fcs_allocator = to_fcs_allocator(subgroup_type, prev_assignment, curr_view,
+            min_shard_sizes);
+    std::unordered_set<Shard> shards = fcs_allocator.allocate();
+    return from_shard_vertices(shards, subgroup_type, prev_assignment, curr_view, min_shard_sizes);
+}
 
-    std::vector<bool> assigned(curr_view.num_members, false);
-    for (const auto& subgroup : prev_assignment) {
-        for (const auto& shard : subgroup) {
-            for (const node_id_t member : shard.members) {
-                int rank = curr_view.rank_of(member);
-                if (rank != -1) {
-                    assigned[rank] = true;
-                }
-            }
-        }
-    }
-    std::priority_queue<FCS> fcs_priority_queue = create_fcs_priority_queue(curr_view.members,
-            curr_view.fcs_ids, assigned);
+FcsAllocator DefaultSubgroupAllocator::to_fcs_allocator(
+        const std::type_index subgroup_type,
+        const std::vector<std::vector<SubView>>& prev_assignment,
+        View& curr_view,
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const {
+    std::unordered_map<node_id_t, fcs_id_t> node_to_fcs = to_node_to_fcs_map(curr_view);
+    std::unordered_map<fcs_id_t, std::unordered_set<node_id_t>> fcs_to_nodes =
+            to_fcs_to_nodes_map(node_to_fcs);
+    std::unordered_set<Shard> shards;
 
-    subgroup_shard_layout_t next_assignment(min_shard_sizes.at(subgroup_type).size());
-    std::vector<std::vector<std::vector<node_id_t>>> next_members(next_assignment.size());
-    std::vector<std::vector<std::vector<int>>> next_is_sender(next_assignment.size());
+    std::unordered_set<node_id_t> unassigned_members(curr_view.members.begin(), curr_view.members.end());
 
-    //1. Greedy algorithm to satisfy minimum FCS
-    for (uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
-        ShardAllocationPolicy shard_policy = shard_policy_from_subgroup(subgroup_type_policy,
-                                                                        subgroup_num);
-        unsigned int num_shards = min_shard_sizes.at(subgroup_type)[subgroup_num].size();
-        next_members[subgroup_num].resize(num_shards);
-        next_is_sender[subgroup_num].resize(num_shards);
-        for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-            std::set<fcs_id_t> shard_fcs;
-            std::vector<node_id_t>& next_shard_members = next_members[subgroup_num][shard_num];
-            std::vector<int>& next_shard_is_sender = next_is_sender[subgroup_num][shard_num];
+    const auto& subgroup_type_policy = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    uint32_t num_subgroups = min_shard_sizes.at(subgroup_type).size();
+    for (uint32_t subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+        ShardAllocationPolicy shard_policy = shard_policy_from_subgroup(
+                subgroup_type_policy, subgroup_num);
+        uint32_t num_shards = min_shard_sizes.at(subgroup_type)[subgroup_num].size();
+        for (uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
+            vertex_id_t id = {subgroup_num, shard_num};
+            uint32_t min_fcs = shard_policy.even_shards ? shard_policy.min_fcs
+                                                        : shard_policy.min_fcs_by_shard[shard_num];
+            Shard shard = {id, min_fcs, {}};
 
             if (!prev_assignment.empty()) {
                 const SubView& prev_shard_assignment = prev_assignment[subgroup_num][shard_num];
-
                 //Add all the non-failed nodes from the previous assignment
-                for(std::size_t rank = 0; rank < prev_shard_assignment.members.size(); ++rank) {
-                    if(curr_view.rank_of(prev_shard_assignment.members[rank]) == -1) {
-                        continue;
+                for (node_id_t node : prev_shard_assignment.members) {
+                    if (unassigned_members.find(node) != unassigned_members.end()) {
+                        shard.members.insert(node);
+                        unassigned_members.erase(node);
                     }
-                    next_shard_members.push_back(prev_shard_assignment.members[rank]);
-                    next_shard_is_sender.push_back(prev_shard_assignment.is_sender[rank]);
-                    shard_fcs.insert(prev_fcs_ids[rank]);
                 }
             }
-
-            unsigned int min_fcs = shard_policy.even_shards ? shard_policy.min_fcs
-                                                            : shard_policy.min_fcs_by_shard[shard_num];
-            //Add additional members if needed
-            std::vector<FCS> assigned_fcs;
-            while (shard_fcs.size() < min_fcs) {
-                if (fcs_priority_queue.empty()) {
-                    std::cerr << "update_fcs could not satisfy min fcs size" << std::endl;
-                    throw subgroup_provisioning_exception();
-                }
-
-                FCS fcs = fcs_priority_queue.top();
-                fcs_priority_queue.pop();
-
-                //If we don't contain this FCS
-                if (shard_fcs.find(fcs.fcs_id) == shard_fcs.end()) {
-                    next_shard_members.push_back(fcs.nodes.back());
-                    fcs.nodes.pop_back();
-                    shard_fcs.insert(fcs.fcs_id);
-                    //All members start out as senders with the default allocator
-                    next_shard_is_sender.push_back(true);
-                }
-
-                if (!fcs.nodes.empty()) {
-                    assigned_fcs.push_back(fcs);
-                }
-            }
-            for (const FCS& fcs : assigned_fcs) {
-                assert(!fcs.nodes.empty());
-                fcs_priority_queue.push(fcs);
-            }
+            shards.insert(shard);
         }
     }
 
-    //2. Satisfy minimum shard size
-    for (uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
-        ShardAllocationPolicy shard_policy = shard_policy_from_subgroup(subgroup_type_policy,
-                                                                        subgroup_num);
-        unsigned int num_shards = min_shard_sizes.at(subgroup_type)[subgroup_num].size();
-        for(uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
-            std::vector<node_id_t>& next_shard_members = next_members[subgroup_num][shard_num];
-            std::vector<int>& next_shard_is_sender = next_is_sender[subgroup_num][shard_num];
-            uint32_t min_shard_size = min_shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
+    std::unordered_set<node_id_t> unassigned_map(unassigned_members.size());
+    for (node_id_t member : unassigned_members) {
+        unassigned_map.insert(member);
+    }
+    Shard unassigned = {{-1,-1}, 0, unassigned_map}; // unassigned shard ID = -1,-1
+    shards.insert(unassigned);
 
-            //Assign nodes from largest FCSs in order with potential overlap
-            std::vector<FCS> assigned_fcs;
-            while (next_shard_members.size() < min_shard_size) {
-                if (fcs_priority_queue.empty()) {
-                    if (assigned_fcs.empty()) {
-                        std::cerr << "update_fcs could not satisfy min shard size" << std::endl;
-                        throw subgroup_provisioning_exception();
-                    } else {
-                        //All failure maps assigned, reuse FCSs
-                        for (const FCS& fcs : assigned_fcs) {
-                            fcs_priority_queue.push(fcs);
-                        }
+    return {shards, node_to_fcs, fcs_to_nodes};
+}
+
+subgroup_shard_layout_t DefaultSubgroupAllocator::from_shard_vertices(
+        const std::unordered_set<Shard>& shards_vertices,
+        const std::type_index subgroup_type,
+        const std::vector<std::vector<SubView>>& prev_assignment,
+        View& curr_view,
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const {
+
+    const auto& subgroup_type_policy = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    uint32_t num_subgroups = min_shard_sizes.at(subgroup_type).size();
+    subgroup_shard_layout_t next_assignment(num_subgroups);
+
+    //convert vertex_id back
+    std::vector<std::vector<Shard>> shard_vertex_for_subgroup_shard(num_subgroups);
+    for (uint32_t subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+        uint32_t num_shards = min_shard_sizes.at(subgroup_type)[subgroup_num].size();
+        shard_vertex_for_subgroup_shard[subgroup_num].resize(num_shards);
+    }
+    for (const Shard& shard : shards_vertices) {
+        const auto& [subgroup_num, shard_num] =  shard.shard_id;
+        if (subgroup_num >= 0 && shard_num >= 0) {
+            shard_vertex_for_subgroup_shard[subgroup_num][shard_num] = shard;
+        }
+    }
+
+    for (uint32_t subgroup_num = 0; subgroup_num < num_subgroups; ++subgroup_num) {
+        ShardAllocationPolicy shard_policy = shard_policy_from_subgroup(
+                subgroup_type_policy, subgroup_num);
+        uint32_t num_shards = min_shard_sizes.at(subgroup_type)[subgroup_num].size();
+        for (uint32_t shard_num = 0; shard_num < num_shards; ++shard_num) {
+            Shard& shard = shard_vertex_for_subgroup_shard[subgroup_num][shard_num];
+            std::vector<node_id_t> members(shard.members.begin(), shard.members.end());
+            std::vector<int> is_sender(members.size());
+
+            for (uint32_t i = 0; i < members.size(); ++i) {
+                node_id_t node = members[i];
+                // this shard was previous assigned this member
+                if (!prev_assignment.empty()) {
+                    const SubView& prev_shard = prev_assignment[subgroup_num][shard_num];
+                    if (std::find(prev_shard.members.begin(), prev_shard.members.end(), node) !=
+                        prev_shard.members.end()) {
+                        int rank = prev_shard.rank_of(node);
+                        is_sender[i] = prev_shard.is_sender[rank];
+                        continue;
                     }
-                } else {
-                    assign_node(fcs_priority_queue, next_shard_members, assigned_fcs);
-                    //All members start out as senders with the default allocator
-                    next_shard_is_sender.push_back(true);
                 }
-            }
-            for (const FCS& fcs : assigned_fcs) {
-                fcs_priority_queue.push(fcs);
+                // default to sender
+                is_sender[i] = true;
             }
 
             Mode delivery_mode = mode_from_shard_policy(shard_policy, shard_num);
             next_assignment[subgroup_num].emplace_back(
-                    curr_view.make_subview(next_shard_members, delivery_mode, next_shard_is_sender));
+                    curr_view.make_subview(members, delivery_mode, is_sender));
         }
     }
     return next_assignment;
+}
+
+std::unordered_map<node_id_t, fcs_id_t> DefaultSubgroupAllocator::to_node_to_fcs_map(
+        const View& view) const {
+    std::unordered_map<node_id_t, derecho::fcs_id_t> node_to_fcs;
+    for (int i = 0; i < view.num_members; ++i) {
+        node_to_fcs[view.members[i]] = view.fcs_ids[i];
+    }
+    return node_to_fcs;
+}
+
+std::unordered_map<fcs_id_t, std::unordered_set<node_id_t>>
+DefaultSubgroupAllocator::to_fcs_to_nodes_map(
+        const std::unordered_map<node_id_t, fcs_id_t>& node_to_fcs) const {
+    std::unordered_map<fcs_id_t, std::unordered_set<node_id_t>> fcs_to_nodes;
+    for (const auto& [node, fcs_id] : node_to_fcs) {
+        fcs_to_nodes[fcs_id].insert(node);
+    }
+    return fcs_to_nodes;
 }
 
 subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_fcs_subgroup_type(
         const std::type_index subgroup_type,
         View& curr_view,
         const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& min_shard_sizes) const {
-    return update_fcs(subgroup_type, {}, {}, curr_view, min_shard_sizes);
+    return update_fcs(subgroup_type, {}, curr_view, min_shard_sizes);
 }
 
 subgroup_shard_layout_t DefaultSubgroupAllocator::update_fcs_subgroup_type(
@@ -396,7 +405,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_fcs_subgroup_type(
     const std::vector<std::vector<SubView>> prev_assignment(
             prev_view->subgroup_shard_views.begin() + previous_assignment_offset,
             prev_view->subgroup_shard_views.end());
-    return update_fcs(subgroup_type, prev_assignment, prev_view->fcs_ids, curr_view, min_shard_sizes);
+    return update_fcs(subgroup_type, prev_assignment, curr_view, min_shard_sizes);
 }
 
 
