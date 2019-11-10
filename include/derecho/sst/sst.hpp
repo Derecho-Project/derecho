@@ -34,12 +34,7 @@ namespace sst {
 const int alignTo = sizeof(long long);
 
 constexpr size_t padded_len(const size_t& len) {
-    if (len % alignTo == 0) {
-        return len;
-    }
-    else {
-        return (len / alignTo + 1) * alignTo;
-    }
+    return (len <= alignTo) ? alignTo : (len + alignTo) & ~(alignTo - 1);
 }
 
 /** Internal helper class, never exposed to the client. */
