@@ -23,7 +23,7 @@ target_include_directories(persistent PRIVATE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
 
-add_executable(persistent_test test.cpp git_version.cpp
+add_executable(persistent_test test_spdk.cpp git_version.cpp
     $<TARGET_OBJECTS:persistent>
     $<TARGET_OBJECTS:conf>
     $<TARGET_OBJECTS:utils>

@@ -160,6 +160,7 @@ public:
      */
     virtual size_t bytes_size(const version_t &ver) = 0;
 
+
     /**
      * Write the serialized log bytes to the given buffer
      * @PARAM buf - the buffer to receive serialized bytes

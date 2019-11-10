@@ -39,36 +39,23 @@ void SPDKPersistLog::tail_unlock() noexcept(false) {
 
 SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : PersistLog(name) {
     //Initialize locks
-    std::printf("Started initializing locks %s.\n", name);
-    std::cout.flush();
     if(pthread_rwlock_init(&this->head_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
     if(pthread_rwlock_init(&this->tail_lock, NULL) != 0) {
         throw derecho::derecho_exception("Failed to initialize head_lock.");
     }
-    std::printf("Started grabbing head/tail locks %s.\n", name);
-    std::cout.flush();    
     head_wlock();
     tail_wlock();
-    std::printf("Started loading log %s.\n", name);
-    std::cout.flush();
     PersistThreads::get();
-    std::printf("Finished getting PersistThreads.\n");
-    std::cout.flush();
     if(pthread_mutex_lock(&PersistThreads::get()->metadata_load_lock)) {
         throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
-    std::printf("Grabbed metadata_load_lock. Start loading log.\n");
-    std::cout.flush();
+    std::cout << "name: " << name << endl;
     PersistThreads::get()->load(name, &this->m_currLogMetadata);
-    std::printf("Finished loading log. Releasing locks.\n");
-    std::cout.flush();
     pthread_mutex_unlock(&PersistThreads::get()->metadata_load_lock);
     tail_unlock();
     head_unlock();
-    std::printf("Locks released.\n");
-    std::cout.flush();
 }
 
 void SPDKPersistLog::append(const void* pdata,
@@ -93,8 +80,6 @@ void SPDKPersistLog::append(const void* pdata,
     next_log_entry->fields.ver = ver;
     next_log_entry->fields.hlc_l = mhlc.m_rtc_us;
     next_log_entry->fields.hlc_l = mhlc.m_logic;
-    std::printf("Added next_log_entry. \n");
-    std::cout.flush();
     LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, (METADATA.tail - 1));
     if(METADATA.tail - METADATA.head == 0) {
         next_log_entry->fields.ofst = 0;
@@ -102,12 +87,8 @@ void SPDKPersistLog::append(const void* pdata,
         next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
     }
     
-    std::printf("append with tail at %d\n", METADATA.tail);
-    std::cout.flush();
     METADATA.ver = ver;
     METADATA.tail++;
-    std::printf("Updated ver and tail to tail %d. \n", METADATA.tail);
-    std::cout.flush();
 
     PersistThreads::get()->append(METADATA.id,
                                   (char*)pdata, 
@@ -115,8 +96,6 @@ void SPDKPersistLog::append(const void* pdata,
                                   (METADATA.tail - 1) % SPDK_LOG_ADDRESS_SPACE,
                                   *m_currLogMetadata.persist_metadata_info);
 
-    std::printf("Called append. \n");
-    std::cout.flush();
     tail_unlock();
     head_unlock();
 }
@@ -323,7 +302,7 @@ void SPDKPersistLog::trimByIndex(const int64_t& idx) {
 
 void SPDKPersistLog::trim(const version_t& ver) {
     int64_t idx = lower_bound(ver);
-    std::printf("Trimming by %d\n", idx);
+    std::printf("Trimming by %ld\n", idx);
     std::cout.flush();
     trimByIndex(idx);
 }
@@ -379,12 +358,8 @@ const void* SPDKPersistLog::getEntryByIndex(const int64_t& eno) noexcept(false) 
     head_rlock();
     tail_rlock();
     void* buf = PersistThreads::get()->read_data(METADATA.id, eno);
-    std::printf("..1\n");
-    std::cout.flush();
     tail_unlock();
     head_unlock();
-    std::printf("..2\n");
-    std::cout.flush();
     return buf;
 }
 
@@ -464,8 +439,6 @@ void SPDKPersistLog::applyLogTail(char const* v) {
     head_rlock();
     tail_wlock();
     size_t ofst = 0;
-    //latest version
-    int64_t latest_version = *(int64_t*)(v + ofst);
     ofst += sizeof(int64_t);
     //num logs
     int64_t nr_log_entry = *(int64_t*)(v + ofst);
@@ -507,8 +480,11 @@ void SPDKPersistLog::applyLogTail(char const* v) {
 void SPDKPersistLog::truncate(const version_t& ver) {
     head_rlock();
     tail_wlock();
-    int64_t index = upper_bound(ver);
-    METADATA.tail = index;
+    int64_t index = lower_bound(ver);
+    METADATA.tail = index + 1;
+    if (METADATA.ver > ver) {
+	METADATA.ver = ver;
+    }
     PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();
     head_unlock();
@@ -519,6 +495,7 @@ void SPDKPersistLog::zeroout() {
     tail_wlock();
     METADATA.head = 0;
     METADATA.tail = 0;
+    METADATA.ver = -1;
     METADATA.inuse = false;
     PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();

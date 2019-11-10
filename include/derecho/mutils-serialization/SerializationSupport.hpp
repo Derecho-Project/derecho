@@ -347,7 +347,7 @@ template <typename T>
 std::enable_if_t<std::is_base_of<ByteRepresentable CMA T>::value,
                  std::unique_ptr<T>>
 from_bytes(DeserializationManager *ctx, char const *v) {
-  return T::from_bytes(ctx, v);
+   return T::from_bytes(ctx, v);
 }
 
 /**

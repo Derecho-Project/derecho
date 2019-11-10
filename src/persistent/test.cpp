@@ -67,7 +67,6 @@ public:
     };
 
     static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager* dsm, char const* const v) {
-        VariableBytes vb;
         std::unique_ptr<VariableBytes> pvb = std::make_unique<VariableBytes>();
         strcpy(pvb->buf, v);
         pvb->data_len = strlen(v) + 1;
@@ -148,17 +147,16 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
+Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, nullptr, &pr);
 Persistent<X> px1([]() { return std::make_unique<X>(); }, nullptr, &pr);
 //Persistent<X> px1;
-Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
+Persistent<VariableBytes, ST_SPDK> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
         npx_logtail([]() { return std::make_unique<VariableBytes>(); });
-Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, nullptr, &pr);
 
 template <typename OT, StorageType st = ST_FILE>
 void listvar(Persistent<OT, st>& var) {
     int64_t nv = var.getNumOfVersions();
     int64_t idx = var.getEarliestIndex();
-    cout << "Number of Versions:\t" << nv << endl;
     while(nv--) {
         /*
     // by lambda
@@ -168,7 +166,7 @@ void listvar(Persistent<OT, st>& var) {
       });
 */
         // by copy
-        cout << "[" << idx << "]\t" << var.getByIndex(idx)->to_string() << "\t//by copy" << endl;
+        cout << "[" << idx << "]\t" << var.getByIndex(idx)->to_string()  << "\t//by copy" << endl;
         idx++;
     }
     // list minimum latest persisted version:
@@ -220,7 +218,7 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
 int main(int argc, char** argv) {
     spdlog::set_level(spdlog::level::trace);
 
-    signal(SIGSEGV, sig_handler);
+    //signal(SIGSEGV, sig_handler);
 
     if(argc < 2) {
         printhelp();

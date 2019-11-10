@@ -38,6 +38,8 @@ struct SpdkInfo {
     uint32_t qpair_size;
     uint32_t qpair_requests;
     uint32_t sectors_per_max_io;
+    uint64_t sector_round_mask;         //equivalent to >> sector_bit << sector_bit
+    uint64_t sector_mask;               //equivalent to % sector_size
 };
 
 /**Info part of log metadata entries stored in persist thread. */

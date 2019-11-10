@@ -86,7 +86,7 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
     switch(storageType) {
         // file system
         case ST_FILE:
-            this->m_pLog = std::make_unique<spdk::SPDKPersistLog>(object_name);
+            this->m_pLog = std::make_unique<file::FilePersistLog>(object_name);
             if(this->m_pLog == nullptr) {
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
@@ -94,6 +94,11 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
         // spdk
         case ST_SPDK:
             // TODO: implementation
+	    this->m_pLog = std::make_unique<spdk::SPDKPersistLog>(object_name);
+	    if(this->m_pLog == nullptr) {
+                throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
+	    }
+	    break;
         //default
         default:
             throw PERSIST_EXP_STORAGE_TYPE_UNKNOWN(storageType);
@@ -105,7 +110,6 @@ template <typename ObjectType,
 inline void Persistent<ObjectType, storageType>::initialize_object_from_log(const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
                                                                             mutils::DeserializationManager* dm) {
     if(this->getNumOfVersions() > 0) {
-        // load the object from log.
         this->m_pWrappedObject = this->getByIndex(this->getLatestIndex(), dm);
     } else {  // create a new one;
         this->m_pWrappedObject = object_factory();
@@ -145,6 +149,8 @@ Persistent<ObjectType, storageType>::Persistent(
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
+    //std::printf("initialize_log 1.\n");
+    //std::cout.flush();
     // Initialize object
     initialize_object_from_log(object_factory, &dm);
     // Register Callbacks
@@ -171,6 +177,8 @@ Persistent<ObjectType, storageType>::Persistent(
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log(object_name);
+    std::printf("initialize_log 2.\n");
+    std::cout.flush();
     // patch it
     if(log_tail != nullptr) {
         this->m_pLog->applyLogTail(log_tail);
@@ -260,13 +268,20 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         std::unique_ptr<ObjectType> p = ObjectType::create(dm);
         // TODO: accelerate this by checkpointing
         for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-            const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-            p->applyDelta(entry_data);
+            //std::printf("here %d\n", i);
+            //std::cout.flush();
+	    const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
+            //std::printf("curr index %d\n", i);
+            //std::cout.flush();
+	    p->applyDelta(entry_data);
         }
 
         return p;
     } else {
-        return mutils::from_bytes<ObjectType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
+        //std::printf("here\n");
+        //std::cout.flush();
+        const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(idx);
+        return mutils::from_bytes<ObjectType>(dm, entry_data);
     }
 };
 
