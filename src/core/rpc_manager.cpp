@@ -23,7 +23,14 @@ RPCManager::~RPCManager() {
 }
 
 void RPCManager::create_connections() {
-    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{
+            nid,
+            {nid},
+	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+            view_manager.view_max_rpc_window_size,
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            view_manager.view_max_rpc_reply_payload_size + sizeof(header)});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
@@ -112,7 +119,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     parse_and_receive(msg_buf, buffer_size,
                       [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
                           reply_size = size;
-                          if(reply_size <= connections->get_max_p2p_size()) {
+                          if(reply_size <= connections->get_max_p2p_reply_size()) {
                               reply_buf = (char*)connections->get_sendbuffer_ptr(
                                       connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;
@@ -315,6 +322,7 @@ void RPCManager::fifo_worker() {
 
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
+
     uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
@@ -326,14 +334,32 @@ void RPCManager::p2p_receive_loop() {
     dbg_default_debug("P2P listening thread started");
     // start the fifo worker thread
     fifo_worker_thread = std::thread(&RPCManager::fifo_worker, this);
+
+    struct timespec last_time, cur_time;
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
     // loop event
     while(!thread_shutdown) {
-        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+        std::unique_lock<std::mutex> connections_lock(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
             p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
             connections->update_incoming_seq_num();
+
+            // update last time
+            clock_gettime(CLOCK_REALTIME, &last_time);
+        } else {
+            clock_gettime(CLOCK_REALTIME, &cur_time);
+            // check if the system has been inactive for enough time to induce sleep
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            if(time_elapsed_in_ms > 1) {
+                connections_lock.unlock();
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+                connections_lock.lock();
+            }
         }
     }
     // stop fifo worker.

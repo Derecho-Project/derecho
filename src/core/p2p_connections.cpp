@@ -5,6 +5,7 @@
 #include <sstream>
 #include <sys/time.h>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/p2p_connections.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
 
@@ -13,12 +14,9 @@ P2PConnections::P2PConnections(const P2PParams params)
         : members(params.members),
           num_members(members.size()),
           my_node_id(params.my_node_id),
-          window_size(params.window_size),
-          max_msg_size(params.max_p2p_size + sizeof(uint64_t)),
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
           prev_mode(num_members) {
     //Figure out my SST index
     my_index = (uint32_t)-1;
@@ -28,6 +26,21 @@ P2PConnections::P2PConnections(const P2PParams params)
         }
         node_id_to_rank[members[i]] = i;
     }
+
+    // HARD-CODED. Adding another request type will break this
+    window_sizes[P2P_REPLY] = params.p2p_window_size;
+    window_sizes[P2P_REQUEST] = params.p2p_window_size;
+    window_sizes[RPC_REPLY] = params.rpc_window_size;
+    max_msg_sizes[P2P_REPLY] = params.max_p2p_reply_size;
+    max_msg_sizes[P2P_REQUEST] = params.max_p2p_request_size;
+    max_msg_sizes[RPC_REPLY] = params.max_rpc_reply_size;
+
+    p2p_buf_size = 0;
+    for(uint8_t i = 0; i < num_request_types; ++i) {
+        offsets[i] = p2p_buf_size;
+	p2p_buf_size += window_sizes[i] * max_msg_sizes[i];
+    }
+    p2p_buf_size += sizeof(bool);
 
     for(auto type : p2p_request_types) {
         incoming_seq_nums_map.try_emplace(type,std::vector<std::atomic<uint64_t>>(num_members));
@@ -39,11 +52,11 @@ P2PConnections::P2PConnections(const P2PParams params)
         outgoing_p2p_buffers[i] = std::make_unique<volatile char[]>(p2p_buf_size);
         if(i != my_index) {
 #ifdef USE_VERBS_API
-            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+            res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      p2p_buf_size, p2p_buf_size);
 #else
-            res_vec[i] = std::make_unique<resources>(i, const_cast<char*>(incoming_p2p_buffers[i].get()),
+            res_vec[i] = std::make_unique<resources>(members[i], const_cast<char*>(incoming_p2p_buffers[i].get()),
                                                      const_cast<char*>(outgoing_p2p_buffers[i].get()),
                                                      p2p_buf_size, p2p_buf_size, i > my_index);
 #endif
@@ -57,12 +70,10 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
         : members(new_members),
           num_members(members.size()),
           my_node_id(old_connections.my_node_id),
-          window_size(old_connections.window_size),
-          max_msg_size(old_connections.max_msg_size),
           incoming_p2p_buffers(num_members),
           outgoing_p2p_buffers(num_members),
           res_vec(num_members),
-          p2p_buf_size(num_request_types * max_msg_size * window_size + sizeof(bool)),
+          p2p_buf_size(old_connections.p2p_buf_size),
           prev_mode(num_members) {
     old_connections.shutdown_failures_thread();
     //Figure out my SST index
@@ -72,6 +83,18 @@ P2PConnections::P2PConnections(P2PConnections&& old_connections, const std::vect
             my_index = i;
         }
         node_id_to_rank[members[i]] = i;
+    }
+
+    // HARD-CODED. Adding another request type will break this
+    window_sizes[P2P_REPLY] = old_connections.window_sizes[P2P_REPLY];
+    window_sizes[P2P_REQUEST] = old_connections.window_sizes[P2P_REQUEST];
+    window_sizes[RPC_REPLY] = old_connections.window_sizes[RPC_REPLY];
+    max_msg_sizes[P2P_REPLY] = old_connections.max_msg_sizes[P2P_REPLY];
+    max_msg_sizes[P2P_REQUEST] = old_connections.max_msg_sizes[P2P_REQUEST];
+    max_msg_sizes[RPC_REPLY] = old_connections.max_msg_sizes[RPC_REPLY];
+
+    for(uint8_t i = 0; i < num_request_types; ++i) {
+        offsets[i] = old_connections.offsets[i];
     }
 
     for(auto type : p2p_request_types) {
@@ -120,16 +143,18 @@ uint32_t P2PConnections::get_node_rank(uint32_t node_id) {
     return node_id_to_rank.at(node_id);
 }
 
-uint64_t P2PConnections::get_max_p2p_size() {
-    return max_msg_size - sizeof(uint64_t);
+uint64_t P2PConnections::get_max_p2p_reply_size() {
+    return max_msg_sizes[P2P_REPLY] - sizeof(uint64_t);
 }
 
 uint64_t P2PConnections::getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num) {
-    return max_msg_size * (type * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
+    return offsets[type] + max_msg_sizes[type] * ((seq_num % window_sizes[type]) + 1) - sizeof(uint64_t);
+    // return max_msg_size * (type * window_size + (seq_num % window_size) + 1) - sizeof(uint64_t);
 }
 
 uint64_t P2PConnections::getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num) {
-    return max_msg_size * (type * window_size + (seq_num++ % window_size));
+    return offsets[type] + max_msg_sizes[type] * (seq_num % window_sizes[type]);
+    // return max_msg_size * (type * window_size + (seq_num % window_size));
 }
 
 // check if there's a new request from some node
@@ -170,7 +195,7 @@ char* P2PConnections::get_sendbuffer_ptr(uint32_t rank, REQUEST_TYPE type) {
     prev_mode[rank] = type;
     if(type != REQUEST_TYPE::P2P_REQUEST
        || static_cast<int32_t>(incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY][rank])
-                  > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_size)) {
+                  > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST][rank] - window_sizes[P2P_REQUEST])) {
         (uint64_t&)outgoing_p2p_buffers[rank][getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank])]
                 = outgoing_seq_nums_map[type][rank] + 1;
         return const_cast<char*>(outgoing_p2p_buffers[rank].get())
@@ -185,13 +210,13 @@ void P2PConnections::send(uint32_t rank) {
         // there's no reason why memcpy shouldn't also copy guard and data separately
         std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetBuf(type, outgoing_seq_nums_map[type][rank]),
                     const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetBuf(type, outgoing_seq_nums_map[type][rank]),
-                    max_msg_size - sizeof(uint64_t));
+                    max_msg_sizes[type] - sizeof(uint64_t));
         std::memcpy(const_cast<char*>(incoming_p2p_buffers[rank].get()) + getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]),
                     const_cast<char*>(outgoing_p2p_buffers[rank].get()) + getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]),
                     sizeof(uint64_t));
     } else {
         res_vec[rank]->post_remote_write(getOffsetBuf(type, outgoing_seq_nums_map[type][rank]),
-                                         max_msg_size - sizeof(uint64_t));
+                                         max_msg_sizes[type] - sizeof(uint64_t));
         res_vec[rank]->post_remote_write(getOffsetSeqNum(type, outgoing_seq_nums_map[type][rank]),
                                          sizeof(uint64_t));
         num_rdma_writes++;
@@ -201,11 +226,13 @@ void P2PConnections::send(uint32_t rank) {
 
 void P2PConnections::check_failures_loop() {
     pthread_setname_np(pthread_self(), "p2p_timeout");
+
+    uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
     while(!thread_shutdown) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
         if(num_rdma_writes < 1000) {
             continue;
         }
@@ -275,14 +302,14 @@ void P2PConnections::debug_print() {
         for(uint32_t node = 0; node < num_members; ++node) {
             std::cout << "Node " << node << std::endl;
             std::cout << "incoming seq_nums:";
-            for(uint32_t i = 0; i < window_size; ++i) {
-                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+            for(uint32_t i = 0; i < window_sizes[type]; ++i) {
+                uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
                 std::cout << " " << (uint64_t&)incoming_p2p_buffers[node][offset];
             }
             std::cout << std::endl
                       << "outgoing seq_nums:";
-            for(uint32_t i = 0; i < window_size; ++i) {
-                uint64_t offset = max_msg_size * (type * window_size + i + 1) - sizeof(uint64_t);
+            for(uint32_t i = 0; i < window_sizes[type]; ++i) {
+                uint64_t offset = max_msg_sizes[type] * (type * window_sizes[type] + i + 1) - sizeof(uint64_t);
                 std::cout << " " << (uint64_t&)outgoing_p2p_buffers[node][offset];
             }
             std::cout << std::endl;

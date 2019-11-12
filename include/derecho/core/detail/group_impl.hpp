@@ -19,8 +19,34 @@ namespace derecho {
 
 template <typename SubgroupType>
 auto& _Group::get_subgroup(uint32_t subgroup_num) {
-    return (dynamic_cast<GroupProjection<SubgroupType>*>(this))
-            ->get_subgroup(subgroup_num);
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_subgroup(subgroup_num);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
+auto& _Group::get_nonmember_subgroup(uint32_t subgroup_num) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_nonmember_subgroup(subgroup_num);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
+std::vector<std::vector<node_id_t>> _Group::get_subgroup_members(uint32_t subgroup_index) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_subgroup_members(subgroup_index);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
+}
+
+template <typename SubgroupType>
+std::size_t _Group::get_number_of_shards(uint32_t subgroup_index) {
+    if(auto gptr = dynamic_cast<GroupProjection<SubgroupType>*>(this)) {
+        return gptr->get_number_of_shards(subgroup_index);
+    } else
+        throw derecho_exception("Error: this top-level group contains no subgroups for the selected type.");
 }
 
 template <typename ReplicatedType>
@@ -32,12 +58,58 @@ GroupProjection<ReplicatedType>::get_subgroup(uint32_t subgroup_num) {
     return *((Replicated<ReplicatedType>*)ret);
 }
 
+template <typename ReplicatedType>
+ExternalCaller<ReplicatedType>&
+GroupProjection<ReplicatedType>::get_nonmember_subgroup(uint32_t subgroup_num) {
+    void* ret{nullptr};
+    set_external_caller_pointer(std::type_index{typeid(ReplicatedType)}, subgroup_num,
+                                &ret);
+    return *((ExternalCaller<ReplicatedType>*)ret);
+}
+
+template <typename ReplicatedType>
+std::vector<std::vector<node_id_t>>
+GroupProjection<ReplicatedType>::get_subgroup_members(uint32_t subgroup_index) {
+    return get_view_manager().get_subgroup_members(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
+}
+
+template <typename ReplicatedType>
+std::size_t
+GroupProjection<ReplicatedType>::get_number_of_shards(uint32_t subgroup_index) {
+    return get_view_manager().get_number_of_shards_in_subgroup(get_index_of_type(typeid(ReplicatedType)), subgroup_index);
+}
+
 template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_replicated_pointer(std::type_index type,
                                                        uint32_t subgroup_num,
                                                        void** ret) {
     ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
                       ? &get_subgroup<ReplicatedTypes>(subgroup_num)
+                      : *ret)),
+     ...);
+}
+
+template <typename... ReplicatedTypes>
+uint32_t Group<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) {
+    assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
+    return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
+                     (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
+                                                                               : 0)
+            + ... + 0);
+    //return index_of_type<SubgroupType, ReplicatedTypes...>;
+}
+
+template <typename... ReplicatedTypes>
+ViewManager& Group<ReplicatedTypes...>::get_view_manager() {
+    return view_manager;
+}
+
+template <typename... ReplicatedTypes>
+void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type,
+                                                            uint32_t subgroup_num,
+                                                            void** ret) {
+    ((*ret = (type == std::type_index{typeid(ReplicatedTypes)}
+                      ? &get_nonmember_subgroup<ReplicatedTypes>(subgroup_num)
                       : *ret)),
      ...);
 }
@@ -127,6 +199,11 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     view_manager.start();
     persistence_manager.start();
 }
+
+//nope there's two now
+template <typename... ReplicatedTypes>
+Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories)
+        : Group({}, subgroup_info, nullptr, {}, factories...) {}
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
@@ -332,7 +409,7 @@ std::vector<node_id_t> Group<ReplicatedTypes...>::get_members() {
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
 std::vector<std::vector<node_id_t>> Group<ReplicatedTypes...>::get_subgroup_members(uint32_t subgroup_index) {
-    return view_manager.get_subgroup_members(index_of_type<SubgroupType, ReplicatedTypes...>, subgroup_index);
+    return GroupProjection<SubgroupType>::get_subgroup_members(subgroup_index);
 }
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>

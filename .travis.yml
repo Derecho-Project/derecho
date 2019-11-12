@@ -25,7 +25,7 @@ install:
 matrix:
   include:
     # build with gcc7 on 4 build types
-    - env: BUILD_TYPE= GCC_VERSION=7
+    - env: BUILD_TYPE=Release GCC_VERSION=7
       addons: &gcc7
         apt:
           sources:
@@ -33,8 +33,6 @@ matrix:
           packages:
             - g++-7
             - gcc-7
-    - env: BUILD_TYPE=Release GCC_VERSION=7
-      addons: *gcc7
     - env: BUILD_TYPE=Debug GCC_VERSION=7
       addons: *gcc7
     - env: BUILD_TYPE=RELWITHDEBINFO GCC_VERSION=7

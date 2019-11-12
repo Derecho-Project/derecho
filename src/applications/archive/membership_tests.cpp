@@ -119,7 +119,7 @@ std::map<Tests, Replicated<State>&> get_subgroups(Group<State>& group, std::map<
         try {
             auto& handle = group.get_subgroup<State>(subgroup_index);
             subgroups.insert({t, handle});
-        } catch(const invalid_subgroup_exception e) {
+        } catch(const invalid_subgroup_exception& e) {
         } catch(...) {
             std::cout << "Got an unknown exception: " << std::endl;
             exit(1);

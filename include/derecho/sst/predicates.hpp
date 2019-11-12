@@ -6,7 +6,6 @@
 #include <mutex>
 #include <utility>
 
-#include "sst.hpp"
 
 namespace sst {
 
