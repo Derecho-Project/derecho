@@ -201,7 +201,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
     leader_connection.write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
 
     receive_view_and_leaders(my_id, leader_connection);
-    dbg_default_debug("Received initial view {} from leader.", curr_view->vid);
+    dbg_default_debug("Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
 }
 
 void ViewManager::receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection) {
@@ -670,9 +670,7 @@ void ViewManager::register_predicates() {
         return gmsSST.num_changes[curr_view->find_rank_of_leader()]
                > gmsSST.num_acked[curr_view->my_rank];
     };
-    auto ack_proposed_change = [this](DerechoSST& sst) {
-        acknowledge_proposed_change(sst);
-    };
+    auto ack_proposed_change = [this](DerechoSST& sst) { acknowledge_proposed_change(sst); };
 
     auto leader_committed_changes = [this](const DerechoSST& gmsSST) {
         const int leader_rank = curr_view->find_rank_of_leader();
@@ -857,13 +855,22 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
 }
 
 void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
-    bool changes_copied = copy_prior_leader_proposals(gmsSST);
+    bool prior_changes_found = copy_prior_leader_proposals(gmsSST);
     dbg_default_debug("Taking over as the new leader; everyone suspects prior leaders.");
-    //Mark the last proposed change from the old leader as the end of a view
-    //PROBLEM: What if that would be an inadequate view?
     const unsigned int my_rank = gmsSST.get_local_index();
-    const int last_change_index = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank] - 1;
-    gmsSST.changes[my_rank][last_change_index].end_of_view = true;
+    const node_id_t my_id = curr_view->members[my_rank];
+    //For any changes proposed by a previous leader but after the last end-of-view,
+    //re-propose them as my own changes
+    if(prior_changes_found) {
+        const int my_changes_length = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank];
+        std::size_t change_index = my_changes_length - 1;
+        bool end_of_view_found = gmsSST.changes[my_rank][change_index].end_of_view;
+        while(!end_of_view_found) {
+            gmsSST.changes[my_rank][change_index].leader_id = my_id;
+            --change_index;
+            end_of_view_found = gmsSST.changes[my_rank][change_index].end_of_view;
+        }
+    }
     bool new_changes_proposed = false;
     //For each node that I suspect, make sure a change is proposed to remove it
     for(int rank = 0; rank < curr_view->num_members; ++rank) {
@@ -876,30 +883,39 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
             }
 
             gmssst::set(gmsSST.changes[my_rank][next_change_index],
-                        make_change_proposal(curr_view->members[my_rank], curr_view->members[rank]));
+                        make_change_proposal(my_id, curr_view->members[rank]));
             gmssst::increment(gmsSST.num_changes[my_rank]);
             dbg_default_debug("Leader proposed a change to remove failed node {}", curr_view->members[rank]);
             new_changes_proposed = true;
         }
     }
-    if(new_changes_proposed) {
-        //Do I need to do this? Maybe not, if I can wait to finish processing these changes until
-        //after the group installs the old leader's last view. And actually, if I do want to mark
-        //end-of-view for the next view already, I need to check for adequacy and potentially wait
-        //for joins.
-        const int new_last_change_index = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank] - 1;
-        gmsSST.changes[my_rank][new_last_change_index].end_of_view = true;
+    if(new_changes_proposed && !prior_changes_found) {
+        /* Ensure the "check for unfinished batch" predicate will run as soon as this
+         * predicate is done, even if it already fired once during the current View
+         * for some reason. This will take care of checking to see if the new changes
+         * will make an adequate view or not. */
+        auto new_view_has_changes = [this](const DerechoSST& sst) {
+            return active_leader
+                   && sst.num_changes[curr_view->my_rank] > sst.num_installed[curr_view->my_rank]
+                   && !changes_includes_end_of_view(sst, curr_view->my_rank);
+        };
+        auto propose_changes_trig = [this](DerechoSST& sst) { propose_changes(sst); };
+        gmsSST.predicates.insert(new_view_has_changes,
+                                 propose_changes_trig,
+                                 sst::PredicateType::ONE_TIME);
     }
-    //Immediately start the view-change process, since the last view proposed by the
-    //old leader needs to be installed. At this point, we really hope it was adequate.
-    next_view = make_next_view(curr_view, gmsSST);
-    make_subgroup_maps(subgroup_info, curr_view, *next_view);
-    //Push the entire new changes vector and the associated joiner_ip vectors
-    gmsSST.put(gmsSST.changes);
-    gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-               gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
-    gmsSST.put(gmsSST.num_changes);
-    //Allow this node to commit the new changes as the active leader
+    if(prior_changes_found) {
+        //Immediately start the view-change process, since the last view proposed by the
+        //old leader needs to be installed. At this point, we really hope it was adequate.
+        next_view = make_next_view(curr_view, gmsSST);
+        make_subgroup_maps(subgroup_info, curr_view, *next_view);
+        //Push the entire new changes vector and the associated joiner_ip vectors
+        gmsSST.put(gmsSST.changes);
+        gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+        gmsSST.put(gmsSST.num_changes);
+    }
+    //Allow this node to advance num_committed as the active leader
     active_leader = true;
 }
 
@@ -1936,52 +1952,57 @@ bool ViewManager::previous_leaders_suspected(const DerechoSST& gmsSST, const Vie
     return true;
 }
 
+/*
+ * Note that if a prior leader proposed some changes but the change marked
+ * "end of view" didn't reach any live node, we might not use those proposed
+ * changes because we only copy proposals from another row if we find the "end
+ * of view" marker. This should very rarely happen, since the prior leader will
+ * wait to propose an entire batch of changes at once, including the "end of
+ * view" change; it will only happen if the SST push of the changes vector only
+ * partially finishes before the leader crashes.
+ */
 bool ViewManager::copy_prior_leader_proposals(DerechoSST& gmsSST) {
-    /*
-     * Possible bugs in this function:
-     * If a prior leader has proposed some changes that this node didn't see,
-     * but the "end of view" change didn't reach any live node, then we will
-     * conclude that there were no prior changes proposed because we didn't
-     * find the "end of view" marker.
-     * If the prior leader had proposed some additional changes beyond the "end
-     * of view" marker, we will copy and re-propose all of those changes, even
-     * if they don't have their own "end of view" marker, because we just copy
-     * the entire changes vector.
-     */
     const int my_rank = gmsSST.get_local_index();
     const int my_changes_length = gmsSST.num_changes[my_rank] - gmsSST.num_installed[my_rank];
     bool prior_changes_found = false;
     int prior_leader_rank = -1;
-    int longest_changes_rank = -1;
+    int longest_changes_rank = my_rank;
+    int longest_changes_length = my_changes_length;
     //Look through the SST in ascending rank order to see if anyone has
     //acknowledged a change from a prior leader that I do not have
     for(uint check_rank = 0; check_rank < gmsSST.get_num_rows(); ++check_rank) {
         const int changes_length = gmsSST.num_changes[check_rank]
                                    - gmsSST.num_installed[check_rank];
         bool first_prior_change_found = false;
+        bool end_of_view_found = false;
         for(int i = 0; i < changes_length; ++i) {
-            if(first_prior_change_found) {
-                if(gmsSST.changes[check_rank][i].end_of_view) {
-                    //We found all the changes proposed by the previous leader, so we can use this row
-                    prior_changes_found = true;
-                    break;
-                }
-            } else if(i >= my_changes_length
-                      || (gmsSST.changes[check_rank][i].change_id != gmsSST.changes[my_rank][i].change_id
-                          && gmsSST.changes[check_rank][i].leader_id >= prior_leader_rank)) {
+            if(!first_prior_change_found
+               && (i >= longest_changes_length
+                   || (gmsSST.changes[check_rank][i].change_id != gmsSST.changes[longest_changes_rank][i].change_id
+                       && gmsSST.changes[check_rank][i].leader_id >= prior_leader_rank))) {
                 first_prior_change_found = true;
                 prior_leader_rank = gmsSST.changes[check_rank][i].leader_id;
+                dbg_default_debug("Found changes in row {} proposed by leader {}", check_rank, prior_leader_rank);
+            }
+            if(first_prior_change_found && !end_of_view_found
+               && gmsSST.changes[check_rank][i].end_of_view) {
+                end_of_view_found = true;
+                //We found an entire batch of changes proposed by the previous leader, so we can use this row
+                prior_changes_found = true;
+                dbg_default_debug("Found end-of-view marker in row {}. Setting longest_changes_rank = {}, longest_changes_length = {}", check_rank, check_rank, changes_length);
                 longest_changes_rank = check_rank;
+                longest_changes_length = changes_length;
+            } else if(first_prior_change_found && end_of_view_found
+                      && gmsSST.changes[check_rank][i].leader_id >= prior_leader_rank) {
+                //There might be changes from a succession of leaders, so we still
+                //need to update prior_leader_rank after the first end-of-view is found
+                prior_leader_rank = gmsSST.changes[check_rank][i].leader_id;
             }
         }
-        //No prior leader can be ranked higher than my_rank, so stop if we find changes from my_rank - 1
-        if(prior_changes_found && longest_changes_rank == my_rank - 1) {
-            break;
-        }
     }
-    //Copy the entire changes row from the prior leader;
-    //this function is called before proposing any changes as the new leader
     if(prior_changes_found) {
+        //Note that this function is called before proposing any changes as the new leader
+        //so it's OK to clobber the entire local changes vector
         dbg_default_debug("Re-proposing changes from prior leader at rank {}, found in row {}. Num_changes is now {}", prior_leader_rank, longest_changes_rank, gmsSST.num_changes[prior_leader_rank]);
         gmssst::set(gmsSST.changes[my_rank], gmsSST.changes[longest_changes_rank],
                     gmsSST.changes.size());
