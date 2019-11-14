@@ -107,8 +107,11 @@ private:
 
     friend class RestartLeaderState;
 
-    /** Controls access to curr_view. Read-only accesses should acquire a
-     * shared_lock, while view changes acquire a unique_lock. */
+    /**
+     * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
+     * access the current View through the pointer should acquire a shared_lock;
+     * the view change predicates will acquire a unique_lock before swapping the
+     * pointer. */
     std::shared_timed_mutex view_mutex;
     /** Notified when curr_view changes (i.e. we are finished with a pending view change).*/
     std::condition_variable_any view_change_cv;
@@ -123,7 +126,7 @@ private:
     /** On the leader node, contains client sockets for pending joins that have not yet been handled.*/
     LockedQueue<tcp::socket> pending_join_sockets;
 
-    /** Contains old Views that need to be cleaned up*/
+    /** Contains old Views that need to be cleaned up. */
     std::queue<std::unique_ptr<View>> old_views;
     std::mutex old_views_mutex;
     std::condition_variable old_views_cv;
@@ -457,11 +460,6 @@ private:
      * shard leaders) from the leader. */
     void receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection);
 
-    /** Helper function for total restart mode: Uses the RaggedTrim values
-     * in logged_ragged_trim to truncate any persistent logs that have a
-     * persisted version later than the last committed version in the RaggedTrim. */
-    void truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim);
-
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
     /**
@@ -749,19 +747,24 @@ public:
 
     /**
      * @return a reference to the current View, wrapped in a container that
-     * holds a read-lock on it. This is mostly here to make it easier for
-     * the Group that contains this ViewManager to set things up.
+     * holds a read-lock on the View pointer. This allows the Group that
+     * contains this ViewManager to look at the current View (and set it up
+     * during construction) without creating an unsafe interleaving with
+     * View changes.
      */
     SharedLockedReference<View> get_current_view();
 
     /**
-     * This function is a dirty workaround for the fact that Group might need
-     * read-only access to curr_view during a total restart when curr_view is
-     * owned by restart_leader_state, but it's only available by const reference
-     * and SharedLockedReference<View> wants a mutable reference.
-     * @return
+     * An ugly workaround function needed only during initial setup during a
+     * total restart. The Group constructor needs to read the members of the
+     * currently-proposed initial View in order to construct Replicated Objects,
+     * but on the restart leader the initial View is stored in restart_leader_state_machine,
+     * not curr_view.
+     * @return A reference to the initial View to use to set up Replicated Objects,
+     * which is either the "current view" on a joining node or the "restart view" on
+     * the restart leader.
      */
-    SharedLockedReference<const View> get_current_view_const();
+    SharedLockedReference<const View> get_current_or_restart_view();
 
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */

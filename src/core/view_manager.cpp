@@ -290,7 +290,25 @@ void ViewManager::truncate_logs() {
         }
     }
     dbg_default_debug("Truncating persistent logs to conform to leader's ragged trim");
-    truncate_persistent_logs(restart_state->logged_ragged_trim);
+
+    for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
+        subgroup_id_t subgroup_id = id_to_shard_map.first;
+        uint32_t my_shard_id;
+        //On the restart leader, the proposed view is still in RestartLeaderState
+        //On all the other nodes, it's been received and stored in curr_view
+        const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
+        const auto find_my_shard = restart_view.my_subgroups.find(subgroup_id);
+        if(find_my_shard == restart_view.my_subgroups.end()) {
+            continue;
+        }
+        my_shard_id = find_my_shard->second;
+        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
+        persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
+                my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
+        dbg_default_trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
+        dbg_default_flush();
+        subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
+    }
 }
 
 void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
@@ -394,27 +412,6 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, node_id_t my_
 void ViewManager::start() {
     dbg_default_debug("Starting predicate evaluation");
     curr_view->gmsSST->start_predicate_evaluation();
-}
-
-void ViewManager::truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim) {
-    for(const auto& id_to_shard_map : logged_ragged_trim) {
-        subgroup_id_t subgroup_id = id_to_shard_map.first;
-        uint32_t my_shard_id;
-        //On the restart leader, the proposed view is still in RestartLeaderState
-        //On all the other nodes, it's been received and stored in curr_view
-        const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
-        const auto find_my_shard = restart_view.my_subgroups.find(subgroup_id);
-        if(find_my_shard == restart_view.my_subgroups.end()) {
-            continue;
-        }
-        my_shard_id = find_my_shard->second;
-        const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
-        persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
-                my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
-        dbg_default_trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
-        dbg_default_flush();
-        subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
-    }
 }
 
 void ViewManager::await_first_view(const node_id_t my_id) {
@@ -2254,9 +2251,11 @@ SharedLockedReference<View> ViewManager::get_current_view() {
     return SharedLockedReference<View>(*curr_view, view_mutex);
 }
 
-SharedLockedReference<const View> ViewManager::get_current_view_const() {
+SharedLockedReference<const View> ViewManager::get_current_or_restart_view() {
     if(restart_leader_state_machine) {
-        return SharedLockedReference<const View>(restart_leader_state_machine->get_curr_view(), view_mutex);
+        //If this node is the restart leader, the "current view" that it's trying to set up is actually
+        //the restart view from RestartLeaderState, not curr_view.
+        return SharedLockedReference<const View>(restart_leader_state_machine->get_restart_view(), view_mutex);
     } else {
         return SharedLockedReference<const View>(*curr_view, view_mutex);
     }
