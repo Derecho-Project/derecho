@@ -164,7 +164,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         //As a side effect, construct_objects filters old_shard_leaders to just the leaders
         //this node needs to receive object state from
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
-                = construct_objects<ReplicatedTypes...>(view_manager.get_current_view_const().get(),
+                = construct_objects<ReplicatedTypes...>(view_manager.get_current_or_restart_view().get(),
                                                         old_shard_leaders);
         //These functions are no-ops if we're not doing total restart
         view_manager.truncate_logs();
@@ -345,10 +345,10 @@ template <typename SubgroupType>
 ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32_t subgroup_index) {
     try {
         auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
-        View& curr_view = view_manager.get_current_view().get();
-        auto subgroup_id = curr_view.subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>)
+        SharedLockedReference<View> curr_view = view_manager.get_current_view();
+        auto subgroup_id = curr_view.get().subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>)
                                    .at(subgroup_index);
-        const auto& shard_subviews = curr_view.subgroup_shard_views.at(subgroup_id);
+        const auto& shard_subviews = curr_view.get().subgroup_shard_views.at(subgroup_id);
         std::vector<node_id_t> shard_reps(shard_subviews.size());
         for(uint i = 0; i < shard_subviews.size(); ++i) {
             // for shard iteration to be possible, each shard must contain at least one member

@@ -173,6 +173,8 @@ public:
     void merge_changes();
     /** Wedges the view, which means wedging both SST and DerechoGroup. */
     void wedge();
+    /** Checks to see if this view has been wedged. */
+    bool is_wedged();
 
     /** Computes the within-shard rank of a particular shard's leader, based on failed[].
      * This is not a member of SubView because it needs access to failed[], but it returns
