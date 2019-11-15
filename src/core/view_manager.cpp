@@ -1352,13 +1352,6 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     // Register predicates in the new view
     register_predicates();
 
-    // First task with my new view...
-    if(curr_view->i_am_new_leader()) {
-        dbg_default_debug("i_am_new_leader() was true, calling merge_changes()");
-        curr_view->merge_changes();  // Create a combined list of Changes
-        active_leader = true;
-    }
-
     // If there are already some failed members in the new view, we'll need to
     // immediately start another view change; don't let any multicasts start
     if(std::find(curr_view->failed.begin(), curr_view->failed.end(), true)
@@ -1846,7 +1839,6 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
             curr_view->vid + 1, members, member_ips_and_ports, failed, joined,
             departed, my_new_rank, next_unassigned_rank,
             curr_view->subgroup_type_order);
-    next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
     return next_view;
 }
 

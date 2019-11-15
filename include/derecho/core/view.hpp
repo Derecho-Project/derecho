@@ -146,8 +146,6 @@ public:
     /** Reverse index of members[]; maps node ID -> SST rank */
     std::map<node_id_t, uint32_t> node_id_to_rank;
 
-    bool i_know_i_am_leader = false;  // I am the leader (and know it)
-
     /**
      * Constructs a SubView containing the provided subset of this View's
      * members. This is helpful in writing subgroup-membership functions.
@@ -167,10 +165,6 @@ public:
     int find_rank_of_leader() const;
     /** @return rank_of_leader() == my_rank */
     bool i_am_leader() const;
-    /** Determines whether this node is the new leader after a view change. */
-    bool i_am_new_leader();
-    /** Merges changes lists from other SST rows into this node's SST row. */
-    void merge_changes();
     /** Wedges the view, which means wedging both SST and DerechoGroup. */
     void wedge();
     /** Checks to see if this view has been wedged. */
