@@ -314,8 +314,13 @@ private:
 // - StorageType: storage type is defined in PersistLog. The value could be
 //   ST_FILE/ST_SPDK ... I will start with ST_FILE and extend it to
 //   other persistent Storage.
-// TODO:comments
-//TODO: Persistent<T> has to be serializable, extending from mutils::ByteRepresentable
+//
+// Please be aware that a Persistent variable will load the state from persistent
+// storage during construction. And defining a global variable of type
+// Persistent<T> could be dangerous because it might be initialized before the
+// other global variables it depends on. For example, the SPDK library might not
+// be ready when the Persistent<T> global variable tries to load data from NVMe,
+// which will end up with a segmentation fault.
 template <typename ObjectType,
           StorageType storageType = ST_FILE>
 class Persistent : public mutils::ByteRepresentable {
