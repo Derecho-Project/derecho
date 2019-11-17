@@ -51,7 +51,6 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
     if(pthread_mutex_lock(&PersistThreads::get()->metadata_load_lock)) {
         throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
-    std::cout << "name: " << name << endl;
     PersistThreads::get()->load(name, &this->m_currLogMetadata);
     pthread_mutex_unlock(&PersistThreads::get()->metadata_load_lock);
     tail_unlock();

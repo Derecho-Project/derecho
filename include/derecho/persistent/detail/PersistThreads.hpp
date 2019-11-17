@@ -224,7 +224,7 @@ protected:
     
     //-------------------------Singleton Design Patern-----------------------------
     static PersistThreads* m_PersistThread;
-    static bool initialized;
+    static std::atomic<bool> initialized;
     static std::mutex initialization_lock;
     int initialize_threads();
     

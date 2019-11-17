@@ -39,9 +39,6 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
-SPDKPersistLog myLog = SPDKPersistLog("mylog");
-SPDKPersistLog myNewLog = SPDKPersistLog("myNewLog");
-
 int main(int argc, char** argv) {
     if(argc < 2) {
         printhelp();
@@ -49,8 +46,8 @@ int main(int argc, char** argv) {
     }
 
     std::cout << "command:" << argv[1] << std::endl;
-    // SPDKPersistLog myLog = SPDKPersistLog("mylog");
-        
+    SPDKPersistLog myLog = SPDKPersistLog("mylog");
+    SPDKPersistLog myNewLog = SPDKPersistLog("myNewLog");    
 
     //try {
         if(strcmp(argv[1], "getentrybyindex") == 0){
@@ -126,19 +123,19 @@ int main(int argc, char** argv) {
             cout << "\tver: " << ver << endl;
             cout << "\tdlen: " << dlen << endl;
             
-            myNewLog.append(v, dlen, ver, mhlc);
-            int64_t idx = myNewLog.getLatestIndex();
-            LogEntry log_entry = myNewLog.getLogEntry(idx);
-            cout << "read entry:" << endl;
-            cout << "\tver: " << log_entry.fields.ver << endl;
-            cout << "\tdlen: " << log_entry.fields.dlen << endl;
+           // myNewLog.append(v, dlen, ver, mhlc);
+           // int64_t idx = myNewLog.getLatestIndex();
+           // LogEntry log_entry = myNewLog.getLogEntry(idx);
+           // cout << "read entry:" << endl;
+           // cout << "\tver: " << log_entry.fields.ver << endl;
+           // cout << "\tdlen: " << log_entry.fields.dlen << endl;
 	} else if (strcmp(argv[1], "getLatestsIndexnew") == 0) {
-	    myNewLog.getLatestIndex();
+	   // myNewLog.getLatestIndex();
 	} else if (strcmp(argv[1], "getEntryByIndexnew") == 0) {
-	    int64_t index = (int64_t)atol(argv[2]);
-	    char* v = (char*)myNewLog.getEntryByIndex(index);	    
-	    cout << "read data:" << endl;
-	    cout << "\tdata: " << v << endl;
+	   // int64_t index = (int64_t)atol(argv[2]);
+	   // char* v = (char*)myNewLog.getEntryByIndex(index);	    
+	   // cout << "read data:" << endl;
+	   // cout << "\tdata: " << v << endl;
 	} else if (strcmp(argv[1], "getLBA") == 0) {
             uint64_t lba_index = (uint64_t)atol(argv[2]);
             char* v = (char*)myLog.getLBA(lba_index);

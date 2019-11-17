@@ -24,7 +24,7 @@ namespace persistent {
 namespace spdk {
 
 PersistThreads* PersistThreads::m_PersistThread;
-bool PersistThreads::initialized;
+std::atomic<bool> PersistThreads::initialized;
 bool PersistThreads::loaded;
 pthread_mutex_t PersistThreads::metadata_load_lock;
 std::mutex PersistThreads::initialization_lock;
@@ -415,7 +415,7 @@ int PersistThreads::initialize_threads() {
     spdk_nvme_ctrlr_get_default_io_qpair_opts(general_spdk_info.ctrlr, &qpair_opts, sizeof(qpair_opts));
     general_spdk_info.qpair_size = qpair_opts.io_queue_size;
     general_spdk_info.qpair_requests = qpair_opts.io_queue_requests;
-    
+   
     // Step 1: get qpair for io threads
     for(int i = 0; i < NUM_IO_THREAD; i++) {
         spdk_qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
