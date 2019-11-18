@@ -149,8 +149,6 @@ Persistent<ObjectType, storageType>::Persistent(
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
-    //std::printf("initialize_log 1.\n");
-    //std::cout.flush();
     // Initialize object
     initialize_object_from_log(object_factory, &dm);
     // Register Callbacks
@@ -177,8 +175,6 @@ Persistent<ObjectType, storageType>::Persistent(
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log(object_name);
-    std::printf("initialize_log 2.\n");
-    std::cout.flush();
     // patch it
     if(log_tail != nullptr) {
         this->m_pLog->applyLogTail(log_tail);
@@ -268,18 +264,12 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         std::unique_ptr<ObjectType> p = ObjectType::create(dm);
         // TODO: accelerate this by checkpointing
         for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-            //std::printf("here %d\n", i);
-            //std::cout.flush();
 	    const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-            //std::printf("curr index %d\n", i);
-            //std::cout.flush();
 	    p->applyDelta(entry_data);
         }
 
         return p;
     } else {
-        //std::printf("here\n");
-        //std::cout.flush();
         const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(idx);
         return mutils::from_bytes<ObjectType>(dm, entry_data);
     }

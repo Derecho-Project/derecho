@@ -173,8 +173,6 @@ void PersistThreads::dummy_request_complete(void* args,
 
 void PersistThreads::metadata_write_request_complete(void* args,
         const struct spdk_nvme_cpl* completion) {
-    std::printf("Get new metadata write complete. \n");
-    std::cout.flush();
     // if error occured
     if(spdk_nvme_cpl_is_error(completion)) {
         throw derecho::derecho_exception("control request failed.");
@@ -208,8 +206,6 @@ int PersistThreads::non_atomic_rw(char* buf, uint32_t data_length, uint64_t virt
             default:
                 break;
         }
-        //std::printf("Starting lba_index %d.\n", lba_index);
-        //std::cout.flush();
 
         // Submit data request for the current segment
         while (curr_ofst < size) {  
@@ -421,8 +417,6 @@ int PersistThreads::initialize_threads() {
         spdk_qpair[i] = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
         if(spdk_qpair[i] == NULL) {
             //qpair initialization failed
-            std::printf("qpair failed.\n");
-            std::cout.flush();
             throw derecho::derecho_exception("Failed to initialize data qpair.");
         }
     }
@@ -447,6 +441,10 @@ int PersistThreads::initialize_threads() {
     segment_usage_table.reset();
     segment_usage_table[0].flip();
     destructed = false;
+
+    for (unsigned int i = 0; i < SPDK_NUM_LOGS_SUPPORTED; i++) {
+        id_to_log[i] = nullptr;
+    }
         	
     // Step 4: initialize io threads
     for(int io_thread_idx = 0; io_thread_idx < NUM_IO_THREAD; io_thread_idx++) {
@@ -504,8 +502,6 @@ int PersistThreads::initialize_threads() {
                     spdk_nvme_qpair_process_completions(spdk_qpair[thread_id], 0);
                 } else if (destructed) {
                     io_queue_mtx.unlock();
-                    std::printf("thread destructed. \n");
-                    std::cout.flush();
                     spdk_nvme_ctrlr_free_io_qpair(spdk_qpair[thread_id]);
                     exit(0);
                 } else {
@@ -587,6 +583,12 @@ PersistThreads::~PersistThreads() {
     while (!metadata_io_queue.empty());
     // Wait for all submitted requests to be completed
     while (uncompleted_io_req > 0);
+    // Free log entry spaces
+    for (unsigned int i = 0; i < SPDK_NUM_LOGS_SUPPORTED; i++) {
+        if (id_to_log[i] != nullptr) {
+            free(id_to_log[i]);
+        }
+    }
 }
 
 void PersistThreads::append(const uint32_t& id, char* data, 
@@ -778,8 +780,11 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
     try {
         uint32_t id = log_name_to_id.at(name);
         log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
-        //std::printf("tail %d\n", log_metadata->persist_metadata_info->fields.tail);
-        std::cout.flush();
+
+        if (id_to_log[id] != nullptr) {
+            return;
+        }
+
         LogEntry *log_entry = (LogEntry *)malloc(SPDK_LOG_ADDRESS_SPACE << 6);
 
         // Submit read request
@@ -788,16 +793,16 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         char* buf = (char*)spdk_malloc(size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
         //std::printf("Reading logentries with size %d and virtaddress %d\n", size, virtaddress);
 	non_atomic_rw(buf, size, virtaddress, BLOCKING, LOGENTRY, false, id);
-        //std::printf("Submitted read request for existing log.\n");
-        //std::cout.flush();
         std::copy(buf, buf + size, (char*)log_entry + ((virtaddress >> general_spdk_info.sector_bit) << general_spdk_info.sector_bit) );
         spdk_free(buf);	
 	for (int idx = log_metadata->persist_metadata_info->fields.head; idx < log_metadata->persist_metadata_info->fields.tail; idx ++ ) {
 	    
-            std::printf("LogEntry idx: %d ver: %ld, LogEntry dlen: %lu, LogEntry ofst: %lu\n", idx, log_entry[idx].fields.ver, log_entry[idx].fields.dlen, log_entry[idx].fields.ofst);
-            std::cout.flush();
+            // std::printf("LogEntry idx: %d ver: %ld, LogEntry dlen: %lu, LogEntry ofst: %lu\n", idx, log_entry[idx].fields.ver, log_entry[idx].fields.dlen, log_entry[idx].fields.ofst);
+            // std::cout.flush();
 	}
         id_to_log[id] = log_entry;
+        // std::cout << "Using existing metadata entry: " << id << std::endl;
+        // std::cout << "Assigning id_to_log[id]: " << id_to_log[id] << std::endl;
         return;
     } catch(const std::out_of_range& oor) {
         // Find an unused metadata entry
@@ -807,7 +812,7 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         }
         for(uint32_t index = 0; index < SPDK_NUM_LOGS_SUPPORTED; index++) {
             if(!global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse) {
-                
+                std::cout << "Find metadata entry not in use: " << index << std::endl; 
                 global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse = true;
                 global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.id = index;
                 global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.head = 0;
@@ -833,11 +838,11 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
     }
 }
 
-LogEntry* PersistThreads::read_entry(const uint32_t& id, const uint64_t& index) {
+LogEntry* PersistThreads::read_entry(const uint32_t& id, const int64_t& index) {
     return &(id_to_log[id][index % SPDK_LOG_ADDRESS_SPACE]);
 }
 
-void* PersistThreads::read_data(const uint32_t& id, const uint64_t& index) {
+void* PersistThreads::read_data(const uint32_t& id, const int64_t& index) {
     LogEntry* log_entry = read_entry(id, index);
     char* buf = (char*)spdk_malloc((1 + (log_entry->fields.dlen >> general_spdk_info.sector_bit)) << general_spdk_info.sector_bit, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
     uint64_t data_offset = log_entry->fields.ofst;

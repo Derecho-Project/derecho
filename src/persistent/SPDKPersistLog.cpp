@@ -51,6 +51,7 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
     if(pthread_mutex_lock(&PersistThreads::get()->metadata_load_lock)) {
         throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
+    // std::cout << "Loading log name: " << name << std::endl;
     PersistThreads::get()->load(name, &this->m_currLogMetadata);
     pthread_mutex_unlock(&PersistThreads::get()->metadata_load_lock);
     tail_unlock();
@@ -59,7 +60,7 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(true) : Persist
 
 void SPDKPersistLog::append(const void* pdata,
                             const uint64_t& size, const version_t& ver,
-                            const HLC& mhlc) {
+                            const HLC& mhlc) noexcept(false) {
     head_rlock();
     tail_wlock();
     if(ver <= METADATA.ver) {
@@ -68,6 +69,7 @@ void SPDKPersistLog::append(const void* pdata,
         head_unlock();
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
     }
+    
     if((((sizeof(LogEntry) * METADATA.tail) >> SPDK_SEGMENT_BIT) - ((sizeof(LogEntry) * METADATA.head) >> SPDK_SEGMENT_BIT)) > SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH) {
         //throw an exception
         tail_unlock();
@@ -79,10 +81,10 @@ void SPDKPersistLog::append(const void* pdata,
     next_log_entry->fields.ver = ver;
     next_log_entry->fields.hlc_l = mhlc.m_rtc_us;
     next_log_entry->fields.hlc_l = mhlc.m_logic;
-    LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, (METADATA.tail - 1));
     if(METADATA.tail - METADATA.head == 0) {
         next_log_entry->fields.ofst = 0;
     } else {
+        LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, (METADATA.tail - 1));
         next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
     }
     
@@ -501,7 +503,7 @@ void SPDKPersistLog::zeroout() {
 }
 
 SPDKPersistLog::~SPDKPersistLog() {
-    free(PersistThreads::get()->id_to_log[METADATA.id]);
+    //free(PersistThreads::get()->id_to_log[METADATA.id]);
 }
 
 }  // namespace spdk

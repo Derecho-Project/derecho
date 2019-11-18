@@ -289,8 +289,8 @@ public:
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata);
 
-    LogEntry* read_entry(const uint32_t& id, const uint64_t& index);
-    void* read_data(const uint32_t& id, const uint64_t& index);
+    LogEntry* read_entry(const uint32_t& id, const int64_t& index);
+    void* read_data(const uint32_t& id, const int64_t& index);
     void* read_lba(const uint64_t& lba_index);
     /** Array of highest ver that has been written for each PersistLog. */
     std::atomic<int64_t> last_written_ver[SPDK_NUM_LOGS_SUPPORTED];
