@@ -101,17 +101,18 @@ int main(int argc, char *argv[]) {
             nullptr,  // the persistence_callback either
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 struct timespec ts;
-                static persistent::version_t pers_ver = 0;
-                if(pers_ver > ver) return;
+                static persistent::version_t pers_seq = 0;
+                persistent::version_t message_seq = (ver & 0xffffffffL);
+                if(pers_seq > message_seq) return;
 
                 clock_gettime(CLOCK_REALTIME, &ts);
                 uint64_t tsus = ts.tv_sec * 1e6 + ts.tv_nsec / 1e3;
 
-                while(pers_ver <= ver) {
-                    message_pers_ts_us[pers_ver++] = tsus;
+                while(pers_seq <= message_seq) {
+                    message_pers_ts_us[pers_seq++] = tsus;
                 }
 
-                if(ver == total_num_messages - 1) {
+                if(message_seq == total_num_messages - 1) {
                     if(is_sending) {
                         for(uint32_t i = 0; i < count; i++) {
                             std::cout << "[" << i << "]" << local_message_ts_us[i] << " " << message_pers_ts_us[num_sender * i + node_rank] << " " << (message_pers_ts_us[num_sender * i + node_rank] - local_message_ts_us[i]) << " us" << std::endl;
