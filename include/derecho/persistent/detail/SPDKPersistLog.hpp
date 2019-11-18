@@ -89,10 +89,39 @@ protected:
     void tail_wlock() noexcept(false);
     void head_unlock() noexcept(false);
     void tail_unlock() noexcept(false);
-    int64_t upper_bound(const version_t& ver);
-    int64_t upper_bound(const HLC& hlc);
-    int64_t lower_bound(const version_t& ver);
     int64_t lower_bound(const HLC& hlc);
+    
+    template <typename TKey, typename KeyGetter>
+	int64_t binarySearch(const KeyGetter & keyGetter, const TKey & key) {
+	    int64_t begin = METADATA.head;
+	    int64_t end = METADATA.tail - 1;
+	    if (end < begin) {
+		return (int64_t)-1L;
+	    }
+	    int64_t pivot = 0;
+	    while (begin <= end) {
+		pivot = (begin + end)/2;
+		const TKey p_key = keyGetter(PersistThreads::get()->read_entry(METADATA.id, pivot));
+		if (p_key == key) {
+		    break;
+		} else if (p_key < key) {
+		    if (pivot + 1 >= METADATA.tail) {
+			break;
+		    } else if (keyGetter(PersistThreads::get()->read_entry(METADATA.id, pivot + 1)) > key) {
+			break;
+		    } else {
+			begin = pivot + 1;
+		    }
+		} else {
+		    end = pivot - 1;
+		    if (begin > end) {
+			return (int64_t)-1L;
+		    }
+		}
+	    }
+	    return pivot;
+	} 
+     int64_t getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false);
 
 public:
     // Constructor:

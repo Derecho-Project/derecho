@@ -143,28 +143,13 @@ int64_t SPDKPersistLog::getLatestIndex() noexcept(false) {
 int64_t SPDKPersistLog::getVersionIndex(const version_t& ver) {
     head_rlock();
     tail_rlock();
-    int64_t begin = METADATA.head;
-    int64_t end = METADATA.tail - 1;
-    int64_t res = -1;
-    while(begin <= end) {
-        int64_t mid = (begin + end) / 2;
-        LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-        int64_t curr_ver = mid_entry->fields.ver;
-        if(curr_ver == ver) {
-            res = mid;
-            break;
-        } else if(curr_ver > ver) {
-            end = mid - 1;
-        } else if(curr_ver < ver) {
-            begin = mid + 1;
-        }
-    }
+    int64_t res = binarySearch<int64_t>(
+         [&](const LogEntry* ple) {
+             return ple->fields.ver;
+         },
+         ver);
     tail_unlock();
     head_unlock();
-    if(res == -1) {
-        // Failed to find the version
-        throw derecho::derecho_exception("Failed to find the version.");
-    }
     return res;
 }
 
@@ -210,62 +195,6 @@ version_t SPDKPersistLog::getLatestVersion() noexcept(false) {
     return ver;
 }
 
-int64_t SPDKPersistLog::upper_bound(const version_t& ver) {
-    int64_t begin = METADATA.head;
-    int64_t end = METADATA.tail - 1;
-    while(begin < end) {
-        int mid = (begin + end) / 2;
-        LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-        int64_t curr_ver = mid_entry->fields.ver;
-        if(ver >= curr_ver) {
-            begin = mid + 1;
-        } else {
-            end = mid - 1;
-        }
-    }
-    if ((PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.ver == ver) {
-	begin = begin - 1;
-    }
-    return begin;
-}
-
-int64_t SPDKPersistLog::lower_bound(const version_t& ver) {
-    int64_t begin = METADATA.head;
-    int64_t end = METADATA.tail - 1;
-    while(begin <= end) {
-        int mid = (begin + end) / 2;
-        LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-        int64_t curr_ver = mid_entry->fields.ver;
-        if(ver <= curr_ver) {
-            end = mid - 1;
-        } else {
-            begin = mid + 1;
-        }
-    }
-    if ((PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.ver == ver) {
-	end = end + 1;
-    }
-    return end;
-}
-
-int64_t SPDKPersistLog::upper_bound(const HLC& hlc) {
-    int64_t begin = METADATA.head;
-    int64_t end = METADATA.tail - 1;
-    while(begin <= end) {
-        int mid = (begin + end) / 2;
-        LogEntry* mid_entry = PersistThreads::get()->read_entry(METADATA.id, mid);
-	if(!(mid_entry->fields.hlc_r > hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_l > hlc.m_logic))) {
-            begin = mid + 1;
-        } else {
-            end = mid - 1;
-        }
-    }
-    if ((PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.hlc_r == hlc.m_rtc_us && (PersistThreads::get()->read_entry(METADATA.id, begin - 1))->fields.hlc_l == hlc.m_logic) {
-	begin = begin - 1;
-    }
-    return begin;
-}
-
 int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
     int64_t begin = METADATA.head;
     int64_t end = METADATA.tail - 1;
@@ -278,10 +207,34 @@ int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
             begin = mid + 1;
         }
     }
-    if ((PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_r == hlc.m_rtc_us && (PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_l == hlc.m_logic) {
+    if (end != METADATA.tail - 1 && (PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_r == hlc.m_rtc_us && (PersistThreads::get()->read_entry(METADATA.id, end + 1))->fields.hlc_l == hlc.m_logic) {
 	end = end + 1;	
     }
     return end;
+}
+
+int64_t SPDKPersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false) {
+    int64_t rIndex = INVALID_INDEX;
+    
+    if (ver == INVALID_VERSION) {
+        return METADATA.head;
+    }
+    
+    int64_t idx = binarySearch<int64_t>(
+        [&](const LogEntry* ple) {
+            return ple->fields.ver;
+        },
+        ver);
+
+    if (idx == -1) {
+       rIndex = METADATA.head;
+    } else if (idx + 1 == METADATA.tail) {
+       rIndex = INVALID_INDEX;
+    } else {
+       rIndex = idx + 1;
+    }
+
+    return rIndex;
 }
 
 void SPDKPersistLog::trimByIndex(const int64_t& idx) {
@@ -300,10 +253,36 @@ void SPDKPersistLog::trimByIndex(const int64_t& idx) {
 }
 
 void SPDKPersistLog::trim(const version_t& ver) {
-    int64_t idx = lower_bound(ver);
+    head_rlock();
+    tail_rlock();
+    int64_t idx = binarySearch<int64_t>(
+        [&](const LogEntry* ple){
+            return ple->fields.ver;
+        },
+        ver);
+
+    tail_unlock();
+    head_unlock();
+    
+    if (idx == -1) {
+        return;
+    }
+    
+    head_rlock();
+    tail_wlock();
+    idx = binarySearch<int64_t>(
+        [&](const LogEntry* ple){
+            return ple->fields.ver;
+        },
+        ver);
+    if(idx != -1) {
+        METADATA.head = idx + 1;
+        PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
+    }
+    tail_unlock();
+    head_unlock();
     std::printf("Trimming by %ld\n", idx);
     std::cout.flush();
-    trimByIndex(idx);
 }
 
 void SPDKPersistLog::trim(const HLC& hlc) {
@@ -322,8 +301,20 @@ const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
 const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
     head_rlock();
     tail_rlock();
-    int64_t index = lower_bound(ver);
-    void* buf = PersistThreads::get()->read_data(METADATA.id, index);
+    int64_t idx = binarySearch<int64_t>(
+        [&](const LogEntry* ple) {
+            return ple->fields.ver;
+        },
+        ver);
+    
+    
+    if (idx == -1) {
+        tail_unlock();
+        head_unlock();
+        return nullptr;
+    }
+     
+    void* buf = PersistThreads::get()->read_data(METADATA.id, idx);
     tail_unlock();
     head_unlock();
     return buf;
@@ -365,7 +356,7 @@ const void* SPDKPersistLog::getEntryByIndex(const int64_t& eno) noexcept(false) 
 size_t SPDKPersistLog::bytes_size(const int64_t& ver) {
     head_rlock();
     tail_rlock();
-    int64_t index = upper_bound(ver);
+    int64_t index = getMinimumIndexBeyondVersion(ver);
     size_t bsize = sizeof(int64_t) + sizeof(int64_t);
     if(index != INVALID_INDEX) {
         while(index < METADATA.tail) {
@@ -382,7 +373,7 @@ size_t SPDKPersistLog::bytes_size(const int64_t& ver) {
 size_t SPDKPersistLog::to_bytes(char* buf, const version_t& ver) {
     head_rlock();
     tail_rlock();
-    int64_t index = upper_bound(ver);
+    int64_t index = getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest version
     *(int64_t*)(buf + ofst) = METADATA.ver;
@@ -412,7 +403,7 @@ void SPDKPersistLog::post_object(const std::function<void(char const* const, std
                                  const version_t& ver) {
     head_rlock();
     tail_rlock();
-    int64_t index = upper_bound(ver);
+    int64_t index = getMinimumIndexBeyondVersion(ver);
     //latest version
     int64_t latest_version = METADATA.ver;
     f((char*)&latest_version, sizeof(int64_t));
@@ -479,8 +470,16 @@ void SPDKPersistLog::applyLogTail(char const* v) {
 void SPDKPersistLog::truncate(const version_t& ver) {
     head_rlock();
     tail_wlock();
-    int64_t index = lower_bound(ver);
-    METADATA.tail = index + 1;
+    int64_t index = binarySearch<int64_t>(
+        [&](const LogEntry* ple) {
+            return ple->fields.ver;
+        },
+        ver);
+    if (index == -1) {
+        METADATA.tail = METADATA.head;
+    } else {
+        METADATA.tail = index + 1;
+    }
     if (METADATA.ver > ver) {
 	METADATA.ver = ver;
     }
