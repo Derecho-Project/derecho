@@ -59,7 +59,7 @@ void print_stats(const uint32_t num_nodes, const uint64_t num_msgs, const uint32
 	    local_missed_intervals = p.second;
         } else {
             remote_missed_counters += p.first;
-	    remote_missed_counters += p.second;
+	    remote_missed_intervals += p.second;
         }
     }
     
@@ -69,7 +69,7 @@ void print_stats(const uint32_t num_nodes, const uint64_t num_msgs, const uint32
     if (local_missed_intervals == 0) {
         fout << "0 0 ";
     } else {
-        fout << local_missed_counters / local_missed_intervals
+        fout << (double)local_missed_counters / local_missed_intervals
              << " " << local_missed_intervals << " ";
     }
 
@@ -77,7 +77,7 @@ void print_stats(const uint32_t num_nodes, const uint64_t num_msgs, const uint32
     if (remote_missed_intervals == 0) {
         fout << "0 0 ";
     } else {
-        fout << remote_missed_counters / remote_missed_intervals
+        fout << (double)remote_missed_counters / remote_missed_intervals
              << " " << remote_missed_intervals << " ";
     }
 
