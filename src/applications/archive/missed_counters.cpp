@@ -1,3 +1,5 @@
+#include <iostream>
+#include <fstream>
 #include <vector>
 
 #include "initialize.h"
@@ -5,16 +7,6 @@
 #include <derecho/sst/sst.hpp>
 
 using namespace sst;
-
-class mySST : public SST<mySST> {
-public:
-    mySST(const std::vector<uint32_t>& members, uint32_t my_rank)
-            : SST<mySST>(this, SSTParams{members, my_rank}) {
-        SSTInit(counter, heartbeat);
-    }
-    SSTField<uint64_t> counter;
-    SSTField<bool> heartbeat;
-};
 
 #ifndef NDEBUG
 #define DEBUG_MSG(str)                 \
@@ -26,6 +18,71 @@ public:
     do {               \
     } while(false)
 #endif
+
+class mySST : public SST<mySST> {
+public:
+    mySST(const std::vector<uint32_t>& members, uint32_t my_rank)
+            : SST<mySST>(this, SSTParams{members, my_rank}) {
+        SSTInit(counter, heartbeat);
+    }
+    SSTField<uint64_t> counter;
+    SSTField<bool> heartbeat;
+};
+
+std::pair<uint64_t, uint64_t> compute_missed(const std::vector<bool>& received,
+                                             const uint32_t start, const uint32_t end) {
+    std::pair<uint64_t, uint64_t> counts{0, 0};
+    for (uint32_t i = start; i <= end; ++i) {
+        if (!received[i]) {
+	    counts.first++;
+	    if (i == 0 || received[i-1]) {
+	        counts.second++;
+	    }
+	}
+    }
+    return counts;
+}
+
+void print_stats(const uint32_t num_nodes, const uint64_t num_msgs, const uint32_t my_rank,
+		 const std::vector<std::vector<bool>>& received_msgs) {
+    // consider messages with index s.t. num_msgs / 2 + 1 <= index <= num_msgs
+
+    uint64_t local_missed_counters = 0;
+    uint64_t local_missed_intervals = 0;
+    uint64_t remote_missed_counters = 0;
+    uint64_t remote_missed_intervals = 0;
+    
+    for (uint32_t i = 0; i < num_nodes; ++i) {
+        std::pair<uint64_t, uint64_t> p = compute_missed(received_msgs[i], num_msgs / 2 + 1, num_msgs);
+        if (i == my_rank) {
+	    local_missed_counters = p.first;
+	    local_missed_intervals = p.second;
+        } else {
+            remote_missed_counters += p.first;
+	    remote_missed_counters += p.second;
+        }
+    }
+    
+    std::ofstream fout("missed_results");
+
+    // local
+    if (local_missed_intervals == 0) {
+        fout << "0 0 ";
+    } else {
+        fout << local_missed_counters / local_missed_intervals
+             << " " << local_missed_intervals << " ";
+    }
+
+    // remote
+    if (remote_missed_intervals == 0) {
+        fout << "0 0 ";
+    } else {
+        fout << remote_missed_counters / remote_missed_intervals
+             << " " << remote_missed_intervals << " ";
+    }
+
+    fout << std::endl;
+}
 
 int main(int argc, char* argv[]) {
     if(argc != 3) {
@@ -98,7 +155,7 @@ int main(int argc, char* argv[]) {
         DEBUG_MSG("Sender finished");
     };
     
-    std::vector<std::vector<bool>> received_msgs(num_nodes, std::vector<bool>(num_msgs, false));
+    std::vector<std::vector<bool>> received_msgs(num_nodes, std::vector<bool>(num_msgs + 1, false));
 
     auto receiver_loop = [&]() {
         pthread_setname_np(pthread_self(), "receiver");
@@ -129,18 +186,9 @@ int main(int argc, char* argv[]) {
     sender_thread.join();
     receiver_thread.join();
 
+    print_stats(num_nodes, num_msgs, my_rank, received_msgs);
+
     shutdown = true;
     failures_thread.join();
     sst.sync_with_members();
-
-    std::cout << "Received counters" << std::endl;
-    for(uint32_t i = 0; i < num_nodes; ++i) {
-        std::cout << "Node rank " << i << std::endl;
-        for(uint32_t j = 0; j < num_msgs; ++j) {
-	    if (received_msgs[i][j]) {
-	        std::cout << j << std::endl;
-	    }
-        }
-        std::cout << std::endl;
-    }
 }
