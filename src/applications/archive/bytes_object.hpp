@@ -19,6 +19,13 @@ struct Bytes : public mutils::ByteRepresentable, public derecho::PersistsFields 
             memcpy(bytes, b, s);
         }
     }
+    Bytes(decltype(size) s) : size(s) {
+        bytes = nullptr;
+        if (s > 0) {
+            bytes = new char[s];
+            bzero(bytes,s);
+        }
+    }
     Bytes() {
         bytes = nullptr;
         size = 0;

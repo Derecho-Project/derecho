@@ -5,18 +5,16 @@
 #include <string>
 #include <time.h>
 #include <vector>
+#include <chrono>
 
 #include "bytes_object.hpp"
 #include <derecho/core/derecho.hpp>
 #include <derecho/persistent/Persistent.hpp>
 
-using std::cout;
 using std::endl;
 using derecho::Bytes;
 using namespace persistent;
-
-
-#define DELTA_T_US(t1, t2) ((double)(((t2).tv_sec - (t1).tv_sec) * 1e6 + ((t2).tv_nsec - (t1).tv_nsec) * 1e-3))
+using namespace std::chrono_literals;
 
 //the payload is used to identify the user timestamp
 typedef struct _payload {
@@ -55,10 +53,16 @@ public:
     }
 };
 
+static inline uint64_t get_cur_us() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    return static_cast<uint64_t>(ts.tv_sec*1e6 + ts.tv_nsec/1e3);
+}
+
 int main(int argc, char *argv[]) {
 
-    if(argc < 5) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <count> <max_ops> [window_size=3]" << std::endl;
+    if(argc < 4) {
+        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <count>" << std::endl;
         return -1;
     }
     int sender_selector = 0;  // 0 for all sender
@@ -66,64 +70,54 @@ int main(int argc, char *argv[]) {
     if(strcmp(argv[1], "one") == 0) sender_selector = 2;
     int num_of_nodes = atoi(argv[2]);
     uint32_t count = (uint32_t)atoi(argv[3]);
-    int max_ops = atoi(argv[4]);
-    uint64_t si_us = (1000000l / max_ops);
     uint64_t msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - 128;
+    uint64_t window_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE);
+    node_id_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     bool is_sending = true;
     uint32_t node_rank = -1;
-    // message_pers_ts_us[] is the time when a message with version 'ver' is persisted.
-    uint64_t *message_pers_ts_us = (uint64_t *)malloc(sizeof(uint64_t) * count * num_of_nodes);
-    if(message_pers_ts_us == NULL) {
-        std::cerr << "allocate memory error!" << std::endl;
-        return -1;
-    }
-    // the total span:
-    struct timespec t_begin;
-    // is only for local
-    uint64_t *local_message_ts_us = (uint64_t *)malloc(sizeof(uint64_t) * count);
-    long total_num_messages;
-    uint32_t num_sender = 0;
-    switch(sender_selector) {
-        case 0:
-            num_sender = num_of_nodes;
-            break;
-        case 1:
-            num_sender = (num_of_nodes / 2);
-            break;
-        case 2:
-            num_sender = 1;
-            break;
-    }
-    total_num_messages = num_sender * count;
+
+    // 1 - On ordered_send, ts_before_ordered_send, and ts_after_ordered_send are filled.
+    // 2 - On global stability callback, versions and ts_delivery are filled.
+    // 3 - On local persist callback, ts_local_persist is filled, depending on versions.
+    // 4 - On global persist callback, ts_global_persist is filled, depending versions.
+    std::vector<persistent::version_t> versions(count,INVALID_VERSION); // dense
+    std::vector<uint64_t> ts_before_ordered_send(count,0); // dense
+    std::vector<uint64_t> ts_after_ordered_send(count,0); // dense
+    std::vector<uint64_t> ts_delivery(count,0); // dense
+    std::vector<uint64_t> ts_local_persist(count,0); // sparse - there may be hole
+    std::vector<uint64_t> ts_global_persist(count,0); // sparse - there may be hole
+
+    std::atomic<bool> done = false;
 
     derecho::CallbackSet callback_set{
-            nullptr,  //we don't need the stability_callback here
-            nullptr,  // the persistence_callback either
+            // 1 - global stability callback - delivery
+            [&](derecho::subgroup_id_t sid, node_id_t nid, derecho::message_id_t msg_id, std::optional<std::pair<char*, long long int>> data,persistent::version_t ver) {
+                static uint32_t filled_idx = 0; // start from 0;
+                if (nid == my_id) {
+                    versions[filled_idx] = ver;
+                    ts_delivery[filled_idx] = get_cur_us();
+                    filled_idx ++;
+                }
+            },
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
-                struct timespec ts;
-                static persistent::version_t pers_seq = 0;
-                persistent::version_t message_seq = (ver & 0xffffffffL);
-                if(pers_seq > message_seq) return;
-
-                clock_gettime(CLOCK_REALTIME, &ts);
-                uint64_t tsus = ts.tv_sec * 1e6 + ts.tv_nsec / 1e3;
-
-                while(pers_seq <= message_seq) {
-                    message_pers_ts_us[pers_seq++] = tsus;
+                static uint32_t filled_idx = 0; // ts_local_persist is already filled before filled_idx. Now we start from here.
+                uint64_t now = get_cur_us();
+                while( (filled_idx < count) && (versions[filled_idx] != INVALID_VERSION) && (versions[filled_idx] <= ver)) {
+                    ts_local_persist[filled_idx++] = now;
+                }
+            },  // the persistence_callback either
+            [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
+                static uint32_t filled_idx = 0; // ts_global_persist is already filled before filled_idx. Now we start from here.
+                uint64_t now = get_cur_us();
+                while( (filled_idx < count) && (versions[filled_idx] != INVALID_VERSION) && (versions[filled_idx] <= ver)) {
+                    ts_global_persist[filled_idx++] = now;
                 }
 
-                if(message_seq == total_num_messages - 1) {
-                    if(is_sending) {
-                        for(uint32_t i = 0; i < count; i++) {
-                            std::cout << "[" << i << "]" << local_message_ts_us[i] << " " << message_pers_ts_us[num_sender * i + node_rank] << " " << (message_pers_ts_us[num_sender * i + node_rank] - local_message_ts_us[i]) << " us" << std::endl;
-                        }
-                    }
-                    double thp_mbps = (double)total_num_messages * msg_size / DELTA_T_US(t_begin, ts);
-                    std::cout << "throughput(pers): " << thp_mbps << " MBps" << std::endl;
-                    std::cout << std::flush;
-                    exit(0);
+                if (filled_idx >= count) {
+                    done = true;
                 }
-            }};
+            }
+    };
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes, sender_selector](
             const std::vector<std::type_index>& subgroup_type_order,
@@ -174,27 +168,24 @@ int main(int argc, char *argv[]) {
 
     std::cout << "my rank is:" << node_rank << ", and I'm sending:" << is_sending << std::endl;
 
-    clock_gettime(CLOCK_REALTIME, &t_begin);
-
     derecho::Replicated<ByteArrayObject> &handle = group.get_subgroup<ByteArrayObject>();
 
     if(is_sending) {
-        char *bbuf = new char[msg_size];
-        bzero(bbuf, msg_size);
-        Bytes bs(bbuf, msg_size);
+        std::vector<std::unique_ptr<Bytes>> buffers;
+        for (uint32_t i=0;i<window_size+1;i++) {
+            buffers.emplace_back(std::make_unique<Bytes>(static_cast<std::size_t>(msg_size)));
+        }
 
         try {
-            struct timespec start, cur;
-            clock_gettime(CLOCK_REALTIME, &start);
-
             for(uint32_t i = 0; i < count; i++) {
-                do {
-                    pthread_yield();
-                    clock_gettime(CLOCK_REALTIME, &cur);
-                } while(DELTA_T_US(start, cur) < i * (double)si_us);
+                uint64_t msg_id = (static_cast<uint64_t>(node_rank)<<32) + i;
+                int bidx = count%(window_size+1);
+                // set msg_id
+                *reinterpret_cast<uint64_t*>(buffers[bidx]->bytes) = msg_id;
                 {
-                    local_message_ts_us[i] = cur.tv_sec * 1e6 + cur.tv_nsec / 1e3;
-                    handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
+                    ts_before_ordered_send[i] = get_cur_us();
+                    handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(*buffers[bidx]);
+                    ts_after_ordered_send[i] = get_cur_us();
                 }
             }
 
@@ -204,7 +195,43 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
-    while(true) {
+    // TODO: use condition variable.
+    std::cout << "wait until we done." << std::endl;
+    while(!done) {
+        std::this_thread::sleep_for(2s);
     }
+
+    // print the data
+    std::ofstream out_file("persistent_latency_data");
+    out_file << "# message_size:\t" << msg_size << std::endl;
+    out_file << "# num_of_nodes:\t" << num_of_nodes << std::endl;
+    out_file << "# sender selector:\t" << argv[1] << std::endl;
+    out_file << "#count\tordered_send(us)\tts_delivery(us)\tts_local_persist(us)\tts_global_persist(us)" << std::endl;
+    double latency_sum = 0.0;
+    for (uint32_t i=0;i<count;i++) {
+        uint64_t start = ts_before_ordered_send[i];
+        out_file << "[" << i << "]\t"
+                  << ts_after_ordered_send[i] - start << " " 
+                  << ts_delivery[i] - start << " " 
+                  << ts_local_persist[i] - start << " " 
+                  << ts_global_persist[i] - start << " " 
+                  << std::endl;
+        latency_sum += static_cast<double>(ts_global_persist[i] - start);
+    }
+    double average_latency = latency_sum/count;
+
+    double square_sum = 0.0;
+    for (uint32_t i=0;i<count;i++) {
+        square_sum += 
+            ((static_cast<double>(ts_global_persist[i]-ts_before_ordered_send[i])-average_latency) *
+             (static_cast<double>(ts_global_persist[i]-ts_before_ordered_send[i])-average_latency));
+    }
+    double latency_std = std::sqrt(square_sum/static_cast<double>(count+1));
+
+    out_file << "# Average latency = " << latency_sum/count << " us" << std::endl;
+    out_file << "# standard Deviation = " << latency_std << " us" << std::endl;
+    out_file.close();
+
+    group.barrier_sync();
+    group.leave();
 }
