@@ -1,31 +1,14 @@
-#include <bitset>
-#include <chrono>
-#include <cstdlib>
-#include <ctime>
-#include <fstream>
-#include <iostream>
-#include <limits>
-#include <map>
-#include <string>
-#include <thread>
+#include <vector>
 
 #include "initialize.h"
 #include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/sst/sst.hpp>
 
-using std::cin;
-using std::cout;
-using std::endl;
-using std::map;
-using std::ofstream;
-using std::string;
-using std::vector;
-
 using namespace sst;
 
 class mySST : public SST<mySST> {
 public:
-    mySST(const vector<uint32_t>& members, uint32_t my_rank)
+    mySST(const std::vector<uint32_t>& members, uint32_t my_rank)
             : SST<mySST>(this, SSTParams{members, my_rank}) {
         SSTInit(counter, heartbeat);
     }
@@ -44,109 +27,26 @@ public:
     } while(false)
 #endif
 
-void print_partial_sums(uint32_t num_nodes, uint64_t num_msgs, uint32_t my_rank, vector<vector<uint64_t>>& received_msgs) {
-    // what do we really want?
-    // [sum_missed_messages_local][num_intervals_with_missed][sum_missed_mesages_remote][num_intervals_with_missed]
-
-    ofstream fout("missed_results");
-
-    uint64_t count_missed = 0;
-    uint64_t num_intervals_with_missed = 0;
-
-    // count local
-
-    // get logic size of the vector:
-    uint64_t logic_size = 1;
-    for(uint64_t i = 1; i < received_msgs[my_rank].size(); i++) {
-        if(received_msgs[my_rank][i] > received_msgs[my_rank][i - 1]) {
-            logic_size++;
-        } else {
-             break;
-        }
-    }
-    // get start index (> num_msgs/2)
-    uint64_t start_index = 0;
-    for(uint64_t i = 0; i < logic_size; i++) {
-        if(received_msgs[my_rank][i] > num_msgs / 2) {
-            start_index = i;
-            break;
-        }
-    }
-
-    // actual count - here I change the vector, as I'm
-    // interested in the SECOND HALF of the messages
-    received_msgs[my_rank][start_index - 1] = num_msgs / 2;
-    for(uint64_t j = start_index; j < logic_size; j++) {
-        count_missed += received_msgs[my_rank][j] - received_msgs[my_rank][j - 1] - 1;
-        if(received_msgs[my_rank][j] - received_msgs[my_rank][j - 1] - 1 > 0) {
-            num_intervals_with_missed++;
-        }
-    }
-
-    fout << count_missed << " " << num_intervals_with_missed << " ";
-
-    // count missed remote
-    count_missed = 0;
-    num_intervals_with_missed = 0;
-
-    for(uint32_t i = 0; i < num_nodes; i++) {
-        if(i == my_rank) {
-            continue;
-        }
-
-        // get logic size of the vector
-        logic_size = 1;
-        for(uint64_t j = 1; j < received_msgs[i].size(); j++) {
-            if(received_msgs[i][j] > received_msgs[i][j - 1]) {
-                logic_size++;
-            } else {
-                break;
-            }
-        }
-
-        // get start index (> num_msgs/2)
-        start_index = 0;
-        for(uint64_t j = 0; j < logic_size; j++) {
-            if(received_msgs[i][j] > num_msgs / 2 ) {
-                start_index = j;
-                break;
-            }
-        }
-
-        // actual count - here I change the vector, as I'm
-        // interested in the SECOND HALF of the messages
-        received_msgs[i][start_index - 1] = num_msgs / 2;  //<--- if start index is 0? Unlikely but would be a problem
-        for(uint64_t j = start_index; j < logic_size; j++) {
-            count_missed += received_msgs[i][j] - received_msgs[i][j - 1] - 1;
-            if(received_msgs[i][j] - received_msgs[i][j - 1] - 1 > 0) {
-                num_intervals_with_missed++;
-            }
-        }
-    }
-    fout << count_missed << " " << num_intervals_with_missed << endl;
-    fout.close();
-}
-
 int main(int argc, char* argv[]) {
     if(argc != 3) {
-        std::cout << "Usage: " << argv[0] << " <num. nodes> <num_msgs>" << endl;
-        return -1;
+        std::cout << "Usage: " << argv[0] << " <num. nodes> <num_msgs>" << std::endl;
+        return 1;
     }
 
     const uint32_t num_nodes = std::atoi(argv[1]);
     const uint64_t num_msgs = std::atoll(argv[2]);
 
     if(num_nodes < 1) {
-        std::cout << "Number of nodes must be at least one" << endl;
-        return -1;
+      std::cout << "Number of nodes must be at least one" << std::endl;
+      return 1;
     }
     if(num_msgs < 1) {
-        std::cout << "Number of messages must be at least one" << endl;
-        return -1;
+      std::cout << "Number of messages must be at least one" << std::endl;
+      return 1;
     }
-
+    
     const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
-    const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
+        const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
@@ -157,7 +57,7 @@ int main(int argc, char* argv[]) {
 
     // form a group with all the nodes
     // all will send and receive
-    vector<uint32_t> members;
+    std::vector<uint32_t> members;
     for(auto p : ip_addrs_and_ports) {
         members.push_back(p.first);
     }
@@ -197,30 +97,22 @@ int main(int argc, char* argv[]) {
 
         DEBUG_MSG("Sender finished");
     };
-
-    //vector of received messages
-    vector<vector<uint64_t>> received_msgs(num_nodes, vector<uint64_t>(num_msgs, 0));
+    
+    std::vector<std::vector<bool>> received_msgs(num_nodes, std::vector<bool>(num_msgs, false));
 
     auto receiver_loop = [&]() {
         pthread_setname_np(pthread_self(), "receiver");
         DEBUG_MSG("Received started");
 
-        //index of the last received message
-        vector<uint64_t> last_received(num_nodes, 0);
-        //index of the newly received message
-        uint64_t actual_received = 0;
-        //vector of indexes
-        vector<uint64_t> j(num_nodes, 0);
-
-        while(!std::all_of(last_received.begin(), last_received.end(), [&](uint64_t n) { return n == num_msgs; })) {
-            for(uint32_t i = 0; i < num_nodes; i++) {
-                actual_received = sst.counter[i];
-                if(actual_received == last_received[i]) {
+        bool done = false;
+        while(!done) {
+	    done = true;
+            for(uint32_t i = 0; i < num_nodes; ++i) {
+                if(received_msgs[i].back()) {
                     continue;
                 }
-                received_msgs[i][j[i]] = actual_received;
-                j[i]++;
-                last_received[i] = actual_received;
+		done = false;
+                received_msgs[i][sst.counter[i]] = true;
             }
         }
         DEBUG_MSG("Receiver finished");
@@ -241,8 +133,14 @@ int main(int argc, char* argv[]) {
     failures_thread.join();
     sst.sync_with_members();
 
-    // print results
-    print_partial_sums(num_nodes, num_msgs, my_rank, received_msgs);
-
-    return 0;
+    std::cout << "Received counters" << std::endl;
+    for(uint32_t i = 0; i < num_nodes; ++i) {
+        std::cout << "Node rank " << i << std::endl;
+        for(uint32_t j = 0; j < num_msgs; ++j) {
+	    if (received_msgs[i][j]) {
+	        std::cout << j << std::endl;
+	    }
+        }
+        std::cout << std::endl;
+    }
 }
