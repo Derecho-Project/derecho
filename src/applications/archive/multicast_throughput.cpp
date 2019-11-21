@@ -39,7 +39,7 @@ struct exp_results {
 int main(int argc, char* argv[]) {
     constexpr uint max_msg_size = 1;
     const unsigned int num_messages = 1000000;
-    if(argc < 3) {
+    if(argc < 4) {
         cout << "Insufficient number of command line arguments" << endl;
         cout << "Usage: " << argv[0] << " <num_nodes> <window_size><num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender)>" << endl;
         cout << "Thank you" << endl;
@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(ip_addrs_and_ports, node_id);
 #else
     lf_initialize(ip_addrs_and_ports, node_id);
 #endif
