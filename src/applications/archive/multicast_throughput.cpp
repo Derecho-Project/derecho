@@ -58,9 +58,9 @@ int main(int argc, char* argv[]) {
     lf_initialize(ip_addrs_and_ports, node_id);
 #endif
 
-    std::vector<uint32_t> members(num_nodes);
-    for(uint i = 0; i < num_nodes; ++i) {
-        members[i] = i;
+    std::vector<uint32_t> members;
+    for(const auto& p : ip_addrs_and_ports) {
+        members.push_back(p.first); 
     }
 
     uint32_t num_senders = num_nodes, row_offset = 0;
