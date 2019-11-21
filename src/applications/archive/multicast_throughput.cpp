@@ -37,16 +37,17 @@ struct exp_results {
 #endif
 
 int main(int argc, char* argv[]) {
-    constexpr uint max_msg_size = 1, window_size = 1000;
+    constexpr uint max_msg_size = 1;
     const unsigned int num_messages = 1000000;
-    if(argc < 2) {
+    if(argc < 3) {
         cout << "Insufficient number of command line arguments" << endl;
-        cout << "Usage: " << argv[0] << " <num_nodes> <num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender)>" << endl;
+        cout << "Usage: " << argv[0] << " <num_nodes> <window_size><num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender)>" << endl;
         cout << "Thank you" << endl;
         exit(1);
     }
     uint32_t num_nodes = atoi(argv[1]);
-    int num_senders_selector = atoi(argv[2]);
+    uint32_t window_size = atoi(argv[2]);
+    int num_senders_selector = atoi(argv[3]);
     const uint32_t node_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports = initialize(num_nodes);
 
