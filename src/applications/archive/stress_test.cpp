@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
     if(i_am_sender) {
         double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec));
         double message_rate = (num_msgs * 1e9) / my_time;
-        std::cout << num_msgs << " msgs in " << my_time << " s => (" << message_rate << " msgs/s)" << std::endl; 
+        std::cout << num_msgs << " msgs in " << my_time << " ns => (" << message_rate << " msgs/s)" << std::endl; 
     }
 
     sst.sync_with_members();
