@@ -167,3 +167,7 @@ target_link_libraries(multicast_throughput derecho)
 #rdma issues
 add_executable(rdma_issue rdma_issue.cpp initialize.cpp)
 target_link_libraries(rdma_issue derecho)
+
+#stress test
+add_executable(stress_test stress_test.cpp initialize.cpp)
+target_link_libraries(stress_test derecho)
