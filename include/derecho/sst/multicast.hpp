@@ -73,6 +73,8 @@ class multicast_group {
     void sender_function() {
         pthread_setname_np(pthread_self(), "multicast_group_sender");
 
+        std::cout << "SenderLoop thread started" << std::endl;
+
         struct timespec last_time, cur_time;
         clock_gettime(CLOCK_REALTIME, &last_time);
         bool msg_sent;
@@ -109,8 +111,8 @@ class multicast_group {
 
                 sst->put(sst->index);
 
-                //DEBUG
-                std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
+                // //DEBUG
+                // std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
 
                 msg_sent = true;
                 old_sent_index = sst->index[my_row];

@@ -11,7 +11,7 @@ public:
             : SST<multicast_sst>(this, parameters),
               slots((max_msg_size + sizeof(uint64_t)) * window_size),
               num_received_sst(num_senders) {
-        SSTInit(slots, num_received_sst, heartbeat);
+        SSTInit(slots, index, num_received_sst, heartbeat);
     }
 };
 }  // namespace sst
