@@ -16,8 +16,8 @@ template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
-    // number of messages for which RDMA write is complete
-    uint64_t num_sent = 0;
+    // current index of sent messages
+    uint64_t current_sent_index = 0;
     // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
@@ -52,17 +52,84 @@ class multicast_group {
 
     std::thread timeout_thread;
 
+    //sender thread
+    std::atomic<bool> thread_shutdown;
+    std::thread sender_thread;
+
     void initialize() {
         for(auto i : row_indices) {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
+            sst->index[i] = 0;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
-                (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
             }
         }
+        sender_thread = std::thread(&multicast_group::sender_function, this);
         sst->sync_with_members(row_indices);
+    }
+
+    void sender_function() {
+        pthread_setname_np(pthread_self(), "multicast_group_sender");
+
+        struct timespec last_time, cur_time;
+        clock_gettime(CLOCK_REALTIME, &last_time);
+        bool msg_sent;
+
+        uint64_t old_sent_index = 0;
+        uint64_t num_to_be_sent = 0;
+        uint32_t my_index = sst->get_local_index();
+        uint32_t first_slot;
+
+        while(!thread_shutdown) {
+            msg_sent = false;
+            sst->index[my_index] = current_sent_index;
+
+            if(sst->index[my_index] > old_sent_index) {
+                num_to_be_sent = sst->index[my_index] - old_sent_index;
+                first_slot = old_sent_index % window_size;
+
+                //slots are contiguous
+                //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+                if(first_slot + num_to_be_sent <= window_size) {
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * num_to_be_sent);
+                } else {
+                    //slots are not contiguous
+                    //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * (window_size - first_slot));
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                            max_msg_size * (first_slot + num_to_be_sent - window_size));
+                }
+
+                sst->put(sst->index);
+
+                //DEBUG
+                std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
+
+                msg_sent = true;
+                old_sent_index = sst->index[my_row];
+            }
+
+            if(msg_sent) {
+                // update last time
+                clock_gettime(CLOCK_REALTIME, &last_time);
+            } else {
+                clock_gettime(CLOCK_REALTIME, &cur_time);
+                // check if the system has been inactive for enough time to induce sleep
+                double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                            + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+                if(time_elapsed_in_ms > 1) {
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(1ms);
+                }
+            }
+        }
     }
 
 public:
@@ -87,7 +154,8 @@ public:
               slots_offset(slots_offset),
               num_members(row_indices.size()),
               window_size(window_size),
-              max_msg_size(max_msg_size + 2 * sizeof(uint64_t)) {
+              max_msg_size(max_msg_size + 1 * sizeof(uint64_t)),
+              thread_shutdown(false) {
         // find my_member_index
         for(uint i = 0; i < num_members; ++i) {
             if(row_indices[i] == my_row) {
@@ -108,6 +176,7 @@ public:
         if(!this->is_sender[my_member_index]) {
             my_sender_index = -1;
         }
+
         initialize();
     }
 
@@ -120,7 +189,7 @@ public:
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
                 // set size appropriately
-                (uint64_t&)sst->slots[my_row][slots_offset + (max_msg_size * (slot + 1)) - 2 * sizeof(uint64_t)] = msg_size;
+                (uint64_t&)sst->slots[my_row][slots_offset + (max_msg_size * (slot + 1)) - sizeof(uint64_t)] = msg_size;
                 return &sst->slots[my_row][slots_offset + (max_msg_size * slot)];
             } else {
                 long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
@@ -138,15 +207,12 @@ public:
     }
 
     void send() {
-        uint32_t slot = num_sent % window_size;
-        num_sent++;
-        ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
-        sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
-                max_msg_size - sizeof(uint64_t));
-        sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
-                sizeof(uint64_t));
+        current_sent_index++;
+    }
+
+    ~multicast_group() {
+        thread_shutdown = true;
+        sender_thread.join();
     }
 
     void debug_print() {
@@ -155,7 +221,7 @@ public:
         cout << "Printing slots::next_seq" << endl;
         for(auto i : row_indices) {
             for(uint j = 0; j < window_size; ++j) {
-                cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
+                cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1))] << " ";
             }
             cout << endl;
         }

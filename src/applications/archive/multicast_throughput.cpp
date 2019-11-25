@@ -113,13 +113,14 @@ int main(int argc, char* argv[]) {
                           row_offset, num_senders](multicast_sst& sst) mutable {
         while(true) {
             for(uint j = 0; j < num_senders; ++j) {
-                auto num_received = sst.num_received_sst[node_rank][j] + 1;
+                uint64_t num_received = sst.num_received_sst[node_rank][j] + 1;
                 uint32_t slot = num_received % window_size;
-                if((int64_t&)sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)] == (num_received / window_size + 1)) {
+                while(sst.index[row_offset + j] >= num_received) {
                     sst_receive_handler(j, num_received,
-                                        &sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * slot],
-                                        sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
+                                        &sst.slots[row_offset + j][(max_msg_size + sizeof(uint64_t)) * slot],
+                                        sst.slots[row_offset + j][(max_msg_size + sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)]);
                     sst.num_received_sst[node_rank][j]++;
+                    num_received++;
                 }
             }
             bool time_to_push = true;

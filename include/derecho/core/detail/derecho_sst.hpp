@@ -119,6 +119,12 @@ public:
     /** for SST multicast */
     SSTFieldVector<char> slots;
     SSTFieldVector<int32_t> num_received_sst;
+   
+    /* ============================ */
+    //TODO: TAKE CARE OR THIS
+    SSTField<uint64_t> index;
+
+    /* ============================ */
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
