@@ -119,12 +119,7 @@ public:
     /** for SST multicast */
     SSTFieldVector<char> slots;
     SSTFieldVector<int32_t> num_received_sst;
-   
-    /* ============================ */
-    //TODO: TAKE CARE OR THIS
     SSTField<uint64_t> index;
-
-    /* ============================ */
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
@@ -160,7 +155,7 @@ public:
                 joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-                slots, num_received_sst, local_stability_frontier, rip);
+                slots, num_received_sst, local_stability_frontier, index, rip);
         //Once superclass constructor has finished, table entries can be initialized
         for(unsigned int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
@@ -192,6 +187,9 @@ public:
             auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
             for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
                 local_stability_frontier[row][i] = current_time;
+            }
+            for(uint32_t i = 0; i < get_num_rows() ; i++) {
+                index[i] = 0;
             }
             rip[row] = false;
         }
