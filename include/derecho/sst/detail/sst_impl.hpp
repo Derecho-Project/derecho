@@ -150,6 +150,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t off
         }
         // perform a remote RDMA write on the owner of the row
         res_vec[index]->post_remote_write(offset, size);
+        total_sent++;
     }
     return;
 }

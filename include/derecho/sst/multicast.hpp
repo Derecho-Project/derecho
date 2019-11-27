@@ -54,8 +54,8 @@ class multicast_group {
     std::thread timeout_thread;
 
     // for statistical purposes
-    std::vector<struct timespec> requested_send_times;
-    std::vector<struct timespec> actual_send_times;
+    // std::vector<struct timespec> requested_send_times;
+    // std::vector<struct timespec> actual_send_times;
 
     void initialize() {
         for(auto i : row_indices) {
@@ -68,8 +68,9 @@ class multicast_group {
             }
         }
 
-        requested_send_times = std::vector<struct timespec>(1000001, {0});        
-        actual_send_times = std::vector<struct timespec>(1000001, {0});    
+        // for statistical purposes
+        // requested_send_times = std::vector<struct timespec>(1000001, {0});        
+        // actual_send_times = std::vector<struct timespec>(1000001, {0});    
 
         sst->sync_with_members(row_indices);
     }
@@ -150,8 +151,7 @@ public:
         uint32_t slot = num_sent % window_size;
         num_sent++;
         
-        clock_gettime(CLOCK_REALTIME, &requested_send_times[num_sent]);
-        
+        // clock_gettime(CLOCK_REALTIME, &requested_send_times[num_sent]);
         ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
@@ -159,7 +159,7 @@ public:
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
                 sizeof(uint64_t));
-        clock_gettime(CLOCK_REALTIME, &actual_send_times[num_sent]);
+        // clock_gettime(CLOCK_REALTIME, &actual_send_times[num_sent]);
     }
 
     void debug_print() {
@@ -182,7 +182,7 @@ public:
         // cout << endl;
         std::ofstream ftimes("delays_req_done_no_batch");
         for(uint32_t i = 1; i <= 1000000; i++) {
-            ftimes << i << " " << (requested_send_times[i].tv_sec - actual_send_times[i].tv_sec) * 1e09 + (requested_send_times[i].tv_nsec - actual_send_times[i].tv_nsec) << std::endl;
+            ftimes << i << " " << (actual_send_times[i].tv_sec - requested_send_times[i].tv_sec) * 1e09 + (actual_send_times[i].tv_nsec - requested_send_times[i].tv_nsec) << std::endl;
         }
         ftimes.close();
     }

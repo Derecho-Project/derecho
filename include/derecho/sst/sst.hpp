@@ -230,6 +230,10 @@ private:
     /** Notified when the predicate evaluation thread should start. */
     std::condition_variable thread_start_cv;
 
+    /* Vector for monitoring */
+    // std::vector<struct timespec> start_times, end_times;
+    uint64_t total_sent;
+
 public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
             : derived_this(derived_class_pointer),
@@ -242,7 +246,8 @@ public:
               row_is_frozen(num_members),
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
-              thread_start(params.start_predicate_thread) {
+              thread_start(params.start_predicate_thread),
+              total_sent(0) {
         //Figure out my SST index
         my_index = (uint)-1;
         for(uint32_t i = 0; i < num_members; ++i) {
@@ -404,6 +409,13 @@ public:
     void put(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 
     void put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
+
+
+    /* Prints stat */
+    void print_times() {
+        std::ofstream("put_times");
+        ofstream << total_sent << std::endl;
+    }
 
 private:
     using char_p = volatile char*;
