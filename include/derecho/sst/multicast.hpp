@@ -266,17 +266,17 @@ public:
 
         std::ofstream ftimes("send_times_batching");
         uint64_t elapsed_time;
-        struct timespec first_time = {0}
+        struct timespec first_time = {0};
         int64_t last_sent = 0;
         for(uint64_t i = 1; i <= 1000000; i++) {
             if(actual_send_msg_and_times[i].first) {
-                if(first_time == {0}) {
+                if(first_time.tv_sec == 0 && first_time.tv_sec == 0) {
                     first_time = actual_send_msg_and_times[i].second;
                 }
                 elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - first_time.tv_sec)  * (uint64_t)1e9 
                         + (actual_send_msg_and_times[i].second.tv_nsec - first_time.tv_nsec);
                 for(uint64_t j = last_sent + 1; j <= i; j++) {                    
-                    fbatches << j << " " << elapsed_time << std::endl;
+                    ftimes << j << " " << elapsed_time << std::endl;
                 }
                 last_sent = i;
             }
