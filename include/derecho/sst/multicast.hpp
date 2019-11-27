@@ -3,10 +3,12 @@
 #include <cstdlib>
 #include <ctime>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "sst.hpp"
@@ -56,6 +58,10 @@ class multicast_group {
     std::atomic<bool> thread_shutdown;
     std::thread sender_thread;
 
+    //statistic - for multicast_throughput.cpp
+    std::vector<struct timespec> requested_send_times;
+    std::vector<std::pair<bool, struct timespec>> actual_send_msg_and_times;
+
     void initialize() {
         for(auto i : row_indices) {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
@@ -67,6 +73,10 @@ class multicast_group {
             }
         }
         sender_thread = std::thread(&multicast_group::sender_function, this);
+
+        requested_send_times = std::vector<struct timespec>(1000000, {0});
+        actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000000, {false, {0}});
+
         sst->sync_with_members(row_indices);
     }
 
@@ -111,6 +121,8 @@ class multicast_group {
 
                 // //DEBUG
                 // std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
+                actual_send_msg_and_times[sst->index[my_index]].first = true;
+                clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_index]].second);
 
                 msg_sent = true;
                 old_sent_index = sst->index[my_row];
@@ -208,6 +220,7 @@ public:
 
     void send() {
         current_sent_index++;
+        clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
 
     ~multicast_group() {
@@ -216,23 +229,39 @@ public:
     }
 
     void debug_print() {
-        using std::cout;
-        using std::endl;
-        cout << "Printing slots::next_seq" << endl;
-        for(auto i : row_indices) {
-            for(uint j = 0; j < window_size; ++j) {
-                cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1))] << " ";
+    //     using std::cout;
+    //     using std::endl;
+    //     cout << "Printing slots::next_seq" << endl;
+    //     for(auto i : row_indices) {
+    //         for(uint j = 0; j < window_size; ++j) {
+    //             cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1))] << " ";
+    //         }
+    //         cout << endl;
+    //     }
+    //     cout << "Printing num_received_sst" << endl;
+    //     for(auto i : row_indices) {
+    //         for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
+    //             cout << sst->num_received_sst[i][j] << " ";
+    //         }
+    //         cout << endl;
+    //     }
+    //     cout << endl;
+
+            ofstream fbatches("batches");
+            ofstream fdelays("delays");
+            uint64_t request_time, actual_time;
+            int64_t last_sent = -1;
+            for(uint64_t i = 0; i < 1000000; i++) {
+                if(actual_send_msg_and_times[i].first) {
+                    fbatches << i - last_sent << std::endl;
+                    for(uint64_t j = last_sent + 1; j <= i; j++) {
+                        request_time = actual_send_msg_and_times[j].second.tv_sec * (uint64_t)1e9 + actual_send_msg_and_times[j].second.tv_nsec;
+                        actual_time = actual_send_msg_and_times[i].second.tv_sec * (uint64_t)1e9 + actual_send_msg_and_times[i].second.tv_nsec;
+                        fdelays << actual_time - request_time << std::endl;
+                    }
+                    last_sent = i;
+                }
             }
-            cout << endl;
-        }
-        cout << "Printing num_received_sst" << endl;
-        for(auto i : row_indices) {
-            for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
-                cout << sst->num_received_sst[i][j] << " ";
-            }
-            cout << endl;
-        }
-        cout << endl;
     }
 };
 }  // namespace sst
