@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <functional>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -52,6 +53,9 @@ class multicast_group {
 
     std::thread timeout_thread;
 
+    // for statistical purposes
+    std::vector<struct timespec> send_times;
+
     void initialize() {
         for(auto i : row_indices) {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
@@ -62,6 +66,9 @@ class multicast_group {
                 (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
             }
         }
+
+        send_times = std::vector<struct timespec>(1000001, {0});        
+
         sst->sync_with_members(row_indices);
     }
 
@@ -147,26 +154,33 @@ public:
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
                 sizeof(uint64_t));
+        clock_gettime(CLOCK_REALTIME, &send_times[num_sent]);
     }
 
     void debug_print() {
-        using std::cout;
-        using std::endl;
-        cout << "Printing slots::next_seq" << endl;
-        for(auto i : row_indices) {
-            for(uint j = 0; j < window_size; ++j) {
-                cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
-            }
-            cout << endl;
+        // using std::cout;
+        // using std::endl;
+        // cout << "Printing slots::next_seq" << endl;
+        // for(auto i : row_indices) {
+        //     for(uint j = 0; j < window_size; ++j) {
+        //         cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
+        //     }
+        //     cout << endl;
+        // }
+        // cout << "Printing num_received_sst" << endl;
+        // for(auto i : row_indices) {
+        //     for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
+        //         cout << sst->num_received_sst[i][j] << " ";
+        //     }
+        //     cout << endl;
+        // }
+        // cout << endl;
+        const auto initial_time = send_times[1];
+        std::ofstream ftimes("send_times_no_batching");
+        for(uint32_t i = 1; i <= 1000000; i++) {
+            ftimes << i << " " << (send_times[i].tv_sec - initial_time.tv_sec) * 1e09 + (send_times[i].tv_nsec - initial_time.tv_nsec) << std::endl;
         }
-        cout << "Printing num_received_sst" << endl;
-        for(auto i : row_indices) {
-            for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
-                cout << sst->num_received_sst[i][j] << " ";
-            }
-            cout << endl;
-        }
-        cout << endl;
+        ftimes.close();
     }
 };
 }  // namespace sst
