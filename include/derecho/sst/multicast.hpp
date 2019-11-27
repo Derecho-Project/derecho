@@ -247,8 +247,8 @@ public:
     //     }
     //     cout << endl;
 
-            ofstream fbatches("batches");
-            ofstream fdelays("delays");
+            std::ofstream fbatches("batches");
+            std::ofstream fdelays("delays");
             uint64_t request_time, actual_time;
             int64_t last_sent = -1;
             for(uint64_t i = 0; i < 1000000; i++) {
