@@ -55,6 +55,7 @@ class multicast_group {
 
     // for statistical purposes
     std::vector<struct timespec> send_times;
+    struct timespec initial_time;
 
     void initialize() {
         for(auto i : row_indices) {
@@ -146,6 +147,9 @@ public:
 
     void send() {
         uint32_t slot = num_sent % window_size;
+        if(num_sent == 0) {
+            clock_gettime(CLOCK_REALTIME, &initial_time);
+        }
         num_sent++;
         ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
         sst->put(
@@ -175,7 +179,6 @@ public:
         //     cout << endl;
         // }
         // cout << endl;
-        const auto initial_time = send_times[1];
         std::ofstream ftimes("send_times_no_batching");
         for(uint32_t i = 1; i <= 1000000; i++) {
             ftimes << i << " " << (send_times[i].tv_sec - initial_time.tv_sec) * 1e09 + (send_times[i].tv_nsec - initial_time.tv_nsec) << std::endl;
