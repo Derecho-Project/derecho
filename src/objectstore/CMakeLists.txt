@@ -71,7 +71,6 @@ export (EXPORT dpods
 
 configure_file(dpodsConfig.cmake
     "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfig.cmake"
-    COPYONLY
 )
 
 set(ConfigPackageLocation lib/cmake/dpods)
@@ -81,7 +80,7 @@ install(EXPORT derecho
 )
 
 install(FILES
-    dpodsConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/dpods/dpodsConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
