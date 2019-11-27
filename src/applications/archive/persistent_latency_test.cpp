@@ -29,7 +29,7 @@ typedef struct _payload {
  */
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
-    Persistent<Bytes> pers_bytes;
+    Persistent<Bytes, ST_SPDK> pers_bytes;
 
     void change_pers_bytes(const Bytes &bytes) {
         *pers_bytes = bytes;
@@ -46,7 +46,7 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
-    ByteArrayObject(Persistent<Bytes> &_p_bytes) : pers_bytes(std::move(_p_bytes)) {
+    ByteArrayObject(Persistent<Bytes, ST_SPDK> &_p_bytes) : pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry *pr) : pers_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
@@ -219,6 +219,10 @@ int main(int argc, char *argv[]) {
         latency_sum += static_cast<double>(ts_global_persist[i] - start);
     }
     double average_latency = latency_sum/count;
+    uint64_t timespan = ts_global_persist[count - 1] - ts_before_ordered_send[0];
+    double msec = (double)timespan / 1000;
+    double thp_gbps = ((double)count * msg_size * 8) / (timespan * 1000);
+    double thp_ops = ((double)count * 1000000) / timespan; 
 
     double square_sum = 0.0;
     for (uint32_t i=0;i<count;i++) {
@@ -230,6 +234,9 @@ int main(int argc, char *argv[]) {
 
     out_file << "# Average latency = " << latency_sum/count << " us" << std::endl;
     out_file << "# standard Deviation = " << latency_std << " us" << std::endl;
+    out_file << "# Time span: " << msec << " millisecond" << std::endl;
+    out_file << "# throughput: " << thp_gbps << " Gbit/s" << std::endl;
+    out_file << "# throughput: " << thp_ops << " ops" << std::endl;
     out_file.close();
 
     group.barrier_sync();
