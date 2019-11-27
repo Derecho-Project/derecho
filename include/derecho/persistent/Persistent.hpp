@@ -588,7 +588,7 @@ public:
     // @v - bytes representation of the log tail)
     void applyLogTail(mutils::DeserializationManager* dsm, char const* v);
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
     uint64_t ns_in_persist = 0ul;
     uint64_t ns_in_set = 0ul;
     uint64_t cnt_in_persist = 0ul;

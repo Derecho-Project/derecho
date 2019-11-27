@@ -66,7 +66,7 @@ private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<persistent::PersistentRegistry> persistent_registry_ptr;
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
 public:
 #endif
     /**
@@ -75,7 +75,7 @@ public:
      * in memory, and otherwise Replicated<T> would be unmoveable.
      */
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG) || defined(DERECHO_DEBUG)
 private:
 #endif
     /** The ID of this node */

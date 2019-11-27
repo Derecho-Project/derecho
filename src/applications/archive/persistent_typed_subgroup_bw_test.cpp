@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
         std::cout << "(send)timespan:" << msec << " millisecond." << std::endl;
         std::cout << "(send)throughput:" << thp_gbps << "Gbit/s." << std::endl;
         std::cout << "(send)throughput:" << thp_ops << "ops." << std::endl;
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
         (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
     }

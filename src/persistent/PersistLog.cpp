@@ -17,5 +17,5 @@ void PersistLog::dump_hidx() {
         dbg_default_trace("hlc({0},{1})->idx({2})", itr->hlc.m_rtc_us, itr->hlc.m_logic, itr->log_idx);
     }
 }
-#endif  //NDEBUG
+#endif  //DERECHO_DEBUG
 }  // namespace persistent
