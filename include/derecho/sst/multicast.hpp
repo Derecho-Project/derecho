@@ -74,8 +74,8 @@ class multicast_group {
         }
         sender_thread = std::thread(&multicast_group::sender_function, this);
 
-        requested_send_times = std::vector<struct timespec>(1000000, {0});
-        actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000000, {false, {0}});
+        requested_send_times = std::vector<struct timespec>(1000001, {0});
+        actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000001, {false, {0}});
 
         sst->sync_with_members(row_indices);
     }
@@ -249,15 +249,16 @@ public:
 
             std::ofstream fbatches("batches");
             std::ofstream fdelays("delays");
-            uint64_t request_time, actual_time;
-            int64_t last_sent = -1;
-            for(uint64_t i = 0; i < 1000000; i++) {
+            uint64_t elapsed_time;
+            int64_t last_sent = 0;
+            for(uint64_t i = 1; i <= 1000000; i++) {
                 if(actual_send_msg_and_times[i].first) {
                     fbatches << i - last_sent << std::endl;
                     for(uint64_t j = last_sent + 1; j <= i; j++) {
-                        request_time = actual_send_msg_and_times[j].second.tv_sec * (uint64_t)1e9 + actual_send_msg_and_times[j].second.tv_nsec;
-                        actual_time = actual_send_msg_and_times[i].second.tv_sec * (uint64_t)1e9 + actual_send_msg_and_times[i].second.tv_nsec;
-                        fdelays << actual_time - request_time << std::endl;
+                        elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - requested_send_times[j].tv_sec)  * (uint64_t)1e9 
+                            + (actual_send_msg_and_times[i].second.tv_nsec - requested_send_times[j].tv_nsec);
+                        
+                        fdelays << elapsed_time << std::endl;
                     }
                     last_sent = i;
                 }
