@@ -196,6 +196,6 @@ int main(int argc, char* argv[]) {
     double sum_message_rate = aggregate_bandwidth(members, node_rank, message_rate);
     log_results(exp_results{num_nodes, num_senders_selector, max_msg_size, sum_message_rate},
                 "data_multicast");
-    sst->print_times();
+    //sst->print_times();
     sst->sync_with_members();
 }

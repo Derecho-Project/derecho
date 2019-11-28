@@ -235,8 +235,8 @@ private:
     std::condition_variable thread_start_cv;
 
     /* Vector for monitoring */
-    std::vector<struct timespec> start_times, end_times;
-    uint64_t total_sent;
+    // std::vector<struct timespec> start_times, end_times;
+    // uint64_t total_sent;
 
 public:
     SST(DerivedSST* derived_class_pointer, const SSTParams& params)
@@ -250,10 +250,10 @@ public:
               row_is_frozen(num_members),
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
-              thread_start(params.start_predicate_thread),
+              thread_start(params.start_predicate_thread)/*,
               start_times(3000000, {0}),
               end_times(3000000, {0}),
-              total_sent(0) {
+              total_sent(0) */{
         //Figure out my SST index
         my_index = (uint)-1;
         for(uint32_t i = 0; i < num_members; ++i) {
@@ -419,11 +419,11 @@ public:
 
     /* Prints stat */
     void print_times() {
-        std::ofstream file("put_times");
-        for(uint64_t i=0; i < total_sent || !(start_times[i].tv_nsec==0 && start_times[i].tv_sec==0); i++) {
-            file << (end_times[i].tv_sec - start_times[i].tv_sec)*(uint64_t)1e09 + (end_times[i].tv_sec - start_times[i].tv_sec) << std::endl;
-        }
-        file.close();
+        // std::ofstream file("put_times");
+        // for(uint64_t i=0; i < total_sent || !(start_times[i].tv_nsec==0 && start_times[i].tv_sec==0); i++) {
+        //     file << (end_times[i].tv_sec - start_times[i].tv_sec)*(uint64_t)1e09 + (end_times[i].tv_nsec - start_times[i].tv_nsec) << std::endl;
+        // }
+        // file.close();
     }
 
 private:

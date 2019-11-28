@@ -83,9 +83,11 @@ int main(int argc, char* argv[]) {
     sst.finished[my_rank] = false;
     sst.put();
     sst.sync_with_members();
-
     
     struct timespec start_time, end_time;
+    // std::vector<struct timespec> start_put_times(num_msgs, {0});
+    // std::vector<struct timespec> end_put_times(num_msgs, {0});
+
     auto sender_loop = [&]() {
         pthread_setname_np(pthread_self(), "sender");
         DEBUG_MSG("Sender started");
@@ -93,7 +95,9 @@ int main(int argc, char* argv[]) {
         // start timer
         clock_gettime(CLOCK_REALTIME, &start_time);
         for(uint64_t i = 0; i < num_msgs; i++) {
+            //clock_gettime(CLOCK_REALTIME, &start_put_times[i]);
             sst.put();
+            //clock_gettime(CLOCK_REALTIME, &end_put_times[i]);
         }
         // end timer
         clock_gettime(CLOCK_REALTIME, &end_time);
@@ -138,6 +142,11 @@ int main(int argc, char* argv[]) {
         double my_time = ((end_time.tv_sec * 1e9 + end_time.tv_nsec) - (start_time.tv_sec * 1e9 + start_time.tv_nsec));
         double message_rate = (num_msgs * 1e9) / my_time;
         std::cout << num_msgs << " msgs in " << my_time << " ns => (" << message_rate << " msgs/s)" << std::endl; 
+
+        // std::ofstream o("inter_put_times");
+        // for(uint64_t i = 0; i < num_msgs; i++) {
+        //     o << (end_put_times[i].tv_sec - start_put_times[i].tv_sec)*(uint64_t)1e09 + (end_put_times[i].tv_nsec - start_put_times[i].tv_nsec) << std::endl;
+        // }
     }
 
     sst.sync_with_members();
