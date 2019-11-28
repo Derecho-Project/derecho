@@ -19,6 +19,10 @@
 #include "predicates.hpp"
 #include <derecho/conf/conf.hpp>
 
+
+//To be removed
+#include <fstream>
+
 #ifdef USE_VERBS_API
 #include "detail/verbs.hpp"
 #else  //LIBFABRIC
@@ -231,7 +235,7 @@ private:
     std::condition_variable thread_start_cv;
 
     /* Vector for monitoring */
-    // std::vector<struct timespec> start_times, end_times;
+    std::vector<struct timespec> start_times, end_times;
     uint64_t total_sent;
 
 public:
@@ -247,6 +251,8 @@ public:
               failure_upcall(params.failure_upcall),
               res_vec(num_members),
               thread_start(params.start_predicate_thread),
+              start_times(3000000, {0}),
+              end_times(3000000, {0}),
               total_sent(0) {
         //Figure out my SST index
         my_index = (uint)-1;
@@ -413,8 +419,11 @@ public:
 
     /* Prints stat */
     void print_times() {
-        std::ofstream("put_times");
-        ofstream << total_sent << std::endl;
+        std::ofstream file("put_times");
+        for(uint64_t i=0; i < total_sent || !(start_times[i].tv_nsec==0 && start_times[i].tv_sec==0); i++) {
+            file << (end_times[i].tv_sec - start_times[i].tv_sec)*(uint64_t)1e09 + (end_times[i].tv_sec - start_times[i].tv_sec) << std::endl;
+        }
+        file.close();
     }
 
 private:

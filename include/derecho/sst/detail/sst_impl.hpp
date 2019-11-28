@@ -149,8 +149,11 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t off
             continue;
         }
         // perform a remote RDMA write on the owner of the row
+        clock_gettime(CLOCK_REALTIME, &start_times[total_sent]);
         res_vec[index]->post_remote_write(offset, size);
+        clock_gettime(CLOCK_REALTIME, &end_times[total_sent]);
         total_sent++;
+        
     }
     return;
 }

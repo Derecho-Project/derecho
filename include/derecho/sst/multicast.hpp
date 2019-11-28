@@ -180,11 +180,11 @@ public:
         //     cout << endl;
         // }
         // cout << endl;
-        std::ofstream ftimes("delays_req_done_no_batch");
-        for(uint32_t i = 1; i <= 1000000; i++) {
-            ftimes << i << " " << (actual_send_times[i].tv_sec - requested_send_times[i].tv_sec) * 1e09 + (actual_send_times[i].tv_nsec - requested_send_times[i].tv_nsec) << std::endl;
-        }
-        ftimes.close();
+        // std::ofstream ftimes("delays_req_done_no_batch");
+        // for(uint32_t i = 1; i <= 1000000; i++) {
+        //     ftimes << i << " " << (actual_send_times[i].tv_sec - requested_send_times[i].tv_sec) * 1e09 + (actual_send_times[i].tv_nsec - requested_send_times[i].tv_nsec) << std::endl;
+        // }
+        // ftimes.close();
     }
 };
 }  // namespace sst
