@@ -59,8 +59,10 @@ class multicast_group {
     std::thread sender_thread;
 
     //statistic - for multicast_throughput.cpp
-    std::vector<struct timespec> requested_send_times;
-    std::vector<std::pair<bool, struct timespec>> actual_send_msg_and_times;
+    // std::vector<struct timespec> requested_send_times;
+    // std::vector<std::pair<bool, struct timespec>> actual_send_msg_and_times;
+    std::vector<struct timespec> loop_times;
+    uint64_t loop_count;
 
     void initialize() {
         for(auto i : row_indices) {
@@ -74,8 +76,10 @@ class multicast_group {
         }
         sender_thread = std::thread(&multicast_group::sender_function, this);
 
-        requested_send_times = std::vector<struct timespec>(1000001, {0});
-        actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000001, {false, {0}});
+        // requested_send_times = std::vector<struct timespec>(1000001, {0});
+        // actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000001, {false, {0}});
+        loop_times = std::vector<struct timespec>(5000000, {0});
+        loop_count = 0;
 
         sst->sync_with_members(row_indices);
     }
@@ -93,6 +97,10 @@ class multicast_group {
         uint32_t first_slot;
 
         while(!thread_shutdown) {
+            
+            clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
+            loop_count++;
+            
             msg_sent = false;
             sst->index[my_index] = current_sent_index;
 
@@ -121,8 +129,8 @@ class multicast_group {
 
                 // //DEBUG
                 // std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
-                actual_send_msg_and_times[sst->index[my_index]].first = true;
-                clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_index]].second);
+                // actual_send_msg_and_times[sst->index[my_index]].first = true;
+                // clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_index]].second);
 
                 msg_sent = true;
                 old_sent_index = sst->index[my_row];
@@ -220,7 +228,7 @@ public:
 
     void send() {
         current_sent_index++;
-        clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
+        // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
 
     ~multicast_group() {
@@ -229,54 +237,51 @@ public:
     }
 
     void debug_print() {
-    //     using std::cout;
-    //     using std::endl;
-    //     cout << "Printing slots::next_seq" << endl;
-    //     for(auto i : row_indices) {
-    //         for(uint j = 0; j < window_size; ++j) {
-    //             cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1))] << " ";
+    
+    /* This measures the time between a send issued and that send done 
+     *  plus the number of messages batched each time
+     */
+    // std::ofstream fbatches("batches");
+    // std::ofstream fdelays("delays");
+    // uint64_t elapsed_time;
+    // int64_t last_sent = 0;
+    // for(uint64_t i = 1; i <= 1000000; i++) {
+    //     if(actual_send_msg_and_times[i].first) {
+    //         fbatches << i - last_sent << std::endl;
+    //         for(uint64_t j = last_sent + 1; j <= i; j++) {
+    //             elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - requested_send_times[j].tv_sec)  * (uint64_t)1e9 
+    //                 + (actual_send_msg_and_times[i].second.tv_nsec - requested_send_times[j].tv_nsec);
+    
+    //             fdelays << elapsed_time << std::endl;
     //         }
-    //         cout << endl;
+    //         last_sent = i;
     //     }
-    //     cout << "Printing num_received_sst" << endl;
-    //     for(auto i : row_indices) {
-    //         for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
-    //             cout << sst->num_received_sst[i][j] << " ";
+    // }
+    
+    /* This measures the moment of time each message was actually  sent, starting from  
+     * the first request to issue a message
+     */
+    // std::ofstream ftimes("send_times_batching");
+    // uint64_t elapsed_time;
+    // struct timespec first_time = requested_send_times[1];
+    // int64_t last_sent = 0;
+    // for(uint64_t i = 1; i <= 1000000; i++) {
+    //     if(actual_send_msg_and_times[i].first) {
+    //         elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - first_time.tv_sec)  * (uint64_t)1e9 
+    //                 + (actual_send_msg_and_times[i].second.tv_nsec - first_time.tv_nsec);
+    //         for(uint64_t j = last_sent + 1; j <= i; j++) {                    
+    //             ftimes << j << " " << elapsed_time << std::endl;
     //         }
-    //         cout << endl;
+    //         last_sent = i;
     //     }
-    //     cout << endl;
+    // }
 
-            // std::ofstream fbatches("batches");
-            // std::ofstream fdelays("delays");
-            // uint64_t elapsed_time;
-            // int64_t last_sent = 0;
-            // for(uint64_t i = 1; i <= 1000000; i++) {
-            //     if(actual_send_msg_and_times[i].first) {
-            //         fbatches << i - last_sent << std::endl;
-            //         for(uint64_t j = last_sent + 1; j <= i; j++) {
-            //             elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - requested_send_times[j].tv_sec)  * (uint64_t)1e9 
-            //                 + (actual_send_msg_and_times[i].second.tv_nsec - requested_send_times[j].tv_nsec);
-                        
-            //             fdelays << elapsed_time << std::endl;
-            //         }
-            //         last_sent = i;
-            //     }
-            // }
-
-        std::ofstream ftimes("send_times_batching");
-        uint64_t elapsed_time;
-        struct timespec first_time = requested_send_times[1];
-        int64_t last_sent = 0;
-        for(uint64_t i = 1; i <= 1000000; i++) {
-            if(actual_send_msg_and_times[i].first) {
-                elapsed_time = (actual_send_msg_and_times[i].second.tv_sec - first_time.tv_sec)  * (uint64_t)1e9 
-                        + (actual_send_msg_and_times[i].second.tv_nsec - first_time.tv_nsec);
-                for(uint64_t j = last_sent + 1; j <= i; j++) {                    
-                    ftimes << j << " " << elapsed_time << std::endl;
-                }
-                last_sent = i;
-            }
+        /* This measures how much it takes a single loop of the sender thread to send a msg */
+        std::ofstream floop("send_loop_times");
+        auto start_time = loop_times[0];
+        for(uint64_t i = 1; i < loop_count; i++) {
+            floop << (loop_times[i].tv_sec - start_time.tv_sec)*(uint64_t)1e09 + (loop_times[i].tv_nsec - start_time.tv_nsec) << std::endl;
+            start_time = loop_times[i];
         }
     }
 };
