@@ -202,7 +202,7 @@ class multicast_group {
 
                 //case 1: slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-                if(first_slot + batch_size <= window_size) {
+                if(first_slot + num_to_send <= window_size) {
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
                             max_msg_size * num_to_send);
