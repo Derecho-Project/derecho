@@ -74,12 +74,12 @@ class multicast_group {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
             }
         }
-        sender_thread = std::thread(&multicast_group::sender_function, this);
-
+        
         // requested_send_times = std::vector<struct timespec>(1000001, {0});
         // actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000001, {false, {0}});
         loop_times = std::vector<struct timespec>(5000000, {0});
         loop_count = 0;
+        sender_thread = std::thread(&multicast_group::sender_function, this);
 
         sst->sync_with_members(row_indices);
     }

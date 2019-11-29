@@ -104,7 +104,7 @@ void SST<DerivedSST>::detect() {
         auto pred_state_it = predicates.transition_predicate_states.begin();
         while(pred_it != predicates.transition_predicates.end()) {
             if(*pred_it != nullptr) {
-                //*pred_state_it is the previous state of the predicate at *pred_it
+                // *pred_state_it is the previous state of the predicate at *pred_it
                 bool curr_pred_state = (*pred_it)->first(*derived_this);
                 if(curr_pred_state == true && *pred_state_it == false) {
                     predicate_fired = true;
