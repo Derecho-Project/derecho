@@ -13,6 +13,8 @@
 
 #include "sst.hpp"
 
+#define WATERMARK
+
 namespace sst {
 template <typename sstType>
 class multicast_group {
@@ -61,8 +63,9 @@ class multicast_group {
     //statistic - for multicast_throughput.cpp
     // std::vector<struct timespec> requested_send_times;
     // std::vector<std::pair<bool, struct timespec>> actual_send_msg_and_times;
-    std::vector<struct timespec> loop_times;
-    uint64_t loop_count;
+    
+    // std::vector<struct timespec> loop_times;
+    // uint64_t loop_count;
 
     void initialize() {
         for(auto i : row_indices) {
@@ -77,14 +80,18 @@ class multicast_group {
         
         // requested_send_times = std::vector<struct timespec>(1000001, {0});
         // actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000001, {false, {0}});
-        loop_times = std::vector<struct timespec>(5000000, {0});
-        loop_count = 0;
-        sender_thread = std::thread(&multicast_group::sender_function, this);
+        // loop_times = std::vector<struct timespec>(5000000, {0});
+        // loop_count = 0;
 
+#ifdef WATERMARK
+        sender_thread = std::thread(&multicast_group::sender_function_watermark, this);
+#else
+        sender_thread = std::thread(&multicast_group::sender_function_opportunistic, this);
+#endif
         sst->sync_with_members(row_indices);
     }
 
-    void sender_function() {
+    void sender_function_opportunistic() {
         pthread_setname_np(pthread_self(), "multicast_group_sender");
 
         struct timespec last_time, cur_time;
@@ -98,8 +105,8 @@ class multicast_group {
 
         while(!thread_shutdown) {
             
-            clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
-            loop_count++;
+            // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
+            // loop_count++;
             
             msg_sent = false;
             sst->index[my_index] = current_sent_index;
@@ -150,6 +157,104 @@ class multicast_group {
                 }
             }
         }
+    }
+
+    void sender_function_watermark() {
+      pthread_setname_np(pthread_self(), "multicast_group_sender");
+
+        // struct timespec last_time, cur_time;
+        // clock_gettime(CLOCK_REALTIME, &last_time);
+        // bool msg_sent;
+
+        uint64_t old_sent_index = 0;
+        uint32_t my_index = sst->get_local_index();
+        uint32_t first_slot;
+
+        uint64_t queued_now = 0, pending_msgs = 0, sender_loop_counter = 0;
+        bool buffered_mode = false;
+        const uint64_t higher_watermark = 6/10 * window_size;
+        const uint64_t lower_watermark = 3/10 * window_size;
+        const uint64_t max_loop_iterations_waiting = 10;
+        const uint64_t batch_size = 1/2 * window_size;
+
+
+        while(!thread_shutdown) {
+            // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
+            // loop_count++;
+            
+            // msg_sent = false;
+            pending_msgs = current_sent_index - old_sent_index;           
+            queued_now = queued_num - finished_multicasts_num;
+            first_slot = old_sent_index % window_size;
+
+            /* BUFFERED MODE */
+            if(buffered_mode) {                
+                if(pending_msgs + queued_now < lower_watermark) {
+                    buffered_mode = false;
+                    continue;
+                }
+                if(pending_msgs == 0 || (pending_msgs < batch_size && sender_loop_counter < max_loop_iterations_waiting)) {
+                    sender_loop_counter++;
+                    continue;
+                }
+
+                //send batch_size messages (not more than that)
+                sst->index[my_index] = batch_size + old_sent_index;
+                
+                //case 1: slots are contiguous
+                //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+                if(first_slot + batch_size <= window_size) {
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * batch_size);
+                } else {
+                    //slots are not contiguous
+                    //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * (window_size - first_slot));
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                            max_msg_size * (first_slot + batch_size - window_size));
+                }
+
+                sst->put(sst->index);
+                old_sent_index = sst->index[my_row];
+                sender_loop_counter = 0;
+                // msg_sent = true;
+            
+            /* NON - BUFFERED MODE */
+            } else {
+                
+                if(pending_msgs + queued_now > higher_watermark) {
+                    buffered_mode = true;
+                    continue;
+                }
+                
+                if(pending_msgs > 0) {
+                    sst->index[my_index]++;
+                    sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(), max_msg_size);
+                    sst->put(sst->index);
+                    old_sent_index = sst->index[my_row];
+                    // msg_sent = true;
+                } 
+            }
+
+
+            // if(msg_sent) {
+            //     // update last time
+            //     clock_gettime(CLOCK_REALTIME, &last_time);
+            // } else {
+            //     clock_gettime(CLOCK_REALTIME, &cur_time);
+            //     // check if the system has been inactive for enough time to induce sleep
+            //     double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+            //                                 + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            //     if(time_elapsed_in_ms > 1) {
+            //         using namespace std::chrono_literals;
+            //         std::this_thread::sleep_for(1ms);
+            //     }
+            // }
+        }  
     }
 
 public:
@@ -276,13 +381,13 @@ public:
     //     }
     // }
 
-        /* This measures how much it takes a single loop of the sender thread to send a msg */
-        std::ofstream floop("send_loop_times");
-        auto start_time = loop_times[0];
-        for(uint64_t i = 1; i < loop_count; i++) {
-            floop << (loop_times[i].tv_sec - start_time.tv_sec)*(uint64_t)1e09 + (loop_times[i].tv_nsec - start_time.tv_nsec) << std::endl;
-            start_time = loop_times[i];
-        }
+        // /* This measures how much it takes a single loop of the sender thread to send a msg */
+        // std::ofstream floop("send_loop_times");
+        // auto start_time = loop_times[0];
+        // for(uint64_t i = 1; i < loop_count; i++) {
+        //     floop << (loop_times[i].tv_sec - start_time.tv_sec)*(uint64_t)1e09 + (loop_times[i].tv_nsec - start_time.tv_nsec) << std::endl;
+        //     start_time = loop_times[i];
+        // }
     }
 };
 }  // namespace sst
