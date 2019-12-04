@@ -631,7 +631,7 @@ bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_setting
                                         const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
-        uint64_t num_received = (uint64_t)sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count];
+        uint64_t num_received = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count];
         if(sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]   
                         > num_received) {
             return true;
@@ -719,11 +719,11 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     for(uint i = 0; i < batch_size; ++i) {
         for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
-            auto num_received = (uint64_t)sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
+            uint64_t num_received = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
             const uint32_t slot = num_received % profile.window_size;
             const uint32_t sender_sst_index = node_id_to_sst_index.at(
                     subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
-            const message_id_t next_seq = sst.index[sender_sst_index];
+            const uint64_t next_seq = sst.index[sender_sst_index];
             if(next_seq >= num_received) {
                 dbg_default_trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
                                   next_seq, num_received, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);

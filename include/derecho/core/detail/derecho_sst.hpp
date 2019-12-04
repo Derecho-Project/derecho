@@ -185,13 +185,18 @@ public:
             struct timespec start_time;
             clock_gettime(CLOCK_REALTIME, &start_time);
             auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
+            for(uint32_t i = 0; i < num_received_size; i++){
+                num_received_sst[row][i] = 0;
+            }
+
             for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
                 local_stability_frontier[row][i] = current_time;
             }
             for(uint32_t i = 0; i < get_num_rows() ; i++) {
-                index[i] = (uint64_t)-1;
+                index[i] = 0;
             }
             rip[row] = false;
+            
         }
     }
 
