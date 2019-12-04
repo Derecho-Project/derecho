@@ -4,7 +4,7 @@ namespace sst {
 class multicast_sst : public SST<multicast_sst> {
 public:
     SSTFieldVector<char> slots;
-    SSTField<uint64_t> index;
+    SSTField<int32_t> index;
     SSTFieldVector<int64_t> num_received_sst;
     SSTField<bool> heartbeat;
     multicast_sst(const SSTParams& parameters, uint32_t window_size, uint32_t num_senders, uint64_t max_msg_size)

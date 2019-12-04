@@ -21,7 +21,7 @@ class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
     // current index of sent messages
-    uint64_t current_sent_index = 0;
+    int32_t current_sent_index = -1;
     // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
@@ -72,7 +72,7 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            sst->index[i] = 0;
+            sst->index[i] = -1;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
             }
@@ -98,7 +98,7 @@ class multicast_group {
         clock_gettime(CLOCK_REALTIME, &last_time);
         bool msg_sent;
 
-        uint64_t old_sent_index = 0;
+        int32_t old_sent_index = -1;
         uint64_t num_to_be_sent = 0;
         uint32_t my_index = sst->get_local_index();
         uint32_t first_slot;
@@ -165,7 +165,8 @@ class multicast_group {
         // clock_gettime(CLOCK_REALTIME, &last_time);
         // bool msg_sent;
 
-        uint64_t old_sent_index = 0, num_to_send = 0;
+        int32_t old_sent_index = -1;
+        uint64_t num_to_send = 0;
         uint32_t my_index = sst->get_local_index();
         uint32_t first_slot;
 

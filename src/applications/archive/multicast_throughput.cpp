@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
                           row_offset, num_senders](multicast_sst& sst) mutable {
         while(true) {
             for(uint j = 0; j < num_senders; ++j) {
-                uint64_t num_received = sst.num_received_sst[node_rank][j] + 1;
+                auto num_received = sst.num_received_sst[node_rank][j] + 1;
                 uint32_t slot = num_received % window_size;
                 while(sst.index[row_offset + j] >= num_received) {
                     sst_receive_handler(j, num_received,

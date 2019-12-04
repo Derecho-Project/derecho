@@ -119,7 +119,7 @@ public:
     /** for SST multicast */
     SSTFieldVector<char> slots;
     SSTFieldVector<int32_t> num_received_sst;
-    SSTField<uint64_t> index;
+    SSTField<message_id_t> index;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
@@ -185,15 +185,12 @@ public:
             struct timespec start_time;
             clock_gettime(CLOCK_REALTIME, &start_time);
             auto current_time = start_time.tv_sec * 1e9 + start_time.tv_nsec;
-            for(uint32_t i = 0; i < num_received_size; i++){
-                num_received_sst[row][i] = 0;
-            }
 
             for(size_t i = 0; i < local_stability_frontier.size(); ++i) {
                 local_stability_frontier[row][i] = current_time;
             }
             for(uint32_t i = 0; i < get_num_rows() ; i++) {
-                index[i] = 0;
+                index[i] = -1;
             }
             rip[row] = false;
             
