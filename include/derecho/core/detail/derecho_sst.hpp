@@ -189,7 +189,7 @@ public:
                 local_stability_frontier[row][i] = current_time;
             }
             for(uint32_t i = 0; i < get_num_rows() ; i++) {
-                index[i] = 0;
+                index[i] = (uint64_t)-1;
             }
             rip[row] = false;
         }
