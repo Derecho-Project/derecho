@@ -13,7 +13,7 @@
 
 #include "sst.hpp"
 
-#define WATERMARK
+//#define WATERMARK
 
 namespace sst {
 template <typename sstType>
