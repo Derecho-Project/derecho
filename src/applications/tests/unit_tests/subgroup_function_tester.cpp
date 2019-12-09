@@ -26,25 +26,26 @@ int main(int argc, char* argv[]) {
 
     //Reduce the verbosity of specifying "ordered" for three custom subgroups
     std::vector<derecho::Mode> three_ordered(3, derecho::Mode::ORDERED);
+    std::vector<std::string> three_default_profiles(3, "default");
     SubgroupAllocationPolicy sharded_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(5, 3));
     SubgroupAllocationPolicy unsharded_policy = derecho::one_subgroup_policy(derecho::fixed_even_shards(1, 5));
     SubgroupAllocationPolicy uneven_sharded_policy = derecho::one_subgroup_policy(
-            derecho::custom_shards_policy({2, 5, 3}, {2, 5, 3}, three_ordered));
+            derecho::custom_shards_policy({2, 5, 3}, {2, 5, 3}, three_ordered,three_default_profiles));
     SubgroupAllocationPolicy multiple_copies_policy = derecho::identical_subgroups_policy(
             2, derecho::fixed_even_shards(3, 4));
     SubgroupAllocationPolicy multiple_subgroups_policy{3, false, {derecho::fixed_even_shards(3, 3),
-            derecho::custom_shards_policy({4, 3, 4}, {4, 3, 4}, three_ordered),
+            derecho::custom_shards_policy({4, 3, 4}, {4, 3, 4}, three_ordered, three_default_profiles),
             derecho::fixed_even_shards(2, 2)}};
 
     SubgroupAllocationPolicy flexible_shards_policy = derecho::one_subgroup_policy(
             derecho::flexible_even_shards(5, 2, 3));
     SubgroupAllocationPolicy uneven_flexible_shards = derecho::one_subgroup_policy(
-            derecho::custom_shards_policy({2, 5, 3}, {3, 6, 5}, three_ordered));
+            derecho::custom_shards_policy({2, 5, 3}, {3, 6, 5}, three_ordered, three_default_profiles));
     SubgroupAllocationPolicy multiple_copies_flexible = derecho::identical_subgroups_policy(
             2, derecho::flexible_even_shards(3, 4, 5));
     SubgroupAllocationPolicy multiple_fault_tolerant_subgroups{3, false,
             {derecho::flexible_even_shards(3, 2, 4),
-             derecho::custom_shards_policy({4, 3, 4}, {5, 4, 5}, three_ordered),
+             derecho::custom_shards_policy({4, 3, 4}, {5, 4, 5}, three_ordered, three_default_profiles),
              derecho::flexible_even_shards(2, 2, 4)}};
 
     //This will create subgroups that are the cross product of the "uneven_sharded_policy" and "sharded_policy" groups

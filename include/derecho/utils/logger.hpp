@@ -5,6 +5,9 @@
 #include <atomic>
 #include "spdlog/spdlog.h"
 
+#ifndef NDEBUG
+#undef NOLOG
+#endif
 
 class LoggerFactory {
 private:
@@ -31,8 +34,8 @@ public:
     static std::shared_ptr<spdlog::logger>& getDefaultLogger();
 };
 
-#ifndef NDEBUG
-  // Debug version
+#ifndef NOLOG
+  // Heavy logging version
   #define dbg_trace(logger, ...) logger->trace(__VA_ARGS__)
   #define dbg_default_trace(...) dbg_trace(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
   #define dbg_debug(logger, ...) logger->debug(__VA_ARGS__)
@@ -48,7 +51,7 @@ public:
   #define dbg_flush(logger) logger->flush()
   #define dbg_default_flush() LoggerFactory::getDefaultLogger()->flush()
 #else
-  // Release version
+  // Log-disabled version
   #define dbg_trace(logger, ...)
   #define dbg_default_trace(...)
   #define dbg_debug(logger, ...)
@@ -65,7 +68,7 @@ public:
   #define dbg_default_flush()
 #endif
 
-// Log-in-release macros. These will not be compiled out in release mode, so use carefully.
+// Log-in-release macros. These will not be compiled out in benchmark mode, so use carefully.
 #define rls_info(logger, ...) logger->info(__VA_ARGS__)
 #define rls_default_info(...) rls_info(LoggerFactory::getDefaultLogger(), __VA_ARGS__)
 #define rls_warn(logger, ...) logger->warn(__VA_ARGS__)

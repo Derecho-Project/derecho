@@ -20,10 +20,10 @@
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"
-#include "replicated.hpp"
 #include "detail/rpc_manager.hpp"
-#include "subgroup_info.hpp"
 #include "detail/view_manager.hpp"
+#include "replicated.hpp"
+#include "subgroup_info.hpp"
 
 #include <derecho/conf/conf.hpp>
 #include <mutils-containers/KindMap.hpp>
@@ -68,19 +68,37 @@ using replicated_index_map = std::map<uint32_t, Replicated<T>>;
 
 class _Group {
 private:
+protected:
+    virtual uint32_t get_index_of_type(const std::type_info&) = 0;
+
 public:
     virtual ~_Group() = default;
+
     template <typename SubgroupType>
     auto& get_subgroup(uint32_t subgroup_num = 0);
+
+    template <typename SubgroupType>
+    auto& get_nonmember_subgroup(uint32_t subgroup_num = 0);
+
+    template <typename SubgroupType>
+    std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
+
+    template <typename SubgroupType>
+    std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
 };
 
 template <typename ReplicatedType>
 class GroupProjection : public virtual _Group {
 protected:
     virtual void set_replicated_pointer(std::type_index, uint32_t, void**) = 0;
+    virtual void set_external_caller_pointer(std::type_index, uint32_t, void**) = 0;
+    virtual ViewManager& get_view_manager() = 0;
 
 public:
     Replicated<ReplicatedType>& get_subgroup(uint32_t subgroup_num = 0);
+    ExternalCaller<ReplicatedType>& get_nonmember_subgroup(uint32_t subgroup_index = 0);
+    std::vector<std::vector<node_id_t>> get_subgroup_members(uint32_t subgroup_index = 0);
+    std::size_t get_number_of_shards(uint32_t subgroup_index = 0);
 };
 
 class GroupReference {
@@ -104,6 +122,11 @@ template <typename... ReplicatedTypes>
 class Group : public virtual _Group, public GroupProjection<ReplicatedTypes>... {
 public:
     void set_replicated_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+    void set_external_caller_pointer(std::type_index type, uint32_t subgroup_num, void** ret);
+
+protected:
+    uint32_t get_index_of_type(const std::type_info&) override;
+    ViewManager& get_view_manager() override;
 
 private:
     using pred_handle = sst::Predicates<DerechoSST>::pred_handle;
@@ -124,7 +147,7 @@ private:
      * Another side effect is double free. So I change it back to the raw pointer.
      * The user deserialization context for all objects serialized and deserialized. */
     // std::shared_ptr<IDeserializationContext> user_deserialization_context;
-    IDeserializationContext * user_deserialization_context;
+    IDeserializationContext* user_deserialization_context;
 
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
@@ -222,8 +245,7 @@ private:
 public:
     /**
      * Constructor that starts a new managed Derecho group with this node as
-     * the leader. If they specify a filename, the group will
-     * run in persistent mode and log all messages to disk.
+     * the leader. 
      *
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
@@ -240,9 +262,21 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          IDeserializationContext * deserialization_context,
+          IDeserializationContext* deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
+
+    /**
+     * Constructor that starts a new managed Derecho group with this node as
+     * the leader. 
+     *
+     * @param subgroup_info The set of functions that define how membership in
+     * each subgroup and shard will be determined in this group.
+     * @param factories A variable number of Factory functions, one for each
+     * template parameter of Group, providing a way to construct instances of
+     * each Replicated Object
+     */
+    Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories);
 
     ~Group();
 
@@ -289,7 +323,7 @@ public:
     /** Causes this node to cleanly leave the group by setting itself to "failed."
      * @param group_shutdown True if all nodes in the group are going to leave.
      */
-    void leave(bool group_shutdown=true);
+    void leave(bool group_shutdown = true);
 
     /** Returns a vector listing the nodes that are currently members of the group. */
     std::vector<node_id_t> get_members();

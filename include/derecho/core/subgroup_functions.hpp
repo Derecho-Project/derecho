@@ -31,6 +31,16 @@ std::unique_ptr<T> deep_pointer_copy(const std::unique_ptr<T>& to_copy) {
     }
 }
 
+/*
+ * String constants for the names of configuration profile fields that
+ * the default subgroup allocator will look up
+ */
+constexpr char num_shards_profile_field[] = "num_shards";
+constexpr char min_nodes_profile_field[] = "min_nodes";
+constexpr char max_nodes_profile_field[] = "max_nodes";
+/* It would be really nice if we could group these together in an enumerated class
+ * called ProfileFields or something, but there's no way to do that with strings. */
+
 /**
  * A simple implementation of shard_view_generator_t that creates a single,
  * un-sharded subgroup containing all the members of curr_view for every subgroup
@@ -47,6 +57,11 @@ subgroup_allocation_map_t one_subgroup_entire_view(const std::vector<std::type_i
 subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::type_index>& subgroup_type_order,
                                                        const std::unique_ptr<View>& prev_view, View& curr_view);
 
+/**
+ * A data structure defining the parameters of the default subgroup allocation
+ * function for a single subgroup; it specifies how one subgroup is divided
+ * into shards.
+ */
 struct ShardAllocationPolicy {
     /** The number of shards; set to 1 for a non-sharded subgroup */
     int num_shards;
@@ -60,6 +75,9 @@ struct ShardAllocationPolicy {
     /** If even_shards is true, this is the delivery mode that will be used for
      * every shard. (Ignored if even_shards is false). */
     Mode shards_mode;
+    /** If even_shards is true, this is the profile that will be used for every
+     * shard. (Ignore if even_shards is false). */
+    std::string shards_profile;
     /** If even_shards is false, this will contain an entry for each shard
      * indicating the minimum number of members it should have.
      * (Ignored if even_shards is true). */
@@ -71,6 +89,10 @@ struct ShardAllocationPolicy {
      * indicating which delivery mode it should use. (Ignored if even_shards is
      * true). */
     std::vector<Mode> modes_by_shard;
+    /** If even_shards is false, this will contain an entry for each shard
+     * indicating which profile it should use. (Ignored if even_shards is
+     * true). */
+    std::vector<std::string> profiles_by_shard;
 };
 
 /**
@@ -115,14 +137,29 @@ struct CrossProductPolicy {
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards "flexible" or
  * fault-tolerant shards, each of which has the same minimum number of nodes
- * and maximuim number of nodes
+ * and maximum number of nodes
  * @param num_shards The number of shards to request in this policy
  * @param min_nodes_per_shard The minimum number of nodes that each shard can have
  * @param max_nodes_per_shard The maximum number of nodes that each shard can have
+ * @param profile An optional configuration profile string to associate with every
+ * shard in this subgroup
  * @return A ShardAllocationPolicy value with these parameters
  */
 ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_shard,
-                                           int max_nodes_per_shard);
+                                           int max_nodes_per_shard,
+                                           const std::string& profile = "default");
+
+/**
+ * Returns a ShardAllocationPolicy that specifies a set number of "flexible"
+ * shards, each of which has the same minimum and maximum number of nodes,
+ * using the values of the constants num_shards, min_nodes, and max_nodes in
+ * the section of the configuration file identified by the profile string.
+ * @param profile A profile string identifying the configuration of this
+ * subgroup
+ * @return A ShardAllocationPolicy value constructed based on this
+ * configuration profile
+ */
+ShardAllocationPolicy flexible_even_shards(const std::string& profile);
 
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards shards with
@@ -130,18 +167,25 @@ ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_sha
  * exactly nodes_per_shard members.
  * @param num_shards The number of shards to request in this policy.
  * @param nodes_per_shard The number of nodes per shard to request.
+ * @param profile An optional configuration profile string to associate with
+ * every shard in this subgroup
  * @return A ShardAllocationPolicy value with these parameters.
  */
-ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
+                                        const std::string& profile = "default");
+
 /**
  * Returns a ShardAllocationPolicy that specifies num_shards shards with
  * the same fixed number of nodes in each shard, and every shard running in
  * "raw" delivery mode.
  * @param num_shards The number of shards to request in this policy.
  * @param nodes_per_shard The number of nodes per shard to request.
+ * @param profile An optional configuration profile string to associate with
+ * every shard in this subgroup
  * @return A ShardAllocationPolicy value with these parameters.
  */
-ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard);
+ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard,
+                                            const std::string& profile = "default");
 /**
  * Returns a ShardAllocationPolicy for a subgroup that has a different number of
  * members in each shard, and possibly has each shard in a different delivery mode.
@@ -152,11 +196,30 @@ ShardAllocationPolicy raw_fixed_even_shards(int num_shards, int nodes_per_shard)
  * shard; the ith shard can have up to max_nodes_by_shard[i] members.
  * @param delivery_modes_by_shard A vector specifying the delivery mode (Raw or
  * Ordered) for each shard, in the same order as the other vectors.
+ * @param profiles_by_shard A vector specifying the profile (defined in configuration
+ * file) for each shard, in the same order as the other vectors.
  * @return A ShardAllocationPolicy that specifies these shard sizes and modes.
  */
 ShardAllocationPolicy custom_shards_policy(const std::vector<int>& min_nodes_by_shard,
                                            const std::vector<int>& max_nodes_by_shard,
-                                           const std::vector<Mode>& delivery_modes_by_shard);
+                                           const std::vector<Mode>& delivery_modes_by_shard,
+                                           const std::vector<std::string>& profiles_by_shard);
+
+/**
+ * Returns a ShardAllocationPolicy for a subgroup that has a different number of
+ * members in each shard, and possibly has each shard in a different delivery mode.
+ * In this function, the minimum and maximum number of members in each shard is
+ * specified by the min_nodes and max_nodes constants in each shard's configuration
+ * profile.
+ * @param delivery_modes_by_shard A vector specifying the delivery mode (Raw or
+ * Ordered) for each shard
+ * @param profiles_by_shard A vector specifying the configuration profile to use
+ * for each shard
+ * @return A ShardAllocationPolicy that specifies the shard sizes and modes found
+ * in the configuration profiles
+ */
+ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_modes_by_shard,
+                                          const std::vector<std::string>& profiles_by_shard);
 
 /**
  * Returns a SubgroupAllocationPolicy for a replicated type that only has a

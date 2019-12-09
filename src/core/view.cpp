@@ -34,8 +34,7 @@ SubView::SubView(Mode mode,
           member_ips_and_ports(member_ips_and_ports),
           my_rank(-1),
           profile(profile) {
-    // if the sender information is not provided, assume that all members are
-    // senders
+    // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
         this->is_sender = is_sender;
     }
@@ -210,80 +209,15 @@ bool View::i_am_leader() const {
     return (find_rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
-bool View::i_am_new_leader() {
-    if(i_know_i_am_leader) {
-        return false;  // I am the OLD leader
-    }
-
-    for(int n = 0; n < my_rank; n++) {
-        for(int row = 0; row < my_rank; row++) {
-            if(!failed[n] && !gmsSST->suspected[row][n]) {
-                return false;  // I'm not the new leader, or some failure suspicion hasn't fully propagated
-            }
-        }
-    }
-    i_know_i_am_leader = true;
-    return true;
-}
-
-void View::merge_changes() {
-    int myRank = my_rank;
-    // Merge the change lists
-    for(int n = 0; n < num_members; n++) {
-        if(gmsSST->num_changes[myRank] < gmsSST->num_changes[n]) {
-            gmssst::set(gmsSST->changes[myRank], gmsSST->changes[n],
-                        gmsSST->changes.size());
-            gmssst::set(gmsSST->num_changes[myRank], gmsSST->num_changes[n]);
-        }
-
-        if(gmsSST->num_committed[myRank] < gmsSST->num_committed[n])  // How many I know to have been committed
-        {
-            gmssst::set(gmsSST->num_committed[myRank], gmsSST->num_committed[n]);
-        }
-    }
-    bool found = false;
-    for(int n = 0; n < num_members; n++) {
-        if(failed[n]) {
-            // Make sure that the failed process is listed in the changes vector as a
-            // proposed change
-            for(int c = gmsSST->num_committed[myRank];
-                c < gmsSST->num_changes[myRank] && !found; c++) {
-                if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
-                    // Already listed
-                    found = true;
-                }
-            }
-        } else {
-            // Not failed
-            found = true;
-        }
-
-        if(!found) {
-            gmssst::set(gmsSST->changes[myRank][gmsSST->num_changes[myRank] % gmsSST->changes.size()],
-                        members[n]);
-            gmssst::increment(gmsSST->num_changes[myRank]);
-        }
-    }
-    // gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
-    //             gmsSST->num_acked.get_base() - gmsSST->changes.get_base());
-    /* breaking the above put statement into individual put calls, to be sure that
-     * if we were relying on any ordering guarantees, we won't run into issue when
-     * guarantees do not hold*/
-    gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->joiner_ips.get_base() - gmsSST->changes.get_base());
-    gmsSST->put(gmsSST->joiner_ips.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_changes.get_base() - gmsSST->joiner_ips.get_base());
-    gmsSST->put(gmsSST->num_changes.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_committed.get_base() - gmsSST->num_changes.get_base());
-    gmsSST->put(gmsSST->num_committed.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_acked.get_base() - gmsSST->num_committed.get_base());
-}
-
 void View::wedge() {
     multicast_group->wedge();  // RDMC finishes sending, stops new sends or receives in Vc
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put(gmsSST->wedged.get_base() - gmsSST->getBaseAddress(),
                 sizeof(gmsSST->wedged[0]));
+}
+
+bool View::is_wedged() {
+    return gmsSST->wedged[my_rank];
 }
 
 std::string View::debug_string() const {

@@ -178,11 +178,11 @@ bool sync(uint32_t r_id);
  * Initializes the global libfabric resources. Must be called before creating
  * or using any SST instance. 
  * 
- * @param ip_addrs_and_ports A map from rank to (IP address, port) pairs
- * @param node_rank rank of this node.
+ * @param ip_addrs_and_ports A map from id to (IP address, port) pairs
+ * @param node_id id of this node.
  */
 void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
-                   uint32_t node_rank);
+                   uint32_t node_id);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 /** Shutdown the polling thread. */
