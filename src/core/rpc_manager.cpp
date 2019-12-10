@@ -200,7 +200,7 @@ void RPCManager::new_view_callback(const View& new_view) {
     {
         std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
         connections->remove_connections(new_view.departed);
-        connections->add_connections(new_view.joined);
+        connections->add_connections(new_view.members);
     }
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);

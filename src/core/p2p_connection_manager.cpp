@@ -10,7 +10,7 @@
 namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id) {
-
+    
     // HARD-CODED. Adding another request type will break this
 
     request_params.window_sizes[P2P_REPLY] = params.p2p_window_size;
@@ -39,7 +39,9 @@ P2PConnectionManager::~P2PConnectionManager() {
 void P2PConnectionManager::add_connections(const std::vector<uint32_t>& node_ids) {
     std::lock_guard<std::mutex> lock(connections_mutex);
     for (const uint32_t remote_id : node_ids) {
-        p2p_connections.at(remote_id) = std::make_unique<P2PConnection>(my_node_id, remote_id, p2p_buf_size, request_params);
+	if (p2p_connections.find(remote_id) == p2p_connections.end()) {
+	    p2p_connections.emplace(remote_id, std::make_unique<P2PConnection>(my_node_id, remote_id, p2p_buf_size, request_params));
+    	}
     }
 }
 
