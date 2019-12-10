@@ -29,7 +29,7 @@ typedef struct _payload {
  */
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
-    Persistent<Bytes, ST_SPDK> pers_bytes;
+    Persistent<Bytes> pers_bytes;
 
     void change_pers_bytes(const Bytes &bytes) {
         *pers_bytes = bytes;
@@ -46,7 +46,7 @@ public:
 
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
-    ByteArrayObject(Persistent<Bytes, ST_SPDK> &_p_bytes) : pers_bytes(std::move(_p_bytes)) {
+    ByteArrayObject(Persistent<Bytes> &_p_bytes) : pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry *pr) : pers_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
@@ -202,7 +202,7 @@ int main(int argc, char *argv[]) {
     }
 
     // print the data
-    std::ofstream out_file("persistent_latency_data");
+    std::ofstream out_file("persistent_latency_file_data");
     out_file << "# message_size:\t" << msg_size << std::endl;
     out_file << "# num_of_nodes:\t" << num_of_nodes << std::endl;
     out_file << "# sender selector:\t" << argv[1] << std::endl;
