@@ -99,8 +99,8 @@ class multicast_group {
         bool msg_sent;
 
         int32_t old_sent_index = -1;
-        uint64_t num_to_be_sent = 0;
-        uint32_t my_index = sst->get_local_index();
+        uint64_t ready_to_be_sent = 0;
+        uint32_t my_sst_index = sst->get_local_index();
         uint32_t first_slot;
 
         while(!thread_shutdown) {
@@ -108,18 +108,18 @@ class multicast_group {
             // loop_count++;
 
             msg_sent = false;
-            sst->index[my_index] = current_sent_index;
+            sst->index[my_sst_index] = current_sent_index;
 
-            if(sst->index[my_index] > old_sent_index) {
-                num_to_be_sent = sst->index[my_index] - old_sent_index;
-                first_slot = old_sent_index % window_size;
+            if(sst->index[my_sst_index] > old_sent_index) {
+                ready_to_be_sent = sst->index[my_sst_index] - old_sent_index;
+                first_slot = (old_sent_index+1) % window_size;
 
                 //slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-                if(first_slot + num_to_be_sent <= window_size) {
+                if(first_slot + ready_to_be_sent <= window_size) {
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * num_to_be_sent);
+                            max_msg_size * ready_to_be_sent);
                 } else {
                     //slots are not contiguous
                     //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
@@ -128,18 +128,13 @@ class multicast_group {
                             max_msg_size * (window_size - first_slot));
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                            max_msg_size * (first_slot + num_to_be_sent - window_size));
+                            max_msg_size * (first_slot + ready_to_be_sent - window_size));
                 }
 
                 sst->put(sst->index);
 
-                // //DEBUG
-                // std::cout << "Sent " << num_to_be_sent << " message(s) together" << std::endl;
-                // actual_send_msg_and_times[sst->index[my_index]].first = true;
-                // clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_index]].second);
-
                 msg_sent = true;
-                old_sent_index = sst->index[my_index];
+                old_sent_index = sst->index[my_sst_index];
             }
 
             if(msg_sent) {
@@ -166,8 +161,8 @@ class multicast_group {
         // bool msg_sent;
 
         int32_t old_sent_index = -1;
-        uint64_t num_to_send = 0;
-        uint32_t my_index = sst->get_local_index();
+        uint64_t ready_to_be_send = 0;
+        uint32_t my_sst_index = sst->get_local_index();
         uint32_t first_slot;
 
         uint64_t queued_now = 0, pending_msgs = 0, sender_loop_counter = 0;
@@ -184,7 +179,7 @@ class multicast_group {
             // msg_sent = false;
             pending_msgs = current_sent_index - old_sent_index;
             queued_now = queued_num - finished_multicasts_num;
-            first_slot = old_sent_index % window_size;
+            first_slot = (old_sent_index+1) % window_size;
 
             /* BUFFERED MODE */
             if(buffered_mode) {
@@ -198,15 +193,15 @@ class multicast_group {
                 }
 
                 //send batch_size messages (not more than that)
-                num_to_send = pending_msgs < batch_size ? pending_msgs : batch_size;
-                sst->index[my_index] = num_to_send + old_sent_index;
+                ready_to_be_send = pending_msgs < batch_size ? pending_msgs : batch_size;
+                sst->index[my_sst_index] += ready_to_be_send;
 
                 //case 1: slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-                if(first_slot + num_to_send <= window_size) {
+                if(first_slot + ready_to_be_send <= window_size) {
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * num_to_send);
+                            max_msg_size * ready_to_be_send);
                 } else {
                     //slots are not contiguous
                     //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
@@ -215,11 +210,11 @@ class multicast_group {
                             max_msg_size * (window_size - first_slot));
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                            max_msg_size * (first_slot + num_to_send - window_size));
+                            max_msg_size * (first_slot + ready_to_be_send - window_size));
                 }
 
                 sst->put(sst->index);
-                old_sent_index = sst->index[my_index];
+                old_sent_index = sst->index[my_sst_index];
                 sender_loop_counter = 0;
                 // msg_sent = true;
 
@@ -231,7 +226,7 @@ class multicast_group {
                 }
 
                 if(pending_msgs > 0) {
-                    sst->index[my_index]++;
+                    sst->index[my_sst_index]++;
                     sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(), max_msg_size);
                     sst->put(sst->index);
                     old_sent_index = sst->index[my_row];

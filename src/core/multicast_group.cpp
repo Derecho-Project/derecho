@@ -630,10 +630,10 @@ int32_t MulticastGroup::resolve_num_received(int32_t index, uint32_t num_receive
 bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_settings,
                                         const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
-    for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {   
+    for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
         // Equivalent to read_seq_num[sender_count] > last_seq_num[sender_count]
-        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]   
-                        > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
+        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+           > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
             return true;
         }
     }
@@ -649,9 +649,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
 
     message_id_t sequence_number = index * num_shard_senders + sender_rank;
     node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
-
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
-
     auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
     /* NULL Send Scheme */
     // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
@@ -719,20 +717,20 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     std::lock_guard<std::mutex> lock(msg_state_mtx);
     for(uint i = 0; i < batch_size; ++i) {
         for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
-            const message_id_t num_received = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
-            const uint32_t slot = num_received % profile.window_size;
+            const message_id_t expected_index = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
+            const uint32_t slot = expected_index % profile.window_size;
             const uint32_t sender_sst_index = node_id_to_sst_index.at(
-                    subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
-            const message_id_t next_seq = sst.index[sender_sst_index];
-            if(next_seq >= num_received) {
+                                subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
+            const message_id_t received_index = sst.index[sender_sst_index];
+            if(received_index >= expected_index) {
                 dbg_default_trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
-                                  next_seq, num_received, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);
+                                  received_index, expected_index, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);
                 sst_receive_handler_lambda(sender_count,
                                            &sst.slots[sender_sst_index]
                                                      [subgroup_settings.slot_offset + slot_width * slot],
                                            (uint64_t&)sst.slots[sender_sst_index]
                                                                [subgroup_settings.slot_offset + slot_width * (slot + 1) - sizeof(uint64_t)]);
-                sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = num_received;
+                sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = expected_index;
             }
         }
     }
