@@ -164,10 +164,6 @@ target_link_libraries(missed_counters derecho)
 add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
 target_link_libraries(multicast_throughput derecho)
 
-#rdma issues
-add_executable(rdma_issue rdma_issue.cpp initialize.cpp)
-target_link_libraries(rdma_issue derecho)
-
-#stress test
-add_executable(stress_test stress_test.cpp initialize.cpp)
-target_link_libraries(stress_test derecho)
+#multicast latency
+add_executable(multicast_latency multicast_latency.cpp initialize.cpp aggregate_bandwidth.cpp)
+target_link_libraries(multicast_latency derecho)
