@@ -180,14 +180,16 @@ int main(int argc, char* argv[]) {
         fout.close();
     }
 
-    stringstream ss;
-    ss << "ml_sent_" << num_nodes << "_" << node_rank;
-    ofstream fout;
-    fout.open(ss.str());
-    for(uint i = 0; i < num_messages; ++i) {
-        fout << send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec << endl;
+    if(node_rank == num_nodes - 1 || num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
+        stringstream ss;
+        ss << "ml_sent_" << num_nodes << "_" << node_rank;
+        ofstream fout;
+        fout.open(ss.str());
+        for(uint i = 0; i < num_messages; ++i) {
+            fout << send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec << endl;
+        }
+        fout.close();
     }
-    fout.close();
 
     sst->sync_with_members();
 }
