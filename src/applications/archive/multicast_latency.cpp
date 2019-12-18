@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
             is_sender[i] = 0;
         }
     } else {
-        for(uint i = 0; i < num_nodes - 1; ++i) {
+        for(uint i = 1; i < num_nodes; ++i) {
             is_sender[i] = 0;
         }
     }
