@@ -83,13 +83,15 @@ int main(int argc, char* argv[]) {
     vector<vector<struct timespec>> recv_times(num_nodes, vector<struct timespec>(num_messages, {0}));
     vector<struct timespec> send_times(num_messages, {0});
 
+    vector<bool> completed(num_senders, false);
     uint64_t num_finished = 0;
     auto sst_receive_handler = [&](uint32_t sender_rank, uint64_t index, volatile char* msg, uint32_t size) {
         clock_gettime(CLOCK_REALTIME, &recv_times[sender_rank][index]);
         if(index == num_messages - 1) {
+            completed[sender_rank] = true;
             num_finished++;
         }
-        if(num_finished == num_nodes) {
+        if(num_finished == num_nodes || (num_senders_selector == 1 && num_finished == num_nodes / 2) || (num_senders_selector == 2 && num_finished == 1)) {
             done = true;
         }
     };
@@ -100,23 +102,38 @@ int main(int argc, char* argv[]) {
     if(!num_times) {
         num_times = 1;
     }
-    auto receiver_trig = [=](multicast_sst& sst) {
-        bool update_sst = false;
-        for(uint i = 0; i < num_times; ++i) {
-            for(uint j = 0; j < num_nodes; ++j) {
-                uint32_t slot = sst.num_received_sst[node_id][j] % window_size;
-                if((int64_t&)sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)] == (sst.num_received_sst[node_id][j]) / window_size + 1) {
-                    sst_receive_handler(j, sst.num_received_sst[node_id][j],
+
+    vector<int64_t> last_max_num_received(num_senders, -1);
+    auto receiver_trig = [&completed, last_max_num_received, window_size, num_nodes, node_rank, sst_receive_handler,
+                          row_offset, num_senders](multicast_sst& sst) mutable {
+        while(true) {
+            for(uint j = 0; j < num_senders; ++j) {
+                auto num_received = sst.num_received_sst[node_rank][j] + 1;
+                uint32_t slot = num_received % window_size;
+                if((int64_t&)sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - sizeof(uint64_t)] == (num_received / window_size + 1)) {
+                    sst_receive_handler(j, num_received,
                                         &sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * slot],
                                         sst.slots[row_offset + j][(max_msg_size + 2 * sizeof(uint64_t)) * (slot + 1) - 2 * sizeof(uint64_t)]);
-                    sst.num_received_sst[node_id][j]++;
-                    update_sst = true;
+                    sst.num_received_sst[node_rank][j]++;
                 }
             }
+            bool time_to_push = true;
+            for(uint j = 0; j < num_senders; ++j) {
+                if(completed[j]) {
+                    continue;
+                }
+                if(sst.num_received_sst[node_rank][j] - last_max_num_received[j] <= window_size / 2) {
+                    time_to_push = false;
+                }
+            }
+            if(time_to_push) {
+                break;
+            }
         }
-        if(update_sst) {
-            sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
-                    sizeof(sst.num_received_sst[0][0]) * num_nodes);
+        sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
+                sizeof(sst.num_received_sst[0][0]) * num_senders);
+        for(uint j = 0; j < num_senders; ++j) {
+            last_max_num_received[j] = sst.num_received_sst[node_rank][j];
         }
     };
     sst->predicates.insert(receiver_pred, receiver_trig,
@@ -158,7 +175,7 @@ int main(int argc, char* argv[]) {
         ofstream fout;
         fout.open(ss.str());
         for(uint j = 0; j < num_messages; ++j) {
-            fout << recv_times[i][j].tv_sec* (uint64_t)1e9 + recv_times[i][j].tv_nsec << endl;
+            fout << recv_times[i][j].tv_sec * (uint64_t)1e9 + recv_times[i][j].tv_nsec << endl;
         }
         fout.close();
     }
@@ -168,7 +185,7 @@ int main(int argc, char* argv[]) {
     ofstream fout;
     fout.open(ss.str());
     for(uint i = 0; i < num_messages; ++i) {
-        fout << send_times[i].tv_sec* (uint64_t)1e9 + send_times[i].tv_nsec << endl;
+        fout << send_times[i].tv_sec * (uint64_t)1e9 + send_times[i].tv_nsec << endl;
     }
     fout.close();
 
