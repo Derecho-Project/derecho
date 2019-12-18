@@ -170,7 +170,7 @@ int main(int argc, char* argv[]) {
     }
     for(uint32_t i = 0; i < num_senders; ++i) {
         stringstream ss;
-        ss << "ml_received_" << num_nodes << "_" << node_rank << "_" << start_index++;
+        ss << "ml_received_" << num_nodes << "_" << node_id << "_" << start_index++;
         ofstream fout;
         fout.open(ss.str());
         for(uint j = 0; j < num_messages; ++j) {
@@ -181,7 +181,7 @@ int main(int argc, char* argv[]) {
 
     if(num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1) || (node_rank == 0 && num_senders_selector == 2)) {
         stringstream ss;
-        ss << "ml_sent_" << num_nodes << "_" << node_rank;
+        ss << "ml_sent_" << num_nodes << "_" << node_id;
         ofstream fout;
         fout.open(ss.str());
         for(uint i = 0; i < num_messages; ++i) {
