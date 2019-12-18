@@ -58,7 +58,6 @@ int main(int argc, char* argv[]) {
         row_offset = (num_nodes + 1) / 2;
     } else {
         num_senders = 1;
-        row_offset = num_nodes - 1;
     }
 
     std::shared_ptr<multicast_sst> sst = make_shared<multicast_sst>(
@@ -98,10 +97,6 @@ int main(int argc, char* argv[]) {
     auto receiver_pred = [](const multicast_sst& sst) {
         return true;
     };
-    auto num_times = window_size / num_nodes;
-    if(!num_times) {
-        num_times = 1;
-    }
 
     vector<int64_t> last_max_num_received(num_senders, -1);
     auto receiver_trig = [&completed, last_max_num_received, window_size, num_nodes, node_rank, sst_receive_handler,
@@ -156,7 +151,7 @@ int main(int argc, char* argv[]) {
     //Create group
     multicast_group<multicast_sst> g(sst, indices, window_size, max_msg_size, is_sender);
 
-    if(node_rank == num_nodes - 1 || num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
+    if(num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1) || (node_rank == 0 && num_senders_selector == 2)) {
         for(uint i = 0; i < num_messages; ++i) {
             volatile char* buf;
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
@@ -169,9 +164,13 @@ int main(int argc, char* argv[]) {
     }
 
     //Gather results
-    for(uint i = 0; i < num_senders; ++i) {
+    uint32_t start_index = 0;
+    if(num_senders_selector == 1) {
+        start_index = (num_nodes + 1) / 2;
+    }
+    for(uint32_t i = 0; i < num_senders; ++i) {
         stringstream ss;
-        ss << "ml_received_" << num_nodes << "_" << i;
+        ss << "ml_received_" << num_nodes << "_" << node_rank << "_" << start_index++;
         ofstream fout;
         fout.open(ss.str());
         for(uint j = 0; j < num_messages; ++j) {
@@ -180,7 +179,7 @@ int main(int argc, char* argv[]) {
         fout.close();
     }
 
-    if(node_rank == num_nodes - 1 || num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1)) {
+    if(num_senders_selector == 0 || (node_rank > (num_nodes - 1) / 2 && num_senders_selector == 1) || (node_rank == 0 && num_senders_selector == 2)) {
         stringstream ss;
         ss << "ml_sent_" << num_nodes << "_" << node_rank;
         ofstream fout;
