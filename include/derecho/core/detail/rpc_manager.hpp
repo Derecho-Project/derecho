@@ -16,7 +16,7 @@
 #include "../derecho_type_definitions.hpp"
 #include "../view.hpp"
 #include "derecho_internal.hpp"
-#include "p2p_connections.hpp"
+#include "p2p_connection_manager.hpp"
 #include "remote_invocable.hpp"
 #include "rpc_utils.hpp"
 #include "view_manager.hpp"
@@ -60,7 +60,7 @@ class RPCManager {
     ViewManager& view_manager;
 
     /** Contains an RDMA connection to each member of the group. */
-    std::unique_ptr<sst::P2PConnections> connections;
+    std::unique_ptr<sst::P2PConnectionManager> connections;
 
     /**
      * This provides mutual exclusion between the P2P listening thread
