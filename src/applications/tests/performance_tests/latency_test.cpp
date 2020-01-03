@@ -47,7 +47,7 @@ struct exp_result {
 };
 
 int main(int argc, char* argv[]) {
-  if(argc < 4 || (argc > 4 && strcmp("--", argv[argc - 4]))) {
+  if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
         cout << "Insufficient number of command line arguments" << endl;
         cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
         return -1;
