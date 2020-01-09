@@ -838,6 +838,7 @@ void MulticastGroup::register_predicates() {
         }
 
         auto receiver_pred = [=](const DerechoSST& sst) {
+	    //std::cout << "receiver predicate evaluated" << std::endl;
             return receiver_predicate(subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
@@ -851,6 +852,7 @@ void MulticastGroup::register_predicates() {
                                 sender_rank, data, size);
         };
         auto receiver_trig = [=](DerechoSST& sst) mutable {
+	    //std::cout << "receiver trigger activated" << std::endl;
             receiver_function(subgroup_num, subgroup_settings,
                               shard_ranks_by_sender_rank, num_shard_senders, sst,
                               batch_size, sst_receive_handler_lambda);
@@ -859,16 +861,19 @@ void MulticastGroup::register_predicates() {
                                                                   sst::PredicateType::RECURRENT));
 
         if(subgroup_settings.mode != Mode::UNORDERED) {
-            auto delivery_pred = [](const DerechoSST& sst) { return true; };
+            auto delivery_pred = [](const DerechoSST& sst) { /* std::cout << "delivery predicate always true" << std::endl; */ return true; };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
+		//std::cout << "delivery trigger activated" << std::endl;
                 delivery_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig,
                                                                       sst::PredicateType::RECURRENT));
 
-            auto persistence_pred = [](const DerechoSST& sst) { return true; };
+            auto persistence_pred = [](const DerechoSST& sst) {
+		    /* std::cout << "persistence pred always true" << std::endl;*/ return true; };
             auto persistence_trig = [this, subgroup_num, subgroup_settings, num_shard_members, version_seen = (persistent::version_t)INVALID_VERSION](DerechoSST& sst) mutable {
+		//std::cout << "persistence trigger activated" << std::endl;
                 std::lock_guard<std::mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
                 persistent::version_t min_persisted_num
@@ -888,7 +893,8 @@ void MulticastGroup::register_predicates() {
 
             if(subgroup_settings.sender_rank >= 0) {
                 auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
-                    message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
+      		    /* std::cout << "sender predicate evaluated" << std::endl; */
+		    message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
                     for(uint i = 0; i < num_shard_members; ++i) {
                         if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
                            || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
@@ -900,6 +906,7 @@ void MulticastGroup::register_predicates() {
                 auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
+		    //std::cout << "sender trigger activated" << std::endl;
                 };
                 sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
                                                                         sst::PredicateType::RECURRENT));

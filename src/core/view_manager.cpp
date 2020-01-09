@@ -642,39 +642,46 @@ void ViewManager::register_predicates() {
    * a member function, and lambdas are the only way to bind "this" to a member
    * function invocation. */
     auto suspected_changed = [this](const DerechoSST& sst) {
+	//std::cout << "suspected_changed predicate evaluated" << std::endl;
         return suspected_not_equal(sst, last_suspected);
     };
-    auto suspected_changed_trig = [this](DerechoSST& sst) { new_suspicion(sst); };
+    auto suspected_changed_trig = [this](DerechoSST& sst) {std::cout << "suspected_changed trigger activated" << std::endl; new_suspicion(sst); };
 
     auto start_join_pred = [this](const DerechoSST& sst) {
+	//std::cout << "start_join predicate evaluated" << std::endl;
         return active_leader && has_pending_join();
     };
-    auto start_join_trig = [this](DerechoSST& sst) { leader_start_join(sst); };
+    auto start_join_trig = [this](DerechoSST& sst) {std::cout << "suspected_changed trigger activated" << std::endl; leader_start_join(sst); };
 
     auto reject_join_pred = [this](const DerechoSST& sst) {
+	//std::cout << "reject_join predicate evaluated" << std::endl;
         return !active_leader && has_pending_join();
     };
-    auto reject_join = [this](DerechoSST& sst) { redirect_join_attempt(sst); };
+    auto reject_join = [this](DerechoSST& sst) {std::cout << "reject_join trigger activated" << std::endl; redirect_join_attempt(sst); };
 
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
+	//std::cout << "changed_commit_ready predicate evaluated" << std::endl;
         return active_leader
                && min_acked(gmsSST, curr_view->failed) > gmsSST.num_committed[curr_view->my_rank];
     };
-    auto commit_change = [this](DerechoSST& sst) { leader_commit_change(sst); };
+    auto commit_change = [this](DerechoSST& sst) {std::cout << "commit_change trigger activated" << std::endl; leader_commit_change(sst); };
 
     auto leader_proposed_change = [this](const DerechoSST& gmsSST) {
+	//std::cout << "leader_proposed_change predicate evaluated" << std::endl;
         return gmsSST.num_changes[curr_view->find_rank_of_leader()]
                > gmsSST.num_acked[curr_view->my_rank];
     };
     auto ack_proposed_change = [this](DerechoSST& sst) {
+	std::cout << "ack_proposed_changed trigger activated" << std::endl;
         acknowledge_proposed_change(sst);
     };
 
     auto leader_committed_changes = [this](const DerechoSST& gmsSST) {
+	//std::cout << "leader_committed_changes predicate evaluated" << std::endl;
         return gmsSST.num_committed[curr_view->find_rank_of_leader()]
                > gmsSST.num_installed[curr_view->my_rank];
     };
-    auto view_change_trig = [this](DerechoSST& sst) { start_meta_wedge(sst); };
+    auto view_change_trig = [this](DerechoSST& sst) { 	std::cout << "view_change_trig trigger activated" << std::endl; start_meta_wedge(sst); };
 
     if(!suspected_changed_handle.is_valid()) {
         suspected_changed_handle = curr_view->gmsSST->predicates.insert(
@@ -791,10 +798,12 @@ void ViewManager::new_suspicion(DerechoSST& gmsSST) {
     if(my_rank == Vc.find_rank_of_leader() && my_rank != old_leader_rank) {
         dbg_default_debug("The current leader failed, so this node will take over as leader");
         auto leader_change_finished = [this](const DerechoSST& sst) {
-            return curr_view->i_am_leader() && previous_leaders_suspected(sst, *curr_view);
+		std::cout << "leader_change_finished predicate evaluated" << std::endl;
+		return curr_view->i_am_leader() && previous_leaders_suspected(sst, *curr_view);
         };
         auto leader_change_trigger = [this](DerechoSST& sst) {
-            new_leader_takeover(sst);
+		std::cout << "leader_change_trigger activated" << std::endl;
+		new_leader_takeover(sst);
         };
         gmsSST.predicates.insert(leader_change_finished, leader_change_trigger,
                                  sst::PredicateType::ONE_TIME);
@@ -944,6 +953,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
      * registers the next epoch termination method as its trigger.
      */
     auto is_meta_wedged = [this](const DerechoSST& gmsSST) {
+	//std::cout << "is_meta_wedged predicate evaluated" << std::endl;
         for(unsigned int n = 0; n < gmsSST.get_num_rows(); ++n) {
             if(!curr_view->failed[n] && !gmsSST.wedged[n]) {
                 return false;
@@ -952,6 +962,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
         return true;
     };
     auto meta_wedged_continuation = [this](DerechoSST& gmsSST) {
+	std::cout << "is_meta_wedged trigger activated" << std::endl;
         terminate_epoch(gmsSST);
     };
     gmsSST.predicates.insert(is_meta_wedged, meta_wedged_continuation,
@@ -980,10 +991,12 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
         // Construct a predicate that watches for any new committed change that is a join
         int curr_num_committed = gmsSST.num_committed[curr_view->find_rank_of_leader()];
         auto leader_committed_change = [this, curr_num_committed](const DerechoSST& gmsSST) {
-            return gmsSST.num_committed[curr_view->find_rank_of_leader()] > curr_num_committed;
+		//std::cout << "leader_committed_change predicate evaluated" << std::endl;
+	        return gmsSST.num_committed[curr_view->find_rank_of_leader()] > curr_num_committed;
         };
         // Construct a trigger that will re-call terminate_epoch()
         auto retry_next_view = [this](DerechoSST& sst) {
+            std::cout << "retry_next_view trigger activated" << std::endl;
             terminate_epoch(sst);
         };
         gmsSST.predicates.insert(leader_committed_change, retry_next_view,
@@ -1063,6 +1076,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     // Wait for the shard leaders of subgroups I'm not a leader in to post
     // global_min_ready before continuing.
     auto leader_global_mins_are_ready = [this, follower_subgroups_and_shards](const DerechoSST& gmsSST) {
+	//std::cout << "leader_global_mins_are_ready predicate evaluated" << std::endl;
         for(const auto& subgroup_shard_pair : *follower_subgroups_and_shards) {
             const SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
                                                 .at(subgroup_shard_pair.second);
@@ -1077,6 +1091,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
     };
 
     auto global_min_ready_continuation = [this, follower_subgroups_and_shards](DerechoSST& gmsSST) {
+	std::cout << "global_min_ready_continuation trigger activated" << std::endl;
         echo_ragged_trim(follower_subgroups_and_shards, gmsSST);
     };
 
@@ -1109,6 +1124,7 @@ void ViewManager::echo_ragged_trim(
     //Now, for all subgroups I'm in (leader or not), wait for everyone to have echoed the leader's
     //global_min_ready before delivering any messages; this means they have seen and logged the ragged trim
     auto everyone_echoed_pred = [this](const DerechoSST& gmsSST) {
+	//std::cout << "everyone_echoed_pred predicate evaluated" << std::endl;
         for(const auto& subgroup_shard_pair : curr_view->my_subgroups) {
             const SubView& shard_view = curr_view->subgroup_shard_views.at(subgroup_shard_pair.first)
                                                 .at(subgroup_shard_pair.second);
@@ -1125,6 +1141,7 @@ void ViewManager::echo_ragged_trim(
     };
 
     auto deliver_ragged_trim_trig = [this](DerechoSST& gmsSST) {
+	std::cout << "deliver_ragged_trim_trig activated" << std::endl;
         deliver_ragged_trim(gmsSST);
     };
 
@@ -1153,6 +1170,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
 
     // Wait for persistence to finish for messages delivered in RaggedEdgeCleanup before continuing
     auto persistence_finished_pred = [this](const DerechoSST& gmsSST) {
+	//std::cout << "persistence_finished_pred predicate evaluated" << std::endl;
         // For each subgroup/shard that this node is a member of...
         for(const auto& subgroup_shard_pair : curr_view->my_subgroups) {
             const subgroup_id_t subgroup_id = subgroup_shard_pair.first;
@@ -1180,6 +1198,7 @@ void ViewManager::deliver_ragged_trim(DerechoSST& gmsSST) {
     };
 
     auto finish_view_change_trig = [this](DerechoSST& gmsSST) {
+	//std::cout << "finish_view_change_trig evaluated" << std::endl;
         finish_view_change(gmsSST);
     };
 

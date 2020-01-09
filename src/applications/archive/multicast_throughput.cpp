@@ -106,6 +106,7 @@ int main(int argc, char* argv[]) {
         }
     };
     auto receiver_pred = [&](const multicast_sst& sst) {
+	std::cout << "Receiver predicate invoked" << std::endl;
         return true;
     };
     vector<int64_t> last_max_num_received(num_senders, -1);
