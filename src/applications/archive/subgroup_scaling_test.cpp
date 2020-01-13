@@ -48,25 +48,31 @@ struct exp_result {
 
 int main(int argc, char *argv[]) {
     try {
-        if(argc < 3) {
-            cout << "Insufficient number of command line arguments" << endl;
-            cout << "Enter num_nodes, subgroup_size" << endl;
+        if(argc != 5) {
+            cout << "Invalid command line arguments." << endl;
+            cout << "USAGE:" << argv[0] << "num_nodes, subgroup_size, num_messages, msg_size" << endl;
             cout << "Thank you" << endl;
             return -1;
         }
         pthread_setname_np(pthread_self(), "sbgrp_scaling");
 
         const uint32_t num_nodes = std::stoi(argv[1]);
+        const uint32_t subgroup_size = std::stoi(argv[2]);
+        const uint32_t num_messages = std::stoi(argv[3]);
+        const uint64_t max_msg_size = std::stoi(argv[4]);
 
+        if(subgroup_size > num_nodes) {
+            cout << "Subgroup size must be at most num nodes!" << endl;
+            cout << "USAGE:" << argv[0] << "num_nodes, subgroup_size, num_messages, msg_size" << endl;
+            cout << "Thank you" << endl;
+            return -1;
+        }
+
+        // Read configurations from the command line options as well as the default config file
         Conf::initialize(argc, argv);
+        const uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-        uint64_t max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-        uint32_t num_messages = ((max_msg_size < 20000) ? 10000 : 1000);
-
-        uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-
-        // will resize it as and when convenient
-        uint32_t subgroup_size = std::stoi(argv[2]);
+        // Create subgroups
         const auto num_subgroups = num_nodes;
         vector<uint32_t> send_subgroup_indices;
         map<uint32_t, uint32_t> subgroup_to_local_index;

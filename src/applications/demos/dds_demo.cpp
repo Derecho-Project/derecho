@@ -30,7 +30,7 @@ public:
 };
 
 int main (int argc, char **argv) {
-    std::cout << "Starting simple data distribution service(DDS)." << std::endl;
+    std::cout << "Starting simple data distribution service (DDS)." << std::endl;
     DataDistributionService::initialize(argc,argv);
     std::atomic<bool> stopped = false;
     std::vector<std::thread> producer_threads;
