@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     try {
         if(argc != 5) {
             cout << "Invalid command line arguments." << endl;
-            cout << "USAGE:" << argv[0] << "num_nodes, subgroup_size, num_messages, msg_size" << endl;
+            cout << "USAGE:" << argv[0] << " num_nodes, subgroup_size, num_messages, msg_size" << endl;
             cout << "Thank you" << endl;
             return -1;
         }
