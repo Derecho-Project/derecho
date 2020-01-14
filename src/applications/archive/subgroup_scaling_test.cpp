@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
 
         if(subgroup_size > num_nodes) {
             cout << "Subgroup size must be at most num nodes!" << endl;
-            cout << "USAGE:" << argv[0] << "num_nodes, subgroup_size, num_messages, msg_size" << endl;
+            cout << "USAGE:" << argv[0] << " num_nodes, subgroup_size, num_messages, msg_size" << endl;
             cout << "Thank you" << endl;
             return -1;
         }
@@ -72,7 +72,11 @@ int main(int argc, char *argv[]) {
         Conf::initialize(argc, argv);
         const uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-        // Create subgroups
+       /* Create subgroups. 
+        * Subgroup creation is based on the node index.
+        * 
+        * 
+        */ 
         const auto num_subgroups = num_nodes;
         vector<uint32_t> send_subgroup_indices;
         map<uint32_t, uint32_t> subgroup_to_local_index;
