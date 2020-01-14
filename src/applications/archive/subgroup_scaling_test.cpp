@@ -35,12 +35,14 @@ struct volatile_wrapper {
 struct exp_result {
     uint32_t num_nodes;
     long long unsigned int max_msg_size;
+    uint32_t num_subgroups;
     uint32_t subgroup_size;
     double bw;
 
     void print(std::ofstream &fout) {
         fout << num_nodes << " "
              << max_msg_size << " "
+             << num_subgroups << " "
              << subgroup_size << " "
              << bw << endl;
     }
@@ -50,7 +52,7 @@ int main(int argc, char *argv[]) {
     try {
         if(argc != 6) {
             cout << "Invalid command line arguments." << endl;
-             cout << "USAGE:" << argv[0] << " num_nodes, num_groups, subgroup_size, num_messages, msg_size" << endl;
+            cout << "USAGE:" << argv[0] << " num_nodes, num_groups, subgroup_size, num_messages, msg_size" << endl;
             cout << "Thank you" << endl;
             return -1;
         }
@@ -177,7 +179,7 @@ int main(int argc, char *argv[]) {
         bw = (max_msg_size * num_messages * num_nodes * send_subgroup_indices.size() + 0.0) / nanoseconds_elapsed;
         avg_bw = aggregate_bandwidth(members_order, node_id, bw);
         if(node_rank == 0) {
-            log_results(exp_result{num_nodes, max_msg_size, subgroup_size, avg_bw},
+            log_results(exp_result{num_nodes, max_msg_size, num_subgroups, subgroup_size, avg_bw},
                         "data_subgroup_scaling");
         }
 
