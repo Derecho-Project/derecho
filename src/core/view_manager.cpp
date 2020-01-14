@@ -645,26 +645,26 @@ void ViewManager::register_predicates() {
 	//std::cout << "suspected_changed predicate evaluated" << std::endl;
         return suspected_not_equal(sst, last_suspected);
     };
-    auto suspected_changed_trig = [this](DerechoSST& sst) {std::cout << "suspected_changed trigger activated" << std::endl; new_suspicion(sst); };
+    auto suspected_changed_trig = [this](DerechoSST& sst) {/*std::cout << "suspected_changed trigger activated" << std::endl; */ new_suspicion(sst); };
 
     auto start_join_pred = [this](const DerechoSST& sst) {
 	//std::cout << "start_join predicate evaluated" << std::endl;
         return active_leader && has_pending_join();
     };
-    auto start_join_trig = [this](DerechoSST& sst) {std::cout << "suspected_changed trigger activated" << std::endl; leader_start_join(sst); };
+    auto start_join_trig = [this](DerechoSST& sst) {/*std::cout << "suspected_changed trigger activated" << std::endl;*/ leader_start_join(sst); };
 
     auto reject_join_pred = [this](const DerechoSST& sst) {
 	//std::cout << "reject_join predicate evaluated" << std::endl;
         return !active_leader && has_pending_join();
     };
-    auto reject_join = [this](DerechoSST& sst) {std::cout << "reject_join trigger activated" << std::endl; redirect_join_attempt(sst); };
+    auto reject_join = [this](DerechoSST& sst) {/*std::cout << "reject_join trigger activated" << std::endl;*/ redirect_join_attempt(sst); };
 
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
 	//std::cout << "changed_commit_ready predicate evaluated" << std::endl;
         return active_leader
                && min_acked(gmsSST, curr_view->failed) > gmsSST.num_committed[curr_view->my_rank];
     };
-    auto commit_change = [this](DerechoSST& sst) {std::cout << "commit_change trigger activated" << std::endl; leader_commit_change(sst); };
+    auto commit_change = [this](DerechoSST& sst) {/*std::cout << "commit_change trigger activated" << std::endl;*/ leader_commit_change(sst); };
 
     auto leader_proposed_change = [this](const DerechoSST& gmsSST) {
 	//std::cout << "leader_proposed_change predicate evaluated" << std::endl;
@@ -672,7 +672,7 @@ void ViewManager::register_predicates() {
                > gmsSST.num_acked[curr_view->my_rank];
     };
     auto ack_proposed_change = [this](DerechoSST& sst) {
-	std::cout << "ack_proposed_changed trigger activated" << std::endl;
+//	std::cout << "ack_proposed_changed trigger activated" << std::endl;
         acknowledge_proposed_change(sst);
     };
 
@@ -681,7 +681,7 @@ void ViewManager::register_predicates() {
         return gmsSST.num_committed[curr_view->find_rank_of_leader()]
                > gmsSST.num_installed[curr_view->my_rank];
     };
-    auto view_change_trig = [this](DerechoSST& sst) { 	std::cout << "view_change_trig trigger activated" << std::endl; start_meta_wedge(sst); };
+    auto view_change_trig = [this](DerechoSST& sst) {/*std::cout << "view_change_trig trigger activated" << std::endl;*/ start_meta_wedge(sst); };
 
     if(!suspected_changed_handle.is_valid()) {
         suspected_changed_handle = curr_view->gmsSST->predicates.insert(

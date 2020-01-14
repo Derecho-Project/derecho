@@ -72,17 +72,17 @@ void SST<DerivedSST>::detect() {
         // Take the predicate lock before reading the predicate lists
         std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
 
-	struct timespec start_pred, end_pred, start_trig, end_trig;
+//	struct timespec start_pred, end_pred, start_trig, end_trig;
 
         // one time predicates need to be evaluated only until they become true
-	uint32_t i = 0;
+//	uint32_t i = 0;
 	
-	std::cout << "OT pred = " << predicates.one_time_predicates.size() << std::endl;
+//	std::cout << "OT pred = " << predicates.one_time_predicates.size() << std::endl;
 	
         for(auto& pred : predicates.one_time_predicates) {
-	    clock_gettime(CLOCK_REALTIME, &start_pred);
+//	    clock_gettime(CLOCK_REALTIME, &start_pred);
 	    bool res = (pred != nullptr && pred->first(*derived_this) == true);
-	    clock_gettime(CLOCK_REALTIME, &end_pred);
+//	    clock_gettime(CLOCK_REALTIME, &end_pred);
 
 //	    std::cout << "[o" << i++ <<  "] Evaluated one time predicate (" << res << ") [" << (end_pred.tv_sec - start_pred.tv_sec)*(uint64_t)1e9 + (end_pred.tv_nsec - start_pred.tv_nsec) << " ns]" << std::endl;
 
@@ -92,9 +92,9 @@ void SST<DerivedSST>::detect() {
                 // segfaulting even if this predicate gets deleted when we unlock predicates_lock
                 std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
                 predicates_lock.unlock();
-                clock_gettime(CLOCK_REALTIME, &start_trig);
+//                clock_gettime(CLOCK_REALTIME, &start_trig);
 		(*trigger)(*derived_this);
-                clock_gettime(CLOCK_REALTIME, &end_trig);
+//                clock_gettime(CLOCK_REALTIME, &end_trig);
 
 //		std::cout << "[trigger " << (i-1) <<  "] Trigger activated [" << (end_trig.tv_sec - start_trig.tv_sec)*(uint64_t)1e9 + (end_trig.tv_nsec - start_trig.tv_nsec) << " ns]" << std::endl;
 
@@ -105,14 +105,14 @@ void SST<DerivedSST>::detect() {
         }
 
         // recurrent predicates are evaluated each time they are found to be true
-	i = 0;
+//	i = 0;
         for(auto& pred : predicates.recurrent_predicates) {
-	    clock_gettime(CLOCK_REALTIME, &start_pred);
+//	    clock_gettime(CLOCK_REALTIME, &start_pred);
 	
-	std::cout << "R pred = " << predicates.recurrent_predicates.size() << std::endl;
+//	std::cout << "R pred = " << predicates.recurrent_predicates.size() << std::endl;
 	
 	    bool res = (pred != nullptr && pred->first(*derived_this) == true);
-            clock_gettime(CLOCK_REALTIME, &end_pred);
+//            clock_gettime(CLOCK_REALTIME, &end_pred);
 
 //   	    std::cout << "[r" << i++ << "] Evaluated recurrent predicate (" << res << ") [" << (end_pred.tv_sec - start_pred.tv_sec)*(uint64_t)1e9 + (end_pred.tv_nsec - start_pred.tv_nsec) << " ns]" << std::endl;
 
@@ -120,9 +120,9 @@ void SST<DerivedSST>::detect() {
                 predicate_fired = true;
                 std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
                 predicates_lock.unlock();
-                clock_gettime(CLOCK_REALTIME, &start_trig);
+//                clock_gettime(CLOCK_REALTIME, &start_trig);
 		(*trigger)(*derived_this);
-                clock_gettime(CLOCK_REALTIME, &end_trig);
+//                clock_gettime(CLOCK_REALTIME, &end_trig);
 
 //		std::cout << "[trigger " << (i-1) <<  "] Trigger activated [" << (end_trig.tv_sec - start_trig.tv_sec)*(uint64_t)1e9 + (end_trig.tv_nsec - start_trig.tv_nsec) << " ns]" << std::endl;
 
@@ -134,16 +134,16 @@ void SST<DerivedSST>::detect() {
         // We need to use iterators here because we need to iterate over two lists in parallel
         auto pred_it = predicates.transition_predicates.begin();
         auto pred_state_it = predicates.transition_predicate_states.begin();
-	i = 0;
+//	i = 0;
         while(pred_it != predicates.transition_predicates.end()) {
-	    bool this_predicate = false;
-	    clock_gettime(CLOCK_REALTIME, &start_pred);
+//	    bool this_predicate = false;
+//	    clock_gettime(CLOCK_REALTIME, &start_pred);
             if(*pred_it != nullptr) {
                 // *pred_state_it is the previous state of the predicate at *pred_it
                 bool curr_pred_state = (*pred_it)->first(*derived_this);
                 if(curr_pred_state == true && *pred_state_it == false) {
-		    clock_gettime(CLOCK_REALTIME, &end_pred);
-		    this_predicate = true;
+//		    clock_gettime(CLOCK_REALTIME, &end_pred);
+//		    this_predicate = true;
                     predicate_fired = true;
                     std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(
                             (*pred_it)->second);
@@ -151,7 +151,7 @@ void SST<DerivedSST>::detect() {
                     (*trigger)(*derived_this);
                     predicates_lock.lock();
                 }
-		else {clock_gettime(CLOCK_REALTIME, &end_pred);}
+//		else {clock_gettime(CLOCK_REALTIME, &end_pred);}
 
                 *pred_state_it = curr_pred_state;
 
