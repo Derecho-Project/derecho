@@ -75,33 +75,30 @@ int main(int argc, char *argv[]) {
         Conf::initialize(argc, argv);
         const uint32_t node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
 
-       /* Create subgroups. 
+       /* Create subgroups.
         * Subgroup creation is based on the node index.
-        * 
-        * 
-        */ 
+        */
         vector<uint32_t> send_subgroup_indices;
-        map<uint32_t, uint32_t> subgroup_to_local_index;
         for(uint i = 0; i < subgroup_size; ++i) {
             auto j = ((int32_t)(node_id + num_nodes) - (int32_t)i) % num_nodes;
-            if(j < num_subgroups) {
-		subgroup_to_local_index[j] = i;
+	    if(j < num_subgroups) {
                 send_subgroup_indices.push_back(j);
             }
         }
-	vector<vector<volatile_wrapper<long long int>>> received_message_indices(subgroup_size);
-        for(uint i = 0; i < subgroup_size; ++i) {
-            received_message_indices[i].resize(subgroup_size, -1);
-        }
-        auto stability_callback = [&num_nodes,
-                                   subgroup_to_local_index,
-                                   &received_message_indices](uint32_t subgroup_num, int sender_id, long long int index,
+
+	volatile bool done = false;
+	volatile uint64_t num_delivered = 0;
+
+        auto stability_callback = [&](uint32_t subgroup_num, int sender_id, long long int index,
                                                               std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
-            int sender_rank = (sender_id - subgroup_num + num_nodes) % num_nodes;
-            received_message_indices[subgroup_to_local_index.at(subgroup_num)][sender_rank] = index;
+	    ++num_delivered;
+	    std::cout << "Received " << subgroup_num << "." << index << std::endl;
+	    if(num_delivered == num_messages * subgroup_size * send_subgroup_indices.size()) {
+                done = true;
+            }
         };
 
-        auto membership_function = [num_subgroups, num_nodes, subgroup_size](
+        auto membership_function = [num_subgroups, num_nodes, subgroup_size, node_id](
                 const std::vector<std::type_index>& subgroup_type_order,
                 const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
             derecho::subgroup_allocation_map_t subgroup_allocation;
@@ -113,7 +110,7 @@ int main(int argc, char *argv[]) {
             for(uint i = 0; i < num_subgroups; ++i) {
                 vector<uint32_t> members(subgroup_size);
                 for(uint j = 0; j < subgroup_size; ++j) {
-                    members[j] = (i + j) % num_members;
+                    members[j] = (node_id + j) % num_members;
                 }
                 subgroup_vector[i].emplace_back(curr_view.make_subview(members));
             }
@@ -143,25 +140,9 @@ int main(int argc, char *argv[]) {
         auto send_some = [&](uint32_t num_subgroups) {
             const auto num_subgroups_to_send = send_subgroup_indices.size();
             for(uint i = 0; i < num_subgroups * num_messages; ++i) {
-                uint j = i % num_subgroups_to_send;
-                subgroups[j].get().send(max_msg_size, [](char* buf){});
+		uint j = i % num_subgroups_to_send;
+		subgroups[j].get().send(max_msg_size, [](char* buf){});
             }
-        };
-
-        auto is_complete = [&](uint32_t num_subgroups) {
-            for(auto p : subgroup_to_local_index) {
-                auto subgroup_num = p.first;
-                if(subgroup_num >= num_subgroups) {
-                    continue;
-                }
-                auto i = p.second;
-                for(uint j = 0; j < subgroup_size; ++j) {
-                    if(received_message_indices[i][j] < num_messages - 1) {
-			return false;
-                    }
-                }
-            }
-            return true;
         };
 
         struct timespec start_time, end_time;
@@ -170,7 +151,7 @@ int main(int argc, char *argv[]) {
         // start timer
         clock_gettime(CLOCK_REALTIME, &start_time);
         send_some(num_subgroups);
-        while(!is_complete(num_subgroups)) {
+        while(!done) {
         }
         clock_gettime(CLOCK_REALTIME, &end_time);
         nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);

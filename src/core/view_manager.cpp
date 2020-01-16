@@ -1600,7 +1600,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
             max_shard_senders = std::max(shard_view.num_senders(), max_shard_senders);
 
             const DerechoParams& profile = DerechoParams::from_profile(shard_view.profile);
-            uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + 2 * sizeof(uint64_t));
+            uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + sizeof(uint64_t));
             uint64_t payload_size = profile.max_msg_size - sizeof(header);
             max_payload_size = std::max(payload_size, max_payload_size);
             slot_size_for_subgroup = std::max(slot_size_for_shard, slot_size_for_subgroup);
