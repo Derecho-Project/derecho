@@ -111,8 +111,8 @@ class multicast_group {
             msg_sent = false;
             sst->index[my_sst_index][index_field_index] = current_sent_index;
 
-            if(sst->index[index_field_index][my_sst_index] > old_sent_index) {
-                ready_to_be_sent = sst->index[index_field_index][my_sst_index] - old_sent_index;
+            if(sst->index[my_sst_index][index_field_index] > old_sent_index) {
+                ready_to_be_sent = sst->index[my_sst_index][index_field_index] - old_sent_index;
                 first_slot = (old_sent_index+1) % window_size;
 
                 //slots are contiguous
@@ -132,7 +132,7 @@ class multicast_group {
                             max_msg_size * (first_slot + ready_to_be_sent - window_size));
                 }
 
-                sst->put(sst->index);
+                sst->put(sst->index, index_field_index);
 
                 msg_sent = true;
                 old_sent_index = sst->index[my_sst_index][index_field_index];
@@ -214,7 +214,7 @@ class multicast_group {
                             max_msg_size * (first_slot + ready_to_be_send - window_size));
                 }
 
-                sst->put(sst->index);
+                sst->put(sst->index, index_field_index);
                 old_sent_index = sst->index[my_sst_index][index_field_index];
                 sender_loop_counter = 0;
                 // msg_sent = true;

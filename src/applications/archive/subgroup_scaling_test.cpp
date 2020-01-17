@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
         auto stability_callback = [&](uint32_t subgroup_num, int sender_id, long long int index,
                                                               std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
 	    ++num_delivered;
-	    std::cout << "Received " << subgroup_num << "." << index << std::endl;
+//	    std::cout << "Received " << subgroup_num << "." << index << std::endl;
 	    if(num_delivered == num_messages * subgroup_size * send_subgroup_indices.size()) {
                 done = true;
             }
