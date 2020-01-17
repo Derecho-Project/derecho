@@ -474,11 +474,13 @@ private:
      * @param callbacks The custom callbacks to supply to the MulticastGroup
      * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
+     * @param index_field_size The number of fields "index" in the SST (to send in different groups)
      */
     void construct_multicast_group(CallbackSet callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
-                                   const uint32_t slot_size);
+                                   const uint32_t slot_size,
+                                   const uint32_t index_field_size);
 
     /**
      * Sets up the SST and MulticastGroup for a new view, based on the settings in the current view,
@@ -489,7 +491,8 @@ private:
      */
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size,
-                                    const uint32_t new_slot_size);
+                                    const uint32_t new_slot_size,
+                                    const uint32_t index_field_size);
     /**
      * Initializes curr_view with subgroup information based on the membership
      * functions in subgroup_info. If curr_view would be inadequate based on
@@ -514,9 +517,10 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size and slot_size for the SST based on the current View's subgroup membership
+     * @return num_received_size, slot_size, index_field_size for the SST based on 
+     * the current View's subgroup membership
      */
-    std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
+    std::tuple<uint32_t, uint32_t, int32_t> derive_subgroup_settings(View& curr_view,
                                                            std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     /**

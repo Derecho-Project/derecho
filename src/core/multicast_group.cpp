@@ -632,7 +632,7 @@ bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_setting
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
         // Equivalent to read_seq_num[sender_count] > last_seq_num[sender_count]
-        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
+        if((message_id_t)sst.index[subgroup_settings.index_field_index][node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])]
            > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
             return true;
         }
@@ -652,8 +652,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
     auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
     std::cout << "[" << subgroup_num << "] node_id = " << node_id << " index = " << index << " seq = " << sequence_number << std::endl;
- 
-  /* NULL Send Scheme */
+
+    /* NULL Send Scheme */
     // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
     if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
         if(subgroup_settings.sender_rank < (int)sender_rank) {
@@ -722,8 +722,8 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
             const message_id_t expected_index = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] + 1;
             const uint32_t slot = expected_index % profile.window_size;
             const uint32_t sender_sst_index = node_id_to_sst_index.at(
-                                subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
-            const message_id_t received_index = sst.index[sender_sst_index];
+                    subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
+            const message_id_t received_index = sst.index[subgroup_settings.index_field_index][sender_sst_index];
             if(received_index >= expected_index) {
                 dbg_default_trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
                                   received_index, expected_index, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);

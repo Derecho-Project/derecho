@@ -42,6 +42,7 @@ class multicast_group {
 
     // start indexes for sst fields it uses
     // need to know the range it can operate on
+    const int32_t index_field_size;
     const uint32_t num_received_offset;
     const uint32_t slots_offset;
 
@@ -72,7 +73,7 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            sst->index[i] = -1;
+            sst->index[index_field_size][i] = -1;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
             }
@@ -108,10 +109,10 @@ class multicast_group {
             // loop_count++;
 
             msg_sent = false;
-            sst->index[my_sst_index] = current_sent_index;
+            sst->index[index_field_size][my_sst_index] = current_sent_index;
 
-            if(sst->index[my_sst_index] > old_sent_index) {
-                ready_to_be_sent = sst->index[my_sst_index] - old_sent_index;
+            if(sst->index[index_field_size][my_sst_index] > old_sent_index) {
+                ready_to_be_sent = sst->index[index_field_size][my_sst_index] - old_sent_index;
                 first_slot = (old_sent_index+1) % window_size;
 
                 //slots are contiguous
@@ -134,7 +135,7 @@ class multicast_group {
                 sst->put(sst->index);
 
                 msg_sent = true;
-                old_sent_index = sst->index[my_sst_index];
+                old_sent_index = sst->index[index_field_size][my_sst_index];
             }
 
             if(msg_sent) {
@@ -194,7 +195,7 @@ class multicast_group {
 
                 //send batch_size messages (not more than that)
                 ready_to_be_send = pending_msgs < batch_size ? pending_msgs : batch_size;
-                sst->index[my_sst_index] += ready_to_be_send;
+                sst->index[index_field_size][my_sst_index] += ready_to_be_send;
 
                 //case 1: slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
@@ -214,7 +215,7 @@ class multicast_group {
                 }
 
                 sst->put(sst->index);
-                old_sent_index = sst->index[my_sst_index];
+                old_sent_index = sst->index[index_field_size][my_sst_index];
                 sender_loop_counter = 0;
                 // msg_sent = true;
 
@@ -226,10 +227,10 @@ class multicast_group {
                 }
 
                 if(pending_msgs > 0) {
-                    sst->index[my_sst_index]++;
+                    sst->index[index_field_size][my_sst_index]++;
                     sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(), max_msg_size);
                     sst->put(sst->index);
-                    old_sent_index = sst->index[my_row];
+                    old_sent_index = sst->index[index_field_size][my_row];
                     // msg_sent = true;
                 }
             }
@@ -257,7 +258,8 @@ public:
                     uint64_t max_msg_size,
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
-                    uint32_t slots_offset = 0)
+                    uint32_t slots_offset = 0,
+                    int32_t index_field_size = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
@@ -268,6 +270,7 @@ public:
                       return is_sender;
                   }
               }()),
+              index_field_size(index_field_size),
               num_received_offset(num_received_offset),
               slots_offset(slots_offset),
               num_members(row_indices.size()),
