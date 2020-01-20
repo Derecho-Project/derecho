@@ -44,19 +44,20 @@ struct exp_result {
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
+    if(argc < 6 || (argc > 6 && strcmp("--", argv[argc - 6]))) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode), msg_size" << endl;
         cout << "Thank you" << endl;
         return -1;
     }
     pthread_setname_np(pthread_self(), "bw_test");
 
     // initialize the special arguments for this test
-    const uint num_nodes = std::stoi(argv[argc - 4]);
-    const uint num_senders_selector = std::stoi(argv[argc - 3]);
-    const uint num_messages = std::stoi(argv[argc - 2]);
-    const uint delivery_mode = std::stoi(argv[argc - 1]);
+    const uint num_nodes = std::stoi(argv[argc - 5]);
+    const uint num_senders_selector = std::stoi(argv[argc - 4]);
+    const uint num_messages = std::stoi(argv[argc - 3]);
+    const uint delivery_mode = std::stoi(argv[argc - 2]);
+    const uint64_t max_msg_size = std::stol(argv[argc - 1]);
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
@@ -142,7 +143,6 @@ int main(int argc, char* argv[]) {
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 
-    long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
     auto send_all = [&]() {
