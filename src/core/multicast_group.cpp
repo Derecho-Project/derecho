@@ -472,9 +472,15 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
 void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
                                      const persistent::version_t& version,
                                      const uint64_t& msg_ts_us) {
-    DERECHO_LOG(-1, -1, "deliver_message()");
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
+
+    if(msg.size == h->header_size) {
+        DERECHO_LOG(-1, -1, "deliver_null()");
+    } else {
+        DERECHO_LOG(-1, -1, "deliver_message()");
+    }
+
     // cooked send
     if(h->cooked_send) {
         buf += h->header_size;
@@ -647,6 +653,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     message_id_t sequence_number = index * num_shard_senders + sender_rank;
     node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
+    DERECHO_LOG(node_id, index, "receive_message()");
+
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
     auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
@@ -745,6 +753,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
         sst.seq_num[member_index][subgroup_num] = new_seq_num;
         sst.put(sst.seq_num, subgroup_num);
+	DERECHO_LOG(new_seq_num, -1, "update_seq_num()");
     }
     sst.put((char*)std::addressof(sst.num_received[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
             sizeof(decltype(sst.num_received)::value_type) * num_shard_senders);
@@ -811,6 +820,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     if(update_sst) {
         sst.put(get_shard_sst_indices(subgroup_num),
                 sst.delivered_num, subgroup_num);
+	DERECHO_LOG(sst.delivered_num[member_index][subgroup_num], -1, "update_delivered_num()");
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
             std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
@@ -1121,6 +1131,8 @@ void MulticastGroup::check_failures_loop() {
 
 // we already hold the lock on msg_state_mtx when we call this
 void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
+    DERECHO_LOG(-1, -1, "begin_null_send");
+
     // short-circuits most of the normal checks because
     // we know that we received a message and are sending a null
     long long unsigned int msg_size = sizeof(header);
@@ -1156,6 +1168,8 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         char* buf = (char*)sst_multicast_group_ptrs[subgroup_num]->get_buffer(msg_size);
 
         assert(buf);
+	
+	DERECHO_LOG(0, -1, "buffer_allocated");
 
         auto current_time = get_time();
         pending_message_timestamps[subgroup_num].insert(current_time);
@@ -1167,6 +1181,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         future_message_indices[subgroup_num]++;
         sst_multicast_group_ptrs[subgroup_num]->send();
+        DERECHO_LOG(-1, -1, "message_sent()");
     }
 }
 
@@ -1282,6 +1297,9 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     }
     std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
 
+    DERECHO_LOG(-1, -1, "begin_send");
+
+    int retry_cnt = 0;
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
@@ -1294,10 +1312,13 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         }
         lock.lock();
         buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
+	retry_cnt++;
     }
 
     // call to the user supplied message generator
     msg_generator(buf);
+
+    DERECHO_LOG(retry_cnt, -1, "buffer_allocated");
 
     if(last_transfer_medium[subgroup_num]) {
         assert(next_sends[subgroup_num]);
@@ -1307,6 +1328,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         return true;
     } else {
         sst_multicast_group_ptrs[subgroup_num]->send();
+        DERECHO_LOG(-1, -1, "message_sent()");
         pending_sst_sends[subgroup_num] = false;
         return true;
     }
