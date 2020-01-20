@@ -472,6 +472,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
 void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
                                      const persistent::version_t& version,
                                      const uint64_t& msg_ts_us) {
+    DERECHO_LOG(-1, -1, "deliver_message()");
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // cooked send
