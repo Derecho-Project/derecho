@@ -217,12 +217,6 @@ public:
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
 
-    ~multicast_group() {
-        thread_shutdown = true;
-        sender_thread.join();
-    //    debug_print();
-    }
-
     void debug_print() {
     /* This measures the moment of time each message was actually  sent, starting from  
      * the first request to issue a message
