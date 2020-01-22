@@ -13,15 +13,11 @@
 
 #include "sst.hpp"
 
-//#define WATERMARK
-
 namespace sst {
 template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
-    // current index of sent messages
-    int32_t current_sent_index = -1;
     // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
@@ -75,186 +71,65 @@ class multicast_group {
                 sst->num_received_sst[i][j] = -1;
             }
             sst->index[i][index_field_index] = -1;
+            sst->smc_pending_messages[i][index_field_index] = -1;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
             }
         }
 
+        //Register sender predicate
+        auto sender_pred = [=](const sstType& sst) {
+            uint32_t my_index = sst.get_local_index();
+            return sst.index[my_index][index_field_index] < sst.smc_pending_messages[my_index][index_field_index];
+        };
+
+        auto receiver_trig = [=](sstType& sst) mutable {
+            sender_function_opportunistic(sst);
+        };
+
+
         // requested_send_times = std::vector<struct timespec>(1000001, {0});
         // actual_send_msg_and_times = std::vector<std::pair<bool, struct timespec>>(1000000, {false, {0}});
         // loop_times = std::vector<struct timespec>(5000000, {0});
         // loop_count = 0;
-
-#ifdef WATERMARK
-        sender_thread = std::thread(&multicast_group::sender_function_watermark, this);
-#else
-        sender_thread = std::thread(&multicast_group::sender_function_opportunistic, this);
-#endif
-        sst->sync_with_members(row_indices);
+        sst->predicates.insert(sender_pred, receiver_trig, sst::PredicateType::RECURRENT);
     }
 
-    void sender_function_opportunistic() {
-        pthread_setname_np(pthread_self(), "send_looper");
+    void sender_function_opportunistic(sstType& sst) {
 
-        struct timespec last_time, cur_time;
-        clock_gettime(CLOCK_REALTIME, &last_time);
-        bool msg_sent;
-
-        int32_t new_index_to_send = -1;
-        int32_t max_batch_size = 5;
-        int64_t ready_to_be_sent = 0;
-        uint32_t my_sst_index = sst->get_local_index();
+        uint32_t my_sst_index = sst.get_local_index();
+        int32_t new_index_to_send = sst.smc_pending_messages[my_sst_index][index_field_index] ;
+        int64_t ready_to_be_sent = new_index_to_send - sst.index[my_sst_index][index_field_index];
         uint32_t first_slot;
 
-        while(!thread_shutdown) {
-            // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
-            // loop_count++;
-
-            msg_sent = false;
-            new_index_to_send = current_sent_index;
-
-            if(new_index_to_send > sst->index[my_sst_index][index_field_index]) {
-                ready_to_be_sent = new_index_to_send - sst->index[my_sst_index][index_field_index];
-                ready_to_be_sent = ready_to_be_sent < max_batch_size ? ready_to_be_sent : max_batch_size;
-                first_slot = (sst->index[my_sst_index][index_field_index]+1) % window_size;
-
-                //slots are contiguous
-                //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-                if(first_slot + ready_to_be_sent <= window_size) {
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * ready_to_be_sent);
-                } else {
-                    //slots are not contiguous
-                    //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * (window_size - first_slot));
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                            max_msg_size * (first_slot + ready_to_be_sent - window_size));
-                }
-
-                sst->index[my_sst_index][index_field_index]+= ready_to_be_sent;
-                sst->put(sst->index, index_field_index);
+        
+        // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
+        // loop_count++;
             
-                // clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_sst_index][index_field_index]].second);
-                // actual_send_msg_and_times[sst->index[my_sst_index][index_field_index]].first = true;
+        first_slot = (sst.index[my_sst_index][index_field_index]+1) % window_size;
 
-                msg_sent = true;
-            }
-
-            if(msg_sent) {
-                // update last time
-                clock_gettime(CLOCK_REALTIME, &last_time);
-            } else {
-                clock_gettime(CLOCK_REALTIME, &cur_time);
-                // check if the system has been inactive for enough time to induce sleep
-                double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-                                            + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-                if(time_elapsed_in_ms > 1) {
-                    using namespace std::chrono_literals;
-                    std::this_thread::sleep_for(1ms);
-                }
-            }
+        //slots are contiguous
+        //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+        if(first_slot + ready_to_be_sent <= window_size) {
+            sst.put(
+                   (char*)std::addressof(sst.slots[0][slots_offset + max_msg_size * first_slot]) - sst.getBaseAddress(),
+                    max_msg_size * ready_to_be_sent);
+        } else {
+            //slots are not contiguous
+            //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
+            sst.put(
+                   (char*)std::addressof(sst.slots[0][slots_offset + max_msg_size * first_slot]) - sst.getBaseAddress(),
+                   max_msg_size * (window_size - first_slot));
+            sst.put(
+                   (char*)std::addressof(sst.slots[0][slots_offset]) - sst.getBaseAddress(),
+                   max_msg_size * (first_slot + ready_to_be_sent - window_size));
         }
-    }
 
-    void sender_function_watermark() {
-        pthread_setname_np(pthread_self(), "send_looper");
-
-        // struct timespec last_time, cur_time;
-        // clock_gettime(CLOCK_REALTIME, &last_time);
-        // bool msg_sent;
-
-        int32_t old_sent_index = -1;
-        uint64_t ready_to_be_send = 0;
-        uint32_t my_sst_index = sst->get_local_index();
-        uint32_t first_slot;
-
-        uint64_t queued_now = 0, pending_msgs = 0, sender_loop_counter = 0;
-        bool buffered_mode = false;
-        const uint64_t higher_watermark = ((double)6 / 10) * window_size;
-        const uint64_t lower_watermark = ((double)3 / 10) * window_size;
-        const uint64_t max_loop_iterations_waiting = 10;
-        const uint64_t batch_size = ((double)1 / 2) * window_size;
-
-        while(!thread_shutdown) {
-            // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
-            // loop_count++;
-
-            // msg_sent = false;
-            pending_msgs = current_sent_index - old_sent_index;
-            queued_now = queued_num - finished_multicasts_num;
-            first_slot = (old_sent_index+1) % window_size;
-
-            /* BUFFERED MODE */
-            if(buffered_mode) {
-                if(pending_msgs + queued_now < lower_watermark) {
-                    buffered_mode = false;
-                    continue;
-                }
-                if(pending_msgs == 0 || (pending_msgs < batch_size && sender_loop_counter < max_loop_iterations_waiting)) {
-                    sender_loop_counter++;
-                    continue;
-                }
-
-                //send batch_size messages (not more than that)
-                ready_to_be_send = pending_msgs < batch_size ? pending_msgs : batch_size;
-                sst->index[my_sst_index][index_field_index] += ready_to_be_send;
-
-                //case 1: slots are contiguous
-                //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-                if(first_slot + ready_to_be_send <= window_size) {
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * ready_to_be_send);
-                } else {
-                    //slots are not contiguous
-                    //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * (window_size - first_slot));
-                    sst->put(
-                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                            max_msg_size * (first_slot + ready_to_be_send - window_size));
-                }
-
-                sst->put(sst->index, index_field_index);
-                old_sent_index = sst->index[my_sst_index][index_field_index];
-                sender_loop_counter = 0;
-                // msg_sent = true;
-
-                /* NON - BUFFERED MODE */
-            } else {
-                if(pending_msgs + queued_now > higher_watermark) {
-                    buffered_mode = true;
-                    continue;
-                }
-
-                if(pending_msgs > 0) {
-                    sst->index[my_sst_index][index_field_index]++;
-                    sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(), max_msg_size);
-                    sst->put(sst->index, index_field_index);
-                    old_sent_index = sst->index[my_row][index_field_index];
-                    // msg_sent = true;
-                }
-            }
-
-            // if(msg_sent) {
-            //     // update last time
-            //     clock_gettime(CLOCK_REALTIME, &last_time);
-            // } else {
-            //     clock_gettime(CLOCK_REALTIME, &cur_time);
-            //     // check if the system has been inactive for enough time to induce sleep
-            //     double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
-            //                                 + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
-            //     if(time_elapsed_in_ms > 1) {
-            //         using namespace std::chrono_literals;
-            //         std::this_thread::sleep_for(1ms);
-            //     }
-            // }
-        }
+        sst.index[my_sst_index][index_field_index]+= ready_to_be_sent;
+        sst.put(sst.index, index_field_index);
+            
+        // clock_gettime(CLOCK_REALTIME, &actual_send_msg_and_times[sst->index[my_sst_index][index_field_index]].second);
+        // actual_send_msg_and_times[sst->index[my_sst_index][index_field_index]].first = true;
     }
 
 public:
@@ -337,7 +212,8 @@ public:
         // if(current_sent_index == -1) {
         //     clock_gettime(CLOCK_REALTIME, &first_time);
         // }
-        current_sent_index++;
+
+        sst->smc_pending_messages[sst->get_local_index()][index_field_index]++;
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
 
