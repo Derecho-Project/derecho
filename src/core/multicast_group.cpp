@@ -474,11 +474,14 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
                                      const uint64_t& msg_ts_us) {
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
-
+    
+    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+    message_id_t seq_num = (msg.index) * get_num_senders(ss.senders) + msg.sender_id;
+    
     if(msg.size == h->header_size) {
-        DERECHO_LOG(-1, -1, "deliver_null()");
+        DERECHO_LOG(seq_num, -1, "deliver_null()");
     } else {
-        DERECHO_LOG(-1, -1, "deliver_message()");
+        DERECHO_LOG(seq_num, -1, "deliver_message()");
     }
 
     // cooked send
@@ -653,7 +656,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     message_id_t sequence_number = index * num_shard_senders + sender_rank;
     node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
-    DERECHO_LOG(node_id, index, "receive_message()");
+    DERECHO_LOG(sequence_number, node_id, "receive_message()");
 
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
@@ -1131,7 +1134,10 @@ void MulticastGroup::check_failures_loop() {
 
 // we already hold the lock on msg_state_mtx when we call this
 void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
-    DERECHO_LOG(-1, -1, "begin_null_send");
+    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+    message_id_t seq_num = (future_message_indices[subgroup_num]) * get_num_senders(ss.senders) + ss.sender_rank;
+
+    DERECHO_LOG(seq_num, -1, "begin_null_send");
 
     // short-circuits most of the normal checks because
     // we know that we received a message and are sending a null
@@ -1169,7 +1175,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         assert(buf);
 	
-	DERECHO_LOG(0, -1, "buffer_allocated");
+	    DERECHO_LOG(seq_num, 0, "buffer_allocated");
 
         auto current_time = get_time();
         pending_message_timestamps[subgroup_num].insert(current_time);
@@ -1181,7 +1187,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         future_message_indices[subgroup_num]++;
         sst_multicast_group_ptrs[subgroup_num]->send();
-        DERECHO_LOG(-1, -1, "message_sent()");
+        DERECHO_LOG(seq_num, -1, "message_sent()");
     }
 }
 
@@ -1296,8 +1302,9 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         return false;
     }
     std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-
-    DERECHO_LOG(-1, -1, "begin_send");
+    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+    message_id_t seq_num = (future_message_indices[subgroup_num]) * get_num_senders(ss.senders) + ss.sender_rank;
+    DERECHO_LOG(seq_num, -1, "begin_send");
 
     int retry_cnt = 0;
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
@@ -1318,7 +1325,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     // call to the user supplied message generator
     msg_generator(buf);
 
-    DERECHO_LOG(retry_cnt, -1, "buffer_allocated");
+    DERECHO_LOG(seq_num, retry_cnt,  "buffer_allocated");
 
     if(last_transfer_medium[subgroup_num]) {
         assert(next_sends[subgroup_num]);
@@ -1328,7 +1335,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         return true;
     } else {
         sst_multicast_group_ptrs[subgroup_num]->send();
-        DERECHO_LOG(-1, -1, "message_sent()");
+        DERECHO_LOG(seq_num, -1, "message_sent()");
         pending_sst_sends[subgroup_num] = false;
         return true;
     }
@@ -1384,3 +1391,4 @@ void MulticastGroup::debug_print() {
 }
 
 }  // namespace derecho
+
