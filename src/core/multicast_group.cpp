@@ -1301,9 +1301,13 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     if(!rdmc_sst_groups_created) {
         return false;
     }
-    std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
     const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+    
     message_id_t seq_num = (future_message_indices[subgroup_num]) * get_num_senders(ss.senders) + ss.sender_rank;
+    DERECHO_LOG(seq_num, -1, "before_send_lock");
+
+    std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
+   
     DERECHO_LOG(seq_num, -1, "begin_send");
 
     int retry_cnt = 0;
