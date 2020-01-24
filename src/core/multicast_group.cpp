@@ -1068,28 +1068,30 @@ void MulticastGroup::check_failures_loop() {
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(sender_timeout));
         if(sst) {
-            std::unique_lock<std::mutex> lock(msg_state_mtx);
-            auto current_time = get_time();
-            for(auto p : subgroup_settings_map) {
-                auto subgroup_num = p.first;
-                auto members = p.second.members;
-                auto sst_indices = get_shard_sst_indices(subgroup_num);
-                // clean up timestamps of persisted messages
-                auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
-                for(auto i : sst_indices) {
-                    persistent::version_t persisted_num_copy = sst->persisted_num[i][subgroup_num];
-                    min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
-                }
-                while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
-                    auto timestamp = pending_persistence[subgroup_num].begin()->second;
-                    pending_persistence[subgroup_num].erase(pending_persistence[subgroup_num].begin());
-                    pending_message_timestamps[subgroup_num].erase(timestamp);
-                }
-                if(pending_message_timestamps[subgroup_num].empty()) {
-                    sst->local_stability_frontier[member_index][subgroup_num] = current_time;
-                } else {
-                    sst->local_stability_frontier[member_index][subgroup_num] = std::min(current_time,
-                                                                                         *pending_message_timestamps[subgroup_num].begin());
+            {
+                std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
+                auto current_time = get_time();
+                for(auto p : subgroup_settings_map) {
+                    auto subgroup_num = p.first;
+                    auto members = p.second.members;
+                    auto sst_indices = get_shard_sst_indices(subgroup_num);
+                    // clean up timestamps of persisted messages
+                    auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
+                    for(auto i : sst_indices) {
+                        persistent::version_t persisted_num_copy = sst->persisted_num[i][subgroup_num];
+                        min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
+                    }
+                    while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
+                        auto timestamp = pending_persistence[subgroup_num].begin()->second;
+                        pending_persistence[subgroup_num].erase(pending_persistence[subgroup_num].begin());
+                        pending_message_timestamps[subgroup_num].erase(timestamp);
+                    }
+                    if(pending_message_timestamps[subgroup_num].empty()) {
+                        sst->local_stability_frontier[member_index][subgroup_num] = current_time;
+                    } else {
+                        sst->local_stability_frontier[member_index][subgroup_num] = std::min(current_time,
+                                                                                             *pending_message_timestamps[subgroup_num].begin());
+                    }
                 }
             }
             sst->put_with_completion((char*)std::addressof(sst->local_stability_frontier[0][0]) - sst->getBaseAddress(),
