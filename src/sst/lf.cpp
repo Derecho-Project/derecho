@@ -302,6 +302,7 @@ namespace sst{
       fi_freeinfo(client_hints);
       fi_freeinfo(client_info);
     }
+    sync(remote_id);
   }
 
   /**

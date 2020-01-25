@@ -568,7 +568,7 @@ void MulticastGroup::deliver_messages_upto(
             char* buf = msg.message_buffer.buffer.get();
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -579,7 +579,7 @@ void MulticastGroup::deliver_messages_upto(
             auto& msg = locally_stable_sst_messages[subgroup_num].at(seq_num);
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             locally_stable_sst_messages[subgroup_num].erase(seq_num);
         }
@@ -791,7 +791,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             uint64_t msg_ts = ((header*)buf)->timestamp;
             //Note: deliver_message frees the RDMC buffer in msg, which is why the timestamp must be saved before calling this
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_rdmc_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             // free the message buffer only after it version_message has been called
             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
@@ -805,7 +805,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             char* buf = (char*)msg.buf;
             uint64_t msg_ts = ((header*)buf)->timestamp;
             assigned_version = persistent::combine_int32s(sst.vid[member_index], least_undelivered_sst_seq_num);
-            deliver_message(msg, subgroup_num, assigned_version, msg_ts/1000);
+            deliver_message(msg, subgroup_num, assigned_version, msg_ts / 1000);
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
@@ -1061,28 +1061,30 @@ void MulticastGroup::check_failures_loop() {
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(sender_timeout));
         if(sst) {
-            std::unique_lock<std::mutex> lock(msg_state_mtx);
-            auto current_time = get_time();
-            for(auto p : subgroup_settings_map) {
-                auto subgroup_num = p.first;
-                auto members = p.second.members;
-                auto sst_indices = get_shard_sst_indices(subgroup_num);
-                // clean up timestamps of persisted messages
-                auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
-                for(auto i : sst_indices) {
-                    persistent::version_t persisted_num_copy = sst->persisted_num[i][subgroup_num];
-                    min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
-                }
-                while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
-                    auto timestamp = pending_persistence[subgroup_num].begin()->second;
-                    pending_persistence[subgroup_num].erase(pending_persistence[subgroup_num].begin());
-                    pending_message_timestamps[subgroup_num].erase(timestamp);
-                }
-                if(pending_message_timestamps[subgroup_num].empty()) {
-                    sst->local_stability_frontier[member_index][subgroup_num] = current_time;
-                } else {
-                    sst->local_stability_frontier[member_index][subgroup_num] = std::min(current_time,
-                                                                                         *pending_message_timestamps[subgroup_num].begin());
+            {
+                std::lock_guard<std::mutex> lock(msg_state_mtx);
+                auto current_time = get_time();
+                for(auto p : subgroup_settings_map) {
+                    auto subgroup_num = p.first;
+                    auto members = p.second.members;
+                    auto sst_indices = get_shard_sst_indices(subgroup_num);
+                    // clean up timestamps of persisted messages
+                    auto min_persisted_num = sst->persisted_num[member_index][subgroup_num];
+                    for(auto i : sst_indices) {
+                        persistent::version_t persisted_num_copy = sst->persisted_num[i][subgroup_num];
+                        min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
+                    }
+                    while(!pending_persistence[subgroup_num].empty() && pending_persistence[subgroup_num].begin()->first <= min_persisted_num) {
+                        auto timestamp = pending_persistence[subgroup_num].begin()->second;
+                        pending_persistence[subgroup_num].erase(pending_persistence[subgroup_num].begin());
+                        pending_message_timestamps[subgroup_num].erase(timestamp);
+                    }
+                    if(pending_message_timestamps[subgroup_num].empty()) {
+                        sst->local_stability_frontier[member_index][subgroup_num] = current_time;
+                    } else {
+                        sst->local_stability_frontier[member_index][subgroup_num] = std::min(current_time,
+                                                                                             *pending_message_timestamps[subgroup_num].begin());
+                    }
                 }
             }
             sst->put_with_completion((char*)std::addressof(sst->local_stability_frontier[0][0]) - sst->getBaseAddress(),

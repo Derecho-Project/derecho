@@ -32,7 +32,7 @@ namespace sst {
 const int alignTo = sizeof(long);
 
 constexpr size_t padded_len(const size_t& len) {
-    return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
+    return (len <= alignTo) ? alignTo : (len + alignTo) & ~(alignTo - 1);
 }
 
 /** Internal helper class, never exposed to the client. */
