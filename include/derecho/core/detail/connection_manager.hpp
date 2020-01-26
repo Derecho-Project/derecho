@@ -74,6 +74,14 @@ public:
     bool add_node(node_id_t new_id,
                   const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
     /**
+     * Adds a TCP connection to a new node. 
+     * @param new_id The ID of the new node
+     * @param sock The IP address and port number of the new node
+     * @return True if the TCP connection was set up successfully, false if
+     * there was an error.
+     */
+    bool add_node(node_id_t new_id, socket& sock);
+    /**
      * Removes a node from the managed set of TCP connections, closing the
      * socket connected to it.
      * @param remove_id The ID of the node to remove

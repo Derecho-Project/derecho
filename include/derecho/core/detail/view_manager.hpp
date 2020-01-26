@@ -19,6 +19,7 @@
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
 #include "restart_state.hpp"
+#include "external_group.hpp"
 #include <derecho/conf/conf.hpp>
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -139,6 +140,9 @@ private:
 
     /** The TCP socket the leader uses to listen for joining clients */
     tcp::connection_listener server_socket;
+
+    /** The TCP socket that each member uses to listen for external clients */
+    tcp::connection_listener external_socket;
     /** A flag to signal background threads to shut down; set to true when the group is destroyed. */
     std::atomic<bool> thread_shutdown;
     /** The background thread that listens for clients connecting on our server socket. */
@@ -233,6 +237,8 @@ private:
      * "failure."
      */
     std::atomic<bool> bSilent = false;
+
+    std::function<void(const std::vector<uint32_t>&)> add_external_connection_upcall;
 
     bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
 
@@ -707,6 +713,10 @@ public:
      * finished.
      */
     void finish_setup();
+
+    void register_add_external_connection_upcall(std::function<void(const std::vector<uint32_t>&)>& upcall) {
+        add_external_connection_upcall = std::move(upcall);
+    }
 
     /**
      * Starts predicate evaluation in the current view's SST. Call this only

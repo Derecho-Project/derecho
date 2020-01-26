@@ -126,6 +126,15 @@ bool tcp_connections::add_node(node_id_t new_id, const std::pair<ip_addr_t, uint
     return add_connection(new_id, new_ip_addr_and_port);
 }
 
+bool tcp_connections::add_node(node_id_t new_id, socket& sock) {
+    std::lock_guard<std::mutex> lock(sockets_mutex);
+    assert(new_id != my_id);
+    if(sockets.count(new_id) > 0)
+        return true;
+    sockets[new_id] = std::move(sock);
+    return true;
+}
+
 bool tcp_connections::delete_node(node_id_t remove_id) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     return (sockets.erase(remove_id) > 0);

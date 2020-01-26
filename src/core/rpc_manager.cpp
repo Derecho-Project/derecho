@@ -230,6 +230,11 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
+void add_connections(const std::vector<uint32_t>& node_ids) {
+    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+    connections->add_connections(node_ids);
+}
+
 bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);

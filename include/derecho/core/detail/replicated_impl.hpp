@@ -207,8 +207,8 @@ ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
-          wrapped_this(group_rpc_manager.make_remote_invoker<T>(type_id, subgroup_id,
-                                                                T::register_functions())) {}
+          wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
+                                                                T::register_functions(), *group_rpc_manager.receivers)) {}
 
 //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
 //but I'm afraid that will introduce unnecessary overheads.

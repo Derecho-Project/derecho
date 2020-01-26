@@ -190,6 +190,9 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     }
     //Once the initial view is committed, we can make RDMA connections
     view_manager.initialize_multicast_groups(callbacks);
+    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
+        rpc_manager.add_connections(node_ids);
+    });
     rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();

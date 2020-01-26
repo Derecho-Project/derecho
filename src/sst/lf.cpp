@@ -98,6 +98,7 @@ namespace sst{
   static bool shutdown = false;
   std::thread polling_thread;
   tcp::tcp_connections *sst_connections;
+  tcp::tcp_connections *external_client_connections;
   // singlton: global states
   lf_ctxt g_ctxt;
 
@@ -233,9 +234,12 @@ namespace sst{
     memcpy((void*)&local_cm_data.pep_addr,&g_ctxt.pep_addr,g_ctxt.pep_addr_len);
     local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
     local_cm_data.vaddr = (uint64_t)htonll((uint64_t)this->write_buf); // for pull mode
-
-    FAIL_IF_ZERO(sst_connections->exchange(this->remote_id,local_cm_data,remote_cm_data),"exchange connection management info.",CRASH_ON_FAILURE);
-
+    if (sst_connections->contains_node(this->remote_id)) {
+      FAIL_IF_ZERO(sst_connections->exchange(this->remote_id,local_cm_data,remote_cm_data),"exchange connection management info.",CRASH_ON_FAILURE);
+    } else {
+      FAIL_IF_ZERO(external_client_connections->exchange(this->remote_id,local_cm_data,remote_cm_data),"exchange connection management info.",CRASH_ON_FAILURE);
+    }
+    
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
     this->mr_rwkey = (uint64_t)ntohll(remote_cm_data.mr_key);
     this->remote_fi_addr = (fi_addr_t)ntohll(remote_cm_data.vaddr);
@@ -559,13 +563,29 @@ namespace sst{
     return sst_connections->add_node(new_id, new_ip_addr_and_port);
   }
 
+  bool add_node(uint32_t new_id, tcp::socket& sock) {
+    return external_client_connections->add_node(sock);
+  }
+
   bool remove_node(uint32_t node_id) {
+    if (sst_connections->contains_node(node_id)) {
       return sst_connections->delete_node(node_id);
+    } else {
+      return external_client_connections->delete_node(node_id);
+    }
+      
   }
 
   bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-    return sst_connections->exchange(r_id, s, t);
+    if (sst_connections->contains_node(r_id)) {
+      return sst_connections->exchange(r_id, s, t);
+    } else {
+      return external_client_connections->exchange(r_id, s, t);
+    }
+  }
+  void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
+    external_client_connections->filter_to(live_nodes_list);
   }
 
   void polling_loop() {

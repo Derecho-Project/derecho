@@ -36,18 +36,18 @@ P2PConnectionManager::~P2PConnectionManager() {
     shutdown_failures_thread();
 }
 
-void P2PConnectionManager::add_connections(const std::vector<uint32_t>& node_ids) {
+void P2PConnectionManager::add_connections(const std::vector<node_id_t>& node_ids) {
     std::lock_guard<std::mutex> lock(connections_mutex);
-    for (const uint32_t remote_id : node_ids) {
+    for (const node_id_t remote_id : node_ids) {
 	if (p2p_connections.find(remote_id) == p2p_connections.end()) {
 	    p2p_connections.emplace(remote_id, std::make_unique<P2PConnection>(my_node_id, remote_id, p2p_buf_size, request_params));
     	}
     }
 }
 
-void P2PConnectionManager::remove_connections(const std::vector<uint32_t>& node_ids) {
+void P2PConnectionManager::remove_connections(const std::vector<node_id_t>& node_ids) {
     std::lock_guard<std::mutex> lock(connections_mutex);
-    for(const uint32_t remote_id : node_ids) {
+    for(const node_id_t remote_id : node_ids) {
         p2p_connections.erase(remote_id);
     }
 }
@@ -68,12 +68,12 @@ void P2PConnectionManager::update_incoming_seq_num() {
 }
 
 // check if there's a new request from any node
-std::optional<std::pair<uint32_t, char*>> P2PConnectionManager::probe_all() {
+std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
     for(const auto& [node_id, p2p_conn] : p2p_connections) {
         auto buf = p2p_conn->probe();
         if(buf && buf[0]) {
             last_node_id = node_id;
-            return std::pair<uint32_t, char*>(node_id, buf);
+            return std::pair<node_id_t, char*>(node_id, buf);
         } else if(buf) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
@@ -83,11 +83,11 @@ std::optional<std::pair<uint32_t, char*>> P2PConnectionManager::probe_all() {
     return {};
 }
 
-char* P2PConnectionManager::get_sendbuffer_ptr(uint32_t node_id, REQUEST_TYPE type) {
+char* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type) {
     return p2p_connections.at(node_id)->get_sendbuffer_ptr(type);
 }
 
-void P2PConnectionManager::send(uint32_t node_id) {
+void P2PConnectionManager::send(node_id_t node_id) {
     p2p_connections.at(node_id)->send();
     if(node_id != my_node_id) {
         num_rdma_writes++;
@@ -158,6 +158,17 @@ void P2PConnectionManager::check_failures_loop() {
     }
 }
 
+void filter_to(const std::vector<node_id_t>& live_nodes_list) {
+    std::vector<node_id_t> prev_nodes_list;
+    for (const auto& e : p2p_connections ) {
+        prev_nodes_list.push_back(e.first);
+    }
+    std::vector<node_id_t> departed;
+    std::set_difference(prev_nodes_list.begin(), prev_nodes_list.end(),
+                        curr_members.begin(), curr_members.end(),
+                        std::back_inserter(departed));
+    remove_connections(departed);
+}
 void P2PConnectionManager::debug_print() {
     // std::cout << "Members: " << std::endl;
     // for(const auto& [node_id, p2p_conn] : p2p_connections) {

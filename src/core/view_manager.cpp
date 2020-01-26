@@ -35,6 +35,7 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+          external_socket(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)),
           thread_shutdown(false),
           disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
@@ -95,6 +96,7 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
+          external_socket(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)),
           thread_shutdown(false),
           disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
@@ -120,6 +122,9 @@ ViewManager::~ViewManager() {
     tcp::socket s{"localhost", getConfUInt16(CONF_DERECHO_GMS_PORT)};
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
+    }
+    if(external_client_listener_thread.joinable()) {
+        external_client_listener_thread.join();
     }
     old_views_cv.notify_all();
     if(old_view_cleanup_thread.joinable()) {
@@ -616,6 +621,27 @@ void ViewManager::create_threads() {
             tcp::socket client_socket = server_socket.accept();
             dbg_default_debug("Background thread got a client connection from {}", client_socket.get_remote_ip());
             pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
+        }
+    }};
+
+    external_client_listener_thread = std::thread{[this]() {
+        pthread_setname_np(pthread_self(), "external_client_thread");
+        while(!thread_shutdown) {
+            tcp::socket client_socket = external_socket.accept();
+            node_id_t remote_node_id;
+            ExternalClientRequest request;
+            
+            client_socket.read(remote_node_id);
+            client_socket.read(request);
+            if (request == ExternalClientRequest::GET_VIEW) {
+                dbg_default_debug("Background thread got an external client connection from {}", external_socket.get_remote_ip());
+                send_view(*curr_view, client_socket);
+            } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
+                sst::add_node(remote_node_id, client_socket);
+                add_remote_connection_upcall({remote_node_id});
+            }
+            
+                        
         }
     }};
 

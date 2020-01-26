@@ -21,12 +21,14 @@ private:
     // config name --> default value
 #define CONF_DERECHO_LEADER_IP "DERECHO/leader_ip"
 #define CONF_DERECHO_LEADER_GMS_PORT "DERECHO/leader_gms_port"
+#define CONF_DERECHO_LEADER_EXTERNAL_PORT "DERECHO/leader_external_port"
 #define CONF_DERECHO_LOCAL_ID "DERECHO/local_id"
 #define CONF_DERECHO_LOCAL_IP "DERECHO/local_ip"
 #define CONF_DERECHO_GMS_PORT "DERECHO/gms_port"
 #define CONF_DERECHO_RPC_PORT "DERECHO/rpc_port"
 #define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
+#define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
@@ -58,12 +60,14 @@ private:
             // [DERECHO]
             {CONF_DERECHO_LEADER_IP, "127.0.0.1"},
             {CONF_DERECHO_LEADER_GMS_PORT, "23580"},
+            {CONF_DERECHO_LEADER_EXTERNAL_PORT, "32645"},
             {CONF_DERECHO_LOCAL_ID, "0"},
             {CONF_DERECHO_LOCAL_IP, "127.0.0.1"},
             {CONF_DERECHO_GMS_PORT, "23580"},
             {CONF_DERECHO_RPC_PORT, "28366"},
             {CONF_DERECHO_SST_PORT, "37683"},
             {CONF_DERECHO_RDMC_PORT, "31675"},
+            {CONF_DERECHO_EXTERNAL_PORT, "32645"},
             {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
