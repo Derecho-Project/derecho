@@ -196,10 +196,10 @@ int main(int argc, char* argv[]) {
         }
         double std_dev = sqrt(sum_of_square / (num_messages - 1));
         // aggregate latency values from all senders
-        std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, (average_time / 1000.0), (std_dev / 1000.0));
+        std::tie(avg_latency, avg_std_dev) = aggregate_latency_tcp(getConfString(CONF_DERECHO_LEADER_IP), my_rank == 0, group_members.size(), (average_time / 1000.0), (std_dev / 1000.0));
     } else {
         // if not a sender, then pass 0 as the latency (not counted)
-        std::tie(avg_latency, avg_std_dev) = aggregate_latency(group_members, my_id, 0.0, 0.0);
+        std::tie(avg_latency, avg_std_dev) = aggregate_latency_tcp(getConfString(CONF_DERECHO_LEADER_IP), my_rank == 0, group_members.size(), 0.0, 0.0);
     }
 
     // log the result at the leader node
