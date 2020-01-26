@@ -118,7 +118,6 @@ export (EXPORT derecho
 
 configure_file (derechoConfig.cmake
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
-    COPYONLY
 )
 
 set(ConfigPackageLocation lib/cmake/derecho)
@@ -128,7 +127,7 @@ install(EXPORT derecho
 )
 
 install(FILES
-    derechoConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
