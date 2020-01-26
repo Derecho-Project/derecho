@@ -158,14 +158,14 @@ void P2PConnectionManager::check_failures_loop() {
     }
 }
 
-void filter_to(const std::vector<node_id_t>& live_nodes_list) {
+void P2PConnectionManager::filter_to(const std::vector<node_id_t>& live_nodes_list) {
     std::vector<node_id_t> prev_nodes_list;
     for (const auto& e : p2p_connections ) {
         prev_nodes_list.push_back(e.first);
     }
     std::vector<node_id_t> departed;
     std::set_difference(prev_nodes_list.begin(), prev_nodes_list.end(),
-                        curr_members.begin(), curr_members.end(),
+                        live_nodes_list.begin(), live_nodes_list.end(),
                         std::back_inserter(departed));
     remove_connections(departed);
 }

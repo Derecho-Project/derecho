@@ -12,6 +12,7 @@
 #include <thread>
 
 #include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)

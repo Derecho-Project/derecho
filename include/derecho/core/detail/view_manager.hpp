@@ -19,7 +19,7 @@
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
 #include "restart_state.hpp"
-#include "external_group.hpp"
+#include "../external_group.hpp"
 #include <derecho/conf/conf.hpp>
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>

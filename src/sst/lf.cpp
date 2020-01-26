@@ -18,7 +18,6 @@
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/utils/logger.hpp>
-#include <derecho/core/detail/connection_manager.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/tcp/tcp.hpp>
 #include <derecho/sst/detail/lf.hpp>
@@ -564,7 +563,7 @@ namespace sst{
   }
 
   bool add_node(uint32_t new_id, tcp::socket& sock) {
-    return external_client_connections->add_node(sock);
+    return external_client_connections->add_node(new_id, sock);
   }
 
   bool remove_node(uint32_t node_id) {
