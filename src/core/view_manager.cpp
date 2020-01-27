@@ -634,11 +634,11 @@ void ViewManager::create_threads() {
             client_socket.read(remote_node_id);
             client_socket.read(request);
             if (request == ExternalClientRequest::GET_VIEW) {
-                dbg_default_debug("Background thread got an external client connection from {}", external_socket.get_remote_ip());
+                dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
                 send_view(*curr_view, client_socket);
             } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
                 sst::add_node(remote_node_id, client_socket);
-                add_remote_connection_upcall({remote_node_id});
+                add_external_connection_upcall({remote_node_id});
             }
             
                         

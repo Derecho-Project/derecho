@@ -19,7 +19,6 @@
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
 #include "restart_state.hpp"
-#include "../external_group.hpp"
 #include <derecho/conf/conf.hpp>
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -81,6 +80,11 @@ enum class JoinResponseCode {
 struct JoinResponse {
     JoinResponseCode code;
     node_id_t leader_id;
+};
+
+enum class ExternalClientRequest {
+    GET_VIEW,
+    ESTABLISH_P2P
 };
 
 template <typename T>
@@ -148,6 +152,7 @@ private:
     /** The background thread that listens for clients connecting on our server socket. */
     std::thread client_listener_thread;
     std::thread old_view_cleanup_thread;
+    std::thread external_client_listener_thread;
 
     /**
      * A user-configurable option that disables the checks for partitioning events.

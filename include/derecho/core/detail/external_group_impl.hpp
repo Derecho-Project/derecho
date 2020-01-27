@@ -229,7 +229,8 @@ void ExternalGroup<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id, subgr
     fulfilled_pending_results[dest_subgroup_id].push_back(pending_results_handle);
 }
 
-std::exception_ptr RPCManager::receive_message(
+template <typename... ReplicatedTypes>
+std::exception_ptr ExternalGroup<ReplicatedTypes...>::receive_message(
         const Opcode& indx, const node_id_t& received_from, char const* const buf,
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;

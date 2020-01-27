@@ -230,7 +230,7 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
-void add_connections(const std::vector<uint32_t>& node_ids) {
+void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
     std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections->add_connections(node_ids);
 }

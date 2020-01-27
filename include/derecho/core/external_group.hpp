@@ -1,17 +1,12 @@
-// #include "replicated.hpp"
+#pragma once
+
 #include "detail/connection_manager.hpp"
 #include "detail/p2p_connection_manager.hpp"
-#include "detail/rpc_manager.hpp"
 #include "group.hpp"
 #include "view.hpp"
 
 #include <derecho/conf/conf.hpp>
 namespace derecho {
-
-enum class ExternalClientRequest {
-    GET_VIEW,
-    ESTABLISH_P2P
-};
 
 template <typename T>
 class ExternalClientCaller {
