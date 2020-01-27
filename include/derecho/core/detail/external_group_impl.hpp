@@ -219,7 +219,7 @@ volatile char* ExternalGroup<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t de
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroup<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
+void ExternalGroup<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle) {
     try {
         p2p_connections->send(dest_id);
     } catch(std::out_of_range& map_error) {
@@ -231,7 +231,7 @@ void ExternalGroup<ReplicatedTypes...>::finish_p2p_send(node_id_t dest_id, subgr
 
 template <typename... ReplicatedTypes>
 std::exception_ptr ExternalGroup<ReplicatedTypes...>::receive_message(
-        const Opcode& indx, const node_id_t& received_from, char const* const buf,
+        const rpc::Opcode& indx, const node_id_t& received_from, char const* const buf,
         std::size_t payload_size, const std::function<char*(int)>& out_alloc) {
     using namespace remote_invocation_utilities;
     assert(payload_size);
@@ -265,7 +265,7 @@ void ExternalGroup<ReplicatedTypes...>::p2p_message_handler(node_id_t sender_id,
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
-    Opcode indx;
+    rpc::Opcode indx;
     node_id_t received_from;
     uint32_t flags;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
@@ -303,7 +303,7 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
-    Opcode indx;
+    rpc::Opcode indx;
     node_id_t received_from;
     uint32_t flags;
     size_t reply_size = 0;

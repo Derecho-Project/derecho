@@ -18,11 +18,12 @@ int main(int argc, char** argv) {
     //for the subgroup's initial state
     auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
-    derecho::ExternalGroup<Foo> group();
+    derecho::ExternalGroup<Foo> group;
 
     cout << "Finished constructing ExternalGroup" << endl;
 
-    uint32_t my_rank = group.get_my_rank();
+    std::vector<node_id_t> members = gourp.get_members();
+    std::vector<node_id_t> shard_members = group.get_shard_members(0, 1);
     ExternalClientCaller<Foo>& foo_p2p_handle = group.get_ref<Foo>();
     {
         foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(0, 75);

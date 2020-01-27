@@ -8,7 +8,10 @@
 #include <derecho/conf/conf.hpp>
 namespace derecho {
 
-template <typename T>
+template <typename... ReplicatedTypes>
+class ExternalGroup;
+
+template <typename T, typename... ReplicatedTypes>
 class ExternalClientCaller {
 private:
     /** The ID of this node */
@@ -17,13 +20,13 @@ private:
     subgroup_id_t subgroup_id;
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
-    ExternalGroup& group;
+    ExternalGroup<ReplicatedTypes...>& group;
 
 public:
-    ExternalClientCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup& group);
+    ExternalClientCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup<ReplicatedTypes...>& group);
 
-    ExternalClientCaller(ExternalCaller&&) = default;
-    ExternalClientCaller(const ExternalCaller&) = delete;
+    ExternalClientCaller(ExternalClientCaller&&) = default;
+    ExternalClientCaller(const ExternalClientCaller&) = delete;
 
     template <rpc::FunctionTag tag, typename... Args>
     auto p2p_send(node_id_t dest_node, Args&&... args);
@@ -38,8 +41,8 @@ private:
     std::unique_ptr<tcp::tcp_connections> tcp_sockets;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
     std::mutex p2p_connections_mutex;
-    std::unique_ptr<std::map<Opcode, receive_fun_t>> receivers;
-    std::map<subgroup_id_t, std::list<PendingBase_ref>> fulfilled_pending_results;
+    std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
+    std::map<subgroup_id_t, std::list<rpc::PendingBase_ref>> fulfilled_pending_results;
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
 
     template <typename T>
@@ -72,7 +75,7 @@ private:
     void p2p_receive_loop();
     void fifo_worker();
     void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
-    std::exception_ptr receive_message(const Opcode& indx, const node_id_t& received_from,
+    std::exception_ptr receive_message(const rpc::Opcode& indx, const node_id_t& received_from,
                                        char const* const buf, std::size_t payload_size,
                                        const std::function<char*(int)>& out_alloc);
     /** ======================== copy/paste for rpc_manager ======================== **/
