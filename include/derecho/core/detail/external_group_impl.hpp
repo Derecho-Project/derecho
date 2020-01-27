@@ -2,29 +2,31 @@
 #include "version_code.hpp"
 namespace derecho {
 
-template <typename T>
-ExternalClientCaller<T>::ExternalClientCaller(uint32_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup& group)
+template <typename T, typename... ReplicatedTypes>
+ExternalClientCaller<T, ReplicatedTypes...>::ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup<ReplicatedTypes...>& group)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group(group),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
-                                                   T::register_functions()),
-                       receivers) {}
+                                                   T::register_functions(), *group.receivers)) {}
 
-template <typename T>
+template <typename T, typename... ReplicatedTypes>
 template <rpc::FunctionTag tag, typename... Args>
-auto ExternalClientCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
-    auto sock = group.get_socket(dest_node);
+auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
+    tcp::socket& sock = group.get_socket(dest_node);
 
     bool success;
     success = sock.write(node_id);
     success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
+    if (!success) {
+        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    }
 
     sst::add_node(dest_node, sock);
     group.p2p_connections->add_connections({dest_node});
 
     assert(dest_node != node_id);
-    if(curr_view->rank_of(dest_node) == -1) {
+    if(group.curr_view->rank_of(dest_node) == -1) {
         throw invalid_node_exception("Cannot send a p2p request to node "
                                      + std::to_string(dest_node) + ": it is not a member of the Group.");
     }
@@ -44,17 +46,18 @@ auto ExternalClientCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
 }
 
 template <typename... ReplicatedTypes>
-ExternalGroup<ReplicatedTypes...>::ExternalGroup()
+ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deserialization_context)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           tcp_sockets(std::make_unique<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           receivers(new std::decay_t<decltype(*receivers)>()) {
+    if(deserialization_context != nullptr) {
+        rdv.push_back(deserialization_context);
+    }
 #ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_and_sst_ports_map,
                           curr_view->members[curr_view->my_rank]);
 #else
-    sst::lf_initialize(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{
-                                      my_id{getConfString(CONF_DERECHO_LOCAL_IP),
-                                            getConfUInt16(CONF_DERECHO_RPC_PORT)}});
+    sst::lf_initialize(std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}, my_id);
 #endif
 
     tcp::socket leader_connection(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_EXTERNAL_PORT));
@@ -76,8 +79,8 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup()
                     view_max_rpc_reply_payload_size);
             view_max_rpc_window_size = std::max(profile.window_size, view_max_rpc_window_size);
         }
+        max_payload_sizes[subgroup_id] = max_payload_size;
     }
-    max_payload_sizes[subgroup_id] = max_payload_size;
 
     p2p_connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             my_id,
@@ -98,10 +101,11 @@ ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
     }
 }
 
+template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
     try {
         bool success;
-        success = sock.write(node_id);
+        success = sock.write(my_id);
         success = sock.write(ExternalClientRequest::GET_VIEW);
 
         std::size_t size_of_view;
@@ -114,7 +118,7 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
         if(!success) {
             throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
         }
-        prev_view = curr_view;
+        prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         return success;
     } catch(...) {
@@ -122,21 +126,23 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
     }
 }
 
+template <typename... ReplicatedTypes>
 tcp::socket& ExternalGroup<ReplicatedTypes...>::get_socket(node_id_t nid) {
     if(!tcp_sockets->contains_node(nid)) {
-        tcp_sockets->add_node(nid, {std::get<0>(curr_view->member_ips_and_ports[i]),
-                                    std::get<5>(curr_view->member_ips_and_ports[i])});
+        int my_rank = curr_view->rank_of(my_id);
+        tcp_sockets->add_node(nid, {std::get<0>(curr_view->member_ips_and_ports[my_rank]),
+                                    std::get<4>(curr_view->member_ips_and_ports[my_rank])}); //TODO: change 4 to 5
     }
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
             = tcp_sockets->get_socket(nid);
-    return std::member_socket.get();
+    return member_socket.get();
 }
 
 template <typename... ReplicatedTypes>
-bool ExternalGroup<ReplicatedTypes...>::clean_up() {
-    tcp_sockets->filter_to(curr_view.members);
-    p2p_connections->filter_to(curr_view.members);
-    sst::filter_external_to(curr_view.memebers);
+void ExternalGroup<ReplicatedTypes...>::clean_up() {
+    tcp_sockets->filter_to(curr_view->members);
+    p2p_connections->filter_to(curr_view->members);
+    sst::filter_external_to(curr_view->members);
 
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
@@ -166,7 +172,7 @@ bool ExternalGroup<ReplicatedTypes...>::clean_up() {
 
 template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::update_view() {
-    for(auto& nid : members) {
+    for(auto& nid : curr_view->members) {
         if(get_view(get_socket(nid))) {
             clean_up();
             return true;
@@ -187,19 +193,19 @@ template <typename SubgroupType>
 std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint32_t subgroup_index, uint32_t shard_num) {
     const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
     const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);
-    subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
+    const subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
     return get_shard_members(subgroup_id, shard_num);
 }
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalClientCaller<SubgroupType>& ExternalGroup<ReplicatedTypes...>::get_ref(uint32_t subgroup_index = 0) {
-    if(external_callers.template get<SubgroupType>.find(subgroup_index) == external_callers.template get<SubgroupType>.end()) {
+ExternalClientCaller<SubgroupType, ReplicatedTypes...>& ExternalGroup<ReplicatedTypes...>::get_ref(uint32_t subgroup_index) {
+    if(external_callers.template get<SubgroupType>().find(subgroup_index) == external_callers.template get<SubgroupType>().end()) {
         const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
         const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);
-        subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
+        const subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
         external_callers.template get<SubgroupType>().emplace(
-                subgroup_index, ExternalClientCaller<SubgroupType>(subgroup_type_id, node_id, subgroup_id, *this));
+                subgroup_index, ExternalClientCaller<SubgroupType, ReplicatedTypes...>(subgroup_type_id, my_id, subgroup_id, *this));
     }
     return external_callers.template get<SubgroupType>().at(subgroup_index);
 }
@@ -209,7 +215,7 @@ volatile char* ExternalGroup<ReplicatedTypes...>::get_sendbuffer_ptr(uint32_t de
     volatile char* buf;
     do {
         try {
-            buf = connections->get_sendbuffer_ptr(dest_id, type);
+            buf = p2p_connections->get_sendbuffer_ptr(dest_id, type);
         } catch(std::out_of_range& map_error) {
             throw node_removed_from_group_exception(dest_id);
         }
@@ -253,9 +259,7 @@ std::exception_ptr ExternalGroup<ReplicatedTypes...>::receive_message(
         reply_buf -= reply_header_size;
         const auto id = reply_return.opcode;
         const auto size = reply_return.size;
-        rpc;
-        ;
-        populate_header(reply_buf, size, id, nid, 0);
+        populate_header(reply_buf, size, id, my_id, 0);
     }
     return reply_return.possible_exception;
 }
@@ -265,7 +269,7 @@ void ExternalGroup<ReplicatedTypes...>::p2p_message_handler(node_id_t sender_id,
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
-    rpc::Opcode indx;
+    Opcode indx;
     node_id_t received_from;
     uint32_t flags;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
@@ -303,7 +307,7 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
-    rpc::Opcode indx;
+    Opcode indx;
     node_id_t received_from;
     uint32_t flags;
     size_t reply_size = 0;
@@ -319,7 +323,7 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
             request = fifo_queue.front();
             fifo_queue.pop();
         }
-        rpc::retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
+        retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
             dbg_default_error("Invalid rpc message in fifo queue: is_reply={}, is_cascading={}",
                               indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
@@ -351,9 +355,9 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
 
     uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     // set the thread local rpc_handler context
-    _in_rpc_handler = true;
+    // _in_rpc_handler = true;
 
-    fifo_worker_thread = std::thread(&ExternlGroup<ReplicatedTypes...>::fifo_worker, this);
+    fifo_worker_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::fifo_worker, this);
 
     struct timespec last_time, cur_time;
     clock_gettime(CLOCK_REALTIME, &last_time);

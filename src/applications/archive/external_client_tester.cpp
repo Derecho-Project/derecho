@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
+    // auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
     derecho::ExternalGroup<Foo> group;
 
@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 
     std::vector<node_id_t> members = group.get_members();
     std::vector<node_id_t> shard_members = group.get_shard_members(0, 1);
-    ExternalClientCaller<Foo>& foo_p2p_handle = group.get_ref<Foo>();
+    ExternalClientCaller<Foo, Foo>& foo_p2p_handle = group.get_ref<Foo>();
     {
         foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(0, 75);
     }
