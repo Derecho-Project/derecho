@@ -193,7 +193,7 @@ std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalCaller<SubgroupType>& ExternalGroup<ReplicatedTypes...>::get_ref(uint32_t subgroup_index = 0) {
+ExternalClientCaller<SubgroupType>& ExternalGroup<ReplicatedTypes...>::get_ref(uint32_t subgroup_index = 0) {
     if(external_callers.template get<SubgroupType>.find(subgroup_index) == external_callers.template get<SubgroupType>.end()) {
         const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
         const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);

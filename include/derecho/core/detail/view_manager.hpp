@@ -719,8 +719,8 @@ public:
      */
     void finish_setup();
 
-    void register_add_external_connection_upcall(std::function<void(const std::vector<uint32_t>&)>& upcall) {
-        add_external_connection_upcall = std::move(upcall);
+    void register_add_external_connection_upcall(const std::function<void(const std::vector<uint32_t>&)>& upcall) {
+        add_external_connection_upcall = upcall;
     }
 
     /**

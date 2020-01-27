@@ -300,11 +300,11 @@ using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
                                                                                       T::register_functions()))>;
 
 template <typename T>
-using RemoteInvokerFor = std::decay_t<decltype(make_remote_invoker<T>(std::declval<node_id_t>(),
+using RemoteInvokerFor = std::decay_t<decltype(*make_remote_invoker<T>(std::declval<node_id_t>(),
                                                                       std::declval<uint32_t>(),
                                                                       std::declval<uint32_t>(),
-                                                                      std::declval<std::map<Opcode, receive_fun_t>&>(),
-                                                                      T::register_functions()))>;
+                                                                      T::register_functions(),
+                                                                      std::declval<std::map<Opcode, receive_fun_t>&>()))>;
 
 // test if the current thread is in an RPC handler to tell if we are sending a cascading RPC message.
 bool in_rpc_handler();

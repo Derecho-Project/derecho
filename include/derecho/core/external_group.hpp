@@ -82,7 +82,7 @@ public:
     ~ExternalGroup();
 
     template <typename SubgroupType>
-    ExternalCaller<SubgroupType>& get_ref(uint32_t subgroup_index = 0);
+    ExternalClientCaller<SubgroupType>& get_ref(uint32_t subgroup_index = 0);
 
     bool update_view();
     std::vector<node_id_t> get_members();
