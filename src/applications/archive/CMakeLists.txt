@@ -151,3 +151,11 @@ target_link_libraries(membership_tests derecho)
 
 add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
+
+#multicast throughput
+add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
+target_link_libraries(multicast_throughput derecho)
+
+#multicast latency
+add_executable(multicast_latency multicast_latency.cpp initialize.cpp aggregate_bandwidth.cpp)
+target_link_libraries(multicast_latency derecho)

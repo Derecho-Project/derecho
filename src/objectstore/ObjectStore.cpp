@@ -553,7 +553,7 @@ public:
             //   Persistent.hpp
             try {
                 return persistent_objectstore[ver]->objects.at(oid);
-            } catch(std::out_of_range ex) {
+            } catch(const std::out_of_range& ex) {
                 return inv_obj;
             }
         }
