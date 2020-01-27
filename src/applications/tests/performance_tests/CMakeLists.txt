@@ -16,3 +16,11 @@ target_link_libraries(bandwidth_test derecho)
 # latency_test
 add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
 target_link_libraries(latency_test derecho)
+
+# single_active_subgroup_test
+add_executable(single_active_subgroup_test single_active_subgroup_test.cpp aggregate_bandwidth.cpp)
+target_link_libraries(single_active_subgroup_test derecho)
+
+# multiple_active_subgroups_test
+add_executable(multiple_active_subgroups_test multiple_active_subgroups_test.cpp aggregate_bandwidth.cpp)
+target_link_libraries(multiple_active_subgroups_test derecho)
