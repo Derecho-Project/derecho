@@ -24,3 +24,7 @@ target_link_libraries(single_active_subgroup_test derecho)
 # multiple_active_subgroups_test
 add_executable(multiple_active_subgroups_test multiple_active_subgroups_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(multiple_active_subgroups_test derecho)
+
+# sender_delay_test
+add_executable(sender_delay_test sender_delay_test.cpp aggregate_bandwidth.cpp)
+target_link_libraries(sender_delay_test derecho)
