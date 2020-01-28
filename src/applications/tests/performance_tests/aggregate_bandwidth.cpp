@@ -18,7 +18,7 @@ double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_id,
     return total_bw / num_nodes;
 }
 
-double aggregate_bandwidth_tcp(std::string leader_ip, bool is_leader, uint32_t num_members,
+double aggregate_bandwidth_tcp(std::string leader_ip, bool is_leader, uint32_t node_id, uint32_t num_members,
                                double bw) {
     uint16_t port = 9826;
     double total_bw = bw;
@@ -32,8 +32,9 @@ double aggregate_bandwidth_tcp(std::string leader_ip, bool is_leader, uint32_t n
         }
     }
     else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(node_id));
         tcp::socket s(leader_ip, port);
-	s.write(bw);
+    	s.write(bw);
     }
 
     return total_bw / num_members;

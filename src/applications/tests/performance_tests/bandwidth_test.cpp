@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
         bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
     }
     // aggregate bandwidth from all nodes
-    double avg_bw = aggregate_bandwidth_tcp(getConfString(CONF_DERECHO_LEADER_IP), node_rank == 0,
+    double avg_bw = aggregate_bandwidth_tcp(getConfString(CONF_DERECHO_LEADER_IP), node_rank == 0, node_rank,
                                             members_order.size(), bw);
     // log the result at the leader node
     if(node_rank == 0) {

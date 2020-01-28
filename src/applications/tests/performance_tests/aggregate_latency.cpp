@@ -27,7 +27,7 @@ std::pair<double, double> aggregate_latency(std::vector<uint32_t> members, uint3
 }
 
 
-std::pair<double, double> aggregate_latency_tcp(std::string leader_ip, bool is_leader, uint32_t num_members,
+std::pair<double, double> aggregate_latency_tcp(std::string leader_ip, bool is_leader, uint32_t node_rank, uint32_t num_members,
                                double latency, double latency_std_dev) {
     uint16_t port = 9826;
     double total_latency = latency;
@@ -46,8 +46,9 @@ std::pair<double, double> aggregate_latency_tcp(std::string leader_ip, bool is_l
         }
     }
     else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(node_rank));
         tcp::socket s(leader_ip, port);
-	      s.write(latency);
+        s.write(latency);
         s.write(latency_std_dev);
     }
 
