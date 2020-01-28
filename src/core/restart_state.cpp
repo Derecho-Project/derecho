@@ -432,7 +432,8 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
                          getConfUInt16(CONF_DERECHO_GMS_PORT),
                          getConfUInt16(CONF_DERECHO_RPC_PORT),
                          getConfUInt16(CONF_DERECHO_SST_PORT),
-                         getConfUInt16(CONF_DERECHO_RDMC_PORT));
+                         getConfUInt16(CONF_DERECHO_RDMC_PORT),
+                         getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     }
     //Mark any nodes from the last view that haven't yet responded as failed
     for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {

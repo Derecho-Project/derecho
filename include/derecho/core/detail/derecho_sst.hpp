@@ -174,7 +174,7 @@ public:
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
-                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports
+                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier, rip);

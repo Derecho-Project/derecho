@@ -131,7 +131,7 @@ tcp::socket& ExternalGroup<ReplicatedTypes...>::get_socket(node_id_t nid) {
     if(!tcp_sockets->contains_node(nid)) {
         int my_rank = curr_view->rank_of(my_id);
         tcp_sockets->add_node(nid, {std::get<0>(curr_view->member_ips_and_ports[my_rank]),
-                                    std::get<4>(curr_view->member_ips_and_ports[my_rank])}); //TODO: change 4 to 5
+                                    std::get<5>(curr_view->member_ips_and_ports[my_rank])});
     }
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
             = tcp_sockets->get_socket(nid);
