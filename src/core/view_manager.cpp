@@ -124,6 +124,9 @@ ViewManager::~ViewManager() {
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
+    // force accept and read to return
+    tcp::socket s_external{"localhost", getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)};
+    s_external.write(getConfUInt32(CONF_DERECHO_LOCAL_ID));
     if(external_client_listener_thread.joinable()) {
         external_client_listener_thread.join();
     }
@@ -632,11 +635,15 @@ void ViewManager::create_threads() {
         pthread_setname_np(pthread_self(), "external_client_thread");
         while(!thread_shutdown) {
             tcp::socket client_socket = external_socket.accept();
-            node_id_t remote_node_id;
+	    node_id_t remote_node_id;
             ExternalClientRequest request;
             
             client_socket.read(remote_node_id);
-            client_socket.read(request);
+            if (remote_node_id == getConfUInt32(CONF_DERECHO_LOCAL_ID)) {
+		// connected by destructor, force thread to return
+		return;
+	    }
+	    client_socket.read(request);
             if (request == ExternalClientRequest::GET_VIEW) {
                 dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
                 send_view(*curr_view, client_socket);
@@ -645,7 +652,6 @@ void ViewManager::create_threads() {
                 add_external_connection_upcall({remote_node_id});
             }
             
-                        
         }
     }};
 
