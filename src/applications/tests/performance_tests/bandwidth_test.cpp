@@ -17,6 +17,16 @@
 
 #include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
+
+//#define ENABLE_LOGGING
+
+#ifdef ENABLE_LOGGING
+#include <derecho/rdmc/rdmc.hpp>
+#include <derecho/rdmc/detail/util.hpp>
+
+std::unique_ptr<rdmc::barrier_group> universal_barrier_group;
+#endif
+
 #include "log_results.hpp"
 
 using std::cout;
@@ -142,6 +152,22 @@ int main(int argc, char* argv[]) {
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 
+#ifdef ENABLE_LOGGING
+    universal_barrier_group = std::make_unique<rdmc::barrier_group>(members_order);
+
+    universal_barrier_group->barrier_wait();
+    uint64_t t1 = get_time();
+    universal_barrier_group->barrier_wait();
+    uint64_t t2 = get_time();
+    reset_epoch();
+    universal_barrier_group->barrier_wait();
+    uint64_t t3 = get_time();
+    printf(
+            "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
+            "Max possible variation from local = %5.3f us\n",
+            (t3 - t1) * 1e-3f, std::max(t2 - t1, t3 - t2) * 1e-3f);
+    fflush(stdout);
+#endif
     long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
@@ -197,5 +223,8 @@ int main(int argc, char* argv[]) {
     }
 
     group.barrier_sync();
+#ifdef ENABLE_LOGGING
+    flush_events();
+#endif
     group.leave();
 }

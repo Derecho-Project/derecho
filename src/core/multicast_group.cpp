@@ -10,6 +10,10 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
+// For logging actions times. 
+// To flush data, enable the same macro
+// in the bandwidth_test
+
 //#define ENABLE_LOGGING
 
 namespace derecho {
