@@ -25,7 +25,7 @@ SubView::SubView(int32_t num_members)
 SubView::SubView(Mode mode,
                  const std::vector<node_id_t>& members,
                  std::vector<int> is_sender,
-                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
+                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t,
                                               uint16_t>>& member_ips_and_ports,
                  const std::string profile)
         : mode(mode),
@@ -89,7 +89,7 @@ void SubView::init_joined_departed(const SubView& previous_subview) {
 }
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
-           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
            const std::vector<char>& failed, const int32_t num_failed,
            const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
@@ -126,7 +126,7 @@ int View::find_rank_of_leader() const {
 }
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
-           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
            const std::vector<char>& failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t my_rank,
@@ -153,7 +153,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
     }
 }
 
-int View::rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>& who) const {
+int View::rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>& who) const {
     for(int rank = 0; rank < num_members; ++rank) {
         if(member_ips_and_ports[rank] == who) {
             return rank;
@@ -176,7 +176,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            std::string profile) const {
     // Make the profile string all uppercase so that it is effectively case-insensitive
     std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
+    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         int view_rank_of_member = rank_of(with_members[subview_rank]);
         if(view_rank_of_member == -1) {
