@@ -76,9 +76,10 @@ int main(int argc, char* argv[]) {
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // start and end time to compute bw
-    struct timespec start_time, end_time;
+    struct timespec start_time;
+    long long int nanoseconds_elapsed;
     // how many slow senders
-    uint num_slow_senders = num_nodes;
+    uint num_slow_senders = 0;
     if(num_slow_senders_selector == 1) {
         num_slow_senders = num_nodes / 2;
     } else if (num_slow_senders_selector == 2) {
@@ -89,13 +90,18 @@ int main(int argc, char* argv[]) {
     auto stability_callback = [&num_messages,
                                &done,
                                &num_nodes,
-                               &end_time,
+                               &start_time,
+                               &nanoseconds_elapsed,
                                num_slow_senders,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
         if(num_delivered == num_messages * (num_nodes-num_slow_senders)) {
+            // here take the time
+            struct timespec end_time;
             clock_gettime(CLOCK_REALTIME, &end_time);
+            // compute time elapsed btw the start and the delivery of a specific message (not the last one)
+            nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
         }
         if(num_delivered == num_messages * num_nodes) {
             done = true;
@@ -174,8 +180,6 @@ int main(int argc, char* argv[]) {
     // wait for the test to finish
     while(!done) {
     }
-    // compute time elapsed btw the start and the delivery of a specific message (not the last one)
-    long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
     // calculate bandwidth measured locally
     double bw = (max_msg_size * num_messages * (num_nodes-num_slow_senders) + 0.0) / nanoseconds_elapsed;
     // aggregate bandwidth from all nodes
