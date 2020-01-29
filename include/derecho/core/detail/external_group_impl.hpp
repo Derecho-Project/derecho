@@ -48,7 +48,7 @@ auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, 
 template <typename... ReplicatedTypes>
 ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deserialization_context)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          tcp_sockets(std::make_unique<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
+          tcp_sockets(std::make_unique<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{})),
           receivers(new std::decay_t<decltype(*receivers)>()) {
     if(deserialization_context != nullptr) {
         rdv.push_back(deserialization_context);
@@ -57,7 +57,7 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
     sst::verbs_initialize(member_ips_and_sst_ports_map,
                           curr_view->members[curr_view->my_rank]);
 #else
-    sst::lf_initialize(std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}, my_id);
+    sst::lf_initialize(std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{}, my_id);
 #endif
 
     tcp::socket leader_connection(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_EXTERNAL_PORT));
