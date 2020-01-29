@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "aggregate_bandwidth.hpp"
-#include <derecho/core/derecho.hpp>
 #include "log_results.hpp"
+#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;
@@ -30,7 +30,7 @@ struct exp_result {
         fout << num_nodes << " "
              << max_msg_size << " " << window_size << " "
              << num_messages << " " << wait_time << " "
-	     << num_slow_senders << " "
+             << num_slow_senders_selector << " "
              << bw << endl;
     }
 };
@@ -39,19 +39,19 @@ void busy_wait(uint32_t wait_time) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_REALTIME, &start_time);
 
-    if (wait_time == 0) {
+    if(wait_time == 0) {
         // wait forever
         while(true) {
-	    std::this_thread::sleep_for(std::chrono::seconds(1));
-	}
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
     }
 
     while(true) {
         clock_gettime(CLOCK_REALTIME, &end_time);
         long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
-	if (nanoseconds_elapsed >= wait_time * 1000) {
-	    return;
-	}
+        if(nanoseconds_elapsed >= wait_time * 1000) {
+            return;
+        }
     }
 }
 
@@ -75,13 +75,28 @@ int main(int argc, char* argv[]) {
 
     // variable 'done' tracks the end of the test
     volatile bool done = false;
+    // start and end time to compute bw
+    struct timespec start_time, end_time;
+    // how many slow senders
+    uint num_slow_senders = num_nodes;
+    if(num_slow_senders_selector == 1) {
+        num_slow_senders = num_nodes / 2;
+    } else if (num_slow_senders_selector == 2) {
+        num_slow_senders = 1;
+    }
+
     // callback into the application code at each message delivery
     auto stability_callback = [&num_messages,
                                &done,
                                &num_nodes,
+                               &end_time,
+                               num_slow_senders,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
+        if(num_delivered == num_messages * (num_nodes-num_slow_senders)) {
+            clock_gettime(CLOCK_REALTIME, &end_time);
+        }
         if(num_delivered == num_messages * num_nodes) {
             done = true;
         }
@@ -119,7 +134,7 @@ int main(int argc, char* argv[]) {
     long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
-    auto send_all = [&]() {
+    auto send_fast = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
@@ -131,14 +146,13 @@ int main(int argc, char* argv[]) {
     auto send_slow = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
         for(uint i = 0; i < num_messages; ++i) {
-	    busy_wait(wait_time);
+            busy_wait(wait_time);
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
             raw_subgroup.send(max_msg_size, [](char* buf) {});
         }
     };
 
-    struct timespec start_time;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
     // send all messages or skip if not a sender
@@ -148,32 +162,22 @@ int main(int argc, char* argv[]) {
         if(node_rank > (num_nodes - 1) / 2) {
             send_slow();
         } else {
-	    send_fast();
-	}
+            send_fast();
+        }
     } else {
         if(node_rank == num_nodes - 1) {
             send_slow();
         } else {
-	    send_fast();
-	}
+            send_fast();
+        }
     }
     // wait for the test to finish
     while(!done) {
     }
-    // end timer
-    struct timespec end_time;
-    clock_gettime(CLOCK_REALTIME, &end_time);
+    // compute time elapsed btw the start and the delivery of a specific message (not the last one)
     long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
     // calculate bandwidth measured locally
-    double bw;
-    // THIS IS NOT HOW WE WANT TO CALCULATE BANDWIDTH
-    if(num_senders_selector == 0) {
-        bw = (max_msg_size * num_messages * num_nodes + 0.0) / nanoseconds_elapsed;
-    } else if(num_senders_selector == 1) {
-        bw = (max_msg_size * num_messages * (num_nodes / 2) + 0.0) / nanoseconds_elapsed;
-    } else {
-        bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;
-    }
+    double bw = (max_msg_size * num_messages * (num_nodes-num_slow_senders) + 0.0) / nanoseconds_elapsed;
     // aggregate bandwidth from all nodes
     double avg_bw = aggregate_bandwidth_tcp(getConfString(CONF_DERECHO_LEADER_IP), node_rank == 0, node_rank,
                                             members_order.size(), bw);
@@ -182,7 +186,7 @@ int main(int argc, char* argv[]) {
         log_results(exp_result{num_nodes, num_slow_senders_selector, max_msg_size,
                                getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
                                wait_time, avg_bw},
-                    "data_derecho_bw");
+                    "data_sender_delay_test");
     }
 
     group.barrier_sync();
