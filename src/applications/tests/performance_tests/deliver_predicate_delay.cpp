@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
     Mode mode = Mode::ORDERED;
 
-    auto membership_function = [num_senders_selector, mode, num_nodes](
+    auto membership_function = [num_nodes, mode](
             const std::vector<std::type_index>& subgroup_type_order,
             const std::unique_ptr<View>& prev_view, View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
