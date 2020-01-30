@@ -1,11 +1,10 @@
 /*
  * This test measures the bandwidth of Derecho raw (uncooked) sends in GB/s as a function of
- * 1. the number of nodes 2. the number of senders (all sending, half nodes sending, one sending)
+ * 1. the number of nodes 2. the delay in the delivery predicates (in us)
  * 3. message size 4. window size 5. number of messages sent per sender
- * 6. delivery mode (atomic multicast or unordered)
  * The test waits for every node to join and then each sender starts sending messages continuously
  * in the only subgroup that consists of all the nodes
- * Upon completion, the results are appended to file data_derecho_bw on the leader
+ * Upon completion, the results are appended to file data_deliver_predicate_delay on the leader
  */
 #include <fstream>
 #include <iostream>
@@ -17,15 +16,6 @@
 
 #include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
-
-//#define ENABLE_LOGGING
-
-#ifdef ENABLE_LOGGING
-#include <derecho/rdmc/rdmc.hpp>
-#include <derecho/rdmc/detail/util.hpp>
-
-std::unique_ptr<rdmc::barrier_group> universal_barrier_group;
-#endif
 
 #include "log_results.hpp"
 
@@ -45,9 +35,9 @@ struct exp_result {
     double bw;
 
     void print(std::ofstream& fout) {
-        fout << num_nodes << " " << num_senders_selector << " "
+        fout << num_nodes << " " << wait_time << " "
              << max_msg_size << " " << window_size << " "
-             << num_messages << " " << delivery_mode << " "
+             << num_messages << " "
              << bw << endl;
     }
 };
