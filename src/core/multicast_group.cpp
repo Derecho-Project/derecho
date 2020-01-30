@@ -296,6 +296,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 }
 
                 auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
+#ifdef NULL_SEND_ENABLED
                 /* NULL Send Scheme */
                 // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
                 if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
@@ -309,7 +310,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         }
                     }
                 }
-
+#endif
                 // deliver immediately if in UNORDERED mode
                 if(subgroup_settings.mode == Mode::UNORDERED) {
                     // issue stability upcalls for the recently sequenced messages
@@ -655,6 +656,9 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
     auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
+
+#ifdef NULL_SEND_ENABLED
+
     /* NULL Send Scheme */
     // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
     if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
@@ -668,6 +672,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
             }
         }
     }
+#endif
 
     if(subgroup_settings.mode == Mode::UNORDERED) {
         // issue stability upcalls for the recently sequenced messages
@@ -841,10 +846,12 @@ void MulticastGroup::register_predicates() {
             return receiver_predicate(subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
-        auto batch_size = subgroup_settings.profile.window_size / 2;
+
+        uint32_t batch_size =  derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_BATCH_SIZE);
         if(!batch_size) {
             batch_size = 1;
         }
+
         auto sst_receive_handler_lambda = [=](uint32_t sender_rank, volatile char* data, uint64_t size) {
             sst_receive_handler(subgroup_num, subgroup_settings,
                                 shard_ranks_by_sender_rank, num_shard_senders,
