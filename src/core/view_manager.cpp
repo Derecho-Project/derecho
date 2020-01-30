@@ -645,6 +645,7 @@ void ViewManager::create_threads() {
                 client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
                 continue;
             }
+            client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
 	        client_socket.read(request);
             if (request == ExternalClientRequest::GET_VIEW) {
                 dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
