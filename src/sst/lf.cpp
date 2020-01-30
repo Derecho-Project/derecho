@@ -563,7 +563,7 @@ namespace sst{
     return sst_connections->add_node(new_id, new_ip_addr_and_port);
   }
 
-  bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+  bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
     return external_client_connections->add_node(new_id, new_ip_addr_and_port);
   }
 

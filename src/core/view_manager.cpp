@@ -642,7 +642,7 @@ void ViewManager::create_threads() {
             if(curr_view->rank_of(remote_node_id) != -1) {
                 // 1. external can't have same id as any member
                 // 2. connected by destructor, force thread to return
-                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
                 continue;
             }
 	        client_socket.read(request);
@@ -652,7 +652,7 @@ void ViewManager::create_threads() {
             } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
                 uint16_t external_client_sst_port = 0;
                 client_socket.read(external_client_sst_port);
-                sst::add_node(remote_node_id, std::pair<ip_addr_t, uint16_t>{
+                sst::add_external_node(remote_node_id, std::pair<ip_addr_t, uint16_t>{
                               client_socket.get_remote_ip(),external_client_sst_port});
                 add_external_connection_upcall({remote_node_id});
             }

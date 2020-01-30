@@ -76,11 +76,11 @@ public:
     /**
      * Adds a TCP connection to a new node. 
      * @param new_id The ID of the new node
-     * @param sock The IP address and port number of the new node
+     * @param sock The socket to be moved
      * @return True if the TCP connection was set up successfully, false if
      * there was an error.
      */
-    bool add_node(node_id_t new_id, socket&& sock);
+    bool add_node_with_socket(node_id_t new_id, socket&& sock);
     /**
      * Removes a node from the managed set of TCP connections, closing the
      * socket connected to it.
