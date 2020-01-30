@@ -1,3 +1,4 @@
+
 /**
  * @file lf.cpp
  * Implementation of RDMA interface defined in lf.h.
@@ -562,8 +563,8 @@ namespace sst{
     return sst_connections->add_node(new_id, new_ip_addr_and_port);
   }
 
-  bool add_node(uint32_t new_id, tcp::socket& sock) {
-    return external_client_connections->add_node(new_id, sock);
+  bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+    return external_client_connections->add_node(new_id, new_ip_addr_and_port);
   }
 
   bool remove_node(uint32_t node_id) {

@@ -168,7 +168,7 @@ bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr
 /**
  * Adds a new node to external client connections set.
  */
-bool add_node(uint32_t new_id, tcp::socket& sock);
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 /**
  * Removes a node from the SST TCP connections set
  */

@@ -14,19 +14,28 @@ template <typename T, typename... ReplicatedTypes>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
     tcp::socket& sock = group.get_socket(dest_node);
-
+    JoinResponse leader_response;
     bool success;
     success = sock.write(node_id);
+    success = leader_connection.read(leader_response);
+    if(leader_response.code == JoinResponseCode::ID_IN_USE) {
+        dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
+        dbg_default_flush();
+        throw derecho_exception("Leader rejected join, ID already in use.");
+    }
     success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
+    success = sock.write(getConfUInt16(CONF_DERECHO_SST_PORT));
     if (!success) {
         throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
     }
 
-    sst::add_node(dest_node, sock);
+    assert(dest_node != node_id);
+    int rank = group.curr_view->rank_of(dest_node);
+    sst::add_node(dest_node, std::pair<ip_addr_t, uint16_t>{std::get<0>(group.curr_view->member_ips_and_ports[rank]), 
+                                                            std::get<PORT_TYPE::SST>(group.curr_view->member_ips_and_ports[rank])});
     group.p2p_connections->add_connections({dest_node});
 
-    assert(dest_node != node_id);
-    if(group.curr_view->rank_of(dest_node) == -1) {
+    if(rank == -1) {
         throw invalid_node_exception("Cannot send a p2p request to node "
                                      + std::to_string(dest_node) + ": it is not a member of the Group.");
     }
@@ -104,8 +113,15 @@ ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
 template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
     try {
+        JoinResponse leader_response;
         bool success;
         success = sock.write(my_id);
+        success = leader_connection.read(leader_response);
+        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
+            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
+            dbg_default_flush();
+            throw derecho_exception("Leader rejected join, ID already in use.");
+        }
         success = sock.write(ExternalClientRequest::GET_VIEW);
 
         std::size_t size_of_view;
@@ -130,8 +146,8 @@ template <typename... ReplicatedTypes>
 tcp::socket& ExternalGroup<ReplicatedTypes...>::get_socket(node_id_t nid) {
     if(!tcp_sockets->contains_node(nid)) {
         int my_rank = curr_view->rank_of(my_id);
-        tcp_sockets->add_node(nid, {std::get<0>(curr_view->member_ips_and_ports[my_rank]),
-                                    std::get<5>(curr_view->member_ips_and_ports[my_rank])});
+        tcp::socket sock(std::get<0>(curr_view->member_ips_and_ports[my_rank]), std::get<5>(curr_view->member_ips_and_ports[my_rank]));
+        tcp_sockets->add_node(std::move(sock));
     }
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
             = tcp_sockets->get_socket(nid);

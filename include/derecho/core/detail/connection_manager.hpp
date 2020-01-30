@@ -80,7 +80,7 @@ public:
      * @return True if the TCP connection was set up successfully, false if
      * there was an error.
      */
-    bool add_node(node_id_t new_id, socket& sock);
+    bool add_node(node_id_t new_id, socket&& sock);
     /**
      * Removes a node from the managed set of TCP connections, closing the
      * socket connected to it.

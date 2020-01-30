@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
     cout << "Finished constructing ExternalGroup" << endl;
 
     std::vector<node_id_t> members = group.get_members();
-    std::vector<node_id_t> shard_members = group.get_shard_members(0, 1);
+    std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
     ExternalClientCaller<Foo, Foo>& foo_p2p_handle = group.get_ref<Foo>();
     {
         foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(0, 75);

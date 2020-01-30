@@ -635,20 +635,25 @@ void ViewManager::create_threads() {
         pthread_setname_np(pthread_self(), "external_client_thread");
         while(!thread_shutdown) {
             tcp::socket client_socket = external_socket.accept();
-	    node_id_t remote_node_id;
+	        node_id_t remote_node_id;
             ExternalClientRequest request;
             
             client_socket.read(remote_node_id);
-            if (remote_node_id == getConfUInt32(CONF_DERECHO_LOCAL_ID)) {
-		// connected by destructor, force thread to return
-		return;
-	    }
-	    client_socket.read(request);
+            if(curr_view->rank_of(remote_node_id) != -1) {
+                // 1. external can't have same id as any member
+                // 2. connected by destructor, force thread to return
+                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
+                continue;
+            }
+	        client_socket.read(request);
             if (request == ExternalClientRequest::GET_VIEW) {
                 dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
                 send_view(*curr_view, client_socket);
             } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
-                sst::add_node(remote_node_id, client_socket);
+                uint16_t external_client_sst_port = 0;
+                client_socket.read(external_client_sst_port);
+                sst::add_node(remote_node_id, std::pair<ip_addr_t, uint16_t>{
+                              client_socket.get_remote_ip(),external_client_sst_port});
                 add_external_connection_upcall({remote_node_id});
             }
             
