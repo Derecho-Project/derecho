@@ -247,192 +247,192 @@ bool MulticastGroup::create_rdmc_sst_groups() {
     for(const auto& p : subgroup_settings_map) {
         uint32_t subgroup_num = p.first;
         const SubgroupSettings& subgroup_settings = p.second;
-        const std::vector<node_id_t>& shard_members = subgroup_settings.members;
-        std::size_t num_shard_members = shard_members.size();
-        std::vector<int> shard_senders = subgroup_settings.senders;
-        uint32_t num_shard_senders = get_num_senders(shard_senders);
+        // const std::vector<node_id_t>& shard_members = subgroup_settings.members;
+        // std::size_t num_shard_members = shard_members.size();
+        // std::vector<int> shard_senders = subgroup_settings.senders;
+        // uint32_t num_shard_senders = get_num_senders(shard_senders);
         auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
 
         sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(
                 sst, shard_sst_indices, subgroup_settings.profile.window_size, subgroup_settings.profile.sst_max_msg_size, subgroup_settings.senders,
                 subgroup_settings.num_received_offset, subgroup_settings.slot_offset);
 
-        for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
-            // don't create RDMC group if the shard member is never going to send
-            if(!shard_senders[shard_rank]) {
-                continue;
-            }
-            sender_rank++;
-            node_id_t node_id = shard_members[shard_rank];
-            // When RDMC receives a message, it should store it in
-            // locally_stable_rdmc_messages and update the received count
-            rdmc::completion_callback_t rdmc_receive_handler;
-            rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank,
-                                    subgroup_settings, node_id,
-                                    num_shard_senders,
-                                    shard_sst_indices](char* data, size_t size) {
-                assert(this->sst);
-                std::lock_guard<std::mutex> lock(msg_state_mtx);
-                header* h = (header*)data;
-                const int32_t index = h->index;
-                message_id_t sequence_number = index * num_shard_senders + sender_rank;
+//         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
+//             // don't create RDMC group if the shard member is never going to send
+//             if(!shard_senders[shard_rank]) {
+//                 continue;
+//             }
+//             sender_rank++;
+//             node_id_t node_id = shard_members[shard_rank];
+//             // When RDMC receives a message, it should store it in
+//             // locally_stable_rdmc_messages and update the received count
+//             rdmc::completion_callback_t rdmc_receive_handler;
+//             rdmc_receive_handler = [this, subgroup_num, shard_rank, sender_rank,
+//                                     subgroup_settings, node_id,
+//                                     num_shard_senders,
+//                                     shard_sst_indices](char* data, size_t size) {
+//                 assert(this->sst);
+//                 std::lock_guard<std::mutex> lock(msg_state_mtx);
+//                 header* h = (header*)data;
+//                 const int32_t index = h->index;
+//                 message_id_t sequence_number = index * num_shard_senders + sender_rank;
 
-                dbg_default_trace("Locally received message in subgroup {}, sender rank {}, index {}",
-                                  subgroup_num, shard_rank, index);
-                // Move message from current_receives to locally_stable_rdmc_messages.
-                if(node_id == members[member_index]) {
-                    assert(current_sends[subgroup_num]);
-                    locally_stable_rdmc_messages[subgroup_num][sequence_number] = std::move(*current_sends[subgroup_num]);
-                    current_sends[subgroup_num] = std::nullopt;
-                } else {
-                    auto it = current_receives.find({subgroup_num, node_id});
-                    assert(it != current_receives.end());
-                    auto& msg = it->second;
-                    msg.index = index;
-                    // We set the size in this receive handler instead of in the incoming_message_handler
-                    msg.size = size;
-                    locally_stable_rdmc_messages[subgroup_num].emplace(sequence_number, std::move(msg));
-                    current_receives.erase(it);
-                }
+//                 dbg_default_trace("Locally received message in subgroup {}, sender rank {}, index {}",
+//                                   subgroup_num, shard_rank, index);
+//                 // Move message from current_receives to locally_stable_rdmc_messages.
+//                 if(node_id == members[member_index]) {
+//                     assert(current_sends[subgroup_num]);
+//                     locally_stable_rdmc_messages[subgroup_num][sequence_number] = std::move(*current_sends[subgroup_num]);
+//                     current_sends[subgroup_num] = std::nullopt;
+//                 } else {
+//                     auto it = current_receives.find({subgroup_num, node_id});
+//                     assert(it != current_receives.end());
+//                     auto& msg = it->second;
+//                     msg.index = index;
+//                     // We set the size in this receive handler instead of in the incoming_message_handler
+//                     msg.size = size;
+//                     locally_stable_rdmc_messages[subgroup_num].emplace(sequence_number, std::move(msg));
+//                     current_receives.erase(it);
+//                 }
 
-                auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
-#ifdef NULL_SEND_ENABLED
-                /* NULL Send Scheme */
-                // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
-                if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
-                    if(subgroup_settings.sender_rank < (int)sender_rank) {
-                        while(future_message_indices[subgroup_num] <= new_num_received) {
-                            get_buffer_and_send_auto_null(subgroup_num);
-                        }
-                    } else if(subgroup_settings.sender_rank > (int)sender_rank) {
-                        while(future_message_indices[subgroup_num] < new_num_received) {
-                            get_buffer_and_send_auto_null(subgroup_num);
-                        }
-                    }
-                }
-#endif
-                // deliver immediately if in UNORDERED mode
-                if(subgroup_settings.mode == Mode::UNORDERED) {
-                    // issue stability upcalls for the recently sequenced messages
-                    for(int i = sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] + 1;
-                        i <= new_num_received; ++i) {
-                        message_id_t seq_num = i * num_shard_senders + sender_rank;
-                        if(!locally_stable_sst_messages[subgroup_num].empty()
-                           && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
-                            auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
-                            char* buf = const_cast<char*>(msg.buf);
-                            header* h = (header*)(buf);
-                            // no delivery callback for a NULL message
-                            if(msg.size > h->header_size && callbacks.global_stability_callback) {
-                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                    msg.index,
-                                                                    {{buf + h->header_size, msg.size - h->header_size}},
-                                                                    INVALID_VERSION);
-                            }
-                            if(node_id == members[member_index]) {
-                                pending_message_timestamps[subgroup_num].erase(h->timestamp);
-                            }
-                            locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
-                        } else {
-                            assert(!locally_stable_rdmc_messages[subgroup_num].empty());
-                            auto it2 = locally_stable_rdmc_messages[subgroup_num].begin();
-                            assert(it2->first == seq_num);
-                            auto& msg = it2->second;
-                            char* buf = msg.message_buffer.buffer.get();
-                            header* h = (header*)(buf);
-                            // no delivery for a NULL message
-                            if(msg.size > h->header_size && callbacks.global_stability_callback) {
-                                callbacks.global_stability_callback(subgroup_num, msg.sender_id,
-                                                                    msg.index,
-                                                                    {{buf + h->header_size, msg.size - h->header_size}},
-                                                                    INVALID_VERSION);
-                            }
-                            free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
-                            if(node_id == members[member_index]) {
-                                pending_message_timestamps[subgroup_num].erase(h->timestamp);
-                            }
-                            locally_stable_rdmc_messages[subgroup_num].erase(it2);
-                        }
-                    }
-                }
-                if(new_num_received > sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank]) {
-                    sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
-                    // std::atomic_signal_fence(std::memory_order_acq_rel);
-                    auto* min_ptr = std::min_element(&sst->num_received[member_index][subgroup_settings.num_received_offset],
-                                                     &sst->num_received[member_index][subgroup_settings.num_received_offset + num_shard_senders]);
-                    uint min_index = std::distance(&sst->num_received[member_index][subgroup_settings.num_received_offset], min_ptr);
-                    auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
-                    if(static_cast<message_id_t>(new_seq_num) > sst->seq_num[member_index][subgroup_num]) {
-                        dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
-                        sst->seq_num[member_index][subgroup_num] = new_seq_num;
-                        sst->put(shard_sst_indices,
-                                 sst->seq_num, subgroup_num);
-                    }
-                    sst->put(shard_sst_indices,
-                             sst->num_received,
-                             subgroup_settings.num_received_offset + sender_rank);
-                }
-            };
-            // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
-            auto receive_handler_plus_notify =
-                    [this, rdmc_receive_handler](char* data, size_t size) {
-                        rdmc_receive_handler(data, size);
-                        // signal background writer thread
-                        sender_cv.notify_all();
-                    };
+//                 auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
+// #ifdef NULL_SEND_ENABLED
+//                 /* NULL Send Scheme */
+//                 // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
+//                 if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
+//                     if(subgroup_settings.sender_rank < (int)sender_rank) {
+//                         while(future_message_indices[subgroup_num] <= new_num_received) {
+//                             get_buffer_and_send_auto_null(subgroup_num);
+//                         }
+//                     } else if(subgroup_settings.sender_rank > (int)sender_rank) {
+//                         while(future_message_indices[subgroup_num] < new_num_received) {
+//                             get_buffer_and_send_auto_null(subgroup_num);
+//                         }
+//                     }
+//                 }
+// #endif
+//                 // deliver immediately if in UNORDERED mode
+//                 if(subgroup_settings.mode == Mode::UNORDERED) {
+//                     // issue stability upcalls for the recently sequenced messages
+//                     for(int i = sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] + 1;
+//                         i <= new_num_received; ++i) {
+//                         message_id_t seq_num = i * num_shard_senders + sender_rank;
+//                         if(!locally_stable_sst_messages[subgroup_num].empty()
+//                            && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
+//                             auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
+//                             char* buf = const_cast<char*>(msg.buf);
+//                             header* h = (header*)(buf);
+//                             // no delivery callback for a NULL message
+//                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
+//                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+//                                                                     msg.index,
+//                                                                     {{buf + h->header_size, msg.size - h->header_size}},
+//                                                                     INVALID_VERSION);
+//                             }
+//                             if(node_id == members[member_index]) {
+//                                 pending_message_timestamps[subgroup_num].erase(h->timestamp);
+//                             }
+//                             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
+//                         } else {
+//                             assert(!locally_stable_rdmc_messages[subgroup_num].empty());
+//                             auto it2 = locally_stable_rdmc_messages[subgroup_num].begin();
+//                             assert(it2->first == seq_num);
+//                             auto& msg = it2->second;
+//                             char* buf = msg.message_buffer.buffer.get();
+//                             header* h = (header*)(buf);
+//                             // no delivery for a NULL message
+//                             if(msg.size > h->header_size && callbacks.global_stability_callback) {
+//                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
+//                                                                     msg.index,
+//                                                                     {{buf + h->header_size, msg.size - h->header_size}},
+//                                                                     INVALID_VERSION);
+//                             }
+//                             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
+//                             if(node_id == members[member_index]) {
+//                                 pending_message_timestamps[subgroup_num].erase(h->timestamp);
+//                             }
+//                             locally_stable_rdmc_messages[subgroup_num].erase(it2);
+//                         }
+//                     }
+//                 }
+//                 if(new_num_received > sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank]) {
+//                     sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
+//                     // std::atomic_signal_fence(std::memory_order_acq_rel);
+//                     auto* min_ptr = std::min_element(&sst->num_received[member_index][subgroup_settings.num_received_offset],
+//                                                      &sst->num_received[member_index][subgroup_settings.num_received_offset + num_shard_senders]);
+//                     uint min_index = std::distance(&sst->num_received[member_index][subgroup_settings.num_received_offset], min_ptr);
+//                     auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
+//                     if(static_cast<message_id_t>(new_seq_num) > sst->seq_num[member_index][subgroup_num]) {
+//                         dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
+//                         sst->seq_num[member_index][subgroup_num] = new_seq_num;
+//                         sst->put(shard_sst_indices,
+//                                  sst->seq_num, subgroup_num);
+//                     }
+//                     sst->put(shard_sst_indices,
+//                              sst->num_received,
+//                              subgroup_settings.num_received_offset + sender_rank);
+//                 }
+//             };
+//             // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
+//             auto receive_handler_plus_notify =
+//                     [this, rdmc_receive_handler](char* data, size_t size) {
+//                         rdmc_receive_handler(data, size);
+//                         // signal background writer thread
+//                         sender_cv.notify_all();
+//                     };
 
-            // Create a "rotated" vector of members in which the currently selected shard member (shard_rank) is first
-            std::vector<uint32_t> rotated_shard_members(shard_members.size());
-            for(uint k = 0; k < num_shard_members; ++k) {
-                rotated_shard_members[k] = shard_members[(shard_rank + k) % num_shard_members];
-            }
+//             // Create a "rotated" vector of members in which the currently selected shard member (shard_rank) is first
+//             std::vector<uint32_t> rotated_shard_members(shard_members.size());
+//             for(uint k = 0; k < num_shard_members; ++k) {
+//                 rotated_shard_members[k] = shard_members[(shard_rank + k) % num_shard_members];
+//             }
 
-            // don't create rdmc group if there's only one member in the shard
-            if(num_shard_members <= 1) {
-                continue;
-            }
+//             // don't create rdmc group if there's only one member in the shard
+//             if(num_shard_members <= 1) {
+//                 continue;
+//             }
 
-            if(node_id == members[member_index]) {
-                //Create a group in which this node is the sender, and only self-receives happen
-                if(!rdmc::create_group(
-                           rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [](size_t length) -> rdmc::receive_destination {
-                               assert_always(false);
-                               return {nullptr, 0};
-                           },
-                           receive_handler_plus_notify,
-                           [](std::optional<uint32_t>) {})) {
-                    return false;
-                }
-                subgroup_to_rdmc_group[subgroup_num] = rdmc_group_num_offset;
-                rdmc_group_num_offset++;
-            } else {
-                if(!rdmc::create_group(
-                           rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                           [this, subgroup_num, node_id](size_t length) {
-                               std::lock_guard<std::mutex> lock(msg_state_mtx);
-                               assert(!free_message_buffers[subgroup_num].empty());
-                               //Create a Message struct to receive the data into.
-                               RDMCMessage msg;
-                               msg.sender_id = node_id;
-                               // The length variable is not the exact size of the msg,
-                               // but it is the nearest multiple of the block size greater then the size
-                               // so we will set the size in the receive handler
-                               msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
-                               free_message_buffers[subgroup_num].pop_back();
+//             if(node_id == members[member_index]) {
+//                 //Create a group in which this node is the sender, and only self-receives happen
+//                 if(!rdmc::create_group(
+//                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
+//                            [](size_t length) -> rdmc::receive_destination {
+//                                assert_always(false);
+//                                return {nullptr, 0};
+//                            },
+//                            receive_handler_plus_notify,
+//                            [](std::optional<uint32_t>) {})) {
+//                     return false;
+//                 }
+//                 subgroup_to_rdmc_group[subgroup_num] = rdmc_group_num_offset;
+//                 rdmc_group_num_offset++;
+//             } else {
+//                 if(!rdmc::create_group(
+//                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
+//                            [this, subgroup_num, node_id](size_t length) {
+//                                std::lock_guard<std::mutex> lock(msg_state_mtx);
+//                                assert(!free_message_buffers[subgroup_num].empty());
+//                                //Create a Message struct to receive the data into.
+//                                RDMCMessage msg;
+//                                msg.sender_id = node_id;
+//                                // The length variable is not the exact size of the msg,
+//                                // but it is the nearest multiple of the block size greater then the size
+//                                // so we will set the size in the receive handler
+//                                msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
+//                                free_message_buffers[subgroup_num].pop_back();
 
-                               rdmc::receive_destination ret{msg.message_buffer.mr, 0};
-                               current_receives[{subgroup_num, node_id}] = std::move(msg);
+//                                rdmc::receive_destination ret{msg.message_buffer.mr, 0};
+//                                current_receives[{subgroup_num, node_id}] = std::move(msg);
 
-                               assert(ret.mr->buffer != nullptr);
-                               return ret;
-                           },
-                           rdmc_receive_handler, [](std::optional<uint32_t>) {})) {
-                    return false;
-                }
-                rdmc_group_num_offset++;
-            }
-        }
+//                                assert(ret.mr->buffer != nullptr);
+//                                return ret;
+//                            },
+//                            rdmc_receive_handler, [](std::optional<uint32_t>) {})) {
+//                     return false;
+//                 }
+//                 rdmc_group_num_offset++;
+//             }
+//         }
     }
     return true;
 }
