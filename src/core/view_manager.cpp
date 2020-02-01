@@ -160,6 +160,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
             throw derecho_exception("Leader rejected join, ID already in use.");
         }
         if(leader_response.code == JoinResponseCode::LEADER_REDIRECT) {
+            //Receive the size of the IP address, then the IP address, then the port (which is a fixed size)
             std::size_t ip_addr_size;
             leader_connection.read(ip_addr_size);
             char buffer[ip_addr_size];
@@ -167,7 +168,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
             ip_addr_t leader_ip(buffer);
             uint16_t leader_gms_port;
             leader_connection.read(leader_gms_port);
-            dbg_default_info("That node was not the leader! Redirecting to {}", leader_ip);
+            dbg_default_info("That node was not the leader! Redirecting to {}:{}", leader_ip, leader_gms_port);
             //Use move-assignment to reconnect the socket to the given IP address, and try again
             //(good thing that leader_connection reference is mutable)
             leader_connection = tcp::socket(leader_ip, leader_gms_port);
@@ -876,6 +877,15 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
         client_socket = std::move(pending_join_sockets_locked.access.front());
         pending_join_sockets_locked.access.pop_front();
     }
+    //Exchange version codes; close the socket if the client has an incompatible version
+    uint64_t joiner_version_code;
+    client_socket.exchange(my_version_hashcode, joiner_version_code);
+    if(joiner_version_code != my_version_hashcode) {
+        rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
+                         client_socket.get_remote_ip());
+        return;
+    }
+    //Read the client's ID, but ignore it, since the leader will check it again anyway
     node_id_t joiner_id;
     client_socket.read(joiner_id);
     client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
