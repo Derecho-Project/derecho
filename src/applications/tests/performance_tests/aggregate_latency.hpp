@@ -15,5 +15,5 @@ public:
 std::pair<double, double> aggregate_latency(std::vector<uint32_t> members, uint32_t node_rank,
 			 double latency, double latency_std_dev);
 
-std::pair<double, double> aggregate_latency_tcp(std::string leader_ip, bool is_leader, uint32_t num_members,
+std::pair<double, double> aggregate_latency_tcp(std::string leader_ip, bool is_leader, uint32_t node_rank, uint32_t num_members,
              double latency, double latency_std_dev);

@@ -13,5 +13,5 @@ public:
 };
 double aggregate_bandwidth(std::vector<uint32_t> members, uint32_t node_rank,
                            double bw);
-double aggregate_bandwidth_tcp(std::string leader_ip, bool is_leader, uint32_t num_members,
+double aggregate_bandwidth_tcp(std::string leader_ip, bool is_leader, uint32_t node_id, uint32_t num_members,
                                double bw);
