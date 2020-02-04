@@ -432,8 +432,9 @@ void ViewManager::await_first_view(const node_id_t my_id) {
                 rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket.get_remote_ip());
                 continue;
             }
-            node_id_t joiner_id = 0;
-            client_socket.read(joiner_id);
+            JoinRequest join_request;
+            client_socket.read(join_request);
+            node_id_t joiner_id = join_request.joiner_id;
             if(curr_view->rank_of(joiner_id) != -1) {
                 client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
                 continue;
