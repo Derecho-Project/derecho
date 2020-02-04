@@ -42,7 +42,6 @@ private:
     const node_id_t my_id;
     std::unique_ptr<View> prev_view;
     std::unique_ptr<View> curr_view;
-    std::unique_ptr<tcp::tcp_connections> tcp_sockets;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
     std::mutex p2p_connections_mutex;
     std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
@@ -53,8 +52,8 @@ private:
     using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ReplicatedTypes...>>;
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
 
-    bool get_view(tcp::socket& sock);
-    tcp::socket& get_socket(node_id_t nid);
+    bool get_view(const node_id_t nid);
+    // tcp::socket& get_socket(node_id_t nid);
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
     void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);

@@ -727,11 +727,18 @@ namespace sst{
   }
 
   void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-                         &ip_addrs_and_ports,
-                     uint32_t node_id) {
+                         &internal_ip_addrs_and_ports,  
+                     uint32_t node_id,
+                     const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                         &external_ip_addrs_and_ports) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_ports);
+    if (!internal_ip_addrs_and_ports.empty()){
+      sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
+    }
+    if (!external_ip_addrs_and_ports.empty()){
+      sst_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
+    }
 
     // initialize global resources:
     // STEP 1: initialize with configuration.

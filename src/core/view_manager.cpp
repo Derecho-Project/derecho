@@ -35,7 +35,6 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
-          external_socket(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)),
           thread_shutdown(false),
           disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
@@ -97,7 +96,6 @@ ViewManager::ViewManager(
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
-          external_socket(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)),
           thread_shutdown(false),
           disable_partitioning_safety(getConfBoolean(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY)),
           view_upcalls(_view_upcalls),
@@ -124,12 +122,7 @@ ViewManager::~ViewManager() {
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
-    // force accept and read to return
-    tcp::socket s_external{"localhost", getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)};
-    s_external.write(getConfUInt32(CONF_DERECHO_LOCAL_ID));
-    if(external_client_listener_thread.joinable()) {
-        external_client_listener_thread.join();
-    }
+    
     old_views_cv.notify_all();
     if(old_view_cleanup_thread.joinable()) {
         old_view_cleanup_thread.join();
@@ -150,7 +143,7 @@ void ViewManager::receive_initial_view(node_id_t my_id, tcp::socket& leader_conn
         if(leader_version_hashcode != my_version_hashcode) {
             throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
         }
-        success = leader_connection.write(my_id);
+        success = leader_connection.write(JoinRequest{my_id, false});
         if(!success) throw derecho_exception("Failed to send ID to the leader! Leader has crashed.");
         success = leader_connection.read(leader_response);
         if(!success) throw derecho_exception("Failed to read initial response from leader! Leader has crashed.");
@@ -612,13 +605,16 @@ void ViewManager::initialize_rdmc_sst() {
         exit(0);
     }
     auto member_ips_and_sst_ports_map = make_member_ips_and_ports_map<PORT_TYPE::SST>(*curr_view);
+    node_id_t my_id = curr_view->members[curr_view->my_rank];
 
 #ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_and_sst_ports_map,
                           curr_view->members[curr_view->my_rank]);
 #else
     sst::lf_initialize(member_ips_and_sst_ports_map,
-                       curr_view->members[curr_view->my_rank]);
+                       my_id,
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, 
+    {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
 #endif
 }
 
@@ -628,37 +624,7 @@ void ViewManager::create_threads() {
         while(!thread_shutdown) {
             tcp::socket client_socket = server_socket.accept();
             dbg_default_debug("Background thread got a client connection from {}", client_socket.get_remote_ip());
-            pending_join_sockets.locked().access.emplace_back(std::move(client_socket));
-        }
-    }};
-
-    external_client_listener_thread = std::thread{[this]() {
-        pthread_setname_np(pthread_self(), "external_client_thread");
-        while(!thread_shutdown) {
-            tcp::socket client_socket = external_socket.accept();
-	        node_id_t remote_node_id;
-            ExternalClientRequest request;
-            
-            client_socket.read(remote_node_id);
-            if(curr_view->rank_of(remote_node_id) != -1) {
-                // 1. external can't have same id as any member
-                // 2. connected by destructor, force thread to return
-                client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
-                continue;
-            }
-            client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
-	        client_socket.read(request);
-            if (request == ExternalClientRequest::GET_VIEW) {
-                dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
-                send_view(*curr_view, client_socket);
-            } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
-                uint16_t external_client_sst_port = 0;
-                client_socket.read(external_client_sst_port);
-                sst::add_external_node(remote_node_id, std::pair<ip_addr_t, uint16_t>{
-                              client_socket.get_remote_ip(),external_client_sst_port});
-                add_external_connection_upcall({remote_node_id});
-            }
-            
+            pending_new_sockets.locked().access.emplace_back(std::move(client_socket));
         }
     }};
 
@@ -695,10 +661,10 @@ void ViewManager::register_predicates() {
     };
     auto propose_changes_trig = [this](DerechoSST& sst) { propose_changes(sst); };
 
-    auto reject_join_pred = [this](const DerechoSST& sst) {
-        return !active_leader && has_pending_join();
+    auto new_sockets_pred = [this](const DerechoSST& sst) {
+        return has_pending_new();
     };
-    auto reject_join = [this](DerechoSST& sst) { redirect_join_attempt(sst); };
+    auto new_sockets = [this](DerechoSST& sst) { process_new_sockets(); };
 
     auto change_commit_ready = [this](const DerechoSST& gmsSST) {
         return active_leader
@@ -745,8 +711,8 @@ void ViewManager::register_predicates() {
         start_join_handle = curr_view->gmsSST->predicates.insert(
                 start_join_pred, propose_changes_trig, sst::PredicateType::RECURRENT);
     }
-    if(!reject_join_handle.is_valid()) {
-        reject_join_handle = curr_view->gmsSST->predicates.insert(reject_join_pred, reject_join,
+    if(!new_sockets_handle.is_valid()) {
+        new_sockets_handle = curr_view->gmsSST->predicates.insert(new_sockets_pred, new_sockets,
                                                                   sst::PredicateType::RECURRENT);
     }
     if(!change_commit_ready_handle.is_valid()) {
@@ -830,13 +796,12 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
                 done_with_joins = true;
                 continue;
             }
-            {  //Lock scope for pending_join_sockets
-                auto pending_join_sockets_locked = pending_join_sockets.locked();
-                proposed_join_sockets.splice(proposed_join_sockets.end(),
-                                             pending_join_sockets_locked.access,
-                                             pending_join_sockets_locked.access.begin());
-            }
-            bool success = receive_join(gmsSST, proposed_join_sockets.back());
+            
+            proposed_join_sockets.splice(proposed_join_sockets.end(),
+                                            pending_join_sockets,
+                                            pending_join_sockets.begin());
+            
+            bool success = receive_join(gmsSST, proposed_join_sockets.back().first, proposed_join_sockets.back().second);
             //If the join failed, close the socket
             if(!success) proposed_join_sockets.pop_back();
 
@@ -870,24 +835,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
     }
 }
 
-void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
-    tcp::socket client_socket;
-    {
-        auto pending_join_sockets_locked = pending_join_sockets.locked();
-        client_socket = std::move(pending_join_sockets_locked.access.front());
-        pending_join_sockets_locked.access.pop_front();
-    }
-    //Exchange version codes; close the socket if the client has an incompatible version
-    uint64_t joiner_version_code;
-    client_socket.exchange(my_version_hashcode, joiner_version_code);
-    if(joiner_version_code != my_version_hashcode) {
-        rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
-                         client_socket.get_remote_ip());
-        return;
-    }
-    //Read the client's ID, but ignore it, since the leader will check it again anyway
-    node_id_t joiner_id;
-    client_socket.read(joiner_id);
+void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
     client_socket.write(JoinResponse{JoinResponseCode::LEADER_REDIRECT,
                                      curr_view->members[curr_view->my_rank]});
     //Send the client the IP address of the current leader
@@ -901,6 +849,55 @@ void ViewManager::redirect_join_attempt(DerechoSST& gmsSST) {
                         std::get<0>(curr_view->member_ips_and_ports[rank_of_leader]));
     client_socket.write(std::get<PORT_TYPE::GMS>(
             curr_view->member_ips_and_ports[rank_of_leader]));
+}
+
+void ViewManager::process_new_sockets() {
+    tcp::socket client_socket;
+    {
+        auto pending_new_sockets_locked = pending_new_sockets.locked();
+        client_socket = std::move(pending_new_sockets_locked.access.front());
+        pending_new_sockets_locked.access.pop_front();
+    }
+    //Exchange version codes; close the socket if the client has an incompatible version
+    uint64_t joiner_version_code;
+    client_socket.exchange(my_version_hashcode, joiner_version_code);
+    if(joiner_version_code != my_version_hashcode) {
+        rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
+                         client_socket.get_remote_ip());
+        return;
+    }
+    JoinRequest join_request;
+    client_socket.read(join_request);
+    if (join_request.is_external) {
+        dbg_default_info("The join request is an external request from {}.", join_request.joiner_id);
+        external_join_handler(client_socket, join_request.joiner_id);
+    } else {
+        if (active_leader) {
+            pending_join_sockets.emplace_back(std::make_pair(join_request.joiner_id, std::move(client_socket)));
+        } else {
+            redirect_join_attempt(client_socket);
+        }
+    }
+    return;
+}
+void ViewManager::external_join_handler(tcp::socket& client_socket, const node_id_t& joiner_id) {
+    if(curr_view->rank_of(joiner_id) != -1) {
+        // external can't have same id as any member
+        client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+    }
+    client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
+    ExternalClientRequest request;
+    client_socket.read(request);
+    if (request == ExternalClientRequest::GET_VIEW) {
+        dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
+        send_view(*curr_view, client_socket);
+    } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
+        uint16_t external_client_external_port = 0;
+        client_socket.read(external_client_external_port);
+        sst::add_external_node(joiner_id, std::pair<ip_addr_t, uint16_t>{
+                        client_socket.get_remote_ip(),external_client_external_port});
+        add_external_connection_upcall({joiner_id});
+    }
 }
 
 void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
@@ -1028,7 +1025,7 @@ void ViewManager::start_meta_wedge(DerechoSST& gmsSST) {
     // Disable all the other SST predicates, except suspected_changed and the
     // one I'm about to register
     gmsSST.predicates.remove(start_join_handle);
-    gmsSST.predicates.remove(reject_join_handle);
+    gmsSST.predicates.remove(new_sockets_handle);
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
@@ -1259,7 +1256,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
     // Disable all the other SST predicates, except suspected_changed
     gmsSST.predicates.remove(start_join_handle);
-    gmsSST.predicates.remove(reject_join_handle);
+    gmsSST.predicates.remove(new_sockets_handle);
     gmsSST.predicates.remove(change_commit_ready_handle);
     gmsSST.predicates.remove(leader_proposed_handle);
 
@@ -1304,15 +1301,15 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         // proposed_join_sockets and send them the new View and old shard
         // leaders list
         for(std::size_t c = 0; c < next_view->joined.size(); ++c) {
-            send_view(*next_view, proposed_join_sockets.front());
+            send_view(*next_view, proposed_join_sockets.front().second);
             std::size_t size_of_vector = mutils::bytes_size(old_shard_leaders_by_id);
-            proposed_join_sockets.front().write(size_of_vector);
+            proposed_join_sockets.front().second.write(size_of_vector);
             mutils::post_object([this](const char* bytes, std::size_t size) {
-                proposed_join_sockets.front().write(bytes, size);
+                proposed_join_sockets.front().second.write(bytes, size);
             },
                                 old_shard_leaders_by_id);
             // save the socket for the commit step
-            joiner_sockets.emplace_back(std::move(proposed_join_sockets.front()));
+            joiner_sockets.emplace_back(std::move(proposed_join_sockets.front().second));
             proposed_join_sockets.pop_front();
         }
     }
@@ -1480,23 +1477,14 @@ void ViewManager::transition_multicast_group(
     gmssst::set(next_view->gmsSST->vid[next_view->my_rank], next_view->vid);
 }
 
-bool ViewManager::receive_join(DerechoSST& gmsSST, tcp::socket& client_socket) {
+bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tcp::socket& client_socket) {
     struct in_addr joiner_ip_packed;
     inet_aton(client_socket.get_remote_ip().c_str(), &joiner_ip_packed);
 
-    uint64_t joiner_version_code;
-    client_socket.exchange(my_version_hashcode, joiner_version_code);
-    if(joiner_version_code != my_version_hashcode) {
-        rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.",
-                         client_socket.get_remote_ip());
-        return false;
-    }
     const node_id_t my_id = curr_view->members[curr_view->my_rank];
-    node_id_t joining_client_id = 0;
-    client_socket.read(joining_client_id);
 
-    if(curr_view->rank_of(joining_client_id) != -1) {
-        dbg_default_warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joining_client_id);
+    if(curr_view->rank_of(joiner_id) != -1) {
+        dbg_default_warn("Joining node at IP {} announced it has ID {}, which is already in the View!", client_socket.get_remote_ip(), joiner_id);
         client_socket.write(JoinResponse{JoinResponseCode::ID_IN_USE, my_id});
         return false;
     }
@@ -1513,7 +1501,7 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, tcp::socket& client_socket) {
     uint16_t joiner_external_port = 0;
     client_socket.read(joiner_external_port);
 
-    dbg_default_debug("Proposing change to add node {}", joining_client_id);
+    dbg_default_debug("Proposing change to add node {}", joiner_id);
     size_t next_change_index = gmsSST.num_changes[curr_view->my_rank]
                                - gmsSST.num_installed[curr_view->my_rank];
     if(next_change_index == gmsSST.changes.size()) {
@@ -1523,7 +1511,7 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, tcp::socket& client_socket) {
         throw derecho_exception("Too many changes at once! Processing a join, but ran out of room in the pending changes list.");
     }
     gmssst::set(gmsSST.changes[curr_view->my_rank][next_change_index],
-                make_change_proposal(my_id, joining_client_id));
+                make_change_proposal(my_id, joiner_id));
     gmssst::set(gmsSST.joiner_ips[curr_view->my_rank][next_change_index],
                 joiner_ip_packed.s_addr);
     gmssst::set(gmsSST.joiner_gms_ports[curr_view->my_rank][next_change_index],

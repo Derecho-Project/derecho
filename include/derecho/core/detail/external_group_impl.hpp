@@ -13,10 +13,18 @@ ExternalClientCaller<T, ReplicatedTypes...>::ExternalClientCaller(subgroup_type_
 template <typename T, typename... ReplicatedTypes>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
-    tcp::socket& sock = group.get_socket(dest_node);
+    int rank = group.curr_view->rank_of(dest_node);
+    tcp::socket sock(std::get<0>(group.curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::GMS>(group.curr_view->member_ips_and_ports[rank]));
+
     JoinResponse leader_response;
     bool success;
-    success = sock.write(node_id);
+    uint64_t leader_version_hashcode;
+    success = sock.exchange(my_version_hashcode, leader_version_hashcode);
+    if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
+    if(leader_version_hashcode != my_version_hashcode) {
+        throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+    }
+    success = sock.write(JoinRequest{node_id, true});
     success = sock.read(leader_response);
     if(leader_response.code == JoinResponseCode::ID_IN_USE) {
         dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group.my_id);
@@ -24,15 +32,14 @@ auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, 
         throw derecho_exception("Leader rejected join, ID already in use.");
     }
     success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
-    success = sock.write(getConfUInt16(CONF_DERECHO_SST_PORT));
+    success = sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     if (!success) {
         throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
     }
 
     assert(dest_node != node_id);
-    int rank = group.curr_view->rank_of(dest_node);
     sst::add_external_node(dest_node, std::pair<ip_addr_t, uint16_t>{std::get<0>(group.curr_view->member_ips_and_ports[rank]), 
-                                                            std::get<PORT_TYPE::SST>(group.curr_view->member_ips_and_ports[rank])});
+                                                            std::get<PORT_TYPE::EXTERNAL>(group.curr_view->member_ips_and_ports[rank])});
     group.p2p_connections->add_connections({dest_node});
 
     if(rank == -1) {
@@ -57,7 +64,6 @@ auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, 
 template <typename... ReplicatedTypes>
 ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deserialization_context)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          tcp_sockets(std::make_unique<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{})),
           receivers(new std::decay_t<decltype(*receivers)>()) {
     if(deserialization_context != nullptr) {
         rdv.push_back(deserialization_context);
@@ -66,12 +72,11 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
     sst::verbs_initialize(member_ips_and_sst_ports_map,
                           curr_view->members[curr_view->my_rank]);
 #else
-    sst::lf_initialize(std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, 
-    {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_SST_PORT)}}}, my_id);
+    sst::lf_initialize({}, my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, 
+    {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
 #endif
 
-    tcp::socket leader_connection(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_EXTERNAL_PORT));
-    get_view(leader_connection);
+    get_view(-1);
 
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
@@ -112,11 +117,21 @@ ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
 }
 
 template <typename... ReplicatedTypes>
-bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
+bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
+        tcp::socket sock = curr_view ? 
+        tcp::socket(std::get<0>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]), std::get<PORT_TYPE::GMS>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)])):
+        tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_EXTERNAL_PORT));
+        
         JoinResponse leader_response;
         bool success;
-        success = sock.write(my_id);
+        uint64_t leader_version_hashcode;
+        success = sock.exchange(my_version_hashcode, leader_version_hashcode);
+        if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
+        if(leader_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        }
+        success = sock.write(JoinRequest{my_id, true});
         success = sock.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
@@ -143,21 +158,14 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(tcp::socket& sock) {
     }
 }
 
-template <typename... ReplicatedTypes>
-tcp::socket& ExternalGroup<ReplicatedTypes...>::get_socket(node_id_t nid) {
-    if(!tcp_sockets->contains_node(nid)) {
-        int rank = curr_view->rank_of(nid);
-        tcp::socket sock(std::get<0>(curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::EXTERNAL>(curr_view->member_ips_and_ports[rank]));
-        tcp_sockets->add_node_with_socket(nid, std::move(sock));
-    }
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
-            = tcp_sockets->get_socket(nid);
-    return member_socket.get();
-}
+// template <typename... ReplicatedTypes>
+// tcp::socket& ExternalGroup<ReplicatedTypes...>::get_socket(node_id_t nid) {
+//     int rank = curr_view->rank_of(nid);
+//     return tcp::socket(std::get<0>(curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::EXTERNAL>(curr_view->member_ips_and_ports[rank]));
+// }
 
 template <typename... ReplicatedTypes>
 void ExternalGroup<ReplicatedTypes...>::clean_up() {
-    tcp_sockets->filter_to(curr_view->members);
     p2p_connections->filter_to(curr_view->members);
     sst::filter_external_to(curr_view->members);
 
@@ -190,7 +198,7 @@ void ExternalGroup<ReplicatedTypes...>::clean_up() {
 template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::update_view() {
     for(auto& nid : curr_view->members) {
-        if(get_view(get_socket(nid))) {
+        if(get_view(nid)) {
             clean_up();
             return true;
         }
