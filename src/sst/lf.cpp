@@ -737,7 +737,7 @@ namespace sst{
       sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
     }
     if (!external_ip_addrs_and_ports.empty()){
-      sst_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
+      external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
     }
 
     // initialize global resources:
