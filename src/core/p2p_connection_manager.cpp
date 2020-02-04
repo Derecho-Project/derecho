@@ -106,8 +106,11 @@ void P2PConnectionManager::check_failures_loop() {
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
+
+    uint16_t tick_count = 0;
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
+        tick_count++;
         std::unordered_set<node_id_t> posted_write_to;
 
         util::polling_data.set_waiting(tid);
@@ -118,7 +121,8 @@ void P2PConnectionManager::check_failures_loop() {
 #endif
 
         for(const auto& [node_id, p2p_conn] : p2p_connections) {
-            if (node_id == my_node_id || p2p_conn->num_rdma_writes < 1000) {
+            // checks every second regardless of num_rdma_writes
+            if (node_id == my_node_id || (p2p_conn->num_rdma_writes < 1000 && tick_count < 1000)) {
                 continue;
             }
             p2p_conn->num_rdma_writes = 0;
@@ -128,6 +132,9 @@ void P2PConnectionManager::check_failures_loop() {
             p2p_conn->get_res()->post_remote_write_with_completion(&sctxt[node_id], p2p_buf_size - sizeof(bool), sizeof(bool));
             posted_write_to.insert(node_id);
         } 
+        if (tick_count >= 1000) {
+            tick_count = 0;
+        }
 
         // track which nodes respond successfully
         std::unordered_set<node_id_t> polled_successfully_from;
