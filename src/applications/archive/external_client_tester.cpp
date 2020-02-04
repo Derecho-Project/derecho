@@ -27,11 +27,9 @@ int main(int argc, char** argv) {
     ExternalClientCaller<Foo, Foo>& foo_p2p_handle = group.get_ref<Foo>();
     {
         
-        auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(0);
-        auto response = result.get().get(0);
-        cout << "Node 0 had state = " << response << endl;
-        cout << "Node 1 had state = " << result.get().get(1) << endl;
-        cout << "Node 2 had state = " << result.get().get(2) << endl;
+        auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(1);
+        auto response = result.get().get(1);
+        cout << "Node 1 had state = " << response << endl;
     }
     {
         foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(1, 75);
@@ -42,8 +40,6 @@ int main(int argc, char** argv) {
         auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(0);
         auto response = result.get().get(0);
         cout << "Node 0 had state = " << response << endl;
-        cout << "Node 1 had state = " << result.get().get(1) << endl;
-        cout << "Node 2 had state = " << result.get().get(2) << endl;
         
     }
     group.update_view();
@@ -54,10 +50,8 @@ int main(int argc, char** argv) {
     {
         
         auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(2);
-        auto response = result.get().get(0);
-        cout << "Node 0 had state = " << response << endl;
-        cout << "Node 1 had state = " << result.get().get(1) << endl;
-        cout << "Node 2 had state = " << result.get().get(2) << endl;
+        auto response = result.get().get(2);
+        cout << "Node 2 had state = " << response << endl;
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
