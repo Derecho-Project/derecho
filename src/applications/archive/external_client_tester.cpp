@@ -26,7 +26,15 @@ int main(int argc, char** argv) {
     std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
     ExternalClientCaller<Foo, Foo>& foo_p2p_handle = group.get_ref<Foo>();
     {
-        foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(0, 75);
+        
+        auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(0);
+        auto response = result.get().get(0);
+        cout << "Node 0 had state = " << response << endl;
+        cout << "Node 1 had state = " << result.get().get(1) << endl;
+        cout << "Node 2 had state = " << result.get().get(2) << endl;
+    }
+    {
+        foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(1, 75);
     }
     std::this_thread::sleep_for(std::chrono::seconds(3));
     {
@@ -34,7 +42,22 @@ int main(int argc, char** argv) {
         auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(0);
         auto response = result.get().get(0);
         cout << "Node 0 had state = " << response << endl;
+        cout << "Node 1 had state = " << result.get().get(1) << endl;
+        cout << "Node 2 had state = " << result.get().get(2) << endl;
         
+    }
+    group.update_view();
+    {
+        foo_p2p_handle.p2p_send<RPC_NAME(change_state)>(0, 85);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(3));
+    {
+        
+        auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(2);
+        auto response = result.get().get(0);
+        cout << "Node 0 had state = " << response << endl;
+        cout << "Node 1 had state = " << result.get().get(1) << endl;
+        cout << "Node 2 had state = " << result.get().get(2) << endl;
     }
 
     cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

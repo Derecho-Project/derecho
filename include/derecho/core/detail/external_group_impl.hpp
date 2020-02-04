@@ -14,6 +14,10 @@ template <typename T, typename... ReplicatedTypes>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
     int rank = group.curr_view->rank_of(dest_node);
+    if(rank == -1) {
+        throw invalid_node_exception("Cannot send a p2p request to node "
+                                     + std::to_string(dest_node) + ": it is not a member of the Group.");
+    }
     tcp::socket sock(std::get<0>(group.curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::GMS>(group.curr_view->member_ips_and_ports[rank]));
 
     JoinResponse leader_response;
@@ -42,10 +46,6 @@ auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, 
                                                             std::get<PORT_TYPE::EXTERNAL>(group.curr_view->member_ips_and_ports[rank])});
     group.p2p_connections->add_connections({dest_node});
 
-    if(rank == -1) {
-        throw invalid_node_exception("Cannot send a p2p request to node "
-                                     + std::to_string(dest_node) + ": it is not a member of the Group.");
-    }
     auto return_pair = wrapped_this->template send<tag>(
             [this, &dest_node](size_t size) -> char* {
                 const std::size_t max_payload_size = group.max_payload_sizes.at(subgroup_id);
@@ -201,6 +201,7 @@ template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::update_view() {
     for(auto& nid : curr_view->members) {
         if(get_view(nid)) {
+            dbg_default_debug("Successfully got new view from {} ", nid);
             clean_up();
             return true;
         }
