@@ -80,7 +80,9 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, std::
 tcp_connections::tcp_connections(node_id_t my_id,
                                  const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports)
         : my_id(my_id) {
-    establish_node_connections(ip_addrs_and_ports);
+    if (!ip_addrs_and_ports.empty()) {
+        establish_node_connections(ip_addrs_and_ports);
+    }
 }
 
 void tcp_connections::destroy() {

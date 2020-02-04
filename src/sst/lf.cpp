@@ -733,12 +733,8 @@ namespace sst{
                          &external_ip_addrs_and_ports) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    if (!internal_ip_addrs_and_ports.empty()){
-      sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
-    }
-    if (!external_ip_addrs_and_ports.empty()){
-      external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
-    }
+    sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
+    external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
 
     // initialize global resources:
     // STEP 1: initialize with configuration.
