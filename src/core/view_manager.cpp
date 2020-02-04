@@ -859,6 +859,7 @@ void ViewManager::process_new_sockets() {
         client_socket = std::move(pending_new_sockets_locked.access.front());
         pending_new_sockets_locked.access.pop_front();
     }
+    dbg_default_info("Background thread got a connection from {}", client_socket.get_remote_ip());
     //Exchange version codes; close the socket if the client has an incompatible version
     uint64_t joiner_version_code;
     client_socket.exchange(my_version_hashcode, joiner_version_code);

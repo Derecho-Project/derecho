@@ -103,7 +103,9 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
             view_max_rpc_window_size,
             getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
             getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
-            view_max_rpc_reply_payload_size + sizeof(header)});
+            view_max_rpc_reply_payload_size + sizeof(header),
+            true,
+            NULL});
 
     rpc_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::p2p_receive_loop, this);
 }  // namespace derecho
@@ -121,7 +123,7 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
         tcp::socket sock = curr_view ? 
         tcp::socket(std::get<0>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]), std::get<PORT_TYPE::GMS>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)])):
-        tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_EXTERNAL_PORT));
+        tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
         
         JoinResponse leader_response;
         bool success;

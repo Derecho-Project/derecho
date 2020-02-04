@@ -18,6 +18,8 @@
 
 namespace sst {
 
+typedef std::function<void(node_id_t)> failure_upcall_t;
+
 struct P2PParams {
     node_id_t my_node_id;
     uint32_t p2p_window_size;
@@ -25,6 +27,8 @@ struct P2PParams {
     uint64_t max_p2p_reply_size;
     uint64_t max_p2p_request_size;
     uint64_t max_rpc_reply_size;
+    bool is_external;
+    failure_upcall_t failure_upcall;
 };
 
 class P2PConnectionManager {
@@ -39,9 +43,8 @@ class P2PConnectionManager {
     std::thread timeout_thread;
     
     node_id_t last_node_id;
-    uint32_t num_rdma_writes = 0;
     void check_failures_loop();
-
+    failure_upcall_t failure_upcall;
     std::mutex connections_mutex;
 
 public:

@@ -2,6 +2,7 @@
 #include <cstring>
 #include <sstream>
 #include <sys/time.h>
+#include <unordered_set>
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/p2p_connection_manager.hpp>
@@ -9,7 +10,8 @@
 
 namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
-        : my_node_id(params.my_node_id) {
+        : my_node_id(params.my_node_id),
+          failure_upcall(params.failure_upcall) {
     
     // HARD-CODED. Adding another request type will break this
 
@@ -29,7 +31,10 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
 
     p2p_connections[my_node_id] = std::make_unique<P2PConnection>(my_node_id, my_node_id, p2p_buf_size, request_params);
 
-    timeout_thread = std::thread(&P2PConnectionManager::check_failures_loop, this);
+    // external client doesn't need failure checking
+    if (!params.is_external) {
+        timeout_thread = std::thread(&P2PConnectionManager::check_failures_loop, this);
+    }
 }
 
 P2PConnectionManager::~P2PConnectionManager() {
@@ -90,7 +95,7 @@ char* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE t
 void P2PConnectionManager::send(node_id_t node_id) {
     p2p_connections.at(node_id)->send();
     if(node_id != my_node_id) {
-        num_rdma_writes++;
+        p2p_connections.at(node_id)->num_rdma_writes++;
     }
 }
 
@@ -103,10 +108,7 @@ void P2PConnectionManager::check_failures_loop() {
     uint32_t ce_idx = util::polling_data.get_index(tid);
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
-        if(num_rdma_writes < 1000) {
-            continue;
-        }
-        num_rdma_writes = 0;
+        std::unordered_set<node_id_t> posted_write_to;
 
         util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
@@ -116,14 +118,21 @@ void P2PConnectionManager::check_failures_loop() {
 #endif
 
         for(const auto& [node_id, p2p_conn] : p2p_connections) {
-            if (node_id == my_node_id) {
+            if (node_id == my_node_id || p2p_conn->num_rdma_writes < 1000) {
                 continue;
             }
+            p2p_conn->num_rdma_writes = 0;
             sctxt[node_id].remote_id = node_id;
             sctxt[node_id].ce_idx = ce_idx;
 
             p2p_conn->get_res()->post_remote_write_with_completion(&sctxt[node_id], p2p_buf_size - sizeof(bool), sizeof(bool));
+            posted_write_to.insert(node_id);
         } 
+
+        // track which nodes respond successfully
+        std::unordered_set<node_id_t> polled_successfully_from;
+        std::vector<node_id_t> failed_node_indexes;
+
         /** Completion Queue poll timeout in millisec */
         const int MAX_POLL_CQ_TIMEOUT = 2000;
         unsigned long start_time_msec;
@@ -149,14 +158,40 @@ void P2PConnectionManager::check_failures_loop() {
                     break;
                 }
             }
+            // if waiting for a completion entry timed out
             if(!ce) {
+                // mark all nodes that have not yet responded as failed
+                for(const auto& pair : p2p_connections) {
+                    const auto& node_id = pair.first;
+                    if(posted_write_to.find(node_id) == posted_write_to.end() 
+                    || polled_successfully_from.find(node_id) != polled_successfully_from.end()) {
+                        continue;
+                    }
+                    failed_node_indexes.push_back(node_id);
+                }
                 break;
             }
             num_completions++;
+
+            auto ce_v = ce.value();
+            int remote_id = ce_v.first;
+            int result = ce_v.second;
+            if(result == -1) {
+                polled_successfully_from.insert(remote_id);
+            } else if(result == -1) {
+                failed_node_indexes.push_back(remote_id);
+            }
         }
         util::polling_data.reset_waiting(tid);
+
+        for(auto index : failed_node_indexes) {
+            if(failure_upcall) {
+                failure_upcall(index);
+            }
+        }
     }
 }
+
 
 void P2PConnectionManager::filter_to(const std::vector<node_id_t>& live_nodes_list) {
     std::vector<node_id_t> prev_nodes_list;

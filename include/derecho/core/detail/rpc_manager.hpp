@@ -147,6 +147,11 @@ class RPCManager {
      */
     void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
 
+    /** Reports to the view manager that the given node has failed if it's internal member.
+     * Otherwise clean up p2p_connections and external sockets in lf.cpp
+     */
+    void report_failure(const node_id_t who);
+
     /**
      * Processes an RPC message for any of the functions managed by this RPCManager,
      * using the opcode to forward it to the correct function for execution.

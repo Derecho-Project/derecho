@@ -22,6 +22,18 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::report_failure(const node_id_t who) {
+    const auto& members = view_manager.get_members();
+    if (std::count(members.begin(), members.end(), who)) {
+        // internal member
+        view_manager.report_failure(who);
+    } else {
+        // external client
+        connections->remove_connections({who});
+        sst::remove_node(who);
+    }
+}
+
 void RPCManager::create_connections() {
     connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             nid,
@@ -29,7 +41,9 @@ void RPCManager::create_connections() {
             view_manager.view_max_rpc_window_size,
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
-            view_manager.view_max_rpc_reply_payload_size + sizeof(header)});
+            view_manager.view_max_rpc_reply_payload_size + sizeof(header),
+            false,
+            [this](const uint32_t node_id) { report_failure(node_id); }});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
