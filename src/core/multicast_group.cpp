@@ -10,6 +10,8 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
+#define NULL_SEND_ENABLED
+
 namespace derecho {
 
 /**
