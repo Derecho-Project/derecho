@@ -43,21 +43,26 @@ struct exp_result {
 };
 
 int main(int argc, char* argv[]) {
-    if(argc < 4 || (argc > 4 && strcmp("--", argv[argc - 4]))) {
+    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, wait_time (in us), num_messages" << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, wait_time (in us), num_messages, num_delayed_nodes" << endl;
         cout << "Thank you" << endl;
         return -1;
     }
     pthread_setname_np(pthread_self(), "bw_test");
 
     // initialize the special arguments for this test
-    const uint num_nodes = std::stoi(argv[argc - 3]);
-    const uint wait_time = std::stoi(argv[argc - 2]);
-    const uint num_messages = std::stoi(argv[argc - 1]);
+    const uint num_nodes = std::stoi(argv[argc - 4]);
+    const uint wait_time = std::stoi(argv[argc - 3]);
+    const uint num_messages = std::stoi(argv[argc - 2]);
+    const uint num_delayed_nodes = std::stoi(argv[argc - 1]);
+
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
+    
+    const int node_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    const int id_threshold = num_nodes - 1  - num_delayed_nodes;
 
     // variable 'done' tracks the end of the test
     volatile bool done = false;
@@ -66,6 +71,8 @@ int main(int argc, char* argv[]) {
                                &done,
                                &num_nodes,
                                wait_time,
+                               id_threshold,
+                               node_id,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
@@ -73,14 +80,17 @@ int main(int argc, char* argv[]) {
             done = true;
         }
 
-        //busy wait
-        struct timespec start_time, end_time;
-        clock_gettime(CLOCK_REALTIME, &start_time);
-        while(true) {
-            clock_gettime(CLOCK_REALTIME, &end_time);
-            long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
-            if(nanoseconds_elapsed >= wait_time * 1000) {
-                break;
+        // yes this is not safe but I have no time to fix it now
+        if(node_id > id_threshold) {
+            //busy wait
+            struct timespec start_time, end_time;
+            clock_gettime(CLOCK_REALTIME, &start_time);
+            while(true) {
+                clock_gettime(CLOCK_REALTIME, &end_time);
+                long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+                if(nanoseconds_elapsed >= wait_time * 1000) {
+                    break;
+                }
             }
         }
     };
