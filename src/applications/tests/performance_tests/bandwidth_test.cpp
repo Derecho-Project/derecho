@@ -12,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <cstring>
 #include <time.h>
 #include <vector>
 
@@ -61,16 +62,26 @@ int main(int argc, char* argv[]) {
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
 
+    const long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    //volatile char* dest_area = (volatile char*)malloc(max_msg_size);
+
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
     auto stability_callback = [&num_messages,
                                &done,
                                &num_nodes,
+                               max_msg_size,
+                               /*dest_area*/,
                                num_senders_selector,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
+
+       // if(data.has_value()) {
+       //     std::memcpy(const_cast<char*>(dest_area), &data.value().first, max_msg_size);
+       // }
+
         if(num_senders_selector == 0) {
             if(num_delivered == num_messages * num_nodes) {
                 done = true;
@@ -141,8 +152,6 @@ int main(int argc, char* argv[]) {
     cout << "Finished constructing/joining Group" << endl;
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
-
-    long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
     auto send_all = [&]() {
