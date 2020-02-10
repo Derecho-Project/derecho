@@ -16,6 +16,7 @@
 #include <thread>
 #include <vector>
 
+#include <derecho/rdmc/detail/util.hpp>
 #include <derecho/core/derecho.hpp>
 #include <derecho/utils/time.h>
 
@@ -64,7 +65,7 @@ int main(int argc, char* argv[]) {
     const uint64_t msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // used by the sending nodes to track time of delivery of messages
-    vector<uint64_t> start_times(num_messages), end_times(num_messages);
+    vector<struct timespec> start_times(num_messages), end_times(num_messages);
 
     // variable 'done' tracks the end of the test
     volatile bool done = false;
@@ -78,7 +79,7 @@ int main(int argc, char* argv[]) {
         ++num_delivered;
         if(sender_id == my_id) {
             // if I am the sender for this message, measure the time of delivery
-            end_times[time_index++] = get_time();
+            clock_gettime(CLOCK_REALTIME, &end_times[time_index++]);
         }
         if(num_senders_selector == 0) {
             if(num_delivered == num_messages * num_nodes) {
@@ -156,9 +157,10 @@ int main(int argc, char* argv[]) {
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
+            
+            clock_gettime(CLOCK_REALTIME, &start_times[i]);
             group_as_subgroup.send(msg_size, [&](char* buf) {
-                // measure the time of starting the send
-                start_times[i] = get_time();
+                
             });
         }
     };
@@ -179,20 +181,22 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
 
+    DERECHO_LOG(-1,-1,"\nFINE\n");
+
     double avg_latency, avg_std_dev;
     // the if loop selects the senders
     if(num_senders_selector == 0 || (num_senders_selector == 1 && my_rank > (num_nodes - 1) / 2) || (num_senders_selector == 2 && my_rank == num_nodes - 1)) {
-        uint64_t total_time = 0;
-        double sum_of_square = 0.0f;
-        double average_time = 0.0f;
+        double total_time = 0;
+        double sum_of_square = 0.0;
+        double average_time = 0.0;
         for(uint i = 0; i < num_messages; ++i) {
-            total_time += end_times[i] - start_times[i];
+            total_time += (end_times[i].tv_sec - start_times[i].tv_sec) * (long long int)1e9 + (end_times[i].tv_nsec - start_times[i].tv_nsec);
         }
         // average latency in nano seconds
         average_time = (total_time / num_messages);
         // calculate the standard deviation
         for(uint i = 0; i < num_messages; ++i) {
-            sum_of_square += (double)(end_times[i] - start_times[i] - average_time) * (end_times[i] - start_times[i] - average_time);
+            sum_of_square += (double)((end_times[i].tv_sec - start_times[i].tv_sec) * (long long int)1e9 + (end_times[i].tv_nsec - start_times[i].tv_nsec) - average_time) * ((end_times[i].tv_sec - start_times[i].tv_sec) * (long long int)1e9 + (end_times[i].tv_nsec - start_times[i].tv_nsec) - average_time);
         }
         double std_dev = sqrt(sum_of_square / (num_messages - 1));
         // aggregate latency values from all senders
@@ -208,4 +212,6 @@ int main(int argc, char* argv[]) {
     }
     managed_group.barrier_sync();
     managed_group.leave();
+
+    flush_events();
 }

@@ -8,13 +8,17 @@
 
 #include <chrono>
 #include <condition_variable>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <pthread.h>
 #include <sys/time.h>
+#include <stdlib.h>
 #include <thread>
 #include <time.h>
 #include <vector>
+
+#include <derecho/rdmc/detail/util.hpp>
 
 #include "poll_utils.hpp"
 #include "../predicates.hpp"
@@ -67,10 +71,14 @@ void SST<DerivedSST>::detect() {
     struct timespec last_time, cur_time;
     clock_gettime(CLOCK_REALTIME, &last_time);
 
+    int extloop = 0;
     while(!thread_shutdown) {
         bool predicate_fired = false;
         // Take the predicate lock before reading the predicate lists
         std::unique_lock<std::mutex> predicates_lock(predicates.predicate_mutex);
+
+	struct timespec start_trig, end_trig;
+	int intloop = 0;
 
         // one time predicates need to be evaluated only until they become true
         for(auto& pred : predicates.one_time_predicates) {
@@ -93,18 +101,27 @@ void SST<DerivedSST>::detect() {
                 predicate_fired = true;
                 std::shared_ptr<typename Predicates<DerivedSST>::trig> trigger(pred->second);
                 predicates_lock.unlock();
-                (*trigger)(*derived_this);
+                clock_gettime(CLOCK_REALTIME, &start_trig);
+       		(*trigger)(*derived_this);
+                clock_gettime(CLOCK_REALTIME, &end_trig);
+		if(intloop==0)
+			DERECHO_LOG(extloop, (end_trig.tv_sec - start_trig.tv_sec)*(uint64_t)1e9 +
+				(end_trig.tv_nsec - start_trig.tv_nsec), "del");
+		else
+			DERECHO_LOG(extloop, (end_trig.tv_sec - start_trig.tv_sec)*(uint64_t)1e9 +
+				(end_trig.tv_nsec - start_trig.tv_nsec), "recv");
+		intloop++;
                 predicates_lock.lock();
             }
         }
-
+	extloop++;
         // transition predicates are only evaluated when they change from false to true
         // We need to use iterators here because we need to iterate over two lists in parallel
         auto pred_it = predicates.transition_predicates.begin();
         auto pred_state_it = predicates.transition_predicate_states.begin();
         while(pred_it != predicates.transition_predicates.end()) {
             if(*pred_it != nullptr) {
-                //*pred_state_it is the previous state of the predicate at *pred_it
+                // *pred_state_it is the previous state of the predicate at *pred_it
                 bool curr_pred_state = (*pred_it)->first(*derived_this);
                 if(curr_pred_state == true && *pred_state_it == false) {
                     predicate_fired = true;
