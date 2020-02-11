@@ -34,7 +34,7 @@ public:
      * @throws connection_failure if local socket construction or IP address
      * lookup fails.
      */
-    socket(std::string server_ip, uint16_t server_port);
+    socket(std::string server_ip, uint16_t server_port, bool retry=true);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;
