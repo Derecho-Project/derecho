@@ -13,38 +13,41 @@ ExternalClientCaller<T, ReplicatedTypes...>::ExternalClientCaller(subgroup_type_
 template <typename T, typename... ReplicatedTypes>
 template <rpc::FunctionTag tag, typename... Args>
 auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
-    int rank = group.curr_view->rank_of(dest_node);
-    if(rank == -1) {
-        throw invalid_node_exception("Cannot send a p2p request to node "
-                                     + std::to_string(dest_node) + ": it is not a member of the Group.");
-    }
-    tcp::socket sock(std::get<0>(group.curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::GMS>(group.curr_view->member_ips_and_ports[rank]));
+    if (!group.p2p_connections->contains_node(dest_node)) {
+        dbg_default_info("p2p connection to {} is not establised yet, establishing right now.", dest_node);
+        int rank = group.curr_view->rank_of(dest_node);
+        if(rank == -1) {
+            throw invalid_node_exception("Cannot send a p2p request to node "
+                                        + std::to_string(dest_node) + ": it is not a member of the Group.");
+        }
+        tcp::socket sock(std::get<0>(group.curr_view->member_ips_and_ports[rank]), std::get<PORT_TYPE::GMS>(group.curr_view->member_ips_and_ports[rank]));
 
-    JoinResponse leader_response;
-    bool success;
-    uint64_t leader_version_hashcode;
-    success = sock.exchange(my_version_hashcode, leader_version_hashcode);
-    if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
-    if(leader_version_hashcode != my_version_hashcode) {
-        throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
-    }
-    success = sock.write(JoinRequest{node_id, true});
-    success = sock.read(leader_response);
-    if(leader_response.code == JoinResponseCode::ID_IN_USE) {
-        dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group.my_id);
-        dbg_default_flush();
-        throw derecho_exception("Leader rejected join, ID already in use.");
-    }
-    success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
-    success = sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
-    if (!success) {
-        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-    }
+        JoinResponse leader_response;
+        bool success;
+        uint64_t leader_version_hashcode;
+        success = sock.exchange(my_version_hashcode, leader_version_hashcode);
+        if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
+        if(leader_version_hashcode != my_version_hashcode) {
+            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        }
+        success = sock.write(JoinRequest{node_id, true});
+        success = sock.read(leader_response);
+        if(leader_response.code == JoinResponseCode::ID_IN_USE) {
+            dbg_default_error("Error! Leader refused connection because ID {} is already in use!", group.my_id);
+            dbg_default_flush();
+            throw derecho_exception("Leader rejected join, ID already in use.");
+        }
+        success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
+        success = sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+        if (!success) {
+            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        }
 
-    assert(dest_node != node_id);
-    sst::add_external_node(dest_node, std::pair<ip_addr_t, uint16_t>{std::get<0>(group.curr_view->member_ips_and_ports[rank]), 
-                                                            std::get<PORT_TYPE::EXTERNAL>(group.curr_view->member_ips_and_ports[rank])});
-    group.p2p_connections->add_connections({dest_node});
+        assert(dest_node != node_id);
+        sst::add_external_node(dest_node, std::pair<ip_addr_t, uint16_t>{std::get<0>(group.curr_view->member_ips_and_ports[rank]), 
+                                                                std::get<PORT_TYPE::EXTERNAL>(group.curr_view->member_ips_and_ports[rank])});
+        group.p2p_connections->add_connections({dest_node});
+    }
 
     auto return_pair = wrapped_this->template send<tag>(
             [this, &dest_node](size_t size) -> char* {

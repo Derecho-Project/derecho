@@ -52,6 +52,7 @@ public:
     ~P2PConnectionManager();
     void add_connections(const std::vector<node_id_t>& node_ids);
     void remove_connections(const std::vector<node_id_t>& node_ids);
+    bool contains_node(const node_id_t node_id);
     void shutdown_failures_thread();
     uint64_t get_max_p2p_reply_size();
     void update_incoming_seq_num();

@@ -57,6 +57,11 @@ void P2PConnectionManager::remove_connections(const std::vector<node_id_t>& node
     }
 }
 
+bool P2PConnectionManager::contains_node(const node_id_t node_id) {
+    std::lock_guard<std::mutex> lock(connections_mutex);
+    return (p2p_connections.find(node_id) != p2p_connections.end());
+}
+
 void P2PConnectionManager::shutdown_failures_thread() {
     thread_shutdown = true;
     if(timeout_thread.joinable()) {
