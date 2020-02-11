@@ -35,8 +35,6 @@ static inline uint64_t ntohll(uint64_t x) { return x; }
 __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
-using namespace std;
-
 namespace rdma {
 
 /**
@@ -79,9 +77,9 @@ struct completion_handler_set {
     completion_handler send;
     completion_handler recv;
     completion_handler write;
-    string name;
+    std::string name;
 };
-static vector<completion_handler_set> completion_handlers;
+static std::vector<completion_handler_set> completion_handlers;
 static std::mutex completion_handlers_mutex;
 
 /** 
@@ -189,7 +187,7 @@ memory_region::memory_region(char* buf, size_t s) : buffer(buf), size(s) {
         crash_with_message("Pointer to memory region is null");
     }
 
-    mr = unique_ptr<fid_mr, std::function<void(fid_mr*)>>(
+    mr = std::unique_ptr<fid_mr, std::function<void(fid_mr*)>>(
             raw_mr, [](fid_mr* mr) { fi_close(&mr->fid); });
 }
 
@@ -208,7 +206,7 @@ completion_queue::completion_queue() {
         crash_with_message("Pointer to completion queue is null");
     }
 
-    cq = unique_ptr<fid_cq, std::function<void(fid_cq*)>>(
+    cq = std::unique_ptr<fid_cq, std::function<void(fid_cq*)>>(
             raw_cq, [](fid_cq* cq) { fi_close(&cq->fid); });
 }
 
@@ -231,7 +229,7 @@ int endpoint::init(struct fi_info* fi) {
     dbg_default_trace("{}:{} created rdmc endpoint: {}", __FILE__, __func__, (void*)&raw_ep->fid);
     dbg_default_flush();
     /** Construct the smart pointer to manage the endpoint */
-    ep = unique_ptr<fid_ep, std::function<void(fid_ep*)>>(
+    ep = std::unique_ptr<fid_ep, std::function<void(fid_ep*)>>(
             raw_ep,
             [](fid_ep* ep) {
                 fi_close(&ep->fid);
@@ -244,7 +242,7 @@ int endpoint::init(struct fi_info* fi) {
             fi_eq_open, g_ctxt.fabric, &g_ctxt.eq_attr, &raw_eq, nullptr);
     if(ret) return ret;
     /** Construct the smart pointer to manage the event queue */
-    eq = unique_ptr<fid_eq, std::function<void(fid_eq*)>>(
+    eq = std::unique_ptr<fid_eq, std::function<void(fid_eq*)>>(
             raw_eq, [](fid_eq* eq) { fi_close(&eq->fid); });
 
     /** Bind endpoint to event queue and completion queue */
@@ -427,9 +425,9 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
                           bool signaled, bool send_inline) {
     if(wr_id >> type.shift_bits || !type.tag) throw invalid_args();
     if(mr.size < offset + size || remote_mr.size < remote_offset + size) {
-        cout << "mr.size = " << mr.size << " offset = " << offset
-             << " length = " << size << " remote_mr.size = " << remote_mr.size
-             << " remote_offset = " << remote_offset;
+        std::cout << "mr.size = " << mr.size << " offset = " << offset
+                  << " length = " << size << " remote_mr.size = " << remote_mr.size
+                  << " remote_offset = " << remote_offset << std::endl;
         return false;
     }
 
@@ -532,13 +530,13 @@ bool lf_remove_connection(uint32_t node_id) {
     return rdmc_connections->delete_node(node_id);
 }
 
-static atomic<bool> interrupt_mode;
-static atomic<bool> polling_loop_shutdown_flag;
+static std::atomic<bool> interrupt_mode;
+static std::atomic<bool> polling_loop_shutdown_flag;
 static void polling_loop() {
     pthread_setname_np(pthread_self(), "rdmc_poll");
 
     const int max_cq_entries = 1024;
-    unique_ptr<fi_cq_data_entry[]> cq_entries(new fi_cq_data_entry[max_cq_entries]);
+    std::unique_ptr<fi_cq_data_entry[]> cq_entries(new fi_cq_data_entry[max_cq_entries]);
 
     while(true) {
         int num_completions = 0;
@@ -574,8 +572,8 @@ static void polling_loop() {
         }
 
         if(num_completions < 0) {
-            cout << "Failed to read from completion queue, fi_cq_read returned "
-                 << num_completions << std::endl;
+            std::cout << "Failed to read from completion queue, fi_cq_read returned "
+                      << num_completions << std::endl;
         }
 
         std::lock_guard<std::mutex> l(completion_handlers_mutex);
@@ -683,7 +681,7 @@ std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
         const std::vector<uint32_t>& members, uint32_t node_rank,
         const memory_region& mr) {
     /** Maps a node's ID to a memory region on that node */
-    map<uint32_t, remote_memory_region> remote_mrs;
+    std::map<uint32_t, remote_memory_region> remote_mrs;
     for(uint32_t m : members) {
         if(m == node_rank) {
             continue;
