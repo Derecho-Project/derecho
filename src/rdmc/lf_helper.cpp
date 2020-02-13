@@ -86,13 +86,12 @@ static std::mutex completion_handlers_mutex;
  * Global states 
  */
 struct lf_ctxt {
-    struct fi_info* hints;     /** hints */
-    struct fi_info* fi;        /** fabric information */
-    struct fid_fabric* fabric; /** fabric handle */
-    struct fid_domain* domain; /** domain handle */
-    struct fid_pep* pep;       /** passive endpoint for receiving connection */
-    struct fid_eq* peq;        /** event queue for connection management */
-    // struct fid_eq      * eq;              /** event queue for transmitting events */ : moved to resources.
+    struct fi_info* hints;           /** hints */
+    struct fi_info* fi;              /** fabric information */
+    struct fid_fabric* fabric;       /** fabric handle */
+    struct fid_domain* domain;       /** domain handle */
+    struct fid_pep* pep;             /** passive endpoint for receiving connection */
+    struct fid_eq* peq;              /** event queue for connection management */
     struct fid_cq* cq;               /** completion queue for all rma operations */
     size_t pep_addr_len;             /** length of local pep address */
     char pep_addr[max_lf_addr_size]; /** local pep address */
@@ -133,7 +132,6 @@ static void default_context() {
     /** Set the completion format to contain additional context */
     g_ctxt.cq_attr.format = FI_CQ_FORMAT_DATA;
     /** Use a file descriptor as the wait object (see polling_loop)*/
-    // g_ctxt.cq_attr.wait_obj = FI_WAIT_UNSPEC; //FI_WAIT_FD;
     g_ctxt.cq_attr.wait_obj = FI_WAIT_FD;
     /** Set the size of the local pep address */
     g_ctxt.pep_addr_len = max_lf_addr_size;
@@ -449,7 +447,6 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     msg.rma_iov = &rma_iov;
     msg.rma_iov_count = 1;
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_WRITE) << OP_BITS_SHIFT);
-    // msg.data          = RDMA_OP_WRITE;
 
     fail_if_nonzero_retry_on_eagain(
             "fi_writemsg() failed", REPORT_ON_FAILURE,
@@ -659,12 +656,6 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     if(g_ctxt.pep_addr_len > max_lf_addr_size) {
         crash_with_message("local name is too big to fit in local buffer\n");
     }
-    //  event queue moved to endpoint.
-    //  FAIL_IF_NONZERO_RETRY_EAGAIN(
-    //      fi_eq_open(g_ctxt.fabric, &g_ctxt.eq_attr, &g_ctxt.eq, NULL),
-    //      "failed to open the event queue for rdma transmission.",
-    //      CRASH_ON_FAILURE
-    //  );
 
     /** Start a polling thread and run in the background */
     std::thread polling_thread(polling_loop);

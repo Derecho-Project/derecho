@@ -71,26 +71,19 @@ struct cm_con_data_t {
 class lf_ctxt {
 public:
     // libfabric resources
-    struct fi_info* hints;          // hints
-    struct fi_info* fi;             // fabric information
-    struct fid_fabric* fabric;      // fabric handle
-    struct fid_domain* domain;      // domain handle
-    struct fid_pep* pep;            // passive endpoint for receiving connection
-    struct fid_eq* peq;             // event queue for connection management
-    // struct fid_eq* eq;              // event queue for transmitting events --> now move to resources.
-    struct fid_cq* cq;              // completion queue for all rma operations
-    size_t pep_addr_len;            // length of local pep address
-    char pep_addr[max_lf_addr_size];
-    // local pep address
+    struct fi_info* hints;            // hints
+    struct fi_info* fi;               // fabric information
+    struct fid_fabric* fabric;        // fabric handle
+    struct fid_domain* domain;        // domain handle
+    struct fid_pep* pep;              // passive endpoint for receiving connection
+    struct fid_eq* peq;               // event queue for connection management
+    struct fid_cq* cq;                // completion queue for all rma operations
+    size_t pep_addr_len;              // length of local pep address
+    char pep_addr[max_lf_addr_size];  // local pep address
+
     // configuration resources
-    struct fi_eq_attr eq_attr;      // event queue attributes
-    struct fi_cq_attr cq_attr;      // completion queue attributes
-    // #define DEFAULT_TX_DEPTH            (4096)
-    // uint32_t tx_depth;              // transfer depth
-    // #define DEFAULT_RX_DEPTH            (4096)
-    // uint32_t rx_depth;              // transfer depth
-    // #define DEFAULT_SGE_BATCH_SIZE      (8)
-    // uint32_t sge_bat_size;          // maximum scatter/gather batch size
+    struct fi_eq_attr eq_attr;  // event queue attributes
+    struct fi_cq_attr cq_attr;  // completion queue attributes
     virtual ~lf_ctxt() {
         lf_destroy();
     }
@@ -100,7 +93,7 @@ public:
 static bool shutdown = false;
 std::thread polling_thread;
 tcp::tcp_connections* sst_connections;
-// singlton: global states
+// singleton: global states
 lf_ctxt g_ctxt;
 
 /**
@@ -126,10 +119,6 @@ static void default_context() {
     g_ctxt.hints->ep_attr->type = FI_EP_MSG;  // use connection based endpoint by default.
     g_ctxt.hints->mode = ~0;                  // all modes
 
-    // g_ctxt.hints->tx_attr->rma_iov_limit = DEFAULT_SGE_BATCH_SIZE; //
-    // g_ctxt.hints->tx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
-    // g_ctxt.hints->rx_attr->iov_limit = DEFAULT_SGE_BATCH_SIZE;
-
     if(g_ctxt.cq_attr.format == FI_CQ_FORMAT_UNSPEC) {
         g_ctxt.cq_attr.format = FI_CQ_FORMAT_CONTEXT;
     }
@@ -147,7 +136,6 @@ static void load_configuration() {
         exit(-1);
     }
 
-    // dbg_default_info("No RDMA conf file, use the default values.");
     // provider:
     g_ctxt.hints->fabric_attr->prov_name = crash_if_nullptr("strdup provider name.",
                                                             strdup, derecho::getConfString(CONF_RDMA_PROVIDER).c_str());
@@ -174,14 +162,9 @@ static void load_configuration() {
 
 int _resources::init_endpoint(struct fi_info* fi) {
     int ret = 0;
-    // struct fi_cq_attr cq_attr = g_ctxt.cq_attr;
 
     // 1 - open completion queue - use unified cq
-    // cq_attr.size = fi->tx_attr->size;
-    // FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->txcq), NULL)"initialize tx completion queue.",REPORT_ON_FAILURE);
-    // if(ret) return ret;
-    // FAIL_IF_NONZERO_RETRY_EAGAIN(ret = fi_cq_open(g_ctxt.domain, &cq_attr, &(this->rxcq), NULL)"initialize rx completion queue.",REPORT_ON_FAILURE);
-    // if(ret) return ret;
+
     // 2 - open endpoint
     ret = fail_if_nonzero_retry_on_eagain("open endpoint.", REPORT_ON_FAILURE,
                                           fi_endpoint, g_ctxt.domain, fi, &(this->ep), nullptr);
@@ -324,15 +307,15 @@ _resources::_resources(
 #define LF_WMR_KEY(rid) (((uint64_t)0xf8000000) << 32 | (uint64_t)(rid))
     // register the write buffer
     fail_if_nonzero_retry_on_eagain("register memory buffer for write", CRASH_ON_FAILURE,
-            fi_mr_reg, g_ctxt.domain, write_buf, size_w,
-            FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
-            0, 0, 0, &this->write_mr, nullptr);
+                                    fi_mr_reg, g_ctxt.domain, write_buf, size_w,
+                                    FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
+                                    0, 0, 0, &this->write_mr, nullptr);
     dbg_default_trace("{}:{} registered memory for remote write: {}:{}", __FILE__, __func__, (void*)write_addr, size_w);
     // register the read buffer
     fail_if_nonzero_retry_on_eagain("register memory buffer for read", CRASH_ON_FAILURE,
-            fi_mr_reg, g_ctxt.domain, read_buf, size_r,
-            FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
-            0, 0, 0, &this->read_mr, nullptr);
+                                    fi_mr_reg, g_ctxt.domain, read_buf, size_r,
+                                    FI_SEND | FI_RECV | FI_READ | FI_WRITE | FI_REMOTE_READ | FI_REMOTE_WRITE,
+                                    0, 0, 0, &this->read_mr, nullptr);
     dbg_default_trace("{}:{} registered memory for remote read: {}:{}", __FILE__, __func__, (void*)read_addr, size_r);
 
     this->mr_lrkey = fi_mr_key(this->read_mr);
@@ -350,10 +333,6 @@ _resources::_resources(
 
 _resources::~_resources() {
     dbg_default_trace("resources destructor:this={}", (void*)this);
-    // if(this->txcq)
-    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->txcq->fid),"close txcq",REPORT_ON_FAILURE);
-    // if(this->rxcq)
-    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&this->rxcq->fid),"close rxcq",REPORT_ON_FAILURE);
     if(this->ep) {
         fail_if_nonzero_retry_on_eagain("close endpoint", REPORT_ON_FAILURE,
                                         fi_close, &this->ep->fid);
@@ -451,7 +430,6 @@ void resources::post_remote_read(const long long int size) {
         dbg_default_error("post_remote_read(1) failed with return code {}", return_code);
         std::cerr << "post_remote_read(1) failed with return code " << return_code << std::endl;
     }
-
 }
 
 void resources::post_remote_read(const long long int offset, const long long int size) {
@@ -698,7 +676,6 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_default_error("\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
             return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
-            // CRASH_WITH_MESSAGE("failed polling the completion queue");
         }
     }
     if(!shutdown) {
@@ -707,7 +684,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_default_debug("WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
-            //        dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
+            //dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
             return {sctxt->ce_idx, {sctxt->remote_id, 1}};
         }
     } else {  // shutdown return a bad entry
@@ -753,11 +730,9 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     if(g_ctxt.pep_addr_len > max_lf_addr_size) {
         crash_with_message("LibFabric error! local name is too big to fit in local buffer");
     }
-    // FAIL_IF_NONZERO_RETRY_EAGAIN(fi_eq_open(g_ctxt.fabric,&g_ctxt.eq_attr,&g_ctxt.eq,NULL),"open the event queue for rdma transmission.", CRASH_ON_FAILURE);
 
     // STEP 4: start polling thread.
     polling_thread = std::thread(polling_loop);
-    // polling_thread.detach();
 }
 
 void shutdown_polling_thread() {
@@ -772,7 +747,7 @@ void lf_destroy() {
     // TODO: make sure all resources are destroyed first.
     if(g_ctxt.pep) {
         fail_if_nonzero_retry_on_eagain("close passive endpoint", REPORT_ON_FAILURE,
-                                        fi_close,&g_ctxt.pep->fid);
+                                        fi_close, &g_ctxt.pep->fid);
     }
     if(g_ctxt.peq) {
         fail_if_nonzero_retry_on_eagain("close event queue for passive endpoint", REPORT_ON_FAILURE,
@@ -782,10 +757,6 @@ void lf_destroy() {
         fail_if_nonzero_retry_on_eagain("close completion queue", REPORT_ON_FAILURE,
                                         fi_close, &g_ctxt.cq->fid);
     }
-    // g_ctxt.eq has been moved to resources
-    // if (g_ctxt.eq) {
-    //  FAIL_IF_NONZERO_RETRY_EAGAIN(fi_close(&g_ctxt.eq->fid),"close event queue",REPORT_ON_FAILURE);
-    // }
     if(g_ctxt.domain) {
         fail_if_nonzero_retry_on_eagain("close domain", REPORT_ON_FAILURE,
                                         fi_close, &g_ctxt.domain->fid);
