@@ -2,18 +2,22 @@
 #define LF_HELPER_HPP
 
 #include <cstdint>
-#include <optional>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
+#include <rdma/fabric.h>
+#include <rdma/fi_errno.h>
+
 #include <string>
 #include <vector>
-#include <rdma/fabric.h>
 
 #include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/utils/logger.hpp>
 
 #ifndef LF_VERSION
-#define LF_VERSION FI_VERSION(1,5)
+#define LF_VERSION FI_VERSION(1, 5)
 #endif
 
 struct fid_mr;
@@ -42,8 +46,8 @@ class unsupported_feature : public exception {};
  * std::function, but that incurs the overhead of type-erasure
  */
 //template<typename fi_struct_type>
-//struct close { 
-//  void operator() (fi_struct_type* fi_struct) const {fi_close(fi_struct->fid);} 
+//struct close {
+//  void operator() (fi_struct_type* fi_struct) const {fi_close(fi_struct->fid);}
 //};
 
 /**
@@ -52,7 +56,7 @@ class unsupported_feature : public exception {};
  */
 class memory_region {
     /** Smart pointer for managing the registered memory region */
-    std::unique_ptr<fid_mr, std::function<void(fid_mr *)>> mr;
+    std::unique_ptr<fid_mr, std::function<void(fid_mr*)>> mr;
     /** Smart pointer for managing the buffer the mr uses */
     std::unique_ptr<char[]> allocated_buffer;
 
@@ -67,7 +71,7 @@ public:
      *
      * @param size The size in bytes of the buffer to be associated with
      *     the memory region.
-     */ 
+     */
     memory_region(size_t size);
     /**
      * Constructor
@@ -76,13 +80,13 @@ public:
      * @param buffer The allocated memory that will be registered.
      * @param size The size in bytes of the buffer to be associated with
      *      the memory region.
-     */ 
+     */
     memory_region(char* buffer, size_t size);
     /**
      * get_key
      * Returns the key associated with the registered memory region, which
      * is used to access the region.
-     */ 
+     */
     uint64_t get_key() const;
 
     char* const buffer;
@@ -102,7 +106,7 @@ public:
      */
     remote_memory_region(uint64_t remote_address, size_t length,
                          uint64_t remote_key)
-        : buffer(remote_address), size(length), rkey(remote_key) {}
+            : buffer(remote_address), size(length), rkey(remote_key) {}
 
     const uint64_t buffer;
     const size_t size;
@@ -114,7 +118,7 @@ public:
  */
 class completion_queue {
     /** Smart pointer for managing the completion queue */
-    std::unique_ptr<fid_cq, std::function<void(fid_cq *)>> cq;
+    std::unique_ptr<fid_cq, std::function<void(fid_cq*)>> cq;
 
     friend class managed_endpoint;
     friend class task;
@@ -127,7 +131,7 @@ public:
     explicit completion_queue();
 };
 
-typedef std::function<void(uint64_t tag, uint32_t immediate, size_t length)> 
+typedef std::function<void(uint64_t tag, uint32_t immediate, size_t length)>
         completion_handler;
 
 class message_type {
@@ -157,23 +161,24 @@ public:
 class endpoint {
 protected:
     /** Smart pointer for managing the endpoint */
-    std::unique_ptr<fid_eq, std::function<void(fid_eq *)>> eq;
-    std::unique_ptr<fid_ep, std::function<void(fid_ep *)>> ep;
+    std::unique_ptr<fid_eq, std::function<void(fid_eq*)>> eq;
+    std::unique_ptr<fid_ep, std::function<void(fid_ep*)>> ep;
 
     explicit endpoint() {}
 
     friend class task;
+
 public:
     virtual ~endpoint();
-    
+
     /**
      * Constructor
      * Calls the second constructor with an empty lambda as the second argument.
      *
      * @param remote_index The id of the remote node.
-     */ 
+     */
     explicit endpoint(size_t remote_index, bool is_lf_server);
-     /**
+    /**
      * Constructor
      * Initializes members and then calls endpoint::connect.
      *
@@ -184,13 +189,13 @@ public:
      * @param post_recvs A lambda that is called at the end of initializing the
      *     endpoints on the client and remote sides to avoid race conditions 
      *     between post_send() and post_recv().
-     */    
+     */
     endpoint(size_t remote_index, bool is_lf_server,
              std::function<void(endpoint*)> post_recvs);
     /**
      * Constructor 
      * Default move constructor
-     */ 
+     */
     endpoint(endpoint&&) = default;
     /**
      * init
@@ -198,8 +203,8 @@ public:
      *
      * @param fi A struct containing information about the current 
      *     fabric services.
-     */ 
-    int init(struct fi_info *fi);
+     */
+    int init(struct fi_info* fi);
     /**
      * connect
      * Uses the initialized endpoint to connect to a remote node
@@ -211,9 +216,9 @@ public:
      * @param post_recvs A lambda that is called at the end of initializing the
      *     endpoints on the client and remote sides to avoid race conditions 
      *     between post_send() and post_recv().
-     */ 
+     */
     void connect(size_t remote_index, bool is_lf_server,
-                 std::function<void(endpoint *)> post_recvs);
+                 std::function<void(endpoint*)> post_recvs);
 
     /**
      * post_send
@@ -226,8 +231,8 @@ public:
      * @param immediate A parameter used only for send operations.
      * @param message_type 
      */
-    bool post_send(const memory_region& mr, size_t offset, 
-                   size_t size, uint64_t wr_id, uint32_t immediate, 
+    bool post_send(const memory_region& mr, size_t offset,
+                   size_t size, uint64_t wr_id, uint32_t immediate,
                    const message_type& type);
     /**
      * post_recv
@@ -239,8 +244,8 @@ public:
      * @param wr_id A parameter used to differentiate types of messages.
      * @param message_type  
      */
-    bool post_recv(const memory_region& mr, size_t offset, 
-                   size_t size, uint64_t wr_id, 
+    bool post_recv(const memory_region& mr, size_t offset,
+                   size_t size, uint64_t wr_id,
                    const message_type& type);
 
     bool post_empty_send(uint64_t wr_id, uint32_t immediate,
@@ -260,7 +265,7 @@ public:
     completion_queue scq, rcq;
     /** TODO Implement the constructor */
     managed_endpoint(size_t remote_index,
-                       std::function<void(managed_endpoint*)> post_recvs) {}
+                     std::function<void(managed_endpoint*)> post_recvs) {}
 };
 
 class manager_endpoint : public endpoint {
@@ -282,25 +287,96 @@ public:
     void append_wait(const completion_queue& cq, int count, bool signaled,
                      bool last, uint64_t wr_id, const message_type& type);
     void append_enable_send(const managed_endpoint& ep, int count);
-    void append_send(const managed_endpoint& ep, const memory_region& mr, 
+    void append_send(const managed_endpoint& ep, const memory_region& mr,
                      size_t offset, size_t length, uint32_t immediate);
-    void append_recv(const managed_endpoint& ep, const memory_region& mr, 
+    void append_recv(const managed_endpoint& ep, const memory_region& mr,
                      size_t offset, size_t length);
     bool post() __attribute__((warn_unused_result));
 };
 
 namespace impl {
-  bool lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
+bool lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
                    uint32_t node_rank);
-bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t> &new_ip_addr_and_port);
+bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool lf_remove_connection(uint32_t node_id);
 bool lf_destroy();
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
-         const std::vector<uint32_t>& members, uint32_t node_rank,
-         const memory_region& mr);
+        const std::vector<uint32_t>& members, uint32_t node_rank,
+        const memory_region& mr);
 
 bool set_interrupt_mode(bool enabled);
+
+/**
+ * Internal-only enum describing what action error-handling functions should
+ * take if a LibFabric function fails.
+ */
+enum NextOnFailure {
+    REPORT_ON_FAILURE = 0,  //!< REPORT_ON_FAILURE Print an error message, but continue
+    CRASH_ON_FAILURE = 1    //!< CRASH_ON_FAILURE Print an error message, then exit the entire program
+};
+
+/**
+ * Calls a LibFabrics function with any number of arguments forwarded via perfect
+ * forwarding. If the function returns the FI_EAGAIN error code, keeps calling it
+ * again with the same arguments. If the function returns any other error code,
+ * prints an error message containing the "description" argument, then either
+ * crashes the program or returns the error code depending on the value of the
+ * "failure_mode" argument.
+ *
+ * @param description A description of the LibFabrics operation being performed,
+ * for debugging purposes. Will be printed in the error message if this
+ * operation fails.
+ * @param failure_mode An enum value representing what to do if the LibFabric
+ * function returns a failure other than EAGAIN
+ * @param lf_function A pointer to the LibFabrics function to call
+ * @param lf_args The arguments to call the LibFabrics function with
+ * @return The same return value returned by the LibFabrics function
+ */
+template <typename FuncType, typename... ArgTypes>
+inline int64_t fail_if_nonzero_retry_on_eagain(const std::string& description, const NextOnFailure& failure_mode,
+                                               FuncType lf_function, ArgTypes&&... lf_args) {
+    //Some lf functions return int, others return ssize_t, but both will fit in an int64_t
+    int64_t return_code;
+    do {
+        return_code = (*lf_function)(std::forward<ArgTypes>(lf_args)...);
+    } while(return_code == -FI_EAGAIN);
+    if(return_code != 0) {
+        dbg_default_error("LibFabric error! Return code = {}. Operation description: {}", return_code, description);
+        std::cerr << "LibFabric error! Ret=" << return_code << ", desc=" << description << std::endl;
+        if(failure_mode == CRASH_ON_FAILURE) {
+            dbg_default_flush();
+            exit(-1);
+        }
+    }
+    return return_code;
+}
+
+/**
+ * Calls a C function that may return either a pointer or NULL, forwarding
+ * all of its arguments by copy (because C functions don't understand
+ * references). If the function succeeds, returns the pointer; if the function
+ * returns NULL, prints an error message and crashes.
+ *
+ * @param description A description of the operation being performed, which
+ * will be printed with the error message if it fails.
+ * @param c_func A pointer to the C function to call
+ * @param args The arguments to call the C function with
+ * @return The pointer that the C function returns
+ */
+template <typename FuncType, typename... ArgTypes>
+inline std::invoke_result_t<FuncType, ArgTypes...> crash_if_nullptr(const std::string& description,
+                                                                    FuncType c_func, ArgTypes... args) {
+    std::invoke_result_t<FuncType, ArgTypes...> return_val = (*c_func)(args...);
+    if(return_val == nullptr) {
+        dbg_default_error("Null pointer error in lf_helper.cpp! Description: {}", description);
+        std::cerr << "Null pointer error in lf_helper.cpp! Description: " << description << std::endl;
+        dbg_default_flush();
+        exit(-1);
+    }
+    return return_val;
+}
+
 } /* namespace impl */
 } /* namespace rdma */
 
