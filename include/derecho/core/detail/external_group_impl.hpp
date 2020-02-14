@@ -79,7 +79,7 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
     {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
 #endif
 
-    if (!get_view(-1)) throw derecho_exception("Failed to contact the leader to request very first view.");
+    if (!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");
 
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
@@ -124,11 +124,11 @@ ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
 template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
-        tcp::socket sock = nid >= 0 ? 
+        tcp::socket sock = (nid == INVALID_NODE_ID) ? 
+        tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT)):
         tcp::socket(std::get<0>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]),
                     std::get<PORT_TYPE::GMS>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]),
-                    false) :
-        tcp::socket(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
+                    false);
         
         JoinResponse leader_response;
         bool success;
