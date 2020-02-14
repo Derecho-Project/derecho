@@ -117,14 +117,17 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip());
                 continue;
             }
-            node_id_t joiner_id = 0;
-            client_socket->read(joiner_id);
+            JoinRequest join_request;
+            client_socket->read(join_request);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
-            dbg_default_debug("Node {} rejoined", joiner_id);
-            rejoined_node_ids.emplace(joiner_id);
-
+            dbg_default_debug("Node {} rejoined", join_request.joiner_id);
+            if(join_request.is_external) {
+                dbg_default_debug("Rejected request from external client {} during total restart", join_request.joiner_id);
+                continue;
+            }
+            rejoined_node_ids.emplace(join_request.joiner_id);
             //Receive and process the joining node's logs of the last known View and RaggedTrim
-            receive_joiner_logs(joiner_id, *client_socket);
+            receive_joiner_logs(join_request.joiner_id, *client_socket);
 
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
@@ -138,10 +141,10 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             uint16_t joiner_external_port = 0;
             client_socket->read(joiner_external_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
-            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port,
-                                                      joiner_rpc_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port};
+            rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
+                                                                   joiner_rpc_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
-            waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
+            waiting_join_sockets.emplace(join_request.joiner_id, std::move(*client_socket));
             //Check for quorum
             ready_to_restart = has_restart_quorum();
             //If all the members have rejoined, no need to keep waiting
@@ -429,11 +432,11 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     if(curr_view->rank_of(my_id) == -1) {
         nodes_to_add_in_next_view.emplace_back(my_id);
         ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
-                         getConfUInt16(CONF_DERECHO_GMS_PORT),
-                         getConfUInt16(CONF_DERECHO_RPC_PORT),
-                         getConfUInt16(CONF_DERECHO_SST_PORT),
-                         getConfUInt16(CONF_DERECHO_RDMC_PORT),
-                         getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+                                                       getConfUInt16(CONF_DERECHO_GMS_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RPC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_SST_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RDMC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     }
     //Mark any nodes from the last view that haven't yet responded as failed
     for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {
