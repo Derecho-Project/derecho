@@ -859,7 +859,6 @@ void ViewManager::process_new_sockets() {
         client_socket = std::move(pending_new_sockets_locked.access.front());
         pending_new_sockets_locked.access.pop_front();
     }
-    dbg_default_info("Background thread got a connection from {}", client_socket.get_remote_ip());
     //Exchange version codes; close the socket if the client has an incompatible version
     uint64_t joiner_version_code;
     client_socket.exchange(my_version_hashcode, joiner_version_code);
@@ -891,7 +890,6 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
     ExternalClientRequest request;
     client_socket.read(request);
     if (request == ExternalClientRequest::GET_VIEW) {
-        dbg_default_debug("Background thread got an external client connection from {}", client_socket.get_remote_ip());
         send_view(*curr_view, client_socket);
     } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
         uint16_t external_client_external_port = 0;

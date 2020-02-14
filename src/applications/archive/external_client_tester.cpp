@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
 
     std::vector<node_id_t> members = group.get_members();
     std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
-    ExternalClientCaller<Foo, Foo>& foo_p2p_handle = group.get_ref<Foo>();
+    ExternalClientCaller<Foo, decltype(group)>& foo_p2p_handle = group.get_subgroup_caller<Foo>();
     {
         
         auto result = foo_p2p_handle.p2p_send<RPC_NAME(read_state)>(1);

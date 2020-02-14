@@ -13,19 +13,19 @@ class ExternalGroup;
 
 using namespace rpc;
 
-template <typename T, typename... ReplicatedTypes>
+template <typename T, typename ExternalGroupType>
 class ExternalClientCaller {
 private:
     /** The ID of this node */
     const node_id_t node_id;
     /** The internally-generated subgroup ID of the subgroup that this ExternalClientCaller will contact. */
     subgroup_id_t subgroup_id;
-    ExternalGroup<ReplicatedTypes...>& group;
+    ExternalGroupType& group;
     /** The actual implementation of ExternalCaller, which has lots of ugly template parameters */
     std::unique_ptr<rpc::RemoteInvokerFor<T>> wrapped_this;
 
 public:
-    ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup<ReplicatedTypes...>& group);
+    ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroupType& group);
 
     ExternalClientCaller(ExternalClientCaller&&) = default;
     ExternalClientCaller(const ExternalClientCaller&) = delete;
@@ -37,7 +37,7 @@ public:
 template <typename... ReplicatedTypes>
 class ExternalGroup {
 private:
-    template <typename T, typename... Ts>
+    template <typename T, typename ExternalGroupType>
     friend class ExternalClientCaller;
     const node_id_t my_id;
     std::unique_ptr<View> prev_view;
@@ -49,11 +49,15 @@ private:
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
 
     template <typename T>
-    using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ReplicatedTypes...>>;
+    using external_caller_index_map = std::map<uint32_t, ExternalClientCaller<T, ExternalGroup<ReplicatedTypes...>>>;
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
 
+    /**
+     * requests a new view from group member nid
+     * if nid is -1, then request a view from CONF_DERECHO_LEADER_IP
+     * defined in derecho.cfg 
+     */
     bool get_view(const node_id_t nid);
-    // tcp::socket& get_socket(node_id_t nid);
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
     void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);
@@ -95,7 +99,7 @@ public:
     ~ExternalGroup();
 
     template <typename SubgroupType>
-    ExternalClientCaller<SubgroupType, ReplicatedTypes...>& get_ref(uint32_t subgroup_index = 0);
+    ExternalClientCaller<SubgroupType, ExternalGroup<ReplicatedTypes...>>& get_subgroup_caller(uint32_t subgroup_index = 0);
 
     bool update_view();
     std::vector<node_id_t> get_members();

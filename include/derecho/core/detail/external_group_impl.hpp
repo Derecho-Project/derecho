@@ -2,17 +2,17 @@
 #include "version_code.hpp"
 namespace derecho {
 
-template <typename T, typename... ReplicatedTypes>
-ExternalClientCaller<T, ReplicatedTypes...>::ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroup<ReplicatedTypes...>& group)
+template <typename T, typename ExternalGroupType>
+ExternalClientCaller<T, ExternalGroupType>::ExternalClientCaller(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id, ExternalGroupType& group)
         : node_id(nid),
           subgroup_id(subgroup_id),
           group(group),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
                                                    T::register_functions(), *group.receivers)) {}
 
-template <typename T, typename... ReplicatedTypes>
+template <typename T, typename ExternalGroupType>
 template <rpc::FunctionTag tag, typename... Args>
-auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, Args&&... args) {
+auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, Args&&... args) {
     if (!group.p2p_connections->contains_node(dest_node)) {
         dbg_default_info("p2p connection to {} is not establised yet, establishing right now.", dest_node);
         int rank = group.curr_view->rank_of(dest_node);
@@ -40,7 +40,7 @@ auto ExternalClientCaller<T, ReplicatedTypes...>::p2p_send(node_id_t dest_node, 
         success = sock.write(ExternalClientRequest::ESTABLISH_P2P);
         success = sock.write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
         if (!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+            throw derecho_exception("Failed to establish P2P connection.");
         }
 
         assert(dest_node != node_id);
@@ -79,7 +79,7 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
     {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
 #endif
 
-    get_view(-1);
+    if (!get_view(-1)) throw derecho_exception("Failed to contact the leader to request very first view.");
 
     uint64_t view_max_rpc_reply_payload_size = 0;
     uint32_t view_max_rpc_window_size = 0;
@@ -124,7 +124,7 @@ ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
 template <typename... ReplicatedTypes>
 bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
     try {
-        tcp::socket sock = curr_view ? 
+        tcp::socket sock = nid >= 0 ? 
         tcp::socket(std::get<0>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]),
                     std::get<PORT_TYPE::GMS>(curr_view->member_ips_and_ports[curr_view->rank_of(nid)]),
                     false) :
@@ -134,33 +134,35 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
         bool success;
         uint64_t leader_version_hashcode;
         success = sock.exchange(my_version_hashcode, leader_version_hashcode);
-        if(!success) throw derecho_exception("Failed to exchange version hashcodes with the leader! Leader has crashed.");
+        if(!success) return false;
         if(leader_version_hashcode != my_version_hashcode) {
-            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+            return false;
         }
         success = sock.write(JoinRequest{my_id, true});
         success = sock.read(leader_response);
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
             dbg_default_flush();
-            throw derecho_exception("Leader rejected join, ID already in use.");
+            return false;
         }
         success = sock.write(ExternalClientRequest::GET_VIEW);
 
         std::size_t size_of_view;
         success = sock.read(size_of_view);
         if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+            return false;
         }
         char buffer[size_of_view];
         success = sock.read(buffer, size_of_view);
         if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+            return false;
         }
         prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
         return success;
-    } catch(...) {
+    } catch(tcp::connection_failure) {
+        dbg_default_error("Failed to connect to group member {} when reqeusting new view.", nid);
+        dbg_default_flush();
         return false;
     }
 }
@@ -232,13 +234,13 @@ std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint
 
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-ExternalClientCaller<SubgroupType, ReplicatedTypes...>& ExternalGroup<ReplicatedTypes...>::get_ref(uint32_t subgroup_index) {
+ExternalClientCaller<SubgroupType, ExternalGroup<ReplicatedTypes...>>& ExternalGroup<ReplicatedTypes...>::get_subgroup_caller(uint32_t subgroup_index) {
     if(external_callers.template get<SubgroupType>().find(subgroup_index) == external_callers.template get<SubgroupType>().end()) {
         const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
         const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);
         const subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
         external_callers.template get<SubgroupType>().emplace(
-                subgroup_index, ExternalClientCaller<SubgroupType, ReplicatedTypes...>(subgroup_type_id, my_id, subgroup_id, *this));
+                subgroup_index, ExternalClientCaller<SubgroupType, ExternalGroup<ReplicatedTypes...>>(subgroup_type_id, my_id, subgroup_id, *this));
     }
     return external_callers.template get<SubgroupType>().at(subgroup_index);
 }

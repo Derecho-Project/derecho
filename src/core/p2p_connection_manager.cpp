@@ -107,12 +107,14 @@ void P2PConnectionManager::send(node_id_t node_id) {
 void P2PConnectionManager::check_failures_loop() {
     pthread_setname_np(pthread_self(), "p2p_timeout");
 
+    // using CONF_DERECHO_HEARTBEAT_MS from derecho.cfg
     uint32_t heartbeat_ms = derecho::getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t ce_idx = util::polling_data.get_index(tid);
 
     uint16_t tick_count = 0;
+    const uint16_t one_second_count = 1000/heartbeat_ms;
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
         tick_count++;
@@ -127,7 +129,7 @@ void P2PConnectionManager::check_failures_loop() {
 
         for(const auto& [node_id, p2p_conn] : p2p_connections) {
             // checks every second regardless of num_rdma_writes
-            if (node_id == my_node_id || (p2p_conn->num_rdma_writes < 1000 && tick_count < 1000)) {
+            if (node_id == my_node_id || (p2p_conn->num_rdma_writes < 1000 && tick_count < one_second_count)) {
                 continue;
             }
             p2p_conn->num_rdma_writes = 0;
@@ -137,7 +139,7 @@ void P2PConnectionManager::check_failures_loop() {
             p2p_conn->get_res()->post_remote_write_with_completion(&sctxt[node_id], p2p_buf_size - sizeof(bool), sizeof(bool));
             posted_write_to.insert(node_id);
         } 
-        if (tick_count >= 1000) {
+        if (tick_count >= one_second_count) {
             tick_count = 0;
         }
 
