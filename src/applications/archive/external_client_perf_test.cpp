@@ -68,6 +68,9 @@ int main(int argc, char** argv) {
 
         derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
         std::cout << "Finished constructing/joining Group" << std::endl;
+        cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
+        while(true) {
+        }
     } else {
         derecho::ExternalGroup<TestObject> group;
 
@@ -101,9 +104,9 @@ int main(int argc, char** argv) {
         std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
         std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
+        cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
+        while(true) {
+        }
     }
 
-    cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
-    while(true) {
-    }
 }
