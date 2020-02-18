@@ -8,6 +8,7 @@
 #include "bytes_object.hpp"
 
 using derecho::ExternalClientCaller;
+using derecho::Replicated;
 using std::cout;
 using std::endl;
 using derecho::Bytes;
@@ -30,18 +31,18 @@ public:
 };
 
 int main(int argc, char** argv) {
-    if(argc < 4 || (argc > 4 && strcmp("--", argv[argc - 4]))) {
+    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] is_external (0 - internal, 1 - external) num_nodes num_messages" << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] is_external (0 - internal, 1 - external) is_sender num_nodes num_messages" << endl;
         cout << "Thank you" << endl;
         return -1;
     }
-    const uint is_external = std::stoi(argv[argc-3]);
+    derecho::Conf::initialize(argc, argv);
+    const uint is_external = std::stoi(argv[argc-4]);
+    const uint is_sender = std::stoi(argv[argc-3]);
     int num_of_nodes = std::stoi(argv[argc-2]);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     const uint count = std::stoi(argv[argc-1]);
-
-    derecho::Conf::initialize(argc, argv);
 
     if (!is_external) {
         derecho::SubgroupInfo subgroup_info{[num_of_nodes](
@@ -68,6 +69,36 @@ int main(int argc, char** argv) {
 
         derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
         std::cout << "Finished constructing/joining Group" << std::endl;
+
+        if(is_sender) {
+            Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
+            uint64_t msg_size = max_msg_size - 128;
+            char* bbuf = (char*)malloc(msg_size);
+            bzero(bbuf, msg_size);
+            Bytes bytes(bbuf, msg_size);
+            struct timespec t1, t2;
+            clock_gettime(CLOCK_REALTIME, &t1);
+
+            for(int i = 0; i < 1000; i++) {
+                handle.p2p_send<RPC_NAME(bytes_fun)>(0, bytes);
+            }
+            auto results = handle.p2p_send<RPC_NAME(finishing_call)>(0, 0);
+#pragma GCC diagnostic ignored "-Wunused-variable"
+            auto response = results.get().get(0);
+#pragma GCC diagnostic pop
+
+            clock_gettime(CLOCK_REALTIME, &t2);
+            free(bbuf);
+
+            int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
+            double msec = (double)nsec / 1000000;
+            double thp_gbps = ((double)count * max_msg_size * 8) / nsec;
+            double thp_ops = ((double)count * 1000000000) / nsec;
+            std::cout << "timespan:" << msec << " millisecond." << std::endl;
+            std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
+            std::cout << "throughput:" << thp_ops << "ops." << std::endl;
+        }
+
         cout << "Reached end of scope, entering infinite loop so program doesn't exit" << std::endl;
         while(true) {
         }
@@ -79,9 +110,10 @@ int main(int argc, char** argv) {
         std::vector<node_id_t> members = group.get_members();
         std::vector<node_id_t> shard_members = group.get_shard_members(0, 0);
         ExternalClientCaller<TestObject, decltype(group)>& handle = group.get_subgroup_caller<TestObject>();
-        char* bbuf = (char*)malloc(max_msg_size);
-        bzero(bbuf, max_msg_size);
-        Bytes bytes(bbuf, max_msg_size);
+        uint64_t msg_size = max_msg_size - 128;
+        char* bbuf = (char*)malloc(msg_size);
+        bzero(bbuf, msg_size);
+        Bytes bytes(bbuf, msg_size);
         struct timespec t1, t2;
         clock_gettime(CLOCK_REALTIME, &t1);
 
