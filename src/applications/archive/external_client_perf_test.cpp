@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
             struct timespec t1, t2;
             clock_gettime(CLOCK_REALTIME, &t1);
 
-            for(int i = 0; i < count; i++) {
+            for(uint i = 0; i < count; i++) {
                 handle.p2p_send<RPC_NAME(bytes_fun)>(0, bytes);
             }
             auto results = handle.p2p_send<RPC_NAME(finishing_call)>(0, 0);
@@ -117,7 +117,7 @@ int main(int argc, char** argv) {
         struct timespec t1, t2;
         clock_gettime(CLOCK_REALTIME, &t1);
 
-        for(int i = 0; i < count; i++) {
+        for(uint i = 0; i < count; i++) {
             handle.p2p_send<RPC_NAME(bytes_fun)>(0, bytes);
         }
         auto results = handle.p2p_send<RPC_NAME(finishing_call)>(0, 0);
