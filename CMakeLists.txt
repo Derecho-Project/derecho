@@ -52,6 +52,22 @@ if (NOT ${libfabric_FOUND})
     message(FATAL_ERROR "libfabric not found. Please install from https://github.com/ofiwg/libfabric.git. [commit:fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6]")
 endif()
 
+# extra include paths
+if (EXTRA_INCLUDE_PATHS)
+    message(STATUS "EXTRA_INCLUDE_PATHS=${EXTRA_INCLUDE_PATHS}")
+    include_directories(${EXTRA_INCLUDE_PATHS})
+else (EXTRA_INCLUDE_PATHS)
+    message(STATUS "EXTRA_INCLUDE_PATHS is not set.")
+endif (EXTRA_INCLUDE_PATHS)
+
+# extra library paths
+if (EXTRA_LIBRARY_PATHS)
+    message(STATUS "EXTRA_LIBRARY_PATHS=${EXTRA_LIBRARY_PATHS}")
+    link_directories(${EXTRA_LIBRARY_PATHS})
+else (EXTRA_LIBRARY_PATHS)
+    message(STATUS "EXTRA_LIBRARY_PATHS is not set.")
+endif (EXTRA_LIBRARY_PATHS)
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
