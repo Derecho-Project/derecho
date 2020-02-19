@@ -14,17 +14,23 @@
 #define NUM_IO_THREAD 1
 #define NUM_METADATA_THREAD 1
 
-#define SPDK_NUM_LOGS_SUPPORTED (1UL << 10)  // support 1024 logs
+#define SPDK_NUM_LOGS_SUPPORTED (1ULL << 10)  // support 1024 logs
 #define SPDK_SEGMENT_BIT 26
 #define SPDK_SEGMENT_SIZE (1ULL << 26)  // segment size is 64 MB
+#define SPDK_SEGMENT_ROUND_MASK ~((1ULL << 26) - 1)
+#define SPDK_SEGMENT_MASK ((1ULL << 26) - 1)
 #define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH (1ULL << 11)
 #define SPDK_DATA_ADDRESS_TABLE_LENGTH (3 * 1ULL << 12)
 #define SPDK_LOG_METADATA_SIZE (1ULL << 15)
 #define SPDK_LOG_ADDRESS_SPACE ((1ULL << (SPDK_SEGMENT_BIT + 11)) >> 6)  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)
-#define LOG_AT_TABLE(idx) (m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
-#define DATA_AT_TABLE(idx) (m_PersistThread->global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
+#define LOG_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
+#define DATA_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
+
+#define LOG_BUFFER_SIZE 1
+#define DATA_BUFFER_SIZE 1
+#define READ_BUFFER_SIZE 1
 
 namespace persistent {
 
@@ -160,7 +166,20 @@ struct PreWriteMetadata {
 typedef struct log_metadata {
     /**Info part of metadata entry */
     PTLogMetadataInfo* persist_metadata_info;
-
+    /**LogEntry write buffer*/
+    LogEntry* log_write_buffer;
+    /**Data write buffer*/
+    uint8_t* data_write_buffer;
+    /**The smallest index of log entries in buffer*/
+    int64_t in_memory_idx;
+    /**The largest index of persisted log entry*/
+    int64_t last_written_idx;
+    /**The highest ver that has been written for each PersistLog. */
+    int64_t last_written_ver;
+    /**The smallest address of data in buffer*/
+    uint64_t in_memory_addr;
+    /**The largest address of data written*/
+    uint64_t last_written_addr; 
     // bool operator
     bool operator==(const struct log_metadata& other) {
         return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
@@ -202,7 +221,8 @@ protected:
 	
     //------------------------Metadata entries of each log-------------------------
     /** Array of all up-to-date metadata entries. */
-    GlobalMetadata global_metadata;
+    GlobalMetadata pt_global_metadata;
+    LogMetadata metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
     /** Array of all to-be-written metadata entries with highest ver w.r.t each PersitLog. */
     PreWriteMetadata to_write_metadata[SPDK_NUM_LOGS_SUPPORTED];
  
@@ -228,6 +248,10 @@ protected:
     static std::mutex initialization_lock;
     int initialize_threads();
     
+    //-------------------------Read Buffer-----------------------------------------
+    uint8_t* read_buffer;
+    std::unordered_map<uint32_t, uint8_t> in_read_buffer_seg; 
+    uint8_t next_read_loc;
     //-------------------------SPDK call back functions----------------------------
     /** Spdk device probing callback function. */
     static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
@@ -292,8 +316,6 @@ public:
     LogEntry* read_entry(const uint32_t& id, const int64_t& index);
     void* read_data(const uint32_t& id, const int64_t& index);
     void* read_lba(const uint64_t& lba_index);
-    /** Array of highest ver that has been written for each PersistLog. */
-    std::atomic<int64_t> last_written_ver[SPDK_NUM_LOGS_SUPPORTED];
     
     /** Map log id to log entry space*/
     std::map<uint32_t, LogEntry*> id_to_log;

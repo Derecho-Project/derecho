@@ -420,7 +420,6 @@ int PersistThreads::initialize_threads() {
             throw derecho::derecho_exception("Failed to initialize data qpair.");
         }
     }
-
     metadata_spdk_qpair = spdk_nvme_ctrlr_alloc_io_qpair(general_spdk_info.ctrlr, NULL, 0);
     if(metadata_spdk_qpair == NULL) {
         throw derecho::derecho_exception("Failed to initialize metadata qpair.");
@@ -446,9 +445,60 @@ int PersistThreads::initialize_threads() {
         id_to_log[i] = nullptr;
     }
         	
-    // Step 4: initialize io threads
-    for(int io_thread_idx = 0; io_thread_idx < NUM_IO_THREAD; io_thread_idx++) {
-        io_threads[io_thread_idx] = std::thread([&, io_thread_idx]() {
+    // Step 4: initialize threads
+    bool metathread_started = false;
+    SPDK_ENV_FOREACH_CORE(i) {
+        if (!metathread_started) {
+            spdk_env_thread_launch_pinned(i, [&]() {
+        uncompleted_metadata_req = 0;
+        while(true) {
+            metadata_io_queue_mtx.lock();
+            if (!metadata_io_queue.empty()) {
+                io_request_t request = metadata_io_queue.front();
+                metadata_io_queue.pop();
+                metadata_io_queue_mtx.unlock();
+
+                // Check whether space avaliable for the new req
+                while (uncompleted_metadata_req > general_spdk_info.qpair_requests) {
+                    spdk_nvme_qpair_process_completions(metadata_spdk_qpair, 0);
+                }
+
+                if (request.cb_fn == data_write_request_complete) {
+                    ((data_write_cbfn_args*)(request.args))->io_thread_id = -1;
+                }
+                int rc = spdk_nvme_ns_cmd_write(general_spdk_info.ns, metadata_spdk_qpair, request.buf, request.lba, request.lba_count, request.cb_fn, request.args, 0);
+                if (rc != 0){
+                    std::fprintf(stderr, "Failed to initialize write io %d with lba_count %d.\n", rc, request.lba_count);
+                    std::cout.flush();
+                }
+                uncompleted_metadata_req += 1;
+            } else if (uncompleted_metadata_req > 0) {
+                metadata_io_queue_mtx.unlock();
+                spdk_nvme_qpair_process_completions(metadata_spdk_qpair, 0);
+            } else if (destructed) {
+                metadata_io_queue_mtx.unlock();
+                std::printf("metadata destructed.\n");
+                std::cout.flush();
+                bool no_uc_data_req = true;
+                for (int i = 0; i < NUM_IO_THREAD; i++){
+                    if (uncompleted_io_req[no_uc_data_req] > 0) {
+                        no_uc_data_req = false;
+                        break;
+                    } 
+                }
+                if (no_uc_data_req) {
+                    spdk_nvme_ctrlr_free_io_qpair(metadata_spdk_qpair);
+                    exit(0);
+                }
+            } else {
+                metadata_io_queue_mtx.unlock();
+                std::unique_lock<std::mutex> lk(metadata_io_queue_mtx);
+                new_metadata_request.wait(lk, [&]{return (destructed || !metadata_io_queue.empty());});
+            }
+        }
+    }, NULL);
+    } else {
+        spdk_env_thread_launch_pinned(i, [&, io_thread_idx]() {
             const int thread_id = io_thread_idx;
             uncompleted_io_req[thread_id] = 0;
             //TODO: Assuming that each sub req is of size 32KB
@@ -510,60 +560,9 @@ int PersistThreads::initialize_threads() {
                     new_io_request.wait(lk, [&]{return (destructed || !io_queue.empty());});
         	}
             }
-        });
-        io_threads[io_thread_idx].detach();
+        }, NULL);
     }
-
-    // Step 5: initialize metadata thread
-    metadata_thread = std::thread([&]() {
-        uncompleted_metadata_req = 0;
-        while(true) {
-            metadata_io_queue_mtx.lock();
-            if (!metadata_io_queue.empty()) {
-                io_request_t request = metadata_io_queue.front();
-                metadata_io_queue.pop();
-                metadata_io_queue_mtx.unlock();
-
-                // Check whether space avaliable for the new req
-                while (uncompleted_metadata_req > general_spdk_info.qpair_requests) {
-                    spdk_nvme_qpair_process_completions(metadata_spdk_qpair, 0);
-                }
-
-                if (request.cb_fn == data_write_request_complete) {
-                    ((data_write_cbfn_args*)(request.args))->io_thread_id = -1;
-                }
-                int rc = spdk_nvme_ns_cmd_write(general_spdk_info.ns, metadata_spdk_qpair, request.buf, request.lba, request.lba_count, request.cb_fn, request.args, 0);
-                if (rc != 0){
-                    std::fprintf(stderr, "Failed to initialize write io %d with lba_count %d.\n", rc, request.lba_count);
-                    std::cout.flush();
-                }
-                uncompleted_metadata_req += 1;
-            } else if (uncompleted_metadata_req > 0) {
-                metadata_io_queue_mtx.unlock();
-                spdk_nvme_qpair_process_completions(metadata_spdk_qpair, 0);
-            } else if (destructed) {
-                metadata_io_queue_mtx.unlock();
-                std::printf("metadata destructed.\n");
-                std::cout.flush();
-                bool no_uc_data_req = true;
-                for (int i = 0; i < NUM_IO_THREAD; i++){
-                    if (uncompleted_io_req[no_uc_data_req] > 0) {
-                        no_uc_data_req = false;
-                        break;
-                    } 
-                }
-                if (no_uc_data_req) {
-                    spdk_nvme_ctrlr_free_io_qpair(metadata_spdk_qpair);
-                    exit(0);
-                }
-            } else {
-                metadata_io_queue_mtx.unlock();
-                std::unique_lock<std::mutex> lk(metadata_io_queue_mtx);
-                new_metadata_request.wait(lk, [&]{return (destructed || !metadata_io_queue.empty());});
-            }
-        }
-    });
-    metadata_thread.detach();
+    spdk_unaffinitize_thread();
     return 0;
 }
 
@@ -591,35 +590,75 @@ PersistThreads::~PersistThreads() {
     }
 }
 
-void PersistThreads::append(const uint32_t& id, char* data, 
-                            const uint64_t& data_size, void* log,
-                            const uint64_t& log_index, PTLogMetadataInfo metadata) {
-    // Step 0: extract virtual segment number and sector number
-    id_to_log[id][log_index].fields.ofst = (id_to_log[id][log_index].fields.ofst + (general_spdk_info.sector_size - 1)) & general_spdk_info.sector_round_mask;
-    uint64_t data_offset = id_to_log[id][log_index].fields.ofst;
-    uint64_t virtual_data_segment = (data_offset >> SPDK_SEGMENT_BIT) % SPDK_DATA_ADDRESS_TABLE_LENGTH;
-    uint64_t data_sector = (data_offset & SPDK_SEGMENT_MASK) >> general_spdk_info.sector_bit;
-     
-    uint64_t virtual_log_segment = ((log_index * sizeof(LogEntry)) >> SPDK_SEGMENT_BIT) % SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
+void PersistThreads::append(const uint32_t& id, const void* pdata, 
+                            const uint64_t& data_size, const version_t& ver,
+                            const HLC& mhlc) {
+    if (metadata_entries[id].persist_metadata_info->fields.tail - metadata_entries[id].last_written_idx >= LOG_BUFFER_SIZE) {
+        // TODO: Covering log entries that have not been persisted
+    }
+    
+    // Step 1: Update log entry info
+    LogEntry* next_log_entry = metadata_entries[id].log_write_buffer[metadata_entries[id].persist_metadata_info->fields.tail];
+    next_log_entry->fields.dlen = data_size;
+    next_log_entry->fields.ver = ver;
+    next_log_entry->fields.hlc_r = mhlc.m_rtc_us;
+    next_log_entry->fields.hlc_l = mhlc_logic;
+    if (metadata_entries[id].persist_metadata_info->fields.tail - metadata_entries[id].persist_metadata_info->fields.head == 0) {
+        next_log_entry->fields.ofst = 0;
+    } else {
+        LogEntry* last_entry = read_entry(id, metadata_entries[id].persist_metadata_info->fields.tail - 1);
+        next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen; 
+    }
+    
+    // Step 2: Update data info
+    if (next_log_entry->fields.ofst + data_size - metadata_entries[id].last_written_addr >= DATA_BUFFER_SIZE) {
+        // TODO: Covering data that have not been persisted
+    }
+    memcpy(pdata, metadata_entries[id].data_write_buffer + (next_log_entry->fields.ofst % DATA_BUFFER_SIZE), data_size);   
+    
+    // Step 3: Update metadata entry
+    metadata_entries[id].persist_metadata_info->fields.tail++;
+    metadata_entries[id].persist_metadata_info->fields.ver = ver;
+    
+}
 
+const version_t PersistThreads::persist(const uint32_t& id) {
+    // Update to_write_metadata entry
+    to_write_metadata[id].processing.lock();
+    to_write_metadata[id].ver = metadata_entries[id].persist_metadata_info->fields.ver;
+    to_write_metadata[id].metadata = *(metadata_entries[id].persist_metadata_info);
+    to_write_metadata[id].processing.unlock(); 
+
+    // Step 0: Extract virtual address span needed to be written 
+    uint64_t log_virtaddr_start = (metadata_entries[id].last_written_idx * sizeof(LogEntry)) & general_spdk_info.sector_round_mask; 
+    uint64_t log_virtaddr_end = (to_write_metadata[id].metadata.fields.tail * sizeof(LogEntry)) & general_spdk_info.sector_round_mask + general_spdk_info.sector_size;
+    uint64_t data_virtaddr_start = metadata_entries[id].last_written_addr & general_spdk_info.sector_round_mask;
+    uint64_t data_virtaddr_end = metadata_entries[id].log_write_buffer[(to_write_metadata[id].fields.tail - 1) % LOG_BUFFER_SIZE].fields.ofst & general_spdk_info.sector_round_mask + general_spdk_info.sector_size;
+     
     // Step 1: Calculate needed segment number
     uint16_t needed_segment = 0;
     uint16_t needed_log_segment = 0;
     uint16_t needed_data_segment = 0;
-    
+   
+    uint64_t virtual_log_segment_start = log_virtaddr_start >> SPDK_SEGMENT_BIT; 
+    uint64_t virtual_log_segment_end = log_virtaddr_end >> SPDK_SEGMENT_BIT;
     if(LOG_AT_TABLE(id)[virtual_log_segment] == 0) {
         needed_segment++;
         needed_log_segment = 1;
+        virtual_log_segment_start++;
     }
+    needed_segment += virtual_log_segment_end - virtual_log_segment_start;
+    needed_log_segment += virtual_log_segment_end - virtual_log_segment_start;
     
-    uint16_t needed_data_sector = 1 +  ((data_size - 1) >> general_spdk_info.sector_bit);
-    if(DATA_AT_TABLE(id)[virtual_data_segment] == 0) {
-        needed_data_segment = 1 + (needed_data_sector >> LBA_PER_SEG_BIT);
-        needed_segment += needed_data_segment;
-    } else {
-        needed_data_segment += ((needed_data_sector + data_sector) >> LBA_PER_SEG_BIT);
-        needed_segment += needed_data_segment;
+    uint64_t virtual_data_segment_start = data_virtaddr_start >> SPDK_SEGMENT_BIT; 
+    uint64_t virtual_data_segment_end = data_virtaddr_end >> SPDK_SEGMENT_BIT;
+    if(DATA_AT_TABLE(id)[virtual_data_segment_start] == 0) {
+        needed_segment++;
+        needed_data_segment = 1;
+        virtual_data_segment_start++;
     }
+    needed_segment += virtual_data_segment_end - virtual_data_segment_start;
+    needed_data_segment += virtual_data_segment_end - virtual_data_segment_start;
 
     uint16_t physical_data_segment = DATA_AT_TABLE(id)[virtual_data_segment];
     uint64_t physical_data_sector = physical_data_segment * LBA_PER_SEG + data_sector;
@@ -654,20 +693,15 @@ void PersistThreads::append(const uint32_t& id, char* data,
     // Step 3: Submit data request for segment address translation table update
     std::vector<atomic_sub_req> sub_requests;
     std::set<uint16_t>::iterator it = available_segment_index.begin();
-    if(needed_log_segment > 0) {
-        LOG_AT_TABLE(id)[virtual_log_segment] = *it;
+    for (int i = virtual_log_segment_start; i <= virtual_log_segment_end; i++) {
+        LOG_AT_TABLE(id)[i] = *it;
         segment_usage_table[*it] = 1;
-        uint64_t virtaddress = (segment_address_log_location(id, virtual_log_segment)) & general_spdk_info.sector_round_mask;
-        atomic_sub_req data_request;
-        uint32_t dlen = general_spdk_info.sector_size;
-        uint8_t* start = ((uint8_t*)(&LOG_AT_TABLE(id)[virtual_log_segment])) - (segment_address_log_location(id, virtual_log_segment) & general_spdk_info.sector_mask);
-        data_request.buf = start;
-        data_request.data_length = dlen;
-        data_request.virtaddress = virtaddress;
-        data_request.content_type = METADATA;
-        sub_requests.push_back(data_request);
         it++;
     }
+    atomic_sub_req log_at_request;
+    uint64_t virtaddress = (segment_address_log_location(id, virtual_log_segment)) & general_spdk_info.sector_round_mask;
+    uint32_t dlen = 0; 
+    uint8_t* start = ((uint8_t*)(&LOG_AT_TABLE(id)[virtual_log_segment])) - (segment_address_log_location(id, virtual_log_segment) & general_spdk_info.sector_mask);
 
     uint16_t i = 0;
     while(it != available_segment_index.end()) {
@@ -751,13 +785,12 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
             ofst += sizeof(uint16_t) * SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH;
             std::copy(buf + ofst, buf + ofst + sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH, (uint8_t*)&DATA_AT_TABLE(id));
             ofst += sizeof(uint16_t) * SPDK_DATA_ADDRESS_TABLE_LENGTH;
-            global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info = *((PTLogMetadataInfo*)(buf + ofst));
+            pt_global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info = *((PTLogMetadataInfo*)(buf + ofst));
             ofst += sizeof(PTLogMetadataInfo);
 
             if(global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.inuse) {
                 //Step 2_1: Update log_name_to_id
-                log_name_to_id.insert(std::pair<std::string, uint32_t>((char*)global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.name, id));
-                last_written_ver[id] = global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.ver;
+                log_name_to_id.insert(std::pair<std::string, uint32_t>((char*)pt_global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.name, id));
 
                 //Step 2_2: Update segment_usage_array
                 for(size_t index = 0; index < SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH; index++) {
@@ -781,28 +814,19 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
         uint32_t id = log_name_to_id.at(name);
         log_metadata->persist_metadata_info = &global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info;
 
-        if (id_to_log[id] != nullptr) {
+        if (metadata_entries[id].log_write_buffer != nullptr) {
             return;
         }
 
-        LogEntry *log_entry = (LogEntry *)malloc(SPDK_LOG_ADDRESS_SPACE << 6);
-
-        // Submit read request
-        uint32_t size = (log_metadata->persist_metadata_info->fields.tail - log_metadata->persist_metadata_info->fields.head) * sizeof(LogEntry) + ((log_metadata->persist_metadata_info->fields.head * sizeof(LogEntry)) & (general_spdk_info.sector_size - 1));
-        uint64_t virtaddress = ((log_metadata->persist_metadata_info->fields.head * sizeof(LogEntry)) >> general_spdk_info.sector_bit) << general_spdk_info.sector_bit;
-        char* buf = (char*)spdk_malloc(size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-        //std::printf("Reading logentries with size %d and virtaddress %d\n", size, virtaddress);
-	non_atomic_rw(buf, size, virtaddress, BLOCKING, LOGENTRY, false, id);
-        std::copy(buf, buf + size, (char*)log_entry + ((virtaddress >> general_spdk_info.sector_bit) << general_spdk_info.sector_bit) );
-        spdk_free(buf);	
-	for (int idx = log_metadata->persist_metadata_info->fields.head; idx < log_metadata->persist_metadata_info->fields.tail; idx ++ ) {
-	    
-            // std::printf("LogEntry idx: %d ver: %ld, LogEntry dlen: %lu, LogEntry ofst: %lu\n", idx, log_entry[idx].fields.ver, log_entry[idx].fields.dlen, log_entry[idx].fields.ofst);
-            // std::cout.flush();
-	}
-        id_to_log[id] = log_entry;
-        // std::cout << "Using existing metadata entry: " << id << std::endl;
-        // std::cout << "Assigning id_to_log[id]: " << id_to_log[id] << std::endl;
+        // Step 1: memory metadata entry info
+	metadata_entries[id].last_written_ver = pt_global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.ver;
+	metadata_entries[id].last_written_idx = pt_global_metadata.fields.log_metadata_entries[id].fields.log_metadata_info.fields.tail - 1;
+	metadata_entries[id].in_memory_idx = -1;
+        
+        // Step 2: allocate buffer area
+	metadata_entries[id].log_write_buffer = (LogEntry*)spdk_malloc(LOG_BUFFER_SIZE * sizeof(LogEntry), 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+	metadata_entries[id].data_write_buffer = (uint8_t*)spdk_malloc(DATA_BUFFER_SIZE, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+        
         return;
     } catch(const std::out_of_range& oor) {
         // Find an unused metadata entry
@@ -811,14 +835,13 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
             throw derecho::derecho_exception("Failed to grab metadata entry assignment lock.");
         }
         for(uint32_t index = 0; index < SPDK_NUM_LOGS_SUPPORTED; index++) {
-            if(!global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse) {
+            if(!pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse) {
                 std::cout << "Find metadata entry not in use: " << index << std::endl; 
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse = true;
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.id = index;
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.head = 0;
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.tail = 0;
-                global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.ver = -1;
-                last_written_ver[index] = -1;
+                pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.inuse = true;
+                pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.id = index;
+                pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.head = 0;
+                pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.tail = 0;
+                pt_global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.ver = -1;
                 
                 strcpy((char *)global_metadata.fields.log_metadata_entries[index].fields.log_metadata_info.fields.name, name.c_str());
                 memset(global_metadata.fields.log_metadata_entries[index].fields.log_metadata_address.segment_log_entry_at_table, 0, sizeof(global_metadata.fields.log_metadata_entries[index].fields.log_metadata_address.segment_log_entry_at_table));
@@ -828,7 +851,16 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
                 
                 pthread_mutex_unlock(&metadata_entry_assignment_lock);
                 
-                id_to_log[index] = (LogEntry*)malloc(SPDK_LOG_ADDRESS_SPACE << 6);
+		// Step 1: memory metadata entry info
+		metadata_entries[id].last_written_ver = -1;
+		metadata_entries[id].last_written_idx = -1; 
+		metadata_entries[id].in_memory_idx = -1;
+                metadata_entries[id].in_memory_addr = 0;
+                metadata_entries[id].last_written_addr = 0; 
+
+		// Step 2: allocate buffer area
+		metadata_entries[id].log_write_buffer = (LogEntry*)spdk_malloc(LOG_BUFFER_SIZE * sizeof(LogEntry), 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+		metadata_entries[id].data_write_buffer = (uint8_t*)spdk_malloc(DATA_BUFFER_SIZE, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
                 return;
             }
         }
@@ -839,19 +871,67 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
 }
 
 LogEntry* PersistThreads::read_entry(const uint32_t& id, const int64_t& index) {
-    return &(id_to_log[id][index % SPDK_LOG_ADDRESS_SPACE]);
+    // Step 1: Check whether in write buffer
+    if (metadata_entries[id].in_memory_idx >= 0) {
+        if (metadata_entires[id].in_memory_idx <= index && metadata_entries[id].in_memory_idx + LOG_BUFFER_SIZE > in_memory_idx) {
+            return (metadata_entries[id].log_write_buffer + (index % LOG_BUFFER_SIZE));
+        }
+    }
+
+    // Step 2: Check whether in read buffer
+    uint32_t phys_seg = LOG_AT_TABLE(id)[(index * sizeof(LogEntry) >> SPDK_SEGMENT_BIT)];
+    if (in_read_buffer_seg.find(phys_seg) != in_read_buffer_seg.end()) {
+        return (LogEntry*)(read_buffer + (in_read_buffer_seg[phys_seg] << SPDK_SEGMENT_BIT));
+    }
+
+    // Step 3: Issue read request
+    char* buf = (char*)(read_buffer + next_read_loc >> SPDK_SEGMENT_BIT);
+    uint64_t virtaddress = (index * sizeof(LogEntry)) & SPDK_SEGMENT_ROUND_MASK;
+    non_atomic_rw(buf, size, virtaddress, BLOCKING, LOGENTRY, id); 
+ 
+    // Step 4: Update read buffer info
+    next_read_loc++;
+    in_read_buffer_seg[phys_seg] = next_read_loc - 1;
+    
+    return (LogEntry*)(buf + virtaddress & SPDK_SEGMENT_MASK);
 }
+
 
 void* PersistThreads::read_data(const uint32_t& id, const int64_t& index) {
     LogEntry* log_entry = read_entry(id, index);
-    char* buf = (char*)spdk_malloc((1 + (log_entry->fields.dlen >> general_spdk_info.sector_bit)) << general_spdk_info.sector_bit, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+    
+    // Step 1: Check whether in write buffer
+    if (metadata_entries[id].in_memory_idx >= 0) {
+        if (metadata_entries[id].in_memory_addr <= log_entry->fields.ofst && log_entry->fields.ofst + log_entry->fields.dlen < metadata_entries[id].in_memory_addr + DATA_BUFFER_SIZE) {
+            return (metadata_entries[id].data_write_buffer + (log_entry->fields.ofst % DATA_BUFFER_SIZE));
+         }
+    }
+
+    // Step 2: Check whether in read buffer
+    uint32_t phys_seg_start = DATA_AT_TABLE(id)[log_entry->fields.ofst >> SPDK_SEGMENT_BIT];
+    uint32_t phys_seg_end = DATA_AT_TABLE(id)[(log_entry -> fields.ofst + log_entry->fields.dlen - 1) >> SPDK_SEGMENT_BIT];
+    int i;
+    for (i = phys_seg_start; i <= phys_seg_end; i++) {
+        if (in_read_buffer_seg.find(phys_reg) == in_read_buffer_seg.end()) {
+            break; 
+        }
+    }
+    if (i == phys_seg_end + 1) {
+        return (read_buffer + (in_read_buffer_seg[phys_seg_start] << SPDK_SEGMENT_BIT));
+    }
+
+    // Step 3: Issue read request
+    char* buf = (char*)(read_buffer + next_read_loc >> SPDK_SEGMENT_BIT);
     uint64_t data_offset = log_entry->fields.ofst;
     non_atomic_rw(buf, log_entry->fields.dlen, data_offset, BLOCKING, DATA, false, id);
     
-    void* res_buf = malloc(log_entry->fields.dlen);
-    memcpy(res_buf, buf, log_entry->fields.dlen);
-    spdk_free(buf);
-    return res_buf;
+    // Step 4: Update read buffer info
+    for (i = phys_seg_start; i <= phys_seg_end; i++) {
+        in_read_buffer_seg[i] = next_read_loc;
+        next_read_loc++;
+    }
+
+    return buf;
 }
 
 void* PersistThreads::read_lba(const uint64_t& lba_index) {
