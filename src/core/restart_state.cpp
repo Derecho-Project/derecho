@@ -29,9 +29,13 @@ void RestartState::load_ragged_trim(const View& curr_view) {
                 if(ragged_trim == nullptr || ragged_trim->vid < curr_view.vid) {
                     dbg_default_debug("No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id);
                     //Get the latest persisted version number from this subgroup's object's log
-                    //(this requires converting the type ID to a std::type_index
+                    //(this requires converting the type ID to a std::type_index)
                     persistent::version_t last_persisted_version = persistent::getMinimumLatestPersistedVersion(curr_view.subgroup_type_order.at(type_id_and_indices.first),
                                                                                                                 subgroup_index, shard_num);
+                    if(last_persisted_version == persistent::INVALID_VERSION) {
+                        //There was no persistent file for this object; it must have been a volatile subgroup
+                        continue;
+                    }
                     int32_t last_vid, last_seq_num;
                     std::tie(last_vid, last_seq_num) = persistent::unpack_version<int32_t>(last_persisted_version);
                     //Divide the sequence number into sender rank and message counter
@@ -427,10 +431,10 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     if(curr_view->rank_of(my_id) == -1) {
         nodes_to_add_in_next_view.emplace_back(my_id);
         ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
-                         getConfUInt16(CONF_DERECHO_GMS_PORT),
-                         getConfUInt16(CONF_DERECHO_RPC_PORT),
-                         getConfUInt16(CONF_DERECHO_SST_PORT),
-                         getConfUInt16(CONF_DERECHO_RDMC_PORT));
+                                                       getConfUInt16(CONF_DERECHO_GMS_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RPC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_SST_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RDMC_PORT));
     }
     //Mark any nodes from the last view that haven't yet responded as failed
     for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {

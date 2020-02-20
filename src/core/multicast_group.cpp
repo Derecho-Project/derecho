@@ -316,7 +316,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                     msg.index,
                                                                     {{buf + h->header_size, msg.size - h->header_size}},
-                                                                    INVALID_VERSION);
+                                                                    persistent::INVALID_VERSION);
                             }
                             if(node_id == members[member_index]) {
                                 pending_message_timestamps[subgroup_num].erase(h->timestamp);
@@ -334,7 +334,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                                 callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                                     msg.index,
                                                                     {{buf + h->header_size, msg.size - h->header_size}},
-                                                                    INVALID_VERSION);
+                                                                    persistent::INVALID_VERSION);
                             }
                             free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
                             if(node_id == members[member_index]) {
@@ -547,7 +547,7 @@ void MulticastGroup::deliver_messages_upto(
         max_seq_num = std::max(max_seq_num,
                                static_cast<int32_t>(max_indices_for_senders[sender] * num_shard_senders + sender));
     }
-    persistent::version_t assigned_version = INVALID_VERSION;
+    persistent::version_t assigned_version = persistent::INVALID_VERSION;
     for(int32_t seq_num = curr_seq_num + 1; seq_num <= max_seq_num; seq_num++) {
         //determine if this sequence number should actually be skipped
         int32_t index = seq_num / num_shard_senders;
@@ -676,7 +676,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                         msg.index,
                                                         {{buf + h->header_size, msg.size - h->header_size}},
-                                                        INVALID_VERSION);
+                                                        persistent::INVALID_VERSION);
                 }
                 if(node_id == members[member_index]) {
                     pending_message_timestamps[subgroup_num].erase(h->timestamp);
@@ -693,7 +693,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                     callbacks.global_stability_callback(subgroup_num, msg.sender_id,
                                                         msg.index,
                                                         {{buf + h->header_size, msg.size - h->header_size}},
-                                                        INVALID_VERSION);
+                                                        persistent::INVALID_VERSION);
                 }
                 free_message_buffers[subgroup_num].push_back(std::move(msg.message_buffer));
                 if(node_id == members[member_index]) {
@@ -763,7 +763,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 
     bool update_sst = false;
     bool non_null_msgs_delivered = false;
-    persistent::version_t assigned_version = INVALID_VERSION;
+    persistent::version_t assigned_version = persistent::INVALID_VERSION;
     while(true) {
         if(locally_stable_rdmc_messages[subgroup_num].empty() && locally_stable_sst_messages[subgroup_num].empty()) {
             break;
@@ -876,7 +876,7 @@ void MulticastGroup::register_predicates() {
                                                                       sst::PredicateType::RECURRENT));
 
             auto persistence_pred = [this, subgroup_num, subgroup_settings, num_shard_members,
-                                     version_seen = (persistent::version_t)INVALID_VERSION](const DerechoSST& sst) {
+                                     version_seen = persistent::INVALID_VERSION](const DerechoSST& sst) {
                 std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
                 persistent::version_t min_persisted_num
@@ -888,7 +888,7 @@ void MulticastGroup::register_predicates() {
                 return (version_seen < min_persisted_num) && callbacks.global_persistence_callback;
             };
             auto persistence_trig = [this, subgroup_num, subgroup_settings, num_shard_members,
-                                     version_seen = (persistent::version_t)INVALID_VERSION](DerechoSST& sst) mutable {
+                                     version_seen = persistent::INVALID_VERSION](DerechoSST& sst) mutable {
                 std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
                 // compute the min of the persisted_num
                 persistent::version_t min_persisted_num
