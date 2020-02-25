@@ -8,9 +8,9 @@
  * random changes to each shard's state.
  */
 
+#include <cstring>
 #include <iostream>
 #include <random>
-#include <cstring>
 
 #include <derecho/core/derecho.hpp>
 
@@ -29,6 +29,7 @@
 using derecho::Replicated;
 using namespace persistent;
 
+/* Simple classes to use as Replicated Objects for this test, one persistent and one non-persistent */
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
@@ -62,26 +63,38 @@ public:
     REGISTER_RPC_FUNCTIONS(NonPersistentThing, read_state, change_state);
 };
 
+/* Test parameters */
+
+//Number of nodes per shard that can fail before the shard is considered inadequate
 constexpr int fault_tolerance = 1;
+//Number of nodes in the non-persistent subgroup, which has no state to recover
 constexpr int non_persistent_subgroup_size = 2;
 
+//Number of updates each member of a persistent shard will multicast to the others
 constexpr int num_persistent_updates = 100000;
+//Number of updates each member of the non-persistent shard will multicast to the others
 constexpr int num_volatile_updates = 100000;
 
+/*
+ * Command-line arguments:
+ * 1. total number of nodes in this test
+ * 2. nodes per shard of the persistent subgroup
+ */
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "restart");
     std::mt19937 random_generator(getpid());
     int num_args = 2;
     if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes members_per_shard" << std::endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] total_nodes members_per_persistent_shard" << std::endl;
         return -1;
     }
 
     const uint num_nodes = std::stoi(argv[argc - num_args]);
     const uint members_per_shard = std::stoi(argv[argc - num_args + 1]);
-    if(num_nodes < members_per_shard) {
-        std::cout << "Must have at least " << members_per_shard << " members" << std::endl;
+    if(num_nodes < members_per_shard + non_persistent_subgroup_size) {
+        std::cout << "Must have at least " << (members_per_shard + non_persistent_subgroup_size)
+                  << " members" << std::endl;
         return -1;
     }
 
@@ -90,15 +103,13 @@ int main(int argc, char** argv) {
     //The number of shards for the persistent subgroup is configurable;
     //the non-persistent subgroup will always have 1 shard
     const uint num_shards = (num_nodes - non_persistent_subgroup_size) / members_per_shard;
-    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
-        {std::type_index(typeid(PersistentThing)),
-            derecho::one_subgroup_policy(derecho::flexible_even_shards(
-                    num_shards, members_per_shard - fault_tolerance, members_per_shard))},
-        {std::type_index(typeid(NonPersistentThing)),
-                derecho::one_subgroup_policy(derecho::flexible_even_shards(
-                        1, non_persistent_subgroup_size - fault_tolerance, non_persistent_subgroup_size))}
-    }));
-
+    derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator(
+            {{std::type_index(typeid(PersistentThing)),
+              derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                      num_shards, members_per_shard - fault_tolerance, members_per_shard))},
+             {std::type_index(typeid(NonPersistentThing)),
+              derecho::one_subgroup_policy(derecho::flexible_even_shards(
+                      1, non_persistent_subgroup_size - fault_tolerance, non_persistent_subgroup_size))}}));
 
     auto persistent_factory = [](PersistentRegistry* pr) {
         return std::make_unique<PersistentThing>(pr);
@@ -111,7 +122,7 @@ int main(int argc, char** argv) {
     derecho::Group<PersistentThing, NonPersistentThing> group(subgroup_info,
                                                               persistent_factory,
                                                               nonpersistent_factory);
-    if (group.get_my_rank() == -1) {
+    if(group.get_my_rank() == -1) {
         std::cout << "Error joining group! My rank is -1" << std::endl;
         return 1;
     }
@@ -119,7 +130,7 @@ int main(int argc, char** argv) {
     uint32_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     std::vector<node_id_t> non_persistent_members = group.get_subgroup_members<NonPersistentThing>(0)[0];
     if(std::find(non_persistent_members.begin(), non_persistent_members.end(), my_id)
-    == non_persistent_members.end()) {
+       == non_persistent_members.end()) {
         //"Main" code for the members of PersistentThing shards
         std::cout << "In the PersistentThing subgroup" << std::endl;
         Replicated<PersistentThing>& persistent_handle = group.get_subgroup<PersistentThing>();
@@ -166,4 +177,3 @@ int main(int argc, char** argv) {
     while(true) {
     }
 }
-
