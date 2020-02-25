@@ -220,10 +220,10 @@ void ViewManager::receive_view_and_leaders(const node_id_t my_id, tcp::socket& l
     curr_view = mutils::from_bytes<View>(nullptr, buffer);
     if(in_total_restart) {
         //In total restart mode, the leader will also send the RaggedTrims it has collected
-        dbg_default_debug("In restart mode, receiving ragged trim from leader");
         restart_state->logged_ragged_trim.clear();
         std::size_t num_of_ragged_trims;
         leader_connection.read(num_of_ragged_trims);
+        dbg_default_debug("In restart mode, receiving {} ragged trims from leader", num_of_ragged_trims);
         for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
             std::size_t size_of_ragged_trim;
             leader_connection.read(size_of_ragged_trim);
@@ -292,17 +292,28 @@ void ViewManager::truncate_logs() {
     }
     dbg_default_debug("Truncating persistent logs to conform to leader's ragged trim");
 
+    const node_id_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+
     for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
         subgroup_id_t subgroup_id = id_to_shard_map.first;
         uint32_t my_shard_id;
         //On the restart leader, the proposed view is still in RestartLeaderState
         //On all the other nodes, it's been received and stored in curr_view
         const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
-        const auto find_my_shard = restart_view.my_subgroups.find(subgroup_id);
-        if(find_my_shard == restart_view.my_subgroups.end()) {
+        //Determine which shard, if any, this node belongs to in subgroup subgroup_id.
+        //At this point, initialize_multicast_groups has not yet been called, so
+        //my_subgroups has not yet been initialized in the restart view.
+        bool shard_found = false;
+        for(my_shard_id = 0; my_shard_id < restart_view.subgroup_shard_views.at(subgroup_id).size();
+                ++my_shard_id) {
+            if(restart_view.subgroup_shard_views.at(subgroup_id).at(my_shard_id).rank_of(my_id) != -1) {
+                shard_found = true;
+                break;
+            }
+        }
+        if(!shard_found) {
             continue;
         }
-        my_shard_id = find_my_shard->second;
         const auto& my_shard_ragged_trim = id_to_shard_map.second.at(my_shard_id);
         persistent::version_t max_delivered_version = RestartState::ragged_trim_to_latest_version(
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);

@@ -25,3 +25,6 @@ target_link_libraries(delivery_order_test derecho)
 
 add_executable(subgroup_function_tester subgroup_function_tester.cpp)
 target_link_libraries(subgroup_function_tester derecho)
+
+add_executable(log_restart_test log_restart_test.cpp)
+target_link_libraries(log_restart_test derecho)
