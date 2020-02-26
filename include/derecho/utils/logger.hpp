@@ -3,7 +3,7 @@
 
 #include <string>
 #include <atomic>
-#include "spdlog/spdlog.h"
+#include <spdlog/spdlog.h>
 
 #ifndef NDEBUG
 #undef NOLOG

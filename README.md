@@ -18,7 +18,7 @@ To obtain such high speeds, Derecho sacrifices some of the interoperability seen
 Derecho does not have any specific O/S dependency.  We've tested most extensively on the current release of Ubuntu, which is also the default Linux configuration used on Azure IoT Edge and Azure IoT, but there is no reason the system couldn't be used on other platforms.
 
 ## Organization
-The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies have to be installed beforehand (Yes, we removed the submodules.) 
+This project is organized as a standard CMake-built C++ library: all headers are within the include/derecho/ directory, all CPP files are within the src/ directory, and each subdirectory within src/ contains its own CMakeLists.txt that is included by the root directory's CMakeLists.txt. Within the src/ and include/derecho/ directories, there is a subdirectory for each separate module of Derecho, such as RDMC, SST, and Persistence. Some sample applications and test cases that are built on the Derecho library are included in the src/applications/ directory, which is not included when building the Derecho library itself.
 
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
@@ -26,10 +26,10 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* CMake 2.8.1 or newer, if you want to use the bundled build scripts
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`).
-* Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
-* Logging library: [`spdlog`](https://github.com/gabime/spdlog). To avoid compatibility issue, please use commit `10e809cf644d55e5bd7d66d02e2604e2ddd7fb48` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-spdlog.sh))
+* CMake 2.8.1 or newer
+* The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
+* [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](https://packages.ubuntu.com/disco/libspdlog-dev) and install it manually with no other dependencies needed.
+* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Matthew's C++ utilities
   - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
   - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
@@ -49,10 +49,10 @@ Once cloning is complete, to build the code, `cd` into the `derecho` directory a
 This will place the binaries and libraries in the sub-directories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
-Once the project is built, install it by run:
+Once the project is built, install it by running:
 * `make install`
 
-By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` privileges to write to system directories.
+By default, Derecho will be installed into `/usr/local/`. Please make sure you have `sudo` privileges to write to system directories.
 
 Successful installation will set up the followings in `$DESTDIR`:
 * `include/derecho` - the header files
