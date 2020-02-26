@@ -824,10 +824,11 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
 	metadata_entries[id].in_memory_idx = -1;
         
         // Step 2: allocate buffer area
-	metadata_entries[id].log_write_buffer = (LogEntry*)spdk_malloc(LOG_BUFFER_SIZE * sizeof(LogEntry), 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
-	metadata_entries[id].data_write_buffer = (uint8_t*)spdk_malloc(DATA_BUFFER_SIZE, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+	metadata_entries[id].log_write_buffer = (LogEntry*)spdk_malloc(LOG_BUFFER_SIZE * general_spdk_info.sector_size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+	metadata_entries[id].data_write_buffer = (uint8_t*)spdk_malloc(DATA_BUFFER_SIZE * general_spdk_info.sector_size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+        read_buffer = (uint8_t*)spdk_malloc(READ_BUFFER_SIZE * general_spdk_info.sector_size, 0, NULL, SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);  
         
-        return;
+	return;
     } catch(const std::out_of_range& oor) {
         // Find an unused metadata entry
         if(pthread_mutex_lock(&metadata_entry_assignment_lock) != 0) {
@@ -871,6 +872,7 @@ void PersistThreads::load(const std::string& name, LogMetadata* log_metadata) {
 }
 
 LogEntry* PersistThreads::read_entry(const uint32_t& id, const int64_t& index) {
+    uint64_t virtaddress = index * sizeof(LogEntry);
     // Step 1: Check whether in write buffer
     if (metadata_entries[id].in_memory_idx >= 0) {
         if (metadata_entires[id].in_memory_idx <= index && metadata_entries[id].in_memory_idx + LOG_BUFFER_SIZE > in_memory_idx) {
@@ -879,21 +881,34 @@ LogEntry* PersistThreads::read_entry(const uint32_t& id, const int64_t& index) {
     }
 
     // Step 2: Check whether in read buffer
-    uint32_t phys_seg = LOG_AT_TABLE(id)[(index * sizeof(LogEntry) >> SPDK_SEGMENT_BIT)];
-    if (in_read_buffer_seg.find(phys_seg) != in_read_buffer_seg.end()) {
-        return (LogEntry*)(read_buffer + (in_read_buffer_seg[phys_seg] << SPDK_SEGMENT_BIT));
+    uint16_t phys_seg = LOG_AT_TABLE(id)[(virtaddress >> SPDK_SEGMENT_BIT) % SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH];
+    uint64_t phys_batch = ((virtaddress & SPDK_SEGMENT_ROUND_MASK) >> READ_BATCH_BIT) + (phys_seg << READ_BATCH_BIT);
+    if (in_read_buffer_seg.find(phys_batch) != in_read_buffer_seg.end()) {
+        // Step 2.1 : Check readed seg length
+	if (in_read_buffer_seg[phys_batch].second < ((virtaddress + sizeof(LogEntry)) & ((1ULL << READ_BATCH_BIT) - 1))) {
+            continue;
+	} else {
+            return (LogEntry*)(read_buffer + (in_read_buffer_seg[phys_batch].first));
+        }
     }
 
     // Step 3: Issue read request
-    char* buf = (char*)(read_buffer + next_read_loc >> SPDK_SEGMENT_BIT);
-    uint64_t virtaddress = (index * sizeof(LogEntry)) & SPDK_SEGMENT_ROUND_MASK;
-    non_atomic_rw(buf, size, virtaddress, BLOCKING, LOGENTRY, id); 
+    if(pthread_mutex_lock(&read_buffer_lock) != 0) {
+        // TODO: throw exception
+    }
+    char* buf = (char*)(read_buffer + next_read_idx << READ_BATCH_BIT);
+    uint8_t read_idx = next_read_idx;
+    next_read_idx++;
+    pthread_mutex_unlock(&read_buffer_lock);
+
+    uint64_t r_virtaddress = virtaddress & (~((1ULL << READ_BATCH_BIT) - 1));
+    uint32_t size = min(1ULL << READ_BATCH_BIT, (metadata_entries[id].last_written_idx * sizeof(LogEntry)) - r_virtaddress);
+    non_atomic_rw(buf, 1ULL << READ_BATCH_BIT, r_virtaddress, BLOCKING, LOGENTRY, id); 
  
     // Step 4: Update read buffer info
-    next_read_loc++;
-    in_read_buffer_seg[phys_seg] = next_read_loc - 1;
+    in_read_buffer_seg[phys_batch] = std::make_pair(read_idx, size);
     
-    return (LogEntry*)(buf + virtaddress & SPDK_SEGMENT_MASK);
+    return (LogEntry*)(buf + (virtaddress & ((1ULL << READ_BATCH_BIT) - 1)));
 }
 
 
@@ -908,30 +923,60 @@ void* PersistThreads::read_data(const uint32_t& id, const int64_t& index) {
     }
 
     // Step 2: Check whether in read buffer
-    uint32_t phys_seg_start = DATA_AT_TABLE(id)[log_entry->fields.ofst >> SPDK_SEGMENT_BIT];
-    uint32_t phys_seg_end = DATA_AT_TABLE(id)[(log_entry -> fields.ofst + log_entry->fields.dlen - 1) >> SPDK_SEGMENT_BIT];
+    uint64_t virtaddress_start = log_entry->fields.ofst;
+    uint64_t virtaddress_end = log_entry->fields.ofst + log_entry->fields.dlen - 1;
+    uint16_t phys_seg_start = DATA_AT_TABLE(id)[virtaddress_start >> SPDK_SEGMENT_BIT];
+    uint16_t phys_seg_end = DATA_AT_TABLE(id)[virtaddress_end >> SPDK_SEGMENT_BIT];
+    uint64_t phys_batch_start = ((virtaddress_start & SPDK_SEGMENT_ROUND_MASK) >> READ_BATCH_BIT) + (phys_seg_start << READ_BATCH_BIT);
+    uint64_t phys_batch_end = ((virtaddress_end & SPDK_SEGMENT_ROUND_MASK) >> READ_BATCH_BIT) + (phys_seg_end << READ_BATCH_BIT);
     int i;
-    for (i = phys_seg_start; i <= phys_seg_end; i++) {
-        if (in_read_buffer_seg.find(phys_reg) == in_read_buffer_seg.end()) {
-            break; 
+    if (in_read_buffer_seg.find(phys_batch_start) != in_read_buffer_seg.end()) {
+	uint8_t i = in_read_buffer_seg[phys_batch_start].first;
+	uint64_t j;
+	for (j = phys_batch_start; j <= phys_batch_end; j++) {
+	    if (in_read_buffer_seg.find(j) == in_read_buffer_seg.end()) {
+                break;
+            }
+	    if (in_read_buffer_seg[j].first != i) {
+                break;
+            }
+	} 
+        	
+        if (j == phys_seg_end + 1) {
+            if (phys_seg_start == phys_seg_end && in_read_buffer_seg[phys_seg_start].second >= (virtaddress_end & ((1ULL << READ_BATCH_BIT) - 1))) {
+                return (read_buffer + (in_read_buffer_seg[phys_seg_start].first << READ_BATCH_BIT) + (virtaddress_start & ((1ULL << READ_BATCH_BIT) - 1)));
+            }
+	    if (in_read_buffer_seg[phys_seg_start] == 1ULL << READ_BATCH_BIT && in_read_buffer_seg[phys_seg_end].second >= (virtaddress_end & ((1ULL << READ_BATCH_BIT) - 1))) {
+                return (read_buffer + (in_read_buffer_seg[phys_seg_start].first << READ_BATCH_BIT) + (virtaddress_start & ((1ULL << READ_BATCH_BIT) - 1)));
+            }
         }
-    }
-    if (i == phys_seg_end + 1) {
-        return (read_buffer + (in_read_buffer_seg[phys_seg_start] << SPDK_SEGMENT_BIT));
     }
 
     // Step 3: Issue read request
-    char* buf = (char*)(read_buffer + next_read_loc >> SPDK_SEGMENT_BIT);
-    uint64_t data_offset = log_entry->fields.ofst;
-    non_atomic_rw(buf, log_entry->fields.dlen, data_offset, BLOCKING, DATA, false, id);
-    
-    // Step 4: Update read buffer info
-    for (i = phys_seg_start; i <= phys_seg_end; i++) {
-        in_read_buffer_seg[i] = next_read_loc;
-        next_read_loc++;
+    if(pthread_mutex_lock(&read_buffer_lock) != 0) {
+        // TODO: throw exception
     }
+    char* buf = (char*)(read_buffer + next_read_idx << READ_BATCH_BIT);
+    uint8_t read_idx = next_read_idx;
+    next_read_idx += 1 + phys_seg_end - phys_seg_start;
+    pthread_mutex_unlock(&read_buffer_lock);
 
-    return buf;
+    uint64_t r_virtaddress_start = virtaddress_start & (~((1ULL << READ_BATCH_BIT) - 1));
+    uint64_t r_virtaddress_end = virtaddress_end & (~((1ULL << READ_BATCH_BIT) - 1));
+    uint32_t size = min(1ULL << READ_BATCH_BIT, (metadata_entries[id].last_written_idx * sizeof(LogEntry)) - r_virtaddress_end);
+    non_atomic_rw(buf, (phys_seg_end - phys_seg_start + 1) << READ_BATCH_BIT, r_virtaddress_start, BLOCKING, LOGENTRY, id); 
+ 
+    // Step 4: Update read buffer info
+    for (uint64_t k = phys_batch_start; k <= phys_batch_end; k++) {
+        if (k != phys_batch_end) {
+            in_read_buffer_seg[k] = std::make_pair(read_idx, 1ULL << READ_BATCH_BIT);
+	} else {
+            in_read_buffer_seg[k] = std::make_pair(read_idx, size);
+	}
+        read_idx++;
+    }
+    
+    return (buf + (virtaddress_start & ((1ULL << READ_BATCH_BIT) - 1)));
 }
 
 void* PersistThreads::read_lba(const uint64_t& lba_index) {

@@ -19,8 +19,8 @@
 #define SPDK_SEGMENT_SIZE (1ULL << 26)  // segment size is 64 MB
 #define SPDK_SEGMENT_ROUND_MASK ~((1ULL << 26) - 1)
 #define SPDK_SEGMENT_MASK ((1ULL << 26) - 1)
-#define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH (1ULL << 11)
-#define SPDK_DATA_ADDRESS_TABLE_LENGTH (3 * 1ULL << 12)
+#define SPDK_LOG_ENTRY_ADDRESS_TABLE_LENGTH (1ULL << 12)
+#define SPDK_DATA_ADDRESS_TABLE_LENGTH (6 * 1ULL << 12)
 #define SPDK_LOG_METADATA_SIZE (1ULL << 15)
 #define SPDK_LOG_ADDRESS_SPACE ((1ULL << (SPDK_SEGMENT_BIT + 11)) >> 6)  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
@@ -28,9 +28,11 @@
 #define LOG_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
 #define DATA_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
 
+// Number of sectors
 #define LOG_BUFFER_SIZE 1
 #define DATA_BUFFER_SIZE 1
 #define READ_BUFFER_SIZE 1
+#define READ_BATCH_BIT 1
 
 namespace persistent {
 
@@ -171,19 +173,21 @@ typedef struct log_metadata {
     /**Data write buffer*/
     uint8_t* data_write_buffer;
     /**The smallest index of log entries in buffer*/
-    int64_t in_memory_idx;
+    std::atomic<int64_t> in_memory_idx;
     /**The largest index of persisted log entry*/
-    int64_t last_written_idx;
+    std::atomic<int64_t> last_written_idx;
+    pthread_mutex_t log_write_buffer_lock;
     /**The highest ver that has been written for each PersistLog. */
     int64_t last_written_ver;
     /**The smallest address of data in buffer*/
     uint64_t in_memory_addr;
     /**The largest address of data written*/
-    uint64_t last_written_addr; 
+    uint64_t last_written_addr;
+    pthread_mutex_t data_write_buffer_lock; 
     // bool operator
     bool operator==(const struct log_metadata& other) {
         return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
-               && (this->persist_metadata_info->fields.tail == other.persist_metadata_info->fields.tail)
+               && (this->persist_metadata_INfo->fields.tail == other.persist_metadata_info->fields.tail)
                && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
     }
 } LogMetadata;
@@ -250,8 +254,10 @@ protected:
     
     //-------------------------Read Buffer-----------------------------------------
     uint8_t* read_buffer;
-    std::unordered_map<uint32_t, uint8_t> in_read_buffer_seg; 
-    uint8_t next_read_loc;
+    std::unordered_map<uint64_t, std::pair<uint8_t, uint32_t>> in_read_buffer_seg; 
+    std::atomic<uint8_t> next_read_idx;
+    pthread_mutex_t read_buffer_lock;
+
     //-------------------------SPDK call back functions----------------------------
     /** Spdk device probing callback function. */
     static bool probe_cb(void* cb_ctx, const struct spdk_nvme_transport_id* trid,
