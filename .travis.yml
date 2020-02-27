@@ -17,7 +17,6 @@ before_install:
 install:
   - chmod +x scripts/prerequisites/*.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-libfabric.sh
-  - sudo env "PATH=$PATH" scripts/prerequisites/install-spdlog.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-containers.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-tasks.sh
