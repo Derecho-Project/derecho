@@ -5,7 +5,7 @@ project(derecho CXX)
 
 # Version
 set(derecho_VERSION 0.9)
-set(derecho_build_VERSION 0.9.1)
+set(derecho_build_VERSION 0.9.2)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDERECHO_DEBUG -O0 -Wall -ggdb -gdwarf-3")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
@@ -44,12 +44,6 @@ if (NOT ${mutils-containers_FOUND})
     message(FATAL_ERROR "mutils-containers not found. Please install from https://github.com/mpmilano/mutils-containers.git")
 endif()
 
-# spdlog_FOUND
-find_package(spdlog)
-if (NOT ${spdlog_FOUND})
-    message(FATAL_ERROR "spdlog not found. Please install from https://github.com/gabime/spdlog [commit:10e809cf644d55e5bd7d66d02e2604e2ddd7fb48]")
-endif()
-
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
@@ -57,6 +51,11 @@ find_package(libfabric)
 if (NOT ${libfabric_FOUND})
     message(FATAL_ERROR "libfabric not found. Please install from https://github.com/ofiwg/libfabric.git. [commit:fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6]")
 endif()
+
+# spdlog is a packaged system library, so this probably isn't necessary, but
+# it helps ensure that the right version is installed
+# spdlog_FOUND
+find_package(spdlog 1.3.1 REQUIRED)
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)

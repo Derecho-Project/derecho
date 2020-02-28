@@ -117,10 +117,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         std::size_t invocation_id = invocation_id_sequencer++;
         invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
         std::size_t size = mutils::bytes_size(invocation_id);
-        {
-            auto t = {std::size_t{0}, std::size_t{0}, mutils::bytes_size(remote_args)...};
-            size += std::accumulate(t.begin(), t.end(), 0);
-        }
+        size += (mutils::bytes_size(remote_args) +...+ 0);
+
         char* serialized_args = out_alloc(size);
         {
             auto v = serialized_args + mutils::to_bytes(invocation_id, serialized_args);
