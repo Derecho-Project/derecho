@@ -363,9 +363,10 @@ void RPCManager::p2p_receive_loop() {
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
-            p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-            connections->update_incoming_seq_num();
-
+            if (reply_pair.first != INVALID_NODE_ID) {
+                p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                connections->update_incoming_seq_num();
+            }
             // update last time
             clock_gettime(CLOCK_REALTIME, &last_time);
         } else {

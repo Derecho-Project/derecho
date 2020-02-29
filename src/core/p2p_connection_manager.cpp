@@ -88,6 +88,7 @@ std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
             p2p_conn->update_incoming_seq_num();
+            return std::pair<node_id_t, char*>(INVALID_NODE_ID, nullptr);
         }
     }
     return {};
