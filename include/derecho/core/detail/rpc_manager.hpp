@@ -39,6 +39,37 @@ namespace rpc {
 
 using PendingBase_ref = std::reference_wrapper<PendingBase>;
 
+/**
+ * Given a subgroup ID and a list of functions, constructs a
+ * RemoteInvokerForClass for the type of object given by the template
+ * parameter, with its receive functions registered to this RPCManager.
+ * @param type_id A number uniquely identifying the type of the object (in
+ * practice, this is the index of UserProvidedClass within the template
+ * parameters of the containing Group).
+ * @param instance_id A number uniquely identifying the subgroup to which
+ * RPC invocations for this object should be sent.
+ * @param funs A tuple of "partially wrapped" pointer-to-member-functions
+ * (the return type of rpc::tag<>(), which is called by the client), one for
+ * each method of UserProvidedClass that should be an RPC function
+ * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
+ * by pointer
+ * @tparam UserProvidedClass The type of the object being wrapped with a
+ * RemoteInvokerForClass
+ * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
+ */
+template <typename UserProvidedClass, typename FunctionTuple>
+auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instance_id, FunctionTuple funs, std::map<Opcode, receive_fun_t>& receivers) {
+    return mutils::callFunc([&](const auto&... unpacked_functions) {
+        //Supply the template parameters for build_remote_invoker_for_class by
+        //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
+        return build_remote_invoker_for_class<UserProvidedClass,
+                                                decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
+                                                                        unpacked_functions))...>(nid, type_id,
+                                                                                                    instance_id, receivers);
+    },
+                            funs);
+}
+
 class RPCManager {
     static_assert(std::is_trivially_copyable<Opcode>::value, "Oh no! Opcode is not trivially copyable!");
     /** The ID of the node this RPCManager is running on. */
@@ -116,6 +147,11 @@ class RPCManager {
      */
     void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
 
+    /** Reports to the view manager that the given node has failed if it's internal member.
+     * Otherwise clean up p2p_connections and external sockets in lf.cpp
+     */
+    void report_failure(const node_id_t who);
+
     /**
      * Processes an RPC message for any of the functions managed by this RPCManager,
      * using the opcode to forward it to the correct function for execution.
@@ -164,6 +200,8 @@ public:
 
     void create_connections();
 
+    void add_connections(const std::vector<uint32_t>& node_ids);
+
     /**
      * Starts the thread that listens for incoming P2P RPC requests over the RDMA P2P
      * connections.
@@ -202,37 +240,6 @@ public:
     }
 
     void destroy_remote_invocable_class(uint32_t instance_id);
-
-    /**
-     * Given a subgroup ID and a list of functions, constructs a
-     * RemoteInvokerForClass for the type of object given by the template
-     * parameter, with its receive functions registered to this RPCManager.
-     * @param type_id A number uniquely identifying the type of the object (in
-     * practice, this is the index of UserProvidedClass within the template
-     * parameters of the containing Group).
-     * @param instance_id A number uniquely identifying the subgroup to which
-     * RPC invocations for this object should be sent.
-     * @param funs A tuple of "partially wrapped" pointer-to-member-functions
-     * (the return type of rpc::tag<>(), which is called by the client), one for
-     * each method of UserProvidedClass that should be an RPC function
-     * @return The RemoteInvokerForClass that can call a remote UserProvidedClass,
-     * by pointer
-     * @tparam UserProvidedClass The type of the object being wrapped with a
-     * RemoteInvokerForClass
-     * @tparam FunctionTuple The type of the tuple of partial_wrapped<> structs
-     */
-    template <typename UserProvidedClass, typename FunctionTuple>
-    auto make_remote_invoker(uint32_t type_id, uint32_t instance_id, FunctionTuple funs) {
-        return mutils::callFunc([&](const auto&... unpacked_functions) {
-            //Supply the template parameters for build_remote_invoker_for_class by
-            //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
-            return build_remote_invoker_for_class<UserProvidedClass,
-                                                  decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
-                                                                            unpacked_functions))...>(nid, type_id,
-                                                                                                     instance_id, *receivers);
-        },
-                                funs);
-    }
 
     /**
      * Callback for new-view events that updates internal state in response to
@@ -298,10 +305,11 @@ using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
                                                                                       T::register_functions()))>;
 
 template <typename T>
-using RemoteInvokerFor = std::decay_t<decltype(*std::declval<RPCManager>()
-                                                        .make_remote_invoker<T>(std::declval<uint32_t>(),
-                                                                                std::declval<uint32_t>(),
-                                                                                T::register_functions()))>;
+using RemoteInvokerFor = std::decay_t<decltype(*make_remote_invoker<T>(std::declval<node_id_t>(),
+                                                                      std::declval<uint32_t>(),
+                                                                      std::declval<uint32_t>(),
+                                                                      T::register_functions(),
+                                                                      std::declval<std::map<Opcode, receive_fun_t>&>()))>;
 
 // test if the current thread is in an RPC handler to tell if we are sending a cascading RPC message.
 bool in_rpc_handler();

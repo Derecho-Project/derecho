@@ -1,3 +1,4 @@
+
 /**
  * @file lf.cpp
  * Implementation of RDMA interface defined in lf.h.
@@ -93,6 +94,7 @@ public:
 static bool shutdown = false;
 std::thread polling_thread;
 tcp::tcp_connections* sst_connections;
+tcp::tcp_connections *external_client_connections;
 // singleton: global states
 lf_ctxt g_ctxt;
 
@@ -199,10 +201,17 @@ void _resources::connect_endpoint(bool is_lf_server) {
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
     local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
     local_cm_data.vaddr = (uint64_t)htonll((uint64_t)this->write_buf);  // for pull mode
-
-    if(!sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
-        dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
-        crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
+    
+    if(sst_connections->contains_node(this->remote_id)) {
+        if(!sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
+            dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
+            crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
+        }
+    } else {
+        if(!external_client_connections->exchange(this->remote_id,local_cm_data,remote_cm_data)) {
+            dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
+            crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
+        }
     }
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
@@ -546,14 +555,32 @@ bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr
     return sst_connections->add_node(new_id, new_ip_addr_and_port);
 }
 
-bool remove_node(uint32_t node_id) {
-    return sst_connections->delete_node(node_id);
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return external_client_connections->add_node(new_id, new_ip_addr_and_port);
 }
+
+bool remove_node(uint32_t node_id) {
+    if (sst_connections->contains_node(node_id)) {
+        return sst_connections->delete_node(node_id);
+    } else {
+        return external_client_connections->delete_node(node_id);
+    }
+}
+
 
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-    return sst_connections->exchange(r_id, s, t);
+    if (sst_connections->contains_node(r_id)) {
+        return sst_connections->exchange(r_id, s, t);
+    } else {
+        return external_client_connections->exchange(r_id, s, t);
+    }
 }
+
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
+    external_client_connections->filter_to(live_nodes_list);
+}
+
 
 void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
@@ -692,11 +719,15 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
     }
 }
 
-void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
-                   uint32_t node_id) {
+void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                         &internal_ip_addrs_and_ports,  
+                     uint32_t node_id,
+                     const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+                         &external_ip_addrs_and_ports) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
-    sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_ports);
+    sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
+    external_client_connections = new tcp::tcp_connections(node_id, external_ip_addrs_and_ports);
 
     // initialize global resources:
     // STEP 1: initialize with configuration.

@@ -14,6 +14,7 @@
 #include <thread>
 
 #include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
 #include <derecho/utils/logger.hpp>
 
 #ifndef LF_VERSION
@@ -164,9 +165,13 @@ public:
 };
 
 /**
- * Adds a new node to the SST TPC connections set.
+ * Adds a new node to the SST TCP connections set.
  */
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+/**
+ * Adds a new node to external client connections set.
+ */
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 /**
  * Removes a node from the SST TCP connections set
  */
@@ -177,15 +182,25 @@ bool remove_node(uint32_t node_id);
  * @param r_id - ID of the node to exchange data with.
  */
 bool sync(uint32_t r_id);
+/**
+ * Compares the set of external client connections to a list of known live nodes and
+ * removes any connections to nodes not in that list. This is used to
+ * filter out connections to nodes that were removed from the view.
+ * @param live_nodes_list A list of node IDs whose connections should be
+ * retained; all other connections will be deleted.
+ */
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
 /** 
  * Initializes the global libfabric resources. Must be called before creating
  * or using any SST instance. 
  * 
- * @param ip_addrs_and_ports A map from id to (IP address, port) pairs
+ * @param internal_ip_addrs_and_ports A map from id to (IP address, port) pairs for internal group members
+ * @param external_ip_addrs_and_ports A map from id to (IP address, port) pairs for external connections
  * @param node_id id of this node.
  */
-void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
-                   uint32_t node_id);
+void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
+                   uint32_t node_id,
+                   const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports={});
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 /** Shutdown the polling thread. */

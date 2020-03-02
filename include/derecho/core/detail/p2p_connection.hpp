@@ -49,6 +49,7 @@ class P2PConnection {
 protected:
     friend class P2PConnectionManager;
     resources* get_res();
+    uint32_t num_rdma_writes = 0;
 
 public:
     P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const RequestParams& request_params);

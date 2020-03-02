@@ -151,3 +151,11 @@ target_link_libraries(membership_tests derecho)
 
 add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
+
+# external_client_tester
+add_executable(external_client_tester external_client_tester.cpp)
+target_link_libraries(external_client_tester derecho)
+
+# external_client_perf_test
+add_executable(external_client_perf_test external_client_perf_test.cpp)
+target_link_libraries(external_client_perf_test derecho)
