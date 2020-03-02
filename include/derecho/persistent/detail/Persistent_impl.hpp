@@ -248,9 +248,19 @@ auto Persistent<ObjectType, storageType>::getByIndex(
         const Func& fun,
         mutils::DeserializationManager* dm) noexcept(false) {
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-        return f(*this->getByIndex(idx, dm));
+        return fun(*this->getByIndex(idx, dm));
     } else {
-        return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+        if constexpr (storageType == ST_FILE ) {
+            return this->m_pLog->template getEntryByIndex<file::FilePersistLog>(
+                idx,
+                std::bind(mutils::deserialize_and_run<ObjectType>, dm, std::placeholders::_1, fun));
+        } else if constexpr (storageType == ST_SPDK) {
+            return this->m_pLog->template getEntryByIndex<spdk::SPDKPersistLog>(
+                idx,
+                std::bind(mutils::deserialize_and_run<ObjectType>, dm, std::placeholders::_1, fun));
+        } else {
+            throw PERSIST_EXP_UNIMPLEMENTED;
+        }
     }
 };
 
@@ -264,14 +274,32 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         std::unique_ptr<ObjectType> p = ObjectType::create(dm);
         // TODO: accelerate this by checkpointing
         for(int64_t i = this->m_pLog->getEarliestIndex(); i <= idx; i++) {
-	    const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(i);
-	    p->applyDelta(entry_data);
+            if constexpr (storageType == ST_FILE) {
+                this->m_pLog->template getEntryByIndex<file::FilePersistLog>(
+                    i,
+                    [&p](const void* entry_data){p->applyDelta(static_cast<const char*>(entry_data));});
+            } else if constexpr (storageType == ST_SPDK) {
+                this->m_pLog->template getEntryByIndex<spdk::SPDKPersistLog>(
+                    i,
+                    [&p](const void* entry_data){p->applyDelta(static_cast<const char*>(entry_data));});
+            } else {
+                throw PERSIST_EXP_UNIMPLEMENTED;
+            }
         }
 
         return p;
     } else {
-        const char* entry_data = (const char*)this->m_pLog->getEntryByIndex(idx);
-        return mutils::from_bytes<ObjectType>(dm, entry_data);
+        if constexpr (storageType == ST_FILE) {
+            return this->m_pLog->template getEntryByIndex<file::FilePersistLog>(
+                idx,
+                std::bind(mutils::from_bytes<ObjectType>, dm, std::placeholders::_1));
+        } else if constexpr (storageType == ST_SPDK) {
+            return this->m_pLog->template getEntryByIndex<spdk::SPDKPersistLog>(
+                idx,
+                std::bind(mutils::from_bytes<ObjectType>, dm, std::placeholders::_1));
+        } else {
+            throw PERSIST_EXP_UNIMPLEMENTED;
+        }
     }
 };
 
@@ -282,15 +310,23 @@ auto Persistent<ObjectType, storageType>::get(
         const int64_t& ver,
         const Func& fun,
         mutils::DeserializationManager* dm) noexcept(false) {
-    char* pdat = (char*)this->m_pLog->getEntry(ver);
-    if(pdat == nullptr) {
-        throw PERSIST_EXP_INV_VERSION;
-    }
-    if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-        // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
-        return f(*this->get(ver, dm));
+    auto process_entry_func = [&dm,&fun,&ver,this](void* pdat) {
+        if (pdat == nullptr) {
+            throw PERSIST_EXP_UNIMPLEMENTED;
+        }
+        if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+            // "So far, the IDeltaSupport does not work with zero-copy 'Persistent::get()'. Emulate with the copy version."
+            return fun(*this->get(ver, dm));
+        } else {
+            return mutils::deserialize_and_run<ObjectType>(dm, static_cast<char*>(pdat), fun);
+        }
+    };
+    if constexpr (storageType == ST_FILE) {
+        return this->m_pLog->template getEntry<file::FilePersistLog>(ver,process_entry_func);
+    } else if constexpr (storageType == ST_SPDK) {
+        return this->m_pLog->template getEntry<spdk::SPDKPersistLog>(ver,process_entry_func);
     } else {
-        return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
+        throw PERSIST_EXP_UNIMPLEMENTED;
     }
 };
 
@@ -307,7 +343,15 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         return getByIndex(idx, dm);
     } else {
-        return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
+        if constexpr (storageType == ST_FILE) {
+            return this->m_pLog->template getEntryByIndex<file::FilePersistLog>(idx,
+                std::bind(mutils::from_bytes<ObjectType>, dm, std::placeholders::_1));
+        } else if constexpr (storageType == ST_SPDK) {
+            return this->m_pLog->template getEntryByIndex<spdk::SPDKPersistLog>(idx,
+                std::bind(mutils::from_bytes<ObjectType>, dm, std::placeholders::_1));
+        } else {
+            throw PERSIST_EXP_UNIMPLEMENTED;
+        }
     }
 }
 
@@ -347,11 +391,20 @@ auto Persistent<ObjectType, storageType>::get(
         }
         return getByIndex(idx, fun, dm);
     } else {
-        char* pdat = (char*)this->m_pLog->getEntry(hlc);
-        if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+        auto process_entry_func = [&dm,&fun](const void* pdat){
+            if(pdat == nullptr) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return mutils::deserialize_and_run<ObjectType>(dm, static_cast<char*>(pdat), fun);
+        };
+        
+        if constexpr (storageType == ST_FILE) {
+            return this->m_pLog->template getEntryByIndex<file::FilePersistLog>(hlc,process_entry_func);
+        } else if constexpr (storageType == ST_SPDK) {
+            return this->m_pLog->template getEntryByIndex<spdk::SPDKPersistLog>(hlc,process_entry_func);
+        } else {
+            throw PERSIST_EXP_UNIMPLEMENTED;
         }
-        return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
     }
 };
 
@@ -371,11 +424,20 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         }
         return getByIndex(idx, dm);
     } else {
-        char const* pdat = (char const*)this->m_pLog->getEntry(hlc);
-        if(pdat == nullptr) {
-            throw PERSIST_EXP_INV_HLC;
+        auto process_entry_func = [&dm](const void* pdat){
+            if(pdat == nullptr) {
+                throw PERSIST_EXP_INV_HLC;
+            }
+            return mutils::from_bytes<ObjectType>(dm, static_cast<const char*>(pdat));
+        };
+
+        if constexpr (storageType == ST_FILE) {
+            return this->m_pLog->template getEntry<file::FilePersistLog>(hlc,process_entry_func);
+        } else if constexpr (storageType == ST_SPDK) {
+            return this->m_pLog->template getEntry<spdk::SPDKPersistLog>(hlc,process_entry_func);
+        } else {
+            throw PERSIST_EXP_UNIMPLEMENTED;
         }
-        return mutils::from_bytes<ObjectType>(dm, pdat);
     }
 }
 

@@ -178,9 +178,107 @@ public:
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
     virtual const version_t getLastPersisted() noexcept(false);
-    virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
-    virtual const void* getEntry(const version_t& ver) noexcept(false);
-    virtual const void* getEntry(const HLC& hlc) noexcept(false);
+    template <typename ProcessLogEntryFunc>
+    auto getEntryByIndex(const int64_t& eidx, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        FPL_RDLOCK;
+        dbg_default_trace("{0}-getEntryByIndex-head:{1},tail:{2},eidx:{3}",
+                          this->m_sName, FS_META_HEADER->fields.head, FS_META_HEADER->fields.tail, eidx);
+    
+        int64_t ridx = (eidx < 0) ? (FS_META_HEADER->fields.tail + eidx) : eidx;
+    
+        if(FS_META_HEADER->fields.tail <= ridx || ridx < FS_META_HEADER->fields.head) {
+            FPL_UNLOCK;
+            throw PERSIST_EXP_INV_ENTRY_IDX(eidx);
+        }
+        FPL_UNLOCK;
+    
+        dbg_default_trace("{0} getEntryByIndex at idx:{1} ver:{2} time:({3},{4})",
+                          this->m_sName,
+                          ridx,
+                          (int64_t)(FS_LOG_ENTRY_AT(ridx)->fields.ver),
+                          (FS_LOG_ENTRY_AT(ridx))->fields.hlc_r,
+                          (FS_LOG_ENTRY_AT(ridx))->fields.hlc_l);
+    
+        return process_entry(static_cast<char*>(FS_LOG_ENTRY_DATA(FS_LOG_ENTRY_AT(ridx))));
+    }
+    template <typename ProcessLogEntryFunc>
+    auto getEntry(const version_t& ver, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        LogEntry* ple = nullptr;
+    
+        FPL_RDLOCK;
+    
+        //binary search
+        dbg_default_trace("{0} - begin binary search.", this->m_sName);
+        int64_t l_idx = binarySearch<int64_t>(
+                [&](const LogEntry* ple) {
+                    return ple->fields.ver;
+                },
+                ver,
+                FS_META_HEADER->fields.head,
+                FS_META_HEADER->fields.tail);
+        ple = (l_idx == -1) ? nullptr : FS_LOG_ENTRY_AT(l_idx);
+        dbg_default_trace("{0} - end binary search.", this->m_sName);
+    
+        FPL_UNLOCK;
+    
+        // no object exists before the requested timestamp.
+        if(ple == nullptr) {
+            return process_entry(nullptr);
+        }
+    
+        dbg_default_trace("{0} getEntry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
+    
+        return process_entry(static_cast<char*>(FS_LOG_ENTRY_DATA(ple)));
+    }
+
+    template <typename ProcessLogEntryFunc>
+    auto getEntry(const HLC& rhlc, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        LogEntry* ple = nullptr;
+        //    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
+    
+        FPL_RDLOCK;
+    
+        //  We do not use binary search any more.
+        //    //binary search
+        //    int64_t head = FS_META_HEADER->fields.head % MAX_LOG_ENTRY;
+        //    int64_t tail = FS_META_HEADER->fields.tail % MAX_LOG_ENTRY;
+        //    if (tail < head) tail += MAX_LOG_ENTRY; //because we mapped it twice
+        //    dbg_default_trace("{0} - begin binary search.",this->m_sName);
+        //    int64_t l_idx = binarySearch<unsigned __int128>(
+        //      [&](int64_t idx){
+        //        return ((((unsigned __int128)FS_LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | FS_LOG_ENTRY_AT(idx)->fields.hlc_l);
+        //      },
+        //      key,head,tail);
+        //    dbg_default_trace("{0} - end binary search.",this->m_sName);
+        //    ple = (l_idx == -1) ? nullptr : FS_LOG_ENTRY_AT(l_idx);
+        dbg_default_trace("getEntry for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
+        struct hlc_index_entry skey(rhlc, 0);
+        auto key = this->hidx.upper_bound(skey);
+        FPL_UNLOCK;
+    
+#ifndef NDEBUG
+        dbg_default_trace("hidx.size = {}", this->hidx.size());
+        if(key == this->hidx.end())
+            dbg_default_trace("found upper bound = hidx.end()");
+        else
+            dbg_default_trace("found upper bound = hlc({},{}),idx{}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
+#endif  //NDEBUG
+    
+        if(key != this->hidx.begin() && this->hidx.size() > 0) {
+            key--;
+            ple = FS_LOG_ENTRY_AT(key->log_idx);
+            dbg_default_trace("getEntry returns: hlc:({0},{1}),idx:{2}", key->hlc.m_rtc_us, key->hlc.m_logic, key->log_idx);
+        }
+    
+        // no object exists before the requested timestamp.
+        if(ple == nullptr) {
+            return process_entry(nullptr);
+        }
+    
+        dbg_default_trace("{0} getEntry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
+    
+        return process_entry(static_cast<char*>(FS_LOG_ENTRY_DATA(ple)));
+    }
     virtual const version_t persist(const bool preLocked = false) noexcept(false);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
