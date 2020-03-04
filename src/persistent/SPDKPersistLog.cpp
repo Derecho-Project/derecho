@@ -76,26 +76,10 @@ void SPDKPersistLog::append(const void* pdata,
         head_unlock();
         throw derecho::derecho_exception("Ran out of log space.");
     }
-    LogEntry* next_log_entry = PersistThreads::get()->read_entry(METADATA.id, METADATA.tail);
-    next_log_entry->fields.dlen = size; 
-    next_log_entry->fields.ver = ver;
-    next_log_entry->fields.hlc_l = mhlc.m_rtc_us;
-    next_log_entry->fields.hlc_l = mhlc.m_logic;
-    if(METADATA.tail - METADATA.head == 0) {
-        next_log_entry->fields.ofst = 0;
-    } else {
-        LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, (METADATA.tail - 1));
-        next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
-    }
-    
-    METADATA.ver = ver;
-    METADATA.tail++;
-
     PersistThreads::get()->append(METADATA.id,
                                   (char*)pdata, 
-                                  next_log_entry->fields.dlen, &next_log_entry,
-                                  (METADATA.tail - 1) % SPDK_LOG_ADDRESS_SPACE,
-                                  *m_currLogMetadata.persist_metadata_info);
+                                  size, ver,
+                                  mhlc);
 
     tail_unlock();
     head_unlock();
@@ -110,7 +94,6 @@ void SPDKPersistLog::advanceVersion(const version_t& ver) {
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
     }
     METADATA.ver = ver;
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     tail_unlock();
     head_unlock();
 }
@@ -293,11 +276,11 @@ void SPDKPersistLog::trim(const HLC& hlc) {
 }
 
 const version_t SPDKPersistLog::getLastPersisted() {
-    return PersistThreads::get()->last_written_ver[METADATA.id];
+    return m_currLogMetadata.last_written_ver; 
 }
 
 const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
-    return PersistThreads::get()->last_written_ver[METADATA.id];
+    return PersistThreads::get()->persist(METADATA.id);
 }
 
 const void* SPDKPersistLog::getEntry(const version_t& ver) noexcept(false) {
