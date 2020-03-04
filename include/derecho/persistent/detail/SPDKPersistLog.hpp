@@ -16,6 +16,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <shared_mutex>
 
 namespace persistent {
 
@@ -79,16 +80,10 @@ protected:
     // log metadata
     LogMetadata m_currLogMetadata;
     /**Lock on head field */
-    pthread_rwlock_t head_lock;
+    std::shared_mutex head_mutex;
     /**Lock on tail field */
-    pthread_rwlock_t tail_lock;
+    std::shared_mutex tail_mutex;
 
-    void head_rlock() noexcept(false);
-    void head_wlock() noexcept(false);
-    void tail_rlock() noexcept(false);
-    void tail_wlock() noexcept(false);
-    void head_unlock() noexcept(false);
-    void tail_unlock() noexcept(false);
     int64_t lower_bound(const HLC& hlc);
     
     template <typename TKey, typename KeyGetter>
@@ -129,7 +124,7 @@ public:
     // to make sure if this named log(by "name" in the template
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
-    SPDKPersistLog(const std::string& name) noexcept(true);
+    SPDKPersistLog(const std::string& name) noexcept(false);
     // Destructor
     virtual ~SPDKPersistLog() noexcept(true);
     /** Persistent Append
@@ -177,17 +172,44 @@ public:
     virtual const version_t getLastPersisted() noexcept(false);
 
     // Get a version by entry number return both length and buffer
-    virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
+    template <typename ProcessLogEntryFunc>
+    auto getEntryByIndex(const int64_t& eidx, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        std::shared_lock head_rlock(head_mutex);
+        std::shared_lock tail_rlock(tail_mutex);
+        return process_entry(static_cast<char*>(PersistThreads::get()->read_data(METADATA.id, eidx)));
+    }
 
     virtual void* getLBA(const uint64_t& lba_index);
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const version_t& ver) noexcept(false);
+    template <typename ProcessLogEntryFunc>
+    auto getEntry(const version_t& ver, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        std::shared_lock head_rlock(head_mutex);
+        std::shared_lock tail_rlock(tail_mutex);
+        int64_t idx = binarySearch<int64_t>(
+            [&](const LogEntry*ple){
+                return ple->fields.ver;
+            },
+            ver);
+
+        if (idx == -1) {
+            return process_entry(nullptr);
+        } else {
+            return process_entry(PersistThreads::get()->read_data(METADATA.id,idx));
+        }
+    }
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() noexcept(false) = 0;
     // Get a version specified by hlc
-    virtual const void* getEntry(const HLC& hlc) noexcept(false);
+    template <typename ProcessLogEntryFunc>
+    auto getEntry(const HLC& hlc, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        std::shared_lock head_rlock(head_mutex);
+        std::shared_lock tail_rlock(tail_mutex);
+        int64_t idx = lower_bound(hlc);
+        //TODO: check if lower_bound logic is right? what would happen if hlc is older than head entry?
+        return process_entry(PersistThreads::get()->read_data(METADATA.id,idx));
+    }
 
     LogEntry getLogEntry(const int64_t& idx);
     /**

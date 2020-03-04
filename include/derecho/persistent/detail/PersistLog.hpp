@@ -35,19 +35,20 @@ struct hlc_index_entry {
     hlc_index_entry() : log_idx(-1) {
     }
     // constructor with hlc and index.
-    hlc_index_entry(const HLC &_hlc, const int64_t &_log_idx) : hlc(_hlc), log_idx(_log_idx) {
+    hlc_index_entry(const HLC& _hlc, const int64_t& _log_idx) : hlc(_hlc), log_idx(_log_idx) {
     }
     // constructor with time stamp and index.
-    hlc_index_entry(const uint64_t &r, const uint64_t &l, const int64_t &_log_idx) : hlc(r, l), log_idx(_log_idx) {
+    hlc_index_entry(const uint64_t& r, const uint64_t& l, const int64_t& _log_idx) : hlc(r, l), log_idx(_log_idx) {
     }
     //copy constructor
-    hlc_index_entry(const struct hlc_index_entry &_entry) : hlc(_entry.hlc), log_idx(_entry.log_idx) {
+    hlc_index_entry(const struct hlc_index_entry& _entry) : hlc(_entry.hlc), log_idx(_entry.log_idx) {
     }
 };
+
 // comparator for the hlc index
 struct hlc_index_entry_comp {
-    bool operator()(const struct hlc_index_entry &e1,
-                    const struct hlc_index_entry &e2) const {
+    bool operator()(const struct hlc_index_entry& e1,
+                    const struct hlc_index_entry& e2) const {
         return e1.hlc < e2.hlc;
     }
 };
@@ -79,17 +80,16 @@ public:
      * Note that the entry appended can only become persistent till the persist()
      * is called on that entry.
      */
-    virtual void append(const void *pdata,
-                        const uint64_t &size, const version_t &ver,  
-                        const HLC &mhlc) noexcept(false)
-            = 0;
+    virtual void append(const void* pdata,
+                        const uint64_t& size, const version_t& ver,  
+                        const HLC& mhlc) noexcept(false) = 0;
 
     /**
      * Advance the version number without appendding a log. This is useful
      * to create gap between versions.
      */
     // virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
-    virtual void advanceVersion(const version_t &ver) noexcept(false) = 0;
+    virtual void advanceVersion(const version_t& ver) noexcept(false) = 0;
 
     // Get the length of the log
     virtual int64_t getLength() noexcept(false) = 0;
@@ -101,7 +101,7 @@ public:
     virtual int64_t getLatestIndex() noexcept(false) = 0;
 
     // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t &ver) noexcept(false) = 0;
+    virtual int64_t getVersionIndex(const version_t& ver) noexcept(false) = 0;
 
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false) = 0;
@@ -115,16 +115,32 @@ public:
     // return the last persisted value
     virtual const version_t getLastPersisted() noexcept(false) = 0;
 
+    // Here is some conflict between OOP and generica programming: we want those function to
+    // be virtual but unfortunately, the template function type are decided during compilation
+    // and not allowed as 'virtual'. A good practice is to use 'Type Erasure' to reconsiliate
+    // them. Please refer to the following link for more explanation.
+    // http://www.cplusplus.com/articles/oz18T05o/
+    // Here we adopt a workaround by assuming the caller knew the underlying implementation.
+    // TODO: use Type Erasure wrapper instead of OOP heritage
     // Get a version by entry number return both length and buffer
-    virtual const void *getEntryByIndex(const int64_t &eno) noexcept(false) = 0;
+    template <typename ImplType, typename ProcessLogEntryFunc>
+    auto getEntryByIndex(const int64_t& eno, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        return dynamic_cast<ImplType*>(this)->getEntryByIndex(eno,process_entry);
+    }
 
     // Get the latest version equal or earlier than ver.
-    virtual const void *getEntry(const version_t &ver) noexcept(false) = 0;
+    template <typename ImplType, typename ProcessLogEntryFunc>
+    auto getEntry(const version_t& ver, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        return dynamic_cast<ImplType*>(this)->getEntry(ver,process_entry);
+    }
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() noexcept(false) = 0;
     // Get a version specified by hlc
-    virtual const void *getEntry(const HLC &hlc) noexcept(false) = 0;
+    template <typename ImplType, typename ProcessLogEntryFunc>
+    auto getEntry(const HLC& hlc, const ProcessLogEntryFunc& process_entry) noexcept(false) {
+        return dynamic_cast<ImplType*>(this)->getEntry(hlc,process_entry);
+    }
 
     /**
      * Persist the log till specified version
@@ -139,26 +155,26 @@ public:
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed
      */
-    virtual void trimByIndex(const int64_t &idx) noexcept(false) = 0;
+    virtual void trimByIndex(const int64_t& idx) noexcept(false) = 0;
 
     /**
      * Trim the log till version, inclusively.
      * @param ver - all log entry before ver will be trimmed.
      */
-    virtual void trim(const version_t &ver) noexcept(false) = 0;
+    virtual void trim(const version_t& ver) noexcept(false) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
      * @param hlc - all log entry before hlc will be trimmed.
      */
-    virtual void trim(const HLC &hlc) noexcept(false) = 0;
+    virtual void trim(const HLC& hlc) noexcept(false) = 0;
 
     /**
      * Calculate the byte size required for serialization
      * @PARAM ver - from which version the detal begins(tail log) 
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t bytes_size(const version_t &ver) = 0;
+    virtual size_t bytes_size(const version_t& ver) = 0;
 
 
     /**
@@ -167,7 +183,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char *buf, const version_t &ver) = 0;
+    virtual size_t to_bytes(char* buf, const version_t& ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -175,22 +191,21 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual void post_object(const std::function<void(char const *const, std::size_t)> &f,
-                             const version_t &ver)
-            = 0;
+    virtual void post_object(const std::function<void(char const *const, std::size_t)>& f,
+                             const version_t& ver) = 0;
 
     /**
      * Check/Merge the LogTail to the existing log.
      * @PARAM dsm - deserialization manager
      * @PARAM v - serialized log bytes to be apllied
      */
-    virtual void applyLogTail(char const *v) = 0;
+    virtual void applyLogTail(char const* v) = 0;
 
     /**
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strict after ver will be truncated.
      */
-    virtual void truncate(const version_t &ver) noexcept(false) = 0;
+    virtual void truncate(const version_t& ver) noexcept(false) = 0;
 };
 }
 

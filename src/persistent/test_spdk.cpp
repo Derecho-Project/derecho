@@ -91,14 +91,16 @@ int main(int argc, char** argv) {
             myLog.zeroout();
         } else if (strcmp(argv[1], "getEntryByIndex") == 0) {
             int64_t index = (int64_t)atol(argv[2]);
-            char* v = (char*)myLog.getEntryByIndex(index);
-            cout << "read data:" << endl;
-            cout << "\tdata: " << v << endl;
+            myLog.getEntryByIndex(index,[](char* v){
+                cout << "read data:" << endl;
+                cout << "\tdata: " << v << endl;
+            });
         } else if (strcmp(argv[1], "getEntryByVer") == 0) {
             int64_t ver = (int64_t)atol(argv[2]);
-            char* v = (char*)myLog.getEntry(ver);
-            cout << "read data:" << endl;
-            cout << "\tdata: " << v << endl;
+            myLog.getEntryByIndex(ver,[](char* v){
+                cout << "read data:" << endl;
+                cout << "\tdata: " << v << endl;
+            });
         } else if (strcmp(argv[1], "getVersionIndex") == 0) {
             int64_t ver = (int64_t)atol(argv[2]);
             uint64_t index = myLog.getVersionIndex(ver);
