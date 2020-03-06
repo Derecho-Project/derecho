@@ -10,20 +10,69 @@
 #include <memory>
 #include <vector>
 
-#include "detail/derecho_internal.hpp"
 #include "derecho_modes.hpp"
+#include "detail/derecho_internal.hpp"
 #include "detail/derecho_sst.hpp"
 #include "detail/multicast_group.hpp"
-#include <derecho/sst/sst.hpp>
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
+#include <derecho/sst/sst.hpp>
 
 namespace derecho {
-enum PORT_TYPE { GMS = 1,
-                 RPC,
-                 SST,
-                 RDMC,
-                 EXTERNAL };
+/**
+ * Enumerates the different kinds of ports used in Derecho. Each of these
+ * values corresponds to a "port" field in the IpAndPorts struct.
+ */
+enum class PortType { GMS,         //!< GMS
+                      RPC,         //!< RPC
+                      SST,         //!< SST
+                      RDMC,        //!< RDMC
+                      EXTERNAL };  //!< EXTERNAL
+
+/**
+ * A node's IP address and the set of TCP ports used for various Derecho components
+ */
+struct IpAndPorts : public mutils::ByteRepresentable {
+    ip_addr_t ip_address;
+    uint16_t gms_port;
+    uint16_t rpc_port;
+    uint16_t sst_port;
+    uint16_t rdmc_port;
+    uint16_t external_port;
+
+    /* Annoyingly, because ip_addr_t is a string, this struct is not POD and we must
+     * define all this boilerplate for serialization.
+     * Maybe we should change to storing IP addresses as unsigned ints, like
+     * DerechoSST and the Linux sockets library do.
+     */
+    IpAndPorts(const ip_addr_t& ip_address,
+               const uint16_t gms_port,
+               const uint16_t rpc_port,
+               const uint16_t sst_port,
+               const uint16_t rdmc_port,
+               const uint16_t external_port)
+            : ip_address(ip_address),
+              gms_port(gms_port),
+              rpc_port(rpc_port),
+              sst_port(sst_port),
+              rdmc_port(rdmc_port),
+              external_port(external_port) {}
+    IpAndPorts() : ip_address{}, gms_port(0), rpc_port(0), sst_port(0), rdmc_port(0), external_port(0) {}
+
+    DEFAULT_SERIALIZATION_SUPPORT(IpAndPorts, ip_address, gms_port, rpc_port,
+                                  sst_port, rdmc_port, external_port);
+
+    inline bool operator==(const IpAndPorts& o) const {
+        return std::tie(ip_address,
+                        gms_port, rpc_port,
+                        sst_port, rdmc_port,
+                        external_port)
+               == std::tie(o.ip_address,
+                           o.gms_port, o.rpc_port,
+                           o.sst_port, o.rdmc_port,
+                           o.external_port);
+    }
+};
 
 /**
  * The subset of a View associated with a single shard, or a single subgroup if
@@ -39,7 +88,7 @@ public:
     /** integers instead of booleans due to the serialization issue :-/ */
     std::vector<int> is_sender;
     /** IP addresses and ports of members in this subgroup/shard, with the same indices as members. */
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports;
+    std::vector<IpAndPorts> member_ips_and_ports;
     /** List of IDs of nodes that joined since the previous view, if any. */
     std::vector<node_id_t> joined;
     /** List of IDs of nodes that left since the previous view, if any. */
@@ -65,10 +114,10 @@ public:
                                   member_ips_and_ports, joined, departed, profile);
     SubView(Mode mode, const std::vector<node_id_t>& members,
             std::vector<int> is_sender,
-            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+            const std::vector<IpAndPorts>& member_ips_and_ports,
             const std::vector<node_id_t>& joined,
             const std::vector<node_id_t>& departed,
-            const std::string &profile)
+            const std::string& profile)
             : mode(mode),
               members(members),
               is_sender(is_sender),
@@ -80,7 +129,7 @@ public:
 
     SubView(Mode mode, const std::vector<node_id_t>& members,
             std::vector<int> is_sender,
-            const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+            const std::vector<IpAndPorts>& member_ips_and_ports,
             std::string profile);
 
     /**
@@ -98,8 +147,8 @@ public:
     const int32_t vid;
     /** Node IDs of members in the current view, indexed by their SST rank. */
     const std::vector<node_id_t> members;
-    /** IP addresses and ports (gms, rpc, sst, rdmc in order) of members in the current view, indexed by their SST rank. */
-    const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports;
+    /** IP addresses and ports of members in the current view, indexed by their SST rank. */
+    const std::vector<IpAndPorts> member_ips_and_ports;
     /** failed[i] is true if members[i] is considered to have failed.
      * Once a member is failed, it will be removed from the members list in a future view. */
     std::vector<char> failed;  //Note: std::vector<bool> is broken, so we pretend these char values are C-style booleans
@@ -158,8 +207,6 @@ public:
      */
     SubView make_subview(const std::vector<node_id_t>& with_members, const Mode mode = Mode::ORDERED, const std::vector<int>& is_sender = {}, std::string profile = "default") const;
 
-    /** Looks up the SST rank of an IP address. Returns -1 if that IP is not a member of this view. */
-    int rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>& who) const;
     /** Looks up the SST rank of a node ID. Returns -1 if that node ID is not a member of this view. */
     int rank_of(const node_id_t& who) const;
     /** Returns the rank of this View's leader, based on failed[]. */
@@ -191,7 +238,7 @@ public:
      * ViewManager after deserialization (the receiving ViewManager will always know this value).
      */
     View(const int32_t vid, const std::vector<node_id_t>& members,
-         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+         const std::vector<IpAndPorts>& member_ips_and_ports,
          const std::vector<char>& failed, const int32_t num_failed,
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t num_members,
@@ -202,7 +249,7 @@ public:
 
     /** Standard constructor for making a new View */
     View(const int32_t vid, const std::vector<node_id_t>& members,
-         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+         const std::vector<IpAndPorts>& member_ips_and_ports,
          const std::vector<char>& failed,
          const std::vector<node_id_t>& joined,
          const std::vector<node_id_t>& departed, const int32_t my_rank,

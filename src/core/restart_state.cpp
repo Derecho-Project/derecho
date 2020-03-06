@@ -419,7 +419,7 @@ void RestartLeaderState::print_longest_logs() const {
 std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     //Nodes that were not in the last view but have restarted will immediately "join" in the new view
     std::vector<node_id_t> nodes_to_add_in_next_view;
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> ips_and_ports_to_add_in_next_view;
+    std::vector<IpAndPorts> ips_and_ports_to_add_in_next_view;
     for(const auto& id_socket_pair : waiting_join_sockets) {
         node_id_t joiner_id = id_socket_pair.first;
         int joiner_rank = curr_view->rank_of(joiner_id);
@@ -457,11 +457,11 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
-                                                         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports) {
+                                                         const std::vector<IpAndPorts>& joiner_ips_and_ports) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
+    std::vector<IpAndPorts> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     std::set<int> leave_ranks;
     for(std::size_t rank = 0; rank < curr_view->failed.size(); ++rank) {

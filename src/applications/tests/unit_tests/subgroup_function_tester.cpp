@@ -4,12 +4,12 @@
 #include <derecho/core/detail/derecho_internal.hpp>
 #include "subgroup_function_tester.hpp"
 
-std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t> ip_and_ports_generator() {
+derecho::IpAndPorts ip_and_ports_generator() {
     static int invocation_count = 0;
     std::stringstream string_generator;
     string_generator << "192.168.1." << invocation_count;
     ++invocation_count;
-    return std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>{string_generator.str(), 35465, 35465, 35465, 35465, 35465};
+    return {string_generator.str(), 35465, 35465, 35465, 35465, 35465};
 }
 
 struct TestType1 {};
@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
                                                         std::type_index(typeid(TestType6))};
     std::vector<node_id_t> members(100);
     std::iota(members.begin(), members.end(), 0);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(100);
+    std::vector<derecho::IpAndPorts> member_ips_and_ports(100);
     std::generate(member_ips_and_ports.begin(), member_ips_and_ports.end(), ip_and_ports_generator);
     std::vector<char> none_failed(100, 0);
     auto curr_view = std::make_unique<derecho::View>(0, members, member_ips_and_ports, none_failed,
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
 
     std::vector<node_id_t> new_members(40);
     std::iota(new_members.begin(), new_members.end(), 100);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> new_member_ips_and_ports(40);
+    std::vector<derecho::IpAndPorts> new_member_ips_and_ports(40);
     std::generate(new_member_ips_and_ports.begin(), new_member_ips_and_ports.end(), ip_and_ports_generator);
     std::cout << "TEST 5: Adding new members 100-140" << std::endl;
     //Since an inadequate view will never be installed, keep the same prev_view from before the failures
@@ -229,11 +229,11 @@ void test_provision_subgroups(const SubgroupInfo& subgroup_info,
 std::unique_ptr<View> make_next_view(const View& curr_view,
                                      const std::set<int>& leave_ranks,
                                      const std::vector<node_id_t>& joiner_ids,
-                                     const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports) {
+                                     const std::vector<IpAndPorts>& joiner_ips_and_ports) {
     int next_num_members = curr_view.num_members - leave_ranks.size() + joiner_ids.size();
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
+    std::vector<IpAndPorts> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view.next_unassigned_rank;
     for(std::size_t i = 0; i < joiner_ids.size(); ++i) {
         joined.emplace_back(joiner_ids[i]);

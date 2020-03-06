@@ -70,7 +70,7 @@ ViewManager::ViewManager(
         in_total_restart = false;
         curr_view = std::make_unique<View>(
                 0, std::vector<node_id_t>{my_id},
-                std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>>{
+                std::vector<IpAndPorts>{
                         {getConfString(CONF_DERECHO_LOCAL_IP),
                          getConfUInt16(CONF_DERECHO_GMS_PORT),
                          getConfUInt16(CONF_DERECHO_RPC_PORT),
@@ -122,7 +122,7 @@ ViewManager::~ViewManager() {
     if(client_listener_thread.joinable()) {
         client_listener_thread.join();
     }
-    
+
     old_views_cv.notify_all();
     if(old_view_cleanup_thread.joinable()) {
         old_view_cleanup_thread.join();
@@ -308,7 +308,7 @@ void ViewManager::truncate_logs() {
         //my_subgroups has not yet been initialized in the restart view.
         bool shard_found = false;
         for(my_shard_id = 0; my_shard_id < restart_view.subgroup_shard_views.at(subgroup_id).size();
-                ++my_shard_id) {
+            ++my_shard_id) {
             if(restart_view.subgroup_shard_views.at(subgroup_id).at(my_shard_id).rank_of(my_id) != -1) {
                 shard_found = true;
                 break;
@@ -397,19 +397,19 @@ void ViewManager::send_logs() {
     }
 }
 
-void ViewManager::setup_initial_tcp_connections(const View& initial_view, node_id_t my_id) {
+void ViewManager::setup_initial_tcp_connections(const View& initial_view, const node_id_t my_id) {
     //Establish TCP connections to each other member of the view in ascending order
     for(int i = 0; i < initial_view.num_members; ++i) {
         if(initial_view.members[i] != my_id) {
             tcp_sockets->add_node(initial_view.members[i],
-                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+                                  {initial_view.member_ips_and_ports[i].ip_address,
+                                   initial_view.member_ips_and_ports[i].rpc_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
 }
 
-void ViewManager::reinit_tcp_connections(const View& initial_view, node_id_t my_id) {
+void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id_t my_id) {
     //Delete sockets for failed members no longer in the view
     tcp_sockets->filter_to(initial_view.members);
     //Recheck the members list and establish connections to any new members
@@ -417,8 +417,8 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, node_id_t my_
         if(initial_view.members[i] != my_id
            && !tcp_sockets->contains_node(initial_view.members[i])) {
             tcp_sockets->add_node(initial_view.members[i],
-                                  {std::get<0>(initial_view.member_ips_and_ports[i]),
-                                   std::get<PORT_TYPE::RPC>(initial_view.member_ips_and_ports[i])});
+                                  {initial_view.member_ips_and_ports[i].ip_address,
+                                   initial_view.member_ips_and_ports[i].rpc_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
@@ -506,7 +506,7 @@ void ViewManager::await_first_view(const node_id_t my_id) {
                 dbg_default_warn("Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id);
                 //Remove the failed client and recompute the view
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
-                std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> filtered_ips_and_ports(curr_view->member_ips_and_ports.size() - 1);
+                std::vector<IpAndPorts> filtered_ips_and_ports(curr_view->member_ips_and_ports.size() - 1);
                 std::vector<node_id_t> filtered_joiners(curr_view->joined.size() - 1);
                 std::remove_copy(curr_view->members.begin(), curr_view->members.end(),
                                  filtered_members.begin(), failed_joiner_id);
@@ -610,13 +610,13 @@ void ViewManager::leader_commit_initial_view() {
 void ViewManager::initialize_rdmc_sst() {
     dbg_default_debug("Starting global initialization of RDMC and SST, including internal TCP connection setup");
     // construct member_ips
-    auto member_ips_and_rdmc_ports_map = make_member_ips_and_ports_map<PORT_TYPE::RDMC>(*curr_view);
+    auto member_ips_and_rdmc_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::RDMC);
     if(!rdmc::initialize(member_ips_and_rdmc_ports_map,
                          curr_view->members[curr_view->my_rank])) {
         std::cout << "Global setup failed" << std::endl;
         exit(0);
     }
-    auto member_ips_and_sst_ports_map = make_member_ips_and_ports_map<PORT_TYPE::SST>(*curr_view);
+    auto member_ips_and_sst_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::SST);
     node_id_t my_id = curr_view->members[curr_view->my_rank];
 
 #ifdef USE_VERBS_API
@@ -625,8 +625,9 @@ void ViewManager::initialize_rdmc_sst() {
 #else
     sst::lf_initialize(member_ips_and_sst_ports_map,
                        my_id,
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, 
-    {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{
+                           my_id, {getConfString(CONF_DERECHO_LOCAL_IP),
+                                   getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
 #endif
 }
 
@@ -808,11 +809,11 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
                 done_with_joins = true;
                 continue;
             }
-            
+
             proposed_join_sockets.splice(proposed_join_sockets.end(),
-                                            pending_join_sockets,
-                                            pending_join_sockets.begin());
-            
+                                         pending_join_sockets,
+                                         pending_join_sockets.begin());
+
             bool success = receive_join(gmsSST, proposed_join_sockets.back().first, proposed_join_sockets.back().second);
             //If the join failed, close the socket
             if(!success) proposed_join_sockets.pop_back();
@@ -852,15 +853,14 @@ void ViewManager::redirect_join_attempt(tcp::socket& client_socket) {
                                      curr_view->members[curr_view->my_rank]});
     //Send the client the IP address of the current leader
     const int rank_of_leader = curr_view->find_rank_of_leader();
-    client_socket.write(mutils::bytes_size(std::get<0>(
-            curr_view->member_ips_and_ports[rank_of_leader])));
+    client_socket.write(mutils::bytes_size(
+            curr_view->member_ips_and_ports[rank_of_leader].ip_address));
     auto bind_socket_write = [&client_socket](const char* bytes, std::size_t size) {
         client_socket.write(bytes, size);
     };
     mutils::post_object(bind_socket_write,
-                        std::get<0>(curr_view->member_ips_and_ports[rank_of_leader]));
-    client_socket.write(std::get<PORT_TYPE::GMS>(
-            curr_view->member_ips_and_ports[rank_of_leader]));
+                        curr_view->member_ips_and_ports[rank_of_leader].ip_address);
+    client_socket.write(curr_view->member_ips_and_ports[rank_of_leader].gms_port);
 }
 
 void ViewManager::process_new_sockets() {
@@ -880,12 +880,12 @@ void ViewManager::process_new_sockets() {
     }
     JoinRequest join_request;
     client_socket.read(join_request);
-    if (join_request.is_external) {
+    if(join_request.is_external) {
         dbg_default_info("The join request is an external request from {}.", join_request.joiner_id);
         external_join_handler(client_socket, join_request.joiner_id);
     } else {
-        if (active_leader) {
-            pending_join_sockets.emplace_back(std::make_pair(join_request.joiner_id, std::move(client_socket)));
+        if(active_leader) {
+            pending_join_sockets.emplace_back(join_request.joiner_id, std::move(client_socket));
         } else {
             redirect_join_attempt(client_socket);
         }
@@ -900,13 +900,13 @@ void ViewManager::external_join_handler(tcp::socket& client_socket, const node_i
     client_socket.write(JoinResponse{JoinResponseCode::OK, getConfUInt32(CONF_DERECHO_LOCAL_ID)});
     ExternalClientRequest request;
     client_socket.read(request);
-    if (request == ExternalClientRequest::GET_VIEW) {
+    if(request == ExternalClientRequest::GET_VIEW) {
         send_view(*curr_view, client_socket);
-    } else if (request == ExternalClientRequest::ESTABLISH_P2P) {
+    } else if(request == ExternalClientRequest::ESTABLISH_P2P) {
         uint16_t external_client_external_port = 0;
         client_socket.read(external_client_external_port);
-        sst::add_external_node(joiner_id, std::pair<ip_addr_t, uint16_t>{
-                        client_socket.get_remote_ip(),external_client_external_port});
+        sst::add_external_node(joiner_id, {client_socket.get_remote_ip(),
+                                           external_client_external_port});
         add_external_connection_upcall({joiner_id});
     }
 }
@@ -1366,7 +1366,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         // The new members will be the last joined.size() elements of the members lists
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
-        dbg_default_debug("Adding RDMC connection to node {}, at IP {} and port {}", next_view->members[joiner_rank], std::get<0>(next_view->member_ips_and_ports[joiner_rank]), std::get<PORT_TYPE::RDMC>(next_view->member_ips_and_ports[joiner_rank]));
+        dbg_default_debug("Adding RDMC connection to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
 
 #ifdef USE_VERBS_API
         rdma::impl::verbs_add_connection(next_view->members[joiner_rank],
@@ -1374,19 +1374,15 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 #else
         rdma::impl::lf_add_connection(
                 next_view->members[joiner_rank],
-                std::pair<ip_addr_t, uint16_t>{
-                        std::get<0>(next_view->member_ips_and_ports[joiner_rank]),
-                        std::get<PORT_TYPE::RDMC>(
-                                next_view->member_ips_and_ports[joiner_rank])});
+                {next_view->member_ips_and_ports[joiner_rank].ip_address,
+                 next_view->member_ips_and_ports[joiner_rank].rdmc_port});
 #endif
     }
     for(std::size_t i = 0; i < next_view->joined.size(); ++i) {
         int joiner_rank = next_view->num_members - next_view->joined.size() + i;
         sst::add_node(next_view->members[joiner_rank],
-                      std::pair<ip_addr_t, uint16_t>{
-                              std::get<0>(next_view->member_ips_and_ports[joiner_rank]),
-                              std::get<PORT_TYPE::SST>(
-                                      next_view->member_ips_and_ports[joiner_rank])});
+                      {next_view->member_ips_and_ports[joiner_rank].ip_address,
+                       next_view->member_ips_and_ports[joiner_rank].sst_port});
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
@@ -1661,8 +1657,8 @@ void ViewManager::update_tcp_connections(const View& new_view) {
     }
     for(const node_id_t& joiner_id : new_view.joined) {
         tcp_sockets->add_node(joiner_id,
-                              {std::get<0>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)]),
-                               std::get<PORT_TYPE::RPC>(new_view.member_ips_and_ports[new_view.rank_of(joiner_id)])});
+                              {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
+                               new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].rpc_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
 }
@@ -1797,6 +1793,43 @@ std::map<subgroup_id_t, uint64_t> ViewManager::get_max_payload_sizes() {
     return max_payload_sizes;
 }
 
+std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
+ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port) {
+    std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
+    size_t num_members = view.members.size();
+    for(uint i = 0; i < num_members; ++i) {
+        if(!view.failed[i]) {
+            switch(port) {
+                case PortType::GMS:
+                    member_ips_and_ports_map[view.members[i]] = {
+                            view.member_ips_and_ports[i].ip_address,
+                            view.member_ips_and_ports[i].gms_port};
+                    break;
+                case PortType::RPC:
+                    member_ips_and_ports_map[view.members[i]] = {
+                            view.member_ips_and_ports[i].ip_address,
+                            view.member_ips_and_ports[i].rpc_port};
+                    break;
+                case PortType::SST:
+                    member_ips_and_ports_map[view.members[i]] = {
+                            view.member_ips_and_ports[i].ip_address,
+                            view.member_ips_and_ports[i].sst_port};
+                    break;
+                case PortType::RDMC:
+                    member_ips_and_ports_map[view.members[i]] = {
+                            view.member_ips_and_ports[i].ip_address,
+                            view.member_ips_and_ports[i].rdmc_port};
+                    break;
+                case PortType::EXTERNAL:
+                    member_ips_and_ports_map[view.members[i]] = {
+                            view.member_ips_and_ports[i].ip_address,
+                            view.member_ips_and_ports[i].external_port};
+            }
+        }
+    }
+    return member_ips_and_ports_map;
+}
+
 std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& curr_view,
                                                   const DerechoSST& gmsSST) {
     const int32_t my_rank = curr_view->my_rank;
@@ -1832,7 +1865,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
     // Initialize the next view
     std::vector<node_id_t> joined, members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
+    std::vector<IpAndPorts> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     for(std::size_t i = 0; i < join_indexes.size(); ++i) {
         const int join_index = join_indexes[i];
@@ -1846,12 +1879,12 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         // New members go at the end of the members list, but it may shrink in the new view
         int new_member_rank = curr_view->num_members - leave_ranks.size() + i;
         members[new_member_rank] = joiner_id;
-        member_ips_and_ports[new_member_rank] = std::tuple{joiner_ip,
-                                                           gmsSST.joiner_gms_ports[my_rank][join_index],
-                                                           gmsSST.joiner_rpc_ports[my_rank][join_index],
-                                                           gmsSST.joiner_sst_ports[my_rank][join_index],
-                                                           gmsSST.joiner_rdmc_ports[my_rank][join_index],
-                                                           gmsSST.joiner_external_ports[my_rank][join_index]};
+        member_ips_and_ports[new_member_rank] = {joiner_ip,
+                                                 gmsSST.joiner_gms_ports[my_rank][join_index],
+                                                 gmsSST.joiner_rpc_ports[my_rank][join_index],
+                                                 gmsSST.joiner_sst_ports[my_rank][join_index],
+                                                 gmsSST.joiner_rdmc_ports[my_rank][join_index],
+                                                 gmsSST.joiner_external_ports[my_rank][join_index]};
         dbg_default_debug("Next view will add new member with ID {}", joiner_id);
     }
     for(const auto& leaver_rank : leave_ranks) {

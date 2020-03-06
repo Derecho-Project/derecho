@@ -26,6 +26,8 @@
 
 namespace derecho {
 
+/*--- Forward declarations ---*/
+
 template <typename T>
 class Replicated;
 template <typename T>
@@ -74,22 +76,32 @@ enum class JoinResponseCode {
 };
 
 /**
- * Bundles together a JoinResponseCode and the leader's node ID, which it also
- * needs to send to the new node that wants to join.
+ * A simple POD message that the group leader sends back to a new node in
+ * response to a JoinRequest. Includes a JoinResponseCode and the leader's
+ * node ID.
  */
 struct JoinResponse {
     JoinResponseCode code;
     node_id_t leader_id;
 };
 
-enum class ExternalClientRequest {
-    GET_VIEW,
-    ESTABLISH_P2P
-};
-
+/**
+ * A simple POD message that new nodes send to the group leader to indicate that
+ * they want to join the group.
+ */
 struct JoinRequest {
     node_id_t joiner_id;
     bool is_external;
+};
+
+/**
+ * A set of status codes that an external client can send to any member of the
+ * group indicating the type of request it is making. External clients send this
+ * after sending a JoinRequest with is_external=true.
+ */
+enum class ExternalClientRequest {
+    GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
+    ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
 };
 
 template <typename T>
@@ -488,7 +500,7 @@ private:
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
      */
-    void receive_initial_view(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_initial_view(const node_id_t my_id, tcp::socket& leader_connection);
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -496,7 +508,7 @@ private:
      * connections have been set up yet.
      * @param initial_view The View to use for membership
      */
-    void setup_initial_tcp_connections(const View& initial_view, node_id_t my_id);
+    void setup_initial_tcp_connections(const View& initial_view, const node_id_t my_id);
 
     /**
      * Another setup helper for joining nodes; re-initializes the TCP connections
@@ -505,7 +517,7 @@ private:
      * @param initial_view The View whose membership the TCP connections should be
      * updated to reflect
      */
-    void reinit_tcp_connections(const View& initial_view, node_id_t my_id);
+    void reinit_tcp_connections(const View& initial_view, const node_id_t my_id);
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
@@ -567,22 +579,11 @@ private:
     static uint32_t compute_num_received_size(const View& view);
 
     /**
-     * Constructs a map from node ID -> IP address from the parallel vectors in the given View.
+     * Constructs a map from node ID -> (IP address, port) for a specific port from
+     * the members and member_ips_and_ports vectors in the given View.
      */
-    template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-    make_member_ips_and_ports_map(const View& view) {
-        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
-        size_t num_members = view.members.size();
-        for(uint i = 0; i < num_members; ++i) {
-            if(!view.failed[i]) {
-                member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{
-                        std::get<0>(view.member_ips_and_ports[i]),
-                        std::get<port_index>(view.member_ips_and_ports[i])};
-            }
-        }
-        return member_ips_and_ports_map;
-    }
+    make_member_ips_and_ports_map(const View& view, const PortType port);
     /**
      * Constructs a vector mapping subgroup ID in the new view -> shard number
      * -> node ID of that shard's leader in the old view. If a shard had no
