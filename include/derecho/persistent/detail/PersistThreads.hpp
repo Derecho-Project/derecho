@@ -32,7 +32,7 @@
 #define LOG_BUFFER_SIZE 1
 #define DATA_BUFFER_SIZE 1
 #define READ_BUFFER_SIZE 1
-#define READ_BATCH_BIT 1
+#define READ_BATCH_BIT 15
 
 namespace persistent {
 
@@ -176,13 +176,15 @@ typedef struct log_metadata {
     std::atomic<int64_t> in_memory_idx;
     /**The largest index of persisted log entry*/
     std::atomic<int64_t> last_written_idx;
+    std::atomic<int64_t> last_submitted_idx;
     pthread_mutex_t log_write_buffer_lock;
     /**The highest ver that has been written for each PersistLog. */
     int64_t last_written_ver;
     /**The smallest address of data in buffer*/
-    uint64_t in_memory_addr;
+    std::atomic<uint64_t> in_memory_addr;
     /**The largest address of data written*/
-    uint64_t last_written_addr;
+    std::atomic<uint64_t> last_written_addr;
+    std::atomic<uint64_t> last_submitted_addr;
     pthread_mutex_t data_write_buffer_lock; 
     // bool operator
     bool operator==(const struct log_metadata& other) {
@@ -191,6 +193,33 @@ typedef struct log_metadata {
                && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
     }
 } LogMetadata;
+
+class Guard {
+    protected:
+        std::atomic<int>* counter = nullptr;
+
+    public:
+        Guard(){}
+        Guard(std::atomic<int>* counter):counter(counter){}
+        Guard(Guard&& rhs):counter(rhs.counter){}
+        Guard(const Guard& rhs) = delete;
+        
+        void swap(Guard&& rhs) {
+            std::atomic<int>* tmp = this->counter;
+            this->counter = rhs.counter;
+            rhs.counter = tmp;
+        }
+
+        void operator = (Guard&& rhs) {
+            swap(std::move(rhs));
+        }
+
+        virtual ~Guard() {
+            if (counter != nullptr) {
+                (*counter)--;
+            }
+        }
+}
 
 class PersistThreads {
 protected:
@@ -254,7 +283,13 @@ protected:
     
     //-------------------------Read Buffer-----------------------------------------
     uint8_t* read_buffer;
-    std::unordered_map<uint64_t, std::pair<uint8_t, uint32_t>> in_read_buffer_seg; 
+    /**Map nvme_bid to readbuf_bid and length of the in-buffer part*/
+    std::unordered_map<uint64_t, std::pair<uint16_t, uint32_t>> read_buf_index; 
+    /**Map readbuf_bid to nvme_bid*/
+    std::unordered_map<uint16_t, uint64_t> idx_to_batch;
+    /**Map nvme_bid to number of references*/
+    std::unordered_map<uint64_t, uint8_t> batch_to_numref;
+    std::list<uint64_t> lru_list;
     std::atomic<uint8_t> next_read_idx;
     pthread_mutex_t read_buffer_lock;
 
@@ -314,13 +349,13 @@ public:
      * @param metadata - updated metadata
      */
     void append(const uint32_t& id, char* data, 
-		    const uint64_t& data_size, void* log,
-		    const uint64_t& log_offset, PTLogMetadataInfo metadata);
+		    const uint64_t& data_size, const version_t& ver,
+		    const HLC& mhlc);
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata);
-
-    LogEntry* read_entry(const uint32_t& id, const int64_t& index);
-    void* read_data(const uint32_t& id, const int64_t& index);
+    version_t persist(const uint32_t& id);
+    std::tuple<LogEntry*, Guard> read_entry(const uint32_t& id, const int64_t& index);
+    std::tuple<void*, Guard> read_data(const uint32_t& id, const int64_t& index);
     void* read_lba(const uint64_t& lba_index);
     
     /** Map log id to log entry space*/
