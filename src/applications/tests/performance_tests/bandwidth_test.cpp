@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
                                &done,
                                &num_nodes,
                                max_msg_size,
-                               /*dest_area*/,
+                               //dest_area,
                                num_senders_selector,
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
