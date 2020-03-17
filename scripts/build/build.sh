@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# case insensitive for string comparison
+shopt -s nocasematch
+
 colorful_print() {
     color_prefix="0;30"
     case $1 in
@@ -53,8 +56,13 @@ colorful_print() {
 }
 
 if [[ $# -lt 1 ]]; then
-    colorful_print orange "USAGE: $0 <Release|Debug|RelWithDebInfo|Benchmark> [USE_VERBS_API]"
+    colorful_print orange "USAGE: $0 <Release|Debug|RelWithDebInfo|Benchmark|Clear> [USE_VERBS_API]"
     exit -1
+fi
+
+if [[ $1 == "Clear" ]]; then
+    rm -rf build-*
+    exit 0
 fi
 
 build_type=$1

@@ -46,7 +46,7 @@ int main() {
 #ifdef USE_VERBS_API
     sst::verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    sst::lf_initialize(ip_addrs_and_ports,node_rank);
+    sst::lf_initialize(ip_addrs_and_ports,{},node_rank);
 #endif
 
     vector<uint32_t> members(num_nodes);

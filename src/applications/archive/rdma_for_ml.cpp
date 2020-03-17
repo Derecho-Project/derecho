@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
 #ifdef USE_VERBS_API
     verbs_initialize(ip_addrs_and_ports, my_id);
 #else
-    lf_initialize(ip_addrs_and_ports, my_id);
+    lf_initialize(ip_addrs_and_ports, {}, my_id);
 #endif
 
     // form a group with a subset of all the nodes

@@ -199,8 +199,8 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
  * @param node_id id of this node.
  */
 void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
-                   uint32_t node_id,
-                   const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports={});
+                   const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
+                   uint32_t node_id);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 /** Shutdown the polling thread. */

@@ -721,9 +721,9 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 
 void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
                          &internal_ip_addrs_and_ports,  
-                     uint32_t node_id,
                      const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-                         &external_ip_addrs_and_ports) {
+                         &external_ip_addrs_and_ports,
+                     uint32_t node_id) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
     sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);

@@ -23,7 +23,7 @@ void initialize(int node_rank, const map<uint32_t, std::pair<string, uint16_t>> 
 #ifdef USE_VERBS_API
     verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
 }
 

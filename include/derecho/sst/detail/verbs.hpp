@@ -8,8 +8,8 @@
  */
 
 #include <map>
-
 #include <infiniband/verbs.h>
+#include <derecho/core/derecho_type_definitions.hpp>
 
 namespace sst {
 

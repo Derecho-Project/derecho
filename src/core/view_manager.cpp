@@ -617,6 +617,7 @@ void ViewManager::initialize_rdmc_sst() {
         exit(0);
     }
     auto member_ips_and_sst_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::SST);
+    auto member_ips_and_external_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::EXTERNAL);
     node_id_t my_id = curr_view->members[curr_view->my_rank];
 
 #ifdef USE_VERBS_API
@@ -624,10 +625,8 @@ void ViewManager::initialize_rdmc_sst() {
                           curr_view->members[curr_view->my_rank]);
 #else
     sst::lf_initialize(member_ips_and_sst_ports_map,
-                       my_id,
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{
-                           my_id, {getConfString(CONF_DERECHO_LOCAL_IP),
-                                   getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
+                       member_ips_and_external_ports_map,
+                       my_id);
 #endif
 }
 

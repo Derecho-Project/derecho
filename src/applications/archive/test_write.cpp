@@ -45,7 +45,7 @@ int main() {
 #ifdef USE_VERBS_API
     verbs_initialize(ip_addrs_and_ports, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
     // create read and write buffers
 //  char *write_buf = (char *)malloc(ROWSIZE);

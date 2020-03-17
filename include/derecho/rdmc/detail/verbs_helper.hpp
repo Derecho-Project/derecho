@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <derecho/core/derecho_type_definitions.hpp>
+
 struct ibv_mr;
 struct ibv_qp;
 struct ibv_cq;
