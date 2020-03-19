@@ -22,11 +22,13 @@
 #include <thread>
 #include <unistd.h>
 
-#include "derecho/connection_manager.h"
-#include "derecho/derecho_ports.h"
-#include "poll_utils.h"
-#include "tcp/tcp.h"
-#include "verbs.h"
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/sst/detail/verbs.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
+#include <derecho/sst/detail/sst_impl.hpp>
+#include <derecho/tcp/tcp.hpp>
+#include <derecho/utils/logger.hpp>
 
 #error "Verbs implementation is obsolete. Compilation stopped."
 
@@ -641,7 +643,10 @@ bool sync(uint32_t r_index) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports, uint32_t node_rank) {
+  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
+                        const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_external_ports, 
+                        uint32_t node_id) {
+    /*** TODO: revive this with external client view
     sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
 
     // init all of the resources, so cleanup will be easy
@@ -650,6 +655,7 @@ bool sync(uint32_t r_index) {
     resources_create();
 
     cout << "Initialized global RDMA resources" << endl;
+    ***/
 }
 
 void shutdown_polling_thread() {

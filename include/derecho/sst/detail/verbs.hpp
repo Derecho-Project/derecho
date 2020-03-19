@@ -92,9 +92,9 @@ public:
     void post_remote_write(const uint32_t id, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const uint32_t id, const long long int offset, long long int size);
-    void post_remote_write_with_completion(const uint32_t id, const long long int size);
+    void post_remote_write_with_completion(struct verbs_sender_ctxt*, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(struct verbs_sender_ctxt*, const long long int offset, const long long int size);
 };
 
 class resources_two_sided : public _resources {
@@ -113,7 +113,8 @@ public:
     void post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size);
 };
 
-bool add_node(uint32_t new_id, const std::string new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t> new_ip_addr);
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool remove_node(uint32_t node_id);
 /**
  * Blocks the current thread until both this node and a remote node reach this
@@ -122,8 +123,9 @@ bool remove_node(uint32_t node_id);
  */
 bool sync(uint32_t r_index);
 /** Initializes the global verbs resources. */
-void verbs_initialize(const std::map<uint32_t, std::string> &ip_addrs,
-                      uint32_t node_rank);
+void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,
+                      const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_external_ports,
+                      uint32_t node_id);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion();
 void shutdown_polling_thread();
