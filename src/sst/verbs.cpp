@@ -30,8 +30,6 @@
 #include <derecho/tcp/tcp.hpp>
 #include <derecho/utils/logger.hpp>
 
-#error "Verbs implementation is obsolete. Compilation stopped."
-
 using std::cout;
 using std::endl;
 
@@ -58,7 +56,8 @@ int ib_port = 1;
 /** GID index to use. */
 int gid_idx = 0;
 
-tcp::tcp_connections *sst_connections;
+tcp::tcp_connections* sst_connections;
+tcp::tcp_connections* external_client_connections;
 
 //  unsigned int max_time_to_completion = 0;
 
@@ -316,7 +315,7 @@ void _resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int _resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
+int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
                                  const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
@@ -330,7 +329,7 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
     memset(&sr, 0, sizeof(sr));
     sr.next = NULL;
     // set the id for the work request, useful at the time of polling
-    sr.wr_id = id;
+    sr.wr_id = reinterpret_cast<uint64_t>(sctxt);
     sr.sg_list = &sge;
     sr.num_sge = 1;
     // set opcode depending on op parameter
@@ -362,8 +361,8 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
 /**
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 0, false);
+void resources::post_remote_read(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -373,8 +372,8 @@ void resources::post_remote_read(const uint32_t id, const long long int size) {
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 0, false);
+void resources::post_remote_read(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -383,8 +382,8 @@ void resources::post_remote_read(const uint32_t id, const long long int offset, 
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 1, false);
+void resources::post_remote_write(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -396,22 +395,22 @@ void resources::post_remote_write(const uint32_t id, const long long int size) {
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 1, false);
+void resources::post_remote_write(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 1, true);
+void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_remote_send(sctxt, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 1, true);
+void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_remote_send(sctxt, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -425,8 +424,8 @@ resources_two_sided::resources_two_sided(int r_index, char *write_addr, char *re
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 2, false);
+void resources_two_sided::post_two_sided_send(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 2, false);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -438,28 +437,28 @@ void resources_two_sided::post_two_sided_send(const uint32_t id, const long long
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 2, false);
+void resources_two_sided::post_two_sided_send(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 2, false);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 2, true);
+void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_remote_send(sctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 2, true);
+void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_remote_send(sctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-int resources_two_sided::post_receive(const uint32_t id, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     struct ibv_recv_wr rr;
     struct ibv_sge sge;
     struct ibv_recv_wr *bad_wr;
@@ -472,7 +471,7 @@ int resources_two_sided::post_receive(const uint32_t id, const long long int off
     /* prepare the receive work request */
     memset(&rr, 0, sizeof(rr));
     rr.next = NULL;
-    rr.wr_id = id;
+    rr.wr_id = reinterpret_cast<uint64_t>(sctxt);
     rr.sg_list = &sge;
     rr.num_sge = 1;
 
@@ -481,15 +480,15 @@ int resources_two_sided::post_receive(const uint32_t id, const long long int off
     return ret;
 }
 
-void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int size) {
-    int rc = post_receive(id, 0, size);
+void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_receive(sctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_receive(id, offset, size);
+void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_receive(sctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -627,23 +626,40 @@ void resources_create() {
     polling_thread.detach();
 }
 
-bool add_node(uint32_t new_id, const std::string new_ip_addr) {
-    return sst_connections->add_node(new_id, new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return sst_connections->add_node(new_id, new_ip_addr_and_port);
 }
+
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return external_client_connections->add_node(new_id, new_ip_addr_and_port);
+}
+
 bool remove_node(uint32_t node_id) {
-    return sst_connections->delete_node(node_id);
+    if (sst_connections->contains_node(node_id)) {
+        return sst_connections->delete_node(node_id);
+    } else {
+        return external_client_connections->delete_node(node_id);
+    }
 }
 
 bool sync(uint32_t r_index) {
     int s = 0, t = 0;
-    return sst_connections->exchange(r_index, s, t);
+    if (sst_connections->contains_node(r_index)) {
+        return sst_connections->exchange(r_index, s, t);
+    } else {
+        return external_client_connections->exchange(r_index, s, t);
+    }
+}
+
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
+    external_client_connections->filter_to(live_nodes_list);
 }
 
 /**
  * @details
  * This must be called before creating or using any SST instance.
  */
-  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
+void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
                         const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_external_ports, 
                         uint32_t node_id) {
     /*** TODO: revive this with external client view

@@ -94,7 +94,7 @@ public:
 static bool shutdown = false;
 std::thread polling_thread;
 tcp::tcp_connections* sst_connections;
-tcp::tcp_connections *external_client_connections;
+tcp::tcp_connections* external_client_connections;
 // singleton: global states
 lf_ctxt g_ctxt;
 

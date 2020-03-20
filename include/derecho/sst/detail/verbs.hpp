@@ -49,7 +49,7 @@ private:
 
 protected:
     /** Post a remote RDMA operation. */
-    int post_remote_send(const uint32_t id, const long long int offset, const long long int size, const int op, const bool completion);
+    int post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
     /** Index of the remote node. */
@@ -85,35 +85,35 @@ public:
       all call post_remote_send with different parameters
     */
     /** Post an RDMA read at the beginning address of remote memory. */
-    void post_remote_read(const uint32_t id, const long long int size);
+    void post_remote_read(const long long int size);
     /** Post an RDMA read at an offset into remote memory. */
-    void post_remote_read(const uint32_t id, const long long int offset, const long long int size);
+    void post_remote_read(const long long int offset, const long long int size);
     /** Post an RDMA write at the beginning address of remote memory. */
-    void post_remote_write(const uint32_t id, const long long int size);
+    void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write(const uint32_t id, const long long int offset, long long int size);
-    void post_remote_write_with_completion(struct verbs_sender_ctxt*, const long long int size);
+    void post_remote_write(const long long int offset, long long int size);
+    void post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(struct verbs_sender_ctxt*, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 };
 
 class resources_two_sided : public _resources {
-    int post_receive(const uint32_t id, const long long int offset, const long long int size);
+    int post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 
 public:
     resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
                         int size_r);
-    void post_two_sided_send(const uint32_t id, const long long int size);
+    void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send(const uint32_t id, const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(const uint32_t id, const long long int size);
+    void post_two_sided_send(const long long int offset, long long int size);
+    void post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size);
-    void post_two_sided_receive(const uint32_t id, const long long int size);
-    void post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size);
+    void post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 };
 
-bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t> new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool remove_node(uint32_t node_id);
 /**
@@ -122,6 +122,15 @@ bool remove_node(uint32_t node_id);
  * @param r_index The node rank of the node to exchange data with.
  */
 bool sync(uint32_t r_index);
+/**
+ * Compares the set of external client connections to a list of known live nodes and
+ * removes any connections to nodes not in that list. This is used to filter out
+ * connections to nodes that were removed from the view.
+ * @param live_nodes_list A list of node IDs whose connections should be retained;
+ *        all other connections will be deleted.
+ */
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
+
 /** Initializes the global verbs resources. */
 void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,
                       const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_external_ports,
