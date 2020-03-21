@@ -662,8 +662,8 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
 void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
                         const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_external_ports, 
                         uint32_t node_id) {
-    /*** TODO: revive this with external client view
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
+    sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_sst_ports);
+    external_client_connections = new tcp::tcp_connections(node_id, ip_addrs_and_external_ports);
 
     // init all of the resources, so cleanup will be easy
     resources_init();
@@ -671,7 +671,6 @@ void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &
     resources_create();
 
     cout << "Initialized global RDMA resources" << endl;
-    ***/
 }
 
 void shutdown_polling_thread() {
