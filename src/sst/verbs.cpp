@@ -49,8 +49,6 @@ __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
 namespace sst {
-/** IB device name. */
-const char *dev_name = NULL;
 /** Local IB port to work with. */
 int ib_port = 1;
 /** GID index to use. */
@@ -573,6 +571,7 @@ void resources_create() {
         cout << "NO RDMA device present" << endl;
     }
     // search for the specific device we want to work with
+    char* dev_name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
     for(i = 1; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
@@ -584,6 +583,7 @@ void resources_create() {
             break;
         }
     }
+    free(static_cast<void*>(dev_name));
     // if the device wasn't found in host
     if(!ib_dev) {
         cout << "No RDMA devices found in the host" << endl;
