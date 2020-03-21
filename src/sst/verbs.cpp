@@ -537,13 +537,14 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
         exit(-1);
     }
     // check the completion status (here we don't care about the completion
+    struct verbs_sender_ctxt* sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
     // opcode)
     if(wc.status != IBV_WC_SUCCESS) {
         cout << "got bad completion with status: "
              << wc.status << ", vendor syndrome: " << wc.vendor_err;
-        return {wc.wr_id, {wc.qp_num, -1}};
+        return {sctxt->ce_idx, {sctxt->remote_id, -1}};
     }
-    return {wc.wr_id, {wc.qp_num, 1}};
+    return {sctxt->ce_idx, {sctxt->remote_id, 1}};
 }
 
 /** Allocates memory for global RDMA resources. */
