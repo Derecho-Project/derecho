@@ -128,9 +128,9 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
     // same completion queue for both send and receive operations
     qp_init_attr.send_cq = g_res->cq;
     qp_init_attr.recv_cq = g_res->cq;
-    // allow a lot of requests at a time
-    qp_init_attr.cap.max_send_wr = 4000;
-    qp_init_attr.cap.max_recv_wr = 4000;
+    // since we send the value first and the update the counter, we double the depth configurations.
+    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH)<<1;
+    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH)<<1;
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
     // create the queue pair
