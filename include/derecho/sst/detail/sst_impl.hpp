@@ -176,8 +176,8 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
             continue;
         }
         // perform a remote RDMA write on the owner of the row
-        sctxt[index].remote_id = index;
-        sctxt[index].ce_idx = ce_idx;
+        sctxt[index].set_remote_id(index);
+        sctxt[index].set_ce_idx(ce_idx);
         res_vec[index]->post_remote_write_with_completion(&sctxt[index], offset, size);
         posted_write_to[index] = true;
         num_writes_posted++;

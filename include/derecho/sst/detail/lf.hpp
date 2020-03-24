@@ -24,8 +24,13 @@
 namespace sst {
 
 struct lf_sender_ctxt {
-    uint32_t ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
-    uint32_t remote_id;  // thread id of the sender
+    uint32_t _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
+    uint32_t _remote_id;  // thread id of the sender
+    // getters and setters
+    uint32_t ce_idx() {return _ce_idx;}
+    uint32_t remote_id() {return _remote_id;}
+    void set_ce_idx(const uint32_t& idx) {_ce_idx = idx;}
+    void set_remote_id(const uint32_t& rid) {_remote_id = rid;}
 };
 
 /**

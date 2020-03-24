@@ -83,8 +83,8 @@ int main() {
 #else
     struct lf_sender_ctxt sctxt;
 #endif
-    sctxt.remote_id = r_index;
-    sctxt.ce_idx = id;
+    sctxt.set_remote_id(r_index);
+    sctxt.set_ce_idx(id);
     res->post_remote_write_with_completion(&sctxt, ROWSIZE);
     // poll for completion
     while(true)

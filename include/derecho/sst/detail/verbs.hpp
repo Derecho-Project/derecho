@@ -8,6 +8,7 @@
  */
 
 #include <map>
+#include <atomic>
 #include <infiniband/verbs.h>
 #include <derecho/core/derecho_type_definitions.hpp>
 
@@ -27,9 +28,28 @@ struct cm_con_data_t {
     uint8_t gid[16];
 } __attribute__((packed));
 
+class _resources;
+
 struct verbs_sender_ctxt {
-  uint32_t      remote_id; // id of the remote node
-  uint32_t      ce_idx; // index into the completion entry list
+    enum verbs_sender_ctxt_type {
+        INTERNAL_FLOW_CONTROL,
+        EXPLICIT_SEND_WITH_COMPLETION
+    } type = EXPLICIT_SEND_WITH_COMPLETION; // the type of the sender context, default to EXPLICIT_SEND_WITH_COMPLETION.
+    union {
+        // for INTERNAL_FLOW_CONTROL type:
+        _resources *res;
+        // for EXPLICIT_SEND_WOTHCOMPLETION type:
+        struct {
+            uint32_t    remote_id;  // id of the remote node
+            uint32_t    ce_idx;     // index into the completion entry list
+        } sender_info;
+    } ctxt;
+    // getters
+    uint32_t remote_id() {return ctxt.sender_info.remote_id;}
+    uint32_t ce_idx() {return ctxt.sender_info.ce_idx;}
+    // setters
+    void set_remote_id(const uint32_t& rid) {ctxt.sender_info.remote_id = rid;}
+    void set_ce_idx(const uint32_t& cidx) {ctxt.sender_info.ce_idx = cidx;}
 };
 
 /**
@@ -67,6 +87,14 @@ public:
     /** Pointer to the memory buffer used for the results of RDMA remote reads.
      */
     char *read_buf;
+    /** the number of ops without completion in the queue pair. */
+    std::atomic<uint32_t> without_completion_send_cnt;
+    /** the maximum number of ops without completion allowed in the queue pair. */
+    uint32_t without_completion_send_capacity;
+    /** how many ops without completion to send before signaling. */
+    uint32_t without_completion_send_signal_interval;
+    /** context for the polling thread */
+    struct verbs_sender_ctxt without_completion_sender_ctxt;
 
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */

@@ -134,8 +134,8 @@ void P2PConnectionManager::check_failures_loop() {
                 continue;
             }
             p2p_conn->num_rdma_writes = 0;
-            sctxt[node_id].remote_id = node_id;
-            sctxt[node_id].ce_idx = ce_idx;
+            sctxt[node_id].set_remote_id(node_id);
+            sctxt[node_id].set_ce_idx(ce_idx);
 
             p2p_conn->get_res()->post_remote_write_with_completion(&sctxt[node_id], p2p_buf_size - sizeof(bool), sizeof(bool));
             posted_write_to.insert(node_id);

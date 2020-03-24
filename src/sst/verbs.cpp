@@ -31,6 +31,7 @@
 #include <derecho/utils/logger.hpp>
 
 using std::cout;
+using std::cerr;
 using std::endl;
 
 #define MSG "SEND operation      "
@@ -142,6 +143,17 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
 
     // connect the QPs
     connect_qp();
+
+    // prepare the flow control counters
+    without_completion_send_cnt = 0;
+    // leave 20% queue pair space for ops with completion.
+    // send signal every half of the capacity.
+    without_completion_send_signal_interval = (derecho::getConfInt32(CONF_RDMA_TX_DEPTH)*4/5)/2;
+    without_completion_send_capacity = without_completion_send_signal_interval*2;
+    // sender context
+    without_completion_sender_ctxt.type = verbs_sender_ctxt::INTERNAL_FLOW_CONTROL;
+    without_completion_sender_ctxt.ctxt.res = this;
+
     cout << "Established RDMA connection with node " << r_index << endl;
 }
 
@@ -319,6 +331,8 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
 
+    static std::atomic<long> counter = 0;
+
     // don't care where the read buffer is saved
     sge.addr = (uintptr_t)(read_buf + offset);
     sge.length = size;
@@ -327,7 +341,7 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     memset(&sr, 0, sizeof(sr));
     sr.next = NULL;
     // set the id for the work request, useful at the time of polling
-    sr.wr_id = reinterpret_cast<uint64_t>(sctxt);
+    sr.wr_id = 0;
     sr.sg_list = &sge;
     sr.num_sge = 1;
     // set opcode depending on op parameter
@@ -340,6 +354,23 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     }
     if(completion) {
         sr.send_flags = IBV_SEND_SIGNALED;
+        if (sctxt == nullptr) {
+            cerr << "post_remote_send(): sctxt cannot be nullptr for send with completion." << std::endl;
+            return EINVAL;
+        }
+        sr.wr_id = reinterpret_cast<uint64_t>(sctxt);
+    } else {
+        // increase the counter.
+        uint32_t my_slot = ++without_completion_send_cnt;
+        if(my_slot > without_completion_send_capacity) {
+            // spin on the counter until space released in queue pair
+            while(without_completion_send_cnt >= without_completion_send_capacity);
+        }
+        // set signal flag if required.
+        if ((my_slot+1)%without_completion_send_signal_interval == 0) {
+            sr.send_flags = IBV_SEND_SIGNALED;
+            sr.wr_id = reinterpret_cast<uint64_t>(&(this->without_completion_sender_ctxt));
+        }
     }
     if(op == 0 || op == 1) {
         // set the remote rkey and virtual address
@@ -348,7 +379,11 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     }
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
-    auto ret = ibv_post_send(qp, &sr, &bad_wr);
+    int ret;
+    do {
+        ret = ibv_post_send(qp, &sr, &bad_wr);
+    } while(ret == ENOMEM);
+    counter ++;
     return ret;
 }
 
@@ -514,6 +549,7 @@ void polling_loop() {
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
+    struct verbs_sender_ctxt* sctxt;
 
     while(!shutdown) {
         poll_result = 0;
@@ -524,25 +560,42 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
             }
         }
         if(poll_result) {
-            break;
+            // not sure what to do when we cannot read entries off the CQ
+            // this means that something is wrong with the local node
+            if(poll_result < 0) {
+                cout << "Poll completion failed" << endl;
+                exit(-1);
+            }
+            // check the completion status (here we don't care about the completion
+            sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
+            // opcode)
+            if(wc.status != IBV_WC_SUCCESS) {
+                cerr << "got bad completion with status: "
+                     << wc.status << ", vendor syndrome: "
+                     << wc.vendor_err << std::endl;
+                if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                    cerr << "WARNING: skip a bad completion for flow control of messages without completion."
+                         << std::endl;
+                    sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
+                    continue;
+                } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
+                    return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
+                }
+            } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                // internal flow control path, we continue to wait for the completion for explicit send with complition.
+                sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
+                continue;
+            } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
+                // normal path
+                break;
+            } else {
+                // this should not happen.
+                cerr << "WARNING: unknown sender context type:" << sctxt->type << "." << std::endl;
+            }
         }
         // util::polling_data.wait_for_requests();
     }
-    // not sure what to do when we cannot read entries off the CQ
-    // this means that something is wrong with the local node
-    if(poll_result < 0) {
-        cout << "Poll completion failed" << endl;
-        exit(-1);
-    }
-    // check the completion status (here we don't care about the completion
-    struct verbs_sender_ctxt* sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
-    // opcode)
-    if(wc.status != IBV_WC_SUCCESS) {
-        cout << "got bad completion with status: "
-             << wc.status << ", vendor syndrome: " << wc.vendor_err;
-        return {sctxt->ce_idx, {sctxt->remote_id, -1}};
-    }
-    return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+    return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
 }
 
 /** Allocates memory for global RDMA resources. */

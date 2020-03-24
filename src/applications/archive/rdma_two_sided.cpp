@@ -103,8 +103,8 @@ int main() {
 #else
     struct lf_sender_ctxt sctxt;
 #endif
-    sctxt.remote_id = r_index;
-    sctxt.ce_idx = id;
+    sctxt.set_remote_id(r_index);
+    sctxt.set_ce_idx(id);
 
     if(node_rank == 0) {
         // wait for random time

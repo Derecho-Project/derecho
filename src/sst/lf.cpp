@@ -515,21 +515,21 @@ void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_c
 void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
-        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
@@ -664,7 +664,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 #ifndef NOLOG
             struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
 #endif
-            dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx, sctxt->remote_id);
+            dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
@@ -698,7 +698,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 #endif  //DEBUG_FOR_RELEASE
         if(eentry.op_context != NULL) {
             struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
-            return {sctxt->ce_idx, {sctxt->remote_id, -1}};
+            return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
         } else {
             dbg_default_error("\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
@@ -712,7 +712,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
             //dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
-            return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+            return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
         }
     } else {  // shutdown return a bad entry
         return {0, {0, 0}};
