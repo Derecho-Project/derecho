@@ -573,7 +573,10 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
                 cerr << "got bad completion with status: "
                      << wc.status << ", vendor syndrome: "
                      << wc.vendor_err << std::endl;
-                if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                if (sctxt == nullptr) {
+                    cerr << "FATAL: sctxt should not be NULL in " << __func__ << "()." << std::endl;
+                    exit(-1);
+                } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
                     cerr << "WARNING: skip a bad completion for flow control of messages without completion."
                          << std::endl;
                     sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
