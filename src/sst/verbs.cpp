@@ -574,8 +574,7 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
                      << wc.status << ", vendor syndrome: "
                      << wc.vendor_err << std::endl;
                 if (sctxt == nullptr) {
-                    cerr << "FATAL: sctxt should not be NULL in " << __func__ << "()." << std::endl;
-                    exit(-1);
+                    cerr << "WARNING: unsignaled work request failed found in " << __func__ << "(). Ignoring..." << std::endl;
                 } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
                     cerr << "WARNING: skip a bad completion for flow control of messages without completion."
                          << std::endl;
