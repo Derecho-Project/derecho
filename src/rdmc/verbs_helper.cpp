@@ -282,7 +282,7 @@ bool verbs_initialize(const map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_ad
     local_config.dev_name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
     fprintf(stdout, "found %d device(s)\n", num_devices);
     /* search for the specific device we want to work with */
-    for(i = 1; i < num_devices; i++) {
+    for(i = 0; i < num_devices; i++) {
         if(!local_config.dev_name) {
             local_config.dev_name = strdup(ibv_get_device_name(dev_list[i]));
             fprintf(stdout, "device not specified, using first one found: %s\n",
