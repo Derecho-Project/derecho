@@ -155,7 +155,3 @@ target_link_libraries(external_client_tester derecho)
 # external_client_perf_test
 add_executable(external_client_perf_test external_client_perf_test.cpp)
 target_link_libraries(external_client_perf_test derecho)
-
-#multicast throughput
-add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
-target_link_libraries(multicast_throughput derecho)
