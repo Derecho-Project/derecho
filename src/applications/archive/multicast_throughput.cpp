@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
 #ifdef USE_VERBS_API
     verbs_initialize(ip_addrs_and_ports, ip_addrs_and_ports, node_id);
 #else
-    lf_initialize(ip_addrs_and_ports, node_id);
+    lf_initialize(ip_addrs_and_ports, ip_addrs_and_ports, node_id);
 #endif
 
     std::vector<uint32_t> members;
