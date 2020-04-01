@@ -21,9 +21,9 @@ using namespace tcp;
 void initialize(int node_rank, const map<uint32_t, std::pair<string, uint16_t>> &ip_addrs_and_ports) {
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(ip_addrs_and_ports, {}, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
 }
 
@@ -87,17 +87,24 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
+#ifdef USE_VERBS_API
+    resources_two_sided *res = new resources_two_sided(r_index, read_buf, write_buf, sizeof(int), sizeof(int));
+#else
     resources_two_sided *res = new resources_two_sided(r_index, read_buf, write_buf, sizeof(int), sizeof(int), r_index);
+#endif
 
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t id = util::polling_data.get_index(tid);
 
     util::polling_data.set_waiting(tid);
-
+#ifdef USE_VERBS_API
+    struct verbs_sender_ctxt sctxt;
+#else
     struct lf_sender_ctxt sctxt;
-    sctxt.remote_id = r_index;
-    sctxt.ce_idx = id;
+#endif
+    sctxt.set_remote_id(r_index);
+    sctxt.set_ce_idx(id);
 
     if(node_rank == 0) {
         // wait for random time

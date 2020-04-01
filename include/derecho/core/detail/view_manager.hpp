@@ -26,6 +26,8 @@
 
 namespace derecho {
 
+/*--- Forward declarations ---*/
+
 template <typename T>
 class Replicated;
 template <typename T>
@@ -74,12 +76,32 @@ enum class JoinResponseCode {
 };
 
 /**
- * Bundles together a JoinResponseCode and the leader's node ID, which it also
- * needs to send to the new node that wants to join.
+ * A simple POD message that the group leader sends back to a new node in
+ * response to a JoinRequest. Includes a JoinResponseCode and the leader's
+ * node ID.
  */
 struct JoinResponse {
     JoinResponseCode code;
     node_id_t leader_id;
+};
+
+/**
+ * A simple POD message that new nodes send to the group leader to indicate that
+ * they want to join the group.
+ */
+struct JoinRequest {
+    node_id_t joiner_id;
+    bool is_external;
+};
+
+/**
+ * A set of status codes that an external client can send to any member of the
+ * group indicating the type of request it is making. External clients send this
+ * after sending a JoinRequest with is_external=true.
+ */
+enum class ExternalClientRequest {
+    GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
+    ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
 };
 
 template <typename T>
@@ -123,16 +145,18 @@ private:
      *  in the process of transitioning to a new view. */
     std::unique_ptr<View> next_view;
 
+    /** contains client sockets for pending requests that have not yet been handled.*/
+    LockedQueue<tcp::socket> pending_new_sockets;
     /** On the leader node, contains client sockets for pending joins that have not yet been handled.*/
-    LockedQueue<tcp::socket> pending_join_sockets;
+    std::list<std::pair<node_id_t, tcp::socket>> pending_join_sockets;
+    /** The sockets connected to clients that will join in the next view, if any */
+    std::list<std::pair<node_id_t, tcp::socket>> proposed_join_sockets;
 
     /** Contains old Views that need to be cleaned up. */
     std::queue<std::unique_ptr<View>> old_views;
     std::mutex old_views_mutex;
     std::condition_variable old_views_cv;
 
-    /** The sockets connected to clients that will join in the next view, if any */
-    std::list<tcp::socket> proposed_join_sockets;
     /** A cached copy of the last known value of this node's suspected[] array.
      * Helps the SST predicate detect when there's been a change to suspected[].*/
     std::vector<bool> last_suspected;
@@ -156,7 +180,7 @@ private:
     pred_handle leader_suspicion_handle;
     pred_handle follower_suspicion_handle;
     pred_handle start_join_handle;
-    pred_handle reject_join_handle;
+    pred_handle new_sockets_handle;
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
@@ -234,7 +258,10 @@ private:
      */
     std::atomic<bool> bSilent = false;
 
-    bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
+    std::function<void(const std::vector<uint32_t>&)> add_external_connection_upcall;
+
+    bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
+    bool has_pending_join() { return pending_join_sockets.size() > 0; }
 
     /* ---------------------------- View-management triggers ---------------------------- */
     /**
@@ -243,6 +270,12 @@ private:
      */
     void new_suspicion(DerechoSST& gmsSST);
     /**
+     * A gateway that handles any socket connections, exchanges version code,
+     * reads JoinRequest and then decides whether to propose changes, redirect
+     * to leader, or handle as an external connection request.
+     */
+    void process_new_sockets();
+    /**
      * Runs only on the group leader; called whenever there is either a new
      * suspicion or a new join attempt, and proposes a batch of changes to
      * add and remove members. This always wedges the current view.
@@ -250,7 +283,9 @@ private:
     void propose_changes(DerechoSST& gmsSST);
 
     /** Runs on non-leaders to redirect confused new members to the current leader. */
-    void redirect_join_attempt(DerechoSST& gmsSST);
+    void redirect_join_attempt(tcp::socket& client_socket);
+    /** Handles join request from external clients. */
+    void external_join_handler(tcp::socket& client_socket, const node_id_t& joiner_id);
     /**
      * Runs once on a node that becomes a leader due to a failure. Searches for
      * and re-proposes changes proposed by prior leaders, as well as suspicions
@@ -313,7 +348,7 @@ private:
      * @return True if the join succeeded, false if it failed because the
      *         client's ID was already in use.
      */
-    bool receive_join(DerechoSST& gmsSST, tcp::socket& client_socket);
+    bool receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tcp::socket& client_socket);
 
     /**
      * Assuming the suspected[] array in the SST has changed, searches through
@@ -465,7 +500,7 @@ private:
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
      */
-    void receive_initial_view(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_initial_view(const node_id_t my_id, tcp::socket& leader_connection);
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -473,7 +508,7 @@ private:
      * connections have been set up yet.
      * @param initial_view The View to use for membership
      */
-    void setup_initial_tcp_connections(const View& initial_view, node_id_t my_id);
+    void setup_initial_tcp_connections(const View& initial_view, const node_id_t my_id);
 
     /**
      * Another setup helper for joining nodes; re-initializes the TCP connections
@@ -482,7 +517,7 @@ private:
      * @param initial_view The View whose membership the TCP connections should be
      * updated to reflect
      */
-    void reinit_tcp_connections(const View& initial_view, node_id_t my_id);
+    void reinit_tcp_connections(const View& initial_view, const node_id_t my_id);
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
@@ -544,22 +579,11 @@ private:
     static uint32_t compute_num_received_size(const View& view);
 
     /**
-     * Constructs a map from node ID -> IP address from the parallel vectors in the given View.
+     * Constructs a map from node ID -> (IP address, port) for a specific port from
+     * the members and member_ips_and_ports vectors in the given View.
      */
-    template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-    make_member_ips_and_ports_map(const View& view) {
-        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
-        size_t num_members = view.members.size();
-        for(uint i = 0; i < num_members; ++i) {
-            if(!view.failed[i]) {
-                member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{
-                        std::get<0>(view.member_ips_and_ports[i]),
-                        std::get<port_index>(view.member_ips_and_ports[i])};
-            }
-        }
-        return member_ips_and_ports_map;
-    }
+    make_member_ips_and_ports_map(const View& view, const PortType port);
     /**
      * Constructs a vector mapping subgroup ID in the new view -> shard number
      * -> node ID of that shard's leader in the old view. If a shard had no
@@ -707,6 +731,10 @@ public:
      * finished.
      */
     void finish_setup();
+
+    void register_add_external_connection_upcall(const std::function<void(const std::vector<uint32_t>&)>& upcall) {
+        add_external_connection_upcall = upcall;
+    }
 
     /**
      * Starts predicate evaluation in the current view's SST. Call this only

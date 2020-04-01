@@ -98,6 +98,7 @@ public:
     SSTFieldVector<uint16_t> joiner_rpc_ports;
     SSTFieldVector<uint16_t> joiner_sst_ports;
     SSTFieldVector<uint16_t> joiner_rdmc_ports;
+    SSTFieldVector<uint16_t> joiner_external_ports;
     /**
      * How many changes to the view have been proposed. Monotonically increases.
      * num_changes - num_committed is the number of pending changes, which should never
@@ -164,6 +165,7 @@ public:
               joiner_rpc_ports(100 + parameters.members.size()),
               joiner_sst_ports(100 + parameters.members.size()),
               joiner_rdmc_ports(100 + parameters.members.size()),
+              joiner_external_ports(100 + parameters.members.size()),
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
@@ -172,7 +174,7 @@ public:
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
-                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
+                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier, rip);
@@ -198,6 +200,7 @@ public:
             memset(const_cast<uint16_t*>(joiner_rpc_ports[row]), 0, joiner_rpc_ports.size());
             memset(const_cast<uint16_t*>(joiner_sst_ports[row]), 0, joiner_sst_ports.size());
             memset(const_cast<uint16_t*>(joiner_rdmc_ports[row]), 0, joiner_rdmc_ports.size());
+            memset(const_cast<uint16_t*>(joiner_external_ports[row]), 0, joiner_external_ports.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_installed[row] = 0;

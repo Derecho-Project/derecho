@@ -22,15 +22,16 @@
 #include <thread>
 #include <unistd.h>
 
-#include "derecho/connection_manager.h"
-#include "derecho/derecho_ports.h"
-#include "poll_utils.h"
-#include "tcp/tcp.h"
-#include "verbs.h"
-
-#error "Verbs implementation is obsolete. Compilation stopped."
+#include <derecho/conf/conf.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/sst/detail/verbs.hpp>
+#include <derecho/sst/detail/poll_utils.hpp>
+#include <derecho/sst/detail/sst_impl.hpp>
+#include <derecho/tcp/tcp.hpp>
+#include <derecho/utils/logger.hpp>
 
 using std::cout;
+using std::cerr;
 using std::endl;
 
 #define MSG "SEND operation      "
@@ -49,14 +50,13 @@ __LITTLE_ENDIAN nor __BIG_ENDIAN
 #endif
 
 namespace sst {
-/** IB device name. */
-const char *dev_name = NULL;
 /** Local IB port to work with. */
 int ib_port = 1;
 /** GID index to use. */
 int gid_idx = 0;
 
-tcp::tcp_connections *sst_connections;
+tcp::tcp_connections* sst_connections;
+tcp::tcp_connections* external_client_connections;
 
 //  unsigned int max_time_to_completion = 0;
 
@@ -129,9 +129,9 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
     // same completion queue for both send and receive operations
     qp_init_attr.send_cq = g_res->cq;
     qp_init_attr.recv_cq = g_res->cq;
-    // allow a lot of requests at a time
-    qp_init_attr.cap.max_send_wr = 4000;
-    qp_init_attr.cap.max_recv_wr = 4000;
+    // since we send the value first and the update the counter, we double the depth configurations.
+    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH)<<1;
+    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH)<<1;
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
     // create the queue pair
@@ -143,6 +143,17 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
 
     // connect the QPs
     connect_qp();
+
+    // prepare the flow control counters
+    without_completion_send_cnt = 0;
+    // leave 20% queue pair space for ops with completion.
+    // send signal every half of the capacity.
+    without_completion_send_signal_interval = (derecho::getConfInt32(CONF_RDMA_TX_DEPTH)*4/5)/2;
+    without_completion_send_capacity = without_completion_send_signal_interval*2;
+    // sender context
+    without_completion_sender_ctxt.type = verbs_sender_ctxt::INTERNAL_FLOW_CONTROL;
+    without_completion_sender_ctxt.ctxt.res = this;
+
     cout << "Established RDMA connection with node " << r_index << endl;
 }
 
@@ -314,11 +325,13 @@ void _resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int _resources::post_remote_send(const uint32_t id, const long long int offset, const long long int size,
+int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
                                  const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
     struct ibv_send_wr *bad_wr = NULL;
+
+    static std::atomic<long> counter = 0;
 
     // don't care where the read buffer is saved
     sge.addr = (uintptr_t)(read_buf + offset);
@@ -328,7 +341,7 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
     memset(&sr, 0, sizeof(sr));
     sr.next = NULL;
     // set the id for the work request, useful at the time of polling
-    sr.wr_id = id;
+    sr.wr_id = 0;
     sr.sg_list = &sge;
     sr.num_sge = 1;
     // set opcode depending on op parameter
@@ -341,6 +354,23 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
     }
     if(completion) {
         sr.send_flags = IBV_SEND_SIGNALED;
+        if (sctxt == nullptr) {
+            cerr << "post_remote_send(): sctxt cannot be nullptr for send with completion." << std::endl;
+            return EINVAL;
+        }
+        sr.wr_id = reinterpret_cast<uint64_t>(sctxt);
+    } else {
+        // increase the counter.
+        uint32_t my_slot = ++without_completion_send_cnt;
+        if(my_slot > without_completion_send_capacity) {
+            // spin on the counter until space released in queue pair
+            while(without_completion_send_cnt >= without_completion_send_capacity);
+        }
+        // set signal flag if required.
+        if ((my_slot+1)%without_completion_send_signal_interval == 0) {
+            sr.send_flags = IBV_SEND_SIGNALED;
+            sr.wr_id = reinterpret_cast<uint64_t>(&(this->without_completion_sender_ctxt));
+        }
     }
     if(op == 0 || op == 1) {
         // set the remote rkey and virtual address
@@ -349,7 +379,11 @@ int _resources::post_remote_send(const uint32_t id, const long long int offset, 
     }
     // there is a receive request in the responder side
     // , so we won't get any into RNR flow
-    auto ret = ibv_post_send(qp, &sr, &bad_wr);
+    int ret;
+    do {
+        ret = ibv_post_send(qp, &sr, &bad_wr);
+    } while(ret == ENOMEM);
+    counter ++;
     return ret;
 }
 
@@ -360,8 +394,8 @@ resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
 /**
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 0, false);
+void resources::post_remote_read(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -371,8 +405,8 @@ void resources::post_remote_read(const uint32_t id, const long long int size) {
  * start reading.
  * @param size The number of bytes to read from remote memory.
  */
-void resources::post_remote_read(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 0, false);
+void resources::post_remote_read(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 0, false);
     if(rc) {
         cout << "Could not post RDMA read, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -381,8 +415,8 @@ void resources::post_remote_read(const uint32_t id, const long long int offset, 
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 1, false);
+void resources::post_remote_write(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -394,22 +428,22 @@ void resources::post_remote_write(const uint32_t id, const long long int size) {
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources::post_remote_write(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 1, false);
+void resources::post_remote_write(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 1, false);
     if(rc) {
         cout << "Could not post RDMA write with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 1, true);
+void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_remote_send(sctxt, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 1, true);
+void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_remote_send(sctxt, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -423,8 +457,8 @@ resources_two_sided::resources_two_sided(int r_index, char *write_addr, char *re
  * @param size The number of bytes to write from the local buffer to remote
  * memory.
  */
-void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 2, false);
+void resources_two_sided::post_two_sided_send(const long long int size) {
+    int rc = post_remote_send(nullptr, 0, size, 2, false);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -436,28 +470,28 @@ void resources_two_sided::post_two_sided_send(const uint32_t id, const long long
  * @param size The number of bytes to write from the local buffer into remote
  * memory.
  */
-void resources_two_sided::post_two_sided_send(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 2, false);
+void resources_two_sided::post_two_sided_send(const long long int offset, const long long int size) {
+    int rc = post_remote_send(nullptr, offset, size, 2, false);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int size) {
-    int rc = post_remote_send(id, 0, size, 2, true);
+void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_remote_send(sctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_remote_send(id, offset, size, 2, true);
+void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_remote_send(sctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-int resources_two_sided::post_receive(const uint32_t id, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     struct ibv_recv_wr rr;
     struct ibv_sge sge;
     struct ibv_recv_wr *bad_wr;
@@ -470,7 +504,7 @@ int resources_two_sided::post_receive(const uint32_t id, const long long int off
     /* prepare the receive work request */
     memset(&rr, 0, sizeof(rr));
     rr.next = NULL;
-    rr.wr_id = id;
+    rr.wr_id = reinterpret_cast<uint64_t>(sctxt);
     rr.sg_list = &sge;
     rr.num_sge = 1;
 
@@ -479,15 +513,15 @@ int resources_two_sided::post_receive(const uint32_t id, const long long int off
     return ret;
 }
 
-void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int size) {
-    int rc = post_receive(id, 0, size);
+void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size) {
+    int rc = post_receive(sctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(const uint32_t id, const long long int offset, const long long int size) {
-    int rc = post_receive(id, offset, size);
+void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+    int rc = post_receive(sctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
@@ -515,6 +549,7 @@ void polling_loop() {
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
+    struct verbs_sender_ctxt* sctxt;
 
     while(!shutdown) {
         poll_result = 0;
@@ -525,24 +560,44 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
             }
         }
         if(poll_result) {
-            break;
+            // not sure what to do when we cannot read entries off the CQ
+            // this means that something is wrong with the local node
+            if(poll_result < 0) {
+                cout << "Poll completion failed" << endl;
+                exit(-1);
+            }
+            // check the completion status (here we don't care about the completion
+            sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
+            // opcode)
+            if(wc.status != IBV_WC_SUCCESS) {
+                cerr << "got bad completion with status: "
+                     << wc.status << ", vendor syndrome: "
+                     << wc.vendor_err << std::endl;
+                if (sctxt == nullptr) {
+                    cerr << "WARNING: unsignaled work request failed found in " << __func__ << "(). Ignoring..." << std::endl;
+                } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                    cerr << "WARNING: skip a bad completion for flow control of messages without completion."
+                         << std::endl;
+                    sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
+                    continue;
+                } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
+                    return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
+                }
+            } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                // internal flow control path, we continue to wait for the completion for explicit send with complition.
+                sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
+                continue;
+            } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
+                // normal path
+                break;
+            } else {
+                // this should not happen.
+                cerr << "WARNING: unknown sender context type:" << sctxt->type << "." << std::endl;
+            }
         }
         // util::polling_data.wait_for_requests();
     }
-    // not sure what to do when we cannot read entries off the CQ
-    // this means that something is wrong with the local node
-    if(poll_result < 0) {
-        cout << "Poll completion failed" << endl;
-        exit(-1);
-    }
-    // check the completion status (here we don't care about the completion
-    // opcode)
-    if(wc.status != IBV_WC_SUCCESS) {
-        cout << "got bad completion with status: "
-             << wc.status << ", vendor syndrome: " << wc.vendor_err;
-        return {wc.wr_id, {wc.qp_num, -1}};
-    }
-    return {wc.wr_id, {wc.qp_num, 1}};
+    return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
 }
 
 /** Allocates memory for global RDMA resources. */
@@ -571,7 +626,8 @@ void resources_create() {
         cout << "NO RDMA device present" << endl;
     }
     // search for the specific device we want to work with
-    for(i = 1; i < num_devices; i++) {
+    char* dev_name = strdup(derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
+    for(i = 0; i < num_devices; i++) {
         if(!dev_name) {
             dev_name = strdup(ibv_get_device_name(dev_list[i]));
             fprintf(stdout, "device not specified, using first one found: %s\n",
@@ -582,6 +638,7 @@ void resources_create() {
             break;
         }
     }
+    free(static_cast<void*>(dev_name));
     // if the device wasn't found in host
     if(!ib_dev) {
         cout << "No RDMA devices found in the host" << endl;
@@ -625,24 +682,44 @@ void resources_create() {
     polling_thread.detach();
 }
 
-bool add_node(uint32_t new_id, const std::string new_ip_addr) {
-    return sst_connections->add_node(new_id, new_ip_addr);
+bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return sst_connections->add_node(new_id, new_ip_addr_and_port);
 }
+
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {
+    return external_client_connections->add_node(new_id, new_ip_addr_and_port);
+}
+
 bool remove_node(uint32_t node_id) {
-    return sst_connections->delete_node(node_id);
+    if (sst_connections->contains_node(node_id)) {
+        return sst_connections->delete_node(node_id);
+    } else {
+        return external_client_connections->delete_node(node_id);
+    }
 }
 
 bool sync(uint32_t r_index) {
     int s = 0, t = 0;
-    return sst_connections->exchange(r_index, s, t);
+    if (sst_connections->contains_node(r_index)) {
+        return sst_connections->exchange(r_index, s, t);
+    } else {
+        return external_client_connections->exchange(r_index, s, t);
+    }
+}
+
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
+    external_client_connections->filter_to(live_nodes_list);
 }
 
 /**
  * @details
  * This must be called before creating or using any SST instance.
  */
-  void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_ports, uint32_t node_rank) {
-    sst_connections = new tcp::tcp_connections(node_rank, ip_addrs_and_ports);
+void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
+                        const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_external_ports, 
+                        uint32_t node_id) {
+    sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_sst_ports);
+    external_client_connections = new tcp::tcp_connections(node_id, ip_addrs_and_external_ports);
 
     // init all of the resources, so cleanup will be easy
     resources_init();

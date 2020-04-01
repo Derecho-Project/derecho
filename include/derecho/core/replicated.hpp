@@ -95,7 +95,7 @@ private:
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     _Group* group;
     /** The version number being processed and corresponding timestamp */
-    persistent::version_t next_version = INVALID_VERSION;
+    persistent::version_t next_version = persistent::INVALID_VERSION;
     uint64_t next_timestamp_us = 0;
 
 public:

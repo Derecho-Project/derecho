@@ -28,6 +28,9 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<uint16_t*>(joiner_rdmc_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_rdmc_ports[row] + num_changes_installed),
            (old_sst.joiner_rdmc_ports.size() - num_changes_installed) * sizeof(uint16_t));
+    memcpy(const_cast<uint16_t*>(joiner_external_ports[local_row]),
+           const_cast<const uint16_t*>(old_sst.joiner_external_ports[row] + num_changes_installed),
+           (old_sst.joiner_external_ports.size() - num_changes_installed) * sizeof(uint16_t));
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }
@@ -66,6 +69,9 @@ void DerechoSST::init_local_change_proposals(const int other_row) {
     memcpy(const_cast<uint16_t*>(joiner_rdmc_ports[local_row]),
            const_cast<const uint16_t*>(joiner_rdmc_ports[other_row]),
            joiner_rdmc_ports.size() * sizeof(uint16_t));
+    memcpy(const_cast<uint16_t*>(joiner_external_ports[local_row]),
+           const_cast<const uint16_t*>(joiner_external_ports[other_row]),
+           joiner_external_ports.size() * sizeof(uint16_t));
     num_changes[local_row] = num_changes[other_row];
     num_committed[local_row] = num_committed[other_row];
     num_acked[local_row] = num_acked[other_row];
@@ -112,6 +118,10 @@ std::string DerechoSST::to_string() const {
         s << "}, joiner_rdmc_ports={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << joiner_rdmc_ports[row][n] << " ";
+        }
+        s << "}, joiner_external_ports={ ";
+        for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
+            s << joiner_external_ports[row][n] << " ";
         }
         s << "}, seq_num={ ";
         for(unsigned int n = 0; n < seq_num.size(); n++) {

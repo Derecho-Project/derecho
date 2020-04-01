@@ -1,12 +1,14 @@
 language: cpp
 os: linux
-dist: xenial
+dist: bionic
 sudo: required
 
 before_install:
   - ifconfig
   - sudo apt-get install librdmacm-dev
   - sudo apt-get install libibverbs-dev
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb
+  - sudo apt install ./libspdlog-dev_1.3.1-1_amd64.deb
   - if [ -n "$GCC_VERSION" ]; then export CXX="g++-${GCC_VERSION}" CC="gcc-${GCC_VERSION}"; fi
   - if [ -n "$CLANG_VERSION" ]; then export CXX="clang++-${CLANG_VERSION}" CC="clang-${CLANG_VERSION}"; fi
   - which $CXX
@@ -17,7 +19,6 @@ before_install:
 install:
   - chmod +x scripts/prerequisites/*.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-libfabric.sh
-  - sudo env "PATH=$PATH" scripts/prerequisites/install-spdlog.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-containers.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-tasks.sh

@@ -22,15 +22,29 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::report_failure(const node_id_t who) {
+    const auto& members = view_manager.get_members();
+    if (std::count(members.begin(), members.end(), who)) {
+        // internal member
+        view_manager.report_failure(who);
+    } else {
+        // external client
+        dbg_default_debug("External client with id {} failed, doing cleanup", who);
+        connections->remove_connections({who});
+        sst::remove_node(who);
+    }
+}
+
 void RPCManager::create_connections() {
-    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{
+    connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             nid,
-            {nid},
 	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
             view_manager.view_max_rpc_window_size,
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
 	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
-            view_manager.view_max_rpc_reply_payload_size + sizeof(header)});
+            view_manager.view_max_rpc_reply_payload_size + sizeof(header),
+            false,
+            [this](const uint32_t node_id) { report_failure(node_id); }});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
@@ -121,7 +135,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                           reply_size = size;
                           if(reply_size <= connections->get_max_p2p_reply_size()) {
                               reply_buf = (char*)connections->get_sendbuffer_ptr(
-                                      connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
+                                      sender_id, sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;
                           } else {
                               // the reply size is too large - not part of the design to handle it
@@ -153,7 +167,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         }
     } else if(reply_size > 0) {
         //Otherwise, the only thing to do is send the reply (if there was one)
-        connections->send(connections->get_node_rank(sender_id));
+        connections->send(sender_id);
     }
 
     // clear the thread local rpc_handler context
@@ -176,12 +190,12 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
                             reply_size = _size;
                             if(reply_size <= buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
-                                        connections->get_node_rank(sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                                        sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             }
                             return nullptr;
                         });
         if(reply_size > 0) {
-            connections->send(connections->get_node_rank(sender_id));
+            connections->send(sender_id);
         }
     } else if(RPC_HEADER_FLAG_TST(flags, CASCADE)) {
         // TODO: what is the lifetime of msg_buf? discuss with Sagar to make
@@ -200,7 +214,8 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 void RPCManager::new_view_callback(const View& new_view) {
     {
         std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-        connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+        connections->remove_connections(new_view.departed);
+        connections->add_connections(new_view.members);
     }
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
@@ -230,6 +245,11 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
+void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
+    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+    connections->add_connections(node_ids);
+}
+
 bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
@@ -240,21 +260,20 @@ bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending
 volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
     volatile char* buf;
     int curr_vid = -1;
-    uint32_t dest_rank = 0;
     do {
         //This lock also prevents connections from being reassigned (because that happens
         //in new_view_callback), so we don't need p2p_connections_mutex
         std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
         //Check to see if the view changed between iterations of the loop, and re-get the rank
         if(curr_vid != view_manager.curr_view->vid) {
-            try {
-                dest_rank = connections->get_node_rank(dest_id);
-            } catch(std::out_of_range& map_error) {
-                throw node_removed_from_group_exception(dest_id);
-            }
             curr_vid = view_manager.curr_view->vid;
         }
-        buf = connections->get_sendbuffer_ptr(dest_rank, type);
+        try {
+            buf = connections->get_sendbuffer_ptr(dest_id, type);
+        } catch(std::out_of_range& map_error) {
+            throw node_removed_from_group_exception(dest_id);
+        }
+
     } while(!buf);
     return buf;
 }
@@ -264,7 +283,7 @@ void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_
         //This lock also prevents connections from being reassigned (because that happens
         //in new_view_callback), so we don't need p2p_connections_mutex
         std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
-        connections->send(connections->get_node_rank(dest_id));
+        connections->send(dest_id);
     } catch(std::out_of_range& map_error) {
         throw node_removed_from_group_exception(dest_id);
     }
@@ -305,17 +324,17 @@ void RPCManager::fifo_worker() {
                             reply_size = _size;
                             if(reply_size <= request.buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
-                                        connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                                        request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             }
                             return nullptr;
                         });
         if(reply_size > 0) {
-            connections->send(connections->get_node_rank(request.sender_id));
+            connections->send(request.sender_id);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            char* buf = connections->get_sendbuffer_ptr(connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+            char* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
             buf[0] = 0;
-            connections->send(connections->get_node_rank(request.sender_id));
+            connections->send(request.sender_id);
         }
     }
 }
@@ -344,9 +363,10 @@ void RPCManager::p2p_receive_loop() {
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
-            p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-            connections->update_incoming_seq_num();
-
+            if (reply_pair.first != INVALID_NODE_ID) {
+                p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                connections->update_incoming_seq_num();
+            }
             // update last time
             clock_gettime(CLOCK_REALTIME, &last_time);
         } else {

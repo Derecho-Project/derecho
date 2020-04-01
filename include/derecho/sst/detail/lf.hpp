@@ -7,11 +7,15 @@
  * including the Resources class and global setup functions.
  */
 
+#include <iostream>
 #include <map>
 #include <rdma/fabric.h>
+#include <rdma/fi_errno.h>
 #include <thread>
 
 #include <derecho/core/derecho_type_definitions.hpp>
+#include <derecho/core/detail/connection_manager.hpp>
+#include <derecho/utils/logger.hpp>
 
 #ifndef LF_VERSION
 #define LF_VERSION FI_VERSION(1, 5)
@@ -20,8 +24,13 @@
 namespace sst {
 
 struct lf_sender_ctxt {
-    uint32_t ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
-    uint32_t remote_id;  // thread id of the sender
+    uint32_t _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
+    uint32_t _remote_id;  // thread id of the sender
+    // getters and setters
+    uint32_t ce_idx() {return _ce_idx;}
+    uint32_t remote_id() {return _remote_id;}
+    void set_ce_idx(const uint32_t& idx) {_ce_idx = idx;}
+    void set_remote_id(const uint32_t& rid) {_remote_id = rid;}
 };
 
 /**
@@ -161,9 +170,13 @@ public:
 };
 
 /**
- * Adds a new node to the SST TPC connections set.
+ * Adds a new node to the SST TCP connections set.
  */
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+/**
+ * Adds a new node to external client connections set.
+ */
+bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 /**
  * Removes a node from the SST TCP connections set
  */
@@ -174,14 +187,24 @@ bool remove_node(uint32_t node_id);
  * @param r_id - ID of the node to exchange data with.
  */
 bool sync(uint32_t r_id);
+/**
+ * Compares the set of external client connections to a list of known live nodes and
+ * removes any connections to nodes not in that list. This is used to
+ * filter out connections to nodes that were removed from the view.
+ * @param live_nodes_list A list of node IDs whose connections should be
+ * retained; all other connections will be deleted.
+ */
+void filter_external_to(const std::vector<node_id_t>& live_nodes_list);
 /** 
  * Initializes the global libfabric resources. Must be called before creating
  * or using any SST instance. 
  * 
- * @param ip_addrs_and_ports A map from id to (IP address, port) pairs
+ * @param internal_ip_addrs_and_ports A map from id to (IP address, port) pairs for internal group members
+ * @param external_ip_addrs_and_ports A map from id to (IP address, port) pairs for external connections
  * @param node_id id of this node.
  */
-void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
+void lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
+                   const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
                    uint32_t node_id);
 /** Polls for completion of a single posted remote write. */
 std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
@@ -189,6 +212,79 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion();
 void shutdown_polling_thread();
 /** Destroys the global libfabric resources. */
 void lf_destroy();
+
+/* -------- Error-handling tools -------- */
+
+/**
+ * Internal-only enum describing what action error-handling functions should
+ * take if a LibFabric function fails.
+ */
+enum NextOnFailure {
+    REPORT_ON_FAILURE = 0,//!< REPORT_ON_FAILURE Print an error message, but continue
+    CRASH_ON_FAILURE = 1  //!< CRASH_ON_FAILURE Print an error message, then exit the entire program
+};
+
+/**
+ * Calls a LibFabrics function with any number of arguments forwarded via perfect
+ * forwarding. If the function returns the FI_EAGAIN error code, keeps calling it
+ * again with the same arguments. If the function returns any other error code,
+ * prints an error message containing the "description" argument, then either
+ * crashes the program or returns the error code depending on the value of the
+ * "failure_mode" argument.
+ *
+ * @param description A description of the LibFabrics operation being performed,
+ * for debugging purposes. Will be printed in the error message if this
+ * operation fails.
+ * @param failure_mode An enum value representing what to do if the LibFabric
+ * function returns a failure other than EAGAIN
+ * @param lf_function A pointer to the LibFabrics function to call
+ * @param lf_args The arguments to call the LibFabrics function with
+ * @return The same return value returned by the LibFabrics function
+ */
+template<typename FuncType, typename... ArgTypes>
+inline int64_t fail_if_nonzero_retry_on_eagain(const std::string& description, const NextOnFailure& failure_mode,
+                                               FuncType lf_function, ArgTypes&& ... lf_args) {
+    //Some lf functions return int, others return ssize_t, but both will fit in an int64_t
+    int64_t return_code;
+    do {
+        return_code = (*lf_function)(std::forward<ArgTypes>(lf_args)...);
+    } while(return_code == -FI_EAGAIN);
+    if(return_code != 0) {
+        dbg_default_error("LibFabric error! Return code = {}. Operation description: {}", return_code, description);
+        std::cerr << "LibFabric error! Ret=" << return_code << ", desc=" << description << std::endl;
+        if(failure_mode == CRASH_ON_FAILURE) {
+            dbg_default_flush();
+            exit(-1);
+        }
+    }
+    return return_code;
+}
+
+/**
+ * Calls a C function that may return either a pointer or NULL, forwarding
+ * all of its arguments by copy (because C functions don't understand
+ * references). If the function succeeds, returns the pointer; if the function
+ * returns NULL, prints an error message and crashes.
+ *
+ * @param description A description of the operation being performed, which
+ * will be printed with the error message if it fails.
+ * @param c_func A pointer to the C function to call
+ * @param args The arguments to call the C function with
+ * @return The pointer that the C function returns
+ */
+template<typename FuncType, typename... ArgTypes>
+inline std::invoke_result_t<FuncType, ArgTypes...> crash_if_nullptr(const std::string& description,
+                                                                    FuncType c_func, ArgTypes ... args) {
+    std::invoke_result_t<FuncType, ArgTypes...> return_val = (*c_func)(args...);
+    if(return_val == nullptr) {
+        dbg_default_error("Null pointer error in lf.cpp! Description: {}", description);
+        std::cerr << "Null pointer error in lf.cpp! Description: " << description << std::endl;
+        dbg_default_flush();
+        exit(-1);
+    }
+    return return_val;
+}
+
 }  // namespace sst
 
 #endif  // LF_HPP

@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
-set(CMAKE_CXX_FLAGS "-fPIC -std=c++1z -Wall")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -Wall -ggdb -gdwarf-3 -D_DEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -ggdb -gdwarf-3 -D_PERFORMANCE_DEBUG")
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
@@ -25,3 +21,6 @@ target_link_libraries(delivery_order_test derecho)
 
 add_executable(subgroup_function_tester subgroup_function_tester.cpp)
 target_link_libraries(subgroup_function_tester derecho)
+
+add_executable(log_restart_test log_restart_test.cpp)
+target_link_libraries(log_restart_test derecho)

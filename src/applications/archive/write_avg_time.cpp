@@ -58,9 +58,9 @@ int main() {
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(ip_addrs_and_ports, {}, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
 
     auto nodes_list = compute_nodes_list(node_rank, num_nodes);
@@ -72,8 +72,11 @@ int main() {
             char *write_buf, *read_buf;
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
-
+#ifdef USE_VERBS_API
+            resources res(remote_rank, read_buf, write_buf, size, size);
+#else
             resources res(remote_rank, read_buf, write_buf, size, size, (uint32_t) remote_rank > node_rank);
+#endif
 
             // start the timing experiment
             struct timespec start_time;
@@ -108,7 +111,11 @@ int main() {
             write_buf = (char *)malloc(size);
             read_buf = (char *)malloc(size);
 
+#ifdef USE_VERBS_API
+            resources res(remote_rank, read_buf, write_buf, size, size);
+#else
             resources res(remote_rank, read_buf, write_buf, size, size, (uint32_t) remote_rank > node_rank);
+#endif
 
             // start the timing experiment
             struct timespec start_time;
