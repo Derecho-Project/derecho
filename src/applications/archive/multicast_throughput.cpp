@@ -53,14 +53,14 @@ int main(int argc, char* argv[]) {
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, ip_addrs_and_ports, node_id);
+    verbs_initialize(ip_addrs_and_ports, {}, node_id);
 #else
-    lf_initialize(ip_addrs_and_ports, ip_addrs_and_ports, node_id);
+    lf_initialize(ip_addrs_and_ports, {}, node_id);
 #endif
 
     std::vector<uint32_t> members;
     for(const auto& p : ip_addrs_and_ports) {
-        members.push_back(p.first); 
+        members.push_back(p.first);
     }
 
     uint32_t num_senders = num_nodes, row_offset = 0;
@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
                 }
             }
             bool time_to_push = true;
-            for(uint j = 0; j < num_senders; ++j) {
+            for(uint j = 0; completed.size() > 0 && j < num_senders; ++j) {
                 if(completed[j]) {
                     continue;
                 }
@@ -134,6 +134,9 @@ int main(int argc, char* argv[]) {
             if(time_to_push) {
                 break;
             }
+	    if(completed.size() > 0) {
+		break;
+	    }
         }
         sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
                 sizeof(sst.num_received_sst[0][0]) * num_senders);
