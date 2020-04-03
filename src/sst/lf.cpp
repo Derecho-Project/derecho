@@ -743,7 +743,8 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
     fail_if_nonzero_retry_on_eagain("fi_domain()", CRASH_ON_FAILURE,
                                     fi_domain, g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), nullptr);
-    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
+    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size*internal_ip_addrs_and_ports.size() +
+                          g_ctxt.fi->tx_attr->size*external_ip_addrs_and_ports.size();
     fail_if_nonzero_retry_on_eagain("initialize tx completion queue.", REPORT_ON_FAILURE,
                                     fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
 
