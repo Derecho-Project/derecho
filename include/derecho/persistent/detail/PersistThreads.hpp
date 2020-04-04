@@ -10,6 +10,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <iostream>
 
 #define NUM_IO_THREAD 1
 #define NUM_METADATA_THREAD 1
@@ -25,13 +26,12 @@
 #define SPDK_LOG_ADDRESS_SPACE ((1ULL << (SPDK_SEGMENT_BIT + 11)) >> 6)  // address space per log is 1TB
 #define SPDK_NUM_SEGMENTS \
     ((SPDK_LOG_ADDRESS_SPACE / SPDK_NUM_LOGS_SUPPORTED) - 256)
-#define LOG_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
-#define DATA_AT_TABLE(idx) (m_PersistThread->pt_global_metadata.fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
+#define LOG_AT_TABLE(idx) (m_PersistThread->pt_global_metadata->fields.log_metadata_entries[idx].fields.log_metadata_address.segment_log_entry_at_table)
+#define DATA_AT_TABLE(idx) (m_PersistThread->pt_global_metadata->fields.log_metadata_entries[idx].fields.log_metadata_address.segment_data_at_table)
 
-// Number of sectors
-#define LOG_BUFFER_SIZE 1
-#define DATA_BUFFER_SIZE 1
-#define READ_BUFFER_SIZE 1
+#define LOG_BUFFER_SIZE 2048 //# of LogEntrys
+#define DATA_BUFFER_SIZE (1ULL << 16) //# of sectors
+#define READ_BUFFER_SIZE 256 //# of batches
 #define READ_BATCH_BIT 15
 
 namespace persistent {
@@ -137,6 +137,8 @@ struct atomic_sub_req {
 struct data_write_cbfn_args {
     uint32_t id;            //Log id
     int64_t ver;            //Log version the request is attached to
+    int64_t new_written_idx;
+    uint64_t new_written_addr;
     void* buf;              //Pointer to write buffer
     std::atomic<int>* completed; //Number of completed sub request
     int num_sub_req;        //Number of sub requests
@@ -177,7 +179,7 @@ typedef struct log_metadata {
     /**The largest index of persisted log entry*/
     std::atomic<int64_t> last_written_idx;
     std::atomic<int64_t> last_submitted_idx;
-    pthread_mutex_t log_write_buffer_lock;
+    std::mutex log_write_buffer_lock;
     /**The highest ver that has been written for each PersistLog. */
     int64_t last_written_ver;
     /**The smallest address of data in buffer*/
@@ -185,45 +187,45 @@ typedef struct log_metadata {
     /**The largest address of data written*/
     std::atomic<uint64_t> last_written_addr;
     std::atomic<uint64_t> last_submitted_addr;
-    pthread_mutex_t data_write_buffer_lock; 
+    std::mutex data_write_buffer_lock; 
+    /**file des for data_write_buffer and read_buffer */
+    int dw_fd;
+    
+    
+    uint8_t* log_read_buffer;
+    int log_rd_fd;
+    uint8_t* data_read_buffer;
+    int data_rd_fd;
+    /**Map nvme_bid to length of the in-buffer part*/
+    std::unordered_map<uint64_t, uint32_t> log_read_buf_index; 
+    /**Map readbuf_bid to nvme_bid*/
+    std::unordered_map<uint16_t, uint64_t> log_idx_to_batch;
+    // -1=waiting for read req 0=cleared positive=being used
+    std::atomic<int> log_idx_to_numref[READ_BUFFER_SIZE];
+    std::mutex log_idx_to_mtx[READ_BUFFER_SIZE];
+    std::condition_variable log_idx_to_cv[READ_BUFFER_SIZE];
+    std::unordered_map<uint64_t, uint8_t> log_batch_to_numref;
+    //-----------------DATA READ BUFFER----------------
+    std::unordered_map<uint64_t, uint32_t> data_read_buf_index;
+    std::unordered_map<uint16_t, uint64_t> data_idx_to_batch;
+    std::atomic<int> data_idx_to_numref[READ_BUFFER_SIZE];
+    std::mutex data_idx_to_mtx[READ_BUFFER_SIZE];
+    std::condition_variable data_idx_to_cv[READ_BUFFER_SIZE];
+    
+
     // bool operator
     bool operator==(const struct log_metadata& other) {
         return (this->persist_metadata_info->fields.head == other.persist_metadata_info->fields.head)
-               && (this->persist_metadata_INfo->fields.tail == other.persist_metadata_info->fields.tail)
+               && (this->persist_metadata_info->fields.tail == other.persist_metadata_info->fields.tail)
                && (this->persist_metadata_info->fields.ver == other.persist_metadata_info->fields.ver);
     }
 } LogMetadata;
 
-class Guard {
-    protected:
-        std::atomic<int>* counter = nullptr;
-
-    public:
-        Guard(){}
-        Guard(std::atomic<int>* counter):counter(counter){}
-        Guard(Guard&& rhs):counter(rhs.counter){}
-        Guard(const Guard& rhs) = delete;
-        
-        void swap(Guard&& rhs) {
-            std::atomic<int>* tmp = this->counter;
-            this->counter = rhs.counter;
-            rhs.counter = tmp;
-        }
-
-        void operator = (Guard&& rhs) {
-            swap(std::move(rhs));
-        }
-
-        virtual ~Guard() {
-            if (counter != nullptr) {
-                (*counter)--;
-            }
-        }
-}
 
 class PersistThreads {
 protected:
-    //----------------------------SPDK Related Info--------------------------------
+    
+	//----------------------------SPDK Related Info--------------------------------
     /** SPDK qpair for threads handling data and log entry io requests. */
     spdk_nvme_qpair* spdk_qpair[NUM_IO_THREAD];
     /** SPDK qpair for threads handling metadata write requests. */
@@ -254,8 +256,7 @@ protected:
 	
     //------------------------Metadata entries of each log-------------------------
     /** Array of all up-to-date metadata entries. */
-    GlobalMetadata pt_global_metadata;
-    LogMetadata metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
+    GlobalMetadata* pt_global_metadata;
     /** Array of all to-be-written metadata entries with highest ver w.r.t each PersitLog. */
     PreWriteMetadata to_write_metadata[SPDK_NUM_LOGS_SUPPORTED];
  
@@ -282,16 +283,6 @@ protected:
     int initialize_threads();
     
     //-------------------------Read Buffer-----------------------------------------
-    uint8_t* read_buffer;
-    /**Map nvme_bid to readbuf_bid and length of the in-buffer part*/
-    std::unordered_map<uint64_t, std::pair<uint16_t, uint32_t>> read_buf_index; 
-    /**Map readbuf_bid to nvme_bid*/
-    std::unordered_map<uint16_t, uint64_t> idx_to_batch;
-    /**Map nvme_bid to number of references*/
-    std::unordered_map<uint64_t, uint8_t> batch_to_numref;
-    std::list<uint64_t> lru_list;
-    std::atomic<uint8_t> next_read_idx;
-    pthread_mutex_t read_buffer_lock;
 
     //-------------------------SPDK call back functions----------------------------
     /** Spdk device probing callback function. */
@@ -320,10 +311,110 @@ protected:
      * @param args - a pair of dlen and io thread id */
     static void dummy_request_complete(void* args, const struct spdk_nvme_cpl* completion); 
 
-    int non_atomic_rw(char* buf, uint32_t data_length, uint64_t virtaddress, int blocking_mode, int content_type, bool is_write, uint32_t id);
-    int atomic_w(std::vector<atomic_sub_req> sub_requests, PTLogMetadataInfo metadata, uint32_t id);
+    static int metadata_io_thread_fn(void* arg);
+    static int data_io_thread_fn(void* arg);
+
+    int non_atomic_rw(char* buf, uint32_t data_length, uint64_t virtaddress, int blocking_mode, int content_type, bool is_write, const uint32_t id);
+    int atomic_w(std::vector<atomic_sub_req> sub_requests, PTLogMetadataInfo metadata, const uint32_t id, int64_t new_written_idx, uint64_t new_written_addr);
 
 public:
+    class Guard {
+	    public:
+	    // protected:
+            uint16_t batch_start;
+	        uint16_t num_batch;
+            uint32_t id;
+	        bool from_write_buffer;
+            bool is_logentry;
+
+       // public:
+            Guard():num_batch(0),
+	        from_write_buffer(false){}
+            Guard(uint16_t batch_start, uint16_t num_batch, uint32_t id, bool fwb, bool il):batch_start(batch_start),
+                                                                                            num_batch(num_batch),
+                                                                                            id(id),
+                                                                                            from_write_buffer(fwb),
+	                                                                                        is_logentry(il){}
+            Guard(Guard&& rhs):batch_start(rhs.batch_start),
+	                           num_batch(rhs.num_batch),
+                               id(rhs.id),
+                               from_write_buffer(rhs.from_write_buffer),
+	                           is_logentry(rhs.is_logentry){
+                rhs.num_batch = 0;
+                rhs.from_write_buffer = false;		
+            }
+	    
+            Guard(const Guard& rhs) = delete;
+
+            void swap(Guard&& rhs) {
+                uint16_t tmp_bs = this->batch_start;
+                uint16_t tmp_nb = this->num_batch;
+                uint32_t tmp_id = this->id;
+                bool tmp_fwb = this->from_write_buffer;
+                bool tmp_il = this->is_logentry;
+
+                this->batch_start = rhs.batch_start;
+                this->num_batch = rhs.num_batch;
+                this->id = rhs.id;
+                this->from_write_buffer = rhs.from_write_buffer;
+                this->is_logentry = rhs.is_logentry;
+
+                rhs.batch_start = tmp_bs;
+                rhs.num_batch = tmp_nb;
+                rhs.id = tmp_id;
+                rhs.from_write_buffer = tmp_fwb;
+                rhs.is_logentry = tmp_il;
+            }
+
+            void operator = (Guard&& rhs) {
+                swap(std::move(rhs));
+            }
+            
+            virtual ~Guard() {
+                if (this->from_write_buffer) {
+                    get()->metadata_entries[id].log_write_buffer_lock.unlock();
+                    return;
+                }
+                
+                if (this->num_batch > 0) {
+                    for (uint16_t i = 0; i < (this->batch_start + this->num_batch - READ_BUFFER_SIZE - 1); i++) {
+                        if (is_logentry) {
+                            get()->metadata_entries[id].log_idx_to_mtx[i].lock();
+                            (get()->metadata_entries[id].log_idx_to_numref[i])--;
+                            if (get()->metadata_entries[id].log_idx_to_numref[i] == 0) {
+                                get()->metadata_entries[id].log_idx_to_cv[i].notify_one();
+                            }
+                            get()->metadata_entries[id].log_idx_to_mtx[i].unlock();
+                        } else {
+                            get()->metadata_entries[id].data_idx_to_mtx[i].lock();
+                            (get()->metadata_entries[id].data_idx_to_numref[i])--;
+                            if (get()->metadata_entries[id].data_idx_to_numref[i] == 0) {
+                                get()->metadata_entries[id].data_idx_to_cv[i].notify_one();
+                            }
+                            get()->metadata_entries[id].data_idx_to_mtx[i].unlock();
+                        }
+                    }
+
+                    for (uint16_t i = batch_start; i < std::min(this->batch_start + this->num_batch, READ_BUFFER_SIZE); i++) {
+                        if (is_logentry) {
+                            get()->metadata_entries[id].log_idx_to_mtx[i].lock();
+                            (get()->metadata_entries[id].log_idx_to_numref[i])--;
+                            if (get()->metadata_entries[id].log_idx_to_numref[i] == 0) {
+                                get()->metadata_entries[id].log_idx_to_cv[i].notify_one();
+                            }
+                            get()->metadata_entries[id].log_idx_to_mtx[i].unlock();
+                        } else {
+                            get()->metadata_entries[id].data_idx_to_mtx[i].lock();
+                            (get()->metadata_entries[id].data_idx_to_numref[i])--;
+                            if (get()->metadata_entries[id].data_idx_to_numref[i] == 0) {
+                                get()->metadata_entries[id].data_idx_to_cv[i].notify_one();
+                            }
+                            get()->metadata_entries[id].data_idx_to_mtx[i].unlock();
+                        }
+                }
+            }
+	}
+    };
     /**
      * Constructor
      */
@@ -353,11 +444,12 @@ public:
 		    const HLC& mhlc);
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata);
-    version_t persist(const uint32_t& id);
+    const version_t persist(const uint32_t& id);
     std::tuple<LogEntry*, Guard> read_entry(const uint32_t& id, const int64_t& index);
     std::tuple<void*, Guard> read_data(const uint32_t& id, const int64_t& index);
     void* read_lba(const uint64_t& lba_index);
-    
+   
+    LogMetadata metadata_entries[SPDK_NUM_LOGS_SUPPORTED];
     /** Map log id to log entry space*/
     std::map<uint32_t, LogEntry*> id_to_log;
     static bool loaded;

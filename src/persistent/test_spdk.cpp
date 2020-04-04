@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
         if(strcmp(argv[1], "getentrybyindex") == 0){
             int64_t idx = atol(argv[2]);
             LogEntry log_entry = myLog.getLogEntry(idx);
-
+            
             cout << "output:" << endl;
             cout << "\tlog entry ver: " << log_entry.fields.ver << endl;
             cout << "\tlog entry dlen: " << log_entry.fields.dlen << endl;
@@ -79,12 +79,40 @@ int main(int argc, char** argv) {
             cout << "\tdlen: " << dlen << endl;
             
             myLog.append(v, dlen, ver, mhlc);
-            int64_t idx = myLog.getLatestIndex();
+            cout << "Completed appending" << endl;
+	    int64_t idx = myLog.getLatestIndex();
+	    cout << "Latest idx " << idx << endl;
             LogEntry log_entry = myLog.getLogEntry(idx);
+	    cout << "Completed reading" << endl;
             cout << "read entry:" << endl;
             cout << "\tver: " << log_entry.fields.ver << endl;
             cout << "\tdlen: " << log_entry.fields.dlen << endl;
-        } else if (strcmp(argv[1], "truncate") == 0) {
+	    myLog.getEntryByIndex(idx, printf);
+        } else if (strcmp(argv[1], "append") == 0) {
+            char* v = argv[2];
+	    int64_t ver = (int64_t)atoi(argv[3]);
+	    int64_t endver = (int64_t)atoi(argv[4]);
+            cout << "Ver " << ver << " Endver " << endver << endl;
+	    HLC mhlc;
+	    uint64_t dlen = strlen(v) + 1;
+	    cout << "Starting appending" << endl;
+            for (int64_t i = ver; i <= endver; i++) {
+                cout << "*********i is " << i << endl; 
+		myLog.append(v, dlen, i, mhlc);
+            }
+	    cout << "Appended" << endl;
+            for (int64_t i = 0; i <= endver - ver; i++) {
+	        myLog.getEntryByIndex(i, printf);
+            }	    
+	    cout << "Start persisting" << endl;
+	    myLog.persist();
+	    version_t pver = myLog.getLastPersisted();
+            while (pver < endver) {
+            	pver = myLog.getLastPersisted();
+		std::cout << "Get pver " << pver << std::endl;
+	    }
+	
+	} else if (strcmp(argv[1], "truncate") == 0) {
             int64_t ver = atol(argv[2]);
             myLog.truncate(ver);
         } else if (strcmp(argv[1], "zeroout") == 0) {
@@ -95,6 +123,10 @@ int main(int argc, char** argv) {
                 cout << "read data:" << endl;
                 cout << "\tdata: " << v << endl;
             });
+	    myLog.getEntryByIndex(index,[](char* v){
+                cout << "read data:" << endl;
+		cout << "\tdata:" << v << endl;
+	    });
         } else if (strcmp(argv[1], "getEntryByVer") == 0) {
             int64_t ver = (int64_t)atol(argv[2]);
             myLog.getEntryByIndex(ver,[](char* v){

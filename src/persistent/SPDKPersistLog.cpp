@@ -15,7 +15,7 @@ SPDKPersistLog::SPDKPersistLog(const std::string& name) noexcept(false) : Persis
     if(pthread_mutex_lock(&PersistThreads::get()->metadata_load_lock)) {
         throw derecho::derecho_exception("Failed to grab metadata_load_lock");
     }
-    // std::cout << "Loading log name: " << name << std::endl;
+    std::cout << "Loading log name: " << name << std::endl;
     PersistThreads::get()->load(name, &this->m_currLogMetadata);
     pthread_mutex_unlock(&PersistThreads::get()->metadata_load_lock);
 }
@@ -25,6 +25,7 @@ void SPDKPersistLog::append(const void* pdata,
                             const HLC& mhlc) noexcept(false) {
     std::shared_lock head_rlock(head_mutex);
     std::unique_lock tail_wlock(tail_mutex);
+    std::cout << "Append lock grabbed " << std::endl;
     if(ver <= METADATA.ver) {
         //throw an exception
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
@@ -85,7 +86,7 @@ int64_t SPDKPersistLog::getHLCIndex(const HLC& hlc) noexcept(false) {
     while(begin <= end) {
         int mid = (begin + end) / 2;
 	LogEntry* mid_entry;
-	Guard entry_guard;
+	PersistThreads::Guard entry_guard;
 	std::tie(mid_entry, entry_guard) = PersistThreads::get()->read_entry(METADATA.id, mid);
         if(mid_entry->fields.hlc_r == hlc.m_rtc_us) {
             res = mid;
@@ -108,7 +109,7 @@ int64_t SPDKPersistLog::getHLCIndex(const HLC& hlc) noexcept(false) {
 version_t SPDKPersistLog::getEarliestVersion() noexcept(false) {
     std::shared_lock head_rlock(head_mutex);
     LogEntry* earliest_entry;
-    Guard entry_guard;
+    PersistThreads::Guard entry_guard;
     std::tie(earliest_entry, entry_guard) = PersistThreads::get()->read_entry(METADATA.id, METADATA.head);
     return earliest_entry->fields.ver;
 }
@@ -124,7 +125,7 @@ int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
 	while(begin <= end) {
 		int mid = (begin + end) / 2;
 		LogEntry* mid_entry;
-		Guard entry_guard;
+		PersistThreads::Guard entry_guard;
 		std::tie(mid_entry, entry_guard) = PersistThreads::get()->read_entry(METADATA.id, mid);
 		if(!(mid_entry->fields.hlc_r < hlc.m_rtc_us || (mid_entry->fields.hlc_r == hlc.m_rtc_us && mid_entry->fields.hlc_l < hlc.m_logic))) {
 			end = mid - 1;
@@ -134,7 +135,7 @@ int64_t SPDKPersistLog::lower_bound(const HLC& hlc) {
 	}
 	if (end != METADATA.tail - 1) {
 		LogEntry* entry;
-		Guard guard;
+		PersistThreads::Guard guard;
         std::tie(entry, guard) = PersistThreads::get()->read_entry(METADATA.id, end + 1);
         if (entry->fields.hlc_r == hlc.m_rtc_us && entry->fields.hlc_l == hlc.m_logic) {
             end = end + 1;
@@ -175,7 +176,6 @@ void SPDKPersistLog::trimByIndex(const int64_t& idx) {
     }
 
     METADATA.head = idx + 1;
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
 }
 
 void SPDKPersistLog::trim(const version_t& ver) {
@@ -203,7 +203,6 @@ void SPDKPersistLog::trim(const version_t& ver) {
         ver);
     if(idx != -1) {
         METADATA.head = idx + 1;
-        PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
     }
     std::printf("Trimming by %ld\n", idx);
     std::cout.flush();
@@ -215,10 +214,14 @@ void SPDKPersistLog::trim(const HLC& hlc) {
 }
 
 const version_t SPDKPersistLog::getLastPersisted() {
-    return m_currLogMetadata.last_written_ver; 
+    return persist(); 
 }
 
 const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
+    if (!preLocked) {	    
+        std::unique_lock head_wlock(head_mutex);
+        std::unique_lock tail_wlock(tail_mutex);
+    }
     return PersistThreads::get()->persist(METADATA.id);
 }
 
@@ -231,10 +234,12 @@ void* SPDKPersistLog::getLBA(const uint64_t& lba_index) {
 // 1 - returning a struct causes copy
 // 2 - what will happen if read_entry read null??
 LogEntry SPDKPersistLog::getLogEntry(const int64_t& idx) {
+    std::cout << "Waiting on lock " << std::endl; 
     std::shared_lock head_rlock(head_mutex);
     std::shared_lock tail_rlock(tail_mutex);
+    std::cout << "Grabbed lock " << std::endl;
     LogEntry* entry;
-    Guard guard;
+    PersistThreads::Guard guard;
     std::tie(entry, guard) = PersistThreads::get()->read_entry(METADATA.id, idx);
     return *entry;
 }
@@ -247,7 +252,7 @@ size_t SPDKPersistLog::bytes_size(const int64_t& ver) {
     if(index != INVALID_INDEX) {
         while(index < METADATA.tail) {
             LogEntry* log_entry;
-            Guard guard;
+	    PersistThreads::Guard guard;
             std::tie(log_entry, guard) = PersistThreads::get()->read_entry(METADATA.id, index);
             bsize += sizeof(LogEntry) + log_entry->fields.dlen;
             index++;
@@ -270,13 +275,17 @@ size_t SPDKPersistLog::to_bytes(char* buf, const version_t& ver) {
     if(index != INVALID_INDEX) {
         while(index < METADATA.tail) {
             // Write log entry
-            // LogEntry* log_entry = PersistThreads::get()->read_entry(METADATA.id, index);
-            // std::copy((LogEntry*)(buf + ofst), (LogEntry*)(buf + ofst + sizeof(LogEntry)), log_entry);
-            // ofst += sizeof(LogEntry);
+            LogEntry* log_entry;
+	    PersistThreads::Guard log_guard; 
+            std::tie(log_entry, log_guard) = PersistThreads::get()->read_entry(METADATA.id, index);
+            std::copy((LogEntry*)(buf + ofst), (LogEntry*)(buf + ofst + sizeof(LogEntry)), log_entry);
+            ofst += sizeof(LogEntry);
             // Write data
-            // void* data = PersistThreads::get()->read_data(METADATA.id, index);
-            // std::copy((char*)(buf + ofst), (char*)(buf + ofst + log_entry->fields.dlen), (char*)data);
-            // ofst += log_entry->fields.dlen;
+            void* data;
+	    PersistThreads::Guard data_guard;
+            std::tie(data, data_guard) = PersistThreads::get()->read_data(METADATA.id, index);
+            std::copy((char*)(buf + ofst), (char*)(buf + ofst + log_entry->fields.dlen), (char*)data);
+            ofst += log_entry->fields.dlen;
             index++;
         }
     }
@@ -297,11 +306,15 @@ void SPDKPersistLog::post_object(const std::function<void(char const* const, std
     if(index != INVALID_INDEX) {
         while(index < METADATA.tail) {
             // Post Log entry
-            // LogEntry* log_entry = PersistThreads::get()->read_entry(METADATA.id, index);
-            // f((char*)&log_entry, sizeof(LogEntry));
+            LogEntry* log_entry;
+	    PersistThreads::Guard log_guard;
+            std::tie(log_entry, log_guard) = PersistThreads::get()->read_entry(METADATA.id, index);
+            f((const char*)log_entry, sizeof(LogEntry));
             // Post data
-            // void* data = PersistThreads::get()->read_data(METADATA.id, index);
-            // f((char*)&data, log_entry->fields.dlen);
+            void* data;
+	    PersistThreads::Guard data_guard;
+            std::tie(data, data_guard) = PersistThreads::get()->read_data(METADATA.id, index);
+            f((const char*)data, log_entry->fields.dlen);
             index++;
         }
     }
@@ -323,26 +336,13 @@ void SPDKPersistLog::applyLogTail(char const* v) {
             continue;
         } else {
             void* data = (void*)(v + ofst);
-
-            // LogEntry* next_log_entry
-            //        = PersistThreads::get()->read_entry(METADATA.id, METADATA.tail);
-            // std::copy(next_log_entry, next_log_entry + sizeof(LogEntry), log_entry);
-            // LogEntry* last_entry = PersistThreads::get()->read_entry(METADATA.id, METADATA.tail - 1);
-            // if(METADATA.tail - METADATA.head == 0) {
-            //    next_log_entry->fields.ofst = 0;
-            // } else {
-            //    next_log_entry->fields.ofst = last_entry->fields.ofst + last_entry->fields.dlen;
-            // }
-
-            // METADATA.ver = log_entry->fields.ver;
-            // METADATA.tail++;
-
-            // PersistThreads::get()->append(METADATA.id,
-            //                              (char*)data,
-            //                              last_entry->fields.dlen, &next_log_entry,
-            //                              METADATA.tail - 1,
-            //                              *m_currLogMetadata.persist_metadata_info);
-            // ofst += log_entry->fields.dlen;
+            HLC mhlc;
+	    mhlc.m_rtc_us = log_entry->fields.hlc_l;
+	    mhlc.m_logic = log_entry->fields.hlc_r;
+            PersistThreads::get()->append(METADATA.id,
+                                          (char*)data, log_entry->fields.dlen, log_entry->fields.ver,
+                                          mhlc);
+            ofst += log_entry->fields.dlen;
         }
     }
 }
@@ -363,7 +363,6 @@ void SPDKPersistLog::truncate(const version_t& ver) {
     if (METADATA.ver > ver) {
 	METADATA.ver = ver;
     }
-    PersistThreads::get()->update_metadata(METADATA.id, *m_currLogMetadata.persist_metadata_info);
 }
 
 void SPDKPersistLog::zeroout() {

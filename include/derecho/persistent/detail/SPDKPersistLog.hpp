@@ -11,6 +11,7 @@
 #include "spdk/nvme.h"
 #include <atomic>
 #include <bitset>
+#include <iostream>
 #include <condition_variable>
 #include <pthread.h>
 #include <queue>
@@ -96,16 +97,24 @@ protected:
 	    int64_t pivot = 0;
 	    while (begin <= end) {
 		pivot = (begin + end)/2;
-		const TKey p_key = keyGetter(PersistThreads::get()->read_entry(METADATA.id, pivot));
+		LogEntry* entry;
+		PersistThreads::Guard guard;
+		std::tie(entry, guard) = PersistThreads::get()->read_entry(METADATA.id, pivot);
+		const TKey p_key = keyGetter(entry);
 		if (p_key == key) {
 		    break;
 		} else if (p_key < key) {
 		    if (pivot + 1 >= METADATA.tail) {
 			break;
-		    } else if (keyGetter(PersistThreads::get()->read_entry(METADATA.id, pivot + 1)) > key) {
-			break;
 		    } else {
-			begin = pivot + 1;
+			    LogEntry* n_entry;
+                PersistThreads::Guard n_guard;
+                std::tie(n_entry, n_guard) = PersistThreads::get()->read_entry(METADATA.id, pivot + 1);
+                if (keyGetter(n_entry) > key) {
+				    break;
+			    } else {
+				    begin = pivot + 1;
+                }
 		    }
 		} else {
 		    end = pivot - 1;
@@ -174,9 +183,15 @@ public:
     // Get a version by entry number return both length and buffer
     template <typename ProcessLogEntryFunc>
     auto getEntryByIndex(const int64_t& eidx, const ProcessLogEntryFunc& process_entry) noexcept(false) {
-        std::shared_lock head_rlock(head_mutex);
+	std::cout << "Grabbing lock " << std::endl;
+	std::shared_lock head_rlock(head_mutex);
         std::shared_lock tail_rlock(tail_mutex);
-        return process_entry(static_cast<char*>(PersistThreads::get()->read_data(METADATA.id, eidx)));
+	
+	void* data;
+	PersistThreads::Guard guard;
+	std::cout << "Issuing read data " << std::endl;
+	std::tie(data, guard) = PersistThreads::get()->read_data(METADATA.id, eidx);
+	return process_entry(static_cast<char*>(data));
     }
 
     virtual void* getLBA(const uint64_t& lba_index);
