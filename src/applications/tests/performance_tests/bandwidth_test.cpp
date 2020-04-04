@@ -18,7 +18,7 @@
 #include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
 
-//#define ENABLE_LOGGING
+#define ENABLE_LOGGING
 
 #ifdef ENABLE_LOGGING
 #include <derecho/rdmc/rdmc.hpp>

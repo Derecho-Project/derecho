@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "sst.hpp"
+#include <derecho/rdmc/detail/util.hpp>
 
 namespace sst {
 template <typename sstType>
@@ -111,6 +112,7 @@ class multicast_group {
 
                 //slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+		DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "before_send");
                 if(first_slot + ready_to_be_sent <= window_size) {
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
@@ -127,6 +129,7 @@ class multicast_group {
                 }
 
                 sst->put(sst->index, index_field_index);
+		DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "after_send");
 
                 msg_sent = true;
                 old_sent_index = sst->index[my_sst_index][index_field_index];
@@ -225,6 +228,7 @@ public:
     }
 
     void send() {
+	DERECHO_LOG(current_sent_index, -1, "start_preliminary_operations");
         current_sent_index++;
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
