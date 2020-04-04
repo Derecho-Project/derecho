@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "sst.hpp"
+#include <derecho/rdmc/detail/util.hpp>
 
 namespace sst {
 template <typename sstType>
