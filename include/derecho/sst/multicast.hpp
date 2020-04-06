@@ -228,7 +228,7 @@ public:
     }
 
     void send() {
-	DERECHO_LOG(current_sent_index, -1, "start_preliminary_operations");
+	DERECHO_LOG(current_sent_index+1, -1, "start_preliminary_operations");
         current_sent_index++;
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
