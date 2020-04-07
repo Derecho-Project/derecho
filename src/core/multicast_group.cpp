@@ -1247,6 +1247,8 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 
 bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                           const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
+    
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_msgstate_lock");
     if(!rdmc_sst_groups_created) {
         return false;
     }

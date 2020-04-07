@@ -90,9 +90,9 @@ class multicast_group {
     void sender_function_opportunistic() {
         pthread_setname_np(pthread_self(), "send_looper");
 
-        struct timespec last_time, cur_time;
-        clock_gettime(CLOCK_REALTIME, &last_time);
-        bool msg_sent;
+        //struct timespec last_time, cur_time;
+        //clock_gettime(CLOCK_REALTIME, &last_time);
+        //bool msg_sent;
 
         int32_t old_sent_index = -1;
         uint64_t ready_to_be_sent = 0;
@@ -103,7 +103,7 @@ class multicast_group {
             // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
             // loop_count++;
 
-            msg_sent = false;
+            //msg_sent = false;
             sst->index[my_sst_index][index_field_index] = current_sent_index;
 
             if(sst->index[my_sst_index][index_field_index] > old_sent_index) {
@@ -131,11 +131,11 @@ class multicast_group {
                 sst->put(sst->index, index_field_index);
 		        DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "after_send");
 
-                msg_sent = true;
+                //msg_sent = true;
                 old_sent_index = sst->index[my_sst_index][index_field_index];
             }
 
-            if(msg_sent) {
+/*         if(msg_sent) {
                 // update last time
                 clock_gettime(CLOCK_REALTIME, &last_time);
             } else {
@@ -148,6 +148,7 @@ class multicast_group {
                     std::this_thread::sleep_for(1ms);
                 }
             }
+*/
         }
     }
 
