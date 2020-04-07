@@ -176,6 +176,7 @@ int main(int argc, char* argv[]) {
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
+            DERECHO_LOG(i+1, -1, "application send");
             raw_subgroup.send(max_msg_size, [](char* buf) {});
         }
     };

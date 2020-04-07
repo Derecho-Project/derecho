@@ -1252,6 +1252,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     }
     std::unique_lock<std::mutex> lock(msg_state_mtx);
 
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "asking for buffer");
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
