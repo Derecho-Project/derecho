@@ -94,7 +94,7 @@ public:
 static bool shutdown = false;
 std::thread polling_thread;
 tcp::tcp_connections* sst_connections;
-tcp::tcp_connections *external_client_connections;
+tcp::tcp_connections* external_client_connections;
 // singleton: global states
 lf_ctxt g_ctxt;
 
@@ -515,21 +515,21 @@ void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_c
 void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
-        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
 void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
-        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id << endl;
+        cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
@@ -664,7 +664,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 #ifndef NOLOG
             struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
 #endif
-            dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx, sctxt->remote_id);
+            dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
         }
 #ifdef DEBUG_FOR_RELEASE
         printf("\tflags=%x\n", eentry.flags);
@@ -698,7 +698,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 #endif  //DEBUG_FOR_RELEASE
         if(eentry.op_context != NULL) {
             struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
-            return {sctxt->ce_idx, {sctxt->remote_id, -1}};
+            return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
         } else {
             dbg_default_error("\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
@@ -712,7 +712,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
         } else {
             //dbg_default_trace("Normal: we get an entry with op_context = {}.",(long long unsigned)sctxt);
-            return {sctxt->ce_idx, {sctxt->remote_id, 1}};
+            return {sctxt->ce_idx(), {sctxt->remote_id(), 1}};
         }
     } else {  // shutdown return a bad entry
         return {0, {0, 0}};
@@ -721,9 +721,9 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 
 void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
                          &internal_ip_addrs_and_ports,  
-                     uint32_t node_id,
                      const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-                         &external_ip_addrs_and_ports) {
+                         &external_ip_addrs_and_ports,
+                     uint32_t node_id) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
     sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
@@ -743,7 +743,8 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
     fail_if_nonzero_retry_on_eagain("fi_domain()", CRASH_ON_FAILURE,
                                     fi_domain, g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), nullptr);
-    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
+    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size*internal_ip_addrs_and_ports.size() +
+                          g_ctxt.fi->tx_attr->size*external_ip_addrs_and_ports.size();
     fail_if_nonzero_retry_on_eagain("initialize tx completion queue.", REPORT_ON_FAILURE,
                                     fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
 

@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 #include <mutex>
+#include <functional>
 
 #include "p2p_connection.hpp"
 #ifdef USE_VERBS_API

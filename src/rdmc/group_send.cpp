@@ -444,7 +444,7 @@ void polling_group::connect(uint32_t neighbor) {
                             message_types.ready_for_block);
     };
 
-    rfb_queue_pairs.emplace(neighbor, endpoint(members[neighbor], post_recv));
+    rfb_queue_pairs.emplace(neighbor, queue_pair(members[neighbor], post_recv));
 #else
     // Decide whether the endpoint will act as a server in the connection
     bool is_lf_server = members[member_index] < members[neighbor];

@@ -634,15 +634,17 @@ void ViewManager::initialize_rdmc_sst() {
         exit(0);
     }
     auto member_ips_and_sst_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::SST);
+    auto member_ips_and_external_ports_map = make_member_ips_and_ports_map(*curr_view, PortType::EXTERNAL);
     node_id_t my_id = curr_view->members[curr_view->my_rank];
 
 #ifdef USE_VERBS_API
     sst::verbs_initialize(member_ips_and_sst_ports_map,
-                          curr_view->members[curr_view->my_rank]);
+                          member_ips_and_external_ports_map,
+                          my_id);
 #else
     sst::lf_initialize(member_ips_and_sst_ports_map,
-                       my_id,
-                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
+                       member_ips_and_external_ports_map,
+                       my_id);
 #endif
 }
 
@@ -1384,8 +1386,12 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         dbg_default_debug("Adding RDMC connection to node {}, at IP {} and port {}", next_view->members[joiner_rank], next_view->member_ips_and_ports[joiner_rank].ip_address, next_view->member_ips_and_ports[joiner_rank].rdmc_port);
 
 #ifdef USE_VERBS_API
-        rdma::impl::verbs_add_connection(next_view->members[joiner_rank],
-                                         next_view->member_ips_and_ports[joiner_rank], my_id);
+        // rdma::impl::verbs_add_connection(next_view->members[joiner_rank],
+        //                                  next_view->member_ips_and_ports[joiner_rank], my_id);
+        rdma::impl::verbs_add_connection(
+                next_view->members[joiner_rank],
+                {next_view->member_ips_and_ports[joiner_rank].ip_address,
+                 next_view->member_ips_and_ports[joiner_rank].rdmc_port});
 #else
         rdma::impl::lf_add_connection(
                 next_view->members[joiner_rank],

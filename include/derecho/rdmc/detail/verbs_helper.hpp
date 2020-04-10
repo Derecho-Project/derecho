@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <derecho/core/derecho_type_definitions.hpp>
+
 struct ibv_mr;
 struct ibv_qp;
 struct ibv_cq;
@@ -171,11 +173,12 @@ struct feature_set {
 feature_set get_supported_features();
 
 namespace impl {
-bool verbs_initialize(const std::map<uint32_t, std::string>& node_addresses,
+bool verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports,
                       uint32_t node_rank);
-bool verbs_add_connection(uint32_t index, const std::string& address,
-                          uint32_t node_rank);
-bool verbs_remove_connection(uint32_t index);
+// bool verbs_add_connection(uint32_t index, const std::string& address,
+//                           uint32_t node_rank);
+bool verbs_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
+bool verbs_remove_connection(uint32_t node_id);
 void verbs_destroy();
 // int poll_for_completions(int num, ibv_wc* wcs,
 //                          std::atomic<bool>& shutdown_flag);

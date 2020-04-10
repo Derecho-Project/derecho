@@ -152,12 +152,12 @@ barrier_group::barrier_group(vector<uint32_t> members) {
         remote_memory_regions.push_back(remote_mrs.find(target)->second);
 
         auto qp_it = qps.find(target);
-        endpoints.push_back(std::move(qp_it->second));
+        queue_pairs.push_back(std::move(qp_it->second));
         qps.erase(qp_it);
     }
 
     for(auto it = qps.begin(); it != qps.end(); it++) {
-        extra_endpoints.push_back(std::move(it->second));
+        extra_queue_pairs.push_back(std::move(it->second));
     }
     qps.clear();
 #else

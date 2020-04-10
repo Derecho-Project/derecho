@@ -72,11 +72,15 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deseri
         rdv.push_back(deserialization_context);
     }
 #ifdef USE_VERBS_API
-    sst::verbs_initialize(member_ips_and_sst_ports_map,
-                          curr_view->members[curr_view->my_rank]);
+    sst::verbs_initialize({},
+                          std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{
+                            my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                          my_id);
 #else
-    sst::lf_initialize({}, my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, 
-    {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}});
+    sst::lf_initialize({},
+                       std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{
+                           my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}}},
+                       my_id);
 #endif
 
     if (!get_view(INVALID_NODE_ID)) throw derecho_exception("Failed to contact the leader to request very first view.");

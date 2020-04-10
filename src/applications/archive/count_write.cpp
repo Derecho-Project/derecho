@@ -48,9 +48,9 @@ int main() {
 
     // initialize the rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(ip_addrs_and_ports, {}, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
 
     // form a group with a subset of all the nodes
@@ -131,7 +131,11 @@ int main() {
                     if(i == node_rank) {
                         times[i] = my_time;
                     } else {
+#ifdef USE_VERBS_API
+                        res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double));
+#else
                         res = new resources(i, (char*)&my_time, (char*)&times[i], sizeof(double), sizeof(double), node_rank < i);
+#endif
                         res->post_remote_read(id, sizeof(double));
                         free(res);
                     }
@@ -161,7 +165,11 @@ int main() {
             } else {
                 resources* res;
                 double no_need;
+#ifdef USE_VERBS_API
+                res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double));
+#else
                 res = new resources(0, (char*)&my_time, (char*)&no_need, sizeof(double), sizeof(double), 0);
+#endif
                 sync(0);
                 free(res);
             }
