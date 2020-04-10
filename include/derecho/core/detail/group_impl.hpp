@@ -114,7 +114,6 @@ void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type
      ...);
 }
 
-/* There is only one constructor */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
@@ -122,36 +121,16 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
-          is_starting_leader((getConfString(CONF_DERECHO_LOCAL_IP) == getConfString(CONF_DERECHO_LEADER_IP))
-                             && (getConfUInt16(CONF_DERECHO_GMS_PORT) == getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT))),
-          leader_connection([&]() -> std::optional<tcp::socket> {
-              if(!is_starting_leader) {
-                  return tcp::socket{getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT)};
-              }
-              return std::nullopt;
-          }()),
           user_deserialization_context(deserialization_context),
           persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
           //Initially empty, all connections are added in the new view callback
           tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
-          view_manager([&]() {
-              if(is_starting_leader) {
-                  return ViewManager(subgroup_info,
-                                     {std::type_index(typeid(ReplicatedTypes))...},
-                                     std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
-                                     tcp_sockets, objects_by_subgroup_id,
-                                     persistence_manager.get_callbacks(),
-                                     _view_upcalls);
-              } else {
-                  return ViewManager(leader_connection.value(),
-                                     subgroup_info,
-                                     {std::type_index(typeid(ReplicatedTypes))...},
-                                     std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
-                                     tcp_sockets, objects_by_subgroup_id,
-                                     persistence_manager.get_callbacks(),
-                                     _view_upcalls);
-              }
-          }()),
+          view_manager(subgroup_info,
+                       {std::type_index(typeid(ReplicatedTypes))...},
+                       std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
+                       tcp_sockets, objects_by_subgroup_id,
+                       persistence_manager.get_callbacks(),
+                       _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
@@ -170,7 +149,8 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         view_manager.truncate_logs();
         view_manager.send_logs();
         receive_objects(subgroups_and_leaders_to_receive);
-        if(is_starting_leader) {
+        if(view_manager.is_starting_leader()) {
+            //These functions are no-ops if we're not doing total restart
             bool leader_has_quorum = true;
             initial_view_confirmed = view_manager.leader_prepare_initial_view(leader_has_quorum);
             if(!leader_has_quorum) {
@@ -180,10 +160,11 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
             }
         } else {
             //This will wait for a new view to be sent if the view was aborted
-            initial_view_confirmed = view_manager.check_view_committed(leader_connection.value());
+            //It must be called even in the non-restart case, since the initial view could still be aborted
+            initial_view_confirmed = view_manager.check_view_committed();
         }
     }
-    if(is_starting_leader) {
+    if(view_manager.is_starting_leader()) {
         //In restart mode, once a prepare is successful, send a commit
         //(this function does nothing if we're not doing total restart)
         view_manager.leader_commit_initial_view();
@@ -203,7 +184,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
     persistence_manager.start();
 }
 
-//nope there's two now
+/* A simpler constructor that uses "default" options for callbacks, upcalls, and deserialization context */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories)
         : Group({}, subgroup_info, nullptr, {}, factories...) {}
@@ -349,8 +330,7 @@ ShardIterator<SubgroupType> Group<ReplicatedTypes...>::get_shard_iterator(uint32
     try {
         auto& EC = external_callers.template get<SubgroupType>().at(subgroup_index);
         SharedLockedReference<View> curr_view = view_manager.get_current_view();
-        auto subgroup_id = curr_view.get().subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>)
-                                   .at(subgroup_index);
+        auto subgroup_id = curr_view.get().subgroup_ids_by_type_id.at(index_of_type<SubgroupType, ReplicatedTypes...>).at(subgroup_index);
         const auto& shard_subviews = curr_view.get().subgroup_shard_views.at(subgroup_id);
         std::vector<node_id_t> shard_reps(shard_subviews.size());
         for(uint i = 0; i < shard_subviews.size(); ++i) {

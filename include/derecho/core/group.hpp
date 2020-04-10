@@ -136,8 +136,6 @@ private:
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
     const node_id_t my_id;
-    bool is_starting_leader;
-    std::optional<tcp::socket> leader_connection;
     /**
      * The shared pointer holding deserialization context is obsolete. I (Weijia)
      * removed it because it complicated things: the deserialization context is
@@ -244,8 +242,9 @@ private:
 
 public:
     /**
-     * Constructor that starts a new managed Derecho group with this node as
-     * the leader. 
+     * Constructor that starts or joins a Derecho group. Whether this node acts
+     * as the leader of a new group or joins an existing group is determined by 
+     * the Derecho configuration file (loaded by the conf module).
      *
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
@@ -267,9 +266,10 @@ public:
           Factory<ReplicatedTypes>... factories);
 
     /**
-     * Constructor that starts a new managed Derecho group with this node as
-     * the leader. 
-     *
+     * Constructor that starts or joins a Derecho group. Whether this node acts
+     * as the leader of a new group or joins an existing group is determined by 
+     * the Derecho configuration file (loaded by the conf module).
+     * 
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param factories A variable number of Factory functions, one for each
