@@ -889,7 +889,7 @@ void MulticastGroup::register_predicates() {
                 }
             };
 
-//            persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
+            persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
 
             if(subgroup_settings.sender_rank >= 0) {
                 auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
@@ -906,8 +906,8 @@ void MulticastGroup::register_predicates() {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
-//              sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-//                                                                        sst::PredicateType::RECURRENT));
+                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+                                                                        sst::PredicateType::RECURRENT));
             }
         } else {
             //This subgroup is in UNORDERED mode
