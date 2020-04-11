@@ -210,8 +210,10 @@ public:
     }
     // @override IReplica::orderedGet
     virtual const Object orderedGet(const OID& oid) {
+#ifndef NDEBUG
         auto version = get_version();
         dbg_default_info("orderedGet object:{},version:0x{:x},timestamp:{}", oid, std::get<0>(version), std::get<1>(version));
+#endif//NDEBUG
         if(objects.find(oid) != objects.end()) {
             return objects.at(oid);
         } else {

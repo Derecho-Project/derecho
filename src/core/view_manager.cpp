@@ -1286,10 +1286,16 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Standard procedure for receiving a View, copied from receive_view_and_leaders
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
-        bool success = tcp_sockets->read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
+#ifndef NDEBUG
+        bool success = 
+#endif//NDEBUG
+        tcp_sockets->read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
         assert(success);
         char buffer[size_of_view];
-        success = tcp_sockets->read(leader_id, buffer, size_of_view);
+#ifndef NDEBUG
+        success = 
+#endif//NDEBUG
+        tcp_sockets->read(leader_id, buffer, size_of_view);
         assert(success);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
         next_view->subgroup_type_order = subgroup_type_order;
