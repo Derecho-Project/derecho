@@ -73,7 +73,7 @@ int main(int argc, char** argv) {
             }};
     derecho::SubgroupInfo subgroup_info{&derecho::one_subgroup_entire_view};
 
-    auto thing_factory = [](PersistentRegistry* pr) { return std::make_unique<PersistentThing>(pr); };
+    auto thing_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<PersistentThing>(pr); };
     //    auto test_factory = [](PersistentRegistry* pr) { return std::make_unique<TestThing>(0); };
 
     derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,

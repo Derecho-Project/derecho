@@ -111,11 +111,11 @@ int main(int argc, char** argv) {
               derecho::one_subgroup_policy(derecho::flexible_even_shards(
                       1, non_persistent_subgroup_size - fault_tolerance, non_persistent_subgroup_size))}}));
 
-    auto persistent_factory = [](PersistentRegistry* pr) {
+    auto persistent_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<PersistentThing>(pr);
     };
 
-    auto nonpersistent_factory = [](PersistentRegistry* pr) {
+    auto nonpersistent_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<NonPersistentThing>(0);
     };
 

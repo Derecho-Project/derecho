@@ -18,7 +18,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
         : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
                   this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(
-                  client_object_factory(persistent_registry_ptr.get()))),
+                  client_object_factory(persistent_registry_ptr.get(),subgroup_id))),
           node_id(nid),
           subgroup_id(subgroup_id),
           subgroup_index(subgroup_index),

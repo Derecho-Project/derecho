@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
 
     derecho::SubgroupInfo subgroup_function(&derecho::one_subgroup_entire_view);
 
-    auto string_object_factory = [](persistent::PersistentRegistry*) { return std::make_unique<StringObject>(); };
+    auto string_object_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<StringObject>(); };
 
     derecho::Group<StringObject> group(derecho::CallbackSet{},
                                        subgroup_function, nullptr,
