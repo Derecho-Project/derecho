@@ -172,7 +172,7 @@ The persistence layer of Derecho stores durable logs of updates in memory-mapped
 
 We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
 
-A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
+A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
 The input to the first node is:
 * 0 (its node ID)
 * 2 (number of nodes for the experiment)
