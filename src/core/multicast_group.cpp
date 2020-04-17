@@ -10,6 +10,12 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please
+// enable the same macro in the bandwidth_test
+//#define ENABLE_LOGGING
+
 namespace derecho {
 
 /**
@@ -297,7 +303,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
 
         //         auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
 
-//    #ifdef NULL_SEND_ENABLED
+        //    #ifdef NULL_SEND_ENABLED
         //         /* NULL Send Scheme */
         //         // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
         //         if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
@@ -311,7 +317,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
         //                 }
         //             }
         //         }
-//    #endif
+        //    #endif
         //         // deliver immediately if in UNORDERED mode
         //         if(subgroup_settings.mode == Mode::UNORDERED) {
         //             // issue stability upcalls for the recently sequenced messages
@@ -841,7 +847,7 @@ void MulticastGroup::register_predicates() {
             return receiver_predicate(subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
-        uint32_t batch_size =  derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_BATCH_SIZE);
+        uint32_t batch_size = derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_BATCH_SIZE);
         if(!batch_size) {
             batch_size = 1;
         }
@@ -901,8 +907,8 @@ void MulticastGroup::register_predicates() {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
+                // sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+                //                                                         sst::PredicateType::RECURRENT));
             }
         } else {
             //This subgroup is in UNORDERED mode
@@ -1247,14 +1253,16 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
 
 bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
                           const std::function<void(char* buf)>& msg_generator, bool cooked_send) {
-    
-    DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_msgstate_lock");
     if(!rdmc_sst_groups_created) {
         return false;
     }
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_send_lock");
+#endif
     std::unique_lock<std::mutex> lock(msg_state_mtx);
-
-    DERECHO_LOG(future_message_indices[subgroup_num], -1, "asking for buffer");
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "ask_for_buffer");
+#endif
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
@@ -1272,17 +1280,21 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     // call to the user supplied message generator
     msg_generator(buf);
 
-    if(last_transfer_medium[subgroup_num]) {
-        assert(next_sends[subgroup_num]);
-        pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
-        next_sends[subgroup_num] = std::nullopt;
-        sender_cv.notify_all();
-        return true;
-    } else {
-        sst_multicast_group_ptrs[subgroup_num]->send();
-        pending_sst_sends[subgroup_num] = false;
-        return true;
-    }
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num] - 1, -1, "buffer_allocated");
+#endif
+
+    // if(last_transfer_medium[subgroup_num]) {
+    //     assert(next_sends[subgroup_num]);
+    //     pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
+    //     next_sends[subgroup_num] = std::nullopt;
+    //     sender_cv.notify_all();
+    //     return true;
+    // } else {
+    sst_multicast_group_ptrs[subgroup_num]->send();
+    pending_sst_sends[subgroup_num] = false;
+    return true;
+    //}
 }
 
 bool MulticastGroup::check_pending_sst_sends(subgroup_id_t subgroup_num) {

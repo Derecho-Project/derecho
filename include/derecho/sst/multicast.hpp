@@ -14,6 +14,18 @@
 #include "sst.hpp"
 #include <derecho/rdmc/detail/util.hpp>
 
+// This macro enables the sleep mode after 1ms of inactivity
+// of the sender loop. Since we need to test both cases, this
+// works as a switch.
+
+#define ENABLE_SLEEP
+
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please
+// enable the same macro in the bandwidth_test
+//#define ENABLE_LOGGING
+
 namespace sst {
 template <typename sstType>
 class multicast_group {
@@ -90,9 +102,11 @@ class multicast_group {
     void sender_function_opportunistic() {
         pthread_setname_np(pthread_self(), "send_looper");
 
-        //struct timespec last_time, cur_time;
-        //clock_gettime(CLOCK_REALTIME, &last_time);
-        //bool msg_sent;
+#ifdef ENABLE_SLEEP
+        struct timespec last_time, cur_time;
+        clock_gettime(CLOCK_REALTIME, &last_time);
+        bool msg_sent;
+#endif
 
         int32_t old_sent_index = -1;
         uint64_t ready_to_be_sent = 0;
@@ -100,19 +114,23 @@ class multicast_group {
         uint32_t first_slot;
 
         while(!thread_shutdown) {
-            // clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
-            // loop_count++;
-
-            //msg_sent = false;
+            //clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
+            //loop_count++;
+#ifdef ENABLE_SLEEP
+            msg_sent = false;
+#endif
             sst->index[my_sst_index][index_field_index] = current_sent_index;
 
             if(sst->index[my_sst_index][index_field_index] > old_sent_index) {
                 ready_to_be_sent = sst->index[my_sst_index][index_field_index] - old_sent_index;
-                first_slot = (old_sent_index+1) % window_size;
+                first_slot = (old_sent_index + 1) % window_size;
 
+#ifdef ENABLE_LOGGING
+                // The second arg here is the number of msgs sent together in this round 
+                DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "before_actual_send");
+#endif
                 //slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-		        DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "before_send");
                 if(first_slot + ready_to_be_sent <= window_size) {
                     sst->put(
                             (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
@@ -129,13 +147,19 @@ class multicast_group {
                 }
 
                 sst->put(sst->index, index_field_index);
-		        DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "after_send");
 
-                //msg_sent = true;
+#ifdef ENABLE_LOGGING
+                // The second arg here is the number of msgs sent together in this round 
+                DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "after_actual_send");
+#endif
+#ifdef ENABLE_SLEEP
+                msg_sent = true;
+#endif
                 old_sent_index = sst->index[my_sst_index][index_field_index];
             }
 
-/*         if(msg_sent) {
+#ifdef ENABLE_SLEEP
+            if(msg_sent) {
                 // update last time
                 clock_gettime(CLOCK_REALTIME, &last_time);
             } else {
@@ -148,7 +172,7 @@ class multicast_group {
                     std::this_thread::sleep_for(1ms);
                 }
             }
-*/
+#endif
         }
     }
 
@@ -229,7 +253,6 @@ public:
     }
 
     void send() {
-	    DERECHO_LOG(current_sent_index+1, -1, "start_preliminary_operations");
         current_sent_index++;
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
