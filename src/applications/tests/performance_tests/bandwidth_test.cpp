@@ -18,6 +18,24 @@
 
 #include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
+
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies
+//#define ENABLE_LOGGING
+
+// This is a macro that diables sophisticated intial operations
+// for the logging. They are nice for 2 nodes, but make it crash
+// for more. So with that we get a good trade-off.
+//#define LIGHT_LOGGING
+
+#ifdef ENABLE_LOGGING
+#include <derecho/rdmc/detail/util.hpp>
+#include <derecho/rdmc/rdmc.hpp>
+
+std::unique_ptr<rdmc::barrier_group> universal_barrier_group;
+#endif
+
 #include "log_results.hpp"
 
 using std::cout;
@@ -61,8 +79,12 @@ int main(int argc, char* argv[]) {
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
+    long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
-    const long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    /* This is for one of the test (simulates user that copies data)
+     * The test includes also the commented parts in the function
+     * stability callback
+     */
     //volatile char* dest_area = (volatile char*)malloc(max_msg_size);
 
     // variable 'done' tracks the end of the test
@@ -78,9 +100,9 @@ int main(int argc, char* argv[]) {
         // increment the total number of messages delivered
         ++num_delivered;
 
-       // if(data.has_value()) {
-       //     std::memcpy(const_cast<char*>(dest_area), &data.value().first, max_msg_size);
-       // }
+        // if(data.has_value()) {
+        //     std::memcpy(const_cast<char*>(dest_area), &data.value().first, max_msg_size);
+        // }
 
         if(num_senders_selector == 0) {
             if(num_delivered == num_messages * num_nodes) {
@@ -103,8 +125,8 @@ int main(int argc, char* argv[]) {
     }
 
     auto membership_function = [num_senders_selector, mode, num_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
+                                       const std::vector<std::type_index>& subgroup_type_order,
+                                       const std::unique_ptr<View>& prev_view, View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         // wait for all nodes to join the group
@@ -153,12 +175,35 @@ int main(int argc, char* argv[]) {
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 
+#ifdef ENABLE_LOGGING
+#ifndef LIGHT_LOGGING
+    universal_barrier_group = std::make_unique<rdmc::barrier_group>(members_order);
+
+    universal_barrier_group->barrier_wait();
+    uint64_t t1 = get_time();
+    universal_barrier_group->barrier_wait();
+    uint64_t t2 = get_time();
+#endif
+    reset_epoch();
+#ifndef LIGHT_LOGGING
+    universal_barrier_group->barrier_wait();
+    uint64_t t3 = get_time();
+    printf(
+            "Synchronized clocks.\nTotal possible variation = %5.3f us\n"
+            "Max possible variation from local = %5.3f us\n",
+            (t3 - t1) * 1e-3f, std::max(t2 - t1, t3 - t2) * 1e-3f);
+    fflush(stdout);
+#endif
+#endif
     // this function sends all the messages
     auto send_all = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
+#ifdef ENABLE_LOGGING
+            DERECHO_LOG(i, -1, "application_send");
+#endif
             raw_subgroup.send(max_msg_size, [](char* buf) {});
         }
     };
@@ -196,7 +241,7 @@ int main(int argc, char* argv[]) {
     }
     // aggregate bandwidth from all nodes
     double avg_bw = aggregate_bandwidth_tcp(getConfString(CONF_DERECHO_LEADER_IP), node_rank == 0, node_rank,
-                                        members_order.size(), bw);
+                                            members_order.size(), bw);
     // log the result at the leader node
     if(node_rank == 0) {
         log_results(exp_result{num_nodes, num_senders_selector, max_msg_size,

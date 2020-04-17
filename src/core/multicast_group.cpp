@@ -12,6 +12,12 @@
 
 #define NULL_SEND_ENABLED
 
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please
+// enable the same macro in the bandwidth_test
+//#define ENABLE_LOGGING
+
 namespace derecho {
 
 /**
@@ -1259,8 +1265,13 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     if(!rdmc_sst_groups_created) {
         return false;
     }
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_send_lock");
+#endif
     std::unique_lock<std::mutex> lock(msg_state_mtx);
-
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "ask_for_buffer");
+#endif
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
@@ -1278,6 +1289,9 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     // call to the user supplied message generator
     msg_generator(buf);
 
+#ifdef ENABLE_LOGGING
+    DERECHO_LOG(future_message_indices[subgroup_num]-1, -1,  "buffer_allocated");
+#endif    
     if(last_transfer_medium[subgroup_num]) {
         assert(next_sends[subgroup_num]);
         pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));

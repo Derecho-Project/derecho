@@ -695,7 +695,7 @@ namespace sst{
     dbg_default_trace("going to use virtual address?{}",LF_USE_VADDR);
     FAIL_IF_NONZERO_RETRY_EAGAIN(fi_fabric(g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), NULL),"fi_fabric()",CRASH_ON_FAILURE);
     FAIL_IF_NONZERO_RETRY_EAGAIN(fi_domain(g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), NULL),"fi_domain()",CRASH_ON_FAILURE);
-    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size;
+    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size*ip_addrs_and_ports.size();
     FAIL_IF_NONZERO_RETRY_EAGAIN(fi_cq_open(g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), NULL),"initialize tx completion queue.",REPORT_ON_FAILURE);
 
     // STEP 3: prepare local PEP
