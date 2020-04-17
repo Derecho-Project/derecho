@@ -18,7 +18,15 @@
 #include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
 
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies
 //#define ENABLE_LOGGING
+
+// This is a macro that diables sophisticated intial operations
+// for the logging. They are nice for 2 nodes, but make it crash
+// for more. So with that we get a good trade-off.
+//#define LIGHT_LOGGING
 
 #ifdef ENABLE_LOGGING
 #include <derecho/rdmc/rdmc.hpp>
@@ -153,13 +161,16 @@ int main(int argc, char* argv[]) {
     uint32_t node_rank = group.get_my_rank();
 
 #ifdef ENABLE_LOGGING
+#ifndef LIGHT_LOGGING
     universal_barrier_group = std::make_unique<rdmc::barrier_group>(members_order);
 
     universal_barrier_group->barrier_wait();
     uint64_t t1 = get_time();
     universal_barrier_group->barrier_wait();
     uint64_t t2 = get_time();
+#endif
     reset_epoch();
+#ifndef LIGHT_LOGGING
     universal_barrier_group->barrier_wait();
     uint64_t t3 = get_time();
     printf(
@@ -167,6 +178,7 @@ int main(int argc, char* argv[]) {
             "Max possible variation from local = %5.3f us\n",
             (t3 - t1) * 1e-3f, std::max(t2 - t1, t3 - t2) * 1e-3f);
     fflush(stdout);
+#endif
 #endif
     long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
@@ -176,6 +188,9 @@ int main(int argc, char* argv[]) {
         for(uint i = 0; i < num_messages; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
+#ifdef ENABLE_LOGGING
+            DERECHO_LOG(i, -1, "application_send");
+#endif
             raw_subgroup.send(max_msg_size, [](char* buf) {});
         }
     };

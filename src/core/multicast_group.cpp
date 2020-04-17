@@ -10,10 +10,10 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
-// For logging actions times. 
-// To flush data, enable the same macro
-// in the bandwidth_test
-
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please 
+// enable the same macro in the bandwidth_test
 //#define ENABLE_LOGGING
 
 namespace derecho {
@@ -474,16 +474,16 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
 
-#ifdef ENABLE_LOGGING
-    // Log delivery
-    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
-    message_id_t seq_num = (msg.index) * get_num_senders(ss.senders) + msg.sender_id;
-    if(msg.size == h->header_size) {
-        DERECHO_LOG(seq_num, -1, "deliver_null()");
-    } else {
-        DERECHO_LOG(seq_num, -1, "deliver_message()");
-    }
-#endif
+// #ifdef ENABLE_LOGGING
+//     // Log delivery
+//     const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+//     message_id_t seq_num = (msg.index) * get_num_senders(ss.senders) + msg.sender_id;
+//     if(msg.size == h->header_size) {
+//         DERECHO_LOG(seq_num, -1, "deliver_null()");
+//     } else {
+//         DERECHO_LOG(seq_num, -1, "deliver_message()");
+//     }
+// #endif
 
     // cooked send
     if(h->cooked_send) {
@@ -657,10 +657,10 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     message_id_t sequence_number = index * num_shard_senders + sender_rank;
     node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
-#ifdef ENABLE_LOGGING
-    // Log reception
-    DERECHO_LOG(sequence_number, node_id, "receive_message()");
-#endif
+// #ifdef ENABLE_LOGGING
+//     // Log reception
+//     DERECHO_LOG(sequence_number, node_id, "receive_message()");
+// #endif
 
     locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
@@ -747,10 +747,10 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
         sst.seq_num[member_index][subgroup_num] = new_seq_num;
         sst.put(sst.seq_num, subgroup_num);
 
-#ifdef ENABLE_LOGGING        
-        // Log update
-        DERECHO_LOG(new_seq_num, -1, "update_seq_num()");
-#endif
+// #ifdef ENABLE_LOGGING        
+//         // Log update
+//         DERECHO_LOG(new_seq_num, -1, "update_seq_num()");
+// #endif
     }
     sst.put((char*)std::addressof(sst.num_received[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
             sizeof(decltype(sst.num_received)::value_type) * num_shard_senders);
@@ -817,10 +817,10 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     if(update_sst) {
         sst.put(get_shard_sst_indices(subgroup_num),
                 sst.delivered_num, subgroup_num);
-#ifdef ENABLE_LOGGING
-        // Log        
-        DERECHO_LOG(sst.delivered_num[member_index][subgroup_num], -1, "update_delivered_num()");
-#endif
+// #ifdef ENABLE_LOGGING
+//         // Log        
+//         DERECHO_LOG(sst.delivered_num[member_index][subgroup_num], -1, "update_delivered_num()");
+// #endif
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
             std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
@@ -906,8 +906,9 @@ void MulticastGroup::register_predicates() {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
+// Disabled because we disabled the RDMC functionality for the baseline!
+//              sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+//                                                                      sst::PredicateType::RECURRENT));
             }
         } else {
             //This subgroup is in UNORDERED mode
@@ -1256,14 +1257,15 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         return false;
     }
 #ifdef ENABLE_LOGGING
-    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
-    message_id_t seq_num = (future_message_indices[subgroup_num]) * get_num_senders(ss.senders) + ss.sender_rank;
-    DERECHO_LOG(seq_num, -1, "before_send_lock");
+//    const SubgroupSettings ss = subgroup_settings_map.at(subgroup_num);
+//    message_id_t seq_num = (future_message_indices[subgroup_num]) * get_num_senders(ss.senders) + ss.sender_rank;
+//    DERECHO_LOG(seq_num, -1, "before_send_lock");
+      DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_send_lock");
 #endif
     std::unique_lock<std::mutex> lock(msg_state_mtx);
 #ifdef ENABLE_LOGGING
-    DERECHO_LOG(seq_num, -1, "begin_send");
-    int retry_cnt = 0;
+    DERECHO_LOG(future_message_indices[subgroup_num], -1, "ask_for_buffer");
+//  int retry_cnt = 0;
 #endif
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
@@ -1277,31 +1279,35 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         }
         lock.lock();
         buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
-#ifdef ENABLE_LOGGING
-        retry_cnt++;
-#endif
+// #ifdef ENABLE_LOGGING
+//         retry_cnt++;
+// #endif
     }
 
     // call to the user supplied message generator
     msg_generator(buf);
+
 #ifdef ENABLE_LOGGING
-    DERECHO_LOG(seq_num, retry_cnt,  "buffer_allocated");
-#endif    
-    if(last_transfer_medium[subgroup_num]) {
-        assert(next_sends[subgroup_num]);
-        pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
-        next_sends[subgroup_num] = std::nullopt;
-        sender_cv.notify_all();
-        return true;
-    } else {
-        sst_multicast_group_ptrs[subgroup_num]->send();
-#ifdef ENABLE_LOGGING
-        DERECHO_LOG(seq_num, -1, "message_sent()");
+//  DERECHO_LOG(seq_num, retry_cnt,  "buffer_allocated");
+    DERECHO_LOG(future_message_indices[subgroup_num]-1, -1,  "buffer_allocated");
 #endif
+
+    // if(last_transfer_medium[subgroup_num]) {
+    //     assert(next_sends[subgroup_num]);
+    //     pending_sends[subgroup_num].push(std::move(*next_sends[subgroup_num]));
+    //     next_sends[subgroup_num] = std::nullopt;
+    //     sender_cv.notify_all();
+    //     return true;
+    // } else {
+    sst_multicast_group_ptrs[subgroup_num]->send();
+
+// #ifdef ENABLE_LOGGING
+//         DERECHO_LOG(future_message_indices[subgroup_num]-1, -1, "message_sent()");
+// #endif
+
         pending_sst_sends[subgroup_num] = false;
         return true;
     }
-}
 
 bool MulticastGroup::check_pending_sst_sends(subgroup_id_t subgroup_num) {
     std::lock_guard<std::mutex> lock(msg_state_mtx);
