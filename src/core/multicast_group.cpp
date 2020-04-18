@@ -10,6 +10,11 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
+// This macro enables the null-send scheme
+// The "opportunistic only" test has it disabled, while the
+// "alltogther" version has it enabled.
+#define NULL_SEND_ENABLED
+
 // This is a macro that enables the logging of single events
 // in order to visualize when they happen and so to detect
 // possible inefficiencies.To flush gathered data, please
