@@ -251,5 +251,8 @@ int main(int argc, char* argv[]) {
     }
 
     group.barrier_sync();
+#ifdef ENABLE_LOGGING
+    flush_events();
+#endif
     group.leave();
 }
