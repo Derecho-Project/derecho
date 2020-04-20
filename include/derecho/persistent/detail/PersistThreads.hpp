@@ -241,6 +241,7 @@ protected:
     /** Tracker of remaining requests in each thread */
     std::atomic<uint32_t> uncompleted_io_req[NUM_IO_THREAD];
     std::atomic<uint32_t> uncompleted_io_sub_req[NUM_IO_THREAD];
+    std::atomic<bool> asked_for_polling[NUM_IO_THREAD];
     /** Thread handling metadata write requests. */
     std::thread metadata_thread;
     /** Metadata write request queue. */
@@ -249,7 +250,8 @@ protected:
     std::mutex metadata_io_queue_mtx;
     /** Tracker of remaining requests in metadata io thread */
     std::atomic<uint32_t> uncompleted_metadata_req;
-    
+    std::atomic<bool> metadata_asked_for_polling;
+
     /** Condition Variables for new io request. */
     std::condition_variable new_io_request;
     std::condition_variable new_metadata_request;    
@@ -445,6 +447,7 @@ public:
 
     void update_metadata(const uint32_t& id, PTLogMetadataInfo metadata);
     const version_t persist(const uint32_t& id);
+    const version_t getLastPersisted(const uint32_t& id);
     std::tuple<LogEntry*, Guard> read_entry(const uint32_t& id, const int64_t& index);
     std::tuple<void*, Guard> read_data(const uint32_t& id, const int64_t& index);
     void* read_lba(const uint64_t& lba_index);

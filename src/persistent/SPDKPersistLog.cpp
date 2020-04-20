@@ -25,7 +25,6 @@ void SPDKPersistLog::append(const void* pdata,
                             const HLC& mhlc) noexcept(false) {
     std::shared_lock head_rlock(head_mutex);
     std::unique_lock tail_wlock(tail_mutex);
-    std::cout << "Append lock grabbed " << std::endl;
     if(ver <= METADATA.ver) {
         //throw an exception
         throw derecho::derecho_exception("the version to append is smaller than the current version.");
@@ -214,7 +213,7 @@ void SPDKPersistLog::trim(const HLC& hlc) {
 }
 
 const version_t SPDKPersistLog::getLastPersisted() {
-    return persist(); 
+    return PersistThreads::get()->getLastPersisted(METADATA.id); 
 }
 
 const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
