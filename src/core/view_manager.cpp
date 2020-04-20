@@ -72,6 +72,7 @@ ViewManager::ViewManager(
         //Determine if I am the first restart leader
         if(my_ip == restart_leader_ips.front() && my_gms_port == restart_leader_ports.front()) {
             in_total_restart = true;
+            active_leader = true;
             dbg_default_debug("Found view {} on disk", curr_view->vid);
             dbg_default_info("Logged View found on disk. Restarting in recovery mode.");
             //The subgroup_type_order can't be serialized, but it's constant across restarts
@@ -86,6 +87,7 @@ ViewManager::ViewManager(
             //If I am not a restart leader, we may or may not be in total restart;
             //in_total_restart will be set when the leader responds in receive_initial_view
             leader_connection = std::make_unique<tcp::socket>(restart_leader_ips.front(), restart_leader_ports.front());
+            active_leader = false;
             receive_initial_view();
             setup_initial_tcp_connections(*curr_view, my_id);
         }
@@ -105,9 +107,11 @@ ViewManager::ViewManager(
                     std::vector<char>{0},
                     std::vector<node_id_t>{}, std::vector<node_id_t>{},
                     0, 0, subgroup_type_order);
+            active_leader = true;
             await_first_view();
             setup_initial_tcp_connections(*curr_view, my_id);
         } else {
+            active_leader = false;
             leader_connection = std::make_unique<tcp::socket>(getConfString(CONF_DERECHO_LEADER_IP), getConfUInt16(CONF_DERECHO_LEADER_GMS_PORT));
             receive_initial_view();
             setup_initial_tcp_connections(*curr_view, my_id);
