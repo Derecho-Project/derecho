@@ -149,7 +149,7 @@ public:
         num_sent++;
         ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
 #ifdef ENABLE_LOGGING
-        DERECHO_LOG(num_sent, -1, "before_actual_send");
+        DERECHO_LOG(num_sent-1, -1, "before_actual_send");
 #endif
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
@@ -158,7 +158,7 @@ public:
                 (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
                 sizeof(uint64_t));
 #ifdef ENABLE_LOGGING
-        DERECHO_LOG(num_sent, -1, "after_actual_send");
+        DERECHO_LOG(num_sent-1, -1, "after_actual_send");
 #endif
     }
 
