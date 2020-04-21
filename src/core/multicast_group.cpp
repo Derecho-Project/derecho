@@ -10,6 +10,8 @@
 #include <derecho/rdmc/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
 
+// This is a macro that act as a switch for the null-send
+// scheme. 
 #define NULL_SEND_ENABLED
 
 // This is a macro that enables the logging of single events
@@ -1152,7 +1154,11 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         ((header*)buf)->cooked_send = false;
 
         future_message_indices[subgroup_num]++;
+#if defined NULL_SEND_ENABLED && defined ENABLE_LOGGING
+        sst_multicast_group_ptrs[subgroup_num]->send_null();
+#else
         sst_multicast_group_ptrs[subgroup_num]->send();
+#endif
     }
 }
 

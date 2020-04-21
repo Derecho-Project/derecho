@@ -35,6 +35,10 @@ class multicast_group {
     int32_t my_sender_index;
     // only one send at a time
     std::mutex msg_send_mutex;
+#ifdef ENABLE_LOGGING
+    // number of null messages for which RDMA write is complete
+    uint64_t num_sent_app = 0;
+#endif
 
     // SST
     std::shared_ptr<sstType> sst;
@@ -149,7 +153,7 @@ public:
         num_sent++;
         ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
 #ifdef ENABLE_LOGGING
-        DERECHO_LOG(num_sent-1, -1, "before_actual_send");
+        DERECHO_LOG(num_sent_app, -1, "before_actual_send");
 #endif
         sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
@@ -158,9 +162,29 @@ public:
                 (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
                 sizeof(uint64_t));
 #ifdef ENABLE_LOGGING
-        DERECHO_LOG(num_sent-1, -1, "after_actual_send");
+        DERECHO_LOG(num_sent_app, -1, "after_actual_send");
+        num_sent_app++;
 #endif
     }
+
+#ifdef ENABLE_LOGGING
+    void send_null() {
+        uint32_t slot = num_sent % window_size;
+        num_sent++;
+        ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
+
+        // I log "num_sent" as the number, so that all the null messages
+        // between two appl. messages are logged with the same index
+        DERECHO_LOG(num_sent_app, -1, "before_actual_null_send");
+        sst->put(
+                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
+                max_msg_size - sizeof(uint64_t));
+        sst->put(
+                (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
+                sizeof(uint64_t));
+        DERECHO_LOG(num_sent_app, -1, "after_actual_null_send");
+    }
+#endif
 
     void debug_print() {
         using std::cout;
