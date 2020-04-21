@@ -51,12 +51,12 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
 
     auto return_pair = wrapped_this->template send<tag>(
             [this, &dest_node](size_t size) -> char* {
-                const std::size_t max_payload_size = group.max_payload_sizes.at(subgroup_id);
-                if(size <= max_payload_size) {
+                const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                if(size <= max_p2p_request_payload_size) {
                     return (char*)group.get_sendbuffer_ptr(dest_node,
                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                 } else {
-                    throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                    throw derecho_exception("The size of serialized args exceeds the maximum message size (CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE).");
                 }
             },
             std::forward<Args>(args)...);
