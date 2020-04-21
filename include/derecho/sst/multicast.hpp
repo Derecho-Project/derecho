@@ -17,7 +17,6 @@
 // This macro enables the sleep mode after 1ms of inactivity
 // of the sender loop. Since we need to test both cases, this
 // works as a switch.
-
 #define ENABLE_SLEEP
 
 // This is a macro that enables the logging of single events
@@ -43,6 +42,10 @@ class multicast_group {
     int32_t my_sender_index;
     // only one send at a time
     std::mutex msg_send_mutex;
+#ifdef ENABLE_LOGGING
+    // current index of sent application (non-null) messages
+    uint64_t current_app_sent_index = -1;
+#endif
 
     // SST
     std::shared_ptr<sstType> sst;
@@ -112,6 +115,9 @@ class multicast_group {
         uint64_t ready_to_be_sent = 0;
         uint32_t my_sst_index = sst->get_local_index();
         uint32_t first_slot;
+#ifdef ENABLE_LOGGING
+            uint64_t tmp_app_sent_index = -1;
+#endif
 
         while(!thread_shutdown) {
             //clock_gettime(CLOCK_REALTIME, &loop_times[loop_count]);
@@ -120,6 +126,9 @@ class multicast_group {
             msg_sent = false;
 #endif
             sst->index[my_sst_index][index_field_index] = current_sent_index;
+#ifdef ENABLE_LOGGING
+            tmp_app_sent_index = current_app_sent_index;
+#endif
 
             if(sst->index[my_sst_index][index_field_index] > old_sent_index) {
                 ready_to_be_sent = sst->index[my_sst_index][index_field_index] - old_sent_index;
@@ -127,7 +136,7 @@ class multicast_group {
 
 #ifdef ENABLE_LOGGING
                 // The second arg here is the number of msgs sent together in this round 
-                DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "before_actual_send");
+                DERECHO_LOG(tmp_app_sent_index, ready_to_be_sent, "before_actual_send");
 #endif
                 //slots are contiguous
                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
@@ -150,7 +159,7 @@ class multicast_group {
 
 #ifdef ENABLE_LOGGING
                 // The second arg here is the number of msgs sent together in this round 
-                DERECHO_LOG(sst->index[my_sst_index][index_field_index], ready_to_be_sent, "after_actual_send");
+                DERECHO_LOG(tmp_app_sent_index, ready_to_be_sent, "after_actual_send");
 #endif
 #ifdef ENABLE_SLEEP
                 msg_sent = true;
@@ -254,8 +263,18 @@ public:
 
     void send() {
         current_sent_index++;
+#ifdef ENABLE_LOGGING
+        current_app_sent_index++;
+#endif
         // clock_gettime(CLOCK_REALTIME, &requested_send_times[current_sent_index]);
     }
+
+#ifdef ENABLE_LOGGING
+    void send_null() {
+        DERECHO_LOG(current_app_sent_index, -1, "requested_null_send");
+        current_sent_index++;
+    }
+#endif
 
     ~multicast_group() {
         thread_shutdown = true;
@@ -263,7 +282,7 @@ public:
     }
 
     void debug_print() {
-        /* This measures the time between a send issued and that send done 
+    /* This measures the time between a send issued and that send done 
      *  plus the number of messages batched each time
      */
         // std::ofstream fbatches("batches");
@@ -283,7 +302,7 @@ public:
         //     }
         // }
 
-        /* This measures the moment of time each message was actually  sent, starting from  
+    /* This measures the moment of time each message was actually  sent, starting from  
      * the first request to issue a message
      */
         // std::ofstream ftimes("send_times_batching");

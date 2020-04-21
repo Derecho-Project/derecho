@@ -13,7 +13,7 @@
 // This macro enables the null-send scheme
 // The "opportunistic only" test has it disabled, while the
 // "alltogther" version has it enabled.
-#define NULL_SEND_ENABLED
+//#define NULL_SEND_ENABLED
 
 // This is a macro that enables the logging of single events
 // in order to visualize when they happen and so to detect
@@ -1148,7 +1148,11 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         ((header*)buf)->cooked_send = false;
 
         future_message_indices[subgroup_num]++;
+#if defined NULL_SEND_ENABLED && defined ENABLE_LOGGING
+        sst_multicast_group_ptrs[subgroup_num]->send_null();
+#else 
         sst_multicast_group_ptrs[subgroup_num]->send();
+#endif
     }
 }
 
