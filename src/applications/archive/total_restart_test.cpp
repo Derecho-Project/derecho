@@ -87,7 +87,7 @@ int main(int argc, char** argv) {
     }));
 
 
-    auto thing_factory = [](PersistentRegistry* pr) {
+    auto thing_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<PersistentThing>(pr);
     };
 

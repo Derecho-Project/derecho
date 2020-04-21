@@ -60,6 +60,9 @@ endif()
 # spdlog_FOUND
 find_package(spdlog 1.3.1 REQUIRED)
 
+# find openssl
+find_package(OpenSSL REQUIRED) 
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
@@ -84,7 +87,8 @@ target_link_libraries(derecho
     stdc++fs ${libfabric_LIBRARIES} 
     ${mutils_LIBRARIES} 
     ${mutils-containers_LIBRARIES}
-    ${mutils-tasks_LIBRARIES})
+    ${mutils-tasks_LIBRARIES}
+    ${OPENSSL_LIBRARIES}) 
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
@@ -133,9 +137,6 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
-
-# objectstore aka dPods
-add_subdirectory(src/objectstore)
 
 # applications
 add_subdirectory(src/applications)

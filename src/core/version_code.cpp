@@ -32,8 +32,14 @@ char int32_array[4]{1, 2, 3, 4};
 char int64_array[8]{1, 2, 3, 4, 5, 6, 7, 8};
 
 // Runtime detection of floating point storage order
-float a_float = 123.4560001;
-double a_double = 654.3210000987;
+union float_union {
+     uint32_t as_uint32;
+     float as_float;
+} a_float = {.as_float = 123.4560001};
+union doulbe_union {
+    uint64_t as_uint64;
+    double as_double;
+} a_double = {.as_double = 654.3210000987};
 
 struct s1 {
     char something;
@@ -89,8 +95,8 @@ uint64_t version_hashcode() {
                                    *reinterpret_cast<uint16_t*>(&int16_array)),
                                *reinterpret_cast<uint32_t*>(&int32_array)),
                            *reinterpret_cast<uint64_t*>(&int64_array)),
-                       *reinterpret_cast<uint32_t*>(&a_float)),
-                   *reinterpret_cast<uint64_t*>(&a_double)),
+                       a_float.as_uint32),
+                   a_double.as_uint64),
                int_offset_hash);
 }
 

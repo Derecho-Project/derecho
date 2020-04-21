@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
         subgroup_allocation.emplace(std::type_index(typeid(ObjStore)), std::move(subgroup_vector));
         return subgroup_allocation;
     }};
-    auto store_factory = [](PersistentRegistry* pr) { return std::make_unique<ObjStore>(pr); };
+    auto store_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<ObjStore>(pr); };
 
     derecho::Group<ObjStore> group{
                 callback_set, subgroup_function, nullptr,
