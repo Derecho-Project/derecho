@@ -359,7 +359,7 @@ _resources::~_resources() {
 }
 
 int _resources::post_remote_send(
-        struct lf_sender_ctxt* ctxt,
+        lf_sender_ctxt* ctxt,
         const long long int offset,
         const long long int size,
         const int op,
@@ -465,7 +465,7 @@ void resources::post_remote_write(const long long int offset, long long int size
     }
 }
 
-void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
     int return_code = post_remote_send(ctxt, 0, size, 1, true);
     if(return_code != 0) {
         dbg_default_error("post_remote_write(3) failed with return code {}", return_code);
@@ -473,7 +473,7 @@ void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, c
     }
 }
 
-void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int return_code = post_remote_send(ctxt, offset, size, 1, true);
     if(return_code != 0) {
         dbg_default_error("post_remote_write(4) failed with return code {}", return_code);
@@ -505,35 +505,35 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_remote_send(ctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-int resources_two_sided::post_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     struct iovec msg_iov;
     struct fi_msg msg;
     int ret;
@@ -662,7 +662,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_default_error("\top_context:NULL");
         } else {
 #ifndef NOLOG
-            struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
+            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
 #endif
             dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
         }
@@ -697,7 +697,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         printf("\terr_data_size=%d\n", eentry.err_data_size);
 #endif  //DEBUG_FOR_RELEASE
         if(eentry.op_context != NULL) {
-            struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
+            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
             return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
         } else {
             dbg_default_error("\tFailed polling the completion queue");
@@ -706,7 +706,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
         }
     }
     if(!shutdown) {
-        struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)entry.op_context;
+        lf_sender_ctxt* sctxt = (lf_sender_ctxt*)entry.op_context;
         if(sctxt == NULL) {
             dbg_default_debug("WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!

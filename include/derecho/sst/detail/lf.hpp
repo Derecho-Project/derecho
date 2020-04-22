@@ -64,7 +64,7 @@ protected:
      * @param op - 0 for read and 1 for write
      * @param return the return code for operation.
      */
-    int post_remote_send(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
+    int post_remote_send(lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
                          const int op, const bool completion);
 
 public:
@@ -141,9 +141,9 @@ public:
     void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
-    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
+    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**
@@ -151,7 +151,7 @@ public:
  * with functions that support two-sided sends and receives.
  */
 class resources_two_sided : public _resources {
-    int post_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    int post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 
 public:
     /** constructor: simply forwards to _resources::_resources */
@@ -162,11 +162,11 @@ public:
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**

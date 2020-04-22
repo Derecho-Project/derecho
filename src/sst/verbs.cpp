@@ -325,7 +325,7 @@ void _resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
+int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
                                  const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
@@ -435,14 +435,14 @@ void resources::post_remote_write(const long long int offset, const long long in
     }
 }
 
-void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -477,21 +477,21 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     struct ibv_recv_wr rr;
     struct ibv_sge sge;
     struct ibv_recv_wr *bad_wr;
@@ -513,14 +513,14 @@ int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const lon
     return ret;
 }
 
-void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_receive(sctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_receive(sctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -549,7 +549,7 @@ void polling_loop() {
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
-    struct verbs_sender_ctxt* sctxt;
+    verbs_sender_ctxt* sctxt;
 
     while(!shutdown) {
         poll_result = 0;
@@ -567,7 +567,7 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
                 exit(-1);
             }
             // check the completion status (here we don't care about the completion
-            sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
+            sctxt = reinterpret_cast<verbs_sender_ctxt*>(wc.wr_id);
             // opcode)
             if(wc.status != IBV_WC_SUCCESS) {
                 cerr << "got bad completion with status: "
