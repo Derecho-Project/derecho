@@ -239,6 +239,7 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
     util::polling_data.reset_waiting(tid);
 
     for(auto index : failed_node_indexes) {
+        std::cerr << "DEBUG: SST put_with_completion detected failure on row " << index << std::endl;
         freeze(index);
     }
 }
@@ -253,8 +254,9 @@ void SST<DerivedSST>::freeze(int row_index) {
         row_is_frozen[row_index] = true;
     }
     num_frozen++;
-    //BUG: deleting from res_vec here creates a race with put(), which blindly
-    //dereferences res_vec[index] after checking fow_is_frozen
+    res_vec[row_index]->report_failure();
+    //We can't delete from res_vec here because it creates a race with put(),
+    //but maybe marking the resource object as "failed" is good enough.
 //    res_vec[row_index].reset();
     if(failure_upcall) {
         failure_upcall(members[row_index]);

@@ -68,6 +68,7 @@ private:
     void connect_qp();
 
 protected:
+    std::atomic<bool> remote_failed;
     /** Post a remote RDMA operation. */
     int post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
@@ -108,6 +109,11 @@ class resources : public _resources {
 public:
     resources(int r_index, char *write_addr, char *read_addr, int size_w,
               int size_r);
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     /*
       wrapper functions that make up the user interface
       all call post_remote_send with different parameters
@@ -132,6 +138,11 @@ class resources_two_sided : public _resources {
 public:
     resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
                         int size_r);
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);

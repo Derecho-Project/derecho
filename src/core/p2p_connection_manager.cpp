@@ -199,8 +199,9 @@ void P2PConnectionManager::check_failures_loop() {
         util::polling_data.reset_waiting(tid);
 
         for(auto nid : failed_node_indexes) {
+            dbg_default_debug("p2p_connection_manager detected failure/timeout on node {}", nid);
+            p2p_connections.at(nid)->get_res()->report_failure();
             if(failure_upcall) {
-                dbg_default_debug("p2p_connection_manager detected node {} timeouts. making failure_upcall.", nid);
                 failure_upcall(nid);
             }
         }
