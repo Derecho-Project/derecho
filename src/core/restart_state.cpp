@@ -106,7 +106,7 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
 
 void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
-    int time_remaining_ms = RESTART_LEADER_TIMEOUT;
+    int time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
     while(time_remaining_ms > 0) {
         using namespace std::chrono;
         auto start_time = high_resolution_clock::now();
@@ -158,7 +158,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             }
         } else if(!ready_to_restart) {
             //Accept timed out, but we haven't heard from enough nodes yet, so reset the timer
-            time_remaining_ms = RESTART_LEADER_TIMEOUT;
+            time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
         }
     }
 }

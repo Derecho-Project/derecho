@@ -152,7 +152,6 @@ private:
     std::unique_ptr<View> update_curr_and_next_restart_view();
 
 public:
-    static const int RESTART_LEADER_TIMEOUT = 2000;
     RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
                        const SubgroupInfo& subgroup_info,
                        const node_id_t my_id);
