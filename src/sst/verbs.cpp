@@ -24,14 +24,14 @@
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/connection_manager.hpp>
-#include <derecho/sst/detail/verbs.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
 #include <derecho/sst/detail/sst_impl.hpp>
+#include <derecho/sst/detail/verbs.hpp>
 #include <derecho/tcp/tcp.hpp>
 #include <derecho/utils/logger.hpp>
 
-using std::cout;
 using std::cerr;
+using std::cout;
 using std::endl;
 
 #define MSG "SEND operation      "
@@ -67,14 +67,14 @@ struct global_resources {
     /** IB port attributes. */
     struct ibv_port_attr port_attr;
     /** Device handle. */
-    struct ibv_context *ib_ctx;
+    struct ibv_context* ib_ctx;
     /** PD handle. */
-    struct ibv_pd *pd;
+    struct ibv_pd* pd;
     /** Completion Queue handle. */
-    struct ibv_cq *cq;
+    struct ibv_cq* cq;
 };
 /** The single instance of global_resources for the %SST system */
-struct global_resources *g_res;
+struct global_resources* g_res;
 
 std::thread polling_thread;
 static bool shutdown = false;
@@ -92,17 +92,16 @@ static bool shutdown = false;
  * @param size_w The size of the write buffer (in bytes).
  * @param size_r The size of the read buffer (in bytes).
  */
-_resources::_resources(int r_index, char *write_addr, char *read_addr, int size_w,
-                       int size_r) {
-    // set the remote index
-    remote_index = r_index;
-
-    write_buf = write_addr;
+_resources::_resources(int r_index, char* write_addr, char* read_addr, int size_w,
+                       int size_r)
+        : remote_failed(false),
+          remote_index(r_index),
+          write_buf(write_addr),
+          read_buf(read_addr) {
     if(!write_buf) {
         cout << "Write address is NULL" << endl;
     }
 
-    read_buf = read_addr;
     if(!read_buf) {
         cout << "Read address is NULL" << endl;
     }
@@ -130,8 +129,8 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
     qp_init_attr.send_cq = g_res->cq;
     qp_init_attr.recv_cq = g_res->cq;
     // since we send the value first and the update the counter, we double the depth configurations.
-    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH)<<1;
-    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH)<<1;
+    qp_init_attr.cap.max_send_wr = derecho::getConfUInt32(CONF_RDMA_TX_DEPTH) << 1;
+    qp_init_attr.cap.max_recv_wr = derecho::getConfUInt32(CONF_RDMA_RX_DEPTH) << 1;
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
     // create the queue pair
@@ -148,8 +147,8 @@ _resources::_resources(int r_index, char *write_addr, char *read_addr, int size_
     without_completion_send_cnt = 0;
     // leave 20% queue pair space for ops with completion.
     // send signal every half of the capacity.
-    without_completion_send_signal_interval = (derecho::getConfInt32(CONF_RDMA_TX_DEPTH)*4/5)/2;
-    without_completion_send_capacity = without_completion_send_signal_interval*2;
+    without_completion_send_signal_interval = (derecho::getConfInt32(CONF_RDMA_TX_DEPTH) * 4 / 5) / 2;
+    without_completion_send_capacity = without_completion_send_signal_interval * 2;
     // sender context
     without_completion_sender_ctxt.type = verbs_sender_ctxt::INTERNAL_FLOW_CONTROL;
     without_completion_sender_ctxt.ctxt.res = this;
@@ -281,7 +280,7 @@ void _resources::connect_qp() {
     }
 
     // exchange using TCP sockets info required to connect QPs
-    local_con_data.addr = htonll((uintptr_t)(char *)write_buf);
+    local_con_data.addr = htonll((uintptr_t)(char*)write_buf);
     local_con_data.rkey = htonl(write_mr->rkey);
     local_con_data.qp_num = htonl(qp->qp_num);
     local_con_data.lid = htons(g_res->port_attr.lid);
@@ -325,13 +324,17 @@ void _resources::connect_qp() {
  * @param op The operation mode; 0 is for read, 1 is for write.
  * @return The return code of the IB Verbs post_send operation.
  */
-int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
+int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size,
                                  const int op, const bool completion) {
     struct ibv_send_wr sr;
     struct ibv_sge sge;
-    struct ibv_send_wr *bad_wr = NULL;
+    struct ibv_send_wr* bad_wr = NULL;
 
     static std::atomic<long> counter = 0;
+
+    if(remote_failed) {
+        return EFAULT;
+    }
 
     // don't care where the read buffer is saved
     sge.addr = (uintptr_t)(read_buf + offset);
@@ -354,7 +357,7 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     }
     if(completion) {
         sr.send_flags = IBV_SEND_SIGNALED;
-        if (sctxt == nullptr) {
+        if(sctxt == nullptr) {
             cerr << "post_remote_send(): sctxt cannot be nullptr for send with completion." << std::endl;
             return EINVAL;
         }
@@ -364,10 +367,14 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
         uint32_t my_slot = ++without_completion_send_cnt;
         if(my_slot > without_completion_send_capacity) {
             // spin on the counter until space released in queue pair
-            while(without_completion_send_cnt >= without_completion_send_capacity);
+            while(without_completion_send_cnt >= without_completion_send_capacity && !remote_failed);
+            if(remote_failed) {
+                cerr << "sst::resources: Remote has failed, aborting post_remote_send()" << std::endl;
+                return EFAULT;
+            }
         }
         // set signal flag if required.
-        if ((my_slot+1)%without_completion_send_signal_interval == 0) {
+        if((my_slot + 1) % without_completion_send_signal_interval == 0) {
             sr.send_flags = IBV_SEND_SIGNALED;
             sr.wr_id = reinterpret_cast<uint64_t>(&(this->without_completion_sender_ctxt));
         }
@@ -383,12 +390,16 @@ int _resources::post_remote_send(struct verbs_sender_ctxt* sctxt, const long lon
     do {
         ret = ibv_post_send(qp, &sr, &bad_wr);
     } while(ret == ENOMEM);
-    counter ++;
+    counter++;
     return ret;
 }
 
-resources::resources(int r_index, char *write_addr, char *read_addr, int size_w,
+resources::resources(int r_index, char* write_addr, char* read_addr, int size_w,
                      int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
+}
+
+void resources::report_failure() {
+    remote_failed = true;
 }
 
 /**
@@ -435,22 +446,26 @@ void resources::post_remote_write(const long long int offset, const long long in
     }
 }
 
-void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources::post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 1, true);
     if(rc) {
         cout << "Could not post RDMA write with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-resources_two_sided::resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
+resources_two_sided::resources_two_sided(int r_index, char* write_addr, char* read_addr, int size_w,
                                          int size_r) : _resources(r_index, write_addr, read_addr, size_w, size_r) {
+}
+
+void resources_two_sided::report_failure() {
+    remote_failed = true;
 }
 
 /**
@@ -477,24 +492,24 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_remote_send(sctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(sctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     struct ibv_recv_wr rr;
     struct ibv_sge sge;
-    struct ibv_recv_wr *bad_wr;
+    struct ibv_recv_wr* bad_wr;
 
     /* prepare the scatter/gather entry */
     memset(&sge, 0, sizeof(sge));
@@ -513,14 +528,14 @@ int resources_two_sided::post_receive(struct verbs_sender_ctxt* sctxt, const lon
     return ret;
 }
 
-void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int size) {
     int rc = post_receive(sctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_index is " << remote_index << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size) {
     int rc = post_receive(sctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_index is " << remote_index << endl;
@@ -549,7 +564,7 @@ void polling_loop() {
 std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
     struct ibv_wc wc;
     int poll_result;
-    struct verbs_sender_ctxt* sctxt;
+    verbs_sender_ctxt* sctxt;
 
     while(!shutdown) {
         poll_result = 0;
@@ -567,15 +582,23 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
                 exit(-1);
             }
             // check the completion status (here we don't care about the completion
-            sctxt = reinterpret_cast<struct verbs_sender_ctxt*>(wc.wr_id);
+            sctxt = reinterpret_cast<verbs_sender_ctxt*>(wc.wr_id);
             // opcode)
             if(wc.status != IBV_WC_SUCCESS) {
                 cerr << "got bad completion with status: "
                      << wc.status << ", vendor syndrome: "
                      << wc.vendor_err << std::endl;
-                if (sctxt == nullptr) {
+                if(sctxt == nullptr) {
                     cerr << "WARNING: unsignaled work request failed found in " << __func__ << "(). Ignoring..." << std::endl;
-                } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                } else {
+                    // just ignore it, the value in wc.wr_id is unreliable...
+                    continue;
+                }
+                /**
+                 * TODO: We suspect the value in wc.wr_id is unreliable on failure. So we avoid the following
+                 * code path to explicitly report the failure but let the caller of this function detect the
+                 * failure by timeout.
+                else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
                     cerr << "WARNING: skip a bad completion for flow control of messages without completion."
                          << std::endl;
                     sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
@@ -583,11 +606,12 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
                 } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
                     return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
                 }
-            } else if (sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
+                */
+            } else if(sctxt->type == verbs_sender_ctxt::INTERNAL_FLOW_CONTROL) {
                 // internal flow control path, we continue to wait for the completion for explicit send with complition.
-                sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval,std::memory_order_relaxed);
+                sctxt->ctxt.res->without_completion_send_cnt.fetch_sub(sctxt->ctxt.res->without_completion_send_signal_interval, std::memory_order_relaxed);
                 continue;
-            } else if (sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
+            } else if(sctxt->type == verbs_sender_ctxt::EXPLICIT_SEND_WITH_COMPLETION) {
                 // normal path
                 break;
             } else {
@@ -603,14 +627,14 @@ std::pair<uint32_t, std::pair<int, int>> verbs_poll_completion() {
 /** Allocates memory for global RDMA resources. */
 void resources_init() {
     // initialize the global resources
-    g_res = (global_resources *)malloc(sizeof(global_resources));
+    g_res = (global_resources*)malloc(sizeof(global_resources));
     memset(g_res, 0, sizeof *g_res);
 }
 
 /** Creates global RDMA resources. */
 void resources_create() {
-    struct ibv_device **dev_list = NULL;
-    struct ibv_device *ib_dev = NULL;
+    struct ibv_device** dev_list = NULL;
+    struct ibv_device* ib_dev = NULL;
     int i;
     int num_devices;
     int rc = 0;
@@ -691,7 +715,7 @@ bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& ne
 }
 
 bool remove_node(uint32_t node_id) {
-    if (sst_connections->contains_node(node_id)) {
+    if(sst_connections->contains_node(node_id)) {
         return sst_connections->delete_node(node_id);
     } else {
         return external_client_connections->delete_node(node_id);
@@ -700,7 +724,7 @@ bool remove_node(uint32_t node_id) {
 
 bool sync(uint32_t r_index) {
     int s = 0, t = 0;
-    if (sst_connections->contains_node(r_index)) {
+    if(sst_connections->contains_node(r_index)) {
         return sst_connections->exchange(r_index, s, t);
     } else {
         return external_client_connections->exchange(r_index, s, t);
@@ -715,9 +739,9 @@ void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
  * @details
  * This must be called before creating or using any SST instance.
  */
-void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_sst_ports,
-                        const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>> &ip_addrs_and_external_ports, 
-                        uint32_t node_id) {
+void verbs_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_sst_ports,
+                      const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_external_ports,
+                      uint32_t node_id) {
     sst_connections = new tcp::tcp_connections(node_id, ip_addrs_and_sst_ports);
     external_client_connections = new tcp::tcp_connections(node_id, ip_addrs_and_external_ports);
 
