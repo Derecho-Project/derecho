@@ -2445,6 +2445,11 @@ SharedLockedReference<View> ViewManager::get_current_view() {
     return SharedLockedReference<View>(*curr_view, view_mutex);
 }
 
+View& ViewManager::unsafe_get_current_view() {
+    assert(curr_view);
+    return *curr_view;
+}
+
 SharedLockedReference<const View> ViewManager::get_current_or_restart_view() {
     if(restart_leader_state_machine) {
         //If this node is the restart leader, the "current view" that it's trying to set up is actually

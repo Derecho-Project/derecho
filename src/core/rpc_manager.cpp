@@ -144,7 +144,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                       });
     if(sender_id == nid) {
         //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
-        const uint32_t my_shard = view_manager.curr_view->my_subgroups.at(subgroup_id);
+        const uint32_t my_shard = view_manager.unsafe_get_current_view().my_subgroups.at(subgroup_id);
         {
             std::unique_lock<std::mutex> lock(pending_results_mutex);
             // because of a race condition, pending_results_to_fulfill can genuinely be empty
@@ -154,7 +154,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             pending_results_cv.wait(lock, [&]() { return !pending_results_to_fulfill[subgroup_id].empty(); });
             //We now know the membership of "all nodes in my shard of the subgroup" in the current view
             pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
-                    view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
+                    view_manager.unsafe_get_current_view().subgroup_shard_views.at(subgroup_id).at(my_shard).members);
             fulfilled_pending_results[subgroup_id].push_back(
                     std::move(pending_results_to_fulfill[subgroup_id].front()));
             pending_results_to_fulfill[subgroup_id].pop();
@@ -261,12 +261,12 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     volatile char* buf;
     int curr_vid = -1;
     do {
-        //This lock also prevents connections from being reassigned (because that happens
-        //in new_view_callback), so we don't need p2p_connections_mutex
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        //ViewManager's view_mutex also prevents connections from being reassigned (because
+        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         //Check to see if the view changed between iterations of the loop, and re-get the rank
-        if(curr_vid != view_manager.curr_view->vid) {
-            curr_vid = view_manager.curr_view->vid;
+        if(curr_vid != view_and_lock.get().vid) {
+            curr_vid = view_and_lock.get().vid;
         }
         try {
             buf = connections->get_sendbuffer_ptr(dest_id, type);
@@ -280,9 +280,9 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
 
 void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
     try {
-        //This lock also prevents connections from being reassigned (because that happens
-        //in new_view_callback), so we don't need p2p_connections_mutex
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        //ViewManager's view_mutex also prevents connections from being reassigned (because
+        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         connections->send(dest_id);
     } catch(std::out_of_range& map_error) {
         throw node_removed_from_group_exception(dest_id);

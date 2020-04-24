@@ -118,16 +118,9 @@ private:
 
     using initialize_rpc_objects_t = std::function<void(node_id_t, const View&, const std::vector<std::vector<int64_t>>&)>;
 
-    //Allow RPCManager and Replicated to access curr_view and view_mutex directly
-    friend class rpc::RPCManager;
+    //Allow Replicated to access view_mutex and view_change_cv directly
     template <typename T>
     friend class Replicated;
-    template <typename T>
-    friend class ExternalCaller;
-
-    friend class PersistenceManager;
-
-    friend class RestartLeaderState;
 
     /**
      * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
@@ -540,6 +533,7 @@ private:
      * updated to reflect
      */
     void reinit_tcp_connections(const View& initial_view, const node_id_t my_id);
+
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
@@ -561,20 +555,6 @@ private:
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size,
                                     const uint32_t new_slot_size);
-    /**
-     * Initializes curr_view with subgroup information based on the membership
-     * functions in subgroup_info. If curr_view would be inadequate based on
-     * the subgroup allocation functions, it will be marked as inadequate.
-     * @param subgroup_info The SubgroupInfo (containing subgroup membership
-     * functions) to use to provision subgroups
-     * @param prev_view The previous View, which may be null if the current view
-     * is the first one
-     * @param curr_view A mutable reference to the current View, which will have
-     * its SubViews initialized
-     */
-    static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
-                                   const std::unique_ptr<View>& prev_view,
-                                   View& curr_view);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
@@ -590,6 +570,23 @@ private:
     std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
                                                            std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
+//Note: This function is public so that RestartLeaderState can access it.
+public:
+    /**
+     * Initializes curr_view with subgroup information based on the membership
+     * functions in subgroup_info. If curr_view would be inadequate based on
+     * the subgroup allocation functions, it will be marked as inadequate.
+     * @param subgroup_info The SubgroupInfo (containing subgroup membership
+     * functions) to use to provision subgroups
+     * @param prev_view The previous View, which may be null if the current view
+     * is the first one
+     * @param curr_view A mutable reference to the current View, which will have
+     * its SubViews initialized
+     */
+    static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
+                                   const std::unique_ptr<View>& prev_view,
+                                   View& curr_view);
+private:
     /**
      * Recomputes num_received_size (the length of the num_received column in
      * the SST) for an existing provisioned View, without re-running the
@@ -783,6 +780,15 @@ public:
      * View changes.
      */
     SharedLockedReference<View> get_current_view();
+
+    /**
+     * Gets a reference to the current View without acquiring a read-lock on it.
+     * This blindly dereferences the curr_view pointer, so only call it if you
+     * can be really confident that a view change won't happen while accessing
+     * the View.
+     * @return The value of *curr_view
+     */
+    View& unsafe_get_current_view();
 
     /**
      * An ugly workaround function needed only during initial setup during a
