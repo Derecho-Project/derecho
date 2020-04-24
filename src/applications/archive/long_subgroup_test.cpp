@@ -45,9 +45,9 @@ int main(int argc, char** argv) {
 
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state
-    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
-    auto cache_factory = [](PersistentRegistry*) { return std::make_unique<Cache>(); };
+    auto foo_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
+    auto cache_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Cache>(); };
 
     derecho::Group<Foo, Bar, Cache> group({}, subgroup_info, nullptr,
                                            std::vector<derecho::view_upcall_t>{},

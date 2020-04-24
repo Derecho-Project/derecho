@@ -46,8 +46,10 @@ script:
   - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
   - make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
   - sudo make install
-  
-# performance tests
-  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
-  - cat data_derecho_bw
-  
+
+# no performance tests any more.
+# we now use regression test for QA.
+## performance tests
+#  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
+#  - cat data_derecho_bw
+#  

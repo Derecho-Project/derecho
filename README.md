@@ -27,6 +27,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
 * CMake 2.8.1 or newer
+* The SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.0.2n. But it should work for any version >= 1.0 
 * The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](https://packages.ubuntu.com/disco/libspdlog-dev) and install it manually with no other dependencies needed.
 * The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
@@ -172,7 +173,7 @@ The persistence layer of Derecho stores durable logs of updates in memory-mapped
 
 We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
 
-A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
+A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
 The input to the first node is:
 * 0 (its node ID)
 * 2 (number of nodes for the experiment)

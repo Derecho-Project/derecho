@@ -201,14 +201,14 @@ void _resources::connect_endpoint(bool is_lf_server) {
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
     local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
     local_cm_data.vaddr = (uint64_t)htonll((uint64_t)this->write_buf);  // for pull mode
-    
+
     if(sst_connections->contains_node(this->remote_id)) {
         if(!sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
             dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
             crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
         }
     } else {
-        if(!external_client_connections->exchange(this->remote_id,local_cm_data,remote_cm_data)) {
+        if(!external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
             dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
             crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
         }
@@ -296,18 +296,17 @@ _resources::_resources(
         char* read_addr,
         int size_w,
         int size_r,
-        int is_lf_server) {
+        int is_lf_server)
+        : remote_failed(false),
+          remote_id(r_id),
+          write_buf(write_addr),
+          read_buf(read_addr) {
     dbg_default_trace("resources constructor: this={}", (void*)this);
 
-    // set remote id
-    this->remote_id = r_id;
-
-    // set write and read buffer
-    this->write_buf = write_addr;
     if(!write_addr) {
         dbg_default_warn("{}:{} called with NULL write_addr!", __FILE__, __func__);
     }
-    this->read_buf = read_addr;
+
     if(!read_addr) {
         dbg_default_warn("{}:{} called with NULL read_addr!", __FILE__, __func__);
     }
@@ -359,7 +358,7 @@ _resources::~_resources() {
 }
 
 int _resources::post_remote_send(
-        struct lf_sender_ctxt* ctxt,
+        lf_sender_ctxt* ctxt,
         const long long int offset,
         const long long int size,
         const int op,
@@ -371,6 +370,10 @@ int _resources::post_remote_send(
     // #endif
     // dbg_default_trace("resources::post_remote_send(ctxt=({},{}),offset={},size={},op={},completion={})",ctxt?ctxt->ce_idx:0,ctxt?ctxt->remote_id:0,offset,size,op,completion);
 
+    if(remote_failed) {
+        dbg_default_warn("lf.cpp: remote has failed, post_remote_send() does nothing.");
+        return -EFAULT;
+    }
     int ret = 0;
 
     if(op == 2) {  // two sided send
@@ -416,12 +419,13 @@ int _resources::post_remote_send(
         // dbg_default_trace("local addr = {} len = {} key = {}",(void*)msg_iov.iov_base,msg_iov.iov_len,(uint64_t)this->mr_lrkey);
         // dbg_default_flush();
 
+        auto remote_has_failed = [this]() { return remote_failed.load(); };
         if(op == 1) {  //write
-            ret = fail_if_nonzero_retry_on_eagain("fi_writemsg failed.", REPORT_ON_FAILURE,
-                                                  fi_writemsg, this->ep, &msg, (completion) ? FI_COMPLETION : 0);
+            ret = retry_on_eagain_unless("fi_writemsg failed.", remote_has_failed,
+                                         fi_writemsg, this->ep, &msg, (completion) ? FI_COMPLETION : 0);
         } else {  // read op==0
-            ret = fail_if_nonzero_retry_on_eagain("fi_readmsg failed.", REPORT_ON_FAILURE,
-                                                  fi_readmsg, this->ep, &msg, (completion) ? FI_COMPLETION : 0);
+            ret = retry_on_eagain_unless("fi_readmsg failed.", remote_has_failed,
+                                         fi_readmsg, this->ep, &msg, (completion) ? FI_COMPLETION : 0);
         }
     }
     // dbg_default_trace("post_remote_send return with ret={}",ret);
@@ -431,6 +435,10 @@ int _resources::post_remote_send(
     // fflush(stdout);
     // #endif//!NDEBUG
     return ret;
+}
+
+void resources::report_failure() {
+    remote_failed = true;
 }
 
 void resources::post_remote_read(const long long int size) {
@@ -465,7 +473,7 @@ void resources::post_remote_write(const long long int offset, long long int size
     }
 }
 
-void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
     int return_code = post_remote_send(ctxt, 0, size, 1, true);
     if(return_code != 0) {
         dbg_default_error("post_remote_write(3) failed with return code {}", return_code);
@@ -473,12 +481,16 @@ void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, c
     }
 }
 
-void resources::post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int return_code = post_remote_send(ctxt, offset, size, 1, true);
     if(return_code != 0) {
         dbg_default_error("post_remote_write(4) failed with return code {}", return_code);
         std::cerr << "post_remote_write(4) failed with return code " << return_code << std::endl;
     }
+}
+
+void resources_two_sided::report_failure() {
+    remote_failed = true;
 }
 
 /**
@@ -505,35 +517,35 @@ void resources_two_sided::post_two_sided_send(const long long int offset, const 
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_remote_send(ctxt, 0, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send (with no offset) with completion, error code is " << rc << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_remote_send(ctxt, offset, size, 2, true);
     if(rc) {
         cout << "Could not post RDMA two sided send with offset and completion, error code is " << rc << ", remote_id is" << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size) {
     int rc = post_receive(ctxt, 0, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive (with no offset), error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-void resources_two_sided::post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+void resources_two_sided::post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     int rc = post_receive(ctxt, offset, size);
     if(rc) {
         cout << "Could not post RDMA two sided receive with offset, error code is " << rc << ", remote_id is " << ctxt->remote_id() << endl;
     }
 }
 
-int resources_two_sided::post_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
+int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size) {
     struct iovec msg_iov;
     struct fi_msg msg;
     int ret;
@@ -560,17 +572,16 @@ bool add_external_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& ne
 }
 
 bool remove_node(uint32_t node_id) {
-    if (sst_connections->contains_node(node_id)) {
+    if(sst_connections->contains_node(node_id)) {
         return sst_connections->delete_node(node_id);
     } else {
         return external_client_connections->delete_node(node_id);
     }
 }
 
-
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-    if (sst_connections->contains_node(r_id)) {
+    if(sst_connections->contains_node(r_id)) {
         return sst_connections->exchange(r_id, s, t);
     } else {
         return external_client_connections->exchange(r_id, s, t);
@@ -580,7 +591,6 @@ bool sync(uint32_t r_id) {
 void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
     external_client_connections->filter_to(live_nodes_list);
 }
-
 
 void polling_loop() {
     pthread_setname_np(pthread_self(), "sst_poll");
@@ -662,7 +672,7 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
             dbg_default_error("\top_context:NULL");
         } else {
 #ifndef NOLOG
-            struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
+            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
 #endif
             dbg_default_error("\top_context:ce_idx={},remote_id={}", sctxt->ce_idx(), sctxt->remote_id());
         }
@@ -696,17 +706,21 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
 #ifdef DEBUG_FOR_RELEASE
         printf("\terr_data_size=%d\n", eentry.err_data_size);
 #endif  //DEBUG_FOR_RELEASE
+        /**
+         * Since eentry.op_context is unreliable, we ignore it with returning a generic error.
         if(eentry.op_context != NULL) {
-            struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)eentry.op_context;
+            lf_sender_ctxt* sctxt = (lf_sender_ctxt*)eentry.op_context;
             return {sctxt->ce_idx(), {sctxt->remote_id(), -1}};
         } else {
             dbg_default_error("\tFailed polling the completion queue");
             fprintf(stderr, "Failed polling the completion queue");
             return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
-        }
+        }*/
+        dbg_default_error("\tFailed polling the completion queue");
+        return {(uint32_t)0xFFFFFFFF, {0, -1}};  // we don't know who sent the message.
     }
     if(!shutdown) {
-        struct lf_sender_ctxt* sctxt = (struct lf_sender_ctxt*)entry.op_context;
+        lf_sender_ctxt* sctxt = (lf_sender_ctxt*)entry.op_context;
         if(sctxt == NULL) {
             dbg_default_debug("WEIRD: we get an entry with op_context = NULL.");
             return {0xFFFFFFFFu, {0, 0}};  // return a bad entry: weird!!!!
@@ -719,11 +733,9 @@ std::pair<uint32_t, std::pair<int32_t, int32_t>> lf_poll_completion() {
     }
 }
 
-void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-                         &internal_ip_addrs_and_ports,  
-                     const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-                         &external_ip_addrs_and_ports,
-                     uint32_t node_id) {
+void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& internal_ip_addrs_and_ports,
+                   const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& external_ip_addrs_and_ports,
+                   uint32_t node_id) {
     // initialize derecho connection manager: This is derived from Sagar's code.
     // May there be a better desgin?
     sst_connections = new tcp::tcp_connections(node_id, internal_ip_addrs_and_ports);
@@ -743,8 +755,8 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
     fail_if_nonzero_retry_on_eagain("fi_domain()", CRASH_ON_FAILURE,
                                     fi_domain, g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), nullptr);
-    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size*internal_ip_addrs_and_ports.size() +
-                          g_ctxt.fi->tx_attr->size*external_ip_addrs_and_ports.size();
+    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size * internal_ip_addrs_and_ports.size()
+                          + g_ctxt.fi->tx_attr->size * external_ip_addrs_and_ports.size();
     fail_if_nonzero_retry_on_eagain("initialize tx completion queue.", REPORT_ON_FAILURE,
                                     fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
 

@@ -1,4 +1,5 @@
 #include <derecho/persistent/Persistent.hpp>
+#include <openssl/sha.h>
 
 namespace persistent {
 
@@ -85,15 +86,34 @@ namespace persistent {
         return this->_subgroup_prefix.c_str();
     }
 
-    std::string PersistentRegistry::generate_prefix(
+    std::string PersistentRegistry::generate_prefix (
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) noexcept(true) {
+        uint32_t shard_num) noexcept(false){
         const char* subgroup_type_name = subgroup_type.name();
-        char prefix[strlen(subgroup_type_name) * 2 + 32];
+
+        // SHA256 subgroup_type_name to avoid a long file name
+        unsigned char subgroup_type_name_digest[32];
+        SHA256_CTX ctxt;
+        if (!SHA256_Init(&ctxt)) {
+            dbg_default_error("{}:{} Unable to initialize SHA256 context. errno = {}", __FILE__, __func__, errno);
+            throw PERSIST_EXP_SHA256_HASH(errno);
+        }
+        if (!SHA256_Update(&ctxt,subgroup_type_name,strlen(subgroup_type_name))) {
+            dbg_default_error("{}:{} Unable to update SHA256 context. string = {}, length = {}, errno = {}",
+                __FILE__, __func__, subgroup_type_name, strlen(subgroup_type_name), errno);
+            throw PERSIST_EXP_SHA256_HASH(errno);
+        }
+        if (!SHA256_Final(subgroup_type_name_digest,&ctxt)) {
+            dbg_default_error("{}:{} Unable to final SHA256 context. errno = {}", __FILE__, __func__, errno);
+            throw PERSIST_EXP_SHA256_HASH(errno);
+        }
+
+        // char prefix[strlen(subgroup_type_name) * 2 + 32];
+        char prefix[32 * 2 + 32];
         uint32_t i = 0;
-        for(i = 0; i < strlen(subgroup_type.name()); i++) {
-            sprintf(prefix + 2 * i, "%02x", subgroup_type_name[i]);
+        for(i = 0; i < 32; i++) {
+            sprintf(prefix + 2 * i, "%02x", subgroup_type_name_digest[i]);
         }
         sprintf(prefix + 2 * i, "-%u-%u", subgroup_index, shard_num);
         return std::string(prefix);

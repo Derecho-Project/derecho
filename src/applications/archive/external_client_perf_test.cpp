@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
         subgroup_allocation.emplace(std::type_index(typeid(TestObject)), std::move(subgroup_layout));
         return subgroup_allocation;
         }};
-        auto ba_factory = [](persistent::PersistentRegistry*) { return std::make_unique<TestObject>(); };
+        auto ba_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
         derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
         std::cout << "Finished constructing/joining Group" << std::endl;

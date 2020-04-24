@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
 
     derecho::SubgroupInfo subgroup_info{&derecho::one_subgroup_entire_view};
     derecho::Group<test1_str> managed_group({}, subgroup_info, nullptr, {},
-                                            [](persistent::PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
+                                            [](persistent::PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<test1_str>(); });
     if(derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID) == 0) {
         derecho::Replicated<test1_str>& rpc_handle = managed_group.get_subgroup<test1_str>(0);
 

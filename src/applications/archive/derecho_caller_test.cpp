@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
     Group<test1_str> managed_group({stability_callback}, subgroup_info, nullptr,
                                    {new_view_callback},
-                                   [](PersistentRegistry* pr) { return std::make_unique<test1_str>(); });
+                                   [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<test1_str>(); });
 
     cout << "Finished constructing/joining Group" << endl;
 

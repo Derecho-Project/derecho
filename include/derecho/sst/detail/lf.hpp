@@ -27,10 +27,10 @@ struct lf_sender_ctxt {
     uint32_t _ce_idx;     // index into the comepletion entry vector. - 0xFFFFFFFF for invalid
     uint32_t _remote_id;  // thread id of the sender
     // getters and setters
-    uint32_t ce_idx() {return _ce_idx;}
-    uint32_t remote_id() {return _remote_id;}
-    void set_ce_idx(const uint32_t& idx) {_ce_idx = idx;}
-    void set_remote_id(const uint32_t& rid) {_remote_id = rid;}
+    uint32_t ce_idx() { return _ce_idx; }
+    uint32_t remote_id() { return _remote_id; }
+    void set_ce_idx(const uint32_t& idx) { _ce_idx = idx; }
+    void set_remote_id(const uint32_t& rid) { _remote_id = rid; }
 };
 
 /**
@@ -54,6 +54,7 @@ private:
     int init_endpoint(struct fi_info* fi);
 
 protected:
+    std::atomic<bool> remote_failed;
     /** 
      * post read/write request
      * 
@@ -64,7 +65,7 @@ protected:
      * @param op - 0 for read and 1 for write
      * @param return the return code for operation.
      */
-    int post_remote_send(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
+    int post_remote_send(lf_sender_ctxt* ctxt, const long long int offset, const long long int size,
                          const int op, const bool completion);
 
 public:
@@ -127,7 +128,11 @@ public:
     resources(int r_id, char* write_addr, char* read_addr, int size_w,
               int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
-
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     /*
       wrapper functions that make up the user interface
       all call post_remote_send with different parameters
@@ -141,9 +146,9 @@ public:
     void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
-    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
+    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**
@@ -151,22 +156,26 @@ public:
  * with functions that support two-sided sends and receives.
  */
 class resources_two_sided : public _resources {
-    int post_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    int post_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 
 public:
     /** constructor: simply forwards to _resources::_resources */
     resources_two_sided(int r_id, char* write_addr, char* read_addr, int size_w,
                         int size_r, int is_lf_server) : _resources(r_id, write_addr, read_addr, size_w, size_r, is_lf_server) {
     }
-
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int size);
-    void post_two_sided_receive(struct lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int size);
+    void post_two_sided_receive(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
 };
 
 /**
@@ -220,8 +229,8 @@ void lf_destroy();
  * take if a LibFabric function fails.
  */
 enum NextOnFailure {
-    REPORT_ON_FAILURE = 0,//!< REPORT_ON_FAILURE Print an error message, but continue
-    CRASH_ON_FAILURE = 1  //!< CRASH_ON_FAILURE Print an error message, then exit the entire program
+    REPORT_ON_FAILURE = 0,  //!< REPORT_ON_FAILURE Print an error message, but continue
+    CRASH_ON_FAILURE = 1    //!< CRASH_ON_FAILURE Print an error message, then exit the entire program
 };
 
 /**
@@ -241,9 +250,9 @@ enum NextOnFailure {
  * @param lf_args The arguments to call the LibFabrics function with
  * @return The same return value returned by the LibFabrics function
  */
-template<typename FuncType, typename... ArgTypes>
+template <typename FuncType, typename... ArgTypes>
 inline int64_t fail_if_nonzero_retry_on_eagain(const std::string& description, const NextOnFailure& failure_mode,
-                                               FuncType lf_function, ArgTypes&& ... lf_args) {
+                                               FuncType lf_function, ArgTypes&&... lf_args) {
     //Some lf functions return int, others return ssize_t, but both will fit in an int64_t
     int64_t return_code;
     do {
@@ -261,6 +270,40 @@ inline int64_t fail_if_nonzero_retry_on_eagain(const std::string& description, c
 }
 
 /**
+ * Calls a LibFabrics function with any number of arguments forwarded via perfect
+ * forwarding. If the function returns the FI_EAGAIN error code, keeps calling it
+ * again with the same arguments, unless the provided "abort predicate" returns
+ * true. If the function returns a non-EAGAIN error code, prints an error message
+ * containing the "description" argument and returns the error code. If the abort
+ * predicate is true, returns the function's error code even if it is EAGAIN.
+ *
+ * @param description A description of the LibFabrics operation being performed,
+ * for debugging purposes. Will be printed in the error message if this
+ * operation fails.
+ * @param abort_predicate A std::function that will return true if we should give
+ * up retrying the LibFabrics function
+ * @param lf_function A pointer to the LibFabrics function to call
+ * @param lf_args The arguments to call the LibFabrics function with
+ * @return The same return value returned by the LibFabrics function
+ */
+template <typename FuncType, typename... ArgTypes>
+inline int64_t retry_on_eagain_unless(const std::string& description,
+                                      const std::function<bool(void)>& abort_predicate,
+                                      FuncType lf_function, ArgTypes&&... lf_args) {
+    //Some lf functions return int, others return ssize_t, but both will fit in an int64_t
+    int64_t return_code;
+    do {
+        return_code = (*lf_function)(std::forward<ArgTypes>(lf_args)...);
+    } while(return_code == -FI_EAGAIN && !abort_predicate());
+    //If the abort predicate is true, don't report the error, since we are giving up anyway
+    if(return_code != 0 && !abort_predicate()) {
+        dbg_default_error("LibFabric error! Return code = {}. Operation description: {}", return_code, description);
+        std::cerr << "LibFabric error! Ret=" << return_code << ", desc=" << description << std::endl;
+    }
+    return return_code;
+}
+
+/**
  * Calls a C function that may return either a pointer or NULL, forwarding
  * all of its arguments by copy (because C functions don't understand
  * references). If the function succeeds, returns the pointer; if the function
@@ -272,9 +315,9 @@ inline int64_t fail_if_nonzero_retry_on_eagain(const std::string& description, c
  * @param args The arguments to call the C function with
  * @return The pointer that the C function returns
  */
-template<typename FuncType, typename... ArgTypes>
+template <typename FuncType, typename... ArgTypes>
 inline std::invoke_result_t<FuncType, ArgTypes...> crash_if_nullptr(const std::string& description,
-                                                                    FuncType c_func, ArgTypes ... args) {
+                                                                    FuncType c_func, ArgTypes... args) {
     std::invoke_result_t<FuncType, ArgTypes...> return_val = (*c_func)(args...);
     if(return_val == nullptr) {
         dbg_default_error("Null pointer error in lf.cpp! Description: {}", description);

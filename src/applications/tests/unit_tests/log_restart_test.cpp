@@ -111,11 +111,11 @@ int main(int argc, char** argv) {
               derecho::one_subgroup_policy(derecho::flexible_even_shards(
                       1, non_persistent_subgroup_size - fault_tolerance, non_persistent_subgroup_size))}}));
 
-    auto persistent_factory = [](PersistentRegistry* pr) {
+    auto persistent_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<PersistentThing>(pr);
     };
 
-    auto nonpersistent_factory = [](PersistentRegistry* pr) {
+    auto nonpersistent_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<NonPersistentThing>(0);
     };
 
@@ -139,7 +139,6 @@ int main(int argc, char** argv) {
             derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
             for(auto& reply_pair : replies) {
                 try {
-                    dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
                     reply_pair.second.get();
                 } catch(derecho::rpc::node_removed_from_group_exception& ex) {
                     dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
@@ -160,7 +159,6 @@ int main(int argc, char** argv) {
             derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
             for(auto& reply_pair : replies) {
                 try {
-                    dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
                     reply_pair.second.get();
                 } catch(derecho::rpc::node_removed_from_group_exception& ex) {
                     dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
