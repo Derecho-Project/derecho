@@ -485,7 +485,16 @@ private:
     /* ---------------------------------------------------------------------------------- */
 
     /* ------------------------ Setup/constructor helpers ------------------------------- */
-
+    /** 
+     * The initial setup code (i.e. the rest of the constructor) for the case where there
+     * is no logged state on disk and the group is doing a "fresh start."
+     */
+    void fresh_initial_setup();
+    /**
+     * The initial setup code (i.e. the rest of the constructor) for the case where some 
+     * logged state was found on disk and the group may be doing a total restart.
+     */
+    void restart_initial_setup();
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
@@ -496,18 +505,24 @@ private:
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
     void await_first_view();
-
-    /** Constructor helper for non-leader nodes; encapsulates receiving and
+    /** 
+     * Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
-     * shard leaders) from the leader. */
-    void receive_view_and_leaders();
+     * shard leaders) from the leader.
+     * @return true if the leader successfully sent the View, false if the
+     * leader crashed (i.e. a socket operation to it failed) before completing
+     * the process.
+     */
+    bool receive_view_and_leaders();
 
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
+     * @return true if the leader successfully sent the View, false if the leader crashed 
+     * (i.e. a socket operation to it failed) before completing the process
      */
-    void receive_initial_view();
+    bool receive_initial_view();
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -607,16 +622,17 @@ private:
      * @return A 2-dimensional vector of ValueType
      * @tparam ValueType The type of values in the vector; this assumes ValueType
      * can be serialized by mutils
+     * @throw derecho_exception if the socket read operations fail
      */
     template <typename ValueType>
     static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
         std::size_t buffer_size;
-        socket.read(buffer_size);
+        if(!socket.read(buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
         char buffer[buffer_size];
-        socket.read(buffer, buffer_size);
+        if(!socket.read(buffer, buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
     }
 

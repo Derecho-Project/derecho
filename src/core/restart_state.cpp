@@ -1,4 +1,5 @@
 #include <optional>
+#include <chrono>
 
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/restart_state.hpp>
