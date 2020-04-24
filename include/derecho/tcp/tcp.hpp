@@ -4,11 +4,21 @@
 #include <memory>
 #include <string>
 #include <optional>
+#include <exception>
 
 namespace tcp {
 
-struct exception {};
-struct connection_failure : public exception {};
+/**
+ * An exception that indicates a socket failed to connect and thus could not
+ * be constructed.
+ */
+struct connection_failure : public std::exception {
+    const std::string message;
+    connection_failure(const std::string& message = "") : message(message) {};
+    const char* what() const noexcept {
+        return message.c_str();
+    }
+};
 
 class socket {
     int sock;
@@ -31,7 +41,7 @@ public:
      * blocking until the connection succeeds.
      * @param server_ip The IP address of the remote host, as a string
      * @param server_port The port to connect to on the remote host
-     * @throws connection_failure if local socket construction or IP address
+     * @throw connection_failure if local socket construction or IP address
      * lookup fails.
      */
     socket(std::string server_ip, uint16_t server_port, bool retry=true);

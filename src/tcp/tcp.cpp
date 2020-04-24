@@ -20,11 +20,11 @@ using namespace std;
 
 socket::socket(string server_ip, uint16_t server_port, bool retry) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
-    if(sock < 0) throw connection_failure();
+    if(sock < 0) throw connection_failure(server_ip);
 
     hostent *server;
     server = gethostbyname(server_ip.c_str());
-    if(server == nullptr) throw connection_failure();
+    if(server == nullptr) throw connection_failure(server_ip);
 
     char server_ip_cstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, server->h_addr, server_ip_cstr, sizeof(server_ip_cstr));
@@ -47,7 +47,7 @@ socket::socket(string server_ip, uint16_t server_port, bool retry) {
     }
     else {
         if (connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-            throw connection_failure();
+            throw connection_failure(server_ip);
         }
     }
 }
@@ -71,11 +71,11 @@ bool socket::is_empty() const { return sock == -1; }
 
 int socket::try_connect(string servername, int port, int timeout_ms) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
-    if(sock < 0) throw connection_failure();
+    if(sock < 0) throw connection_failure(servername);
 
     hostent *server;
     server = gethostbyname(servername.c_str());
-    if(server == nullptr) throw connection_failure();
+    if(server == nullptr) throw connection_failure(servername);
 
     char server_ip_cstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, server->h_addr, server_ip_cstr, sizeof(server_ip_cstr));
@@ -217,7 +217,7 @@ connection_listener::connection_listener(uint16_t port) {
     sockaddr_in serv_addr;
 
     int listenfd = ::socket(AF_INET, SOCK_STREAM, 0);
-    if(listenfd < 0) throw connection_failure();
+    if(listenfd < 0) throw connection_failure("connection_listener: socket() failed");
 
     int reuse_addr = 1;
     setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse_addr,
@@ -245,7 +245,7 @@ socket connection_listener::accept() {
     socklen_t len = sizeof client_addr_info;
 
     int sock = ::accept(*fd, (struct sockaddr *)&client_addr_info, &len);
-    if(sock < 0) throw connection_failure();
+    if(sock < 0) throw connection_failure("connection_listener: accept() failed");
 
     if(client_addr_info.ss_family == AF_INET) {
         // Client has an IPv4 address
@@ -266,7 +266,7 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     int socket_flags = fcntl(*fd, F_GETFL, 0);
     socket_flags |= O_NONBLOCK;
     if(fcntl(*fd, F_SETFL, socket_flags) < 0) {
-        throw connection_failure();
+        return std::nullopt;
     }
 
     int epoll_fd = epoll_create1(0);
@@ -296,7 +296,7 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     socket_flags = fcntl(*fd, F_GETFL, 0);
     socket_flags &= (~O_NONBLOCK);
     if(fcntl(*fd, F_SETFL, socket_flags) < 0) {
-        throw connection_failure();
+        return std::nullopt;
     }
 
     if(success) {
