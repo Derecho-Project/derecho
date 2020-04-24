@@ -122,6 +122,7 @@ void ViewManager::restart_initial_setup() {
         }
         return ports;
     }();
+    const bool enable_backup_restart_leaders = getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS);
     restart_state = std::make_unique<RestartState>();
     restart_state->restart_leader_ips = restart_leader_ips;
     restart_state->restart_leader_ports = restart_leader_ports;
@@ -167,12 +168,16 @@ void ViewManager::restart_initial_setup() {
                 if(got_initial_view) {
                     setup_initial_tcp_connections(*curr_view, my_id);
                 } else {
+                    if(!enable_backup_restart_leaders) {
+                        throw derecho_exception("Restart leader crashed before sending the View, and backup restart leaders are disabled.");
+                    }
                     num_leader_failures++;
                     dbg_default_debug("Restart leader failed, moving to leader #{}", num_leader_failures);
                 }
-            } else {
+            } else if(enable_backup_restart_leaders) {
+                dbg_default_warn("Couldn't connect to restart leader at {}, moving to next leader", restart_leader_ips[num_leader_failures]);
                 num_leader_failures++;
-                dbg_default_warn("Couldn't connect to restart leader at {}, moving to leader {}", restart_leader_ips[num_leader_failures-1], restart_leader_ips[num_leader_failures]);
+                //If backup_restart_leaders is disabled, keep num_leader_failures at 0 and just keep retrying
             }
             if(num_leader_failures >= restart_leader_ips.size()) {
                 throw derecho_exception("All configured restart leaders have failed! Giving up on restart.");
