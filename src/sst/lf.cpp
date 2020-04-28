@@ -755,8 +755,15 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
                                     fi_fabric, g_ctxt.fi->fabric_attr, &(g_ctxt.fabric), nullptr);
     fail_if_nonzero_retry_on_eagain("fi_domain()", CRASH_ON_FAILURE,
                                     fi_domain, g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), nullptr);
-    g_ctxt.cq_attr.size = g_ctxt.fi->tx_attr->size * internal_ip_addrs_and_ports.size()
-                          + g_ctxt.fi->tx_attr->size * external_ip_addrs_and_ports.size();
+    // Note: we don't have a way to throttle the sender based on the completion queue size.
+    // Therefore we just use a very large completion queue size to buffer cq entries as much as possible.
+    // ibv_query_device() in verbs API reports max_cqe, which is "Maximum number of entries in each CQ supported
+    // by this device". The number is 4194303 (2^22-1) with Mellanox connectx-4 VPI. We hard lift the setting to
+    // >=2097151(2^21-1), hoping it works for as many RDMA devices as possible. TODO: find a better approach
+    // to determining completion queue size.
+    size_t max_cqe = g_ctxt.fi->tx_attr->size * internal_ip_addrs_and_ports.size()
+                     + g_ctxt.fi->tx_attr->size * external_ip_addrs_and_ports.size();
+    g_ctxt.cq_attr.size = (max_cqe > 2097152)? max_cqe:2097152;
     fail_if_nonzero_retry_on_eagain("initialize tx completion queue.", REPORT_ON_FAILURE,
                                     fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
 
