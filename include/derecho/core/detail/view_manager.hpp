@@ -479,15 +479,12 @@ private:
 
     /* ------------------------ Setup/constructor helpers ------------------------------- */
     /** 
-     * The initial setup code (i.e. the rest of the constructor) for the case where there
-     * is no logged state on disk and the group is doing a "fresh start."
+     * The initial start-up procedure (basically a constructor) for the case
+     * where there is no logged state on disk and the group is doing a "fresh
+     * start." At the end of this function this node has constructed or received
+     * the group's first view.
      */
-    void fresh_initial_setup();
-    /**
-     * The initial setup code (i.e. the rest of the constructor) for the case where some 
-     * logged state was found on disk and the group may be doing a total restart.
-     */
-    void restart_initial_setup();
+    void startup_to_first_view();
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
@@ -636,9 +633,12 @@ private:
 public:
     /**
      * Constructor for either the leader or non-leader of a group.
-     * @param my_ip The IP address of the node executing this code
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
+     * @param subgroup_type_order A vector of type_index in the same order as 
+     * the template parameters to the Group class
+     * @param any_persistent_objects True if any of the subgroup types in this
+     * group use Persistent<T> fields, false otherwise
      * @param group_tcp_sockets The pool of TCP connections to each group member
      * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
@@ -659,6 +659,24 @@ public:
     ~ViewManager();
 
     /**
+     * Post-constructor initializer that must be called before doing anything
+     * else with the ViewManager. Determines whether this is a fresh start or a
+     * restart, and constructs or receives the initial View (depending on whether
+     * this node is a leader or non-leader).
+     * @return true if the group is now in total restart mode, false if not.
+     */
+    bool first_init();
+    /**
+     * Starts the restart procedure on this node, assuming some logged state has
+     * been found on disk. Determines whether this node is the restart leader,
+     * contacts the restart leader if not, and waits for an initial restart view
+     * to be constructed or received.
+     * @return true if the group is in total restart mode (and the restart
+     * procecure should continue), false if the contacted leader replied that
+     * the group is not actually in total restart mode.
+     */
+    bool restart_to_initial_view();
+    /**
      * Setup method for the leader when it is restarting from complete failure:
      * waits for a restart quorum of nodes from the last known view to join.
      */
@@ -666,25 +684,30 @@ public:
 
     /**
      * Setup method for non-leader nodes: checks whether the initial View received
-     * in the constructor gets committed by the leader, and if not, waits for another
-     * initial View to be sent.
-     * @return True if the initial View was committed, false if it was aborted
-     * and a new View has been received.
+     * in the init function gets committed by the leader, and if not, waits for
+     * another initial View to be sent. Reports its results in the two out-parameters.
+     * @param view_confirmed A mutable reference to a bool that will be set to true
+     * if the initial View was committed.
+     * @param leader_failed A mutable reference to a bool that will be set to true
+     * if the restart leader failed before it could finish committing the view. In
+     * this case view_confirmed will also be false, but this node will need to go
+     * back and contact a new restart leader.
      */
-    bool check_view_committed();
+    void check_view_committed(bool& view_confirmed, bool& leader_failed);
 
     /**
      * Setup method for the leader node in total restart mode: sends a Prepare
      * message to all non-leader nodes indicating that state transfer has finished.
      * Also checks to see whether any non-leader nodes have failed in the meantime.
      * This function simply does nothing if this node is not in total restart mode.
+     * Reports its results in the two out-parameters.
+     * @param view_confirmed A mutable reference to a bool that will be set to
+     * true if all non-leader nodes are still alive, or false if there was a failure.
      * @param leader_has_quorum A mutable reference to a bool that will be set to
      * False if the leader realizes it no longer has a restart quorum due to
      * failures.
-     * @return True if all non-leader nodes are still alive, False if there was
-     * a failure.
      */
-    bool leader_prepare_initial_view(bool& leader_has_quorum);
+    void leader_prepare_initial_view(bool& view_confirmed, bool& leader_has_quorum);
 
     /**
      * Setup method for the leader node: sends a commit message to all non-leader
@@ -736,7 +759,7 @@ public:
 
     /**
      * Returns true if this node is configured as the initial leader of the group,
-     * either because its IP matches leader_ip or because a total restart is in 
+     * either because its IP matches leader_ip or because a total restart is in
      * progress and it is the current restart leader.
      */
     bool is_starting_leader() const;

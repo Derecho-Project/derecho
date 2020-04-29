@@ -46,17 +46,6 @@ ViewManager::ViewManager(
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);
-    if(any_persistent_objects) {
-        //Attempt to load a saved View from disk, to see if one is there
-        curr_view = persistent::loadObject<View>();
-    }
-    //The presence of a logged View on disk means this node is restarting after a crash
-    if(curr_view) {
-        dbg_default_debug("Found view {} on disk", curr_view->vid);
-        restart_initial_setup();
-    } else {
-        fresh_initial_setup();
-    }
 }
 
 ViewManager::~ViewManager() {
@@ -74,7 +63,34 @@ ViewManager::~ViewManager() {
 }
 
 /* ----------  1. Constructor Components ------------- */
-void ViewManager::fresh_initial_setup() {
+bool ViewManager::first_init() {
+    if(any_persistent_objects) {
+        //Attempt to load a saved View from disk, to see if one is there
+        curr_view = persistent::loadObject<View>();
+    }
+    //The presence of a logged View on disk means this node is restarting after a crash
+    if(curr_view) {
+        dbg_default_debug("Found view {} on disk", curr_view->vid);
+        restart_state = std::make_unique<RestartState>();
+        restart_state->restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
+        restart_state->restart_leader_ports = [&]() {
+            //"Apply std::stoi over the result of split_string(getConfString(...))"
+            auto port_list = split_string(getConfString(CONF_DERECHO_RESTART_LEADER_PORTS));
+            std::vector<uint16_t> ports;
+            for(const auto& port_str : port_list) {
+                ports.emplace_back((uint16_t)std::stoi(port_str));
+            }
+            return ports;
+        }();
+        restart_state->num_leader_failures = 0;
+        restart_to_initial_view();
+    } else {
+        startup_to_first_view();
+    }
+    return in_total_restart;
+}
+
+void ViewManager::startup_to_first_view() {
     const ip_addr_t my_ip = getConfString(CONF_DERECHO_LOCAL_IP);
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     const uint16_t my_gms_port = getConfUInt16(CONF_DERECHO_GMS_PORT);
@@ -108,32 +124,20 @@ void ViewManager::fresh_initial_setup() {
     }
 }
 
-void ViewManager::restart_initial_setup() {
-    //Read configuration settings
+bool ViewManager::restart_to_initial_view() {
     const ip_addr_t my_ip = getConfString(CONF_DERECHO_LOCAL_IP);
     const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     const uint16_t my_gms_port = getConfUInt16(CONF_DERECHO_GMS_PORT);
-    const std::vector<std::string> restart_leader_ips = split_string(getConfString(CONF_DERECHO_RESTART_LEADERS));
-    const std::vector<uint16_t> restart_leader_ports = [&]() {
-        auto port_list = split_string(getConfString(CONF_DERECHO_RESTART_LEADER_PORTS));
-        std::vector<uint16_t> ports;
-        for(const auto& port_str : port_list) {
-            ports.emplace_back((uint16_t)std::stoi(port_str));
-        }
-        return ports;
-    }();
     const bool enable_backup_restart_leaders = getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS);
-    restart_state = std::make_unique<RestartState>();
-    restart_state->restart_leader_ips = restart_leader_ips;
-    restart_state->restart_leader_ports = restart_leader_ports;
+
     bool got_initial_view = false;
-    std::size_t num_leader_failures = 0;
     while(!got_initial_view) {
         //Determine if I am the current restart leader
-        if(my_ip == restart_leader_ips[num_leader_failures] && my_gms_port == restart_leader_ports[num_leader_failures]) {
+        if(my_ip == restart_state->restart_leader_ips[restart_state->num_leader_failures]
+           && my_gms_port == restart_state->restart_leader_ports[restart_state->num_leader_failures]) {
             in_total_restart = true;
             active_leader = true;
-            dbg_default_info("Logged View found on disk. Restarting in recovery mode as the leader.");
+            dbg_default_info("Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
             //The subgroup_type_order can't be serialized, but it's constant across restarts
             curr_view->subgroup_type_order = subgroup_type_order;
             restart_state->load_ragged_trim(*curr_view);
@@ -155,8 +159,8 @@ void ViewManager::restart_initial_setup() {
             //which is the usual result while waiting for the leader to start up.
             while(time_remaining_micro > 0 && connect_status != 0) {
                 auto start_time = high_resolution_clock::now();
-                connect_status = leader_connection->try_connect(restart_leader_ips[num_leader_failures],
-                                                                restart_leader_ports[num_leader_failures],
+                connect_status = leader_connection->try_connect(restart_state->restart_leader_ips[restart_state->num_leader_failures],
+                                                                restart_state->restart_leader_ports[restart_state->num_leader_failures],
                                                                 time_remaining_micro / 1000);
                 auto end_time = high_resolution_clock::now();
                 microseconds time_waited = duration_cast<microseconds>(end_time - start_time);
@@ -171,19 +175,20 @@ void ViewManager::restart_initial_setup() {
                     if(!enable_backup_restart_leaders) {
                         throw derecho_exception("Restart leader crashed before sending the View, and backup restart leaders are disabled.");
                     }
-                    num_leader_failures++;
-                    dbg_default_debug("Restart leader failed, moving to leader #{}", num_leader_failures);
+                    restart_state->num_leader_failures++;
+                    dbg_default_debug("Restart leader failed, moving to leader #{}", restart_state->num_leader_failures);
                 }
             } else if(enable_backup_restart_leaders) {
-                dbg_default_warn("Couldn't connect to restart leader at {}, moving to next leader", restart_leader_ips[num_leader_failures]);
-                num_leader_failures++;
+                dbg_default_warn("Couldn't connect to restart leader at {}", restart_state->restart_leader_ips[restart_state->num_leader_failures]);
+                restart_state->num_leader_failures++;
                 //If backup_restart_leaders is disabled, keep num_leader_failures at 0 and just keep retrying
             }
-            if(num_leader_failures >= restart_leader_ips.size()) {
+            if(!got_initial_view && restart_state->num_leader_failures >= restart_state->restart_leader_ips.size()) {
                 throw derecho_exception("All configured restart leaders have failed! Giving up on restart.");
             }
         }
     }
+    return in_total_restart;
 }
 
 bool ViewManager::receive_initial_view() {
@@ -328,48 +333,56 @@ bool ViewManager::receive_view_and_leaders() {
     return true;
 }
 
-bool ViewManager::check_view_committed() {
+void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed) {
     assert(leader_connection);
+    view_confirmed = false;
+    leader_failed = false;
     CommitMessage commit_message;
-    //The leader will first sent a Prepare message, then a Commit message if the
-    //new was committed at all joining members. Either one of these could be Abort
-    //if the leader detected a failure.
-    bool success = leader_connection->read(commit_message);
-    if(!success) {
-        throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
-    }
-    if(commit_message == CommitMessage::PREPARE) {
-        dbg_default_debug("Leader sent PREPARE");
-        bool success = leader_connection->write(CommitMessage::ACK);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+    /* The leader will first sent a Prepare message, then a Commit message if the
+     * new was committed at all joining members. Either one of these could be Abort
+     * if the leader detected a failure. If any socket operations fail, throw an 
+     * exception to skip to the error-reporting logic.
+     */
+    try {
+        bool success = leader_connection->read(commit_message);
+        if(!success) throw derecho_exception("Leader crashed!");
+        if(commit_message == CommitMessage::PREPARE) {
+            dbg_default_debug("Leader sent PREPARE");
+            bool success = leader_connection->write(CommitMessage::ACK);
+            if(!success) throw derecho_exception("Leader crashed!");
+            //After a successful Prepare, replace commit_message with the second message,
+            //which is either Commit or Abort
+            success = leader_connection->read(commit_message);
+            if(!success) throw derecho_exception("Leader crashed!");
         }
-        //After a successful Prepare, replace commit_message with the second message,
-        //which is either Commit or Abort
-        success = leader_connection->read(commit_message);
-        if(!success) {
-            throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+        //This checks if either the first or the second message was Abort
+        if(commit_message == CommitMessage::ABORT) {
+            dbg_default_debug("Leader sent ABORT");
+            const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
+            //Wait for a new initial view and ragged trim to be sent,
+            //so that when this method returns we can try state transfer again
+            leader_failed = receive_view_and_leaders();
+            if(leader_failed) throw derecho_exception("Leader crashed!");
+            //Update the TCP connections pool for any new/failed nodes,
+            //so we can run state transfer again.
+            reinit_tcp_connections(*curr_view, my_id);
         }
-    }
-    //This checks if either the first or the second message was Abort
-    if(commit_message == CommitMessage::ABORT) {
-        dbg_default_debug("Leader sent ABORT");
-        const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
-        //Wait for a new initial view and ragged trim to be sent,
-        //so that when this method returns we can try state transfer again
-        receive_view_and_leaders();
-        //Update the TCP connections pool for any new/failed nodes,
-        //so we can run state transfer again.
-        reinit_tcp_connections(*curr_view, my_id);
+    } catch(derecho_exception&) {
+        //The exception is just a way to avoid repeating this code
+        leader_failed = true;
+        if(restart_state && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS)) {
+            restart_state->num_leader_failures++;
+            //Throw out the curr_view the leader sent and revert to the logged one on disk
+            curr_view = persistent::loadObject<View>();
+        }
+        return;
     }
     //Unless the final message was Commit, we need to retry state transfer
-    return (commit_message == CommitMessage::COMMIT);
+    view_confirmed = (commit_message == CommitMessage::COMMIT);
 }
 
 void ViewManager::truncate_logs() {
-    if(!in_total_restart) {
-        return;
-    }
+    assert(in_total_restart);
     for(const auto& subgroup_and_map : restart_state->logged_ragged_trim) {
         for(const auto& shard_and_trim : subgroup_and_map.second) {
             persistent::saveObject(*shard_and_trim.second,
@@ -460,9 +473,7 @@ void ViewManager::finish_setup() {
 }
 
 void ViewManager::send_logs() {
-    if(!in_total_restart) {
-        return;
-    }
+    assert(in_total_restart);
     //The restart leader doesn't have curr_view
     const View& restart_view = curr_view ? *curr_view : restart_leader_state_machine->get_restart_view();
     /* If we're in total restart mode, prior_view_shard_leaders is equal
@@ -677,19 +688,18 @@ void ViewManager::await_rejoining_nodes(const node_id_t my_id) {
     //Now control will return to Group to do state transfer before confirming this view
 }
 
-bool ViewManager::leader_prepare_initial_view(bool& leader_has_quorum) {
-    if(restart_leader_state_machine) {
-        dbg_default_trace("Sending prepare messages for restart View");
-        int64_t failed_node_id = restart_leader_state_machine->send_prepare();
-        if(failed_node_id != -1) {
-            dbg_default_warn("Node {} failed when sending Prepare messages for the restart view!", failed_node_id);
-            leader_has_quorum = restart_leader_state_machine->resend_view_until_quorum_lost();
-            //If there was at least one failure, we (may) need to do state transfer again, so return false
-            //The out-parameter will tell the leader if it also needs to wait for more joins
-            return false;
-        }
+void ViewManager::leader_prepare_initial_view(bool& view_confirmed, bool& leader_has_quorum) {
+    view_confirmed = true;
+    assert(restart_leader_state_machine);
+    dbg_default_trace("Sending prepare messages for restart View");
+    int64_t failed_node_id = restart_leader_state_machine->send_prepare();
+    if(failed_node_id != -1) {
+        dbg_default_warn("Node {} failed when sending Prepare messages for the restart view!", failed_node_id);
+        leader_has_quorum = restart_leader_state_machine->resend_view_until_quorum_lost();
+        //If there was at least one failure, we (may) need to do state transfer again, so set view to unconfirmed
+        view_confirmed = false;
+        return;
     }
-    return true;
 }
 
 void ViewManager::leader_commit_initial_view() {

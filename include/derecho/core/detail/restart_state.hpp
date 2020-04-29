@@ -77,6 +77,11 @@ struct RestartState {
      */
     std::vector<uint16_t> restart_leader_ports;
     /**
+     * The number of restart leaders that have failed; this is the current index
+     * into restart_leader_ips.
+     */
+    uint32_t num_leader_failures;
+    /**
      * Reads the logs stored at this node and initializes logged_ragged_trim
      */
     void load_ragged_trim(const View& curr_view);

@@ -133,9 +133,16 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
+    bool in_total_restart = view_manager.first_init();
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
+    bool restart_leader_failed = false;
     while(!initial_view_confirmed) {
+        if(restart_leader_failed) {
+            //Retry connecting to the restart leader
+            dbg_default_warn("Restart leader failed during 2PC! Trying again...");
+            in_total_restart = view_manager.restart_to_initial_view();
+        }
         //This might be the shard leaders from the previous view,
         //or the nodes with the longest logs in their shard if we're doing total restart,
         //or empty if this is the first View of a new group
@@ -145,23 +152,30 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
                 = construct_objects<ReplicatedTypes...>(view_manager.get_current_or_restart_view().get(),
                                                         old_shard_leaders);
-        //These functions are no-ops if we're not doing total restart
-        view_manager.truncate_logs();
-        view_manager.send_logs();
+        if(in_total_restart) {
+            view_manager.truncate_logs();
+            view_manager.send_logs();
+        }
         receive_objects(subgroups_and_leaders_to_receive);
         if(view_manager.is_starting_leader()) {
-            //These functions are no-ops if we're not doing total restart
-            bool leader_has_quorum = true;
-            initial_view_confirmed = view_manager.leader_prepare_initial_view(leader_has_quorum);
-            if(!leader_has_quorum) {
-                //If quorum was lost due to failures during the prepare message,
-                //stop here and wait for more nodes to rejoin before going back to state-transfer
-                view_manager.await_rejoining_nodes(my_id);
+            if(in_total_restart) {
+                bool leader_has_quorum = true;
+                view_manager.leader_prepare_initial_view(initial_view_confirmed, leader_has_quorum);
+                if(!leader_has_quorum) {
+                    //If quorum was lost due to failures during the prepare message,
+                    //stop here and wait for more nodes to rejoin before going back to state-transfer
+                    view_manager.await_rejoining_nodes(my_id);
+                }
+            } else {
+                initial_view_confirmed = true;
             }
         } else {
             //This will wait for a new view to be sent if the view was aborted
             //It must be called even in the non-restart case, since the initial view could still be aborted
-            initial_view_confirmed = view_manager.check_view_committed();
+            view_manager.check_view_committed(initial_view_confirmed, restart_leader_failed);
+            if(restart_leader_failed && !(in_total_restart && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS))) {
+                throw derecho_exception("Leader crashed before it could send the initial View! Try joining again at the new leader.");
+            }
         }
     }
     if(view_manager.is_starting_leader()) {
@@ -360,10 +374,10 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
                           subgroup_and_leader.first, subgroup_and_leader.second);
         std::size_t buffer_size;
         bool success = leader_socket.get().read(buffer_size);
-        assert_always(success);
+        if(!success) throw derecho_exception("Fatal error: Subgroup leader failed during state transfer.");
         char* buffer = new char[buffer_size];
         success = leader_socket.get().read(buffer, buffer_size);
-        assert_always(success);
+        if(!success) throw derecho_exception("Fatal error: Subgroup leader failed during state transfer.");
         subgroup_object.receive_object(buffer);
         delete[] buffer;
     }
