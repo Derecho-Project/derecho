@@ -30,7 +30,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * The SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.0.2n. But it should work for any version >= 1.0 
 * The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](https://packages.ubuntu.com/disco/libspdlog-dev) and install it manually with no other dependencies needed.
-* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
+* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please install `v1.7.0` from source code. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Matthew's C++ utilities
   - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
   - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
@@ -45,7 +45,7 @@ Once cloning is complete, to build the code, `cd` into the `derecho` directory a
 * `mkdir Release`
 * `cd Release`
 * `cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=<path-to-install-dir> ..`
-* ``make -j `lscpu | grep "^CPU(" | awk '{print $2}'` ``
+* ``make -j $(nproc)``
 
 This will place the binaries and libraries in the sub-directories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
@@ -67,7 +67,6 @@ To uninstall, run:
 
 To build your own derecho executable, simple run:
 * `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
-* or, `g++ -std=c++1z -o myapp myapp.cpp -lderecho -ldpods -pthread`, if you use **dPods**
 
 To use Derecho in your code, you simply need to 
 - include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
@@ -76,19 +75,19 @@ To use Derecho in your code, you simply need to
 The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior. 
 
 #### Configuring Core Derecho
-Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **rpc_port**, **sst_port**, and **rdmc_port**). 
+Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **rpc_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**leader_external_port** and **external_port**);
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 
 Three message-size options control the memory footprint and performance of Derecho.  In all cases, larger values will increase the memory (DRAM) footprint of the application, and it is fairly easy to end up with a huge memory size if you just pick giant values.  The defaults keep the memory size smaller, but can reduce performance if an application is sending high rates of larger messages.
 
-The options are named **max_payload_size**, **max_smc_payload_size**, and **block_size**. 
+The options are named **max_payload_size**, **max_smc_payload_size**, **block_size**, **max_p2p_request_payload_size**, and **max_p2p_reply_payload_size**. 
 
-No message bigger than **max_payload_size** will be sent by Derecho. 
+No message bigger than **max_payload_size** will be sent by Derecho multicast(`Replicated<>::send()`). No message bigger than **max_p2p_request_payload_size** will be sent by Derecho p2p send(`Replicated<>::p2p_send()` or `ExternalClientCaller<>::p2p_send()`). No reply bigger than **max_p2p_reply_payload_size** will be sent to carry the return values any multicast or p2p send.
 
-To understand the other two options, it helps to remember that internally, Derecho makes use of two sub-protocols when it transmits your data.  One sub-protocol is optimized for small messages, and is called SMC.  Messages equal to or smaller than **max_smc_payload_size** will be sent using SMC.  Normally **max_smc_payload_size** is set to a small value, like 1K, but we have tested with values up to 10K.  This limit should not be made much larger  performance will suffer and memory would bloat.
+To understand the other two options, it helps to remember that internally, Derecho makes use of two sub-protocols when it transmits your data.  One sub-protocol is optimized for small messages, and is called SMC.  Messages equal to or smaller than **max_smc_payload_size** will be sent using SMC.  Normally **max_smc_payload_size** is set to a small value, like 1K, but we have tested with values up to 10K.  This limit should not be made much larger: performance will suffer and memory would bloat.
 
-Larger messages are sent via RDMC, our big object protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size  it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
+Larger messages are sent via RDMC, our *big object* protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size: it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
 
 More information about Derecho parameter setting can be found in the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
@@ -160,9 +159,17 @@ sudo modprobe -a rdma_cm ib_uverbs ib_umad ib_ipoib mlx4_ib iw_cxgb3 iw_cxgb4 iw
 ```
 Depending on your system, some of the modules might not load which is fine.
 
-RDMA requires memory pinning of memory regions shared with other nodes. There's a limit on the maximum amount of memory a process can pin, typically 64 KB, which Derecho easily exceeds. Therefore, you need to set this to unlimited. To do so, append the following lines to /etc/security/limits.conf:
-* `[username] hard memlock unlimited`
-* `[username] soft memlock unlimited`
+RDMA requires memory pinning of memory regions shared with other nodes. There's a limit on the maximum amount of memory a process can pin, typically 64 KB, which Derecho easily exceeds. Therefore, you need to set this to unlimited. To do so, append the following lines to `/etc/security/limits.conf`:
+```
+* [username] hard memlock unlimited
+* [username] soft memlock unlimited
+```
+
+Derecho maintains many TCP connections as well as disk files for large scale setups. We recommend raise the limit of maximum number of open files by appending the following lines to `/etc/security/limits.conf`:
+```
+* hard nofile 10240
+* soft nofile 10240
+```
 
 where `[username]` is your linux username. A `*` in place of the username will set this limit to unlimited for all users. Log out and back in again for the limits to reapply. You can test this by verifying that `ulimit -l` outputs `unlimited` in bash.
 
@@ -170,18 +177,7 @@ The persistence layer of Derecho stores durable logs of updates in memory-mapped
 
     sysctl -w vm.overcommit_memory = 1
 
-
-We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
-
-A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
-The input to the first node is:
-* 0 (its node ID)
-* 2 (number of nodes for the experiment)
-* IP address of node 1
-* IP address of node 2
-
-Replace the node ID 0 by 1 for the input to the second node.
-As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw`, which will be something along the lines of `12 0 10000 15 1000 1 0 0.37282`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation for this program.
+A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 2 0 100000 0` on both. As a confirmation that the experiment finished successfully, the first node will write a log of the result in the file `data_derecho_bw`, which will be something along the lines of `2 0 10240 300 100000 0 5.07607`. Full experiment details including explanation of the arguments, results and methodology is explained in the source documentation for this program.
 
 ## Using Derecho
 The file `simple_replicated_objects.cpp` within applications/demos shows a complete working example of a program that sets up and uses a Derecho group with several Replicated Objects. You can read through that file if you prefer to learn by example, or read on for an explanation of how to use various features of Derecho.
