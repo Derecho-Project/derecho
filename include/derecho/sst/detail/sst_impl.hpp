@@ -239,7 +239,6 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
     util::polling_data.reset_waiting(tid);
 
     for(auto index : failed_node_indexes) {
-        std::cerr << "DEBUG: SST put_with_completion detected failure on row " << index << std::endl;
         freeze(index);
     }
 }
