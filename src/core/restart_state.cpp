@@ -13,6 +13,8 @@
 namespace derecho {
 
 void RestartState::load_ragged_trim(const View& curr_view) {
+    //If this method is called more than once, it should be idempotent
+    logged_ragged_trim.clear();
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
      * so that I have access to the type ID. This wastes time, but I don't have a map
      * from subgroup ID to subgroup_type_id within curr_view. */
@@ -387,6 +389,7 @@ int64_t RestartLeaderState::send_prepare() {
             }
         } catch(node_id_t failed_node) {
             waiting_join_sockets.erase(waiting_sockets_iter);
+            members_sent_restart_view.erase(failed_node);
             rejoined_node_ips_and_ports.erase(failed_node);
             rejoined_node_ids.erase(failed_node);
             return failed_node;

@@ -140,6 +140,7 @@ bool ViewManager::restart_to_initial_view() {
             dbg_default_info("Logged View {} found on disk. Restarting in recovery mode as the leader.", curr_view->vid);
             //The subgroup_type_order can't be serialized, but it's constant across restarts
             curr_view->subgroup_type_order = subgroup_type_order;
+            //Set up restart state and await rejoining nodes as the leader
             restart_state->load_ragged_trim(*curr_view);
             restart_leader_state_machine = std::make_unique<RestartLeaderState>(
                     std::move(curr_view), *restart_state,
@@ -250,6 +251,7 @@ bool ViewManager::receive_initial_view() {
         }
         //Restore this non-serializeable field to curr_view before using it
         curr_view->subgroup_type_order = subgroup_type_order;
+        //Now that we know we need them, load ragged trims from disk
         restart_state->load_ragged_trim(*curr_view);
         dbg_default_debug("In restart mode, sending {} ragged trims to leader", restart_state->logged_ragged_trim.size());
         /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
@@ -258,7 +260,8 @@ bool ViewManager::receive_initial_view() {
         success = leader_connection->write(restart_state->logged_ragged_trim.size());
         if(!success) return false;
         for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
-            const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second;  //The inner map has one entry
+            assert(id_to_shard_map.second.size() == 1); //The inner map has one entry
+            const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second;
             success = leader_connection->write(mutils::bytes_size(*ragged_trim));
             if(!success) return false;
             try {
@@ -361,7 +364,7 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
             const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
             //Wait for a new initial view and ragged trim to be sent,
             //so that when this method returns we can try state transfer again
-            leader_failed = receive_view_and_leaders();
+            leader_failed = !receive_view_and_leaders();
             if(leader_failed) throw derecho_exception("Leader crashed!");
             //Update the TCP connections pool for any new/failed nodes,
             //so we can run state transfer again.
@@ -695,6 +698,7 @@ void ViewManager::leader_prepare_initial_view(bool& view_confirmed, bool& leader
     int64_t failed_node_id = restart_leader_state_machine->send_prepare();
     if(failed_node_id != -1) {
         dbg_default_warn("Node {} failed when sending Prepare messages for the restart view!", failed_node_id);
+        restart_leader_state_machine->send_abort();
         leader_has_quorum = restart_leader_state_machine->resend_view_until_quorum_lost();
         //If there was at least one failure, we (may) need to do state transfer again, so set view to unconfirmed
         view_confirmed = false;
@@ -1757,6 +1761,7 @@ void ViewManager::send_objects_to_new_members(const View& new_view, const vector
  * the other one is waiting on. */
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets->get_socket(new_node_id);
+    assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
     ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
     if(subgroup_object.is_persistent()) {
         //First, read the log tail length sent by the joining node

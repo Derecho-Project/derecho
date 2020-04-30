@@ -214,7 +214,7 @@ private:
     template <typename... Empty>
     std::enable_if_t<0 == sizeof...(Empty),
                      std::set<std::pair<subgroup_id_t, node_id_t>>>
-    construct_objects(const View&, const vector_int64_2d&) {
+    construct_objects(const View&, const vector_int64_2d&, bool) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
 
@@ -232,13 +232,16 @@ private:
      * @param old_shard_leaders The array of old shard leaders for each subgroup
      * (indexed by subgroup ID), which will contain -1 if there is no previous
      * leader for that shard.
+     * @param in_restart True if this node is in restart mode (in which case this
+     * function may be called multiple times if the restart view is aborted)
      * @return The set of subgroup IDs that are un-initialized because this node is
      * joining an existing group and needs to receive initial object state, paired
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
-            const View& curr_view, const vector_int64_2d& old_shard_leaders);
+            const View& curr_view, const vector_int64_2d& old_shard_leaders,
+            bool in_restart);
 
 public:
     /**

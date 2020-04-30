@@ -151,7 +151,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         //this node needs to receive object state from
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders_to_receive
                 = construct_objects<ReplicatedTypes...>(view_manager.get_current_or_restart_view().get(),
-                                                        old_shard_leaders);
+                                                        old_shard_leaders, in_total_restart);
         if(in_total_restart) {
             view_manager.truncate_logs();
             view_manager.send_logs();
@@ -217,7 +217,8 @@ template <typename... ReplicatedTypes>
 template <typename FirstType, typename... RestTypes>
 std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::construct_objects(
         const View& curr_view,
-        const vector_int64_2d& old_shard_leaders) {
+        const vector_int64_2d& old_shard_leaders,
+        bool in_restart) {
     std::set<std::pair<subgroup_id_t, uint32_t>> subgroups_to_receive;
     if(!curr_view.is_adequately_provisioned) {
         return subgroups_to_receive;
@@ -245,13 +246,15 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     objects_by_subgroup_id.erase(subgroup_id);
                     replicated_objects.template get<FirstType>().erase(old_object);
                 }
+                //Determine if there is existing state for this shard on another node
+                bool has_previous_leader = old_shard_leaders.size() > subgroup_id
+                                           && old_shard_leaders[subgroup_id].size() > shard_num
+                                           && old_shard_leaders[subgroup_id][shard_num] > -1
+                                           && old_shard_leaders[subgroup_id][shard_num] != my_id;
                 //If we don't have a Replicated<T> for this (type, subgroup index), we just became a member of the shard
                 if(replicated_objects.template get<FirstType>().count(subgroup_index) == 0) {
-                    //Determine if there is existing state for this shard that will need to be received
-                    bool has_previous_leader = old_shard_leaders.size() > subgroup_id
-                                               && old_shard_leaders[subgroup_id].size() > shard_num
-                                               && old_shard_leaders[subgroup_id][shard_num] > -1
-                                               && old_shard_leaders[subgroup_id][shard_num] != my_id;
+                    dbg_default_debug("Constructing a Replicated Object for type {}, subgroup {}, shard {}",
+                                      typeid(FirstType).name(), subgroup_id, shard_num);
                     if(has_previous_leader) {
                         subgroups_to_receive.emplace(subgroup_id, old_shard_leaders[subgroup_id][shard_num]);
                     }
@@ -271,8 +274,13 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     // Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id,
                                                    replicated_objects.template get<FirstType>().at(subgroup_index));
-                    break;  // This node can be in at most one shard, so stop here
+                } else if(in_restart && has_previous_leader) {
+                    //In restart mode, construct_objects may be called multiple times if the initial view
+                    //is aborted, so we need to receive state for this shard even if we already constructed
+                    //the Replicated<T> for it
+                    subgroups_to_receive.emplace(subgroup_id, old_shard_leaders[subgroup_id][shard_num]);
                 }
+                break;  // This node can be in at most one shard, so stop here
             }
         }
         if(!in_subgroup) {
@@ -290,7 +298,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                                                               my_id, subgroup_id, rpc_manager));
         }
     }
-    return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders));
+    return functional_insert(subgroups_to_receive, construct_objects<RestTypes...>(curr_view, old_shard_leaders, in_restart));
 }
 
 template <typename... ReplicatedTypes>
@@ -310,7 +318,7 @@ void Group<ReplicatedTypes...>::set_up_components() {
     view_manager.register_initialize_objects_upcall([this](node_id_t my_id, const View& view,
                                                            const vector_int64_2d& old_shard_leaders) {
         std::set<std::pair<subgroup_id_t, node_id_t>> subgroups_and_leaders
-                = construct_objects<ReplicatedTypes...>(view, old_shard_leaders);
+                = construct_objects<ReplicatedTypes...>(view, old_shard_leaders, false);
         receive_objects(subgroups_and_leaders);
     });
 }
