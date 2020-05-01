@@ -12,7 +12,7 @@ static const char* default_conf_file = "derecho.cfg";
 
 const std::vector<std::string> Conf::subgroupProfileFields = {
         "max_payload_size",
-	"max_reply_payload_size",
+	    "max_reply_payload_size",
         "max_smc_payload_size",
         "block_size",
         "window_size",
@@ -33,6 +33,8 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_IP),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_GMS_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_EXTERNAL_PORT),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RESTART_LEADERS),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RESTART_LEADER_PORTS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_ID),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_IP),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_GMS_PORT),
@@ -42,10 +44,12 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_HEARTBEAT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RESTART_TIMEOUT_MS),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY),
-	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
-	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
-	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
+	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
+	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
+	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
         // [SUBGROUP/<subgroup name>]
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE),
@@ -152,4 +156,17 @@ const bool getConfBoolean(const std::string& key) {
 const bool hasCustomizedConfKey(const std::string& key) {
     return Conf::get()->hasCustomizedKey(key);
 }
+
+std::vector<std::string> split_string(const std::string& str, const std::string& delimiter) {
+    std::vector<std::string> result;
+    std::size_t lastpos = 0; 
+    std::size_t nextpos = 0; 
+    while((nextpos = str.find(delimiter, lastpos)) != std::string::npos) {
+        result.emplace_back(str.substr(lastpos, nextpos));
+        lastpos = nextpos + delimiter.length(); 
+    }
+    result.emplace_back(str.substr(lastpos));
+    return result;
+}
+
 }

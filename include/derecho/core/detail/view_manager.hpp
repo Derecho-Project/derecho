@@ -118,16 +118,9 @@ private:
 
     using initialize_rpc_objects_t = std::function<void(node_id_t, const View&, const std::vector<std::vector<int64_t>>&)>;
 
-    //Allow RPCManager and Replicated to access curr_view and view_mutex directly
-    friend class rpc::RPCManager;
+    //Allow Replicated to access view_mutex and view_change_cv directly
     template <typename T>
     friend class Replicated;
-    template <typename T>
-    friend class ExternalCaller;
-
-    friend class PersistenceManager;
-
-    friend class RestartLeaderState;
 
     /**
      * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
@@ -196,6 +189,13 @@ private:
 
     /** The same set of TCP sockets used by Group and RPCManager. */
     std::shared_ptr<tcp::tcp_connections> tcp_sockets;
+
+    /** 
+     * The socket that made the initial connection to the restart leader, if this
+     * node is a non-leader. This is only used during the initial startup phase; 
+     * after the Group constructor finishes and start() is called, it will be null.
+     */
+    std::unique_ptr<tcp::socket> leader_connection;
 
     using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
     /**
@@ -478,7 +478,13 @@ private:
     /* ---------------------------------------------------------------------------------- */
 
     /* ------------------------ Setup/constructor helpers ------------------------------- */
-
+    /** 
+     * The initial start-up procedure (basically a constructor) for the case
+     * where there is no logged state on disk and the group is doing a "fresh
+     * start." At the end of this function this node has constructed or received
+     * the group's first view.
+     */
+    void startup_to_first_view();
     /** Constructor helper method to encapsulate spawning the background threads. */
     void create_threads();
     /** Constructor helper method to encapsulate creating all the predicates. */
@@ -488,19 +494,25 @@ private:
     void load_ragged_trim();
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
-    void await_first_view(const node_id_t my_id);
-
-    /** Constructor helper for non-leader nodes; encapsulates receiving and
+    void await_first_view();
+    /** 
+     * Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
-     * shard leaders) from the leader. */
-    void receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection);
+     * shard leaders) from the leader.
+     * @return true if the leader successfully sent the View, false if the
+     * leader crashed (i.e. a socket operation to it failed) before completing
+     * the process.
+     */
+    bool receive_view_and_leaders();
 
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
+     * @return true if the leader successfully sent the View, false if the leader crashed 
+     * (i.e. a socket operation to it failed) before completing the process
      */
-    void receive_initial_view(const node_id_t my_id, tcp::socket& leader_connection);
+    bool receive_initial_view();
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -518,6 +530,7 @@ private:
      * updated to reflect
      */
     void reinit_tcp_connections(const View& initial_view, const node_id_t my_id);
+
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
@@ -539,20 +552,6 @@ private:
     void transition_multicast_group(const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
                                     const uint32_t new_num_received_size,
                                     const uint32_t new_slot_size);
-    /**
-     * Initializes curr_view with subgroup information based on the membership
-     * functions in subgroup_info. If curr_view would be inadequate based on
-     * the subgroup allocation functions, it will be marked as inadequate.
-     * @param subgroup_info The SubgroupInfo (containing subgroup membership
-     * functions) to use to provision subgroups
-     * @param prev_view The previous View, which may be null if the current view
-     * is the first one
-     * @param curr_view A mutable reference to the current View, which will have
-     * its SubViews initialized
-     */
-    static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
-                                   const std::unique_ptr<View>& prev_view,
-                                   View& curr_view);
 
     /**
      * Creates the subgroup-settings map that MulticastGroup's constructor needs
@@ -568,6 +567,23 @@ private:
     std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
                                                            std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
+//Note: This function is public so that RestartLeaderState can access it.
+public:
+    /**
+     * Initializes curr_view with subgroup information based on the membership
+     * functions in subgroup_info. If curr_view would be inadequate based on
+     * the subgroup allocation functions, it will be marked as inadequate.
+     * @param subgroup_info The SubgroupInfo (containing subgroup membership
+     * functions) to use to provision subgroups
+     * @param prev_view The previous View, which may be null if the current view
+     * is the first one
+     * @param curr_view A mutable reference to the current View, which will have
+     * its SubViews initialized
+     */
+    static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
+                                   const std::unique_ptr<View>& prev_view,
+                                   View& curr_view);
+private:
     /**
      * Recomputes num_received_size (the length of the num_received column in
      * the SST) for an existing provisioned View, without re-running the
@@ -600,25 +616,29 @@ private:
      * @return A 2-dimensional vector of ValueType
      * @tparam ValueType The type of values in the vector; this assumes ValueType
      * can be serialized by mutils
+     * @throw derecho_exception if the socket read operations fail
      */
     template <typename ValueType>
     static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
         std::size_t buffer_size;
-        socket.read(buffer_size);
+        if(!socket.read(buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
         char buffer[buffer_size];
-        socket.read(buffer, buffer_size);
+        if(!socket.read(buffer, buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
     }
 
 public:
     /**
-     * Constructor for a new group where this node is the GMS leader.
-     * @param my_ip The IP address of the node executing this code
+     * Constructor for either the leader or non-leader of a group.
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
+     * @param subgroup_type_order A vector of type_index in the same order as 
+     * the template parameters to the Group class
+     * @param any_persistent_objects True if any of the subgroup types in this
+     * group use Persistent<T> fields, false otherwise
      * @param group_tcp_sockets The pool of TCP connections to each group member
      * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
@@ -636,35 +656,26 @@ public:
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
-    /**
-     * Constructor for joining an existing group, assuming the caller has already
-     * opened a socket to the group's leader.
-     * @param my_id The node ID of this node
-     * @param leader_connection A Socket connected to the leader on its
-     * group-management service port.
-     * @param subgroup_info The set of functions defining subgroup membership
-     * in this group. Must be the same as the SubgroupInfo used to set up the
-     * leader.
-     * @param group_tcp_sockets The pool of TCP connections to each group member
-     * that is shared with Group.
-     * @param object_reference_map A mutable reference to the list of
-     * ReplicatedObject references in Group, so that ViewManager can access it
-     * while Group manages the list
-     * @param _persistence_manager_callbacks The persistence manager callbacks
-     * @param _view_upcalls Any extra View Upcalls to be called when a view
-     * changes.
-     */
-    ViewManager(tcp::socket& leader_connection,
-                const SubgroupInfo& subgroup_info,
-                const std::vector<std::type_index>& subgroup_type_order,
-                const bool any_persistent_objects,
-                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
-                ReplicatedObjectReferenceMap& object_reference_map,
-                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
-                std::vector<view_upcall_t> _view_upcalls = {});
-
     ~ViewManager();
 
+    /**
+     * Post-constructor initializer that must be called before doing anything
+     * else with the ViewManager. Determines whether this is a fresh start or a
+     * restart, and constructs or receives the initial View (depending on whether
+     * this node is a leader or non-leader).
+     * @return true if the group is now in total restart mode, false if not.
+     */
+    bool first_init();
+    /**
+     * Starts the restart procedure on this node, assuming some logged state has
+     * been found on disk. Determines whether this node is the restart leader,
+     * contacts the restart leader if not, and waits for an initial restart view
+     * to be constructed or received.
+     * @return true if the group is in total restart mode (and the restart
+     * procecure should continue), false if the contacted leader replied that
+     * the group is not actually in total restart mode.
+     */
+    bool restart_to_initial_view();
     /**
      * Setup method for the leader when it is restarting from complete failure:
      * waits for a restart quorum of nodes from the last known view to join.
@@ -673,26 +684,30 @@ public:
 
     /**
      * Setup method for non-leader nodes: checks whether the initial View received
-     * in the constructor gets committed by the leader, and if not, waits for another
-     * initial View to be sent.
-     * @param leader_connection
-     * @return True if the initial View was committed, false if it was aborted
-     * and a new View has been received.
+     * in the init function gets committed by the leader, and if not, waits for
+     * another initial View to be sent. Reports its results in the two out-parameters.
+     * @param view_confirmed A mutable reference to a bool that will be set to true
+     * if the initial View was committed.
+     * @param leader_failed A mutable reference to a bool that will be set to true
+     * if the restart leader failed before it could finish committing the view. In
+     * this case view_confirmed will also be false, but this node will need to go
+     * back and contact a new restart leader.
      */
-    bool check_view_committed(tcp::socket& leader_connection);
+    void check_view_committed(bool& view_confirmed, bool& leader_failed);
 
     /**
      * Setup method for the leader node in total restart mode: sends a Prepare
      * message to all non-leader nodes indicating that state transfer has finished.
      * Also checks to see whether any non-leader nodes have failed in the meantime.
      * This function simply does nothing if this node is not in total restart mode.
+     * Reports its results in the two out-parameters.
+     * @param view_confirmed A mutable reference to a bool that will be set to
+     * true if all non-leader nodes are still alive, or false if there was a failure.
      * @param leader_has_quorum A mutable reference to a bool that will be set to
      * False if the leader realizes it no longer has a restart quorum due to
      * failures.
-     * @return True if all non-leader nodes are still alive, False if there was
-     * a failure.
      */
-    bool leader_prepare_initial_view(bool& leader_has_quorum);
+    void leader_prepare_initial_view(bool& view_confirmed, bool& leader_has_quorum);
 
     /**
      * Setup method for the leader node: sends a commit message to all non-leader
@@ -743,6 +758,13 @@ public:
     void start();
 
     /**
+     * Returns true if this node is configured as the initial leader of the group,
+     * either because its IP matches leader_ip or because a total restart is in
+     * progress and it is the current restart leader.
+     */
+    bool is_starting_leader() const;
+
+    /**
      * @return The list of shard leaders in the previous view that this node
      * received along with curr_view when it joined the group. Needed by Group
      * to complete state transfer.
@@ -781,6 +803,15 @@ public:
      * View changes.
      */
     SharedLockedReference<View> get_current_view();
+
+    /**
+     * Gets a reference to the current View without acquiring a read-lock on it.
+     * This blindly dereferences the curr_view pointer, so only call it if you
+     * can be really confident that a view change won't happen while accessing
+     * the View.
+     * @return The value of *curr_view
+     */
+    View& unsafe_get_current_view();
 
     /**
      * An ugly workaround function needed only during initial setup during a

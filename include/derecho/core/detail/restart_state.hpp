@@ -55,14 +55,35 @@ inline std::string ragged_trim_filename(subgroup_id_t subgroup_num, uint32_t sha
 using ragged_trim_map_t = std::map<subgroup_id_t, std::map<uint32_t, std::unique_ptr<RaggedTrim>>>;
 
 struct RestartState {
-    /** List of logged ragged trim states recovered from the last known View,
+    /**
+     * List of logged ragged trim states recovered from the last known View,
      * either read locally from this node's logs or received from the restart
-     * leader. */
+     * leader.
+     */
     ragged_trim_map_t logged_ragged_trim;
-    /** Map from (subgroup ID, shard num) to ID of the "restart leader" for that
+    /** 
+     * Map from (subgroup ID, shard num) to ID of the "restart leader" for that
      * shard, which is the node with the longest persistent log for that shard's
-     * replicated state. */
+     * replicated state.
+     */
     std::vector<std::vector<int64_t>> restart_shard_leaders;
+    /**
+     * List of IP addresses of potential restart leaders (of the overall process)
+     * in descending priority order
+     */
+    std::vector<std::string> restart_leader_ips;
+    /**
+     * List of GMS ports of potential restart leaders in descending priority order
+     */
+    std::vector<uint16_t> restart_leader_ports;
+    /**
+     * The number of restart leaders that have failed; this is the current index
+     * into restart_leader_ips.
+     */
+    uint32_t num_leader_failures;
+    /**
+     * Reads the logs stored at this node and initializes logged_ragged_trim
+     */
     void load_ragged_trim(const View& curr_view);
     /**
      * Computes the persistent version corresponding to a ragged trim proposal,
@@ -136,7 +157,6 @@ private:
     std::unique_ptr<View> update_curr_and_next_restart_view();
 
 public:
-    static const int RESTART_LEADER_TIMEOUT = 2000;
     RestartLeaderState(std::unique_ptr<View> _curr_view, RestartState& restart_state,
                        const SubgroupInfo& subgroup_info,
                        const node_id_t my_id);

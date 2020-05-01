@@ -1,4 +1,5 @@
 #include <optional>
+#include <chrono>
 
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/restart_state.hpp>
@@ -12,6 +13,8 @@
 namespace derecho {
 
 void RestartState::load_ragged_trim(const View& curr_view) {
+    //If this method is called more than once, it should be idempotent
+    logged_ragged_trim.clear();
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
      * so that I have access to the type ID. This wastes time, but I don't have a map
      * from subgroup ID to subgroup_type_id within curr_view. */
@@ -106,7 +109,7 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
 
 void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
-    int time_remaining_ms = RESTART_LEADER_TIMEOUT;
+    int time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
     while(time_remaining_ms > 0) {
         using namespace std::chrono;
         auto start_time = high_resolution_clock::now();
@@ -158,7 +161,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             }
         } else if(!ready_to_restart) {
             //Accept timed out, but we haven't heard from enough nodes yet, so reset the timer
-            time_remaining_ms = RESTART_LEADER_TIMEOUT;
+            time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
         }
     }
 }
@@ -386,6 +389,7 @@ int64_t RestartLeaderState::send_prepare() {
             }
         } catch(node_id_t failed_node) {
             waiting_join_sockets.erase(waiting_sockets_iter);
+            members_sent_restart_view.erase(failed_node);
             rejoined_node_ips_and_ports.erase(failed_node);
             rejoined_node_ids.erase(failed_node);
             return failed_node;

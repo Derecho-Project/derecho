@@ -17,11 +17,12 @@ namespace derecho {
 /** The single configuration file for derecho **/
 class Conf {
 private:
-    // Configuration Table:
-    // config name --> default value
+    //String constants for config options
 #define CONF_DERECHO_LEADER_IP "DERECHO/leader_ip"
 #define CONF_DERECHO_LEADER_GMS_PORT "DERECHO/leader_gms_port"
 #define CONF_DERECHO_LEADER_EXTERNAL_PORT "DERECHO/leader_external_port"
+#define CONF_DERECHO_RESTART_LEADERS "DERECHO/restart_leaders"
+#define CONF_DERECHO_RESTART_LEADER_PORTS "DERECHO/restart_leader_ports"
 #define CONF_DERECHO_LOCAL_ID "DERECHO/local_id"
 #define CONF_DERECHO_LOCAL_IP "DERECHO/local_ip"
 #define CONF_DERECHO_GMS_PORT "DERECHO/gms_port"
@@ -31,6 +32,8 @@ private:
 #define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
+#define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
+#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders" 
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
 
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
@@ -55,12 +58,15 @@ private:
 #define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
-
+    // Configuration Table:
+    // config name --> default value
     std::map<const std::string, std::string> config = {
             // [DERECHO]
             {CONF_DERECHO_LEADER_IP, "127.0.0.1"},
             {CONF_DERECHO_LEADER_GMS_PORT, "23580"},
             {CONF_DERECHO_LEADER_EXTERNAL_PORT, "32645"},
+            {CONF_DERECHO_RESTART_LEADERS, "127.0.0.1"},
+            {CONF_DERECHO_RESTART_LEADER_PORTS, "23580"},
             {CONF_DERECHO_LOCAL_ID, "0"},
             {CONF_DERECHO_LOCAL_IP, "127.0.0.1"},
             {CONF_DERECHO_GMS_PORT, "23580"},
@@ -70,10 +76,12 @@ private:
             {CONF_DERECHO_EXTERNAL_PORT, "32645"},
             {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
+            {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
-	    {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
-	    {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
-	    {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
+	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
+	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
+	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
             {CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE, "10240"},
@@ -207,5 +215,17 @@ const float getConfFloat(const std::string& key);
 const double getConfDouble(const std::string& key);
 const bool getConfBoolean(const std::string& key);
 const bool hasCustomizedConfKey(const std::string& key);
+
+/**
+ * Splits a string into a vector of strings using a delimiting string. This is 
+ * helpful for parsing "list-like" config options, which are comma-delimited 
+ * sequences of strings or numbers (so the default delimiter is ",").
+ * @param str The string to split
+ * @param delimiter The string to use as the delimiter for splitting
+ * @return A vector of substrings of the input string, partitioned on the
+ * delimiter. The delimiter is not included in any substring.
+ */
+std::vector<std::string> split_string(const std::string& str, const std::string& delimiter = ",");
+
 }  // namespace derecho
 #endif  // CONF_HPP
