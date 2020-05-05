@@ -285,8 +285,9 @@ void _resources::connect_qp() {
     local_con_data.qp_num = htonl(qp->qp_num);
     local_con_data.lid = htons(g_res->port_attr.lid);
     memcpy(local_con_data.gid, &my_gid, 16);
-    bool success = sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
-    if(!success) {
+    try {
+        sst_connections->exchange(remote_index, local_con_data, tmp_con_data);
+    } catch(tcp::socket_error&) {
         cout << "Could not exchange qp data in connect_qp" << endl;
     }
     remote_con_data.addr = ntohll(tmp_con_data.addr);
@@ -309,7 +310,7 @@ void _resources::connect_qp() {
     // sync to make sure that both sides are in states that they can connect to
     // prevent packet loss
     // just send a dummy char back and forth
-    success = sync(remote_index);
+    bool success = sync(remote_index);
     if(!success) {
         cout << "Could not sync in connect_qp after qp transition to RTS state" << endl;
     }
@@ -367,7 +368,8 @@ int _resources::post_remote_send(verbs_sender_ctxt* sctxt, const long long int o
         uint32_t my_slot = ++without_completion_send_cnt;
         if(my_slot > without_completion_send_capacity) {
             // spin on the counter until space released in queue pair
-            while(without_completion_send_cnt >= without_completion_send_capacity && !remote_failed);
+            while(without_completion_send_cnt >= without_completion_send_capacity && !remote_failed)
+                ;
             if(remote_failed) {
                 cerr << "sst::resources: Remote has failed, aborting post_remote_send()" << std::endl;
                 return EFAULT;
@@ -724,11 +726,16 @@ bool remove_node(uint32_t node_id) {
 
 bool sync(uint32_t r_index) {
     int s = 0, t = 0;
-    if(sst_connections->contains_node(r_index)) {
-        return sst_connections->exchange(r_index, s, t);
-    } else {
-        return external_client_connections->exchange(r_index, s, t);
+    try {
+        if(sst_connections->contains_node(r_index)) {
+            sst_connections->exchange(r_index, s, t);
+        } else {
+            external_client_connections->exchange(r_index, s, t);
+        }
+    } catch(tcp::socket_error&) {
+        return false;
     }
+    return true;
 }
 
 void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {

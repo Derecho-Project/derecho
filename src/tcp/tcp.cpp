@@ -2,61 +2,59 @@
 
 #include <algorithm>
 #include <arpa/inet.h>
+#include <cassert>
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 #include <iostream>
+#include <linux/tcp.h>
 #include <netdb.h>
+#include <sys/epoll.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/epoll.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <cassert>
-#include <linux/tcp.h>
 
 namespace tcp {
 
-using namespace std;
-
-socket::socket(string server_ip, uint16_t server_port, bool retry) {
+socket::socket(std::string server_ip, uint16_t server_port, bool retry) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure(server_ip);
 
-    hostent *server;
+    hostent* server;
     server = gethostbyname(server_ip.c_str());
     if(server == nullptr) throw connection_failure(server_ip);
 
     char server_ip_cstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, server->h_addr, server_ip_cstr, sizeof(server_ip_cstr));
-    remote_ip = string(server_ip_cstr);
+    remote_ip = std::string(server_ip_cstr);
 
     sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(server_port);
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
           server->h_length);
 
     int optval = 1;
     if(setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval))) {
-      fprintf(stderr, "WARNING: Failed to disable Nagle's algorithm, continue without TCP_NODELAY...\n");
+        fprintf(stderr, "WARNING: Failed to disable Nagle's algorithm, continue without TCP_NODELAY...\n");
     }
 
-    if (retry) {
-        while(connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0);
-    }
-    else {
-        if (connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+    if(retry) {
+        while(connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0)
+            ;
+    } else {
+        if(connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
             throw connection_failure(server_ip);
         }
     }
 }
-socket::socket(socket &&s) : sock(s.sock), remote_ip(s.remote_ip) {
+socket::socket(socket&& s) : sock(s.sock), remote_ip(s.remote_ip) {
     s.sock = -1;
     s.remote_ip = std::string();
 }
 
-socket &socket::operator=(socket &&s) {
+socket& socket::operator=(socket&& s) {
     sock = s.sock;
     s.sock = -1;
     remote_ip = std::move(s.remote_ip);
@@ -69,23 +67,23 @@ socket::~socket() {
 
 bool socket::is_empty() const { return sock == -1; }
 
-int socket::try_connect(string servername, int port, int timeout_ms) {
+int socket::try_connect(std::string servername, int port, int timeout_ms) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure(servername);
 
-    hostent *server;
+    hostent* server;
     server = gethostbyname(servername.c_str());
     if(server == nullptr) throw connection_failure(servername);
 
     char server_ip_cstr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, server->h_addr, server_ip_cstr, sizeof(server_ip_cstr));
-    remote_ip = string(server_ip_cstr);
+    remote_ip = std::string(server_ip_cstr);
 
     sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
+    bcopy((char*)server->h_addr, (char*)&serv_addr.sin_addr.s_addr,
           server->h_length);
 
     //Temporarily set socket to nonblocking in order to connect with a timeout
@@ -100,7 +98,7 @@ int socket::try_connect(string servername, int port, int timeout_ms) {
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock, &connect_event);
 
     bool connected = false;
-    int return_code = connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr));
+    int return_code = connect(sock, (sockaddr*)&serv_addr, sizeof(serv_addr));
     if(return_code == -1 && errno != EINPROGRESS) {
         return_code = errno;
     } else if(return_code == 0) {
@@ -133,7 +131,7 @@ int socket::try_connect(string servername, int port, int timeout_ms) {
         epoll_ctl(epoll_fd, EPOLL_CTL_DEL, sock, NULL);
         sock_flags = fcntl(sock, F_GETFL, 0);
         sock_flags &= ~O_NONBLOCK;
-        return_code = fcntl(sock, F_SETFL, sock_flags); //This should return 0
+        return_code = fcntl(sock, F_SETFL, sock_flags);  //This should return 0
     } else {
         close(sock);
     }
@@ -141,10 +139,9 @@ int socket::try_connect(string servername, int port, int timeout_ms) {
     return return_code;
 }
 
-bool socket::read(char *buffer, size_t size) {
+void socket::read(char* buffer, size_t size) {
     if(sock < 0) {
-        fprintf(stderr, "WARNING: Attempted to read from closed socket\n");
-        return false;
+        throw socket_closed_error("Attempted to read from closed socket");
     }
 
     size_t total_bytes = 0;
@@ -152,17 +149,17 @@ bool socket::read(char *buffer, size_t size) {
         ssize_t new_bytes = ::read(sock, buffer + total_bytes, size - total_bytes);
         if(new_bytes > 0) {
             total_bytes += new_bytes;
-        } else if(new_bytes == 0 || (new_bytes == -1 && errno != EINTR)) {
-            return false;
+        } else if(new_bytes == 0) {
+            throw incomplete_read_error("Read EOF prematurely");
+        } else if(new_bytes == -1 && errno != EINTR) {
+            throw socket_io_error(errno, "Read failed due to an error in socket connected to " + remote_ip);
         }
     }
-    return true;
 }
 
-ssize_t socket::read_partial(char *buffer, size_t max_size) {
+ssize_t socket::read_partial(char* buffer, size_t max_size) {
     if(sock < 0) {
-        fprintf(stderr, "WARNING: Attempted to read from closed socket\n");
-        return -1;
+        throw socket_closed_error("Attempted to read from closed socket");
     }
 
     ssize_t bytes_read = ::read(sock, buffer, max_size);
@@ -174,10 +171,9 @@ bool socket::probe() {
     return count > 0;
 }
 
-bool socket::write(const char *buffer, size_t size) {
+void socket::write(const char* buffer, size_t size) {
     if(sock < 0) {
-        fprintf(stderr, "WARNING: Attempted to write to closed socket\n");
-        return false;
+        throw socket_closed_error("Attempted to write to closed socket");
     }
 
     size_t total_bytes = 0;
@@ -187,56 +183,65 @@ bool socket::write(const char *buffer, size_t size) {
         ssize_t bytes_written = send(sock, buffer + total_bytes, size - total_bytes, MSG_NOSIGNAL);
         if(bytes_written >= 0) {
             total_bytes += bytes_written;
+        } else if(bytes_written == -1 && errno == ECONNRESET) {
+            throw connection_reset_error("socket::write: Connection reset on socket to " + remote_ip);
+        } else if(bytes_written == -1 && errno == EPIPE) {
+            throw remote_closed_connection_error("socket::write: Socket closed by remote at " + remote_ip);
         } else if(bytes_written == -1 && errno != EINTR) {
             std::cerr << "socket::write: Error in the socket! Errno " << errno << std::endl;
-            return false;
+            throw socket_io_error(errno, "socket::write: Unexpected error in socket connected to " + remote_ip);
         }
     }
-    return true;
 }
 
 std::string socket::get_self_ip() {
     struct sockaddr_storage my_addr_info;
     socklen_t len = sizeof my_addr_info;
 
-    getsockname(sock, (struct sockaddr *)&my_addr_info, &len);
+    getsockname(sock, (struct sockaddr*)&my_addr_info, &len);
     char my_ip_cstr[INET6_ADDRSTRLEN + 1];
     if(my_addr_info.ss_family == AF_INET) {
-        struct sockaddr_in *s = (struct sockaddr_in *)&my_addr_info;
+        struct sockaddr_in* s = (struct sockaddr_in*)&my_addr_info;
         inet_ntop(AF_INET, &s->sin_addr, my_ip_cstr,
                   sizeof my_ip_cstr);
     } else {
-        struct sockaddr_in6 *s = (struct sockaddr_in6 *)&my_addr_info;
+        struct sockaddr_in6* s = (struct sockaddr_in6*)&my_addr_info;
         inet_ntop(AF_INET6, &s->sin6_addr, my_ip_cstr,
                   sizeof my_ip_cstr);
     }
     return std::string(my_ip_cstr);
 }
 
-connection_listener::connection_listener(uint16_t port) {
+connection_listener::connection_listener(uint16_t port, int queue_depth) {
     sockaddr_in serv_addr;
 
     int listenfd = ::socket(AF_INET, SOCK_STREAM, 0);
     if(listenfd < 0) throw connection_failure("connection_listener: socket() failed");
 
     int reuse_addr = 1;
-    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse_addr,
+    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse_addr,
                sizeof(reuse_addr));
 
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(port);
-    if(bind(listenfd, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+    if(bind(listenfd, (sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
         fprintf(stderr,
                 "ERROR on binding to socket in ConnectionListener: %s\n",
                 strerror(errno));
         std::cout << "Port is: " << port << std::endl;
+        throw connection_failure("connection_listener: bind() failed");
     }
-    listen(listenfd, 5);
+    if(listen(listenfd, queue_depth) < 0) {
+        fprintf(stderr,
+                "ERROR on listening to socket in ConnectionListener: %s\n",
+                strerror(errno));
+        throw connection_failure("connection_listener: listen() failed");
+    }
 
-    fd = unique_ptr<int, std::function<void(int *)>>(
-            new int(listenfd), [](int *fd) { close(*fd); delete fd; });
+    fd = std::unique_ptr<int, std::function<void(int*)>>(
+            new int(listenfd), [](int* fd) { close(*fd); delete fd; });
 }
 
 socket connection_listener::accept() {
@@ -244,16 +249,16 @@ socket connection_listener::accept() {
     struct sockaddr_storage client_addr_info;
     socklen_t len = sizeof client_addr_info;
 
-    int sock = ::accept(*fd, (struct sockaddr *)&client_addr_info, &len);
+    int sock = ::accept(*fd, (struct sockaddr*)&client_addr_info, &len);
     if(sock < 0) throw connection_failure("connection_listener: accept() failed");
 
     if(client_addr_info.ss_family == AF_INET) {
         // Client has an IPv4 address
-        struct sockaddr_in *s = (struct sockaddr_in *)&client_addr_info;
+        struct sockaddr_in* s = (struct sockaddr_in*)&client_addr_info;
         inet_ntop(AF_INET, &s->sin_addr, client_ip_cstr, sizeof client_ip_cstr);
     } else {  // AF_INET6
         // Client has an IPv6 address
-        struct sockaddr_in6 *s = (struct sockaddr_in6 *)&client_addr_info;
+        struct sockaddr_in6* s = (struct sockaddr_in6*)&client_addr_info;
         inet_ntop(AF_INET6, &s->sin6_addr, client_ip_cstr,
                   sizeof client_ip_cstr);
     }
@@ -285,7 +290,7 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     int numfds = epoll_wait(epoll_fd, array_of_one_event, 1, timeout_ms);
     if(numfds == 1) {
         assert(array_of_one_event[0].data.fd == *fd);
-        client_sock = ::accept(*fd, (struct sockaddr *)&client_addr_info, &len);
+        client_sock = ::accept(*fd, (struct sockaddr*)&client_addr_info, &len);
         if(client_sock >= 0) {
             success = true;
         }
@@ -302,12 +307,12 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     if(success) {
         char client_ip_cstr[INET6_ADDRSTRLEN + 1];
         if(client_addr_info.ss_family == AF_INET) {
-        // Client has an IPv4 address
-        struct sockaddr_in *s = (struct sockaddr_in *)&client_addr_info;
-        inet_ntop(AF_INET, &s->sin_addr, client_ip_cstr, sizeof client_ip_cstr);
+            // Client has an IPv4 address
+            struct sockaddr_in* s = (struct sockaddr_in*)&client_addr_info;
+            inet_ntop(AF_INET, &s->sin_addr, client_ip_cstr, sizeof client_ip_cstr);
         } else {  // AF_INET6
             // Client has an IPv6 address
-            struct sockaddr_in6 *s = (struct sockaddr_in6 *)&client_addr_info;
+            struct sockaddr_in6* s = (struct sockaddr_in6*)&client_addr_info;
             inet_ntop(AF_INET6, &s->sin6_addr, client_ip_cstr,
                       sizeof client_ip_cstr);
         }
@@ -315,7 +320,6 @@ std::optional<socket> connection_listener::try_accept(int timeout_ms) {
     } else {
         return std::nullopt;
     }
-
 }
 
 }  // namespace tcp

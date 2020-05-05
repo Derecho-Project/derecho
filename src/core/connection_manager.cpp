@@ -17,13 +17,17 @@ bool tcp_connections::add_connection(const node_id_t other_id,
         }
 
         node_id_t remote_id = 0;
-        if(!sockets[other_id].exchange(my_id, remote_id)) {
+
+        try {
+            sockets[other_id].exchange(my_id, remote_id);
+        } catch(socket_error&) {
             std::cerr << "WARNING: failed to exchange rank with node "
                       << other_id << " at " << other_ip_and_port.first << ":" << other_ip_and_port.second
                       << std::endl;
             sockets.erase(other_id);
             return false;
-        } else if(remote_id != other_id) {
+        }
+        if(remote_id != other_id) {
             std::cerr << "WARNING: node at " << other_ip_and_port.first << ":" << other_ip_and_port.second
                       << " replied with wrong id (expected " << other_id
                       << " but got " << remote_id << ")" << std::endl;
@@ -38,20 +42,21 @@ bool tcp_connections::add_connection(const node_id_t other_id,
                 socket s = conn_listener->accept();
 
                 node_id_t remote_id = 0;
-                if(!s.exchange(my_id, remote_id)) {
-                    std::cerr << "WARNING: failed to exchange id with node" << other_id
-                              << std::endl;
-                    return false;
-                } else {
-                    sockets[remote_id] = std::move(s);
-                    //If the connection we got wasn't the intended node, keep
-                    //looping and try again; there must be multiple nodes connecting
-                    //simultaneously
-                    if(remote_id == other_id)
-                        return true;
-                }
+                s.exchange(my_id, remote_id);
+
+                sockets[remote_id] = std::move(s);
+                //If the connection we got wasn't the intended node, keep
+                //looping and try again; there must be multiple nodes connecting
+                //simultaneously
+                if(remote_id == other_id)
+                    return true;
+
             } catch(connection_failure&) {
                 std::cerr << "Got error while attempting to listen on port"
+                          << std::endl;
+                return false;
+            } catch(socket_error&) {
+                std::cerr << "WARNING: failed to exchange id with node" << other_id
                           << std::endl;
                 return false;
             }
@@ -80,7 +85,7 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, std::
 tcp_connections::tcp_connections(node_id_t my_id,
                                  const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports)
         : my_id(my_id) {
-    if (!ip_addrs_and_ports.empty()) {
+    if(!ip_addrs_and_ports.empty()) {
         establish_node_connections(ip_addrs_and_ports);
     }
 }
@@ -91,32 +96,30 @@ void tcp_connections::destroy() {
     conn_listener.reset();
 }
 
-bool tcp_connections::write(node_id_t node_id, char const* buffer,
+void tcp_connections::write(node_id_t node_id, char const* buffer,
                             size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     const auto it = sockets.find(node_id);
     assert(it != sockets.end());
-    return it->second.write(buffer, size);
+    it->second.write(buffer, size);
 }
 
-bool tcp_connections::write_all(char const* buffer, size_t size) {
+void tcp_connections::write_all(char const* buffer, size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
-    bool success = true;
     for(auto& p : sockets) {
         if(p.first == my_id) {
             continue;
         }
-        success = success && p.second.write(buffer, size);
+        p.second.write(buffer, size);
     }
-    return success;
 }
 
-bool tcp_connections::read(node_id_t node_id, char* buffer,
+void tcp_connections::read(node_id_t node_id, char* buffer,
                            size_t size) {
     std::lock_guard<std::mutex> lock(sockets_mutex);
     const auto it = sockets.find(node_id);
     assert(it != sockets.end());
-    return it->second.read(buffer, size);
+    it->second.read(buffer, size);
 }
 
 bool tcp_connections::add_node(node_id_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port) {

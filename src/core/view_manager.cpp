@@ -200,17 +200,17 @@ bool ViewManager::receive_initial_view() {
     do {
         leader_redirect = false;
         uint64_t leader_version_hashcode;
-        bool success;
         dbg_default_debug("Socket connected to leader, exchanging version codes.");
-        success = leader_connection->exchange(my_version_hashcode, leader_version_hashcode);
-        if(!success) return false;
-        if(leader_version_hashcode != my_version_hashcode) {
-            throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+        try {
+            leader_connection->exchange(my_version_hashcode, leader_version_hashcode);
+            if(leader_version_hashcode != my_version_hashcode) {
+                throw derecho_exception("Unable to connect to Derecho leader because the leader is running on an incompatible platform or used an incompatible compiler.");
+            }
+            leader_connection->write(JoinRequest{my_id, false});
+            leader_connection->read(leader_response);
+        } catch(tcp::socket_error& e) {
+            return false;
         }
-        success = leader_connection->write(JoinRequest{my_id, false});
-        if(!success) return false;
-        success = leader_connection->read(leader_response);
-        if(!success) return false;
         if(leader_response.code == JoinResponseCode::ID_IN_USE) {
             dbg_default_error("Error! Leader refused connection because ID {} is already in use!", my_id);
             dbg_default_flush();
@@ -236,56 +236,44 @@ bool ViewManager::receive_initial_view() {
     if(in_total_restart) {
         dbg_default_info("Logged state found on disk. Restarting in recovery mode.");
         dbg_default_debug("Sending view {} to leader", curr_view->vid);
-        bool success = leader_connection->write(mutils::bytes_size(*curr_view));
-        if(!success) return false;
         auto leader_socket_write = [this](const char* bytes, std::size_t size) {
-            //Convert socket errors to exceptions so we can catch them outside of post_object
-            if(!leader_connection->write(bytes, size)) {
-                throw derecho_exception("Failure when writing to the leader's TCP socket");
-            }
+            leader_connection->write(bytes, size);
         };
         try {
+            leader_connection->write(mutils::bytes_size(*curr_view));
             mutils::post_object(leader_socket_write, *curr_view);
-        } catch(derecho_exception& e) {
-            return false;
-        }
-        //Restore this non-serializeable field to curr_view before using it
-        curr_view->subgroup_type_order = subgroup_type_order;
-        //Now that we know we need them, load ragged trims from disk
-        restart_state->load_ragged_trim(*curr_view);
-        dbg_default_debug("In restart mode, sending {} ragged trims to leader", restart_state->logged_ragged_trim.size());
-        /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
-        /* Since we know this node is only a member of one shard per subgroup,
-         * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
-        success = leader_connection->write(restart_state->logged_ragged_trim.size());
-        if(!success) return false;
-        for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
-            assert(id_to_shard_map.second.size() == 1); //The inner map has one entry
-            const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second;
-            success = leader_connection->write(mutils::bytes_size(*ragged_trim));
-            if(!success) return false;
-            try {
+            //Restore this non-serializeable field to curr_view before using it
+            curr_view->subgroup_type_order = subgroup_type_order;
+            //Now that we know we need them, load ragged trims from disk
+            restart_state->load_ragged_trim(*curr_view);
+            dbg_default_debug("In restart mode, sending {} ragged trims to leader", restart_state->logged_ragged_trim.size());
+            /* Protocol: Send the number of RaggedTrim objects, then serialize each RaggedTrim */
+            /* Since we know this node is only a member of one shard per subgroup,
+             * the size of the outer map (subgroup IDs) is the number of RaggedTrims. */
+            leader_connection->write(restart_state->logged_ragged_trim.size());
+            for(const auto& id_to_shard_map : restart_state->logged_ragged_trim) {
+                assert(id_to_shard_map.second.size() == 1);  //The inner map has one entry
+                const std::unique_ptr<RaggedTrim>& ragged_trim = id_to_shard_map.second.begin()->second;
+                leader_connection->write(mutils::bytes_size(*ragged_trim));
                 mutils::post_object(leader_socket_write, *ragged_trim);
-            } catch(derecho_exception& e) {
-                return false;
             }
+        } catch(tcp::socket_error& e) {
+            //If any of the leader socket operations throws an error, stop and return false
+            return false;
         }
     } else {
         //This might have been constructed even though we don't need it
         restart_state.reset();
     }
-    bool write_success;
-    write_success = leader_connection->write(getConfUInt16(CONF_DERECHO_GMS_PORT));
-    if(!write_success) return false;
-    write_success = leader_connection->write(getConfUInt16(CONF_DERECHO_RPC_PORT));
-    if(!write_success) return false;
-    write_success = leader_connection->write(getConfUInt16(CONF_DERECHO_SST_PORT));
-    if(!write_success) return false;
-    write_success = leader_connection->write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
-    if(!write_success) return false;
-    write_success = leader_connection->write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
-    if(!write_success) return false;
-
+    try {
+        leader_connection->write(getConfUInt16(CONF_DERECHO_GMS_PORT));
+        leader_connection->write(getConfUInt16(CONF_DERECHO_RPC_PORT));
+        leader_connection->write(getConfUInt16(CONF_DERECHO_SST_PORT));
+        leader_connection->write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
+        leader_connection->write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
+    } catch(tcp::socket_error& e) {
+        return false;
+    }
     if(receive_view_and_leaders()) {
         dbg_default_debug("Received initial view {} from leader: {}", curr_view->vid, curr_view->debug_string());
         return true;
@@ -295,38 +283,34 @@ bool ViewManager::receive_initial_view() {
 }
 
 bool ViewManager::receive_view_and_leaders() {
-    //The leader will first send the size of the necessary buffer, then the serialized View
-    std::size_t size_of_view;
-    bool success = leader_connection->read(size_of_view);
-    if(!success) return false;
-    char buffer[size_of_view];
-    success = leader_connection->read(buffer, size_of_view);
-    if(!success) return false;
-    curr_view = mutils::from_bytes<View>(nullptr, buffer);
-    if(in_total_restart) {
-        //In total restart mode, the leader will also send the RaggedTrims it has collected
-        restart_state->logged_ragged_trim.clear();
-        std::size_t num_of_ragged_trims;
-        bool success = leader_connection->read(num_of_ragged_trims);
-        if(!success) return false;
-        dbg_default_debug("In restart mode, receiving {} ragged trims from leader", num_of_ragged_trims);
-        for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
-            std::size_t size_of_ragged_trim;
-            success = leader_connection->read(size_of_ragged_trim);
-            if(!success) return false;
-            char buffer[size_of_ragged_trim];
-            success = leader_connection->read(buffer, size_of_ragged_trim);
-            if(!success) return false;
-            std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
-            //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
-            restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(
-                    ragged_trim->shard_num, std::move(ragged_trim));
-        }
-    }
-    //Next, the leader will send the list of nodes to do state transfer from
+    //This try block is to handle TCP socket errors
     try {
+        //The leader will first send the size of the necessary buffer, then the serialized View
+        std::size_t size_of_view;
+        leader_connection->read(size_of_view);
+        char buffer[size_of_view];
+        leader_connection->read(buffer, size_of_view);
+        curr_view = mutils::from_bytes<View>(nullptr, buffer);
+        if(in_total_restart) {
+            //In total restart mode, the leader will also send the RaggedTrims it has collected
+            restart_state->logged_ragged_trim.clear();
+            std::size_t num_of_ragged_trims;
+            leader_connection->read(num_of_ragged_trims);
+            dbg_default_debug("In restart mode, receiving {} ragged trims from leader", num_of_ragged_trims);
+            for(std::size_t i = 0; i < num_of_ragged_trims; ++i) {
+                std::size_t size_of_ragged_trim;
+                leader_connection->read(size_of_ragged_trim);
+                char buffer[size_of_ragged_trim];
+                leader_connection->read(buffer, size_of_ragged_trim);
+                std::unique_ptr<RaggedTrim> ragged_trim = mutils::from_bytes<RaggedTrim>(nullptr, buffer);
+                //operator[] is intentional: Create an empty inner map at subgroup_id if one does not exist
+                restart_state->logged_ragged_trim[ragged_trim->subgroup_id].emplace(
+                        ragged_trim->shard_num, std::move(ragged_trim));
+            }
+        }
+        //Next, the leader will send the list of nodes to do state transfer from
         prior_view_shard_leaders = *receive_vector2d<int64_t>(*leader_connection);
-    } catch(derecho_exception& e) {
+    } catch(tcp::socket_error& e) {
         return false;
     }
 
@@ -343,20 +327,16 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
     CommitMessage commit_message;
     /* The leader will first sent a Prepare message, then a Commit message if the
      * new was committed at all joining members. Either one of these could be Abort
-     * if the leader detected a failure. If any socket operations fail, throw an 
-     * exception to skip to the error-reporting logic.
+     * if the leader detected a failure.
      */
     try {
-        bool success = leader_connection->read(commit_message);
-        if(!success) throw derecho_exception("Leader crashed!");
+        leader_connection->read(commit_message);
         if(commit_message == CommitMessage::PREPARE) {
             dbg_default_debug("Leader sent PREPARE");
-            bool success = leader_connection->write(CommitMessage::ACK);
-            if(!success) throw derecho_exception("Leader crashed!");
+            leader_connection->write(CommitMessage::ACK);
             //After a successful Prepare, replace commit_message with the second message,
             //which is either Commit or Abort
-            success = leader_connection->read(commit_message);
-            if(!success) throw derecho_exception("Leader crashed!");
+            leader_connection->read(commit_message);
         }
         //This checks if either the first or the second message was Abort
         if(commit_message == CommitMessage::ABORT) {
@@ -365,13 +345,12 @@ void ViewManager::check_view_committed(bool& view_confirmed, bool& leader_failed
             //Wait for a new initial view and ragged trim to be sent,
             //so that when this method returns we can try state transfer again
             leader_failed = !receive_view_and_leaders();
-            if(leader_failed) throw derecho_exception("Leader crashed!");
+            if(leader_failed) throw tcp::socket_error("Leader crashed!");
             //Update the TCP connections pool for any new/failed nodes,
             //so we can run state transfer again.
             reinit_tcp_connections(*curr_view, my_id);
         }
-    } catch(derecho_exception&) {
-        //The exception is just a way to avoid repeating this code
+    } catch(tcp::socket_error&) {
         leader_failed = true;
         if(restart_state && getConfBoolean(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS)) {
             restart_state->num_leader_failures++;
@@ -592,27 +571,18 @@ void ViewManager::await_first_view() {
             waiting_sockets_iter != waiting_join_sockets.end();) {
             std::size_t view_buffer_size = mutils::bytes_size(*curr_view);
             char view_buffer[view_buffer_size];
-            bool send_success;
-            //Within this try block, any send that returns failure throws the ID of the node that failed
             try {
                 //First send the View
-                send_success = waiting_sockets_iter->second.write(view_buffer_size);
-                if(!send_success) {
-                    throw waiting_sockets_iter->first;
-                }
+                waiting_sockets_iter->second.write(view_buffer_size);
                 mutils::to_bytes(*curr_view, view_buffer);
-                send_success = waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
-                if(!send_success) {
-                    throw waiting_sockets_iter->first;
-                }
+                waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
                 //Then send "0" as the size of the "old shard leaders" vector, since there are no old leaders
-                send_success = waiting_sockets_iter->second.write(std::size_t{0});
-                if(!send_success) {
-                    throw waiting_sockets_iter->first;
-                }
+                waiting_sockets_iter->second.write(std::size_t{0});
                 members_sent_view.emplace(waiting_sockets_iter->first);
                 waiting_sockets_iter++;
-            } catch(node_id_t failed_joiner_id) {
+            } catch(tcp::socket_error& e) {
+                //If any socket operation failed, assume the joining node failed
+                node_id_t failed_joiner_id = waiting_sockets_iter->first;
                 dbg_default_warn("Node {} failed after contacting the leader! Removing it from the initial view.", failed_joiner_id);
                 //Remove the failed client and recompute the view
                 std::vector<node_id_t> filtered_members(curr_view->members.size() - 1);
@@ -1399,17 +1369,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Standard procedure for receiving a View, copied from receive_view_and_leaders
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
-#ifndef NDEBUG
-        bool success =
-#endif  //NDEBUG
-                tcp_sockets->read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
-        assert(success);
+        tcp_sockets->read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
         char buffer[size_of_view];
-#ifndef NDEBUG
-        success =
-#endif  //NDEBUG
-                tcp_sockets->read(leader_id, buffer, size_of_view);
-        assert(success);
+        tcp_sockets->read(leader_id, buffer, size_of_view);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
         next_view->subgroup_type_order = subgroup_type_order;
         next_view->my_rank = next_view->rank_of(my_id);

@@ -556,9 +556,11 @@ queue_pair::queue_pair(size_t remote_index,
     // fprintf(stdout, "Local LID        = 0x%x\n",
     // verbs_resources.port_attr.lid);
 
-    if(!rdmc_connections->exchange(remote_index, local_con_data, remote_con_data))
+    try {
+        rdmc_connections->exchange(remote_index, local_con_data, remote_con_data);
+    } catch(tcp::socket_error&) {
         throw rdma::qp_creation_failure();
-
+    }
     bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid, local_config.ib_port, local_config.gid_idx) && !modify_qp_to_rts(qp.get());
 
     if(!success) printf("Failed to initialize QP\n");
@@ -569,7 +571,12 @@ queue_pair::queue_pair(size_t remote_index,
    * prevent packet loss */
     /* just send a dummy char back and forth */
     int tmp = -1;
-    if(!rdmc_connections->exchange(remote_index, 0, tmp) || tmp != 0) throw rdma::qp_creation_failure();
+    try {
+        rdmc_connections->exchange(remote_index, 0, tmp);
+        if(tmp != 0) throw rdma::qp_creation_failure();
+    } catch(tcp::socket_error&) {
+        throw rdma::qp_creation_failure();
+    }
 }
 bool queue_pair::post_send(const memory_region& mr, size_t offset,
                            size_t length, uint64_t wr_id, uint32_t immediate,
@@ -775,9 +782,11 @@ managed_queue_pair::managed_queue_pair(
     // fprintf(stdout, "Local LID        = 0x%x\n",
     // verbs_resources.port_attr.lid);
 
-    if(!rdmc_connections->exchange(remote_index, local_con_data, remote_con_data))
+    try {
+        rdmc_connections->exchange(remote_index, local_con_data, remote_con_data);
+    } catch(tcp::socket_error&) {
         throw rdma::qp_creation_failure();
-
+    }
     bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), remote_con_data.qp_num, remote_con_data.lid, remote_con_data.gid, local_config.ib_port, local_config.gid_idx) && !modify_qp_to_rts(qp.get());
 
     if(!success) throw rdma::qp_creation_failure();
@@ -787,7 +796,12 @@ managed_queue_pair::managed_queue_pair(
     // Sync to make sure that both sides are in states that they can connect to
     // prevent packet loss.
     int tmp = -1;
-    if(!rdmc_connections->exchange(remote_index, 0, tmp) || tmp != 0) throw rdma::qp_creation_failure();
+    try {
+        rdmc_connections->exchange(remote_index, 0, tmp);
+        if(tmp != 0) throw rdma::qp_creation_failure();
+    } catch(tcp::socket_error&) {
+        throw rdma::qp_creation_failure();
+    }
 }
 manager_queue_pair::manager_queue_pair() : queue_pair() {
     ibv_exp_qp_init_attr attr;
@@ -817,7 +831,9 @@ manager_queue_pair::manager_queue_pair() : queue_pair() {
         throw rdma::qp_creation_failure();
     }
 
-    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port) && !modify_qp_to_rtr(qp.get(), qp->qp_num, 0, nullptr, local_config.ib_port, -1) && !modify_qp_to_rts(qp.get());
+    bool success = !modify_qp_to_init(qp.get(), local_config.ib_port)
+                   && !modify_qp_to_rtr(qp.get(), qp->qp_num, 0, nullptr, local_config.ib_port, -1)
+                   && !modify_qp_to_rts(qp.get());
 
     if(!success) throw rdma::qp_creation_failure();
 }
@@ -1061,11 +1077,11 @@ map<uint32_t, remote_memory_region> verbs_exchange_memory_regions(
         size_t size;
         uint32_t rkey;
 
-        bool still_connected = rdmc_connections->exchange(m, (uintptr_t)mr.buffer, buffer) && 
-                               rdmc_connections->exchange(m, (size_t)mr.size, size) && 
-                               rdmc_connections->exchange(m, (uint32_t)mr.get_rkey(), rkey);
-
-        if(!still_connected) {
+        try {
+            rdmc_connections->exchange(m, (uintptr_t)mr.buffer, buffer);
+            rdmc_connections->exchange(m, (size_t)mr.size, size);
+            rdmc_connections->exchange(m, (uint32_t)mr.get_rkey(), rkey);
+        } catch(tcp::socket_error&) {
             fprintf(stderr, "WARNING: lost connection to node %u\n", m);
             throw rdma::connection_broken();
         }

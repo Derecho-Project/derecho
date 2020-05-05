@@ -372,22 +372,24 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = tcp_sockets->get_socket(subgroup_and_leader.second);
         ReplicatedObject& subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
-        if(subgroup_object.is_persistent()) {
-            int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
-            dbg_default_debug("Sending log tail length of {} for subgroup {} to node {}.",
-                              log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
-            leader_socket.get().write(log_tail_length);
+        try {
+            if(subgroup_object.is_persistent()) {
+                int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
+                dbg_default_debug("Sending log tail length of {} for subgroup {} to node {}.",
+                                  log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
+                leader_socket.get().write(log_tail_length);
+            }
+            dbg_default_debug("Receiving Replicated Object state for subgroup {} from node {}",
+                              subgroup_and_leader.first, subgroup_and_leader.second);
+            std::size_t buffer_size;
+            leader_socket.get().read(buffer_size);
+            std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
+            leader_socket.get().read(buffer.get(), buffer_size);
+            subgroup_object.receive_object(buffer.get());
+        } catch(tcp::socket_error& e) {
+            //Convert socket exceptions to a more readable error message, since this will cause a crash
+            throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");
         }
-        dbg_default_debug("Receiving Replicated Object state for subgroup {} from node {}",
-                          subgroup_and_leader.first, subgroup_and_leader.second);
-        std::size_t buffer_size;
-        bool success = leader_socket.get().read(buffer_size);
-        if(!success) throw derecho_exception("Fatal error: Subgroup leader failed during state transfer.");
-        char* buffer = new char[buffer_size];
-        success = leader_socket.get().read(buffer, buffer_size);
-        if(!success) throw derecho_exception("Fatal error: Subgroup leader failed during state transfer.");
-        subgroup_object.receive_object(buffer);
-        delete[] buffer;
     }
     dbg_default_debug("Done receiving all Replicated Objects from subgroup leaders");
 }

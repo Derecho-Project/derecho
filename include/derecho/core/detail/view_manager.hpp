@@ -616,17 +616,17 @@ private:
      * @return A 2-dimensional vector of ValueType
      * @tparam ValueType The type of values in the vector; this assumes ValueType
      * can be serialized by mutils
-     * @throw derecho_exception if the socket read operations fail
+     * @throw tcp::socket_error if the socket read operations fail
      */
     template <typename ValueType>
     static std::unique_ptr<std::vector<std::vector<ValueType>>> receive_vector2d(tcp::socket& socket) {
         std::size_t buffer_size;
-        if(!socket.read(buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
+        socket.read(buffer_size);
         if(buffer_size == 0) {
             return std::make_unique<std::vector<std::vector<ValueType>>>();
         }
         char buffer[buffer_size];
-        if(!socket.read(buffer, buffer_size)) throw derecho_exception("Socket error in receive_vector2d");
+        socket.read(buffer, buffer_size);
         return mutils::from_bytes<std::vector<std::vector<ValueType>>>(nullptr, buffer);
     }
 

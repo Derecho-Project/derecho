@@ -202,16 +202,15 @@ void _resources::connect_endpoint(bool is_lf_server) {
     local_cm_data.mr_key = (uint64_t)htonll(this->mr_lwkey);
     local_cm_data.vaddr = (uint64_t)htonll((uint64_t)this->write_buf);  // for pull mode
 
-    if(sst_connections->contains_node(this->remote_id)) {
-        if(!sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
-            dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
-            crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
+    try {
+        if(sst_connections->contains_node(this->remote_id)) {
+            sst_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
+        } else {
+            external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data);
         }
-    } else {
-        if(!external_client_connections->exchange(this->remote_id, local_cm_data, remote_cm_data)) {
-            dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
-            crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
-        }
+    } catch(tcp::socket_error&) {
+        dbg_default_error("Failed to exchange connection management info with node {}", this->remote_id);
+        crash_with_message("Failed to exchange connection management info with node %d\n", this->remote_id);
     }
 
     remote_cm_data.pep_addr_len = (uint32_t)ntohl(remote_cm_data.pep_addr_len);
@@ -581,11 +580,16 @@ bool remove_node(uint32_t node_id) {
 
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-    if(sst_connections->contains_node(r_id)) {
-        return sst_connections->exchange(r_id, s, t);
-    } else {
-        return external_client_connections->exchange(r_id, s, t);
+    try {
+        if(sst_connections->contains_node(r_id)) {
+            sst_connections->exchange(r_id, s, t);
+        } else {
+            external_client_connections->exchange(r_id, s, t);
+        }
+    } catch(tcp::socket_error&) {
+        return false;
     }
+    return true;
 }
 
 void filter_external_to(const std::vector<node_id_t>& live_nodes_list) {
@@ -763,7 +767,7 @@ void lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& in
     // to determining completion queue size.
     size_t max_cqe = g_ctxt.fi->tx_attr->size * internal_ip_addrs_and_ports.size()
                      + g_ctxt.fi->tx_attr->size * external_ip_addrs_and_ports.size();
-    g_ctxt.cq_attr.size = (max_cqe > 2097152)? max_cqe:2097152;
+    g_ctxt.cq_attr.size = (max_cqe > 2097152) ? max_cqe : 2097152;
     fail_if_nonzero_retry_on_eagain("initialize tx completion queue.", REPORT_ON_FAILURE,
                                     fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
 

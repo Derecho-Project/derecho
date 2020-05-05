@@ -37,19 +37,22 @@ public:
      * @param node_id The ID of the node to send data to
      * @param buffer A byte buffer containing the data to send
      * @param size The number of bytes to send; must be <= the size of buffer
-     * @return True if all bytes were written successfully, false if there was
-     * an error.
+     * @throw a subclass of socket_error if there was an error before all size
+     * bytes could be written. The type of exception indicates the type of 
+     * error: socket_closed_error means the socket cannot be written to because
+     * it is closed, while socket_io_error or one of its subclasses means an 
+     * error occurred during the write() call.
      */
-    bool write(node_id_t node_id, char const* buffer, size_t size);
+    void write(node_id_t node_id, char const* buffer, size_t size);
     /**
      * Writes size bytes from a buffer to all the other nodes currently
      * connected, in ascending order of node ID.
      * @param buffer A byte buffer containing the data to send
      * @param size The number of bytes to send
-     * @return True if all writes completed successfully, false if any of them
-     * didn't.
+     * @throw a subclass of socket_error if there was an error before all size
+     * bytes could be written on all sockets.
      */
-    bool write_all(char const* buffer, size_t size);
+    void write_all(char const* buffer, size_t size);
     /**
      * Receives size bytes from the node with ID node_id, over the TCP socket
      * connected to that node. Blocks until all the bytes have been received or
@@ -57,10 +60,14 @@ public:
      * @param node_id The ID of the node to read from
      * @param buffer A byte buffer to put received data into
      * @param size The number of bytes to read
-     * @return True if all the bytes were read successfully, false if there was
-     * an error.
+     * @throw a subclass of socket_error if there was an error before all size
+     * bytes could be read. The type of exception indicates the type of error:
+     * socket_closed_error means the socket cannot be read from because it is
+     * closed, incomplete_read_error means the connection was terminated (i.e.
+     * read returned EOF) before all size bytes could be read, and 
+     * socket_io_error means some other error occurred during the read() call.
      */
-    bool read(node_id_t node_id, char* buffer, size_t size);
+    void read(node_id_t node_id, char* buffer, size_t size);
     /**
      * Adds a TCP connection to a new node. If the new node's ID is lower than
      * this node's ID, this function initiates a new TCP connection to it;
@@ -91,11 +98,11 @@ public:
     bool contains_node(node_id_t node_id);
 
     template <class T>
-    bool exchange(node_id_t node_id, T local, T& remote) {
+    void exchange(node_id_t node_id, T local, T& remote) {
         std::lock_guard<std::mutex> lock(sockets_mutex);
         const auto it = sockets.find(node_id);
         assert(it != sockets.end());
-        return it->second.exchange(local, remote);
+        it->second.exchange(local, remote);
     }
     /**
      * Checks all of the TCP connections managed by this object for new
