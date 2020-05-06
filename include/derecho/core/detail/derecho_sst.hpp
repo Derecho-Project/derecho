@@ -15,11 +15,32 @@ namespace derecho {
 
 using sst::SSTField;
 using sst::SSTFieldVector;
+
+/**
+ * Represents a proposal to either add or remove a node from the View.
+ * Includes the ID of the leader who proposed the change, as well as a flag
+ * indicating whether this is the last proposed change in a View (used when
+ * the leader changes to mark the end of the previous leader's proposals).
+ * Although node IDs are technically 32-bit ints, in practice they should never
+ * be longer than 16 bits, so we can pack both IDs into 32 bits here.
+ */
+struct ChangeProposal {
+    uint16_t leader_id;
+    uint16_t change_id;
+    bool end_of_view;
+};
+
+/** "Constructor" for ChangeProposals, as a free function so they are still POD. */
+inline ChangeProposal make_change_proposal(uint16_t leader_id, uint16_t change_id) {
+    return ChangeProposal{leader_id, change_id, false};
+}
+
 /**
  * The GMS and derecho_group will share the same SST for efficiency. This class
  * defines all the fields in this SST.
  */
 class DerechoSST : public sst::SST<DerechoSST> {
+    static_assert(std::is_trivially_copyable<ChangeProposal>::value, "ChangeProposal is not trivially copyable, but it should be because it's an SST field!");
 public:
     // MulticastGroup members, related only to tracking message delivery
     /**
@@ -64,7 +85,7 @@ public:
      * If request i is a Join, changes[i] is not in current View's members.
      * If request i is a Departure, changes[i] is in current View's members.
      */
-    SSTFieldVector<node_id_t> changes;
+    SSTFieldVector<ChangeProposal> changes;
     /**
      * If changes[i] is a Join, joiner_ips[i] is the IP address of the joining
      * node, packed into an unsigned int in network byte order. This
@@ -77,6 +98,7 @@ public:
     SSTFieldVector<uint16_t> joiner_rpc_ports;
     SSTFieldVector<uint16_t> joiner_sst_ports;
     SSTFieldVector<uint16_t> joiner_rdmc_ports;
+    SSTFieldVector<uint16_t> joiner_external_ports;
     /**
      * How many changes to the view have been proposed. Monotonically increases.
      * num_changes - num_committed is the number of pending changes, which should never
@@ -137,12 +159,13 @@ public:
               delivered_num(num_subgroups),
               persisted_num(num_subgroups),
               suspected(parameters.members.size()),
-              changes(100 + parameters.members.size()),
+              changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
               joiner_gms_ports(100 + parameters.members.size()),
               joiner_rpc_ports(100 + parameters.members.size()),
               joiner_sst_ports(100 + parameters.members.size()),
               joiner_rdmc_ports(100 + parameters.members.size()),
+              joiner_external_ports(100 + parameters.members.size()),
               num_received(num_received_size),
               global_min(num_received_size),
               global_min_ready(num_subgroups),
@@ -151,7 +174,7 @@ public:
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
-                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports,
+                joiner_gms_ports, joiner_rpc_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier, rip);
@@ -162,7 +185,9 @@ public:
                 suspected[row][i] = false;
             }
             for(size_t i = 0; i < changes.size(); ++i) {
-                changes[row][i] = false;
+                changes[row][i].leader_id = 0;
+                changes[row][i].change_id = 0;
+                changes[row][i].end_of_view = false;
             }
             for(size_t i = 0; i < global_min_ready.size(); ++i) {
                 global_min_ready[row][i] = false;
@@ -175,6 +200,7 @@ public:
             memset(const_cast<uint16_t*>(joiner_rpc_ports[row]), 0, joiner_rpc_ports.size());
             memset(const_cast<uint16_t*>(joiner_sst_ports[row]), 0, joiner_sst_ports.size());
             memset(const_cast<uint16_t*>(joiner_rdmc_ports[row]), 0, joiner_rdmc_ports.size());
+            memset(const_cast<uint16_t*>(joiner_external_ports[row]), 0, joiner_external_ports.size());
             num_changes[row] = 0;
             num_committed[row] = 0;
             num_installed[row] = 0;
@@ -305,6 +331,8 @@ void set(volatile Arr (&dst)[L1], const volatile Arr (&src)[L2], const size_t& n
     }
     std::atomic_signal_fence(std::memory_order_acq_rel);
 }
+
+void set(volatile ChangeProposal& member, const ChangeProposal& value);
 
 void set(volatile char* string_array, const std::string& value);
 

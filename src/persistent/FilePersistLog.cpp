@@ -309,7 +309,7 @@ void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     FPL_UNLOCK;
 }
 
-const int64_t FilePersistLog::persist(const bool preLocked) noexcept(false) {
+int64_t FilePersistLog::persist(const bool preLocked) noexcept(false) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
@@ -416,7 +416,7 @@ version_t FilePersistLog::getLatestVersion() noexcept(false) {
     return ver;
 }
 
-const version_t FilePersistLog::getLastPersisted() noexcept(false) {
+version_t FilePersistLog::getLastPersisted() noexcept(false) {
     version_t last_persisted = INVALID_VERSION;
     ;
     FPL_PERS_LOCK;

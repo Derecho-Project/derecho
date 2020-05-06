@@ -190,7 +190,7 @@ public:
      * @param shard_num, the shard number of a subgroup
      * @return a std::string representation of the prefix
      */
-    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true);
+    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(false);
 
     /** match prefix
      * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
@@ -594,7 +594,7 @@ public:
     // @v - bytes representation of the log tail)
     void applyLogTail(mutils::DeserializationManager* dsm, char const* v);
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG)
     uint64_t ns_in_persist = 0ul;
     uint64_t ns_in_set = 0ul;
     uint64_t cnt_in_persist = 0ul;

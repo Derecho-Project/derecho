@@ -41,4 +41,13 @@ struct empty_reference_exception : public derecho_exception {
 struct invalid_subgroup_exception : public derecho_exception {
     invalid_subgroup_exception(const std::string& message) : derecho_exception(message) {}
 };
+
+/**
+ * Exception that means the user requested an operation targeting a specific node
+ * and that node was not as valid target, e.g. because the node is not currently
+ * a member of the group.
+ */
+struct invalid_node_exception : public derecho_exception {
+    invalid_node_exception(const std::string& message) : derecho_exception(message) {}
+};
 }  // namespace derecho

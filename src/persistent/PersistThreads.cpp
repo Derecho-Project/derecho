@@ -203,7 +203,7 @@ int PersistThreads::non_atomic_rw(char* buf, uint32_t data_length, uint64_t virt
         uint32_t curr_ofst = 0;
         uint32_t size = std::min((uint32_t)SPDK_SEGMENT_SIZE, data_length - ofst);
         // Extract physical lba index based on content type using the corresponding address translation table
-        uint64_t lba_index;
+        uint64_t lba_index = static_cast<uint64_t>(-1);
         switch(content_type){
             case METADATA:
                 lba_index = (virtaddress + ofst) >> general_spdk_info.sector_bit;
@@ -215,7 +215,10 @@ int PersistThreads::non_atomic_rw(char* buf, uint32_t data_length, uint64_t virt
                 lba_index = DATA_AT_TABLE(id)[((virtaddress + ofst) >> SPDK_SEGMENT_BIT) % SPDK_DATA_ADDRESS_TABLE_LENGTH] * LBA_PER_SEG + (((virtaddress + ofst) & SPDK_SEGMENT_MASK) >> general_spdk_info.sector_bit);
                 break;
             default:
-                break;
+                // TODO: 
+                // report error?
+                return -1;
+                // break;
         }
 
         // Submit data request for the current segment
@@ -297,7 +300,7 @@ int PersistThreads::atomic_w(std::vector<atomic_sub_req> sub_requests, PTLogMeta
             uint32_t curr_ofst = 0;
             uint32_t size = std::min((uint32_t)SPDK_SEGMENT_SIZE, req.data_length - ofst);
             // Extract physical lba index based on content type using the corresponding address translation table
-            uint64_t lba_index;
+            uint64_t lba_index = static_cast<uint64_t>(-1);
             switch(req.content_type){
                 case METADATA:
                     lba_index = (req.virtaddress + ofst) >> general_spdk_info.sector_bit;
@@ -309,7 +312,9 @@ int PersistThreads::atomic_w(std::vector<atomic_sub_req> sub_requests, PTLogMeta
                     lba_index = DATA_AT_TABLE(id)[((req.virtaddress + ofst) >> SPDK_SEGMENT_BIT) % SPDK_DATA_ADDRESS_TABLE_LENGTH] * LBA_PER_SEG + (((req.virtaddress + ofst) & SPDK_SEGMENT_MASK) >> general_spdk_info.sector_bit);
                     break;
                 default:
-                    break;
+                    // TODO: report error?
+                    return -1;
+                    // break;
             }
 
             // Submit data request for the current segment
@@ -607,7 +612,7 @@ int PersistThreads::initialize_threads() {
     destructed = false;
     
     // Step 4: initialize threads
-    bool metathread_started = false;
+    // bool metathread_started = false;
     uint32_t i;
     // SPDK_ENV_FOREACH_CORE(i) {
     //	std::cout << "Starting thread " << i << std::endl;

@@ -45,7 +45,7 @@ using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32
 /** The type of factory function the user must provide to the Group constructor,
  * to construct each Replicated Object that is assigned to a subgroup */
 template <typename T>
-using Factory = std::function<std::unique_ptr<T>(persistent::PersistentRegistry*)>;
+using Factory = std::function<std::unique_ptr<T>(persistent::PersistentRegistry*, subgroup_id_t subgroup_id)>;
 
 // for persistence manager
 using persistence_manager_make_version_func_t = std::function<void(
@@ -61,6 +61,7 @@ using persistence_manager_callbacks_t = std::tuple<persistence_manager_make_vers
 // to post the next version in a subgroup
 using subgroup_post_next_version_func_t = std::function<void(
         const subgroup_id_t&,
-        const persistent::version_t&)>;
+        const persistent::version_t&,
+        const uint64_t&)>;
 
 }  // namespace derecho

@@ -23,9 +23,8 @@ enum StorageType {
     ST_SPDK
 };
 
-//#define INVALID_VERSION ((__int128)-1L)
-#define INVALID_VERSION ((int64_t)-1L)
-#define INVALID_INDEX INT64_MAX
+constexpr version_t INVALID_VERSION = -1L;
+constexpr int64_t INVALID_INDEX = INT64_MAX;
 
 // index entry for the hlc index
 struct hlc_index_entry {
@@ -68,7 +67,7 @@ public:
     // to make sure if this named log(by "name" in the template
     // parameters) is already there. If it is, load it from disk.
     // Otherwise, create the log.
-    PersistLog(const std::string &name) noexcept(true);
+    PersistLog(const std::string& name) noexcept(true);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append
@@ -81,8 +80,9 @@ public:
      * is called on that entry.
      */
     virtual void append(const void* pdata,
-                        const uint64_t& size, const version_t& ver,  
-                        const HLC& mhlc) noexcept(false) = 0;
+                        const uint64_t& size, const version_t& ver,
+                        const HLC& mhlc) noexcept(false)
+            = 0;
 
     /**
      * Advance the version number without appendding a log. This is useful
@@ -113,7 +113,7 @@ public:
     virtual version_t getLatestVersion() noexcept(false) = 0;
 
     // return the last persisted value
-    virtual const version_t getLastPersisted() noexcept(false) = 0;
+    virtual version_t getLastPersisted() noexcept(false) = 0;
 
     // Here is some conflict between OOP and generica programming: we want those function to
     // be virtual but unfortunately, the template function type are decided during compilation
@@ -148,7 +148,7 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const bool preLocked = false) noexcept(false) = 0;
+    virtual version_t persist(const bool preLocked = false) noexcept(false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
@@ -176,7 +176,6 @@ public:
      */
     virtual size_t bytes_size(const version_t& ver) = 0;
 
-
     /**
      * Write the serialized log bytes to the given buffer
      * @PARAM buf - the buffer to receive serialized bytes
@@ -191,8 +190,9 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual void post_object(const std::function<void(char const *const, std::size_t)>& f,
-                             const version_t& ver) = 0;
+    virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                             const version_t& ver)
+            = 0;
 
     /**
      * Check/Merge the LogTail to the existing log.
@@ -207,6 +207,6 @@ public:
      */
     virtual void truncate(const version_t& ver) noexcept(false) = 0;
 };
-}
+}  // namespace persistent
 
 #endif  //PERSIST_LOG_HPP

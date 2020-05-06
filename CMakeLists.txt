@@ -5,13 +5,22 @@ project(derecho CXX)
 
 # Version
 set(derecho_VERSION 0.9)
-set(derecho_build_VERSION 0.9.1)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -Wall -ggdb -gdwarf-3 -pg")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall -DNOLOG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wall -ggdb -gdwarf-3 -DNOLOG")
+set(derecho_build_VERSION 0.9.2)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z -fPIC")
+if (${USE_VERBS_API})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_VERBS_API")
+endif()
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDERECHO_DEBUG -O0 -Wall -ggdb -gdwarf-3")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
+set(CMAKE_CXX_FLAGS_BENCHMARK "${CMAKE_CXX_FLAGS_RELEASE} -Wall -DNOLOG")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wall -ggdb -gdwarf-3")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+if ( NOT DEFINED CMAKE_INSTALL_LIBDIR )
+    set( CMAKE_INSTALL_LIBDIR lib )
+endif ( )
+
 include(GetGitRevisionDescription)
 
 # mutils_FOUND 
@@ -38,12 +47,6 @@ if (NOT ${mutils-containers_FOUND})
     message(FATAL_ERROR "mutils-containers not found. Please install from https://github.com/mpmilano/mutils-containers.git")
 endif()
 
-# spdlog_FOUND
-find_package(spdlog)
-if (NOT ${spdlog_FOUND})
-    message(FATAL_ERROR "spdlog not found. Please install from https://github.com/gabime/spdlog [commit:10e809cf644d55e5bd7d66d02e2604e2ddd7fb48]")
-endif()
-
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
@@ -67,6 +70,14 @@ if (EXTRA_LIBRARY_PATHS)
 else (EXTRA_LIBRARY_PATHS)
     message(STATUS "EXTRA_LIBRARY_PATHS is not set.")
 endif (EXTRA_LIBRARY_PATHS)
+
+# spdlog is a packaged system library, so this probably isn't necessary, but
+# it helps ensure that the right version is installed
+# spdlog_FOUND
+find_package(spdlog 1.3.1 REQUIRED)
+
+# find openssl
+find_package(OpenSSL REQUIRED) 
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
@@ -93,7 +104,8 @@ target_link_libraries(derecho
     ${mutils_LIBRARIES} 
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES}
-    spdk_nvme spdk_env_dpdk spdk_vmd spdk_log spdk_util spdk_sock dpdk uuid numa dl)
+    spdk_nvme spdk_env_dpdk spdk_vmd spdk_log spdk_util spdk_sock dpdk uuid numa dl
+    ${OPENSSL_LIBRARIES}) 
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
@@ -104,7 +116,7 @@ add_dependencies(derecho
 
 # make install
 install(TARGETS derecho EXPORT derecho
-        LIBRARY DESTINATION lib)
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY
         include/derecho/conf
         include/derecho/core
@@ -129,7 +141,6 @@ export (EXPORT derecho
 
 configure_file (derechoConfig.cmake
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
-    COPYONLY
 )
 
 set(ConfigPackageLocation lib/cmake/derecho)
@@ -139,13 +150,10 @@ install(EXPORT derecho
 )
 
 install(FILES
-    derechoConfig.cmake
+    "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
-
-# objectstore aka dPods
-add_subdirectory(src/objectstore)
 
 # applications
 add_subdirectory(src/applications)

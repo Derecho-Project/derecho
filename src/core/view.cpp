@@ -25,8 +25,7 @@ SubView::SubView(int32_t num_members)
 SubView::SubView(Mode mode,
                  const std::vector<node_id_t>& members,
                  std::vector<int> is_sender,
-                 const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t,
-                                              uint16_t>>& member_ips_and_ports,
+                 const std::vector<IpAndPorts>& member_ips_and_ports,
                  const std::string profile)
         : mode(mode),
           members(members),
@@ -34,8 +33,7 @@ SubView::SubView(Mode mode,
           member_ips_and_ports(member_ips_and_ports),
           my_rank(-1),
           profile(profile) {
-    // if the sender information is not provided, assume that all members are
-    // senders
+    // if the sender information is not provided, assume that all members are senders
     if(is_sender.size()) {
         this->is_sender = is_sender;
     }
@@ -90,7 +88,7 @@ void SubView::init_joined_departed(const SubView& previous_subview) {
 }
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
-           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+           const std::vector<IpAndPorts>& member_ips_and_ports,
            const std::vector<char>& failed, const int32_t num_failed,
            const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
@@ -117,7 +115,7 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
     }
 }
 
-int View::rank_of_leader() const {
+int View::find_rank_of_leader() const {
     for(int r = 0; r < num_members; ++r) {
         if(!failed[r]) {
             return r;
@@ -127,7 +125,7 @@ int View::rank_of_leader() const {
 }
 
 View::View(const int32_t vid, const std::vector<node_id_t>& members,
-           const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& member_ips_and_ports,
+           const std::vector<IpAndPorts>& member_ips_and_ports,
            const std::vector<char>& failed, const std::vector<node_id_t>& joined,
            const std::vector<node_id_t>& departed,
            const int32_t my_rank,
@@ -154,15 +152,6 @@ View::View(const int32_t vid, const std::vector<node_id_t>& members,
     }
 }
 
-int View::rank_of(const std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>& who) const {
-    for(int rank = 0; rank < num_members; ++rank) {
-        if(member_ips_and_ports[rank] == who) {
-            return rank;
-        }
-    }
-    return -1;
-}
-
 int View::rank_of(const node_id_t& who) const {
     auto it = node_id_to_rank.find(who);
     if(it != node_id_to_rank.end()) {
@@ -177,7 +166,7 @@ SubView View::make_subview(const std::vector<node_id_t>& with_members,
                            std::string profile) const {
     // Make the profile string all uppercase so that it is effectively case-insensitive
     std::transform(profile.begin(), profile.end(), profile.begin(), ::toupper);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> subview_member_ips_and_ports(with_members.size());
+    std::vector<IpAndPorts> subview_member_ips_and_ports(with_members.size());
     for(std::size_t subview_rank = 0; subview_rank < with_members.size(); ++subview_rank) {
         int view_rank_of_member = rank_of(with_members[subview_rank]);
         if(view_rank_of_member == -1) {
@@ -207,76 +196,7 @@ int View::subview_rank_of_shard_leader(subgroup_id_t subgroup_id,
 }
 
 bool View::i_am_leader() const {
-    return (rank_of_leader() == my_rank);  // True if I know myself to be the leader
-}
-
-bool View::i_am_new_leader() {
-    if(i_know_i_am_leader) {
-        return false;  // I am the OLD leader
-    }
-
-    for(int n = 0; n < my_rank; n++) {
-        for(int row = 0; row < my_rank; row++) {
-            if(!failed[n] && !gmsSST->suspected[row][n]) {
-                return false;  // I'm not the new leader, or some failure suspicion hasn't fully propagated
-            }
-        }
-    }
-    i_know_i_am_leader = true;
-    return true;
-}
-
-void View::merge_changes() {
-    int myRank = my_rank;
-    // Merge the change lists
-    for(int n = 0; n < num_members; n++) {
-        if(gmsSST->num_changes[myRank] < gmsSST->num_changes[n]) {
-            gmssst::set(gmsSST->changes[myRank], gmsSST->changes[n],
-                        gmsSST->changes.size());
-            gmssst::set(gmsSST->num_changes[myRank], gmsSST->num_changes[n]);
-        }
-
-        if(gmsSST->num_committed[myRank] < gmsSST->num_committed[n])  // How many I know to have been committed
-        {
-            gmssst::set(gmsSST->num_committed[myRank], gmsSST->num_committed[n]);
-        }
-    }
-    bool found = false;
-    for(int n = 0; n < num_members; n++) {
-        if(failed[n]) {
-            // Make sure that the failed process is listed in the changes vector as a
-            // proposed change
-            for(int c = gmsSST->num_committed[myRank];
-                c < gmsSST->num_changes[myRank] && !found; c++) {
-                if(gmsSST->changes[myRank][c % gmsSST->changes.size()] == members[n]) {
-                    // Already listed
-                    found = true;
-                }
-            }
-        } else {
-            // Not failed
-            found = true;
-        }
-
-        if(!found) {
-            gmssst::set(gmsSST->changes[myRank][gmsSST->num_changes[myRank] % gmsSST->changes.size()],
-                        members[n]);
-            gmssst::increment(gmsSST->num_changes[myRank]);
-        }
-    }
-    // gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
-    //             gmsSST->num_acked.get_base() - gmsSST->changes.get_base());
-    /* breaking the above put statement into individual put calls, to be sure that
-     * if we were relying on any ordering guarantees, we won't run into issue when
-     * guarantees do not hold*/
-    gmsSST->put(gmsSST->changes.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->joiner_ips.get_base() - gmsSST->changes.get_base());
-    gmsSST->put(gmsSST->joiner_ips.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_changes.get_base() - gmsSST->joiner_ips.get_base());
-    gmsSST->put(gmsSST->num_changes.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_committed.get_base() - gmsSST->num_changes.get_base());
-    gmsSST->put(gmsSST->num_committed.get_base() - gmsSST->getBaseAddress(),
-                gmsSST->num_acked.get_base() - gmsSST->num_committed.get_base());
+    return (find_rank_of_leader() == my_rank);  // True if I know myself to be the leader
 }
 
 void View::wedge() {
@@ -284,6 +204,10 @@ void View::wedge() {
     gmssst::set(gmsSST->wedged[my_rank], true);
     gmsSST->put(gmsSST->wedged.get_base() - gmsSST->getBaseAddress(),
                 sizeof(gmsSST->wedged[0]));
+}
+
+bool View::is_wedged() {
+    return gmsSST->wedged[my_rank];
 }
 
 std::string View::debug_string() const {

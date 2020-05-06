@@ -24,6 +24,8 @@
 
 using namespace persistent;
 using derecho::Replicated;
+using std::cout;
+using std::endl;
 
 class PersistentThing : public mutils::ByteRepresentable, public derecho::PersistsFields {
     Persistent<int> state;
@@ -55,6 +57,19 @@ public:
 int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "restart");
     srand(getpid());
+    int num_args = 2;
+    if(argc < (num_args + 1) || (argc > (num_args + 1) && strcmp("--", argv[argc - (num_args + 1)]))) {
+        cout << "Invalid command line arguments." << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes members_per_shard" << endl;
+        return -1;
+    }
+
+    const uint num_nodes = std::stoi(argv[argc - num_args]);
+    const uint members_per_shard = std::stoi(argv[argc - num_args + 1]);
+    if(num_nodes < members_per_shard) {
+        cout << "Must have at least " << members_per_shard << " members" << endl;
+        return -1;
+    }
 
     derecho::Conf::initialize(argc, argv);
 
@@ -64,16 +79,15 @@ int main(int argc, char** argv) {
                 // std::cout << "Subgroup " << subgroup << ", version " << ver << " is persisted." << std::endl;
             }};
 
-    const int num_shards = 2;
-    const int desired_nodes_per_shard = 3;
+    const int num_shards = num_nodes / members_per_shard;
     const int fault_tolerance = 1;
     derecho::SubgroupInfo subgroup_info(derecho::DefaultSubgroupAllocator({
         {std::type_index(typeid(PersistentThing)), derecho::one_subgroup_policy(derecho::flexible_even_shards(
-                num_shards, desired_nodes_per_shard - fault_tolerance, desired_nodes_per_shard))}
+                num_shards, members_per_shard - fault_tolerance, members_per_shard))}
     }));
 
 
-    auto thing_factory = [](PersistentRegistry* pr) {
+    auto thing_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) {
         return std::make_unique<PersistentThing>(pr);
     };
 
@@ -82,39 +96,38 @@ int main(int argc, char** argv) {
                                           thing_factory);
 
     auto my_rank = group.get_my_rank();
-    if(my_rank <= 5) {
+    if (my_rank == -1) {
+        std::cout << "ERROR!! My rank is -1" << std::endl;
+	return 1;
+    }
+
+    if(static_cast<unsigned>(my_rank) <= (num_shards * members_per_shard)) {
         Replicated<PersistentThing>& thing_handle = group.get_subgroup<PersistentThing>();
         int num_updates = 1000000;
         for(int counter = 0; counter < num_updates; ++counter) {
             derecho::rpc::QueryResults<int> results = thing_handle.ordered_send<RPC_NAME(read_state)>();
-            try {
-                derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
-                // int curr_state = 0;
-                for(auto& reply_pair : replies) {
-                    try {
-                        dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
-                        reply_pair.second.get();
-                    } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                        dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
-                    } catch(derecho::rpc::sender_removed_from_group_exception& ex2) {
-                        dbg_default_warn("No query reply due to sender_removed_from_group_exception: {}", ex2.what());
-                    }
+            derecho::rpc::QueryResults<int>::ReplyMap& replies = results.get();
+            // int curr_state = 0;
+            for(auto& reply_pair : replies) {
+                try {
+                    dbg_default_debug("Waiting on read_state reply from node {}", reply_pair.first);
+                    reply_pair.second.get();
+                } catch(derecho::rpc::node_removed_from_group_exception& ex) {
+                    dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
                 }
-                // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
-            } catch(derecho::rpc::sender_removed_from_group_exception& ex) {
-                dbg_default_warn("Query send aborted due to sender_removed_from_group_exception: {}", ex.what());
             }
+            // std::cout << "Current state according to ordered_send: " << curr_state << std::endl;
 
-	    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+//            std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
             //This ensures the state changes with every update from every node
             // int new_value = counter * 10 + node_id;
             int new_value = rand() % 100;
             // std::cout << "Updating state to " << new_value << std::endl;
             thing_handle.ordered_send<RPC_NAME(change_state)>(new_value);
-            // if(counter % 1000 == 0) {
-	    std::cout << "Done with counter = " << counter << std::endl;
-            // }
+            if(counter % 1000 == 0) {
+                std::cout << "Done with counter = " << counter << std::endl;
+            }
         }
     }
     // std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;

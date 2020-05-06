@@ -212,11 +212,11 @@ void SPDKPersistLog::trim(const HLC& hlc) {
     trimByIndex(idx);
 }
 
-const version_t SPDKPersistLog::getLastPersisted() {
+version_t SPDKPersistLog::getLastPersisted() {
     return PersistThreads::get()->getLastPersisted(METADATA.id); 
 }
 
-const version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
+version_t SPDKPersistLog::persist(bool preLocked) noexcept(false) {
     if (!preLocked) {	    
         std::unique_lock head_wlock(head_mutex);
         std::unique_lock tail_wlock(tail_mutex);

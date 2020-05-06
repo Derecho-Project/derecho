@@ -1,12 +1,14 @@
 language: cpp
 os: linux
-dist: xenial
+dist: bionic
 sudo: required
 
 before_install:
   - ifconfig
   - sudo apt-get install librdmacm-dev
   - sudo apt-get install libibverbs-dev
+  - wget http://mirrors.kernel.org/ubuntu/pool/universe/s/spdlog/libspdlog-dev_1.3.1-1_amd64.deb
+  - sudo apt install ./libspdlog-dev_1.3.1-1_amd64.deb
   - if [ -n "$GCC_VERSION" ]; then export CXX="g++-${GCC_VERSION}" CC="gcc-${GCC_VERSION}"; fi
   - if [ -n "$CLANG_VERSION" ]; then export CXX="clang++-${CLANG_VERSION}" CC="clang-${CLANG_VERSION}"; fi
   - which $CXX
@@ -17,7 +19,6 @@ before_install:
 install:
   - chmod +x scripts/prerequisites/*.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-libfabric.sh
-  - sudo env "PATH=$PATH" scripts/prerequisites/install-spdlog.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-containers.sh
   - sudo env "PATH=$PATH" scripts/prerequisites/install-mutils-tasks.sh
@@ -25,7 +26,7 @@ install:
 matrix:
   include:
     # build with gcc7 on 4 build types
-    - env: BUILD_TYPE= GCC_VERSION=7
+    - env: BUILD_TYPE=Release GCC_VERSION=7
       addons: &gcc7
         apt:
           sources:
@@ -33,8 +34,6 @@ matrix:
           packages:
             - g++-7
             - gcc-7
-    - env: BUILD_TYPE=Release GCC_VERSION=7
-      addons: *gcc7
     - env: BUILD_TYPE=Debug GCC_VERSION=7
       addons: *gcc7
     - env: BUILD_TYPE=RELWITHDEBINFO GCC_VERSION=7
@@ -47,8 +46,10 @@ script:
   - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE ..
   - make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
   - sudo make install
-  
-# performance tests
-  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
-  - cat data_derecho_bw
-  
+
+# no performance tests any more.
+# we now use regression test for QA.
+## performance tests
+#  - DERECHO_CONF_FILE=../scripts/travis-ci/derecho0.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 & DERECHO_CONF_FILE=../scripts/travis-ci/derecho1.cfg src/applications/tests/performance_tests/bandwidth_test 2 2 1000 0 
+#  - cat data_derecho_bw
+#  

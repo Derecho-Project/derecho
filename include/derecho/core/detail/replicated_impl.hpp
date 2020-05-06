@@ -18,7 +18,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
         : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
                   this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(
-                  client_object_factory(persistent_registry_ptr.get()))),
+                  client_object_factory(persistent_registry_ptr.get(),subgroup_id))),
           node_id(nid),
           subgroup_id(subgroup_id),
           subgroup_index(subgroup_index),
@@ -75,29 +75,25 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
-        //Ensure a view change isn't in progress
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-        size_t size;
-        std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
-                                               ->multicast_group->get_subgroup_settings()
-                                               .at(subgroup_id)
-                                               .profile.max_msg_size
-                                       - sizeof(header);
+        if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
+            throw invalid_node_exception("Cannot send a p2p request to node "
+                    + std::to_string(dest_node) + ": it is not a member of the Group.");
+        }
         auto return_pair = wrapped_this->template send<tag>(
-                [this, &dest_node, &max_payload_size, &size](size_t _size) -> char* {
-                    size = _size;
-                    if(size <= max_payload_size) {
+                [this, &dest_node](size_t size) -> char* {
+                    const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
+                    if(size <= max_p2p_request_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        return nullptr;
+                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                     }
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(return_pair.results);
     } else {
-        throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
 }
 
@@ -106,28 +102,20 @@ template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::ordered_send(Args&&... args) {
     if(is_valid()) {
         size_t payload_size_for_multicast_send = wrapped_this->template get_size_for_ordered_send<tag>(std::forward<Args>(args)...);
-        // // declare send_return_struct outside the lambda 'serializer'
-        // // serializer will be called inside multicast_group.cpp, in send
-        // // but we need the object after that, outside the lambda
-        // // it's a pointer because one of its members is a reference
-        // typename std::invoke_result<decltype (&rpc::RemoteInvocableOf<T>::template send<tag>)(rpc::RemoteInvocableOf<T>, std::function<char*(int)>&, Args...)>::type send_return_struct_ptr;
 
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<tag>(
                 std::forward<Args>(args)...))>::type;
         rpc::QueryResults<Ret>* results_ptr;
         rpc::PendingResults<Ret>* pending_ptr;
         auto serializer = [&](char* buffer) {
-            std::size_t max_payload_size = group_rpc_manager.view_manager.curr_view
-                                                   ->multicast_group->get_subgroup_settings()
-                                                   .at(subgroup_id)
-                                                   .profile.max_msg_size
-                                           - sizeof(header);
+            //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
+            const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
             auto send_return_struct = wrapped_this->template send<tag>(
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
                             return buffer;
                         } else {
-                            return nullptr;
+                            throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                         }
                     },
                     std::forward<Args>(args)...);
@@ -143,7 +131,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
         group_rpc_manager.finish_rpc_send(subgroup_id, *pending_ptr);
         return std::move(*results_ptr);
     } else {
-        throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
 }
 
@@ -219,8 +207,8 @@ ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t
         : node_id(nid),
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
-          wrapped_this(group_rpc_manager.make_remote_invoker<T>(type_id, subgroup_id,
-                                                                T::register_functions())) {}
+          wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
+                                                                T::register_functions(), *group_rpc_manager.receivers)) {}
 
 //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
 //but I'm afraid that will introduce unnecessary overheads.
@@ -229,25 +217,25 @@ template <rpc::FunctionTag tag, typename... Args>
 auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         assert(dest_node != node_id);
-        //Ensure a view change isn't in progress
-        std::shared_lock<std::shared_timed_mutex> view_read_lock(group_rpc_manager.view_manager.view_mutex);
-        size_t size;
+        if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
+            throw invalid_node_exception("Cannot send a p2p request to node "
+                    + std::to_string(dest_node) + ": it is not a member of the Group.");
+        }
         auto return_pair = wrapped_this->template send<tag>(
-                [this, &dest_node, &size](size_t _size) -> char* {
-                    size = _size;
+                [this, &dest_node](size_t size) -> char* {
                     const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
                     if(size <= max_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        return nullptr;
+                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
                     }
                 },
                 std::forward<Args>(args)...);
         group_rpc_manager.finish_p2p_send(dest_node, subgroup_id, return_pair.pending);
         return std::move(return_pair.results);
     } else {
-        throw derecho::empty_reference_exception{"Attempted to use an empty Replicated<T>"};
+        throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
     }
 }
 

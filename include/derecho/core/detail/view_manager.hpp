@@ -26,6 +26,8 @@
 
 namespace derecho {
 
+/*--- Forward declarations ---*/
+
 template <typename T>
 class Replicated;
 template <typename T>
@@ -74,12 +76,32 @@ enum class JoinResponseCode {
 };
 
 /**
- * Bundles together a JoinResponseCode and the leader's node ID, which it also
- * needs to send to the new node that wants to join.
+ * A simple POD message that the group leader sends back to a new node in
+ * response to a JoinRequest. Includes a JoinResponseCode and the leader's
+ * node ID.
  */
 struct JoinResponse {
     JoinResponseCode code;
     node_id_t leader_id;
+};
+
+/**
+ * A simple POD message that new nodes send to the group leader to indicate that
+ * they want to join the group.
+ */
+struct JoinRequest {
+    node_id_t joiner_id;
+    bool is_external;
+};
+
+/**
+ * A set of status codes that an external client can send to any member of the
+ * group indicating the type of request it is making. External clients send this
+ * after sending a JoinRequest with is_external=true.
+ */
+enum class ExternalClientRequest {
+    GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
+    ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
 };
 
 template <typename T>
@@ -107,8 +129,11 @@ private:
 
     friend class RestartLeaderState;
 
-    /** Controls access to curr_view. Read-only accesses should acquire a
-     * shared_lock, while view changes acquire a unique_lock. */
+    /**
+     * Mutex to protect the curr_view pointer. Non-SST-predicate threads that
+     * access the current View through the pointer should acquire a shared_lock;
+     * the view change predicates will acquire a unique_lock before swapping the
+     * pointer. */
     std::shared_timed_mutex view_mutex;
     /** Notified when curr_view changes (i.e. we are finished with a pending view change).*/
     std::condition_variable_any view_change_cv;
@@ -120,16 +145,18 @@ private:
      *  in the process of transitioning to a new view. */
     std::unique_ptr<View> next_view;
 
+    /** contains client sockets for pending requests that have not yet been handled.*/
+    LockedQueue<tcp::socket> pending_new_sockets;
     /** On the leader node, contains client sockets for pending joins that have not yet been handled.*/
-    LockedQueue<tcp::socket> pending_join_sockets;
+    std::list<std::pair<node_id_t, tcp::socket>> pending_join_sockets;
+    /** The sockets connected to clients that will join in the next view, if any */
+    std::list<std::pair<node_id_t, tcp::socket>> proposed_join_sockets;
 
-    /** Contains old Views that need to be cleaned up*/
+    /** Contains old Views that need to be cleaned up. */
     std::queue<std::unique_ptr<View>> old_views;
     std::mutex old_views_mutex;
     std::condition_variable old_views_cv;
 
-    /** The sockets connected to clients that will join in the next view, if any */
-    std::list<tcp::socket> proposed_join_sockets;
     /** A cached copy of the last known value of this node's suspected[] array.
      * Helps the SST predicate detect when there's been a change to suspected[].*/
     std::vector<bool> last_suspected;
@@ -150,9 +177,10 @@ private:
     const bool disable_partitioning_safety;
 
     //Handles for all the predicates the GMS registered with the current view's SST.
-    pred_handle suspected_changed_handle;
+    pred_handle leader_suspicion_handle;
+    pred_handle follower_suspicion_handle;
     pred_handle start_join_handle;
-    pred_handle reject_join_handle;
+    pred_handle new_sockets_handle;
     pred_handle change_commit_ready_handle;
     pred_handle leader_proposed_handle;
     pred_handle leader_committed_handle;
@@ -204,6 +232,12 @@ private:
      * Otherwise this will be a null pointer. */
     std::unique_ptr<RestartState> restart_state;
 
+    /**
+     * True if this node is the current leader and is fully active (i.e. has
+     * finished "waking up"), false otherwise.
+     */
+    bool active_leader;
+
     /** The persistence request func is from persistence manager*/
     persistence_manager_callbacks_t persistence_manager_callbacks;
 
@@ -224,18 +258,40 @@ private:
      */
     std::atomic<bool> bSilent = false;
 
-    bool has_pending_join() { return pending_join_sockets.locked().access.size() > 0; }
+    std::function<void(const std::vector<uint32_t>&)> add_external_connection_upcall;
+
+    bool has_pending_new() { return pending_new_sockets.locked().access.size() > 0; }
+    bool has_pending_join() { return pending_join_sockets.size() > 0; }
 
     /* ---------------------------- View-management triggers ---------------------------- */
     /**
-     * Called when there is a new failure suspicion. Updates the suspected[]
-     * array and, for the leader, proposes new views to exclude failed members.
+     * Called on non-leaders when there is a new failure suspicion. Updates the
+     * suspected[] and failed[] arrays but does not propose any changes.
      */
     void new_suspicion(DerechoSST& gmsSST);
-    /** Runs only on the group leader; proposes new views to include new members. */
-    void leader_start_join(DerechoSST& gmsSST);
+    /**
+     * A gateway that handles any socket connections, exchanges version code,
+     * reads JoinRequest and then decides whether to propose changes, redirect
+     * to leader, or handle as an external connection request.
+     */
+    void process_new_sockets();
+    /**
+     * Runs only on the group leader; called whenever there is either a new
+     * suspicion or a new join attempt, and proposes a batch of changes to
+     * add and remove members. This always wedges the current view.
+     */
+    void propose_changes(DerechoSST& gmsSST);
+
     /** Runs on non-leaders to redirect confused new members to the current leader. */
-    void redirect_join_attempt(DerechoSST& gmsSST);
+    void redirect_join_attempt(tcp::socket& client_socket);
+    /** Handles join request from external clients. */
+    void external_join_handler(tcp::socket& client_socket, const node_id_t& joiner_id);
+    /**
+     * Runs once on a node that becomes a leader due to a failure. Searches for
+     * and re-proposes changes proposed by prior leaders, as well as suspicions
+     * noticed by this node before it became the leader.
+     */
+    void new_leader_takeover(DerechoSST& gmsSST);
     /**
      * Runs only on the group leader and updates num_committed when all non-failed
      * members have acked a proposed view change.
@@ -288,10 +344,20 @@ private:
 
     /**
      * Assuming this node is the leader, handles a join request from a client.
+     * @param client_socket A TCP socket connected to the joining client
      * @return True if the join succeeded, false if it failed because the
      *         client's ID was already in use.
      */
-    bool receive_join(tcp::socket& client_socket);
+    bool receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tcp::socket& client_socket);
+
+    /**
+     * Assuming the suspected[] array in the SST has changed, searches through
+     * it to find new suspicions, marks the suspected nodes as failed in the
+     * current View, and wedges the current View.
+     * @return A list of the SST ranks corresponding to nodes that have just
+     * been marked as failed (i.e. the new suspicions)
+     */
+    std::vector<int> process_suspicions(DerechoSST& gmsSST);
     /**
      * Updates the TCP connections pool to reflect the joined and departed
      * members in a new view. Removes connections to departed members, and
@@ -382,7 +448,21 @@ private:
     static bool suspected_not_equal(const DerechoSST& gmsSST, const std::vector<bool>& old);
     static void copy_suspected(const DerechoSST& gmsSST, std::vector<bool>& old);
     static bool changes_contains(const DerechoSST& gmsSST, const node_id_t q);
+    static bool changes_includes_end_of_view(const DerechoSST& gmsSST, const int rank_of_leader);
     static int min_acked(const DerechoSST& gmsSST, const std::vector<char>& failed);
+    static bool previous_leaders_suspected(const DerechoSST& gmsSST, const View& curr_view);
+
+    /**
+     * Searches backwards from this node's row in the SST to lower-ranked rows,
+     * looking for proposed changes not in this node's changes list, assuming
+     * this node is the current leader and the lower-ranked rows are failed
+     * prior leaders. If a lower-ranked row has more changes, or different
+     * changes, copies that node's changes array to the local row.
+     * @param gmsSST
+     * @return True if there was a prior leader with changes to copy, false if
+     * no prior proposals were found.
+     */
+    static bool copy_prior_leader_proposals(DerechoSST& gmsSST);
 
     /**
      * Constructs the next view from the current view and the set of committed
@@ -415,17 +495,12 @@ private:
      * shard leaders) from the leader. */
     void receive_view_and_leaders(const node_id_t my_id, tcp::socket& leader_connection);
 
-    /** Helper function for total restart mode: Uses the RaggedTrim values
-     * in logged_ragged_trim to truncate any persistent logs that have a
-     * persisted version later than the last committed version in the RaggedTrim. */
-    void truncate_persistent_logs(const ragged_trim_map_t& logged_ragged_trim);
-
     /** Performs one-time global initialization of RDMC and SST, using the current view's membership. */
     void initialize_rdmc_sst();
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
      */
-    void receive_initial_view(node_id_t my_id, tcp::socket& leader_connection);
+    void receive_initial_view(const node_id_t my_id, tcp::socket& leader_connection);
 
     /**
      * Constructor helper that initializes TCP connections (for state transfer)
@@ -433,7 +508,7 @@ private:
      * connections have been set up yet.
      * @param initial_view The View to use for membership
      */
-    void setup_initial_tcp_connections(const View& initial_view, node_id_t my_id);
+    void setup_initial_tcp_connections(const View& initial_view, const node_id_t my_id);
 
     /**
      * Another setup helper for joining nodes; re-initializes the TCP connections
@@ -442,7 +517,7 @@ private:
      * @param initial_view The View whose membership the TCP connections should be
      * updated to reflect
      */
-    void reinit_tcp_connections(const View& initial_view, node_id_t my_id);
+    void reinit_tcp_connections(const View& initial_view, const node_id_t my_id);
     /**
      * Creates the SST and MulticastGroup for the first time, using the current view's member list.
      * @param callbacks The custom callbacks to supply to the MulticastGroup
@@ -504,22 +579,11 @@ private:
     static uint32_t compute_num_received_size(const View& view);
 
     /**
-     * Constructs a map from node ID -> IP address from the parallel vectors in the given View.
+     * Constructs a map from node ID -> (IP address, port) for a specific port from
+     * the members and member_ips_and_ports vectors in the given View.
      */
-    template <PORT_TYPE port_index>
     static std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>
-    make_member_ips_and_ports_map(const View& view) {
-        std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> member_ips_and_ports_map;
-        size_t num_members = view.members.size();
-        for(uint i = 0; i < num_members; ++i) {
-            if(!view.failed[i]) {
-                member_ips_and_ports_map[view.members[i]] = std::pair<ip_addr_t, uint16_t>{
-                        std::get<0>(view.member_ips_and_ports[i]),
-                        std::get<port_index>(view.member_ips_and_ports[i])};
-            }
-        }
-        return member_ips_and_ports_map;
-    }
+    make_member_ips_and_ports_map(const View& view, const PortType port);
     /**
      * Constructs a vector mapping subgroup ID in the new view -> shard number
      * -> node ID of that shard's leader in the old view. If a shard had no
@@ -668,6 +732,10 @@ public:
      */
     void finish_setup();
 
+    void register_add_external_connection_upcall(const std::function<void(const std::vector<uint32_t>&)>& upcall) {
+        add_external_connection_upcall = upcall;
+    }
+
     /**
      * Starts predicate evaluation in the current view's SST. Call this only
      * when all other setup has been done for the Derecho group.
@@ -690,6 +758,7 @@ public:
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+    std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     /**
      * If this node is a member of the given subgroup (identified by its type
      * and index), returns the number of the shard this node belongs to.
@@ -706,19 +775,24 @@ public:
 
     /**
      * @return a reference to the current View, wrapped in a container that
-     * holds a read-lock on it. This is mostly here to make it easier for
-     * the Group that contains this ViewManager to set things up.
+     * holds a read-lock on the View pointer. This allows the Group that
+     * contains this ViewManager to look at the current View (and set it up
+     * during construction) without creating an unsafe interleaving with
+     * View changes.
      */
     SharedLockedReference<View> get_current_view();
 
     /**
-     * This function is a dirty workaround for the fact that Group might need
-     * read-only access to curr_view during a total restart when curr_view is
-     * owned by restart_leader_state, but it's only available by const reference
-     * and SharedLockedReference<View> wants a mutable reference.
-     * @return
+     * An ugly workaround function needed only during initial setup during a
+     * total restart. The Group constructor needs to read the members of the
+     * currently-proposed initial View in order to construct Replicated Objects,
+     * but on the restart leader the initial View is stored in restart_leader_state_machine,
+     * not curr_view.
+     * @return A reference to the initial View to use to set up Replicated Objects,
+     * which is either the "current view" on a joining node or the "restart view" on
+     * the restart leader.
      */
-    SharedLockedReference<const View> get_current_view_const();
+    SharedLockedReference<const View> get_current_or_restart_view();
 
     /** Adds another function to the set of "view upcalls," which are called
      * when the view changes to notify another component of the new view. */
@@ -750,9 +824,8 @@ public:
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
     std::map<subgroup_id_t, uint64_t> get_max_payload_sizes();
     // max of max_payload_sizes
-    uint64_t view_max_payload_size = 0;
-    unsigned int view_max_window_size = 0;
-    unsigned int view_max_sender_timeout = 0;
+    uint64_t view_max_rpc_reply_payload_size = 0;
+    uint32_t view_max_rpc_window_size = 0;
 };
 
 } /* namespace derecho */

@@ -38,7 +38,8 @@ struct RaggedTrim : public mutils::ByteRepresentable {
 enum class CommitMessage {
     PREPARE,  //!< PREPARE
     COMMIT,   //!< COMMIT
-    ABORT     //!< ABORT
+    ABORT,    //!< ABORT
+    ACK       //!< ACK
 };
 
 /**
@@ -89,11 +90,23 @@ private:
 
     std::unique_ptr<View> restart_view;
     std::map<node_id_t, tcp::socket> waiting_join_sockets;
-    std::map<node_id_t, std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> rejoined_node_ips_and_ports;
+    std::map<node_id_t, IpAndPorts> rejoined_node_ips_and_ports;
     std::set<node_id_t> members_sent_restart_view;
     std::set<node_id_t> rejoined_node_ids;
     std::set<node_id_t> last_known_view_members;
+    /**
+     * Map from (subgroup ID, shard num) to the latest persistent log version
+     * currently known for that shard
+     */
     std::vector<std::vector<persistent::version_t>> longest_log_versions;
+    /**
+     * Map from (subgroup ID, shard num) to the ID of the node on which the
+     * longest known log for that shard resides. An entry will be -1 if no log
+     * for that shard has yet been found, or if the subgroup is non-persistent
+     * and there is no logged state at all. This is the same format as
+     * ViewManager::prior_view_shard_leaders, in which an entry of -1 indicates
+     * a shard with no prior state to transfer.
+     */
     std::vector<std::vector<int64_t>> nodes_with_longest_log;
     const node_id_t my_id;
 
@@ -205,7 +218,7 @@ public:
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
                                                 const std::vector<node_id_t>& joiner_ids,
-                                                const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports);
+                                                const std::vector<IpAndPorts>& joiner_ips_and_ports);
     /**
      * @return true if the set of node IDs includes at least one member of each
      * subgroup in the given View.

@@ -177,7 +177,7 @@ public:
     virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
-    virtual const version_t getLastPersisted() noexcept(false);
+    virtual version_t getLastPersisted() noexcept(false);
     template <typename ProcessLogEntryFunc>
     auto getEntryByIndex(const int64_t& eidx, const ProcessLogEntryFunc& process_entry) noexcept(false) {
         FPL_RDLOCK;
@@ -279,7 +279,7 @@ public:
     
         return process_entry(static_cast<char*>(FS_LOG_ENTRY_DATA(ple)));
     }
-    virtual const version_t persist(const bool preLocked = false) noexcept(false);
+    virtual version_t persist(const bool preLocked = false) noexcept(false);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
     virtual void trim(const HLC& hlc) noexcept(false);
@@ -437,7 +437,7 @@ private:
         dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)FS_META_HEADER_PERS->fields.head, (int64_t)FS_META_HEADER_PERS->fields.tail);
         dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)FS_NEXT_LOG_ENTRY, (void*)FS_NEXT_LOG_ENTRY_PERS);
     }
-#endif  //NDEBUG
+#endif  // NDEBUG
 };
 }
 }
