@@ -205,9 +205,9 @@ public:
      * given port of this machine's TCP interface.
      * @param port The port to listen on.
      * @param queue_depth The length of the pending connection queue to create
-     * for the server socket. Defaults to 5.
+     * for the server socket. Defaults to 50.
      */
-    explicit connection_listener(uint16_t port, int queue_depth = 5);
+    explicit connection_listener(uint16_t port, int queue_depth = 50);
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.

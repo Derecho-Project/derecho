@@ -67,8 +67,6 @@ bool tcp_connections::add_connection(const node_id_t other_id,
 }
 
 void tcp_connections::establish_node_connections(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip_addrs_and_ports) {
-    conn_listener = std::make_unique<connection_listener>(ip_addrs_and_ports.at(my_id).second);
-
     for(auto it = ip_addrs_and_ports.begin(); it != ip_addrs_and_ports.end(); it++) {
         //Check that there isn't already a connection to this ID,
         //since an earlier add_connection could have connected to it by "mistake"
@@ -85,9 +83,9 @@ void tcp_connections::establish_node_connections(const std::map<node_id_t, std::
 tcp_connections::tcp_connections(node_id_t my_id,
                                  const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>> ip_addrs_and_ports)
         : my_id(my_id) {
-    if(!ip_addrs_and_ports.empty()) {
-        establish_node_connections(ip_addrs_and_ports);
-    }
+    assert(ip_addrs_and_ports.count(my_id) > 0);
+    conn_listener = std::make_unique<connection_listener>(ip_addrs_and_ports.at(my_id).second);
+    establish_node_connections(ip_addrs_and_ports);
 }
 
 void tcp_connections::destroy() {
