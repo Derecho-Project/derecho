@@ -29,7 +29,6 @@ ViewManager::ViewManager(
         const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
-        const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
         ReplicatedObjectReferenceMap& object_reference_map,
         const persistence_manager_callbacks_t& _persistence_manager_callbacks,
         std::vector<view_upcall_t> _view_upcalls)
@@ -39,7 +38,9 @@ ViewManager::ViewManager(
           view_upcalls(_view_upcalls),
           subgroup_info(subgroup_info),
           subgroup_type_order(subgroup_type_order),
-          tcp_sockets(group_tcp_sockets),
+          tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID),
+                      {{getConfUInt32(CONF_DERECHO_LOCAL_ID),
+                        {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager_callbacks(_persistence_manager_callbacks) {
@@ -60,6 +61,7 @@ ViewManager::~ViewManager() {
     if(old_view_cleanup_thread.joinable()) {
         old_view_cleanup_thread.join();
     }
+    tcp_sockets.destroy();
 }
 
 /* ----------  1. Constructor Components ------------- */
@@ -480,9 +482,9 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
     //Establish TCP connections to each other member of the view in ascending order
     for(int i = 0; i < initial_view.num_members; ++i) {
         if(initial_view.members[i] != my_id) {
-            tcp_sockets->add_node(initial_view.members[i],
-                                  {initial_view.member_ips_and_ports[i].ip_address,
-                                   initial_view.member_ips_and_ports[i].rpc_port});
+            tcp_sockets.add_node(initial_view.members[i],
+                                 {initial_view.member_ips_and_ports[i].ip_address,
+                                  initial_view.member_ips_and_ports[i].rpc_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
@@ -490,14 +492,14 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
 
 void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id_t my_id) {
     //Delete sockets for failed members no longer in the view
-    tcp_sockets->filter_to(initial_view.members);
+    tcp_sockets.filter_to(initial_view.members);
     //Recheck the members list and establish connections to any new members
     for(int i = 0; i < initial_view.num_members; ++i) {
         if(initial_view.members[i] != my_id
-           && !tcp_sockets->contains_node(initial_view.members[i])) {
-            tcp_sockets->add_node(initial_view.members[i],
-                                  {initial_view.member_ips_and_ports[i].ip_address,
-                                   initial_view.member_ips_and_ports[i].rpc_port});
+           && !tcp_sockets.contains_node(initial_view.members[i])) {
+            tcp_sockets.add_node(initial_view.members[i],
+                                 {initial_view.member_ips_and_ports[i].ip_address,
+                                  initial_view.member_ips_and_ports[i].rpc_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
@@ -1361,7 +1363,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         for(int i = 0; i < curr_view->num_members; ++i) {
             if(i != curr_view->my_rank && !curr_view->failed[i]) {
                 LockedReference<std::unique_lock<std::mutex>, tcp::socket> member_socket
-                        = tcp_sockets->get_socket(curr_view->members[i]);
+                        = tcp_sockets.get_socket(curr_view->members[i]);
                 send_view(*next_view, member_socket.get());
             }
         }
@@ -1369,9 +1371,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         //Standard procedure for receiving a View, copied from receive_view_and_leaders
         const node_id_t leader_id = curr_view->members[curr_view->find_rank_of_leader()];
         std::size_t size_of_view;
-        tcp_sockets->read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
+        tcp_sockets.read(leader_id, reinterpret_cast<char*>(&size_of_view), sizeof(size_of_view));
         char buffer[size_of_view];
-        tcp_sockets->read(leader_id, buffer, size_of_view);
+        tcp_sockets.read(leader_id, buffer, size_of_view);
         next_view = mutils::from_bytes<View>(nullptr, buffer);
         next_view->subgroup_type_order = subgroup_type_order;
         next_view->my_rank = next_view->rank_of(my_id);
@@ -1722,7 +1724,7 @@ void ViewManager::send_objects_to_new_members(const View& new_view, const vector
  * different object to A, and neither node will be able to send the log tail length that
  * the other one is waiting on. */
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
-    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets->get_socket(new_node_id);
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets.get_socket(new_node_id);
     assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
     ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
     if(subgroup_object.is_persistent()) {
@@ -1739,12 +1741,12 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
 void ViewManager::update_tcp_connections(const View& new_view) {
     for(const node_id_t& removed_id : new_view.departed) {
         dbg_default_debug("Removing TCP connection for failed node {}", removed_id);
-        tcp_sockets->delete_node(removed_id);
+        tcp_sockets.delete_node(removed_id);
     }
     for(const node_id_t& joiner_id : new_view.joined) {
-        tcp_sockets->add_node(joiner_id,
-                              {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
-                               new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].rpc_port});
+        tcp_sockets.add_node(joiner_id,
+                             {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
+                              new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].rpc_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
 }
@@ -2435,6 +2437,10 @@ SharedLockedReference<const View> ViewManager::get_current_or_restart_view() {
     } else {
         return SharedLockedReference<const View>(*curr_view, view_mutex);
     }
+}
+
+LockedReference<std::unique_lock<std::mutex>, tcp::socket> ViewManager::get_transfer_socket(node_id_t member_id) {
+    return tcp_sockets.get_socket(member_id);
 }
 
 void ViewManager::debug_print_status() const {

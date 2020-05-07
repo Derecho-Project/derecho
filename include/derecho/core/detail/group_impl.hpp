@@ -123,12 +123,10 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           user_deserialization_context(deserialization_context),
           persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
-          //Initially empty, all connections are added in the new view callback
-          tcp_sockets(std::make_shared<tcp::tcp_connections>(my_id, std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>{{my_id, {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}})),
           view_manager(subgroup_info,
                        {std::type_index(typeid(ReplicatedTypes))...},
                        std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
-                       tcp_sockets, objects_by_subgroup_id,
+                       objects_by_subgroup_id,
                        persistence_manager.get_callbacks(),
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
@@ -210,7 +208,6 @@ Group<ReplicatedTypes...>::~Group() {
     // Will a node be able to come back once it leaves? if not, maybe we should
     // shut it down on leave().
     persistence_manager.shutdown(true);
-    tcp_sockets->destroy();
 }
 
 template <typename... ReplicatedTypes>
@@ -370,7 +367,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     //This will receive one object from each shard leader in ascending order of subgroup ID
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
-                = tcp_sockets->get_socket(subgroup_and_leader.second);
+                = view_manager.get_transfer_socket(subgroup_and_leader.second);
         ReplicatedObject& subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
         try {
             if(subgroup_object.is_persistent()) {

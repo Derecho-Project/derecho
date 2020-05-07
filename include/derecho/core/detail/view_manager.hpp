@@ -187,8 +187,13 @@ private:
      * set by Group to be the same order as its template parameters. */
     std::vector<std::type_index> subgroup_type_order;
 
-    /** The same set of TCP sockets used by Group and RPCManager. */
-    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
+    /**
+     * Contains a TCP connection to each member of the group, for the purpose
+     * of transferring new Views and state information (serialized Replicated
+     * Objects) to new members during a view change. Each socket is connected
+     * to the (badly-named) RPC port of the corresponding member.
+     */
+    tcp::tcp_connections tcp_sockets;
 
     /** 
      * The socket that made the initial connection to the restart leader, if this
@@ -639,8 +644,6 @@ public:
      * the template parameters to the Group class
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
-     * @param group_tcp_sockets The pool of TCP connections to each group member
-     * that is shared with Group.
      * @param object_reference_map A mutable reference to the list of
      * ReplicatedObject references in Group, so that ViewManager can access it
      * while Group manages the list
@@ -651,7 +654,6 @@ public:
     ViewManager(const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
-                const std::shared_ptr<tcp::tcp_connections>& group_tcp_sockets,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 const persistence_manager_callbacks_t& _persistence_manager_callbacks,
                 std::vector<view_upcall_t> _view_upcalls = {});
@@ -770,6 +772,14 @@ public:
      * to complete state transfer.
      */
     const vector_int64_2d& get_old_shard_leaders() const { return prior_view_shard_leaders; }
+
+    /**
+     * Gets a locked reference to the TCP socket connected to a particular node
+     * for the purposes of doing state transfer. This is needed by Group to
+     * complete state transfer during Replicated Object construction, and just
+     * forwards the same call through to ViewManager's tcp_connections.
+     */
+    LockedReference<std::unique_lock<std::mutex>, tcp::socket> get_transfer_socket(node_id_t member_id);
 
     /** Causes this node to cleanly leave the group by setting itself to "failed." */
     void leave();
