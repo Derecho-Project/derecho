@@ -235,6 +235,8 @@ struct SubgroupSettings {
     uint32_t num_received_offset;
     /** The offset of this node's slot within the subgroup's SST section */
     uint32_t slot_offset;
+    /** The index of the SST index used to track SMC messages in a specific subgroup */
+    uint32_t index_field_index;
     /** The operation mode of the subgroup */
     Mode mode;
     DerechoParams profile;

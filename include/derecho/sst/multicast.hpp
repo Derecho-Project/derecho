@@ -16,9 +16,7 @@ template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
-    // number of messages for which RDMA write is complete
-    uint64_t num_sent = 0;
-    // the number of messages acknowledged by all the nodes
+   // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
     const uint32_t my_row;
@@ -38,6 +36,7 @@ class multicast_group {
 
     // start indexes for sst fields it uses
     // need to know the range it can operate on
+    const uint32_t index_field_index;
     const uint32_t num_received_offset;
     const uint32_t slots_offset;
 
@@ -57,6 +56,7 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
+            sst->index[i][index_field_index] = -1;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
                 (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
@@ -72,7 +72,8 @@ public:
                     uint64_t max_msg_size,
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
-                    uint32_t slots_offset = 0)
+                    uint32_t slots_offset = 0,
+                     int32_t index_field_index = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
@@ -83,11 +84,12 @@ public:
                       return is_sender;
                   }
               }()),
+              index_field_index(index_field_index),
               num_received_offset(num_received_offset),
               slots_offset(slots_offset),
               num_members(row_indices.size()),
               window_size(window_size),
-              max_msg_size(max_msg_size + 2 * sizeof(uint64_t)) {
+              max_msg_size(max_msg_size + sizeof(uint64_t)) {
         // find my_member_index
         for(uint i = 0; i < num_members; ++i) {
             if(row_indices[i] == my_row) {
@@ -120,7 +122,7 @@ public:
                 queued_num++;
                 uint32_t slot = queued_num % window_size;
                 // set size appropriately
-                (uint64_t&)sst->slots[my_row][slots_offset + (max_msg_size * (slot + 1)) - 2 * sizeof(uint64_t)] = msg_size;
+                (uint64_t&)sst->slots[my_row][slots_offset + (max_msg_size * (slot + 1)) - sizeof(uint64_t)] = msg_size;
                 return &sst->slots[my_row][slots_offset + (max_msg_size * slot)];
             } else {
                 long long int min_multicast_num = sst->num_received_sst[my_row][num_received_offset + my_sender_index];
@@ -138,15 +140,25 @@ public:
     }
 
     void send() {
-        uint32_t slot = num_sent % window_size;
-        num_sent++;
-        ((uint64_t&)sst->slots[my_row][slots_offset + max_msg_size * (slot + 1) - sizeof(uint64_t)])++;
-        sst->put(
+        uint32_t slot = (sst->index[my_row][index_field_index]+1) % window_size;
+        sst->index[my_row][index_field_index]++;
+	    
+        //slots are contiguous
+        //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+        if(slot + 1 <= window_size) {
+            sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
-                max_msg_size - sizeof(uint64_t));
-        sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + slot * max_msg_size]) - sst->getBaseAddress() + max_msg_size - sizeof(uint64_t),
-                sizeof(uint64_t));
+                            max_msg_size * 1);
+        } else { //slots are not contiguous
+                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
+            // sst->put(
+            //     (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+            //                 max_msg_size * (window_size - first_slot));
+            sst->put(
+                (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                             max_msg_size * (slot + 1 - window_size));
+        }
+        sst->put(sst->index, index_field_index);
     }
 
     void debug_print() {
