@@ -139,24 +139,25 @@ public:
         }
     }
 
-    void send() {
-        uint32_t slot = (sst->index[my_row][index_field_index]+1) % window_size;
-        sst->index[my_row][index_field_index]++;
+    void send(uint32_t ready_to_be_sent = 1) {
+        
+        uint32_t first_slot = (sst->index[my_row][index_field_index]+1) % window_size;
+        sst->index[my_row][index_field_index] += ready_to_be_sent;
 	    
         //slots are contiguous
         //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-        if(slot + 1 <= window_size) {
+        if(first_slot + ready_to_be_sent <= window_size) {
             sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * slot]) - sst->getBaseAddress(),
+                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
                             max_msg_size * 1);
         } else { //slots are not contiguous
                  //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
-            // sst->put(
-            //     (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-            //                 max_msg_size * (window_size - first_slot));
+            sst->put(
+                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * (window_size - first_slot));
             sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                             max_msg_size * (slot + 1 - window_size));
+                             max_msg_size * (first_slot + 1 - window_size));
         }
         sst->put(sst->index, index_field_index);
     }

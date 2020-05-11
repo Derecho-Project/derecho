@@ -45,6 +45,7 @@ MulticastGroup::MulticastGroup(
           rdmc_group_num_offset(0),
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
+          committed_sst_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
@@ -106,6 +107,7 @@ MulticastGroup::MulticastGroup(
           rdmc_group_num_offset(old_group.rdmc_group_num_offset + old_group.num_members),
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
+          committed_sst_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
@@ -824,6 +826,20 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
         }
     }
 }
+void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                          const uint32_t num_shard_members, DerechoSST& sst){
+    int32_t current_committed_sst_index;
+    for(const auto& p : subgroup_settings_map) {
+        subgroup_id_t subgroup_num = p.first;
+        const SubgroupSettings& subgroup_settings = p.second;
+        current_committed_sst_index = committed_sst_index[subgroup_num];
+        uint32_t to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
+        if(to_be_sent > 0) {
+            sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
+        }
+    }
+}
+
 void MulticastGroup::register_predicates() {
     for(const auto& p : subgroup_settings_map) {
         subgroup_id_t subgroup_num = p.first;
@@ -861,6 +877,16 @@ void MulticastGroup::register_predicates() {
         };
         receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
                                                                   sst::PredicateType::RECURRENT));
+
+        auto sst_send_pred = [](const DerechoSST& sst) {
+                return true;
+        };
+        auto sst_send_trig = [&](DerechoSST& sst) mutable {
+            sst_send_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
+        };
+        receiver_pred_handles.emplace_back(sst->predicates.insert(sst_send_pred, sst_send_trig,
+                                                                  sst::PredicateType::RECURRENT));
+
 
         if(subgroup_settings.mode != Mode::UNORDERED) {
             auto delivery_pred = [](const DerechoSST& sst) {
@@ -1153,7 +1179,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         ((header*)buf)->cooked_send = false;
 
         future_message_indices[subgroup_num]++;
-        sst_multicast_group_ptrs[subgroup_num]->send();
+        committed_sst_index[subgroup_num]++;
     }
 }
 
@@ -1292,7 +1318,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         sender_cv.notify_all();
         return true;
     } else {
-        sst_multicast_group_ptrs[subgroup_num]->send();
+        committed_sst_index[subgroup_num]++;
         pending_sst_sends[subgroup_num] = false;
         return true;
     }

@@ -288,6 +288,7 @@ private:
      * It is std::nullopt when there is no message to send. */
     std::vector<std::optional<RDMCMessage>> next_sends;
     std::map<uint32_t, bool> pending_sst_sends;
+    std::vector<uint32_t> committed_sst_index;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
@@ -426,6 +427,9 @@ private:
 
     void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                           const uint32_t num_shard_members, DerechoSST& sst);
+
+    void sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                          const uint32_t num_shard_members, DerechoSST& sst);                          
 
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
