@@ -149,7 +149,7 @@ public:
         if(first_slot + ready_to_be_sent <= window_size) {
             sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            max_msg_size * 1);
+                            max_msg_size * ready_to_be_sent);
         } else { //slots are not contiguous
                  //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
             sst->put(
@@ -157,7 +157,7 @@ public:
                             max_msg_size * (window_size - first_slot));
             sst->put(
                 (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                             max_msg_size * (first_slot + 1 - window_size));
+                             max_msg_size * (first_slot + ready_to_be_sent - window_size));
         }
         sst->put(sst->index, index_field_index);
     }
