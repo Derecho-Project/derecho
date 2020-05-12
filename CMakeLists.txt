@@ -23,7 +23,7 @@ endif ( )
 
 include(GetGitRevisionDescription)
 
-# mutils_FOUND 
+# mutils_FOUND
 # mutils_INCLUDE_DIRS
 # mutils_LIBRARIES
 find_package(mutils)
@@ -61,7 +61,7 @@ endif()
 find_package(spdlog 1.3.1 REQUIRED)
 
 # find openssl
-find_package(OpenSSL REQUIRED) 
+find_package(OpenSSL REQUIRED)
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
@@ -71,31 +71,33 @@ add_subdirectory(src/rdmc)
 add_subdirectory(src/sst)
 add_subdirectory(src/tcp)
 add_subdirectory(src/persistent)
+add_subdirectory(src/openssl)
 
 # make libderecho.so
 add_library(derecho SHARED
-    $<TARGET_OBJECTS:mutils-serialization> 
+    $<TARGET_OBJECTS:mutils-serialization>
     $<TARGET_OBJECTS:conf>
     $<TARGET_OBJECTS:utils>
     $<TARGET_OBJECTS:core>
     $<TARGET_OBJECTS:rdmc>
     $<TARGET_OBJECTS:sst>
     $<TARGET_OBJECTS:tcp>
-    $<TARGET_OBJECTS:persistent>)
+    $<TARGET_OBJECTS:persistent>
+    $<TARGET_OBJECTS:openssl_wrapper>)
 target_link_libraries(derecho
     rdmacm ibverbs rt pthread atomic
-    stdc++fs ${libfabric_LIBRARIES} 
-    ${mutils_LIBRARIES} 
+    stdc++fs ${libfabric_LIBRARIES}
+    ${mutils_LIBRARIES}
     ${mutils-containers_LIBRARIES}
     ${mutils-tasks_LIBRARIES}
-    ${OPENSSL_LIBRARIES}) 
+    ${OPENSSL_LIBRARIES})
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
 )
 add_dependencies(derecho
     mutils-serialization conf utils core
-    rdmc sst tcp persistent)
+    rdmc sst tcp persistent openssl_wrapper)
 
 # make install
 install(TARGETS derecho EXPORT derecho
@@ -104,6 +106,7 @@ install(DIRECTORY
         include/derecho/conf
         include/derecho/core
         include/derecho/mutils-serialization
+        include/derecho/openssl
         include/derecho/persistent
         include/derecho/rdmc
         include/derecho/sst
