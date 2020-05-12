@@ -1,5 +1,5 @@
 #include <derecho/persistent/Persistent.hpp>
-#include <openssl/sha.h>
+#include <derecho/openssl/hash.hpp>
 
 namespace persistent {
 
@@ -15,7 +15,7 @@ namespace persistent {
         ITemporalQueryFrontierProvider* tqfp,
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) : 
+        uint32_t shard_num) :
         _subgroup_prefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
         _temporal_query_frontier_provider(tqfp) {
     }
@@ -94,18 +94,11 @@ namespace persistent {
 
         // SHA256 subgroup_type_name to avoid a long file name
         unsigned char subgroup_type_name_digest[32];
-        SHA256_CTX ctxt;
-        if (!SHA256_Init(&ctxt)) {
-            dbg_default_error("{}:{} Unable to initialize SHA256 context. errno = {}", __FILE__, __func__, errno);
-            throw PERSIST_EXP_SHA256_HASH(errno);
-        }
-        if (!SHA256_Update(&ctxt,subgroup_type_name,strlen(subgroup_type_name))) {
-            dbg_default_error("{}:{} Unable to update SHA256 context. string = {}, length = {}, errno = {}",
-                __FILE__, __func__, subgroup_type_name, strlen(subgroup_type_name), errno);
-            throw PERSIST_EXP_SHA256_HASH(errno);
-        }
-        if (!SHA256_Final(subgroup_type_name_digest,&ctxt)) {
-            dbg_default_error("{}:{} Unable to final SHA256 context. errno = {}", __FILE__, __func__, errno);
+        openssl::Hasher sha256(openssl::DigestAlgorithm::SHA256);
+        try {
+            sha256.hash_bytes(subgroup_type_name, strlen(subgroup_type_name), subgroup_type_name_digest);
+        } catch(openssl::openssl_error& ex) {
+            dbg_default_error("{}:{} Unable to compute SHA256 of subgroup type name. OpenSSL error: {}", __FILE__, __func__, ex.what());
             throw PERSIST_EXP_SHA256_HASH(errno);
         }
 
