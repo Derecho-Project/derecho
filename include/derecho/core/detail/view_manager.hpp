@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -18,7 +19,10 @@
 #include "derecho_internal.hpp"
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
+#include "persistence_manager.hpp"
+#include "replicated_interface.hpp"
 #include "restart_state.hpp"
+#include "rpc_manager.hpp"
 #include <derecho/conf/conf.hpp>
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -26,18 +30,12 @@
 
 namespace derecho {
 
-/*--- Forward declarations ---*/
+/*--- Forward declarations to break circular include dependencies ---*/
 
 template <typename T>
 class Replicated;
 template <typename T>
 class ExternalCaller;
-
-class ReplicatedObject;
-
-namespace rpc {
-class RPCManager;
-}
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -195,9 +193,9 @@ private:
      */
     tcp::tcp_connections tcp_sockets;
 
-    /** 
+    /**
      * The socket that made the initial connection to the restart leader, if this
-     * node is a non-leader. This is only used during the initial startup phase; 
+     * node is a non-leader. This is only used during the initial startup phase;
      * after the Group constructor finishes and start() is called, it will be null.
      */
     std::unique_ptr<tcp::socket> leader_connection;
@@ -223,6 +221,13 @@ private:
      */
     const bool any_persistent_objects;
 
+    /**
+     * A reference to the PersistenceManager for this group, which is owned by
+     * Group. Used to notify PersistenceManager when new versions need to be
+     * persisted (because new updates have been delivered).
+     */
+    PersistenceManager& persistence_manager;
+
     /** Set to true in the constructor if this node must do a total restart
      * before completing group setup; false otherwise. */
     bool in_total_restart;
@@ -243,9 +248,6 @@ private:
      */
     bool active_leader;
 
-    /** The persistence request func is from persistence manager*/
-    persistence_manager_callbacks_t persistence_manager_callbacks;
-
     /**
      * A 2-dimensional vector, indexed by (subgroup ID -> shard number),
      * containing the ID of the node in each shard that was its leader
@@ -257,7 +259,7 @@ private:
 
     /**
      * On a graceful exit, nodes will be agree to leave at some point, where
-     * the view manager should stop throw exception on "failure". Set 
+     * the view manager should stop throw exception on "failure". Set
      * 'bSilence' to keep the view manager calm on detecting intended node
      * "failure."
      */
@@ -483,7 +485,7 @@ private:
     /* ---------------------------------------------------------------------------------- */
 
     /* ------------------------ Setup/constructor helpers ------------------------------- */
-    /** 
+    /**
      * The initial start-up procedure (basically a constructor) for the case
      * where there is no logged state on disk and the group is doing a "fresh
      * start." At the end of this function this node has constructed or received
@@ -500,7 +502,7 @@ private:
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
     void await_first_view();
-    /** 
+    /**
      * Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
      * shard leaders) from the leader.
@@ -514,7 +516,7 @@ private:
     void initialize_rdmc_sst();
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
-     * @return true if the leader successfully sent the View, false if the leader crashed 
+     * @return true if the leader successfully sent the View, false if the leader crashed
      * (i.e. a socket operation to it failed) before completing the process
      */
     bool receive_initial_view();
@@ -572,7 +574,7 @@ private:
     std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
                                                            std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
-//Note: This function is public so that RestartLeaderState can access it.
+    //Note: This function is public so that RestartLeaderState can access it.
 public:
     /**
      * Initializes curr_view with subgroup information based on the membership
@@ -588,6 +590,7 @@ public:
     static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
                                    const std::unique_ptr<View>& prev_view,
                                    View& curr_view);
+
 private:
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -640,14 +643,16 @@ public:
      * Constructor for either the leader or non-leader of a group.
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
-     * @param subgroup_type_order A vector of type_index in the same order as 
+     * @param subgroup_type_order A vector of type_index in the same order as
      * the template parameters to the Group class
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
      * @param object_reference_map A mutable reference to the list of
      * ReplicatedObject references in Group, so that ViewManager can access it
      * while Group manages the list
-     * @param _persistence_manager_callbacks The persistence manager callbacks.
+     * @param persistence_manager A mutable reference to the PersistenceManager
+     * stored in Group, so that ViewManager (and MulticastGroup) can send it
+     * requests to persist new versions
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
@@ -655,7 +660,7 @@ public:
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
                 ReplicatedObjectReferenceMap& object_reference_map,
-                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+                PersistenceManager& persistence_manager,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();

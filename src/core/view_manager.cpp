@@ -30,7 +30,7 @@ ViewManager::ViewManager(
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
         ReplicatedObjectReferenceMap& object_reference_map,
-        const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+        PersistenceManager& persistence_manager,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
@@ -43,7 +43,7 @@ ViewManager::ViewManager(
                         {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
-          persistence_manager_callbacks(_persistence_manager_callbacks) {
+          persistence_manager(persistence_manager) {
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);
@@ -1537,7 +1537,7 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
                 subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
             },
-            persistence_manager_callbacks, curr_view->failed);
+            persistence_manager, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group(
@@ -1560,7 +1560,7 @@ void ViewManager::transition_multicast_group(
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
                 subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
             },
-            persistence_manager_callbacks, next_view->failed);
+            next_view->failed);
 
     curr_view->multicast_group.reset();
 

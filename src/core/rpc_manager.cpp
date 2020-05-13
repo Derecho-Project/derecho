@@ -8,6 +8,7 @@
 #include <iostream>
 
 #include <derecho/core/detail/rpc_manager.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 
 namespace derecho {
 
@@ -24,7 +25,7 @@ RPCManager::~RPCManager() {
 
 void RPCManager::report_failure(const node_id_t who) {
     const auto& members = view_manager.get_members();
-    if (std::count(members.begin(), members.end(), who)) {
+    if(std::count(members.begin(), members.end(), who)) {
         // internal member
         view_manager.report_failure(who);
     } else {
@@ -38,10 +39,10 @@ void RPCManager::report_failure(const node_id_t who) {
 void RPCManager::create_connections() {
     connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
             nid,
-	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+            getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
             view_manager.view_max_rpc_window_size,
-	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
-	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+            getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
             view_manager.view_max_rpc_reply_payload_size + sizeof(header),
             false,
             [this](const uint32_t node_id) { report_failure(node_id); }});
@@ -363,7 +364,7 @@ void RPCManager::p2p_receive_loop() {
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
-            if (reply_pair.first != INVALID_NODE_ID) {
+            if(reply_pair.first != INVALID_NODE_ID) {
                 p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
                 connections->update_incoming_seq_num();
             }

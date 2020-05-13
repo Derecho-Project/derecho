@@ -12,13 +12,16 @@
 #include <semaphore.h>
 #include <thread>
 
-#include "../replicated.hpp"
 #include "derecho_internal.hpp"
-#include "view_manager.hpp"
-#include <derecho/persistent/Persistent.hpp>
+#include "replicated_interface.hpp"
+#include <derecho/persistent/PersistentTypenames.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
+
+/* Forward declaration to break circular include dependency between ViewManager
+ * and PersistenceManager. */
+class ViewManager;
 
 using persistence_request_t = std::tuple<subgroup_id_t, persistent::version_t>;
 
@@ -53,7 +56,6 @@ public:
             std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
             const persistence_callback_t& _persistence_callback);
 
-
     /** default Destructor
      */
     virtual ~PersistenceManager();
@@ -70,14 +72,9 @@ public:
     void make_version(const subgroup_id_t& subgroup_id,
                       const persistent::version_t& version, const HLC& mhlc);
 
-    /** shutdown the thread 
+    /** shutdown the thread
      * @wait - wait till the thread finished or not.
      */
     void shutdown(bool wait);
-
-    /** get the persistence callbacks. The multicast_group object will use this to notify
-     *  the persistence thread about it.
-     */
-    persistence_manager_callbacks_t get_callbacks();
 };
 }  // namespace derecho

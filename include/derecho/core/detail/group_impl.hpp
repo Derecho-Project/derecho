@@ -127,7 +127,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                        {std::type_index(typeid(ReplicatedTypes))...},
                        std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                        objects_by_subgroup_id,
-                       persistence_manager.get_callbacks(),
+                       persistence_manager,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {

@@ -3,7 +3,8 @@
  *
  * @date Jun 20, 2017
  */
-#include "derecho/core/detail/persistence_manager.hpp"
+#include <derecho/core/detail/persistence_manager.hpp>
+#include <derecho/core/detail/view_manager.hpp>
 
 namespace derecho {
 
@@ -116,7 +117,7 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
     }
 }
 
-/** shutdown the thread 
+/** shutdown the thread
  * @wait - wait till the thread finished or not.
  */
 void PersistenceManager::shutdown(bool wait) {
@@ -128,21 +129,5 @@ void PersistenceManager::shutdown(bool wait) {
     if(wait) {
         this->persist_thread.join();
     }
-}
-
-/** get the persistence callbacks. The multicast_group object will use this to notify
- *  the persistence thread about it.
- */
-persistence_manager_callbacks_t PersistenceManager::get_callbacks() {
-    return std::make_tuple(
-            [this](const subgroup_id_t& subgroup_id,
-                   const persistent::version_t& ver,
-                   const HLC& mhlc) {
-                this->make_version(subgroup_id, ver, mhlc);
-            },
-            [this](const subgroup_id_t& subgroup_id,
-                   const persistent::version_t& ver) {
-                this->post_persist_request(subgroup_id, ver);
-            });
 }
 }  // namespace derecho

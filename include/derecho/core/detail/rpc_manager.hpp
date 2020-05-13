@@ -19,16 +19,18 @@
 #include "p2p_connection_manager.hpp"
 #include "remote_invocable.hpp"
 #include "rpc_utils.hpp"
-#include "view_manager.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
 
+/* --- Forward declarations to break circular include dependencies --- */
 template <typename T>
 class Replicated;
 template <typename T>
 class ExternalCaller;
+
+class ViewManager;
 
 /**
  * The Deserialization Interface to be implemented by user applications.
