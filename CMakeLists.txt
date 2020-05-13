@@ -61,7 +61,7 @@ endif()
 find_package(spdlog 1.3.1 REQUIRED)
 
 # find openssl
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL 1.1.1 REQUIRED)
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
