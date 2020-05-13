@@ -50,10 +50,7 @@ endif()
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
-find_package(libfabric)
-if (NOT ${libfabric_FOUND})
-    message(FATAL_ERROR "libfabric not found. Please install from https://github.com/ofiwg/libfabric.git. [commit:fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6]")
-endif()
+find_package(libfabric 1.7.0 REQUIRED)
 
 # spdlog is a packaged system library, so this probably isn't necessary, but
 # it helps ensure that the right version is installed
