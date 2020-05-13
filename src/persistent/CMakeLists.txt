@@ -19,6 +19,7 @@ add_executable(persistent_test test.cpp
     $<TARGET_OBJECTS:conf>
     $<TARGET_OBJECTS:utils>
     $<TARGET_OBJECTS:mutils-serialization>
+    $<TARGET_OBJECTS:openssl_wrapper>
 )
 target_include_directories(persistent_test PRIVATE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
