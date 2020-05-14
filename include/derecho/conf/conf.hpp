@@ -26,14 +26,14 @@ private:
 #define CONF_DERECHO_LOCAL_ID "DERECHO/local_id"
 #define CONF_DERECHO_LOCAL_IP "DERECHO/local_ip"
 #define CONF_DERECHO_GMS_PORT "DERECHO/gms_port"
-#define CONF_DERECHO_RPC_PORT "DERECHO/rpc_port"
+#define CONF_DERECHO_TRANSFER_PORT "DERECHO/transfer_port"
 #define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
 #define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
-#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders" 
+#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
 
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
@@ -70,7 +70,7 @@ private:
             {CONF_DERECHO_LOCAL_ID, "0"},
             {CONF_DERECHO_LOCAL_IP, "127.0.0.1"},
             {CONF_DERECHO_GMS_PORT, "23580"},
-            {CONF_DERECHO_RPC_PORT, "28366"},
+            {CONF_DERECHO_TRANSFER_PORT, "28366"},
             {CONF_DERECHO_SST_PORT, "37683"},
             {CONF_DERECHO_RDMC_PORT, "31675"},
             {CONF_DERECHO_EXTERNAL_PORT, "32645"},
@@ -217,8 +217,8 @@ const bool getConfBoolean(const std::string& key);
 const bool hasCustomizedConfKey(const std::string& key);
 
 /**
- * Splits a string into a vector of strings using a delimiting string. This is 
- * helpful for parsing "list-like" config options, which are comma-delimited 
+ * Splits a string into a vector of strings using a delimiting string. This is
+ * helpful for parsing "list-like" config options, which are comma-delimited
  * sequences of strings or numbers (so the default delimiter is ",").
  * @param str The string to split
  * @param delimiter The string to use as the delimiter for splitting

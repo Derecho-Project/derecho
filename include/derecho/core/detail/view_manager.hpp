@@ -191,13 +191,13 @@ private:
      * Contains a TCP connection to each member of the group, for the purpose
      * of transferring new Views and state information (serialized Replicated
      * Objects) to new members during a view change. Each socket is connected
-     * to the (badly-named) RPC port of the corresponding member.
+     * to the transfer port of the corresponding member.
      */
     tcp::tcp_connections tcp_sockets;
 
-    /** 
+    /**
      * The socket that made the initial connection to the restart leader, if this
-     * node is a non-leader. This is only used during the initial startup phase; 
+     * node is a non-leader. This is only used during the initial startup phase;
      * after the Group constructor finishes and start() is called, it will be null.
      */
     std::unique_ptr<tcp::socket> leader_connection;
@@ -257,7 +257,7 @@ private:
 
     /**
      * On a graceful exit, nodes will be agree to leave at some point, where
-     * the view manager should stop throw exception on "failure". Set 
+     * the view manager should stop throw exception on "failure". Set
      * 'bSilence' to keep the view manager calm on detecting intended node
      * "failure."
      */
@@ -483,7 +483,7 @@ private:
     /* ---------------------------------------------------------------------------------- */
 
     /* ------------------------ Setup/constructor helpers ------------------------------- */
-    /** 
+    /**
      * The initial start-up procedure (basically a constructor) for the case
      * where there is no logged state on disk and the group is doing a "fresh
      * start." At the end of this function this node has constructed or received
@@ -500,7 +500,7 @@ private:
     /** Constructor helper for the leader when it first starts; waits for enough
      * new nodes to join to make the first view adequately provisioned. */
     void await_first_view();
-    /** 
+    /**
      * Constructor helper for non-leader nodes; encapsulates receiving and
      * deserializing a View, DerechoParams, and state-transfer leaders (old
      * shard leaders) from the leader.
@@ -514,7 +514,7 @@ private:
     void initialize_rdmc_sst();
     /**
      * Helper for joining an existing group; receives the View and parameters from the leader.
-     * @return true if the leader successfully sent the View, false if the leader crashed 
+     * @return true if the leader successfully sent the View, false if the leader crashed
      * (i.e. a socket operation to it failed) before completing the process
      */
     bool receive_initial_view();
@@ -640,7 +640,7 @@ public:
      * Constructor for either the leader or non-leader of a group.
      * @param subgroup_info The set of functions defining subgroup membership
      * for this group.
-     * @param subgroup_type_order A vector of type_index in the same order as 
+     * @param subgroup_type_order A vector of type_index in the same order as
      * the template parameters to the Group class
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise

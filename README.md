@@ -2,7 +2,7 @@ Full source documentation can be found at https://derecho-project.github.io/.
 
 
 # Derecho [![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
-This is the main repository for the Derecho project. It unifies the RDMC, SST, and Derecho modules under a single, easy-to-use repository. 
+This is the main repository for the Derecho project. It unifies the RDMC, SST, and Derecho modules under a single, easy-to-use repository.
 
 ## Intended use cases and assumptions.
 Derecho is aimed at supporting what are called "cloud micro-services", meaning pools of servers that would reside in a cluster or on a cloud data-center, probably to support the "first tier" where requests arrive from external clients, and that perform some kind of well-defined subtask like data cleaning, image classification, compression and deduplication, etc.  Although the system could definitely run in other settings, if you stray too far from our intended use cases, you'll probably trigger timeout-related crashes that we might not be very eager to try and "fix".  We recommend using Zookeeper or some other tool if you are aiming at a very different setup.
@@ -27,7 +27,7 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
 * CMake 2.8.1 or newer
-* The SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.0.2n. But it should work for any version >= 1.0 
+* The SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.0.2n. But it should work for any version >= 1.0
 * The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
 * [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](https://packages.ubuntu.com/disco/libspdlog-dev) and install it manually with no other dependencies needed.
 * The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please install `v1.7.0` from source code. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
@@ -68,20 +68,20 @@ To uninstall, run:
 To build your own derecho executable, simple run:
 * `g++ -std=c++1z -o myapp myapp.cpp -lderecho -pthread`
 
-To use Derecho in your code, you simply need to 
+To use Derecho in your code, you simply need to
 - include the header `derecho/core/derecho.hpp` in your \*.h \*.hpp or \*.cpp files, and
-- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `<installation-prefix>/share/derecho/derecho-sample.cfg`. 
+- specify a configuration file, either by setting environment variable `DERECHO_CONF_FILE` or by placing a file named `derecho.cfg` in the working directory. A sample configuration file along with an explanation can be found in `<installation-prefix>/share/derecho/derecho-sample.cfg`.
 
-The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior. 
+The configuration file consists of three sections: **DERECHO**, **RDMA**, and **PERS**. The **DERECHO** section includes core configuration options for a Derecho instance, which every application will need to customize. The **RDMA** section includes options for RDMA hardware specifications. The **PERS** section allows you to customize the persistent layer's behavior.
 
 #### Configuring Core Derecho
-Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **rpc_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**leader_external_port** and **external_port**);
+Applications need to tell the Derecho library which node is the initial leader with the options **leader_ip** and **leader_gms_port**. Each node then specifies its own ID (**local_id**) and the IP address and ports it will use for Derecho component services (**local_ip**, **gms_port**, **transfer_port**, **sst_port**, and **rdmc_port**). Also, if using external clients, applications need to specify the ports serving external clients (**leader_external_port** and **external_port**);
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 
 Three message-size options control the memory footprint and performance of Derecho.  In all cases, larger values will increase the memory (DRAM) footprint of the application, and it is fairly easy to end up with a huge memory size if you just pick giant values.  The defaults keep the memory size smaller, but can reduce performance if an application is sending high rates of larger messages.
 
-The options are named **max_payload_size**, **max_smc_payload_size**, **block_size**, **max_p2p_request_payload_size**, and **max_p2p_reply_payload_size**. 
+The options are named **max_payload_size**, **max_smc_payload_size**, **block_size**, **max_p2p_request_payload_size**, and **max_p2p_reply_payload_size**.
 
 No message bigger than **max_payload_size** will be sent by Derecho multicast(`Replicated<>::send()`). No message bigger than **max_p2p_request_payload_size** will be sent by Derecho p2p send(`Replicated<>::p2p_send()` or `ExternalClientCaller<>::p2p_send()`). No reply bigger than **max_p2p_reply_payload_size** will be sent to carry the return values any multicast or p2p send.
 
@@ -132,7 +132,7 @@ We also allow applications to specify configuration options on the command line.
 ```cpp
 #define NUM_OF_APP_ARGS () // specify the number of application arguments.
 int main(int argc, char* argv[]) {
-    if((argc < (NUM_OF_APP_ARGS+1)) || 
+    if((argc < (NUM_OF_APP_ARGS+1)) ||
        ((argc > (NUM_OF_APP_ARGS+1)) && strcmp("--", argv[argc - NUM_OF_APP_ARGS - 1]))) {
         cout << "Invalid command line arguments." << endl;
         cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] application-argument-list" << endl;
@@ -185,7 +185,7 @@ The file `simple_replicated_objects.cpp` within applications/demos shows a compl
 ### Replicated Objects
 One of the core building blocks of Derecho is the concept of a Replicated Object. This provides a simple way for you to define state that is replicated among several machines and a set of RPC functions that operate on that state.
 
-A Replicated Object is any class that (1) is serializable with the mutils-serialization framework and (2) implements a static method called `register_functions()`. The [mutils-serialization](https://github.com/mpmilano/mutils-serialization) library should have more documentation on making objects serializable, but the most straightforward way is to inherit `mutils::ByteRepresentable`, use the macro `DEFAULT_SERIALIZATION_SUPPORT`, and write an element-by-element constructor. The `register_functions()` method is how your class specifies to Derecho which of its methods should be converted to RPC functions and what their numeric "function tags" should be. It should return a `std::tuple` containing a pointer to each RPC-callable method, wrapped in the template function `derecho::rpc::tag`, whose template parameter is an integer constant. We have provided a default implementation of this function with the macro `REGISTER_RPC_FUNCTIONS`, which registers each method in its argument using the integer constant generated by the macro `RPC_NAME`. Here is an example of a Replicated Object declaration that uses the default implementation macros: 
+A Replicated Object is any class that (1) is serializable with the mutils-serialization framework and (2) implements a static method called `register_functions()`. The [mutils-serialization](https://github.com/mpmilano/mutils-serialization) library should have more documentation on making objects serializable, but the most straightforward way is to inherit `mutils::ByteRepresentable`, use the macro `DEFAULT_SERIALIZATION_SUPPORT`, and write an element-by-element constructor. The `register_functions()` method is how your class specifies to Derecho which of its methods should be converted to RPC functions and what their numeric "function tags" should be. It should return a `std::tuple` containing a pointer to each RPC-callable method, wrapped in the template function `derecho::rpc::tag`, whose template parameter is an integer constant. We have provided a default implementation of this function with the macro `REGISTER_RPC_FUNCTIONS`, which registers each method in its argument using the integer constant generated by the macro `RPC_NAME`. Here is an example of a Replicated Object declaration that uses the default implementation macros:
 
 ```cpp
 class Cache : public mutils::ByteRepresentable {
@@ -193,7 +193,7 @@ class Cache : public mutils::ByteRepresentable {
 
 public:
     void put(const std::string& key, const std::string& value);
-    std::string get(const std::string& key); 
+    std::string get(const std::string& key);
     bool contains(const std::string& key);
     bool invalidate(const std::string& key);
     Cache() : cache_map() {}
@@ -207,9 +207,9 @@ This object has one field, `cache_map`, so the DEFAULT\_SERIALIZATION\_SUPPORT m
 
 ### Groups and Subgroups
 
-Derecho organizes nodes (machines or processes in a system) into Groups, which can then be divided into subgroups and shards. Any member of a Group can communicate with any other member, and all run the same group-management service that handles failures and accepts new members. Subgroups, which are any subset of the nodes in a Group, correspond to Replicated Objects; each subgroup replicates the state of a Replicated Object and any member of the subgroup can handle RPC calls on that object. Shards are disjoint subsets of a subgroup that each maintain their own state, so one subgroup can replicate multiple instances of the same type of Replicated Object. A Group must be statically configured with the types of Replicated Objects it can support, but the number of subgroups and their exact membership can change at runtime according to functions that you provide. 
+Derecho organizes nodes (machines or processes in a system) into Groups, which can then be divided into subgroups and shards. Any member of a Group can communicate with any other member, and all run the same group-management service that handles failures and accepts new members. Subgroups, which are any subset of the nodes in a Group, correspond to Replicated Objects; each subgroup replicates the state of a Replicated Object and any member of the subgroup can handle RPC calls on that object. Shards are disjoint subsets of a subgroup that each maintain their own state, so one subgroup can replicate multiple instances of the same type of Replicated Object. A Group must be statically configured with the types of Replicated Objects it can support, but the number of subgroups and their exact membership can change at runtime according to functions that you provide.
 
-Note that more than one subgroup can use the same type of Replicated Object, so there can be multiple independent instances of a Replicated Object in a Group even if those subgroups are not sharded. A subgroup is usually identified by the type of Replicated Object it implements and an integral index number specifying which subgroup of that type it is. 
+Note that more than one subgroup can use the same type of Replicated Object, so there can be multiple independent instances of a Replicated Object in a Group even if those subgroups are not sharded. A subgroup is usually identified by the type of Replicated Object it implements and an integral index number specifying which subgroup of that type it is.
 
 To start using Derecho, a process must either start or join a Group by constructing an instance of `derecho::Group`, which then provides the interface for interacting with other nodes in the Group. (The difference between starting and joining a group is simply a matter of calling a different constructor). A `derecho::Group` expects a set of variadic template parameters representing the types of Replicated Objects that it can support in its subgroups. For example, this declaration is a pointer to a Group object that can have subgroups of type LoadBalancer, Cache, and Storage:
 
@@ -268,7 +268,7 @@ For all three types of Replicated Object, the function creates one subgroup and 
 Although the subgroup allocation function is the most important part of constructing a `derecho::Group`, it requires a few additional parameters.
 * A set of **callback functions** that will be notified when each Derecho message is delivered to the node (stability callback) or persisted to disk (persistence callback). These can be null, and are probably not useful if you're only using the Replicated Object features of Derecho (since the "messages" will be serialized RPC calls).
 * A set of **View upcalls** that will be notified when the group experiences a View change event (nodes fail or join the group). This is optional and can be empty, but it can be useful for adding additional failure-handling or load-balancing behavior to your application.
-* For each template parameter in the type of `derecho::Group`, its constructor will expect an additional argument of type `derecho::Factory`, which is a function or functor that constructs instances of the Replicated Object (it's just an alias for `std::function<std::unique_ptr<T>(void)>`). 
+* For each template parameter in the type of `derecho::Group`, its constructor will expect an additional argument of type `derecho::Factory`, which is a function or functor that constructs instances of the Replicated Object (it's just an alias for `std::function<std::unique_ptr<T>(void)>`).
 
 ### Invoking RPC Functions
 
@@ -335,7 +335,7 @@ class PFoo : public mutils::ByteRepresentable {
 public:
     virtual ~PFoo() noexcept (true) {}
     int read_state() {
-        return *pint; 
+        return *pint;
     }
     bool change_state(int new_int) {
          if(new_int == *pint) {
@@ -345,7 +345,7 @@ public:
          *pint = new_int;
          return true;
     }
-     
+
     // constructor with PersistentRegistry
     PFoo(PersistentRegistry * pr) : pint(nullptr,pr) {}
     PFoo(Persistent<int> & init_pint) : pint(std::move(init_pint)) {}
@@ -353,7 +353,7 @@ public:
     REGISTER_RPC_FUNCTIONS(PFoo, read_state, change_state);
 };
 ```
-	
+
 For simplicity, the versioned type is int in this example. You set it up in the same way as a non-versioned member of a replicated object, except that you need to pass the PersistentRegistry from the constructor of the replicated object to the constructor of the `Persistent<T>`. Derecho uses PersistentRegistry to keep track of all the Persistent<T> objects in a single Replicated Object so that it can create versions on updates. The Persistent<T> constructor registers itself in the registry.
 
 By default, the Persistent<T> stores its log in the file-system (in a folder called .plog in the current directory). Application can specify memory as the storage location by setting the second template parameter: `Persistent<T,ST_MEM>` (or `Volatile<T>` as syntactic sugar). We are working on more store storage types including NVM.
@@ -371,7 +371,7 @@ Additionally, it is important for you as the developer to realize that launching
 
 Even on HPC systems, which can support MPI at that scale, because MPI doesn't use an all-to-all connection pattern, we have seen these kinds of difficulties at massive scale.  In MPI there is one leader and N-1 followers, so the primary pattern that arises is really 1-N connections (more accurately, they do have some cases at runtime (like AllReduce) that can create K x K patterns.  I don't know how much success those folks have had with K>=1000, though.  My impression is that All Reduce normally runs on a significantly smaller scale.  Other KxK situations on MPI are probably delicate to initialize, too.)
 
-At Cornell, up to now, our largest experiments involved cases where we benchmarked RDMC (not the full Derecho) on 1000's of nodes at the LLNL supercomputer center.  And it was a nightmare getting to the point where that worked.  In the end, we actually had a special batch script to launch them 50 at a time, and have them connect in batches, to avoid overloading the file system and TCP layer.  
+At Cornell, up to now, our largest experiments involved cases where we benchmarked RDMC (not the full Derecho) on 1000's of nodes at the LLNL supercomputer center.  And it was a nightmare getting to the point where that worked.  In the end, we actually had a special batch script to launch them 50 at a time, and have them connect in batches, to avoid overloading the file system and TCP layer.
 
 Our largest Derecho experiments have been on a Texas supercomputer, where we had successful and completely stable runs on 256 physical nodes and probably could have pushed towards 1024 or more had we not run out of credits: "renting" 1000's of non-virtualized nodes is expensive.   Then just as we applied for more credit, they decommissioned the entire machine (Stampede-1).  So that whole line of experiments ended abruptly.  Still, we do think it could have been carried quite a bit further.  In this mode, we felt we were experimenting on a use case and deployment of a kind that Derecho needs to support.
 
