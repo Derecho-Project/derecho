@@ -40,7 +40,7 @@ ViewManager::ViewManager(
           subgroup_type_order(subgroup_type_order),
           tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID),
                       {{getConfUInt32(CONF_DERECHO_LOCAL_ID),
-                        {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_RPC_PORT)}}}),
+                        {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager(persistence_manager) {
@@ -104,7 +104,7 @@ void ViewManager::startup_to_first_view() {
                 std::vector<IpAndPorts>{
                         {getConfString(CONF_DERECHO_LOCAL_IP),
                          getConfUInt16(CONF_DERECHO_GMS_PORT),
-                         getConfUInt16(CONF_DERECHO_RPC_PORT),
+                         getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT),
                          getConfUInt16(CONF_DERECHO_SST_PORT),
                          getConfUInt16(CONF_DERECHO_RDMC_PORT),
                          getConfUInt16(CONF_DERECHO_EXTERNAL_PORT)}},
@@ -269,7 +269,7 @@ bool ViewManager::receive_initial_view() {
     }
     try {
         leader_connection->write(getConfUInt16(CONF_DERECHO_GMS_PORT));
-        leader_connection->write(getConfUInt16(CONF_DERECHO_RPC_PORT));
+        leader_connection->write(getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT));
         leader_connection->write(getConfUInt16(CONF_DERECHO_SST_PORT));
         leader_connection->write(getConfUInt16(CONF_DERECHO_RDMC_PORT));
         leader_connection->write(getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
@@ -484,7 +484,7 @@ void ViewManager::setup_initial_tcp_connections(const View& initial_view, const 
         if(initial_view.members[i] != my_id) {
             tcp_sockets.add_node(initial_view.members[i],
                                  {initial_view.member_ips_and_ports[i].ip_address,
-                                  initial_view.member_ips_and_ports[i].rpc_port});
+                                  initial_view.member_ips_and_ports[i].state_transfer_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
@@ -499,7 +499,7 @@ void ViewManager::reinit_tcp_connections(const View& initial_view, const node_id
            && !tcp_sockets.contains_node(initial_view.members[i])) {
             tcp_sockets.add_node(initial_view.members[i],
                                  {initial_view.member_ips_and_ports[i].ip_address,
-                                  initial_view.member_ips_and_ports[i].rpc_port});
+                                  initial_view.member_ips_and_ports[i].state_transfer_port});
             dbg_default_debug("Established a TCP connection to node {}", initial_view.members[i]);
         }
     }
@@ -544,8 +544,8 @@ void ViewManager::await_first_view() {
             client_socket.write(JoinResponse{JoinResponseCode::OK, my_id});
             uint16_t joiner_gms_port = 0;
             client_socket.read(joiner_gms_port);
-            uint16_t joiner_rpc_port = 0;
-            client_socket.read(joiner_rpc_port);
+            uint16_t joiner_state_transfer_port = 0;
+            client_socket.read(joiner_state_transfer_port);
             uint16_t joiner_sst_port = 0;
             client_socket.read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
@@ -559,7 +559,7 @@ void ViewManager::await_first_view() {
             curr_view = std::make_unique<View>(curr_view->vid,
                                                functional_append(curr_view->members, joiner_id),
                                                functional_append(curr_view->member_ips_and_ports,
-                                                                 {joiner_ip, joiner_gms_port, joiner_rpc_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port}),
+                                                                 {joiner_ip, joiner_gms_port, joiner_state_transfer_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port}),
                                                std::vector<char>(curr_view->num_members + 1, 0),
                                                functional_append(curr_view->joined, joiner_id),
                                                std::vector<node_id_t>{}, 0, 0,
@@ -1084,8 +1084,8 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
                     gmsSST.joiner_ips.size());
         gmssst::set(gmsSST.joiner_gms_ports[myRank], gmsSST.joiner_gms_ports[leader],
                     gmsSST.joiner_gms_ports.size());
-        gmssst::set(gmsSST.joiner_rpc_ports[myRank], gmsSST.joiner_rpc_ports[leader],
-                    gmsSST.joiner_rpc_ports.size());
+        gmssst::set(gmsSST.joiner_state_transfer_ports[myRank], gmsSST.joiner_state_transfer_ports[leader],
+                    gmsSST.joiner_state_transfer_ports.size());
         gmssst::set(gmsSST.joiner_sst_ports[myRank], gmsSST.joiner_sst_ports[leader],
                     gmsSST.joiner_sst_ports.size());
         gmssst::set(gmsSST.joiner_rdmc_ports[myRank], gmsSST.joiner_rdmc_ports[leader],
@@ -1588,8 +1588,8 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
 
     uint16_t joiner_gms_port = 0;
     client_socket.read(joiner_gms_port);
-    uint16_t joiner_rpc_port = 0;
-    client_socket.read(joiner_rpc_port);
+    uint16_t joiner_state_transfer_port = 0;
+    client_socket.read(joiner_state_transfer_port);
     uint16_t joiner_sst_port = 0;
     client_socket.read(joiner_sst_port);
     uint16_t joiner_rdmc_port = 0;
@@ -1612,8 +1612,8 @@ bool ViewManager::receive_join(DerechoSST& gmsSST, const node_id_t joiner_id, tc
                 joiner_ip_packed.s_addr);
     gmssst::set(gmsSST.joiner_gms_ports[curr_view->my_rank][next_change_index],
                 joiner_gms_port);
-    gmssst::set(gmsSST.joiner_rpc_ports[curr_view->my_rank][next_change_index],
-                joiner_rpc_port);
+    gmssst::set(gmsSST.joiner_state_transfer_ports[curr_view->my_rank][next_change_index],
+                joiner_state_transfer_port);
     gmssst::set(gmsSST.joiner_sst_ports[curr_view->my_rank][next_change_index],
                 joiner_sst_port);
     gmssst::set(gmsSST.joiner_rdmc_ports[curr_view->my_rank][next_change_index],
@@ -1748,7 +1748,7 @@ void ViewManager::update_tcp_connections(const View& new_view) {
     for(const node_id_t& joiner_id : new_view.joined) {
         tcp_sockets.add_node(joiner_id,
                              {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
-                              new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].rpc_port});
+                              new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].state_transfer_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
 }
@@ -1895,10 +1895,10 @@ ViewManager::make_member_ips_and_ports_map(const View& view, const PortType port
                             view.member_ips_and_ports[i].ip_address,
                             view.member_ips_and_ports[i].gms_port};
                     break;
-                case PortType::RPC:
+                case PortType::TRANSFER:
                     member_ips_and_ports_map[view.members[i]] = {
                             view.member_ips_and_ports[i].ip_address,
-                            view.member_ips_and_ports[i].rpc_port};
+                            view.member_ips_and_ports[i].state_transfer_port};
                     break;
                 case PortType::SST:
                     member_ips_and_ports_map[view.members[i]] = {
@@ -1971,7 +1971,7 @@ std::unique_ptr<View> ViewManager::make_next_view(const std::unique_ptr<View>& c
         members[new_member_rank] = joiner_id;
         member_ips_and_ports[new_member_rank] = {joiner_ip,
                                                  gmsSST.joiner_gms_ports[my_rank][join_index],
-                                                 gmsSST.joiner_rpc_ports[my_rank][join_index],
+                                                 gmsSST.joiner_state_transfer_ports[my_rank][join_index],
                                                  gmsSST.joiner_sst_ports[my_rank][join_index],
                                                  gmsSST.joiner_rdmc_ports[my_rank][join_index],
                                                  gmsSST.joiner_external_ports[my_rank][join_index]};
@@ -2181,8 +2181,8 @@ bool ViewManager::copy_prior_leader_proposals(DerechoSST& gmsSST) {
                     gmsSST.joiner_ips.size());
         gmssst::set(gmsSST.joiner_gms_ports[my_rank], gmsSST.joiner_gms_ports[longest_changes_rank],
                     gmsSST.joiner_gms_ports.size());
-        gmssst::set(gmsSST.joiner_rpc_ports[my_rank], gmsSST.joiner_rpc_ports[longest_changes_rank],
-                    gmsSST.joiner_rpc_ports.size());
+        gmssst::set(gmsSST.joiner_state_transfer_ports[my_rank], gmsSST.joiner_state_transfer_ports[longest_changes_rank],
+                    gmsSST.joiner_state_transfer_ports.size());
         gmssst::set(gmsSST.joiner_sst_ports[my_rank], gmsSST.joiner_sst_ports[longest_changes_rank],
                     gmsSST.joiner_sst_ports.size());
         gmssst::set(gmsSST.joiner_rdmc_ports[my_rank], gmsSST.joiner_rdmc_ports[longest_changes_rank],

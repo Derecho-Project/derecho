@@ -189,7 +189,7 @@ private:
      * Contains a TCP connection to each member of the group, for the purpose
      * of transferring new Views and state information (serialized Replicated
      * Objects) to new members during a view change. Each socket is connected
-     * to the (badly-named) RPC port of the corresponding member.
+     * to the transfer port of the corresponding member.
      */
     tcp::tcp_connections tcp_sockets;
 
