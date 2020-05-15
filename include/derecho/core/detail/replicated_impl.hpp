@@ -17,9 +17,9 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                           rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory,
                           _Group* group)
         : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
-                  this, std::type_index(typeid(T)), subgroup_index, shard_num)),
+                this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(
-                  client_object_factory(persistent_registry_ptr.get(),subgroup_id))),
+                  client_object_factory(persistent_registry_ptr.get(), subgroup_id))),
           node_id(nid),
           subgroup_id(subgroup_id),
           subgroup_index(subgroup_index),
@@ -39,7 +39,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                           uint32_t subgroup_index, uint32_t shard_num,
                           rpc::RPCManager& group_rpc_manager, _Group* group)
         : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
-                  this, std::type_index(typeid(T)), subgroup_index, shard_num)),
+                this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
           node_id(nid),
           subgroup_id(subgroup_id),
@@ -78,7 +78,7 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
     if(is_valid()) {
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
             throw invalid_node_exception("Cannot send a p2p request to node "
-                    + std::to_string(dest_node) + ": it is not a member of the Group.");
+                                         + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
         auto return_pair = wrapped_this->template send<tag>(
                 [this, &dest_node](size_t size) -> char* {
@@ -178,12 +178,16 @@ std::size_t Replicated<T>::receive_object(char* buffer) {
 }
 
 template <typename T>
-void Replicated<T>::persist(const persistent::version_t version) noexcept(false) {
-    persistent::version_t persisted_ver;
+void Replicated<T>::make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) {
+    persistent_registry_ptr->makeVersion(ver, hlc);
+}
 
+template <typename T>
+void Replicated<T>::persist(const persistent::version_t version, const unsigned char* signature, std::size_t signature_size) noexcept(false) {
+    persistent::version_t persisted_ver;
     // persist variables
     do {
-        persisted_ver = persistent_registry_ptr->persist();
+        persisted_ver = persistent_registry_ptr->persist(signature, signature_size);
         if(persisted_ver == -1) {
             // for replicated<T> without Persistent fields,
             // tell the persistent thread that we are done.
@@ -191,10 +195,35 @@ void Replicated<T>::persist(const persistent::version_t version) noexcept(false)
         }
     } while(persisted_ver < version);
 };
+template <typename T>
+void Replicated<T>::sign(openssl::Signer& signer, unsigned char* signature_buffer) {
+    persistent_registry_ptr->sign(signer, signature_buffer);
+}
+
+template <typename T>
+void Replicated<T>::trim(const persistent::version_t& earliest_version) noexcept(false) {
+    persistent_registry_ptr->trim(earliest_version);
+}
+
+template <typename T>
+void Replicated<T>::truncate(const persistent::version_t& latest_version) noexcept(false) {
+    persistent_registry_ptr->truncate(latest_version);
+}
 
 template <typename T>
 const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() noexcept(false) {
     return persistent_registry_ptr->getMinimumLatestPersistedVersion();
+}
+
+template <typename T>
+void Replicated<T>::post_next_version(const persistent::version_t& version, const uint64_t& ts_us) {
+    next_version = version;
+    next_timestamp_us = ts_us;
+}
+
+template <typename T>
+std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_next_version() {
+    return std::tie(next_version, next_timestamp_us);
 }
 
 template <typename T>
@@ -209,7 +238,7 @@ ExternalCaller<T>::ExternalCaller(uint32_t type_id, node_id_t nid, subgroup_id_t
           subgroup_id(subgroup_id),
           group_rpc_manager(group_rpc_manager),
           wrapped_this(rpc::make_remote_invoker<T>(nid, type_id, subgroup_id,
-                                                                T::register_functions(), *group_rpc_manager.receivers)) {}
+                                                   T::register_functions(), *group_rpc_manager.receivers)) {}
 
 //This is literally copied and pasted from Replicated<T>. I wish I could let them share code with inheritance,
 //but I'm afraid that will introduce unnecessary overheads.
@@ -220,7 +249,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
         assert(dest_node != node_id);
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
             throw invalid_node_exception("Cannot send a p2p request to node "
-                    + std::to_string(dest_node) + ": it is not a member of the Group.");
+                                         + std::to_string(dest_node) + ": it is not a member of the Group.");
         }
         auto return_pair = wrapped_this->template send<tag>(
                 [this, &dest_node](size_t size) -> char* {

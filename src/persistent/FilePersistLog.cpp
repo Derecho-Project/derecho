@@ -267,7 +267,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
     NEXT_LOG_ENTRY->fields.hlc_r = mhlc.m_rtc_us;
     NEXT_LOG_ENTRY->fields.hlc_l = mhlc.m_logic;
     /* No Sync required here.
-    if (msync(ALIGN_TO_PAGE(NEXT_LOG_ENTRY), 
+    if (msync(ALIGN_TO_PAGE(NEXT_LOG_ENTRY),
         sizeof(LogEntry) + (((uint64_t)NEXT_LOG_ENTRY) % PAGE_SIZE),MS_SYNC) != 0) {
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
@@ -301,7 +301,7 @@ void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     FPL_UNLOCK;
 }
 
-const int64_t FilePersistLog::persist(const bool preLocked) noexcept(false) {
+const int64_t FilePersistLog::persist(const unsigned char* signature, const std::size_t sig_size, const bool preLocked) noexcept(false) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
@@ -628,7 +628,8 @@ void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
     }
     META_HEADER->fields.head = idx + 1;
     try {
-        persist(true);
+        //How should persist be called if the current signature is not known?
+        persist(NULL, 0, true);
     } catch(uint64_t e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;
@@ -862,14 +863,14 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false
 // invisible to outside //
 //////////////////////////
 /* -- moved to util.hpp
-  void checkOrCreateDir(const string & dirPath) 
+  void checkOrCreateDir(const string & dirPath)
   noexcept(false) {
     struct stat sb;
     if (stat(dirPath.c_str(),&sb) == 0) {
       if (! S_ISDIR(sb.st_mode)) {
         throw PERSIST_EXP_INV_PATH;
       }
-    } else { 
+    } else {
       // create it
       if (mkdir(dirPath.c_str(),0700) != 0) {
         throw PERSIST_EXP_CREATE_PATH(errno);

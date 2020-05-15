@@ -46,6 +46,7 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RESTART_TIMEOUT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_PRIVATE_KEY_FILE),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY),
 	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
 	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
@@ -159,11 +160,11 @@ const bool hasCustomizedConfKey(const std::string& key) {
 
 std::vector<std::string> split_string(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> result;
-    std::size_t lastpos = 0; 
-    std::size_t nextpos = 0; 
+    std::size_t lastpos = 0;
+    std::size_t nextpos = 0;
     while((nextpos = str.find(delimiter, lastpos)) != std::string::npos) {
         result.emplace_back(str.substr(lastpos, nextpos));
-        lastpos = nextpos + delimiter.length(); 
+        lastpos = nextpos + delimiter.length();
     }
     result.emplace_back(str.substr(lastpos));
     return result;

@@ -74,7 +74,7 @@ std::pair<int_type, int_type> unpack_version(const version_t packed_int);
    * PersistentRegistry is a book for all the Persistent<T> or Volatile<T>
    * variables. Replicated<T> class should maintain such a registry to perform
    * the following operations:
-   * - makeVersion(const int64_t & ver): create a version 
+   * - makeVersion(const int64_t & ver): create a version
    * - persist(): persist the existing versions
    * - trim(const int64_t & ver): trim all versions earlier than ver
    */
@@ -92,9 +92,13 @@ public:
     /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false);
 
+    void sign(openssl::Signer& signer, unsigned char* signature_buffer);
+
     /** (attempt to) Persist all existing versions
+     * @param signature A signature to add to the log of the latest version,
+     * obtained by calling sign() on all of the Persistent fields
      * @return The newest version number that was actually persisted. */
-    const int64_t persist() noexcept(false);
+    const int64_t persist(const unsigned char* signature, std::size_t signature_size) noexcept(false);
 
     /** Trims the log of all versions earlier than the argument. */
     void trim(const int64_t& earliest_version) noexcept(false);
@@ -125,11 +129,11 @@ public:
     void truncate(const int64_t& last_version);
 
     /**
-     * set the latest version for serialization
-     * register a Persistent<T> along with its lambda
+     * register a Persistent<T> along with its lambdas
      */
     void registerPersist(const char* obj_name,
                          const VersionFunc& vf,
+                         const SignFunc& sf,
                          const PersistFunc& pf,
                          const TrimFunc& tf,
                          const LatestPersistedGetterFunc& lpgf,
@@ -204,7 +208,7 @@ protected:
     /**
      * this appears in the first part of storage file for persistent<T>
      */
-    const std::string _subgroup_prefix;  
+    const std::string _subgroup_prefix;
 
     /**
      * Pointer to an entity providing TemporalQueryFrontier service.
@@ -214,14 +218,14 @@ protected:
     /**
      * Callback registry.
      */
-    std::map<std::size_t, std::tuple<VersionFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>> _registry;
+    std::map<std::size_t, std::tuple<VersionFunc, SignFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>> _registry;
 
     /**
      * Helper function I
      */
     template <int funcIdx, typename... Args>
-    void callFunc(Args... args);
-    
+    void callFunc(Args&&... args);
+
     /**
      * Helper function II
      */
@@ -462,7 +466,7 @@ public:
     template <typename TKey>
     void trim(const TKey& k) noexcept(false);
 
-    /** 
+    /**
      * truncate the log
      * @param ver: all versions strictly newer than 'ver' will be truncated.
      */
@@ -546,11 +550,20 @@ public:
      */
     virtual void version(const version_t& ver) noexcept(false);
 
-    /** persist till version
-     * @param ver version number
-     * @return the given version to be persisted.
+    /**
+     * Update the provided Signer with the current state of the object (i.e.
+     * the state that was included in the last call to version()). This should
+     * not finalize the Signer, since other Persistent fields in the same
+     * object might need to update it too.
      */
-    virtual const int64_t persist() noexcept(false);
+    virtual void sign(openssl::Signer& signer);
+    /**
+     * persist versions
+     * @param signature A signature to add to the latest version being persisted
+     * @param signature_size The size of the signature array in bytes
+     * @return the version that has been persisted.
+     */
+    virtual const int64_t persist(const unsigned char* signature, std::size_t signature_size) noexcept(false);
 
 public:
     // wrapped objected
@@ -658,7 +671,7 @@ public:
  *        is <storage type>-<object type name>-nolog. NOTE: please provide
  *        an object name if you trying to persist two objects of the same
  *        type. NOTE: the object has to be ByteRepresentable.
- * @return 
+ * @return
  */
 template <typename ObjectType, StorageType storageType = ST_FILE>
 void saveObject(ObjectType& obj, const char* object_name = nullptr) noexcept(false);

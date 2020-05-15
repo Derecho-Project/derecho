@@ -71,7 +71,7 @@ typedef union log_entry {
 #define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
 
 #define NEXT_DATA_OFST ((CURR_LOG_IDX == -1) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
-#define NEXT_DATA ((void*)((uint64_t) this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
+#define NEXT_DATA ((void*)((uint64_t)this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
 #define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(META_HEADER->fields.head)->fields.ofst))
@@ -188,7 +188,8 @@ public:
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
     virtual const void* getEntry(const version_t& ver) noexcept(false);
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
-    virtual const version_t persist(const bool preLocked = false) noexcept(false);
+    virtual const version_t persist(const unsigned char* signature, const std::size_t sig_size,
+                                    const bool preLocked = false) noexcept(false);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
     virtual void trim(const HLC& hlc) noexcept(false);
@@ -220,7 +221,8 @@ public:
             META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
-                persist(true);
+                //How should persist be called if the current signature is not known?
+                persist(NULL, 0, true);
             } catch(uint64_t e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;
@@ -245,20 +247,20 @@ public:
     static const uint64_t getMinimumLatestPersistedVersion(const std::string& prefix);
 
 private:
-     /** verify the existence of the meta file */
-     bool checkOrCreateMetaFile() noexcept(false);
+    /** verify the existence of the meta file */
+    bool checkOrCreateMetaFile() noexcept(false);
 
-     /** verify the existence of the log file */
-     bool checkOrCreateLogFile() noexcept(false);
+    /** verify the existence of the log file */
+    bool checkOrCreateLogFile() noexcept(false);
 
-     /** verify the existence of the data file */
-     bool checkOrCreateDataFile() noexcept(false);
+    /** verify the existence of the data file */
+    bool checkOrCreateDataFile() noexcept(false);
 
     /**
      * Get the minimum index greater than a given version
      * Note: no lock protected, use FPL_RDLOCK
      * @PARAM ver the given version. INVALID_VERSION means to return the earliest index.
-     * @RETURN the minimum index since the given version. INVALID_INDEX means 
+     * @RETURN the minimum index since the given version. INVALID_INDEX means
      *         that no log entry is available for the requested version.
      */
     int64_t getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false);
@@ -348,6 +350,6 @@ private:
     }
 #endif  // NDEBUG
 };
-}
+}  // namespace persistent
 
 #endif  //FILE_PERSIST_LOG_HPP

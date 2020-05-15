@@ -74,7 +74,7 @@ public:
      * @param size - length of the data
      * @param ver - version of the data, the implementation is responsible for
      *              making sure it grows monotonically.
-     * @param mhlc - the hlc clock of the data, the implementation is 
+     * @param mhlc - the hlc clock of the data, the implementation is
      *               responsible for making sure it grows monotonically.
      * Note that the entry appended can only become persistent till the persist()
      * is called on that entry.
@@ -132,7 +132,9 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const bool preLocked = false) noexcept(false) = 0;
+    virtual const version_t persist(const unsigned char* signature, const std::size_t sig_size,
+                                    const bool preLocked = false) noexcept(false)
+            = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
@@ -155,7 +157,7 @@ public:
 
     /**
      * Calculate the byte size required for serialization
-     * @PARAM ver - from which version the detal begins(tail log) 
+     * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual size_t bytes_size(const version_t& ver) = 0;

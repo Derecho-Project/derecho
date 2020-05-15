@@ -5,6 +5,7 @@
  */
 #include <derecho/core/detail/persistence_manager.hpp>
 #include <derecho/core/detail/view_manager.hpp>
+#include <derecho/openssl/signature.hpp>
 
 namespace derecho {
 
@@ -21,8 +22,18 @@ PersistenceManager::PersistenceManager(
     if(sem_init(&persistence_request_sem, 1, 0) != 0) {
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
+    // Attempt to load the private key and create a Signer
+    try {
+        signer = std::make_unique<openssl::Signer>(openssl::load_private_key(getConfString(CONF_DERECHO_PRIVATE_KEY_FILE)),
+                                                   openssl::DigestAlgorithm::SHA256);
+        signature_size = signer->get_max_signature_size();
+    } catch(openssl::file_error& ex) {
+        //If the private key file can't be opened, assume signatures are disabled
+        dbg_default_info("No private key file found. Persistent version signatures disabled.");
+        signer = nullptr;
+        signature_size = 0;
+    }
 }
-
 
 /** default Destructor
  */
@@ -34,11 +45,12 @@ void PersistenceManager::set_view_manager(ViewManager& view_manager) {
     this->view_manager = &view_manager;
 }
 
+std::size_t PersistenceManager::get_signature_size() const {
+    return signature_size;
+}
+
 /** Start the persistent thread. */
 void PersistenceManager::start() {
-    //skip for raw subgroups -- NO, DON'T
-    // if(replicated_objects == nullptr) return;
-
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
         do {
@@ -61,16 +73,33 @@ void PersistenceManager::start() {
 
             // persist
             try {
+                //To reduce the time this thread holds the View lock, put the signature in a local array
+                //and copy it into the SST once signing is done. (We could use the SST signatures field
+                //directly as the signature array, but that would require holding the lock for longer.)
+                unsigned char signature[signature_size];
+
                 auto search = objects_by_subgroup_id.find(subgroup_id);
                 if(search != objects_by_subgroup_id.end()) {
-                    search->second.get().persist(version);
+                    if(signer) {
+                        search->second.get().sign(*signer, signature);
+                        //read lock the view
+                        SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
+                        View& Vc = view_and_lock.get();
+                        //update the signature field for this subgroup in the SST
+                        gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
+                                    signature, signature_size);
+                        //push ths signature
+                        Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
+                                       (char*)std::addressof(Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
+                                       signature_size);
+                    }
+                    search->second.get().persist(version, signature, signature_size);
                 }
                 // read lock the view
                 SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
                 // update the persisted_num in SST
-
                 View& Vc = view_and_lock.get();
-                Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id] = version;
+                gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], version);
                 Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
                                (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
                                sizeof(long long int));

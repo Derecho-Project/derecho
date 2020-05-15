@@ -264,23 +264,29 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) {
-        persistent_registry_ptr->makeVersion(ver, hlc);
-    };
+    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false);
+
+    /**
+     * Sign the last version produced by make_version, placing the signature in
+     * the buffer.
+     * @param signer The Signer object to use to produce the signature
+     * @param signature_buffer The byte array in which to put the signature,
+     * assumed to be the correct length for this type of signature.
+     */
+    virtual void sign(openssl::Signer& signer, unsigned char* signature_buffer);
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(const persistent::version_t version) noexcept(false);
+    virtual void persist(const persistent::version_t version,
+                         const unsigned char* signature, std::size_t signature_size) noexcept(false);
 
     /**
      * trim the logs to a version, inclusively.
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& earliest_version) noexcept(false) {
-        persistent_registry_ptr->trim(earliest_version);
-    };
+    virtual void trim(const persistent::version_t& earliest_version) noexcept(false);
 
     /**
      * Truncate the logs of all Persistent<T> members back to the version
@@ -288,24 +294,17 @@ public:
      * during failure recovery when some versions must be rolled back.
      * @param latest_version The latest version number that should remain in the logs
      */
-    virtual void truncate(const persistent::version_t& latest_version) {
-        persistent_registry_ptr->truncate(latest_version);
-    }
+    virtual void truncate(const persistent::version_t& latest_version);
 
     /**
      * Post the next version to be handled.
      */
-    virtual void post_next_version(const persistent::version_t& version, const uint64_t & ts_us) {
-        next_version = version;
-        next_timestamp_us = ts_us;
-    }
+    virtual void post_next_version(const persistent::version_t& version, const uint64_t& ts_us);
 
     /**
      * Get the next version to be handled.
      */
-    virtual std::tuple<persistent::version_t,uint64_t> get_next_version() {
-        return std::tie(next_version,next_timestamp_us);
-    }
+    virtual std::tuple<persistent::version_t, uint64_t> get_next_version();
 
     /**
      * Register a persistent member
@@ -315,11 +314,12 @@ public:
      */
     virtual void register_persistent_member(const char* object_name,
                                             const persistent::VersionFunc& vf,
+                                            const persistent::SignFunc& sf,
                                             const persistent::PersistFunc& pf,
                                             const persistent::TrimFunc& tf,
                                             const persistent::LatestPersistedGetterFunc& gf,
                                             persistent::TruncateFunc tcf) noexcept(false) {
-        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf, tcf);
+        this->persistent_registry_ptr->registerPersist(object_name, vf, sf, pf, tf, gf, tcf);
     }
 };
 

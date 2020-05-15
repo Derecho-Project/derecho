@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <functional>
 
+#include "../openssl/signature.hpp"
+
 namespace persistent {
 
 using version_t = int64_t;
@@ -23,11 +25,18 @@ using version_t = int64_t;
  */
 using VersionFunc = std::function<void(const version_t&, const HLC&)>;
 /**
+ * The "sign" function in a persistent object should update the provided Signer
+ * object (parameter 1) with the state of the object in its latest version.
+ */
+using SignFunc = std::function<void(openssl::Signer&)>;
+/**
  * The "persist" function in a persistent object should persist as many
  * versions as possible to persistent storage, up to the current version. Its
  * return value is the latest version that was successfully persisted.
+ * In addition, it takes as input a signature to add to the log, which should
+ * have been computed by an earlier call to the sign function.
  */
-using PersistFunc = std::function<const version_t(void)>;
+using PersistFunc = std::function<const version_t(const unsigned char*, const std::size_t)>;
 /**
  * The "trim" function in a persistent object should discard old versions from
  * the object's persistent log, deleting all records earlier than the provided

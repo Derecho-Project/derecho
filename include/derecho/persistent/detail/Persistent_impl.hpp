@@ -2,6 +2,7 @@
 #define PERSISTENT_IMPL_HPP
 
 #include <derecho/openssl/hash.hpp>
+#include <utility>
 
 namespace persistent {
 
@@ -20,10 +21,10 @@ std::pair<int_type, int_type> unpack_version(const version_t packed_int) {
 //===========================================
 
 template <int funcIdx, typename... Args>
-void PersistentRegistry::callFunc(Args... args) {
+void PersistentRegistry::callFunc(Args&&... args) {
     for(auto itr = this->_registry.begin();
         itr != this->_registry.end(); ++itr) {
-        std::get<funcIdx>(itr->second)(args...);
+        std::get<funcIdx>(itr->second)(std::forward<Args>(args)...);
     }
 };
 
@@ -145,7 +146,8 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
                 std::bind(&Persistent<ObjectType, storageType>::version, this, std::placeholders::_1),
-                std::bind(&Persistent<ObjectType, storageType>::persist, this),
+                std::bind(&Persistent<ObjectType, storageType>::sign, this, std::placeholders::_1),
+                std::bind(&Persistent<ObjectType, storageType>::persist, this, std::placeholders::_1, std::placeholders::_2),
                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)              // truncate persistent versions.
@@ -481,17 +483,24 @@ void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::persist() noexcept(false) {
+void Persistent<ObjectType, storageType>::sign(openssl::Signer& signer) {
+    dbg_default_trace("In Persistent<T>: sign");
+    throw std::runtime_error("Persistent<T>::sign not yet implemented!");
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+const int64_t Persistent<ObjectType, storageType>::persist(const unsigned char* signature, std::size_t signature_size) noexcept(false) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
-    const int64_t ret = this->m_pLog->persist();
+    const int64_t ret = this->m_pLog->persist(signature, signature_size);
     clock_gettime(CLOCK_REALTIME, &t2);
     cnt_in_persist++;
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
-    return this->m_pLog->persist();
+    return this->m_pLog->persist(signature, signature_size);
 #endif  //_PERFORMANCE_DEBUG
 }
 

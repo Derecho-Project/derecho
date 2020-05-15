@@ -6,10 +6,11 @@ namespace persistent {
     thread_local int64_t PersistentRegistry::earliest_version_to_serialize = INVALID_VERSION;
 
 #define VERSION_FUNC_IDX (0)
-#define PERSIST_FUNC_IDX (1)
-#define TRIM_FUNC_IDX (2)
-#define GET_ML_PERSISTED_VER (3)
-#define TRUNCATE_FUNC_IDX (4)
+#define SIGN_FUNC_IDX (1)
+#define PERSIST_FUNC_IDX (2)
+#define TRIM_FUNC_IDX (3)
+#define GET_ML_PERSISTED_VER (4)
+#define TRUNCATE_FUNC_IDX (5)
 
     PersistentRegistry::PersistentRegistry(
         ITemporalQueryFrontierProvider* tqfp,
@@ -28,8 +29,14 @@ namespace persistent {
         callFunc<VERSION_FUNC_IDX>(ver, mhlc);
     };
 
-    const int64_t PersistentRegistry::persist() noexcept(false) {
-        return callFuncMin<PERSIST_FUNC_IDX, int64_t>();
+    void PersistentRegistry::sign(openssl::Signer& signer, unsigned char* signature_buffer) {
+        signer.init();
+        callFunc<SIGN_FUNC_IDX>(signer);
+        signer.finalize(signature_buffer);
+    }
+
+    const int64_t PersistentRegistry::persist(const unsigned char* signature, std::size_t signature_size) noexcept(false) {
+        return callFuncMin<PERSIST_FUNC_IDX, int64_t>(signature, signature_size);
     };
 
     void PersistentRegistry::trim(const int64_t& earliest_version) noexcept(false) {
@@ -58,18 +65,19 @@ namespace persistent {
 
     void PersistentRegistry::registerPersist(const char* obj_name,
                          const VersionFunc& vf,
+                         const SignFunc& sf,
                          const PersistFunc& pf,
                          const TrimFunc& tf,
                          const LatestPersistedGetterFunc& lpgf,
                          const TruncateFunc& tcf) noexcept(false) {
         //this->_registry.push_back(std::make_tuple(vf,pf,tf));
-        auto tuple_val = std::make_tuple(vf, pf, tf, lpgf, tcf);
+        auto tuple_val = std::make_tuple(vf, sf, pf, tf, lpgf, tcf);
         std::size_t key = std::hash<std::string>{}(obj_name);
-        auto res = this->_registry.insert(std::pair<std::size_t, std::tuple<VersionFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>>(key, tuple_val));
+        auto res = this->_registry.insert(std::pair<std::size_t, std::tuple<VersionFunc, SignFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>>(key, tuple_val));
         if(res.second == false) {
             //override the previous value:
             this->_registry.erase(res.first);
-            this->_registry.insert(std::pair<std::size_t, std::tuple<VersionFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>>(key, tuple_val));
+            this->_registry.insert(std::pair<std::size_t, std::tuple<VersionFunc, SignFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>>(key, tuple_val));
         }
     };
 

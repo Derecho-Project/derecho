@@ -1521,13 +1521,14 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
                                             const uint32_t num_received_size,
                                             const uint32_t slot_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
+    const std::size_t signature_size = persistence_manager.get_signature_size();
 
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(
                     curr_view->members, curr_view->members[curr_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     curr_view->failed, false),
-            num_subgroups, num_received_size, slot_size);
+            num_subgroups, signature_size, num_received_size, slot_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -1544,13 +1545,14 @@ void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
         const uint32_t new_num_received_size, const uint32_t new_slot_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
+    const std::size_t signature_size = persistence_manager.get_signature_size();
 
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(
                     next_view->members, next_view->members[next_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     next_view->failed, false),
-            num_subgroups, new_num_received_size, new_slot_size);
+            num_subgroups, signature_size, new_num_received_size, new_slot_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],

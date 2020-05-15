@@ -33,8 +33,9 @@ private:
 #define CONF_DERECHO_HEARTBEAT_MS "DERECHO/heartbeat_ms"
 #define CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS "DERECHO/sst_poll_cq_timeout_ms"
 #define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
-#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders" 
+#define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
+#define CONF_DERECHO_PRIVATE_KEY_FILE "DERECHO/private_key_file"
 
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
 #define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
@@ -79,6 +80,7 @@ private:
             {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
             {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
+            {CONF_DERECHO_PRIVATE_KEY_FILE, "private_key.pem"},
 	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
@@ -217,8 +219,8 @@ const bool getConfBoolean(const std::string& key);
 const bool hasCustomizedConfKey(const std::string& key);
 
 /**
- * Splits a string into a vector of strings using a delimiting string. This is 
- * helpful for parsing "list-like" config options, which are comma-delimited 
+ * Splits a string into a vector of strings using a delimiting string. This is
+ * helpful for parsing "list-like" config options, which are comma-delimited
  * sequences of strings or numbers (so the default delimiter is ",").
  * @param str The string to split
  * @param delimiter The string to use as the delimiter for splitting
