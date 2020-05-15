@@ -38,7 +38,7 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_ID),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_IP),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_GMS_PORT),
-        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RPC_PORT),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_STATE_TRANSFER_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_EXTERNAL_PORT),
@@ -159,11 +159,11 @@ const bool hasCustomizedConfKey(const std::string& key) {
 
 std::vector<std::string> split_string(const std::string& str, const std::string& delimiter) {
     std::vector<std::string> result;
-    std::size_t lastpos = 0; 
-    std::size_t nextpos = 0; 
+    std::size_t lastpos = 0;
+    std::size_t nextpos = 0;
     while((nextpos = str.find(delimiter, lastpos)) != std::string::npos) {
         result.emplace_back(str.substr(lastpos, nextpos));
-        lastpos = nextpos + delimiter.length(); 
+        lastpos = nextpos + delimiter.length();
     }
     result.emplace_back(str.substr(lastpos));
     return result;
