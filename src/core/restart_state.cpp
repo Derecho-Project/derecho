@@ -1,5 +1,5 @@
-#include <optional>
 #include <chrono>
+#include <optional>
 
 #include <derecho/core/detail/container_template_functions.hpp>
 #include <derecho/core/detail/restart_state.hpp>
@@ -139,8 +139,8 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
             client_socket->read(joiner_gms_port);
-            uint16_t joiner_transfer_port = 0;
-            client_socket->read(joiner_transfer_port);
+            uint16_t joiner_state_transfer_port = 0;
+            client_socket->read(joiner_state_transfer_port);
             uint16_t joiner_sst_port = 0;
             client_socket->read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
@@ -149,7 +149,8 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             client_socket->read(joiner_external_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
             rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
-                                                                   joiner_transfer_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port};
+                                                                   joiner_state_transfer_port, joiner_sst_port,
+                                                                   joiner_rdmc_port, joiner_external_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
             waiting_join_sockets.emplace(join_request.joiner_id, std::move(*client_socket));
             //Check for quorum
@@ -413,7 +414,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
         nodes_to_add_in_next_view.emplace_back(my_id);
         ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
                                                        getConfUInt16(CONF_DERECHO_GMS_PORT),
-                                                       getConfUInt16(CONF_DERECHO_TRANSFER_PORT),
+                                                       getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT),
                                                        getConfUInt16(CONF_DERECHO_SST_PORT),
                                                        getConfUInt16(CONF_DERECHO_RDMC_PORT),
                                                        getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));

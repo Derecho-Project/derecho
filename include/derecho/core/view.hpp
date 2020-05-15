@@ -35,7 +35,7 @@ enum class PortType { GMS,         //!< GMS
 struct IpAndPorts : public mutils::ByteRepresentable {
     ip_addr_t ip_address;
     uint16_t gms_port;
-    uint16_t transfer_port;
+    uint16_t state_transfer_port;
     uint16_t sst_port;
     uint16_t rdmc_port;
     uint16_t external_port;
@@ -47,28 +47,28 @@ struct IpAndPorts : public mutils::ByteRepresentable {
      */
     IpAndPorts(const ip_addr_t& ip_address,
                const uint16_t gms_port,
-               const uint16_t transfer_port,
+               const uint16_t state_transfer_port,
                const uint16_t sst_port,
                const uint16_t rdmc_port,
                const uint16_t external_port)
             : ip_address(ip_address),
               gms_port(gms_port),
-              transfer_port(transfer_port),
+              state_transfer_port(state_transfer_port),
               sst_port(sst_port),
               rdmc_port(rdmc_port),
               external_port(external_port) {}
-    IpAndPorts() : ip_address{}, gms_port(0), transfer_port(0), sst_port(0), rdmc_port(0), external_port(0) {}
+    IpAndPorts() : ip_address{}, gms_port(0), state_transfer_port(0), sst_port(0), rdmc_port(0), external_port(0) {}
 
-    DEFAULT_SERIALIZATION_SUPPORT(IpAndPorts, ip_address, gms_port, transfer_port,
+    DEFAULT_SERIALIZATION_SUPPORT(IpAndPorts, ip_address, gms_port, state_transfer_port,
                                   sst_port, rdmc_port, external_port);
 
     inline bool operator==(const IpAndPorts& o) const {
         return std::tie(ip_address,
-                        gms_port, transfer_port,
+                        gms_port, state_transfer_port,
                         sst_port, rdmc_port,
                         external_port)
                == std::tie(o.ip_address,
-                           o.gms_port, o.transfer_port,
+                           o.gms_port, o.state_transfer_port,
                            o.sst_port, o.rdmc_port,
                            o.external_port);
     }

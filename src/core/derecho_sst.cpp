@@ -19,9 +19,9 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<uint16_t*>(joiner_gms_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_gms_ports[row] + num_changes_installed),
            (old_sst.joiner_gms_ports.size() - num_changes_installed) * sizeof(uint16_t));
-    memcpy(const_cast<uint16_t*>(joiner_transfer_ports[local_row]),
-           const_cast<const uint16_t*>(old_sst.joiner_transfer_ports[row] + num_changes_installed),
-           (old_sst.joiner_transfer_ports.size() - num_changes_installed) * sizeof(uint16_t));
+    memcpy(const_cast<uint16_t*>(joiner_state_transfer_ports[local_row]),
+           const_cast<const uint16_t*>(old_sst.joiner_state_transfer_ports[row] + num_changes_installed),
+           (old_sst.joiner_state_transfer_ports.size() - num_changes_installed) * sizeof(uint16_t));
     memcpy(const_cast<uint16_t*>(joiner_sst_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_sst_ports[row] + num_changes_installed),
            (old_sst.joiner_sst_ports.size() - num_changes_installed) * sizeof(uint16_t));
@@ -60,9 +60,9 @@ void DerechoSST::init_local_change_proposals(const int other_row) {
     memcpy(const_cast<uint16_t*>(joiner_gms_ports[local_row]),
            const_cast<const uint16_t*>(joiner_gms_ports[other_row]),
            joiner_gms_ports.size() * sizeof(uint16_t));
-    memcpy(const_cast<uint16_t*>(joiner_transfer_ports[local_row]),
-           const_cast<const uint16_t*>(joiner_transfer_ports[other_row]),
-           joiner_transfer_ports.size() * sizeof(uint16_t));
+    memcpy(const_cast<uint16_t*>(joiner_state_transfer_ports[local_row]),
+           const_cast<const uint16_t*>(joiner_state_transfer_ports[other_row]),
+           joiner_state_transfer_ports.size() * sizeof(uint16_t));
     memcpy(const_cast<uint16_t*>(joiner_sst_ports[local_row]),
            const_cast<const uint16_t*>(joiner_sst_ports[other_row]),
            joiner_sst_ports.size() * sizeof(uint16_t));
@@ -107,9 +107,9 @@ std::string DerechoSST::to_string() const {
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
             s << joiner_gms_ports[row][n] << " ";
         }
-        s << "}, joiner_transfer_ports={ ";
+        s << "}, joiner_state_transfer_ports={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {
-            s << joiner_transfer_ports[row][n] << " ";
+            s << joiner_state_transfer_ports[row][n] << " ";
         }
         s << "}, joiner_sst_ports={ ";
         for(int n = 0; n < (num_changes[row] - num_installed[row]); ++n) {

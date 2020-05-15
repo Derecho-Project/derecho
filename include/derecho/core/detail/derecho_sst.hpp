@@ -95,7 +95,7 @@ public:
     SSTFieldVector<uint32_t> joiner_ips;
     /** joiner_xxx_ports are the port numbers for the joining nodes. */
     SSTFieldVector<uint16_t> joiner_gms_ports;
-    SSTFieldVector<uint16_t> joiner_transfer_ports;
+    SSTFieldVector<uint16_t> joiner_state_transfer_ports;
     SSTFieldVector<uint16_t> joiner_sst_ports;
     SSTFieldVector<uint16_t> joiner_rdmc_ports;
     SSTFieldVector<uint16_t> joiner_external_ports;
@@ -162,7 +162,7 @@ public:
               changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
               joiner_gms_ports(100 + parameters.members.size()),
-              joiner_transfer_ports(100 + parameters.members.size()),
+              joiner_state_transfer_ports(100 + parameters.members.size()),
               joiner_sst_ports(100 + parameters.members.size()),
               joiner_rdmc_ports(100 + parameters.members.size()),
               joiner_external_ports(100 + parameters.members.size()),
@@ -174,7 +174,7 @@ public:
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num,
                 persisted_num, vid, suspected, changes, joiner_ips,
-                joiner_gms_ports, joiner_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
+                joiner_gms_ports, joiner_state_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
                 slots, num_received_sst, local_stability_frontier, rip);
@@ -197,7 +197,7 @@ public:
             }
             memset(const_cast<uint32_t*>(joiner_ips[row]), 0, joiner_ips.size());
             memset(const_cast<uint16_t*>(joiner_gms_ports[row]), 0, joiner_gms_ports.size());
-            memset(const_cast<uint16_t*>(joiner_transfer_ports[row]), 0, joiner_transfer_ports.size());
+            memset(const_cast<uint16_t*>(joiner_state_transfer_ports[row]), 0, joiner_state_transfer_ports.size());
             memset(const_cast<uint16_t*>(joiner_sst_ports[row]), 0, joiner_sst_ports.size());
             memset(const_cast<uint16_t*>(joiner_rdmc_ports[row]), 0, joiner_rdmc_ports.size());
             memset(const_cast<uint16_t*>(joiner_external_ports[row]), 0, joiner_external_ports.size());

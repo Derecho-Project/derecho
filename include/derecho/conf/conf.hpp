@@ -26,7 +26,7 @@ private:
 #define CONF_DERECHO_LOCAL_ID "DERECHO/local_id"
 #define CONF_DERECHO_LOCAL_IP "DERECHO/local_ip"
 #define CONF_DERECHO_GMS_PORT "DERECHO/gms_port"
-#define CONF_DERECHO_TRANSFER_PORT "DERECHO/transfer_port"
+#define CONF_DERECHO_STATE_TRANSFER_PORT "DERECHO/state_transfer_port"
 #define CONF_DERECHO_SST_PORT "DERECHO/sst_port"
 #define CONF_DERECHO_RDMC_PORT "DERECHO/rdmc_port"
 #define CONF_DERECHO_EXTERNAL_PORT "DERECHO/external_port"
@@ -70,7 +70,7 @@ private:
             {CONF_DERECHO_LOCAL_ID, "0"},
             {CONF_DERECHO_LOCAL_IP, "127.0.0.1"},
             {CONF_DERECHO_GMS_PORT, "23580"},
-            {CONF_DERECHO_TRANSFER_PORT, "28366"},
+            {CONF_DERECHO_STATE_TRANSFER_PORT, "28366"},
             {CONF_DERECHO_SST_PORT, "37683"},
             {CONF_DERECHO_RDMC_PORT, "31675"},
             {CONF_DERECHO_EXTERNAL_PORT, "32645"},
