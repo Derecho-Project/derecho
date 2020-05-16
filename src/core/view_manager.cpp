@@ -1868,7 +1868,7 @@ std::tuple<uint32_t, uint32_t, uint32_t> ViewManager::derive_subgroup_settings(V
                         shard_view.sender_rank_of(shard_view.my_rank),
                         num_received_offset,
                         slot_offset,
-                        index_field_size,
+                        subgroup_id,
                         shard_view.mode,
                         profile,
                 };

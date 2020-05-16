@@ -827,16 +827,12 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     }
 }
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
-                          const uint32_t num_shard_members, DerechoSST& sst){
-    int32_t current_committed_sst_index;
-    for(const auto& p : subgroup_settings_map) {
-        subgroup_id_t subgroup_num = p.first;
-        const SubgroupSettings& subgroup_settings = p.second;
-        current_committed_sst_index = committed_sst_index[subgroup_num];
-        uint32_t to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
-        if(to_be_sent > 0) {
-            sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
-        }
+                                      const uint32_t num_shard_members, DerechoSST& sst) {
+    // to avoid a race condition, do not read the same SST entry twice
+    int32_t current_committed_sst_index = committed_sst_index[subgroup_num];
+    uint32_t to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
+    if(to_be_sent > 0) {
+        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
     }
 }
 
@@ -879,14 +875,13 @@ void MulticastGroup::register_predicates() {
                                                                   sst::PredicateType::RECURRENT));
 
         auto sst_send_pred = [](const DerechoSST& sst) {
-                return true;
+            return true;
         };
-        auto sst_send_trig = [&](DerechoSST& sst) mutable {
+        auto sst_send_trig = [this, subgroup_num, subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
             sst_send_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
         };
         receiver_pred_handles.emplace_back(sst->predicates.insert(sst_send_pred, sst_send_trig,
                                                                   sst::PredicateType::RECURRENT));
-
 
         if(subgroup_settings.mode != Mode::UNORDERED) {
             auto delivery_pred = [](const DerechoSST& sst) {
