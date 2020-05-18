@@ -1206,7 +1206,9 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         future_message_indices[subgroup_num]++;
         committed_sst_index[subgroup_num]++;
+#ifdef ENABLE_LOGGING
         DERECHO_LOG(log_committed_nonnull_sst_index[subgroup_num], -1, "requested_null_send");
+#endif
     }
 }
 
