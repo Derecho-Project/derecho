@@ -27,6 +27,16 @@
 #include <derecho/sst/sst.hpp>
 #include <spdlog/spdlog.h>
 
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please
+// enable the same macro in the bandwidth_test
+//#define ENABLE_LOGGING
+
+#ifdef ENABLE_LOGGING
+    #include <derecho/rdmc/detail/util.hpp>
+#endif
+
 namespace derecho {
 
 /**
@@ -289,6 +299,9 @@ private:
     std::vector<std::optional<RDMCMessage>> next_sends;
     std::map<uint32_t, bool> pending_sst_sends;
     std::vector<uint32_t> committed_sst_index;
+#ifdef ENABLE_LOGGING
+    std::vector<uint32_t> log_committed_nonnull_sst_index;
+#endif
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */

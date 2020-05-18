@@ -19,6 +19,16 @@
 #include <derecho/core/derecho.hpp>
 #include "log_results.hpp"
 
+// This is a macro that enables the logging of single events
+// in order to visualize when they happen and so to detect
+// possible inefficiencies.To flush gathered data, please
+// enable the same macro in the bandwidth_test
+//#define ENABLE_LOGGING
+
+#ifdef ENABLE_LOGGING
+    #include <derecho/rdmc/detail/util.hpp>
+#endif
+
 using std::cout;
 using std::endl;
 using std::map;
@@ -142,6 +152,10 @@ int main(int argc, char* argv[]) {
     auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
 
+#ifdef ENABLE_LOGGING
+    reset_epoch();
+#endif
+
     long long unsigned int max_msg_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     // this function sends all the messages
@@ -197,4 +211,9 @@ int main(int argc, char* argv[]) {
 
     group.barrier_sync();
     group.leave();
+    
+    #ifdef ENABLE_LOGGING
+    // print out the logged data
+    flush_events();
+    #endif
 }
