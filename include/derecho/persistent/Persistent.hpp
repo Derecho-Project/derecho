@@ -132,12 +132,7 @@ public:
      * register a Persistent<T> along with its lambdas
      */
     void registerPersist(const char* obj_name,
-                         const VersionFunc& vf,
-                         const SignFunc& sf,
-                         const PersistFunc& pf,
-                         const TrimFunc& tf,
-                         const LatestPersistedGetterFunc& lpgf,
-                         const TruncateFunc& tcf) noexcept(false);
+                         const PersistentObjectFunctions& interface_functions) noexcept(false);
 
     /**
      * deregister
@@ -218,19 +213,7 @@ protected:
     /**
      * Callback registry.
      */
-    std::map<std::size_t, std::tuple<VersionFunc, SignFunc, PersistFunc, TrimFunc, LatestPersistedGetterFunc, TruncateFunc>> _registry;
-
-    /**
-     * Helper function I
-     */
-    template <int funcIdx, typename... Args>
-    void callFunc(Args&&... args);
-
-    /**
-     * Helper function II
-     */
-    template <int funcIdx, typename ReturnType, typename... Args>
-    ReturnType callFuncMin(Args... args);
+    std::map<std::size_t, PersistentObjectFunctions> _registry;
 
     /**
      * Set the earliest version to serialize for recovery.

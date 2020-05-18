@@ -17,33 +17,6 @@ std::pair<int_type, int_type> unpack_version(const version_t packed_int) {
 }
 
 //===========================================
-// PersistentRegistry
-//===========================================
-
-template <int funcIdx, typename... Args>
-void PersistentRegistry::callFunc(Args&&... args) {
-    for(auto itr = this->_registry.begin();
-        itr != this->_registry.end(); ++itr) {
-        std::get<funcIdx>(itr->second)(std::forward<Args>(args)...);
-    }
-};
-
-template <int funcIdx, typename ReturnType, typename... Args>
-ReturnType PersistentRegistry::callFuncMin(Args... args) {
-    ReturnType min_ret = -1;  // -1 means invalid value.
-    for(auto itr = this->_registry.begin();
-        itr != this->_registry.end(); ++itr) {
-        ReturnType ret = std::get<funcIdx>(itr->second)(args...);
-        if(itr == this->_registry.begin()) {
-            min_ret = ret;
-        } else if(min_ret > ret) {
-            min_ret = ret;
-        }
-    }
-    return min_ret;
-}
-
-//===========================================
 // _NameMaker
 //===========================================
 template <typename ObjectType, StorageType storageType>
@@ -145,12 +118,12 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
     if(this->m_pRegistry != nullptr) {
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
-                std::bind(&Persistent<ObjectType, storageType>::version, this, std::placeholders::_1),
-                std::bind(&Persistent<ObjectType, storageType>::sign, this, std::placeholders::_1),
-                std::bind(&Persistent<ObjectType, storageType>::persist, this, std::placeholders::_1, std::placeholders::_2),
-                std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
-                std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
-                std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)              // truncate persistent versions.
+                {std::bind(&Persistent<ObjectType, storageType>::version, this, std::placeholders::_1),
+                 std::bind(&Persistent<ObjectType, storageType>::sign, this, std::placeholders::_1),
+                 std::bind(&Persistent<ObjectType, storageType>::persist, this, std::placeholders::_1, std::placeholders::_2),
+                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
+                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
+                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)}             // truncate persistent versions.
         );
     }
 }
