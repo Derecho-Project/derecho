@@ -92,19 +92,37 @@ public:
     /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false);
 
-    void sign(openssl::Signer& signer, unsigned char* signature_buffer);
+    /**
+     * Returns the minumum of the latest version across all Persistent fields.
+     * This is effectively the "current version" of the object, since all the
+     * Persistent fields should advance their version numbers at the same rate.
+     */
+    version_t getMinimumLatestVersion();
 
-    /** (attempt to) Persist all existing versions
-     * @param signature A signature to add to the log of the latest version,
-     * obtained by calling sign() on all of the Persistent fields
-     * @return The newest version number that was actually persisted. */
-    const int64_t persist(const unsigned char* signature, std::size_t signature_size) noexcept(false);
+    /**
+     * Adds signatures to the log up to the specified version, and returns the
+     * signature for the latest version. The version specified should be the
+     * result of calling getMinimumLatestVersion().
+     * @param latest_version The version to add signatures up through
+     * @param signer The Signer object to use for generating signatures,
+     * initialized with the appropriate private key
+     * @param signature_buffer A byte buffer in which the latest signature will
+     * be placed after running this function
+     */
+    void sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
+
+    /**
+     * Persist versions up to a specified version, which should be the result of
+     * calling getMinimumLatestVersion().
+     * @param latest_version The version to persist up to.
+     */
+    void persist(const version_t& latest_version) noexcept(false);
 
     /** Trims the log of all versions earlier than the argument. */
     void trim(const int64_t& earliest_version) noexcept(false);
 
     /** Returns the minimum of the latest persisted versions among all Persistent fields. */
-    const int64_t getMinimumLatestPersistedVersion() noexcept(false);
+    version_t getMinimumLatestPersistedVersion() noexcept(false);
 
     /**
      * Set the earliest version for serialization, exclusive. This version will
@@ -534,19 +552,23 @@ public:
     virtual void version(const version_t& ver) noexcept(false);
 
     /**
-     * Update the provided Signer with the current state of the object (i.e.
-     * the state that was included in the last call to version()). This should
-     * not finalize the Signer, since other Persistent fields in the same
-     * object might need to update it too.
+     * Update the provided Signer with the state of T at the specified version.
+     * This should not finalize the Signer, since other Persistent fields in
+     * the same Replicated object might need to update it too.
      */
-    virtual void sign(openssl::Signer& signer);
+    virtual void update_signature(const version_t& ver, openssl::Signer& signer);
+
+    /**
+     * Add the provided signature to the specified version in the log. The length
+     * of the signature buffer must be equal to the configured signature length for
+     * this log.
+     */
+    virtual void add_signature(const version_t& ver, const unsigned char* signature);
     /**
      * persist versions
-     * @param signature A signature to add to the latest version being persisted
-     * @param signature_size The size of the signature array in bytes
-     * @return the version that has been persisted.
+     * @param version The version to persist up to
      */
-    virtual const int64_t persist(const unsigned char* signature, std::size_t signature_size) noexcept(false);
+    virtual const int64_t persist(const version_t& ver) noexcept(false);
 
 public:
     // wrapped objected

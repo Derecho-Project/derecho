@@ -41,16 +41,7 @@ private:
     std::queue<persistence_request_t> persistence_request_queue;
     /** lock for persistence request queue */
     std::atomic_flag prq_lock = ATOMIC_FLAG_INIT;
-    /**
-     * The Signer object to use for signing new versions, if signatures are enabled.
-     * If signatures are disabled, this will be null.
-     */
-    std::unique_ptr<openssl::Signer> signer;
-    /**
-     * The size of each signature, which is a fixed run-time constant based on
-     * the security parameter of the private key being used. This will be 0 if
-     * signatures are disabled.
-     */
+    /** The size of a signature, determined at startup by reading the local private key. 0 if signatures are disabled. */
     std::size_t signature_size;
     /** persistence callback */
     persistence_callback_t persistence_callback;

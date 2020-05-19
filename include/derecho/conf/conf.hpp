@@ -35,7 +35,6 @@ private:
 #define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
 #define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
-#define CONF_DERECHO_PRIVATE_KEY_FILE "DERECHO/private_key_file"
 
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
 #define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
@@ -57,6 +56,8 @@ private:
 #define CONF_PERS_RESET "PERS/reset"
 #define CONF_PERS_MAX_LOG_ENTRY "PERS/max_log_entry"
 #define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
+#define CONF_PERS_SIGNED_LOG "PERS/signed_log"
+#define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
     // Configuration Table:
@@ -80,7 +81,6 @@ private:
             {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
             {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
-            {CONF_DERECHO_PRIVATE_KEY_FILE, "private_key.pem"},
 	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
@@ -102,6 +102,8 @@ private:
             {CONF_PERS_RESET, "false"},
             {CONF_PERS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
             {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_SIGNED_LOG, "false"},
+            {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};

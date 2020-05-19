@@ -188,7 +188,7 @@ public:
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
     virtual const void* getEntry(const version_t& ver) noexcept(false);
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
-    virtual const version_t persist(const unsigned char* signature, const std::size_t sig_size,
+    virtual const version_t persist(const version_t& ver,
                                     const bool preLocked = false) noexcept(false);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
@@ -221,8 +221,8 @@ public:
             META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
-                //How should persist be called if the current signature is not known?
-                persist(NULL, 0, true);
+                //What version number should be supplied to persist in this case?
+                persist(0, true);
             } catch(uint64_t e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;

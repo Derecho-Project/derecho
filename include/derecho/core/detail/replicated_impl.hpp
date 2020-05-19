@@ -16,14 +16,16 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
                           uint32_t subgroup_index, uint32_t shard_num,
                           rpc::RPCManager& group_rpc_manager, Factory<T> client_object_factory,
                           _Group* group)
-        : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
+        : persistent_registry(std::make_unique<persistent::PersistentRegistry>(
                 this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(
-                  client_object_factory(persistent_registry_ptr.get(), subgroup_id))),
+                  client_object_factory(persistent_registry.get(), subgroup_id))),
           node_id(nid),
           subgroup_id(subgroup_id),
           subgroup_index(subgroup_index),
           shard_num(shard_num),
+          signer(nullptr),
+          signature_size(0),
           group_rpc_manager(group_rpc_manager),
           wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(),
                                                                      type_id, subgroup_id,
@@ -32,36 +34,55 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if constexpr(std::is_base_of_v<GroupReference, T>) {
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
+    if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
+        //Attempt to load the private key and create a Signer
+        //This will crash with a file_error if the private key doesn't actually exist
+        signer = std::make_unique<openssl::Signer>(openssl::load_private_key(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+                                                   openssl::DigestAlgorithm::SHA256);
+        signature_size = signer->get_max_signature_size();
+    }
 }
 
 template <typename T>
 Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id_t subgroup_id,
                           uint32_t subgroup_index, uint32_t shard_num,
                           rpc::RPCManager& group_rpc_manager, _Group* group)
-        : persistent_registry_ptr(std::make_unique<persistent::PersistentRegistry>(
+        : persistent_registry(std::make_unique<persistent::PersistentRegistry>(
                 this, std::type_index(typeid(T)), subgroup_index, shard_num)),
           user_object_ptr(std::make_unique<std::unique_ptr<T>>(nullptr)),
           node_id(nid),
           subgroup_id(subgroup_id),
           subgroup_index(subgroup_index),
           shard_num(shard_num),
+          signer(nullptr),
+          signature_size(0),
           group_rpc_manager(group_rpc_manager),
           wrapped_this(group_rpc_manager.make_remote_invocable_class(user_object_ptr.get(),
                                                                      type_id, subgroup_id,
                                                                      T::register_functions())),
-          group(group) {}
+          group(group) {
+    if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
+        //Attempt to load the private key and create a Signer
+        //This will crash with a file_error if the private key doesn't actually exist
+        signer = std::make_unique<openssl::Signer>(openssl::load_private_key(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+                                                   openssl::DigestAlgorithm::SHA256);
+        signature_size = signer->get_max_signature_size();
+    }
+}
 
 template <typename T>
-Replicated<T>::Replicated(Replicated&& rhs) : persistent_registry_ptr(std::move(rhs.persistent_registry_ptr)),
+Replicated<T>::Replicated(Replicated&& rhs) : persistent_registry(std::move(rhs.persistent_registry)),
                                               user_object_ptr(std::move(rhs.user_object_ptr)),
                                               node_id(rhs.node_id),
                                               subgroup_id(rhs.subgroup_id),
                                               subgroup_index(rhs.subgroup_index),
                                               shard_num(rhs.shard_num),
+                                              signer(std::move(rhs.signer)),
+                                              signature_size(rhs.signature_size),
                                               group_rpc_manager(rhs.group_rpc_manager),
                                               wrapped_this(std::move(rhs.wrapped_this)),
                                               group(rhs.group) {
-    persistent_registry_ptr->updateTemporalFrontierProvider(this);
+    persistent_registry->updateTemporalFrontierProvider(this);
 }
 
 template <typename T>
@@ -168,7 +189,7 @@ template <typename T>
 std::size_t Replicated<T>::receive_object(char* buffer) {
     // *user_object_ptr = std::move(mutils::from_bytes<T>(&group_rpc_manager.dsm, buffer));
     mutils::RemoteDeserialization_v rdv{group_rpc_manager.rdv};
-    rdv.insert(rdv.begin(), persistent_registry_ptr.get());
+    rdv.insert(rdv.begin(), persistent_registry.get());
     mutils::DeserializationManager dsm{rdv};
     *user_object_ptr = std::move(mutils::from_bytes<T>(&dsm, buffer));
     if constexpr(std::is_base_of_v<GroupReference, T>) {
@@ -179,40 +200,40 @@ std::size_t Replicated<T>::receive_object(char* buffer) {
 
 template <typename T>
 void Replicated<T>::make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) {
-    persistent_registry_ptr->makeVersion(ver, hlc);
+    persistent_registry->makeVersion(ver, hlc);
 }
 
 template <typename T>
-void Replicated<T>::persist(const persistent::version_t version, const unsigned char* signature, std::size_t signature_size) noexcept(false) {
-    persistent::version_t persisted_ver;
+void Replicated<T>::persist(const persistent::version_t version, unsigned char* signature) noexcept(false) {
+    persistent::version_t next_persisted_ver;
     // persist variables
     do {
-        persisted_ver = persistent_registry_ptr->persist(signature, signature_size);
-        if(persisted_ver == -1) {
+        next_persisted_ver = persistent_registry->getMinimumLatestVersion();
+        if(signer) {
+            persistent_registry->sign(next_persisted_ver, *signer, signature);
+        }
+        persistent_registry->persist(next_persisted_ver);
+        if(next_persisted_ver == -1) {
             // for replicated<T> without Persistent fields,
             // tell the persistent thread that we are done.
-            persisted_ver = version;
+            next_persisted_ver = version;
         }
-    } while(persisted_ver < version);
+    } while(next_persisted_ver < version);
 };
-template <typename T>
-void Replicated<T>::sign(openssl::Signer& signer, unsigned char* signature_buffer) {
-    persistent_registry_ptr->sign(signer, signature_buffer);
-}
 
 template <typename T>
 void Replicated<T>::trim(const persistent::version_t& earliest_version) noexcept(false) {
-    persistent_registry_ptr->trim(earliest_version);
+    persistent_registry->trim(earliest_version);
 }
 
 template <typename T>
 void Replicated<T>::truncate(const persistent::version_t& latest_version) noexcept(false) {
-    persistent_registry_ptr->truncate(latest_version);
+    persistent_registry->truncate(latest_version);
 }
 
 template <typename T>
 const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() noexcept(false) {
-    return persistent_registry_ptr->getMinimumLatestPersistedVersion();
+    return persistent_registry->getMinimumLatestPersistedVersion();
 }
 
 template <typename T>

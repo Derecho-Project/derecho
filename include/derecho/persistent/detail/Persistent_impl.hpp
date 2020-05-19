@@ -115,15 +115,20 @@ inline void Persistent<ObjectType, storageType>::initialize_object_from_log(cons
 template <typename ObjectType,
           StorageType storageType>
 inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(false) {
+    using namespace std::placeholders;
     if(this->m_pRegistry != nullptr) {
+        //PROBLEM: The version() function bound here does not match the type signature (2 parameters) for the
+        //"version function" expected by PersistentRegistry.
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
-                {std::bind(&Persistent<ObjectType, storageType>::version, this, std::placeholders::_1),
-                 std::bind(&Persistent<ObjectType, storageType>::sign, this, std::placeholders::_1),
-                 std::bind(&Persistent<ObjectType, storageType>::persist, this, std::placeholders::_1, std::placeholders::_2),
-                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
-                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
-                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)}             // truncate persistent versions.
+                {std::bind(&Persistent<ObjectType, storageType>::version, this, _1),                //make new version
+                 std::bind(&Persistent<ObjectType, storageType>::update_signature, this, _1, _2),   //update signature at version
+                 std::bind(&Persistent<ObjectType, storageType>::add_signature, this, _1, _2),      //add signature to version
+                 std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),                //persist up to version
+                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),    //trim by version:(const int64_t)
+                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),           //get the latest version in memory
+                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),           //get the latest persisted version
+                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, _1)}               //truncate persistent versions
         );
     }
 }
@@ -456,24 +461,29 @@ void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::sign(openssl::Signer& signer) {
-    dbg_default_trace("In Persistent<T>: sign");
-    throw std::runtime_error("Persistent<T>::sign not yet implemented!");
+void Persistent<ObjectType, storageType>::update_signature(const version_t& ver, openssl::Signer& signer) {
+    throw std::runtime_error("Persistent<T>::update_signature not yet implemented!");
 }
+template <typename ObjectType,
+          StorageType storageType>
+void Persistent<ObjectType, storageType>::add_signature(const version_t& ver, const unsigned char* signature) {
+    throw std::runtime_error("Persistent<T>::add_signature not yet implemented!");
+}
+
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::persist(const unsigned char* signature, std::size_t signature_size) noexcept(false) {
+const int64_t Persistent<ObjectType, storageType>::persist(const version_t& ver) noexcept(false) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
-    const int64_t ret = this->m_pLog->persist(signature, signature_size);
+    const int64_t ret = this->m_pLog->persist(ver);
     clock_gettime(CLOCK_REALTIME, &t2);
     cnt_in_persist++;
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
-    return this->m_pLog->persist(signature, signature_size);
+    return this->m_pLog->persist(ver);
 #endif  //_PERFORMANCE_DEBUG
 }
 

@@ -19,6 +19,10 @@ EnvelopeKey& EnvelopeKey::operator=(EnvelopeKey&& other) {
     return *this;
 }
 
+int EnvelopeKey::get_max_size() {
+    return EVP_PKEY_size(key.get());
+}
+
 EnvelopeKey load_private_key(const std::string& pem_file_name) {
     FILE* pem_file = fopen(pem_file_name.c_str(), "r");
     if(pem_file == NULL) {
@@ -67,7 +71,7 @@ Signer::Signer(const EnvelopeKey& _private_key, DigestAlgorithm digest_type)
           digest_context(EVP_MD_CTX_new()) {}
 
 int Signer::get_max_signature_size() {
-    return EVP_PKEY_size(private_key);
+    return private_key.get_max_size();
 }
 
 void Signer::init() {

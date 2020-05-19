@@ -132,7 +132,7 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const unsigned char* signature, const std::size_t sig_size,
+    virtual const version_t persist(const version_t& version,
                                     const bool preLocked = false) noexcept(false)
             = 0;
 

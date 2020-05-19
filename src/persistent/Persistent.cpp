@@ -23,20 +23,11 @@ void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) noexce
     }
 };
 
-void PersistentRegistry::sign(openssl::Signer& signer, unsigned char* signature_buffer) {
-    signer.init();
+version_t PersistentRegistry::getMinimumLatestVersion() {
+    version_t min = -1;
     for(auto itr = _registry.begin();
         itr != _registry.end(); ++itr) {
-        itr->second.sign(signer);
-    }
-    signer.finalize(signature_buffer);
-}
-
-const int64_t PersistentRegistry::persist(const unsigned char* signature, std::size_t signature_size) noexcept(false) {
-    int64_t min = -1;
-    for(auto itr = _registry.begin();
-        itr != _registry.end(); ++itr) {
-        int64_t ver = itr->second.persist(signature, signature_size);
+        version_t ver = itr->second.get_latest_version();
         if(itr == _registry.begin()) {
             min = ver;
         } else if(min > ver) {
@@ -44,6 +35,29 @@ const int64_t PersistentRegistry::persist(const unsigned char* signature, std::s
         }
     }
     return min;
+}
+
+void PersistentRegistry::sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
+    //Find the last version successfully persisted to disk so we know where to start
+    version_t last_signed_version = getMinimumLatestPersistedVersion();
+    for(version_t version = last_signed_version; version <= latest_version; ++version) {
+        signer.init();
+        for(auto& entry : _registry) {
+            entry.second.update_signature(version, signer);
+        }
+        signer.finalize(signature_buffer);
+        //After computing a signature over all fields of the object, go back and
+        //tell each field to add that signature to its log
+        for(auto& entry : _registry) {
+            entry.second.add_signature(version, signature_buffer);
+        }
+    }
+}
+
+void PersistentRegistry::persist(const version_t& latest_version) noexcept(false) {
+    for(auto& entry : _registry) {
+        entry.second.persist(latest_version);
+    }
 };
 
 void PersistentRegistry::trim(const int64_t& earliest_version) noexcept(false) {
@@ -52,7 +66,7 @@ void PersistentRegistry::trim(const int64_t& earliest_version) noexcept(false) {
     }
 };
 
-const int64_t PersistentRegistry::getMinimumLatestPersistedVersion() noexcept(false) {
+int64_t PersistentRegistry::getMinimumLatestPersistedVersion() noexcept(false) {
     int64_t min = -1;
     for(auto itr = _registry.begin();
         itr != _registry.end(); ++itr) {

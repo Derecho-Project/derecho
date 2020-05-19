@@ -29,18 +29,22 @@ struct PersistentObjectFunctions {
      */
     std::function<void(const version_t&, const HLC&)> version;
     /**
-     * The "sign" function in a persistent object should update the provided Signer
-     * object (parameter 1) with the state of the object in its latest version.
+     * The "update signature" function in a persistent object should update the
+     * provided Signer object (parameter 2) with the state of the object in a
+     * specific version (parameter 1).
      */
-    std::function<void(openssl::Signer&)> sign;
+    std::function<void(const version_t&, openssl::Signer&)> update_signature;
     /**
-     * The "persist" function in a persistent object should persist as many
-     * versions as possible to persistent storage, up to the current version. Its
-     * return value is the latest version that was successfully persisted.
-     * In addition, it takes as input a signature to add to the log, which should
-     * have been computed by an earlier call to the sign function.
+     * The "add signature" function in a persistent object should add the
+     * provided signature (parameter 2) to the log at the specified version
+     * number (parameter 1).
      */
-    std::function<const version_t(const unsigned char*, const std::size_t)> persist;
+    std::function<void(const version_t&, const unsigned char*)> add_signature;
+    /**
+     * The "persist" function in a persistent object should persist a batch of
+     * versions to persistent storage, up to the specified version.
+     */
+    std::function<version_t(const version_t&)> persist;
     /**
      * The "trim" function in a persistent object should discard old versions from
      * the object's persistent log, deleting all records earlier than the provided
@@ -48,10 +52,15 @@ struct PersistentObjectFunctions {
      */
     std::function<void(const version_t&)> trim;
     /**
+     * The "get latest version" function in a persistent object should return the
+     * object's current version number.
+     */
+    std::function<version_t(void)> get_latest_version;
+    /**
      * The "get latest persisted" function in a persistent object should return
      * the latest version that has been successfully persisted to storage.
      */
-    std::function<const version_t(void)> get_latest_persisted;
+    std::function<version_t(void)> get_latest_persisted;
     /**
      * The "truncate" function in a persistent object should truncate the object's
      * persistent log, deleting all versions newer than the specified version

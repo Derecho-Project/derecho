@@ -14,6 +14,10 @@
 
 namespace openssl {
 
+/**
+ * A class that wraps the EVP_PKEY object used to represent public and private
+ * keys in OpenSSL EVP_* functions.
+ */
 class EnvelopeKey {
     std::unique_ptr<EVP_PKEY, DeleterFor<EVP_PKEY>> key;
 
@@ -64,6 +68,12 @@ public:
      * Move assignment operator.
      */
     EnvelopeKey& operator=(EnvelopeKey&& other);
+    /**
+     * @return the "maximum output size" (in bytes) reported by this key. For
+     * RSA private keys, this is the exact size of every signature and can be
+     * used as the size of signature buffers.
+     */
+    int get_max_size();
 };
 
 /**

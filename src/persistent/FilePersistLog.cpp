@@ -301,7 +301,7 @@ void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     FPL_UNLOCK;
 }
 
-const int64_t FilePersistLog::persist(const unsigned char* signature, const std::size_t sig_size, const bool preLocked) noexcept(false) {
+const int64_t FilePersistLog::persist(const int64_t& ver, const bool preLocked) noexcept(false) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
@@ -628,8 +628,8 @@ void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
     }
     META_HEADER->fields.head = idx + 1;
     try {
-        //How should persist be called if the current signature is not known?
-        persist(NULL, 0, true);
+        //What version number should be supplied to persist in this case?
+        persist(0, true);
     } catch(uint64_t e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;

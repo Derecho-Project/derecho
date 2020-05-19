@@ -65,7 +65,7 @@ class Replicated : public ReplicatedObject, public persistent::ITemporalQueryFro
 private:
     /** persistent registry for persistent<t>
      */
-    std::unique_ptr<persistent::PersistentRegistry> persistent_registry_ptr;
+    std::unique_ptr<persistent::PersistentRegistry> persistent_registry;
 #if defined(_PERFORMANCE_DEBUG)
 public:
 #endif
@@ -89,10 +89,25 @@ private:
      * shard within the same subgroup (and hence its Replicated state is obsolete).
      */
     const uint32_t shard_num;
+    /**
+     * The Signer object to use for signing updates to this object, if signatures are
+     * enabled. If signatures are disabled, this will be null.
+     */
+    std::unique_ptr<openssl::Signer> signer;
+    /**
+     * The size of a signature, which is a fixed run-time constant based on the
+     * security parameter of the private key being used. This will be 0 if
+     * signatures are disabled.
+     */
+    std::size_t signature_size;
     /** Reference to the RPCManager for the Group this Replicated is in */
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
+    /**
+     * A type-erased pointer to the Group that contains this Replicated. Will
+     * never be null since Group owns and outlives Replicated.
+     */
     _Group* group;
     /** The version number being processed and corresponding timestamp */
     persistent::version_t next_version = persistent::INVALID_VERSION;
@@ -267,19 +282,14 @@ public:
     virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false);
 
     /**
-     * Sign the last version produced by make_version, placing the signature in
-     * the buffer.
-     * @param signer The Signer object to use to produce the signature
-     * @param signature_buffer The byte array in which to put the signature,
-     * assumed to be the correct length for this type of signature.
-     */
-    virtual void sign(openssl::Signer& signer, unsigned char* signature_buffer);
-
-    /**
-     * persist the data to the latest version
+     * Persist the data up to the specified version. Also, if the signed log is
+     * enabled, return the signature over the latest version in the provided buffer.
+     * @param version The version to persist up to.
+     * @param signature The byte array in which to put the signature, assumed to be
+     * the correct length for this node's signing key.
      */
     virtual void persist(const persistent::version_t version,
-                         const unsigned char* signature, std::size_t signature_size) noexcept(false);
+                         unsigned char* signature) noexcept(false);
 
     /**
      * trim the logs to a version, inclusively.
@@ -311,7 +321,7 @@ public:
      */
     virtual void register_persistent_member(const char* object_name,
                                             const persistent::PersistentObjectFunctions& interface_functions) noexcept(false) {
-        this->persistent_registry_ptr->registerPersist(object_name, interface_functions);
+        this->persistent_registry->registerPersist(object_name, interface_functions);
     }
 };
 
