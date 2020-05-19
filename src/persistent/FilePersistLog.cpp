@@ -408,7 +408,7 @@ version_t FilePersistLog::getLatestVersion() noexcept(false) {
     return ver;
 }
 
-const version_t FilePersistLog::getLastPersisted() noexcept(false) {
+const version_t FilePersistLog::getLastPersistedVersion() noexcept(false) {
     version_t last_persisted = INVALID_VERSION;
     ;
     FPL_PERS_LOCK;
