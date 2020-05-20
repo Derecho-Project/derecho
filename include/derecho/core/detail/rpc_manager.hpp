@@ -114,34 +114,39 @@ class RPCManager {
     /** Notified when the P2P listening thread should start. */
     std::condition_variable thread_start_cv;
     std::atomic<bool> thread_shutdown{false};
-    std::thread rpc_thread;
-    /** p2p send and queries are queued in fifo worker */
-    std::thread fifo_worker_thread;
-    struct fifo_req {
+    /** The thread that listens for incoming P2P RPC calls; implemented by p2p_receive_loop() */
+    std::thread rpc_listener_thread;
+    /** The thread that processes P2P requests in FIFO order; implemented by p2p_request_worker() */
+    std::thread request_worker_thread;
+    /** A simple struct representing a P2P request message.
+     *  Encapsulates the parameters to a p2p_message_handler call. */
+    struct p2p_req {
         node_id_t sender_id;
         char* msg_buf;
         uint32_t buffer_size;
-        fifo_req() : sender_id(0),
+        p2p_req() : sender_id(0),
                      msg_buf(nullptr),
                      buffer_size(0) {}
-        fifo_req(node_id_t _sender_id,
+        p2p_req(node_id_t _sender_id,
                  char* _msg_buf,
                  uint32_t _buffer_size) : sender_id(_sender_id),
                                           msg_buf(_msg_buf),
                                           buffer_size(_buffer_size) {}
     };
-    std::queue<fifo_req> fifo_queue;
-    std::mutex fifo_queue_mutex;
-    std::condition_variable fifo_queue_cv;
+    /** P2P requests that need to be handled by the worker thread. */
+    std::queue<p2p_req> p2p_request_queue;
+    std::mutex request_queue_mutex;
+    /** Notified when the request worker thread has work to do. */
+    std::condition_variable request_queue_cv;
 
     /** Listens for P2P RPC calls over the RDMA P2P connections and handles them. */
     void p2p_receive_loop();
 
-    /** Handle Non-cascading P2P Send and P2P Queries in fifo*/
-    void fifo_worker();
+    /** Handles non-cascading P2P Send requests in FIFO order. */
+    void p2p_request_worker();
 
     /**
-     * Handler to be called by rpc_process_loop each time it receives a
+     * Handler to be called by p2p_receive_loop each time it receives a
      * peer-to-peer message over an RDMA P2P connection.
      * @param sender_id The ID of the node that sent the message
      * @param msg_buf A buffer containing the message
@@ -195,7 +200,7 @@ public:
         if(deserialization_context_ptr != nullptr) {
             rdv.push_back(deserialization_context_ptr);
         }
-        rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
+        rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
     }
 
     ~RPCManager();
