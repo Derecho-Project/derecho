@@ -127,7 +127,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
                  std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),                //persist up to version
                  std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),    //trim by version:(const int64_t)
                  std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),           //get the latest version in memory
-                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),           //get the latest persisted version
+                 std::bind(&Persistent<ObjectType, storageType>::getLastPersistedVersion, this),    //get the latest persisted version
                  std::bind(&Persistent<ObjectType, storageType>::truncate, this, _1)}               //truncate persistent versions
         );
     }
@@ -412,8 +412,8 @@ int64_t Persistent<ObjectType, storageType>::getLatestVersion() noexcept(false) 
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getLastPersisted() noexcept(false) {
-    return this->m_pLog->getLastPersisted();
+const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() noexcept(false) {
+    return this->m_pLog->getLastPersistedVersion();
 }
 
 template <typename ObjectType,

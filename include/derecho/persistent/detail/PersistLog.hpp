@@ -112,8 +112,8 @@ public:
     // Get the Latest version
     virtual version_t getLatestVersion() noexcept(false) = 0;
 
-    // return the last persisted value
-    virtual const version_t getLastPersisted() noexcept(false) = 0;
+    // return the last persisted version
+    virtual const version_t getLastPersistedVersion() noexcept(false) = 0;
 
     // Get a version by entry number return both length and buffer
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false) = 0;
