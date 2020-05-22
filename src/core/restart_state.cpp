@@ -29,9 +29,13 @@ void RestartState::load_ragged_trim(const View& curr_view) {
                 if(ragged_trim == nullptr || ragged_trim->vid < curr_view.vid) {
                     dbg_default_debug("No ragged trim information found for subgroup {}, synthesizing it from logs", subgroup_id);
                     //Get the latest persisted version number from this subgroup's object's log
-                    //(this requires converting the type ID to a std::type_index
+                    //(this requires converting the type ID to a std::type_index)
                     persistent::version_t last_persisted_version = persistent::getMinimumLatestPersistedVersion(curr_view.subgroup_type_order.at(type_id_and_indices.first),
                                                                                                                 subgroup_index, shard_num);
+                    if(last_persisted_version == persistent::INVALID_VERSION) {
+                        //There was no persistent file for this object; it must have been a volatile subgroup
+                        continue;
+                    }
                     int32_t last_vid, last_seq_num;
                     std::tie(last_vid, last_seq_num) = persistent::unpack_version<int32_t>(last_persisted_version);
                     //Divide the sequence number into sender rank and message counter
@@ -117,14 +121,17 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
                 rls_default_warn("Rejected a connection from client at {}. Client was running on an incompatible platform or used an incompatible compiler.", client_socket->get_remote_ip());
                 continue;
             }
-            node_id_t joiner_id = 0;
-            client_socket->read(joiner_id);
+            JoinRequest join_request;
+            client_socket->read(join_request);
             client_socket->write(JoinResponse{JoinResponseCode::TOTAL_RESTART, my_id});
-            dbg_default_debug("Node {} rejoined", joiner_id);
-            rejoined_node_ids.emplace(joiner_id);
-
+            dbg_default_debug("Node {} rejoined", join_request.joiner_id);
+            if(join_request.is_external) {
+                dbg_default_debug("Rejected request from external client {} during total restart", join_request.joiner_id);
+                continue;
+            }
+            rejoined_node_ids.emplace(join_request.joiner_id);
             //Receive and process the joining node's logs of the last known View and RaggedTrim
-            receive_joiner_logs(joiner_id, *client_socket);
+            receive_joiner_logs(join_request.joiner_id, *client_socket);
 
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
@@ -135,11 +142,13 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             client_socket->read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
             client_socket->read(joiner_rdmc_port);
+            uint16_t joiner_external_port = 0;
+            client_socket->read(joiner_external_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
-            rejoined_node_ips_and_ports[joiner_id] = {joiner_ip, joiner_gms_port,
-                                                      joiner_rpc_port, joiner_sst_port, joiner_rdmc_port};
+            rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
+                                                                   joiner_rpc_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
-            waiting_join_sockets.emplace(joiner_id, std::move(*client_socket));
+            waiting_join_sockets.emplace(join_request.joiner_id, std::move(*client_socket));
             //Check for quorum
             ready_to_restart = has_restart_quorum();
             //If all the members have rejoined, no need to keep waiting
@@ -356,11 +365,23 @@ void RestartLeaderState::send_abort() {
 int64_t RestartLeaderState::send_prepare() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        bool send_success;
+        bool socket_success;
         try {
             dbg_default_debug("Sending view prepare message to node {}", waiting_sockets_iter->first);
-            send_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
-            if(!send_success) {
+            socket_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
+            if(!socket_success) {
+                throw waiting_sockets_iter->first;
+            }
+            //Wait for an acknowledgment, to make sure the node has finished state transfer
+            CommitMessage response;
+            socket_success = waiting_sockets_iter->second.read(response);
+            if(!socket_success) {
+                throw waiting_sockets_iter->first;
+            }
+            if(response == CommitMessage::ACK) {
+                dbg_default_debug("Node {} acknowledged Prepare", waiting_sockets_iter->first);
+            } else {
+                dbg_default_warn("Node {} responded to Prepare with something other than Ack!", waiting_sockets_iter->first);
                 throw waiting_sockets_iter->first;
             }
         } catch(node_id_t failed_node) {
@@ -398,7 +419,7 @@ void RestartLeaderState::print_longest_logs() const {
 std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
     //Nodes that were not in the last view but have restarted will immediately "join" in the new view
     std::vector<node_id_t> nodes_to_add_in_next_view;
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> ips_and_ports_to_add_in_next_view;
+    std::vector<IpAndPorts> ips_and_ports_to_add_in_next_view;
     for(const auto& id_socket_pair : waiting_join_sockets) {
         node_id_t joiner_id = id_socket_pair.first;
         int joiner_rank = curr_view->rank_of(joiner_id);
@@ -410,6 +431,16 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
             curr_view->failed[joiner_rank] = false;
             curr_view->num_failed--;
         }
+    }
+    //Ensure the restart leader itself will be in the next view
+    if(curr_view->rank_of(my_id) == -1) {
+        nodes_to_add_in_next_view.emplace_back(my_id);
+        ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
+                                                       getConfUInt16(CONF_DERECHO_GMS_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RPC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_SST_PORT),
+                                                       getConfUInt16(CONF_DERECHO_RDMC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));
     }
     //Mark any nodes from the last view that haven't yet responded as failed
     for(std::size_t rank = 0; rank < curr_view->members.size(); ++rank) {
@@ -426,11 +457,11 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
 
 std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<View>& curr_view,
                                                          const std::vector<node_id_t>& joiner_ids,
-                                                         const std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>>& joiner_ips_and_ports) {
+                                                         const std::vector<IpAndPorts>& joiner_ips_and_ports) {
     int next_num_members = curr_view->num_members - curr_view->num_failed + joiner_ids.size();
     std::vector<node_id_t> members(next_num_members), departed;
     std::vector<char> failed(next_num_members);
-    std::vector<std::tuple<ip_addr_t, uint16_t, uint16_t, uint16_t, uint16_t>> member_ips_and_ports(next_num_members);
+    std::vector<IpAndPorts> member_ips_and_ports(next_num_members);
     int next_unassigned_rank = curr_view->next_unassigned_rank;
     std::set<int> leave_ranks;
     for(std::size_t rank = 0; rank < curr_view->failed.size(); ++rank) {
@@ -465,10 +496,11 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
     }
 
     //Initialize my_rank in next_view
+    //Note that the restart leader might not be a member of curr_view, so we can't use curr_view->my_rank
     int32_t my_new_rank = -1;
-    node_id_t myID = curr_view->members[curr_view->my_rank];
+    const uint32_t my_id = getConfUInt32(CONF_DERECHO_LOCAL_ID);
     for(int i = 0; i < next_num_members; ++i) {
-        if(members[i] == myID) {
+        if(members[i] == my_id) {
             my_new_rank = i;
             break;
         }
@@ -481,8 +513,7 @@ std::unique_ptr<View> RestartLeaderState::make_next_view(const std::unique_ptr<V
     auto next_view = std::make_unique<View>(curr_view->vid + 1, members, member_ips_and_ports, failed,
                                             joiner_ids, departed, my_new_rank, next_unassigned_rank,
                                             curr_view->subgroup_type_order);
-    next_view->i_know_i_am_leader = curr_view->i_know_i_am_leader;
-    return std::move(next_view);
+    return next_view;
 }
 
 bool RestartLeaderState::contains_at_least_one_member_per_subgroup(std::set<node_id_t> rejoined_node_ids, const View& last_view) {

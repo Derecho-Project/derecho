@@ -22,8 +22,29 @@ RPCManager::~RPCManager() {
     }
 }
 
+void RPCManager::report_failure(const node_id_t who) {
+    const auto& members = view_manager.get_members();
+    if (std::count(members.begin(), members.end(), who)) {
+        // internal member
+        view_manager.report_failure(who);
+    } else {
+        // external client
+        dbg_default_debug("External client with id {} failed, doing cleanup", who);
+        connections->remove_connections({who});
+        sst::remove_node(who);
+    }
+}
+
 void RPCManager::create_connections() {
-    connections = std::make_unique<sst::P2PConnections>(sst::P2PParams{nid, {nid}, view_manager.view_max_window_size, view_manager.view_max_payload_size + sizeof(header)});
+    connections = std::make_unique<sst::P2PConnectionManager>(sst::P2PParams{
+            nid,
+	    getConfUInt32(CONF_DERECHO_P2P_WINDOW_SIZE),
+            view_manager.view_max_rpc_window_size,
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) + sizeof(header),
+	    getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE) + sizeof(header),
+            view_manager.view_max_rpc_reply_payload_size + sizeof(header),
+            false,
+            [this](const uint32_t node_id) { report_failure(node_id); }});
 }
 
 void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
@@ -112,9 +133,9 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     parse_and_receive(msg_buf, buffer_size,
                       [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
                           reply_size = size;
-                          if(reply_size <= connections->get_max_p2p_size()) {
+                          if(reply_size <= connections->get_max_p2p_reply_size()) {
                               reply_buf = (char*)connections->get_sendbuffer_ptr(
-                                      connections->get_node_rank(sender_id), sst::REQUEST_TYPE::RPC_REPLY);
+                                      sender_id, sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;
                           } else {
                               // the reply size is too large - not part of the design to handle it
@@ -123,19 +144,21 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                       });
     if(sender_id == nid) {
         //This is a self-receive of an RPC message I sent, so I have a reply-map that needs fulfilling
-        int my_shard = view_manager.curr_view->multicast_group->get_subgroup_settings().at(subgroup_id).shard_num;
-        std::unique_lock<std::mutex> lock(pending_results_mutex);
-        // because of a race condition, toFulfillQueue can genuinely be empty
-        // so we shouldn't assert that it is empty
-        // instead we should sleep on a condition variable and let the main thread that called the orderedSend signal us
-        // although the race condition is infinitely rare
-        pending_results_cv.wait(lock, [&]() { return !pending_results_to_fulfill[subgroup_id].empty(); });
-        //We now know the membership of "all nodes in my shard of the subgroup" in the current view
-        pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
-                view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
-        fulfilled_pending_results[subgroup_id].push_back(
-                std::move(pending_results_to_fulfill[subgroup_id].front()));
-        pending_results_to_fulfill[subgroup_id].pop();
+        const uint32_t my_shard = view_manager.curr_view->my_subgroups.at(subgroup_id);
+        {
+            std::unique_lock<std::mutex> lock(pending_results_mutex);
+            // because of a race condition, pending_results_to_fulfill can genuinely be empty
+            // so before accessing it we should sleep on a condition variable and let the main
+            // thread that called the orderedSend signal us
+            // although the race condition is infinitely rare
+            pending_results_cv.wait(lock, [&]() { return !pending_results_to_fulfill[subgroup_id].empty(); });
+            //We now know the membership of "all nodes in my shard of the subgroup" in the current view
+            pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
+                    view_manager.curr_view->subgroup_shard_views.at(subgroup_id).at(my_shard).members);
+            fulfilled_pending_results[subgroup_id].push_back(
+                    std::move(pending_results_to_fulfill[subgroup_id].front()));
+            pending_results_to_fulfill[subgroup_id].pop();
+        }  //release pending_results_mutex
         if(reply_size > 0) {
             //Since this was a self-receive, the reply also goes to myself
             parse_and_receive(
@@ -144,7 +167,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
         }
     } else if(reply_size > 0) {
         //Otherwise, the only thing to do is send the reply (if there was one)
-        connections->send(connections->get_node_rank(sender_id));
+        connections->send(sender_id);
     }
 
     // clear the thread local rpc_handler context
@@ -163,16 +186,16 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &msg_buf, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
+                        [this, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
                             reply_size = _size;
                             if(reply_size <= buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
-                                        connections->get_node_rank(sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                                        sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             }
                             return nullptr;
                         });
         if(reply_size > 0) {
-            connections->send(connections->get_node_rank(sender_id));
+            connections->send(sender_id);
         }
     } else if(RPC_HEADER_FLAG_TST(flags, CASCADE)) {
         // TODO: what is the lifetime of msg_buf? discuss with Sagar to make
@@ -187,14 +210,18 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     }
 }
 
+//This is always called while holding a write lock on view_manager.view_mutex
 void RPCManager::new_view_callback(const View& new_view) {
-    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-    connections = std::make_unique<sst::P2PConnections>(std::move(*connections), new_view.members);
+    {
+        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+        connections->remove_connections(new_view.departed);
+        connections->add_connections(new_view.members);
+    }
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
-        //For each PendingResults in this subgroup, check the departed list of each shard
+        //For each PendingResults in this subgroup, check the departed list of each shard in
         //the subgroup, and call set_exception_for_removed_node for the departed nodes
         for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
             pending_results_iter != fulfilled_pending_results_pair.second.end();) {
@@ -218,6 +245,11 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
+void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
+    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+    connections->add_connections(node_ids);
+}
+
 bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending_results_handle) {
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     pending_results_to_fulfill[subgroup_id].push(pending_results_handle);
@@ -226,16 +258,35 @@ bool RPCManager::finish_rpc_send(subgroup_id_t subgroup_id, PendingBase& pending
 }
 
 volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type) {
-    auto dest_rank = connections->get_node_rank(dest_id);
     volatile char* buf;
+    int curr_vid = -1;
     do {
-        buf = connections->get_sendbuffer_ptr(dest_rank, type);
+        //This lock also prevents connections from being reassigned (because that happens
+        //in new_view_callback), so we don't need p2p_connections_mutex
+        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        //Check to see if the view changed between iterations of the loop, and re-get the rank
+        if(curr_vid != view_manager.curr_view->vid) {
+            curr_vid = view_manager.curr_view->vid;
+        }
+        try {
+            buf = connections->get_sendbuffer_ptr(dest_id, type);
+        } catch(std::out_of_range& map_error) {
+            throw node_removed_from_group_exception(dest_id);
+        }
+
     } while(!buf);
     return buf;
 }
 
 void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
-    connections->send(connections->get_node_rank(dest_id));
+    try {
+        //This lock also prevents connections from being reassigned (because that happens
+        //in new_view_callback), so we don't need p2p_connections_mutex
+        std::shared_lock<std::shared_timed_mutex> view_read_lock(view_manager.view_mutex);
+        connections->send(dest_id);
+    } catch(std::out_of_range& map_error) {
+        throw node_removed_from_group_exception(dest_id);
+    }
     pending_results_handle.fulfill_map({dest_id});
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     fulfilled_pending_results[dest_subgroup_id].push_back(pending_results_handle);
@@ -273,23 +324,24 @@ void RPCManager::fifo_worker() {
                             reply_size = _size;
                             if(reply_size <= request.buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
-                                        connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+                                        request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             }
                             return nullptr;
                         });
         if(reply_size > 0) {
-            connections->send(connections->get_node_rank(request.sender_id));
+            connections->send(request.sender_id);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
-            char* buf = connections->get_sendbuffer_ptr(connections->get_node_rank(request.sender_id), sst::REQUEST_TYPE::P2P_REPLY);
+            char* buf = connections->get_sendbuffer_ptr(request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
             buf[0] = 0;
-            connections->send(connections->get_node_rank(request.sender_id));
+            connections->send(request.sender_id);
         }
     }
 }
 
 void RPCManager::p2p_receive_loop() {
     pthread_setname_np(pthread_self(), "rpc_thread");
+
     uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     // set the thread local rpc_handler context
     _in_rpc_handler = true;
@@ -301,13 +353,33 @@ void RPCManager::p2p_receive_loop() {
     dbg_default_debug("P2P listening thread started");
     // start the fifo worker thread
     fifo_worker_thread = std::thread(&RPCManager::fifo_worker, this);
+
+    struct timespec last_time, cur_time;
+    clock_gettime(CLOCK_REALTIME, &last_time);
+
     // loop event
     while(!thread_shutdown) {
-        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
+        std::unique_lock<std::mutex> connections_lock(p2p_connections_mutex);
         auto optional_reply_pair = connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
-            p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+            if (reply_pair.first != INVALID_NODE_ID) {
+                p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                connections->update_incoming_seq_num();
+            }
+            // update last time
+            clock_gettime(CLOCK_REALTIME, &last_time);
+        } else {
+            clock_gettime(CLOCK_REALTIME, &cur_time);
+            // check if the system has been inactive for enough time to induce sleep
+            double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
+                                        + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
+            if(time_elapsed_in_ms > 1) {
+                connections_lock.unlock();
+                using namespace std::chrono_literals;
+                std::this_thread::sleep_for(1ms);
+                connections_lock.lock();
+            }
         }
     }
     // stop fifo worker.

@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
                   return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [](PersistentRegistry *pr,derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group{{}, subgroup_info, nullptr, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
         return -1;
     }
     dbg_default_debug("about to start the querying thread.");
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG)
     int num_datapoints = 0;     // number of data points
     pqt = std::make_unique<std::thread>([&]() {
         struct timespec tqt;
@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
         std::cout << std::flush;
         exit(0);
     });
-#endif  //_PERFORMANCE_DEBUG || _DEBUG
+#endif  //_PERFORMANCE_DEBUG
     dbg_default_debug("querying thread started.");
 
     if(is_sending) {
@@ -231,7 +231,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG)
 //      (*handle.user_object_ptr)->vola_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
 

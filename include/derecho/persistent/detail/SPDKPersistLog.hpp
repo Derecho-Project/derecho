@@ -178,7 +178,7 @@ public:
     virtual version_t getLatestVersion() noexcept(false);
 
     // return the last persisted value
-    virtual const version_t getLastPersisted() noexcept(false);
+    virtual version_t getLastPersisted() noexcept(false);
 
     // Get a version by entry number return both length and buffer
     template <typename ProcessLogEntryFunc>
@@ -233,7 +233,7 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const bool preLocked = false) noexcept(false);
+    virtual version_t persist(const bool preLocked = false) noexcept(false);
 
     /**
      * Trim the log till entry number eno, inclusively.

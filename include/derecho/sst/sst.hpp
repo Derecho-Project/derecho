@@ -16,23 +16,25 @@
 #include <thread>
 #include <vector>
 
-#include <derecho/conf/conf.hpp>
 #include "predicates.hpp"
+#include <derecho/conf/conf.hpp>
 
 #ifdef USE_VERBS_API
-  #include "detail/verbs.hpp"
-#else//LIBFABRIC
-  #include "detail/lf.hpp"
+#include "detail/verbs.hpp"
+#else  //LIBFABRIC
+#include "detail/lf.hpp"
 #endif
 
 using sst::resources;
 
 namespace sst {
 
-const int alignTo = sizeof(long);
+// strongly assumes that no counter in the SST row 
+// is greater than sizeof(long long), typically 8 bytes
+const int alignTo = sizeof(long long);
 
 constexpr size_t padded_len(const size_t& len) {
-    return (len < alignTo) ? alignTo : (len + alignTo) | (alignTo - 1);
+    return (len <= alignTo) ? alignTo : (len + alignTo) & ~(alignTo - 1);
 }
 
 /** Internal helper class, never exposed to the client. */
@@ -283,9 +285,9 @@ public:
 #ifdef USE_VERBS_API
                 res_vec[sst_index] = std::make_unique<resources>(
                         node_rank, write_addr, read_addr, rowLen, rowLen);
-#else // use libfabric api by default
+#else  // use libfabric api by default
                 res_vec[sst_index] = std::make_unique<resources>(
-                        node_rank, write_addr, read_addr, rowLen, rowLen, (my_node_id<node_rank));
+                        node_rank, write_addr, read_addr, rowLen, rowLen, (my_node_id < node_rank));
 #endif
                 // update qp_num_to_index
                 // qp_num_to_index[res_vec[sst_index].get()->qp->qp_num] = sst_index;
@@ -344,8 +346,53 @@ public:
         put(all_indices, offset, size);
     }
 
+    /** Writes a specific local field to all remote nodes */
+    template <typename T>
+    void put(SSTField<T>& field) {
+        put(all_indices, field.get_base() - getBaseAddress(), sizeof(field[0]));
+    }
+
+    /** Writes a specific local vector field to all remote nodes. */
+    template <typename T>
+    void put(SSTFieldVector<T>& vec_field) {
+        put(all_indices, vec_field.get_base() - getBaseAddress(),
+            sizeof(vec_field[0][0]) * vec_field.size());
+    }
+
+    /** Writes only a single element of a vector field to all remote nodes */
+    template <typename T>
+    void put(SSTFieldVector<T>& vec_field, std::size_t index) {
+        put(all_indices,
+            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(vec_field[0][index])))
+                    - getBaseAddress(),
+            sizeof(vec_field[0][index]));
+    }
+
+    /** Writes only a single element of a vector field to only some of the remote nodes */
+    template <typename T>
+    void put(const std::vector<uint32_t> receiver_ranks,
+             SSTFieldVector<T>& vec_field, std::size_t index) {
+        put(receiver_ranks,
+            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(vec_field[0][index])))
+                    - getBaseAddress(),
+            sizeof(vec_field[0][index]));
+    }
+
     void put_with_completion(size_t offset, size_t size) {
         put_with_completion(all_indices, offset, size);
+    }
+
+    /** Writes a specific local field to all remote nodes */
+    template <typename T>
+    void put_with_completion(SSTField<T>& field) {
+        put_with_completion(all_indices, field.get_base() - getBaseAddress(), sizeof(field[0]));
+    }
+
+    /** Writes a specific local vector field to all remote nodes. */
+    template <typename T>
+    void put_with_completion(SSTFieldVector<T>& vec_field) {
+        put_with_completion(all_indices, vec_field.get_base() - getBaseAddress(),
+            sizeof(vec_field[0][0]) * vec_field.size());
     }
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */

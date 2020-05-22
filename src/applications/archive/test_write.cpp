@@ -43,9 +43,9 @@ int main() {
 
     // create all tcp connections and initialize global rdma resources
 #ifdef USE_VERBS_API
-    verbs_initialize(ip_addrs_and_ports, node_rank);
+    verbs_initialize(ip_addrs_and_ports, {}, node_rank);
 #else
-    lf_initialize(ip_addrs_and_ports, node_rank);
+    lf_initialize(ip_addrs_and_ports, {}, node_rank);
 #endif
     // create read and write buffers
 //  char *write_buf = (char *)malloc(ROWSIZE);
@@ -67,16 +67,24 @@ int main() {
     int r_index = num_nodes - 1 - node_rank;
 
     // create the rdma struct for exchanging data
+#ifdef USE_VERBS_API
+    resources *res = new resources(r_index, read_buf, write_buf, ROWSIZE, ROWSIZE);
+#else
     resources *res = new resources(r_index, read_buf, write_buf, ROWSIZE, ROWSIZE, node_rank < r_index);
+#endif
 
     const auto tid = std::this_thread::get_id();
     // get id first
     uint32_t id = util::polling_data.get_index(tid);
 
     // remotely write data from the write_buf
+#ifdef USE_VERBS_API
+    struct verbs_sender_ctxt sctxt;
+#else
     struct lf_sender_ctxt sctxt;
-    sctxt.remote_id = r_index;
-    sctxt.ce_idx = id;
+#endif
+    sctxt.set_remote_id(r_index);
+    sctxt.set_ce_idx(id);
     res->post_remote_write_with_completion(&sctxt, ROWSIZE);
     // poll for completion
     while(true)

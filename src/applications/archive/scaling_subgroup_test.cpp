@@ -51,8 +51,8 @@ int main(int argc, char** argv) {
         return subgroup_allocation;
     }};
 
-    auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
-    auto bar_factory = [](PersistentRegistry*) { return std::make_unique<Bar>(); };
+    auto foo_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
+    auto bar_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
 
     derecho::Group<Foo, Bar> group({}, subgroup_function, nullptr,
                                    std::vector<derecho::view_upcall_t>{},

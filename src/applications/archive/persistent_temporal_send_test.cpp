@@ -137,7 +137,7 @@ public:
         HLC hlc{query_us, 0};
         try {
             return *pers_bytes.get(hlc);
-        } catch(std::exception e) {
+        } catch(std::exception& e) {
             std::cout << "query_pers_bytes failed:" << e.what() << std::endl;
         }
         return Bytes();
@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry *pr) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [](PersistentRegistry *pr,derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group{{}, subgroup_info, nullptr, std::vector<derecho::view_upcall_t>{}, ba_factory};
 

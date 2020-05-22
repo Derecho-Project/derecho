@@ -18,7 +18,7 @@ To obtain such high speeds, Derecho sacrifices some of the interoperability seen
 Derecho does not have any specific O/S dependency.  We've tested most extensively on the current release of Ubuntu, which is also the default Linux configuration used on Azure IoT Edge and Azure IoT, but there is no reason the system couldn't be used on other platforms.
 
 ## Organization
-The code for this project is split into modules that interact only through each others' public interfaces. Each module resides in a directory with its own name, which is why the repository's root directory is mostly empty. External dependencies have to be installed beforehand (Yes, we removed the submodules.) 
+This project is organized as a standard CMake-built C++ library: all headers are within the include/derecho/ directory, all CPP files are within the src/ directory, and each subdirectory within src/ contains its own CMakeLists.txt that is included by the root directory's CMakeLists.txt. Within the src/ and include/derecho/ directories, there is a subdirectory for each separate module of Derecho, such as RDMC, SST, and Persistence. Some sample applications and test cases that are built on the Derecho library are included in the src/applications/ directory, which is not included when building the Derecho library itself.
 
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
@@ -26,14 +26,15 @@ Derecho is a library that helps you build replicated, fault-tolerant services in
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
-* CMake 2.8.1 or newer, if you want to use the bundled build scripts
-* The following system libraries: `rdmacm` (packaged for Ubuntu as `librdmacm-dev`), `ibverbs` (packaged for Ubuntu as `libibverbs-dev`).
-* Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-libfabric.sh))
-* Logging library: [`spdlog`](https://github.com/gabime/spdlog). To avoid compatibility issue, please use commit `10e809cf644d55e5bd7d66d02e2604e2ddd7fb48` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-spdlog.sh))
+* CMake 2.8.1 or newer
+* The SSL/TLS Library. On Ubuntu and other Debian-like systems, you can install package `libssl-dev`. We tested with v1.0.2n. But it should work for any version >= 1.0 
+* The "rdmacm" and "ibverbs" system libraries for Linux, at version 17.1 or higher. On Ubuntu and other Debian-like systems, these are in the packages `librdmacm-dev` and `libibverbs-dev`.
+* [`spdlog`](https://github.com/gabime/spdlog), a logging library, v1.3.1 or newer. On Ubuntu 19.04 and later this can be installed with the package `libspdlog-dev`. The version of spdlog in Ubuntu 18.04's repositories is too old, but if you are running Ubuntu 18.04 you can download the `libspdlog-dev` package [here](https://packages.ubuntu.com/disco/libspdlog-dev) and install it manually with no other dependencies needed.
+* The Open Fabric Interface (OFI) library: [`libfabric`](https://github.com/ofiwg/libfabric). To avoid compatibility issue, please use commit `fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6` on `master` branch. ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-libfabric.sh))
 * Matthew's C++ utilities
-  - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils.sh))
-  - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-containers.sh))
-  - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/packaging/scripts/prerequisites/install-mutils-tasks.sh))
+  - [`mutils`](https://github.com/mpmilano/mutils) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils.sh))
+  - [`mutils-containers`](https://github.com/mpmilano/mutils-containers) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-containers.sh))
+  - [`mutils-tasks`](https://github.com/mpmilano/mutils-tasks) ([Installation script](https://github.com/Derecho-Project/derecho/blob/master/scripts/prerequisites/install-mutils-tasks.sh))
 
 ### Getting Started
 To download the project, run
@@ -49,10 +50,10 @@ Once cloning is complete, to build the code, `cd` into the `derecho` directory a
 This will place the binaries and libraries in the sub-directories of `Release`.
 The other build type is Debug. If you need to build the Debug version, replace Release by Debug in the above instructions. We explicitly disable in-source build, so running `cmake .` in `derecho` will not work.
 
-Once the project is built, install it by run:
+Once the project is built, install it by running:
 * `make install`
 
-By default, derecho will be install into `/usr/local/`. Please make sure you have `sudo` privileges to write to system directories.
+By default, Derecho will be installed into `/usr/local/`. Please make sure you have `sudo` privileges to write to system directories.
 
 Successful installation will set up the followings in `$DESTDIR`:
 * `include/derecho` - the header files
@@ -79,10 +80,17 @@ Applications need to tell the Derecho library which node is the initial leader w
 
 The other important parameters are the message sizes. Since Derecho pre-allocates buffers for RDMA communication, each application should decide on an optimal buffer size based on the amount of data it expects to send at once. If the buffer size is much larger than the messages an application actually sends, Derecho will pin a lot of memory and leave it underutilized. If the buffer size is smaller than the application's actual message size, it will have to split messages into segments before sending them, causing unnecessary overhead.
 
-There are three options to control the size of messages: **max_payload_size**, **max_smc_payload_size**, and **block_size**.
-No message bigger than **max_payload_size** will be sent by Derecho. Messages equal to or smaller than **max_smc_payload_size** will be sent through SST multicast (SMC), which is more suitable than RDMC for small messages. **block_size** defines the size of unit sent in RDMC (messages bigger than **block_size** will be split internally and sent in a pipeline).
+Three message-size options control the memory footprint and performance of Derecho.  In all cases, larger values will increase the memory (DRAM) footprint of the application, and it is fairly easy to end up with a huge memory size if you just pick giant values.  The defaults keep the memory size smaller, but can reduce performance if an application is sending high rates of larger messages.
 
-Please refer to the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg) for more explanations on **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
+The options are named **max_payload_size**, **max_smc_payload_size**, and **block_size**. 
+
+No message bigger than **max_payload_size** will be sent by Derecho. 
+
+To understand the other two options, it helps to remember that internally, Derecho makes use of two sub-protocols when it transmits your data.  One sub-protocol is optimized for small messages, and is called SMC.  Messages equal to or smaller than **max_smc_payload_size** will be sent using SMC.  Normally **max_smc_payload_size** is set to a small value, like 1K, but we have tested with values up to 10K.  This limit should not be made much larger  performance will suffer and memory would bloat.
+
+Larger messages are sent via RDMC, our big object protocol.  These will be automatically broken into chunks.  Each chunk will be of size  **block_size**.  The **block_size** value we tend to favor in our tests is 1MB, but we have run experiments with values as large as 100MB.   If you plan to send huge objects, like 100MB or even multi-gigabyte images, consider a larger block size  it pays off at that scale.  If you expect that huge objects would be rare, use a value like 1MB.
+
+More information about Derecho parameter setting can be found in the comments in [the default configuration file](https://github.com/Derecho-Project/derecho/blob/master/conf/derecho-default.cfg).  You may want to read about **window_size**, **timeout_ms**, and **rdmc_send_algorithm**.
 
 #### Configuring RDMA Devices
 The most important configuration entries in this section are **provider** and **domain**. The **provider** option specifies the type of RDMA device (i.e. a class of hardware) and the **domain** option specifies the device (i.e. a specific NIC or network interface). This [Libfabric document](https://www.slideshare.net/seanhefty/ofi-overview) explains the details of those concepts.
@@ -165,7 +173,7 @@ The persistence layer of Derecho stores durable logs of updates in memory-mapped
 
 We currently do not have a systematic way of asking the user for RDMA device configuration. So, we pick an arbitrary RDMA device in functions `resources_create` in `sst/verbs.cpp` and `verbs_initialize` in `rdmc/verbs_helper.cpp`. Look for the loop `for(i = 1; i < num_devices; i++)`. If you have a single RDMA device, most likely you want to start `i` from `0`. If you have multiple devices, you want to start `i` from the order (zero-based) of the device you want to use in the list of devices obtained by running `ibv_devices` in bash.
 
-A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
+A simple test to see if your setup is working is to run the test `bandwidth_test` from applications/tests/performance\_tests. To run it, go to two of your machines (nodes), `cd` to `Release/src/applications/tests/performance_tests` and run `./bandwidth_test 0 10000 15 1000 1 0` on both. The programs will ask for input.
 The input to the first node is:
 * 0 (its node ID)
 * 2 (number of nodes for the experiment)
@@ -302,6 +310,8 @@ derecho::rpc::QueryResults<std::string> results = p2p_cache_handle.p2p_query<RPC
 #### Using QueryResults objects
 
 The result of an ordered query is a slightly complex object, because it must contain a `std::future` for each member of the subgroup, but the membership of the subgroup might change during the query invocation. Thus, a QueryResults object is actually itself a future, which is fulfilled with a map from node IDs to futures as soon as Derecho can guarantee that the query will be delivered in a particular View. (The node IDs in the map are the members of the subgroup in that View). Each `std::future` in the map will be fulfilled with either the response from that node or a `node_removed_from_group_exception`, if a View change occurred after the query was delivered but before that node had a chance to respond.
+
+By the time the caller sees this exception, the view will have been updated.  Thus a caller that wishes to reissue a request could do so immediately after the exception is caught: it can already look up the new membership, select a new target, and send a new request.  On the other hand, notice that Derecho provides no indication of whether the target that failed did so before or after the original request was received.  Thus if your target might have taken some action (like issuing an update request), you may have to include application-layer logic to make sure your reissued request won't be performed twice if the initial request actually got past the update step, and the failure occurred later.  A simple way to do this is to make your requests idempotent, for example by including a request-id and an "this is a retry" flag, and if the flag is true, having the group member check to see if that request-id has already been performed.
 
 As an example, this code waits for the responses from each node and combines them to ensure that all replicas agree on an item's presence in the cache:
 

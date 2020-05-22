@@ -56,7 +56,7 @@ struct RawObject {
  * An implementation of Factory<T> for RawObject, which is trivial because
  * RawObjects have no state.
  */
-inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegistry*) {
+inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegistry*, subgroup_id_t) {
     return std::make_unique<RawObject>();
 }
 
@@ -66,7 +66,7 @@ private:
     /** persistent registry for persistent<t>
      */
     std::unique_ptr<persistent::PersistentRegistry> persistent_registry_ptr;
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG)
 public:
 #endif
     /**
@@ -75,7 +75,7 @@ public:
      * in memory, and otherwise Replicated<T> would be unmoveable.
      */
     std::unique_ptr<std::unique_ptr<T>> user_object_ptr;
-#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
+#if defined(_PERFORMANCE_DEBUG)
 private:
 #endif
     /** The ID of this node */
@@ -94,8 +94,9 @@ private:
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
     _Group* group;
-    /** The version number being processed */
-    persistent::version_t next_version = INVALID_VERSION;
+    /** The version number being processed and corresponding timestamp */
+    persistent::version_t next_version = persistent::INVALID_VERSION;
+    uint64_t next_timestamp_us = 0;
 
 public:
     /**
@@ -149,7 +150,7 @@ public:
      * template parameter. This is true if any field of the user object T is
      * persistent.
      */
-    constexpr bool is_persistent() const {
+    virtual bool is_persistent() const {
         return has_persistent_fields<T>::value;
     }
 
@@ -160,6 +161,14 @@ public:
      */
     bool is_valid() const {
         return *user_object_ptr && true;
+    }
+
+    /**
+     * @return The subgroup_id of the subgroup containing this Replicated<T>
+     * object.
+     */
+    subgroup_id_t get_subgroup_id() const {
+        return subgroup_id;
     }
 
     /**
@@ -286,15 +295,16 @@ public:
     /**
      * Post the next version to be handled.
      */
-    virtual void post_next_version(const persistent::version_t& version) {
+    virtual void post_next_version(const persistent::version_t& version, const uint64_t & ts_us) {
         next_version = version;
+        next_timestamp_us = ts_us;
     }
 
     /**
      * Get the next version to be handled.
      */
-    virtual persistent::version_t get_next_version() {
-        return next_version;
+    virtual std::tuple<persistent::version_t,uint64_t> get_next_version() {
+        return std::tie(next_version,next_timestamp_us);
     }
 
     /**

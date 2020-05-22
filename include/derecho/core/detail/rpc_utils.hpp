@@ -337,6 +337,7 @@ public:
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
     virtual bool all_responded() const = 0;
+    virtual void reset() = 0;
     virtual ~PendingBase() {}
 };
 
@@ -370,10 +371,7 @@ private:
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
-    virtual ~PendingResults() {
-        dbg_default_debug("Deleted PendingResults at address {:p}", reinterpret_cast<void*>(this));
-        dbg_default_flush();
-    }
+    virtual ~PendingResults() {}
 
     /**
      * Constructs and returns a QueryResults representing the "future" end of
@@ -391,7 +389,6 @@ public:
      */
     void fulfill_map(const node_list_t& who) {
         dbg_default_trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
-        dbg_default_flush();
         std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
         std::map<node_id_t, std::promise<Ret>> promises_map;
         for(const auto& e : who) {
@@ -475,6 +472,20 @@ public:
     bool all_responded() const {
         return map_fulfilled && (responded_nodes == dest_nodes);
     }
+
+    /**
+     * reset this object.
+     */
+    void reset() {
+        promise_for_pending_map = std::promise<std::unique_ptr<reply_map<Ret>>>();
+        promise_for_reply_promises = std::promise<std::map<node_id_t, std::promise<Ret>>>();
+        reply_promises_are_ready = promise_for_reply_promises.get_future();
+        // reply_promises_are_ready_mutex
+        reply_promises.clear();
+        map_fulfilled = false;
+        dest_nodes.clear();
+        responded_nodes.clear();
+    }
 };
 
 /**
@@ -514,6 +525,11 @@ public:
 
     bool all_responded() const {
         return map_fulfilled;
+    }
+
+    void reset() {
+        promise_for_pending_map = std::promise<std::unique_ptr<std::set<node_id_t>>>();
+        map_fulfilled = false;
     }
 };
 

@@ -17,6 +17,7 @@ public:
     schedule(uint32_t members, uint32_t index)
             : num_members(members),
               member_index(index) {}
+    virtual ~schedule() = default;
 
     struct block_transfer {
         uint32_t target;

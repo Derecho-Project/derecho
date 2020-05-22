@@ -119,7 +119,7 @@ std::map<Tests, Replicated<State>&> get_subgroups(Group<State>& group, std::map<
         try {
             auto& handle = group.get_subgroup<State>(subgroup_index);
             subgroups.insert({t, handle});
-        } catch(const invalid_subgroup_exception e) {
+        } catch(const invalid_subgroup_exception& e) {
         } catch(...) {
             std::cout << "Got an unknown exception: " << std::endl;
             exit(1);
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
     };
 
     const int INIT_STATE = 100;
-    auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*) { return std::make_unique<State>(INIT_STATE); };
+    auto state_subgroup_factory = [INIT_STATE](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<State>(INIT_STATE); };
     SubgroupInfo subgroup_info{state_membership_function};
 
     std::mutex main_mutex;

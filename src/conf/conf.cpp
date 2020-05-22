@@ -12,6 +12,7 @@ static const char* default_conf_file = "derecho.cfg";
 
 const std::vector<std::string> Conf::subgroupProfileFields = {
         "max_payload_size",
+	"max_reply_payload_size",
         "max_smc_payload_size",
         "block_size",
         "window_size",
@@ -31,18 +32,24 @@ struct option Conf::long_options[] = {
         // [DERECHO]
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_IP),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_GMS_PORT),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LEADER_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_ID),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_LOCAL_IP),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_GMS_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RPC_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RDMC_PORT),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_EXTERNAL_PORT),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_HEARTBEAT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY),
+	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
+	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
+	MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
         // [SUBGROUP/<subgroup name>]
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_SMC_PAYLOAD_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_BLOCK_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE),
@@ -100,8 +107,10 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
 // should we force the user to call Conf::initialize() by throw an expcetion
 // for uninitialized configuration?
 const Conf* Conf::get() noexcept {
-    while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED)
-        Conf::initialize(1, nullptr, nullptr);
+    while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED) {
+        char *empty_arg[1] = {nullptr};
+        Conf::initialize(0, empty_arg, nullptr);
+    }
     return Conf::singleton.get();
 }
 

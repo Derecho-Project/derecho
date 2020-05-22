@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry* pr) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group{callback_set,subgroup_info,nullptr,
         std::vector<derecho::view_upcall_t>{},ba_factory};
@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
         std::cout << "(send)timespan:" << msec << " millisecond." << std::endl;
         std::cout << "(send)throughput:" << thp_gbps << "Gbit/s." << std::endl;
         std::cout << "(send)throughput:" << thp_ops << "ops." << std::endl;
-#ifdef _PERFORMANCE_DEBUG
+#if defined(_PERFORMANCE_DEBUG)
         (*handle.user_object_ptr)->pers_bytes.print_performance_stat();
 #endif  //_PERFORMANCE_DEBUG
     }

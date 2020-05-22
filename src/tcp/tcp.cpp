@@ -18,7 +18,7 @@ namespace tcp {
 
 using namespace std;
 
-socket::socket(string server_ip, uint16_t server_port) {
+socket::socket(string server_ip, uint16_t server_port, bool retry) {
     sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if(sock < 0) throw connection_failure();
 
@@ -42,8 +42,14 @@ socket::socket(string server_ip, uint16_t server_port) {
       fprintf(stderr, "WARNING: Failed to disable Nagle's algorithm, continue without TCP_NODELAY...\n");
     }
 
-    while(connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-        /* do nothing*/;
+    if (retry) {
+        while(connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0);
+    }
+    else {
+        if (connect(sock, (sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+            throw connection_failure();
+        }
+    }
 }
 socket::socket(socket &&s) : sock(s.sock), remote_ip(s.remote_ip) {
     s.sock = -1;
