@@ -88,6 +88,7 @@ void PersistThreads::attach_cb(void* cb_ctx, const struct spdk_nvme_transport_id
         std::cout.flush();
         m_PersistThread->general_spdk_info.ns = ns;
         m_PersistThread->general_spdk_info.sectors_per_max_io = ((my_spdk_nvme_ns*)ns)->sectors_per_max_io;
+        m_PersistThread->general_spdk_info.sectors_per_max_io = std::min(m_PersistThread->general_spdk_info.sectors_per_max_io, derecho::getConfUInt32(CONF_PERS_SPDK_SUBTXN_SIZE))
         m_PersistThread->general_spdk_info.sector_size = spdk_nvme_ns_get_sector_size(ns);
         m_PersistThread->general_spdk_info.sector_bit = std::log2(m_PersistThread->general_spdk_info.sector_size);
         m_PersistThread->general_spdk_info.sector_mask = (1 << m_PersistThread->general_spdk_info.sector_bit) - 1;
@@ -575,7 +576,20 @@ int PersistThreads::initialize_threads() {
     // Step 0: initialize spdk nvme info
     struct spdk_env_opts opts;
     spdk_env_opts_init(&opts);
-    opts.core_mask= "0xB";
+    opts.core_mask= "B";
+    
+    uint32_t num_io_thread = derecho::getConfUInt32(CONF_PERS_SPDK_NUM_IO_THREAD);
+    if (num_io_thread < 2) {
+        throw derecho::derecho_exception("At least 2 io threads required.");
+    }
+    for (uint32_t i = 4; i <= num_io_thread; i = i + 2) {
+        opts.core_mask = "A" + opts.core_mask;
+    }
+    if (i % 2 != 0) {
+        opts.core_mask = "2" + opts.core_mask;
+    }
+    opts.core_mask = "0x" + opts.core_mask;
+
     if(spdk_env_init(&opts) < 0) {
         // Failed to initialize spdk env, throw an exception
         throw derecho::derecho_exception("Failed to initialize spdk namespace.");

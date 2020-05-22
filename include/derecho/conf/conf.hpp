@@ -1,8 +1,8 @@
 #ifndef CONF_HPP
 #define CONF_HPP
 
-#include <atomic>
 #include "getpot/GetPot"
+#include <atomic>
 #include <getopt.h>
 #include <inttypes.h>
 #include <map>
@@ -59,6 +59,8 @@ private:
 #define CONF_PERS_SPDK_TRADDR "PERS/spdk/traddr"
 #define CONF_PERS_SPDK_TRSVCID "PERS/spdk/trsvcid"
 #define CONF_PERS_SPDK_SUBNQN "PERS/spdk/subnqn"
+#define CONF_PERS_SPDK_NUM_IO_THREAD "PERS/spdk/num_io_thread"
+#define CONF_PERS_SPDK_SUBTXN_SIZE "PERS/spdk/subtxn_size"
 
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
@@ -78,9 +80,9 @@ private:
             {CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM, "binomial_send"},
             {CONF_DERECHO_SST_POLL_CQ_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
-	    {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
-	    {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
-	    {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
             {CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE, "10240"},
@@ -97,13 +99,15 @@ private:
             {CONF_PERS_STORAGE_TYPE, "filesystem"},
             {CONF_PERS_RESET, "false"},
             {CONF_PERS_FS_FILE_PATH, ".plog"},
-            {CONF_PERS_FS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
-            {CONF_PERS_FS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_FS_MAX_LOG_ENTRY, "1048576"},       // 1M log entries.
+            {CONF_PERS_FS_MAX_DATA_SIZE, "549755813888"},  // 512G total data size.
             {CONF_PERS_SPDK_TRTYPE, "pcie"},
             {CONF_PERS_SPDK_ADRFAM, ""},
             {CONF_PERS_SPDK_TRADDR, ""},
             {CONF_PERS_SPDK_TRSVCID, ""},
             {CONF_PERS_SPDK_SUBNQN, ""},
+            {CONF_PERS_SPDK_NUM_IO_THREAD, "1"},
+            {CONF_PERS_SPDK_SUBTXN_SIZE, "1"}
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};
