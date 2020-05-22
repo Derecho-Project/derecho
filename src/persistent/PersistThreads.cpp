@@ -441,6 +441,10 @@ PersistThreads* PersistThreads::get() {
 int PersistThreads::metadata_io_thread_fn(void* arg) {
     get()->uncompleted_metadata_req = 0;
     while(true) {
+        if(get()->metadata_asked_for_polling) {
+            get()->metadata_asked_for_polling = false;
+            spdk_nvme_qpair_process_completions(get()->metadata_spdk_qpair, 0);
+        }
         get()->metadata_io_queue_mtx.lock();
         if (!get()->metadata_io_queue.empty()) {
             io_request_t request = get()->metadata_io_queue.front();
@@ -497,6 +501,10 @@ int PersistThreads::data_io_thread_fn(void* arg) {
     //TODO: Assuming that each sub req is of size 32KB
     get()->uncompleted_io_sub_req[thread_id] = 0;
     while(true) {
+        if (get()->asked_for_polling[thread_id]) {
+            get()->asked_for_polling[thread_id] = false;
+            spdk_nvme_qpair_process_completions(get()->spdk_qpair[thread_id], 0);
+        }
         get()->io_queue_mtx.lock();
         if (!get()->io_queue.empty()) {
             io_request_t request = get()->io_queue.front();
@@ -725,7 +733,7 @@ const version_t PersistThreads::getLastPersisted(const uint32_t& id) {
 }    
 
 const version_t PersistThreads::persist(const uint32_t& id) {
-//	std::cout << "Get fields.tail " << metadata_entries[id].persist_metadata_info->fields.tail - 1 << " and last submitted " << metadata_entries[id].last_submitted_idx << std::endl;
+	std::cout << "Get fields.tail " << metadata_entries[id].persist_metadata_info->fields.tail - 1 << " and last submitted " << metadata_entries[id].last_submitted_idx << std::endl;
     if (metadata_entries[id].last_submitted_idx == metadata_entries[id].persist_metadata_info->fields.tail - 1) {
         return metadata_entries[id].last_written_ver;
     }
