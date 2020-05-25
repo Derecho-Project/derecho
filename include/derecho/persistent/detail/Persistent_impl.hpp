@@ -462,18 +462,23 @@ void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::update_signature(const version_t& ver, openssl::Signer& signer) {
-    throw std::runtime_error("Persistent<T>::update_signature not yet implemented!");
+    this->m_pLog->processEntryAtVersion(ver,[&signer](const void* data,const std::size_t& size){
+            if (size > 0) {
+                signer.add_bytes(data, size);
+            }
+        });
 }
+
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::add_signature(const version_t& ver, const unsigned char* signature) {
-    throw std::runtime_error("Persistent<T>::add_signature not yet implemented!");
+    this->m_pLog->add_signature(ver,signature);
 }
 
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::persist(const version_t& ver) noexcept(false) {
+void Persistent<ObjectType, storageType>::persist(const version_t& ver) noexcept(false) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -483,7 +488,7 @@ const int64_t Persistent<ObjectType, storageType>::persist(const version_t& ver)
     ns_in_persist += ((t2.tv_sec - t1.tv_sec) * 1000000000ul + t2.tv_nsec - t1.tv_nsec);
     return ret;
 #else
-    return this->m_pLog->persist(ver);
+    this->m_pLog->persist(ver);
 #endif  //_PERFORMANCE_DEBUG
 }
 

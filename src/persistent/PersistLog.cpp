@@ -1,10 +1,13 @@
 #include <derecho/persistent/detail/PersistLog.hpp>
 #include <derecho/persistent/detail/util.hpp>
 #include <derecho/utils/logger.hpp>
+#include <derecho/openssl/signature.hpp>
 
 namespace persistent {
 
-PersistLog::PersistLog(const std::string& name) noexcept(true) : m_sName(name) {
+PersistLog::PersistLog(const std::string& name) noexcept(true) : 
+    m_sName(name),
+    signature_size(openssl::load_private_key(CONF_PERS_PRIVATE_KEY_FILE).get_max_size()){
 }
 
 PersistLog::~PersistLog() noexcept(true) {

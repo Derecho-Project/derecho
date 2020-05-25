@@ -13,6 +13,7 @@ namespace persistent {
 #define LOG_FILE_SUFFIX "log"
 #define DATA_FILE_SUFFIX "data"
 #define SWAP_FILE_SUFFIX "swp"
+#define MAX_LOG_ENTRY_SIZE (1024)
 
 // meta header format
 typedef union meta_header {
@@ -37,8 +38,9 @@ typedef union log_entry {
         uint64_t ofst;   // offset of the data in the memory buffer
         uint64_t hlc_r;  // realtime component of hlc
         uint64_t hlc_l;  // logic component of hlc
+        char signature[];  // signature
     } fields;
-    uint8_t bytes[64];
+    uint8_t bytes[MAX_LOG_ENTRY_SIZE];
 } LogEntry;
 
 // TODO: make this hard-wired number configurable.
@@ -190,6 +192,8 @@ public:
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
     virtual const version_t persist(const version_t& ver,
                                     const bool preLocked = false) noexcept(false);
+    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*,const std::size_t& size)>& func);
+    virtual void add_signature(const version_t& ver, const unsigned char* signature);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
     virtual void trim(const HLC& hlc) noexcept(false);

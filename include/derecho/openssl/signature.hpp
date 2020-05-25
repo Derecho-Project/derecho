@@ -119,7 +119,7 @@ public:
      * @param buffer A pointer to a byte array
      * @param buffer_size The length of the byte array
      */
-    void add_bytes(const void* buffer, std::size_t buffer_size);
+    void add_bytes(const void* buffer, const std::size_t buffer_size);
     /**
      * Signs all of the bytes that have been added with add_bytes (since the
      * last call to init) and places the signature in the provided buffer, which

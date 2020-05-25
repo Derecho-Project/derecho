@@ -568,7 +568,7 @@ public:
      * persist versions
      * @param version The version to persist up to
      */
-    virtual const int64_t persist(const version_t& ver) noexcept(false);
+    virtual void persist(const version_t& ver) noexcept(false);
 
 public:
     // wrapped objected

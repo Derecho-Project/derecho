@@ -42,6 +42,9 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexc
                                                                                              m_iDataFileDesc(-1),
                                                                                              m_pLog(MAP_FAILED),
                                                                                              m_pData(MAP_FAILED) {
+    if(MAX_LOG_ENTRY_SIZE < (sizeof(LogEntry::fields) + this->signature_size)) {
+        throw PERSIST_EXP_INV_SIGNATURE_SIZE;
+    }
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -370,6 +373,29 @@ const int64_t FilePersistLog::persist(const int64_t& ver, const bool preLocked) 
     return ver_ret;
 }
 
+void FilePersistLog::add_signature(const version_t& version,
+                                   const unsigned char* signature) {
+    LogEntry* ple = nullptr;
+
+    FPL_RDLOCK;
+
+    //binary search
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            version,
+            META_HEADER->fields.head,
+            META_HEADER->fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == version) {
+        memcpy(ple->fields.signature, signature, signature_size);
+    }
+}
+
 int64_t FilePersistLog::getLength() noexcept(false) {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;
@@ -605,6 +631,29 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
     dbg_default_trace("{0} getEntry at ({1},{2})", this->m_sName, ple->fields.hlc_r, ple->fields.hlc_l);
 
     return LOG_ENTRY_DATA(ple);
+}
+
+void FilePersistLog::processEntryAtVersion(const int64_t& ver,
+        const std::function<void(const void*, const std::size_t&)>& func) noexcept(false) {
+    LogEntry* ple = nullptr;
+
+    FPL_RDLOCK;
+
+    //binary search
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            ver,
+            META_HEADER->fields.head,
+            META_HEADER->fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == ver) {
+        func(static_cast<void*>(ple->bytes),static_cast<size_t>(ple->fields.dlen));
+    }
 }
 
 // trim by index

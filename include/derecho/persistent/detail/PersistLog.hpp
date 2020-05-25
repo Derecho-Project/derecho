@@ -57,6 +57,7 @@ class PersistLog {
 public:
     // LogName
     const std::string m_sName;
+    const uint32_t signature_size;
     // HLCIndex
     std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
 #ifndef NDEBUG
@@ -126,6 +127,11 @@ public:
     // Get a version specified by hlc
     virtual const void* getEntry(const HLC& hlc) noexcept(false) = 0;
 
+    // process the entry at exactly version @ver
+    // if such a version does not exist, nothing will happen.
+    // @param ver - the specified version
+    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*,const std::size_t& size)>& func) = 0;
+
     /**
      * Persist the log till specified version
      * @return - the version till which has been persisted.
@@ -134,6 +140,14 @@ public:
      */
     virtual const version_t persist(const version_t& version,
                                     const bool preLocked = false) noexcept(false)
+            = 0;
+
+    /**
+     * add a signature to corresponding version
+     * @param ver - version
+     * @param signature - signature
+     */
+    virtual void add_signature(const version_t& ver, const unsigned char* signature)
             = 0;
 
     /**
