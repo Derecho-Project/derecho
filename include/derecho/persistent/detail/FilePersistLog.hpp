@@ -184,7 +184,7 @@ public:
     virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
-    virtual const version_t getLastPersisted() noexcept(false);
+    virtual const version_t getLastPersistedVersion() noexcept(false);
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
     virtual const void* getEntry(const version_t& ver) noexcept(false);
     virtual const void* getEntry(const HLC& hlc) noexcept(false);

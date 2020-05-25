@@ -67,7 +67,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     unsigned int window_size;
     unsigned int heartbeat_ms;
     rdmc::send_algorithm rdmc_send_algorithm;
-    uint32_t rpc_port;
+    uint32_t state_transfer_port;
 
     static uint64_t compute_max_msg_size(
             const uint64_t max_payload_size,
@@ -103,14 +103,14 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int window_size,
                   unsigned int heartbeat_ms,
                   rdmc::send_algorithm rdmc_send_algorithm,
-                  uint32_t rpc_port)
+                  uint32_t state_transfer_port)
             : max_reply_msg_size(max_reply_payload_size + sizeof(header)),
               sst_max_msg_size(max_smc_payload_size + sizeof(header)),
               block_size(block_size),
               window_size(window_size),
               heartbeat_ms(heartbeat_ms),
               rdmc_send_algorithm(rdmc_send_algorithm),
-              rpc_port(rpc_port) {
+              state_transfer_port(state_transfer_port) {
         //if this is initialized above, DerechoParams turns abstract. idk why.
         max_msg_size = compute_max_msg_size(max_payload_size, block_size,
                                             max_payload_size > max_smc_payload_size);
@@ -144,7 +144,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[4]);
         uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
         const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[5]);
-        uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
+        uint32_t state_transfer_port = getConfUInt32(CONF_DERECHO_STATE_TRANSFER_PORT);
 
         return DerechoParams{
                 max_payload_size,
@@ -154,13 +154,13 @@ struct DerechoParams : public mutils::ByteRepresentable {
                 window_size,
                 timeout_ms,
                 DerechoParams::send_algorithm_from_string(algorithm),
-                rpc_port,
+                state_transfer_port,
         };
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_msg_size, max_reply_msg_size,
                                   sst_max_msg_size, block_size, window_size,
-                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
+                                  heartbeat_ms, rdmc_send_algorithm, state_transfer_port);
 };
 
 /**

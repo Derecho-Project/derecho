@@ -527,9 +527,9 @@ public:
     virtual int64_t getLatestVersion() noexcept(false);
 
     /**
-     * get the last persisted index.
+     * get the last persisted version.
      */
-    virtual const int64_t getLastPersisted() noexcept(false);
+    virtual const int64_t getLastPersistedVersion() noexcept(false);
 
     /**
      * make a version with a version number and mhlc clock
