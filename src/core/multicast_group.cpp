@@ -46,9 +46,6 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-#ifdef ENABLE_LOGGING
-          log_committed_nonnull_sst_index(total_num_subgroups, -1),
-#endif
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
@@ -111,9 +108,6 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-#ifdef ENABLE_LOGGING
-          log_committed_nonnull_sst_index(total_num_subgroups, -1),
-#endif
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
@@ -834,37 +828,13 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 }
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
-#ifdef ENABLE_LOGGING
-        DERECHO_LOG(-1, -1, "init_trigger");
-#endif
-
     // to avoid a race condition, do not read the same counter twice
     int32_t current_committed_sst_index = committed_sst_index[subgroup_num];
-
-#ifdef ENABLE_LOGGING
-    int32_t tmp_app_sent_index = log_committed_nonnull_sst_index[subgroup_num];
-#endif
-
     // sst.index[member_index][subgroup_settings.index_field_index] contains the old counter value
     uint32_t to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
     if(to_be_sent > 0) {
-
-#ifdef ENABLE_LOGGING
-        // The second arg here is the number of msgs sent together in this round 
-        DERECHO_LOG(tmp_app_sent_index, to_be_sent, "before_actual_send");
-#endif
-
         sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
-
-#ifdef ENABLE_LOGGING
-        // The second arg here is the number of msgs sent together in this round 
-        DERECHO_LOG(tmp_app_sent_index, to_be_sent, "after_actual_send");
-#endif    
-
     }
-#ifdef ENABLE_LOGGING
-        DERECHO_LOG(-1, -1, "end_trigger");
-#endif
 }
 
 void MulticastGroup::register_predicates() {
@@ -1206,9 +1176,6 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         future_message_indices[subgroup_num]++;
         committed_sst_index[subgroup_num]++;
-#ifdef ENABLE_LOGGING
-        DERECHO_LOG(log_committed_nonnull_sst_index[subgroup_num], -1, "requested_null_send");
-#endif
     }
 }
 
@@ -1321,16 +1288,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     if(!rdmc_sst_groups_created) {
         return false;
     }
-#ifdef ENABLE_LOGGING
-    DERECHO_LOG(future_message_indices[subgroup_num], -1, "before_send_lock");
-#endif
-
     std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-
-#ifdef ENABLE_LOGGING
-    DERECHO_LOG(future_message_indices[subgroup_num], -1, "ask_for_buffer");
-#endif
-
     char* buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     while(!buf) {
         // Don't want any deadlocks. For example, this thread cannot get a buffer because delivery is lagging
@@ -1344,11 +1302,6 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         lock.lock();
         buf = get_sendbuffer_ptr(subgroup_num, payload_size, cooked_send);
     }
-
-#ifdef ENABLE_LOGGING
-    DERECHO_LOG(future_message_indices[subgroup_num] - 1, -1, "buffer_allocated");
-#endif
-
     // call to the user supplied message generator
     msg_generator(buf);
 
@@ -1359,9 +1312,6 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
         sender_cv.notify_all();
         return true;
     } else {
-#ifdef ENABLE_LOGGING
-        log_committed_nonnull_sst_index[subgroup_num]++;
-#endif
         committed_sst_index[subgroup_num]++;
         pending_sst_sends[subgroup_num] = false;
         return true;
