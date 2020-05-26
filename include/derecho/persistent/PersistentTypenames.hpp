@@ -44,7 +44,7 @@ struct PersistentObjectFunctions {
      * The "persist" function in a persistent object should persist a batch of
      * versions to persistent storage, up to the specified version.
      */
-    std::function<version_t(const version_t&)> persist;
+    std::function<void(const version_t&)> persist;
     /**
      * The "trim" function in a persistent object should discard old versions from
      * the object's persistent log, deleting all records earlier than the provided
