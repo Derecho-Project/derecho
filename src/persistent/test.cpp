@@ -1,6 +1,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/HLC.hpp>
 #include <derecho/persistent/Persistent.hpp>
+#include <derecho/openssl/signature.hpp>
 #include <derecho/persistent/detail/util.hpp>
 #include <iostream>
 #include <signal.h>
@@ -9,6 +10,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <iomanip>
 
 using namespace persistent;
 using namespace mutils;
@@ -149,6 +151,22 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
+void dump_binary_buffer(const unsigned char* buf, std::size_t len) {
+    std::size_t idx=0;
+    std::cout << "[" << std::endl;
+    while (idx < len) {
+        if (idx%16 == 0) {
+            std::cout << "\t" << std::endl;
+        }
+        std::cout << std::hex << std::setw(3) << static_cast<unsigned>(buf[idx]);
+        idx ++;
+        if (idx%16 == 0) {
+            std::cout << std::endl;
+        }
+    }
+    std::cout << "]" << std::endl;
+}
+
 Persistent<X> px1([]() { return std::make_unique<X>(); }, nullptr, &pr);
 //Persistent<X> px1;
 Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
@@ -227,12 +245,20 @@ int main(int argc, char** argv) {
 
     signal(SIGSEGV, sig_handler);
 
+
     if(argc < 2) {
         printhelp();
         return 0;
     }
 
     std::cout << "command:" << argv[1] << std::endl;
+
+    openssl::EnvelopeKey prikey = openssl::load_private_key(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
+    openssl::Signer signer(prikey,openssl::DigestAlgorithm::SHA256);
+    signer.init();
+    std::size_t sig_size = signer.get_max_signature_size();
+    cout << "signer output length=" << sig_size << endl;
+    unsigned char sig_buf[sig_size];
 
     try {
         if(strcmp(argv[1], "list") == 0) {
@@ -301,6 +327,11 @@ int main(int argc, char** argv) {
             sprintf((*npx).buf, "%s", v);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
+            npx.update_signature(ver,signer);
+            signer.finalize(static_cast<unsigned char*>(sig_buf));
+            std::cout << "signature=" << std::endl;
+            dump_binary_buffer(sig_buf,sig_size);
+            npx.add_signature(ver,sig_buf);
             npx.persist(ver);
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];
