@@ -542,6 +542,11 @@ public:
     virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false);
 
     /**
+     * make a version with a version number and mhlc clock, using the current state.
+     */
+    virtual void version_with_hlc(const version_t& ver, const HLC& mhlc) noexcept(false);
+
+    /**
      * make a version with only a version number
      */
     virtual void set(ObjectType& v, const version_t& ver) noexcept(false);

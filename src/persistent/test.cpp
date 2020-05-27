@@ -201,10 +201,10 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
     clock_gettime(CLOCK_REALTIME, &ts);
     while(cnt-- > 0) {
         pvar.set(writeMe, ver++);
-        if(!batch) pvar.persist();
+        if(!batch) pvar.persist(ver-1);
     }
     if(batch) {
-        pvar.persist();
+        pvar.persist(ver);
     }
 
 #if defined(_PERFORMANCE_DEBUG)
@@ -280,12 +280,10 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "trimbyidx") == 0) {
             int64_t nv = atol(argv[2]);
             npx.trim(nv);
-            npx.persist();
             cout << "trim till index " << nv << " successfully" << endl;
         } else if(strcmp(argv[1], "trimbyver") == 0) {
             int64_t ver = atol(argv[2]);
             npx.trim(ver);
-            npx.persist();
             cout << "trim till ver " << ver << " successfully" << endl;
         } else if(strcmp(argv[1], "truncate") == 0) {
             int64_t ver = atol(argv[2]);
@@ -296,7 +294,6 @@ int main(int argc, char** argv) {
             hlc.m_rtc_us = atol(argv[2]);
             hlc.m_logic = 0;
             npx.trim(hlc);
-            npx.persist();
             cout << "trim till time " << hlc.m_rtc_us << " successfully" << endl;
         } else if(strcmp(argv[1], "set") == 0) {
             char* v = argv[2];
@@ -304,14 +301,14 @@ int main(int argc, char** argv) {
             sprintf((*npx).buf, "%s", v);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
-            npx.persist();
+            npx.persist(ver);
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx_logtail).buf, "%s", v);
             (*npx_logtail).data_len = strlen(v) + 1;
             npx_logtail.version(ver);
-            npx_logtail.persist();
+            npx_logtail.persist(ver);
         }
 #define LOGTAIL_FILE "logtail.ser"
         else if(strcmp(argv[1], "logtail-serialize") == 0) {
@@ -345,7 +342,6 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "logtail-trim") == 0) {
             int64_t ver = atol(argv[2]);
             npx_logtail.trim(ver);
-            npx_logtail.persist();
             cout << "logtail-trim till ver " << ver << " successfully" << endl;
         } else if(strcmp(argv[1], "logtail-apply") == 0) {
             //load the serialized logtail.
@@ -377,17 +373,17 @@ int main(int argc, char** argv) {
             X x;
             x.x = 1;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 1" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 10;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 10" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 100;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 100" << endl;
             listvar<X, ST_MEM>(px2);
         } else if(strcmp(argv[1], "hlc") == 0) {
@@ -418,13 +414,13 @@ int main(int argc, char** argv) {
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "add(" << op << ") = " << (*dx).add(op) << endl;
             dx.version(ver);
-            dx.persist();
+            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-sub") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "sub(" << op << ") = " << (*dx).sub(op) << endl;
             dx.version(ver);
-            dx.persist();
+            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-list") == 0) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
             listvar<IntegerWithDelta>(dx);

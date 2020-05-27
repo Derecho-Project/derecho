@@ -121,7 +121,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
         //"version function" expected by PersistentRegistry.
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
-                {std::bind(&Persistent<ObjectType, storageType>::version, this, _1),                //make new version
+                {std::bind(&Persistent<ObjectType, storageType>::version_with_hlc, this, _1, _2),                //make new version
                  std::bind(&Persistent<ObjectType, storageType>::update_signature, this, _1, _2),   //update signature at version
                  std::bind(&Persistent<ObjectType, storageType>::add_signature, this, _1, _2),      //add signature to version
                  std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),                //persist up to version
@@ -433,6 +433,13 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
         this->m_pLog->append((void*)buf, size, ver, mhlc);
         delete[] buf;
     }
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+void Persistent<ObjectType, storageType>::version_with_hlc(const version_t& ver, const HLC& mhlc) noexcept(false) {
+    dbg_default_trace("In Persistent<T>: make version (ver={}, hlc={}us.{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
+    this->set(*this->m_pWrappedObject, ver, mhlc);
 }
 
 template <typename ObjectType,

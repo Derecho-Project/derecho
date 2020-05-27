@@ -225,8 +225,13 @@ public:
             META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
-                //What version number should be supplied to persist in this case?
-                persist(0, true);
+                // What version number should be supplied to persist in this case?
+                // CAUTION:
+                // The persist API is changed for Edward's convenience by adding a version parameter
+                // This has a widespreading on the design and needs extensive test before replying on
+                // it.
+                version_t ver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+                persist(ver, true);
             } catch(uint64_t e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;
