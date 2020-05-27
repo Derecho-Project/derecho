@@ -36,8 +36,8 @@ int main(int argc, char** argv) {
     test_objects.push_back(StringObject("This is a longer object with more data in it. abcdefghijklmnopqrstuvwxyz1234567890"));
     test_objects.push_back(StringObject("This is a much larger object with a lot of data in it. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. In nisl nisi scelerisque eu ultrices vitae auctor eu. Ultricies lacus sed turpis tincidunt id. Ultricies mi quis hendrerit dolor magna eget est lorem ipsum. Pellentesque habitant morbi tristique senectus et netus et malesuada. Id interdum velit laoreet id donec. Sagittis id consectetur purus ut. Donec pretium vulputate sapien nec sagittis aliquam. Lacus sed viverra tellus in hac habitasse. Libero volutpat sed cras ornare arcu dui vivamus arcu felis. Eget nulla facilisi etiam dignissim diam quis. Dictum non consectetur a erat nam at lectus. In dictum non consectetur a erat nam at lectus. Cras tincidunt lobortis feugiat vivamus at. Vitae aliquet nec ullamcorper sit amet risus nullam eget felis. Sed risus ultricies tristique nulla aliquet enim tortor. Nulla posuere sollicitudin aliquam ultrices sagittis orci. Tempus imperdiet nulla malesuada pellentesque elit. Velit sed ullamcorper morbi tincidunt ornare massa eget."));
 
-    openssl::EnvelopeKey my_private_key = openssl::load_private_key("server_private_key.pem");
-    openssl::EnvelopeKey my_public_key = openssl::load_public_key("server_public_key.pem");
+    openssl::EnvelopeKey my_private_key = openssl::EnvelopeKey::from_pem_private("server_private_key.pem");
+    openssl::EnvelopeKey my_public_key = openssl::EnvelopeKey::from_pem_public("server_public_key.pem");
 
     openssl::Signer my_signer(my_private_key, openssl::DigestAlgorithm::SHA256);
     openssl::Verifier my_verifier(my_public_key, openssl::DigestAlgorithm::SHA256);

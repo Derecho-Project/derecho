@@ -253,7 +253,7 @@ int main(int argc, char** argv) {
 
     std::cout << "command:" << argv[1] << std::endl;
 
-    openssl::EnvelopeKey prikey = openssl::load_private_key(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
+    openssl::EnvelopeKey prikey = openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
     openssl::Signer signer(prikey,openssl::DigestAlgorithm::SHA256);
     signer.init();
     std::size_t sig_size = signer.get_max_signature_size();

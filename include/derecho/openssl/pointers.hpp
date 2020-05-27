@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <openssl/evp.h>
+#include <openssl/bio.h>
 
 namespace openssl {
 
@@ -22,6 +23,11 @@ struct DeleterFor<EVP_MD_CTX> {
 template <>
 struct DeleterFor<EVP_PKEY> {
     void operator()(EVP_PKEY* p) { EVP_PKEY_free(p); }
+};
+
+template<>
+struct DeleterFor<BIO> {
+    void operator()(BIO* p) { BIO_free_all(p); }
 };
 
 }  // namespace openssl

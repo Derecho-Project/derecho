@@ -74,17 +74,35 @@ public:
      * used as the size of signature buffers.
      */
     int get_max_size();
+    /**
+     * Factory function that constructs an EnvelopeKey by loading a public key
+     * from a PEM file on disk.
+     * @param pem_file_name The name (or path) of the PEM file to read from
+     */
+    static EnvelopeKey from_pem_public(const std::string& pem_file_name);
+    /**
+     * Factory function that constructs an EnvelopeKey by loading a public key
+     * from a PEM file stored in a byte buffer in memory.
+     * @param byte_buffer An array of bytes containing a public key in PEM
+     * format
+     * @param buffer_size The size of the byte array
+     */
+    static EnvelopeKey from_pem_public(const void* byte_buffer, std::size_t buffer_size);
+    /**
+     * Factory function that constructs an EnvelopeKey by loading a private key
+     * from a PEM file on disk.
+     * @param pem_file_name The name (or path) of the PEM file to read from
+     */
+    static EnvelopeKey from_pem_private(const std::string& pem_file_name);
+    /**
+     * Factory function that constructs an EnvelopeKey by loading a private key
+     * from a PEM file stored in a byte buffer in memory.
+     * @param byte_buffer An array of bytes containing a public key in PEM
+     * format
+     * @param buffer_size The size of the byte array
+     */
+    static EnvelopeKey from_pem_private(const void* byte_buffer, std::size_t buffer_size);
 };
-
-/**
- * Loads a public key from a PEM file into an EnvelopeKey object.
- */
-EnvelopeKey load_public_key(const std::string& pem_file_name);
-
-/**
- * Loads a private key from a PEM file into an EnvelopeKey object.
- */
-EnvelopeKey load_private_key(const std::string& pem_file_name);
 
 /**
  * A class that wraps the EVP_DigestSign* functions for signing a byte array

@@ -5,9 +5,9 @@
 
 namespace persistent {
 
-PersistLog::PersistLog(const std::string& name) noexcept(true) : 
+PersistLog::PersistLog(const std::string& name) noexcept(true) :
     m_sName(name),
-    signature_size(openssl::load_private_key(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size()){
+    signature_size(openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size()){
 }
 
 PersistLog::~PersistLog() noexcept(true) {

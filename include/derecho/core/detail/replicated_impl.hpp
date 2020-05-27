@@ -37,7 +37,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
         //Attempt to load the private key and create a Signer
         //This will crash with a file_error if the private key doesn't actually exist
-        signer = std::make_unique<openssl::Signer>(openssl::load_private_key(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
     }
@@ -64,7 +64,7 @@ Replicated<T>::Replicated(subgroup_type_id_t type_id, node_id_t nid, subgroup_id
     if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
         //Attempt to load the private key and create a Signer
         //This will crash with a file_error if the private key doesn't actually exist
-        signer = std::make_unique<openssl::Signer>(openssl::load_private_key(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
+        signer = std::make_unique<openssl::Signer>(openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)),
                                                    openssl::DigestAlgorithm::SHA256);
         signature_size = signer->get_max_signature_size();
     }

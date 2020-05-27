@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <derecho/openssl/signature.hpp>
+#include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
 
@@ -23,7 +24,7 @@ int EnvelopeKey::get_max_size() {
     return EVP_PKEY_size(key.get());
 }
 
-EnvelopeKey load_private_key(const std::string& pem_file_name) {
+EnvelopeKey EnvelopeKey::from_pem_private(const std::string& pem_file_name) {
     FILE* pem_file = fopen(pem_file_name.c_str(), "r");
     if(pem_file == NULL) {
         switch(errno) {
@@ -43,8 +44,16 @@ EnvelopeKey load_private_key(const std::string& pem_file_name) {
     }
     return std::move(private_key);
 }
+EnvelopeKey EnvelopeKey::from_pem_private(const void* byte_buffer, std::size_t buffer_size) {
+    std::unique_ptr<BIO, DeleterFor<BIO>> buffer_bio(BIO_new_mem_buf(byte_buffer, buffer_size));
+    EnvelopeKey private_key(PEM_read_bio_PrivateKey(buffer_bio.get(), NULL, NULL, NULL));
+    if(!private_key) {
+        throw openssl_error(ERR_get_error(), "Load private key");
+    }
+    return std::move(private_key);
+}
 
-EnvelopeKey load_public_key(const std::string& pem_file_name) {
+EnvelopeKey EnvelopeKey::from_pem_public(const std::string& pem_file_name) {
     FILE* pem_file = fopen(pem_file_name.c_str(), "r");
     if(pem_file == NULL) {
         switch(errno) {
@@ -59,6 +68,15 @@ EnvelopeKey load_public_key(const std::string& pem_file_name) {
     }
     EnvelopeKey public_key(PEM_read_PUBKEY(pem_file, NULL, NULL, NULL));
     fclose(pem_file);
+    if(!public_key) {
+        throw openssl_error(ERR_get_error(), "Load public key");
+    }
+    return std::move(public_key);
+}
+
+EnvelopeKey EnvelopeKey::from_pem_public(const void* byte_buffer, std::size_t buffer_size) {
+    std::unique_ptr<BIO, DeleterFor<BIO>> buffer_bio(BIO_new_mem_buf(byte_buffer, buffer_size));
+    EnvelopeKey public_key(PEM_read_bio_PUBKEY(buffer_bio.get(), NULL, NULL, NULL));
     if(!public_key) {
         throw openssl_error(ERR_get_error(), "Load public key");
     }

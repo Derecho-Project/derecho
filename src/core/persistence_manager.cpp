@@ -9,9 +9,6 @@
 
 namespace derecho {
 
-/** Constructor
- * @param objects_map reference to the objects_by_subgroup_id from Group.
- */
 PersistenceManager::PersistenceManager(
         std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
         const persistence_callback_t& _persistence_callback)
@@ -24,12 +21,10 @@ PersistenceManager::PersistenceManager(
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
     if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
-        signature_size = openssl::load_private_key(getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size();
+        signature_size = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size();
     }
 }
 
-/** default Destructor
- */
 PersistenceManager::~PersistenceManager() {
     sem_destroy(&persistence_request_sem);
 }
