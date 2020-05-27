@@ -1,3 +1,4 @@
+#include <chrono>
 #include <optional>
 
 #include <derecho/core/detail/container_template_functions.hpp>
@@ -12,6 +13,8 @@
 namespace derecho {
 
 void RestartState::load_ragged_trim(const View& curr_view) {
+    //If this method is called more than once, it should be idempotent
+    logged_ragged_trim.clear();
     /* Iterate through all subgroups by type, rather than iterating through my_subgroups,
      * so that I have access to the type ID. This wastes time, but I don't have a map
      * from subgroup ID to subgroup_type_id within curr_view. */
@@ -106,7 +109,7 @@ RestartLeaderState::RestartLeaderState(std::unique_ptr<View> _curr_view, Restart
 
 void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
     bool ready_to_restart = false;
-    int time_remaining_ms = RESTART_LEADER_TIMEOUT;
+    int time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
     while(time_remaining_ms > 0) {
         using namespace std::chrono;
         auto start_time = high_resolution_clock::now();
@@ -136,8 +139,8 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             //Receive the joining node's ports - this is part of the standard join logic
             uint16_t joiner_gms_port = 0;
             client_socket->read(joiner_gms_port);
-            uint16_t joiner_rpc_port = 0;
-            client_socket->read(joiner_rpc_port);
+            uint16_t joiner_state_transfer_port = 0;
+            client_socket->read(joiner_state_transfer_port);
             uint16_t joiner_sst_port = 0;
             client_socket->read(joiner_sst_port);
             uint16_t joiner_rdmc_port = 0;
@@ -146,7 +149,8 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             client_socket->read(joiner_external_port);
             const ip_addr_t& joiner_ip = client_socket->get_remote_ip();
             rejoined_node_ips_and_ports[join_request.joiner_id] = {joiner_ip, joiner_gms_port,
-                                                                   joiner_rpc_port, joiner_sst_port, joiner_rdmc_port, joiner_external_port};
+                                                                   joiner_state_transfer_port, joiner_sst_port,
+                                                                   joiner_rdmc_port, joiner_external_port};
             //Done receiving from this socket (for now), so store it in waiting_join_sockets for later
             waiting_join_sockets.emplace(join_request.joiner_id, std::move(*client_socket));
             //Check for quorum
@@ -158,7 +162,7 @@ void RestartLeaderState::await_quorum(tcp::connection_listener& server_socket) {
             }
         } else if(!ready_to_restart) {
             //Accept timed out, but we haven't heard from enough nodes yet, so reset the timer
-            time_remaining_ms = RESTART_LEADER_TIMEOUT;
+            time_remaining_ms = getConfUInt32(CONF_DERECHO_RESTART_TIMEOUT_MS);
         }
     }
 }
@@ -271,54 +275,32 @@ int64_t RestartLeaderState::send_restart_view() {
         std::size_t leaders_buffer_size = mutils::bytes_size(nodes_with_longest_log);
         char view_buffer[view_buffer_size];
         char leaders_buffer[leaders_buffer_size];
-        bool send_success;
-        //Within this try block, any send that returns failure throws the ID of the node that failed
         try {
             dbg_default_debug("Sending post-recovery view {} to node {}", restart_view->vid, waiting_sockets_iter->first);
-            send_success = waiting_sockets_iter->second.write(view_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(view_buffer_size);
             mutils::to_bytes(*restart_view, view_buffer);
-            send_success = waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(view_buffer, view_buffer_size);
             dbg_default_debug("Sending ragged-trim information to node {}", waiting_sockets_iter->first);
             std::size_t num_ragged_trims = multimap_size(restart_state.logged_ragged_trim);
-            send_success = waiting_sockets_iter->second.write(num_ragged_trims);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(num_ragged_trims);
             //Unroll the maps and send each RaggedTrim individually, since it contains its subgroup_id and shard_num
             for(const auto& subgroup_to_shard_map : restart_state.logged_ragged_trim) {
                 for(const auto& shard_trim_pair : subgroup_to_shard_map.second) {
                     std::size_t trim_buffer_size = mutils::bytes_size(*shard_trim_pair.second);
                     char trim_buffer[trim_buffer_size];
-                    send_success = waiting_sockets_iter->second.write(trim_buffer_size);
-                    if(!send_success) {
-                        throw waiting_sockets_iter->first;
-                    }
+                    waiting_sockets_iter->second.write(trim_buffer_size);
                     mutils::to_bytes(*shard_trim_pair.second, trim_buffer);
-                    send_success = waiting_sockets_iter->second.write(trim_buffer, trim_buffer_size);
-                    if(!send_success) {
-                        throw waiting_sockets_iter->first;
-                    }
+                    waiting_sockets_iter->second.write(trim_buffer, trim_buffer_size);
                 }
             }
             dbg_default_debug("Sending longest-log locations to node {}", waiting_sockets_iter->first);
-            send_success = waiting_sockets_iter->second.write(leaders_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(leaders_buffer_size);
             mutils::to_bytes(nodes_with_longest_log, leaders_buffer);
-            send_success = waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
-            if(!send_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(leaders_buffer, leaders_buffer_size);
             members_sent_restart_view.emplace(waiting_sockets_iter->first);
             waiting_sockets_iter++;
-        } catch(node_id_t failed_node) {
+        } catch(tcp::socket_error& e) {
+            node_id_t failed_node = waiting_sockets_iter->first;
             //All send failures will end up here.
             //Close the failed socket, delete it from rejoined_node_ids, and return the ID of the failed node.
             waiting_join_sockets.erase(waiting_sockets_iter);
@@ -365,27 +347,22 @@ void RestartLeaderState::send_abort() {
 int64_t RestartLeaderState::send_prepare() {
     for(auto waiting_sockets_iter = waiting_join_sockets.begin();
         waiting_sockets_iter != waiting_join_sockets.end();) {
-        bool socket_success;
         try {
             dbg_default_debug("Sending view prepare message to node {}", waiting_sockets_iter->first);
-            socket_success = waiting_sockets_iter->second.write(CommitMessage::PREPARE);
-            if(!socket_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.write(CommitMessage::PREPARE);
             //Wait for an acknowledgment, to make sure the node has finished state transfer
             CommitMessage response;
-            socket_success = waiting_sockets_iter->second.read(response);
-            if(!socket_success) {
-                throw waiting_sockets_iter->first;
-            }
+            waiting_sockets_iter->second.read(response);
             if(response == CommitMessage::ACK) {
                 dbg_default_debug("Node {} acknowledged Prepare", waiting_sockets_iter->first);
             } else {
                 dbg_default_warn("Node {} responded to Prepare with something other than Ack!", waiting_sockets_iter->first);
-                throw waiting_sockets_iter->first;
+                throw tcp::socket_error("Received an unexpected message!");
             }
-        } catch(node_id_t failed_node) {
+        } catch(tcp::socket_error& e) {
+            node_id_t failed_node = waiting_sockets_iter->first;
             waiting_join_sockets.erase(waiting_sockets_iter);
+            members_sent_restart_view.erase(failed_node);
             rejoined_node_ips_and_ports.erase(failed_node);
             rejoined_node_ids.erase(failed_node);
             return failed_node;
@@ -437,7 +414,7 @@ std::unique_ptr<View> RestartLeaderState::update_curr_and_next_restart_view() {
         nodes_to_add_in_next_view.emplace_back(my_id);
         ips_and_ports_to_add_in_next_view.emplace_back(getConfString(CONF_DERECHO_LOCAL_IP),
                                                        getConfUInt16(CONF_DERECHO_GMS_PORT),
-                                                       getConfUInt16(CONF_DERECHO_RPC_PORT),
+                                                       getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT),
                                                        getConfUInt16(CONF_DERECHO_SST_PORT),
                                                        getConfUInt16(CONF_DERECHO_RDMC_PORT),
                                                        getConfUInt16(CONF_DERECHO_EXTERNAL_PORT));

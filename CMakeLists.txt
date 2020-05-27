@@ -50,15 +50,15 @@ endif()
 # libfabric_FOUND
 # libfabric_INCLUDE_DIRS
 # libfabric_LIBRARIES
-find_package(libfabric)
-if (NOT ${libfabric_FOUND})
-    message(FATAL_ERROR "libfabric not found. Please install from https://github.com/ofiwg/libfabric.git. [commit:fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6]")
-endif()
+find_package(libfabric 1.7.0 REQUIRED)
 
 # spdlog is a packaged system library, so this probably isn't necessary, but
 # it helps ensure that the right version is installed
 # spdlog_FOUND
 find_package(spdlog 1.3.1 REQUIRED)
+
+# find openssl
+find_package(OpenSSL REQUIRED) 
 
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
@@ -84,7 +84,8 @@ target_link_libraries(derecho
     stdc++fs ${libfabric_LIBRARIES} 
     ${mutils_LIBRARIES} 
     ${mutils-containers_LIBRARIES}
-    ${mutils-tasks_LIBRARIES})
+    ${mutils-tasks_LIBRARIES}
+    ${OPENSSL_LIBRARIES}) 
 set_target_properties(derecho PROPERTIES
     SOVERSION ${derecho_VERSION}
     VERSION ${derecho_build_VERSION}
@@ -133,9 +134,6 @@ install(FILES
     "${CMAKE_CURRENT_BINARY_DIR}/derecho/derechoConfigVersion.cmake"
     DESTINATION ${ConfigPackageLocation}
 )
-
-# objectstore aka dPods
-add_subdirectory(src/objectstore)
 
 # applications
 add_subdirectory(src/applications)

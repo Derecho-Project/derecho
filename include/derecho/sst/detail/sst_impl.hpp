@@ -166,9 +166,9 @@ void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_r
 
     util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-    struct verbs_sender_ctxt sctxt[receiver_ranks.size()];
+    verbs_sender_ctxt sctxt[receiver_ranks.size()];
 #else
-    struct lf_sender_ctxt sctxt[receiver_ranks.size()];
+    lf_sender_ctxt sctxt[receiver_ranks.size()];
 #endif
     for(auto index : receiver_ranks) {
         // don't write to yourself or a frozen row
@@ -253,8 +253,9 @@ void SST<DerivedSST>::freeze(int row_index) {
         row_is_frozen[row_index] = true;
     }
     num_frozen++;
-    //BUG: deleting from res_vec here creates a race with put(), which blindly
-    //dereferences res_vec[index] after checking fow_is_frozen
+    res_vec[row_index]->report_failure();
+    //We can't delete from res_vec here because it creates a race with put(),
+    //but maybe marking the resource object as "failed" is good enough.
 //    res_vec[row_index].reset();
     if(failure_upcall) {
         failure_upcall(members[row_index]);

@@ -65,10 +65,10 @@ void PersistenceManager::start() {
                     search->second.get().persist(version);
                 }
                 // read lock the view
-                std::shared_lock<std::shared_timed_mutex> read_lock(view_manager->view_mutex);
+                SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
                 // update the persisted_num in SST
 
-                View& Vc = *view_manager->curr_view;
+                View& Vc = view_and_lock.get();
                 Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id] = version;
                 Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
                                (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),

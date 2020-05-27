@@ -1,6 +1,8 @@
 #ifndef PERSISTENT_IMPL_HPP
 #define PERSISTENT_IMPL_HPP
 
+#include <openssl/sha.h>
+
 namespace persistent {
 
 template <typename int_type>
@@ -68,8 +70,36 @@ std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const cha
     }
     std::unique_ptr<std::string> ret = std::make_unique<std::string>();
     //char * buf = (char *)malloc((strlen(this->m_sObjectTypeName)+13)/8*8);
+    // SHA256 object type name to avoid file name length overflow.
+    unsigned char digest[64];
+    SHA256_CTX ctxt;
+    SHA256_Init(&ctxt);
+    SHA256_Update(&ctxt,this->m_sObjectTypeName,strlen(this->m_sObjectTypeName));
+    SHA256_Final(digest,&ctxt);
+
+    if (!SHA256_Init(&ctxt)) {
+        dbg_default_error("{}:{} Unable to initialize SHA256 context. errno = {}", __FILE__, __func__, errno);
+        throw PERSIST_EXP_SHA256_HASH(errno);
+    }
+    if (!SHA256_Update(&ctxt,this->m_sObjectTypeName,strlen(this->m_sObjectTypeName))) {
+        dbg_default_error("{}:{} Unable to update SHA256 context. string = {}, length = {}, errno = {}",
+            __FILE__, __func__, this->m_sObjectTypeName, strlen(this->m_sObjectTypeName), errno);
+        throw PERSIST_EXP_SHA256_HASH(errno);
+    }
+    if (!SHA256_Final(digest,&ctxt)) {
+        dbg_default_error("{}:{} Unable to final SHA256 context. errno = {}", __FILE__, __func__, errno);
+        throw PERSIST_EXP_SHA256_HASH(errno);
+    }
+
+    // char prefix[strlen(this->m_sObjectTypeName) * 2 + 32];
     char buf[256];
-    sprintf(buf, "%s-%d-%s-%d", (prefix) ? prefix : "none", storageType, this->m_sObjectTypeName, cnt);
+    sprintf(buf, "%s-%d-", (prefix) ? prefix : "none", storageType);
+    // fill the object type name SHA256
+    char *tbuf = buf + strlen(buf);
+    for(uint32_t i = 0; i < 32; i++) {
+        sprintf(tbuf + 2 * i, "%02x", digest[i]);
+    }
+    sprintf(tbuf + 64, "-%d", cnt);
     // return std::make_shared<const char *>((const char*)buf);
     *ret = buf;
     return ret;
@@ -127,7 +157,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
                 std::bind(&Persistent<ObjectType, storageType>::version, this, std::placeholders::_1),
                 std::bind(&Persistent<ObjectType, storageType>::persist, this),
                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, std::placeholders::_1),  //trim by version:(const int64_t)
-                std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),                            //get the latest persisted versions
+                std::bind(&Persistent<ObjectType, storageType>::getLastPersistedVersion, this),                            //get the latest persisted versions
                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, std::placeholders::_1)              // truncate persistent versions.
                 );
     }
@@ -424,8 +454,8 @@ int64_t Persistent<ObjectType, storageType>::getLatestVersion() noexcept(false) 
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getLastPersisted() noexcept(false) {
-    return this->m_pLog->getLastPersisted();
+const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() noexcept(false) {
+    return this->m_pLog->getLastPersistedVersion();
 }
 
 template <typename ObjectType,

@@ -10,7 +10,7 @@ PersistLog::PersistLog(const std::string& name) noexcept(true) : m_sName(name) {
 PersistLog::~PersistLog() noexcept(true) {
 }
 
-#ifdef DERECHO_DEBUG
+#ifndef NDEBUG
 void PersistLog::dump_hidx() {
     dbg_default_trace("number of entry in hidx:{}.log_len={}.", hidx.size(), getLength());
     for(auto itr = hidx.cbegin(); itr != hidx.cend(); itr++) {

@@ -184,7 +184,7 @@ public:
     virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
     virtual version_t getEarliestVersion() noexcept(false);
     virtual version_t getLatestVersion() noexcept(false);
-    virtual const version_t getLastPersisted() noexcept(false);
+    virtual const version_t getLastPersistedVersion() noexcept(false);
     virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
     virtual const void* getEntry(const version_t& ver) noexcept(false);
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
@@ -346,7 +346,7 @@ private:
         dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
         dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
     }
-#endif  //NDEBUG
+#endif  // NDEBUG
 };
 }
 

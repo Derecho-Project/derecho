@@ -261,8 +261,12 @@ int endpoint::init(struct fi_info* fi) {
 
 bool sync(uint32_t r_id) {
     int s = 0, t = 0;
-
-    return rdmc_connections->exchange(r_id, s, t);
+    try {
+        rdmc_connections->exchange(r_id, s, t);
+    } catch(tcp::socket_error&) {
+        return false;
+    }
+    return true;
 }
 
 void endpoint::connect(size_t remote_index, bool is_lf_server,
@@ -275,7 +279,9 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
     local_cm_data.pep_addr_len = (uint32_t)htonl((uint32_t)g_ctxt.pep_addr_len);
     memcpy((void*)&local_cm_data.pep_addr, &g_ctxt.pep_addr, g_ctxt.pep_addr_len);
 
-    if(!rdmc_connections->exchange(remote_index, local_cm_data, remote_cm_data)) {
+    try {
+        rdmc_connections->exchange(remote_index, local_cm_data, remote_cm_data);
+    } catch(tcp::socket_error&) {
         crash_with_message("RDMC failed to exchange cm info\n");
     }
 
@@ -344,7 +350,12 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
 
     post_recvs(this);
     int tmp = -1;
-    if(!rdmc_connections->exchange(remote_index, 0, tmp) || tmp != 0) {
+    try {
+        rdmc_connections->exchange(remote_index, 0, tmp);
+        if(tmp != 0) {
+            crash_with_message("Failed to sync after endpoint creation");
+        }
+    } catch(tcp::socket_error&) {
         crash_with_message("Failed to sync after endpoint creation");
     }
 }
@@ -682,7 +693,11 @@ std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
         size_t size;
         uint64_t rkey;
 
-        if(!rdmc_connections->exchange(m, (uint64_t)mr.buffer, buffer) || !rdmc_connections->exchange(m, mr.size, size) || !rdmc_connections->exchange(m, mr.get_key(), rkey)) {
+        try {
+            rdmc_connections->exchange(m, (uint64_t)mr.buffer, buffer);
+            rdmc_connections->exchange(m, mr.size, size);
+            rdmc_connections->exchange(m, mr.get_key(), rkey);
+        } catch(tcp::socket_error& e) {
             fprintf(stderr, "WARNING: lost connection to node %u\n", m);
             throw rdma::connection_broken();
         }

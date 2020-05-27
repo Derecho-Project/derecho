@@ -123,9 +123,9 @@ void P2PConnectionManager::check_failures_loop() {
 
         util::polling_data.set_waiting(tid);
 #ifdef USE_VERBS_API
-        std::map<uint32_t, struct verbs_sender_ctxt> sctxt;
+        std::map<uint32_t, verbs_sender_ctxt> sctxt;
 #else
-        std::map<uint32_t, struct lf_sender_ctxt> sctxt;
+        std::map<uint32_t, lf_sender_ctxt> sctxt;
 #endif
 
         for(const auto& [node_id, p2p_conn] : p2p_connections) {
@@ -199,8 +199,9 @@ void P2PConnectionManager::check_failures_loop() {
         util::polling_data.reset_waiting(tid);
 
         for(auto nid : failed_node_indexes) {
+            dbg_default_debug("p2p_connection_manager detected failure/timeout on node {}", nid);
+            p2p_connections.at(nid)->get_res()->report_failure();
             if(failure_upcall) {
-                dbg_default_debug("p2p_connection_manager detected node {} timeouts. making failure_upcall.", nid);
                 failure_upcall(nid);
             }
         }

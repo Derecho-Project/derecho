@@ -22,7 +22,7 @@
 
 #include <derecho/utils/logger.hpp>
 
-#if defined(_PERFORMANCE_DEBUG) 
+#if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
   #include <derecho/utils/time.h>
 #endif  //_PERFORMANCE_DEBUG
 
@@ -189,7 +189,7 @@ public:
      * @param shard_num, the shard number of a subgroup
      * @return a std::string representation of the prefix
      */
-    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(true);
+    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(false);
 
     /** match prefix
      * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
@@ -527,9 +527,9 @@ public:
     virtual int64_t getLatestVersion() noexcept(false);
 
     /**
-     * get the last persisted index.
+     * get the last persisted version.
      */
-    virtual const int64_t getLastPersisted() noexcept(false);
+    virtual const int64_t getLastPersistedVersion() noexcept(false);
 
     /**
      * make a version with a version number and mhlc clock

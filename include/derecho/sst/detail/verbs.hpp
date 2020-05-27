@@ -68,8 +68,9 @@ private:
     void connect_qp();
 
 protected:
+    std::atomic<bool> remote_failed;
     /** Post a remote RDMA operation. */
-    int post_remote_send(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
+    int post_remote_send(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size, const int op, const bool completion);
 
 public:
     /** Index of the remote node. */
@@ -94,7 +95,7 @@ public:
     /** how many ops without completion to send before signaling. */
     uint32_t without_completion_send_signal_interval;
     /** context for the polling thread */
-    struct verbs_sender_ctxt without_completion_sender_ctxt;
+    verbs_sender_ctxt without_completion_sender_ctxt;
 
     /** Constructor; initializes Queue Pair, Memory Regions, and `remote_props`.
      */
@@ -108,6 +109,11 @@ class resources : public _resources {
 public:
     resources(int r_index, char *write_addr, char *read_addr, int size_w,
               int size_r);
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     /*
       wrapper functions that make up the user interface
       all call post_remote_send with different parameters
@@ -120,25 +126,31 @@ public:
     void post_remote_write(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write(const long long int offset, long long int size);
-    void post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size);
-    /** Post an RDMA write at an offset into remote memory. */
-    void post_remote_write_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    /** Post an RDMA write at the beginning address of remote memory, and also request a completion event for it. */
+    void post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int size);
+    /** Post an RDMA write at an offset into remote memory, and also request a completion event for it. */
+    void post_remote_write_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 };
 
 class resources_two_sided : public _resources {
-    int post_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    int post_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 
 public:
     resources_two_sided(int r_index, char *write_addr, char *read_addr, int size_w,
                         int size_r);
+    /**
+     * Report that the remote node this object is connected to has failed.
+     * This will cause all future remote operations to be no-ops.
+     */
+    void report_failure();
     void post_two_sided_send(const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_two_sided_send(const long long int offset, long long int size);
-    void post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int size);
+    void post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
-    void post_two_sided_send_with_completion(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
-    void post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int size);
-    void post_two_sided_receive(struct verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    void post_two_sided_send_with_completion(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
+    void post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int size);
+    void post_two_sided_receive(verbs_sender_ctxt* sctxt, const long long int offset, const long long int size);
 };
 
 bool add_node(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);

@@ -2,13 +2,73 @@
 
 #include <functional>
 #include <memory>
-#include <string>
 #include <optional>
+#include <stdexcept>
+#include <string>
 
 namespace tcp {
 
-struct exception {};
-struct connection_failure : public exception {};
+/**
+ * An exception that reports that a socket failed to connect and thus could not
+ * be constructed.
+ */
+struct connection_failure : public std::runtime_error {
+    connection_failure(const std::string& message = "") : runtime_error(message){};
+};
+
+/**
+ * An exception that indicates that some kind of communication failure occurred
+ * during a socket operation.
+ */
+struct socket_error : public std::runtime_error {
+    socket_error(const std::string& message = "") : runtime_error(message){};
+};
+
+/**
+ * An exception that reports that a socket operation failed because the socket 
+ * was closed.
+ */
+struct socket_closed_error : public socket_error {
+    socket_closed_error(const std::string& message = "") : socket_error(message){};
+};
+
+/**
+ * An exception that reports that a socket operation failed because of an I/O 
+ * error reported by the underlying OS socket system. Contains the "errno" 
+ * value reported by the socket operation.
+ */
+struct socket_io_error : public socket_error {
+    const int errno_value;
+    socket_io_error(int errno_value, const std::string& message = "")
+            : socket_error(message), errno_value(errno_value){};
+};
+
+/**
+ * An exception that reports that a socket read failed because the socket was 
+ * closed before the expected number of bytes could be read.
+ */
+struct incomplete_read_error : public socket_error {
+    incomplete_read_error(const std::string& message = "") : socket_error(message){};
+};
+
+/**
+ * An exception that reports that a socket operation failed because of the error
+ * "connection reset by peer." This is a subclass of socket_io_error with the
+ * errno value ECONNRESET.
+ */
+struct connection_reset_error : public socket_io_error {
+    connection_reset_error(const std::string& message = "") : socket_io_error(ECONNRESET, message) {};
+};
+
+/**
+ * An exception that reports that a socket operation failed because of the error
+ * "the local end of a connection-oriented socket has been shut down" (which 
+ * happens when the remote end terminates the TCP session). This is a subclass
+ * of socket_io_error with the errno value EPIPE.
+ */
+struct remote_closed_connection_error : public socket_io_error {
+    remote_closed_connection_error(const std::string& message = "") : socket_io_error(EPIPE, message) {};
+};
 
 class socket {
     int sock;
@@ -21,7 +81,6 @@ class socket {
     std::string remote_ip;
 
 public:
-
     /**
      * Constructs an empty, unconnected socket.
      */
@@ -31,10 +90,10 @@ public:
      * blocking until the connection succeeds.
      * @param server_ip The IP address of the remote host, as a string
      * @param server_port The port to connect to on the remote host
-     * @throws connection_failure if local socket construction or IP address
+     * @throw connection_failure if local socket construction or IP address
      * lookup fails.
      */
-    socket(std::string server_ip, uint16_t server_port, bool retry=true);
+    socket(std::string server_ip, uint16_t server_port, bool retry = true);
     socket(socket&& s);
 
     socket& operator=(socket& s) = delete;
@@ -66,10 +125,14 @@ public:
      * @param buffer A pointer to a byte buffer that should be used to store
      * the result of the read.
      * @param size The number of bytes to read.
-     * @return True if the read was successful, false if there was an error
-     * before size bytes could be read.
+     * @throw a subclass of socket_error if there was an error before all size
+     * bytes could be read. The type of exception indicates the type of error:
+     * socket_closed_error means the socket cannot be read from because it is
+     * closed, incomplete_read_error means the connection was terminated (i.e.
+     * read returned EOF) before all size bytes could be read, and 
+     * socket_io_error means some other error occurred during the read() call.
      */
-    bool read(char* buffer, size_t size);
+    void read(char* buffer, size_t size);
 
     /**
      * Attempts to read up to max_size bytes from socket and write them to the
@@ -91,18 +154,21 @@ public:
      * @param buffer A pointer to a byte buffer whose data should be sent over
      * the socket.
      * @param size The number of bytes from the buffer to send.
-     * @return True if the write was successful, false if there was an error
-     * before size bytes could be written.
+     * @throw a subclass of socket_error if there was an error before all size
+     * bytes could be written. The type of exception indicates the type of 
+     * error: socket_closed_error means the socket cannot be written to because
+     * it is closed, while socket_io_error or one of its subclasses means an 
+     * error occurred during the write() call.
      */
-    bool write(const char* buffer, size_t size);
+    void write(const char* buffer, size_t size);
 
     /**
      * Convenience method for sending a single POD object (e.g. an int) over
      * the socket.
      */
     template <typename T>
-    bool write(const T& obj) {
-        return write(reinterpret_cast<const char*>(&obj), sizeof(obj));
+    void write(const T& obj) {
+        write(reinterpret_cast<const char*>(&obj), sizeof(obj));
     }
 
     /**
@@ -112,21 +178,21 @@ public:
      * of the same size read from the socket.
      */
     template <typename T>
-    bool read(T& obj) {
-        return read(reinterpret_cast<char*>(&obj), sizeof(obj));
+    void read(T& obj) {
+        read(reinterpret_cast<char*>(&obj), sizeof(obj));
     }
 
     template <class T>
-    bool exchange(T local, T& remote) {
+    void exchange(T local, T& remote) {
         static_assert(std::is_pod<T>::value,
                       "Can't send non-pod type over TCP");
 
         if(sock < 0) {
-            fprintf(stderr, "WARNING: Attempted to write to closed socket\n");
-            return false;
+            throw socket_closed_error("Attempted to write to closed socket");
         }
 
-        return write((char*)&local, sizeof(T)) && read((char*)&remote, sizeof(T));
+        write((char*)&local, sizeof(T));
+        read((char*)&remote, sizeof(T));
     }
 };
 
@@ -138,8 +204,10 @@ public:
      * Constructs a connection listener ("server socket") that listens on the
      * given port of this machine's TCP interface.
      * @param port The port to listen on.
+     * @param queue_depth The length of the pending connection queue to create
+     * for the server socket. Defaults to 50.
      */
-    explicit connection_listener(uint16_t port);
+    explicit connection_listener(uint16_t port, int queue_depth = 50);
     /**
      * Blocks until a remote client makes a connection to this connection
      * listener, then returns a new socket connected to that client.
@@ -159,4 +227,3 @@ public:
     std::optional<socket> try_accept(int timeout_ms);
 };
 }  // namespace tcp
-

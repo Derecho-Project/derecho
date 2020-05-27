@@ -136,8 +136,6 @@ private:
     using external_caller_index_map = std::map<uint32_t, ExternalCaller<T>>;
 
     const node_id_t my_id;
-    bool is_starting_leader;
-    std::optional<tcp::socket> leader_connection;
     /**
      * The shared pointer holding deserialization context is obsolete. I (Weijia)
      * removed it because it complicated things: the deserialization context is
@@ -152,10 +150,6 @@ private:
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
-    /** Contains a TCP connection to each member of the group, for the purpose
-     * of transferring state information to new members during a view change.
-     * This connection pool is shared between Group and ViewManager */
-    std::shared_ptr<tcp::tcp_connections> tcp_sockets;
     /** Contains all state related to managing Views, including the
      * MulticastGroup and SST (since those change when the view changes). */
     ViewManager view_manager;
@@ -216,7 +210,7 @@ private:
     template <typename... Empty>
     std::enable_if_t<0 == sizeof...(Empty),
                      std::set<std::pair<subgroup_id_t, node_id_t>>>
-    construct_objects(const View&, const vector_int64_2d&) {
+    construct_objects(const View&, const vector_int64_2d&, bool) {
         return std::set<std::pair<subgroup_id_t, node_id_t>>();
     }
 
@@ -234,18 +228,22 @@ private:
      * @param old_shard_leaders The array of old shard leaders for each subgroup
      * (indexed by subgroup ID), which will contain -1 if there is no previous
      * leader for that shard.
+     * @param in_restart True if this node is in restart mode (in which case this
+     * function may be called multiple times if the restart view is aborted)
      * @return The set of subgroup IDs that are un-initialized because this node is
      * joining an existing group and needs to receive initial object state, paired
      * with the ID of the node that should be contacted to receive that state.
      */
     template <typename FirstType, typename... RestTypes>
     std::set<std::pair<subgroup_id_t, node_id_t>> construct_objects(
-            const View& curr_view, const vector_int64_2d& old_shard_leaders);
+            const View& curr_view, const vector_int64_2d& old_shard_leaders,
+            bool in_restart);
 
 public:
     /**
-     * Constructor that starts a new managed Derecho group with this node as
-     * the leader. 
+     * Constructor that starts or joins a Derecho group. Whether this node acts
+     * as the leader of a new group or joins an existing group is determined by 
+     * the Derecho configuration file (loaded by the conf module).
      *
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
@@ -267,9 +265,10 @@ public:
           Factory<ReplicatedTypes>... factories);
 
     /**
-     * Constructor that starts a new managed Derecho group with this node as
-     * the leader. 
-     *
+     * Constructor that starts or joins a Derecho group. Whether this node acts
+     * as the leader of a new group or joins an existing group is determined by 
+     * the Derecho configuration file (loaded by the conf module).
+     * 
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param factories A variable number of Factory functions, one for each

@@ -7,7 +7,7 @@
 # git_version.cpp in which the C++ constants are defined to have these values.
 # The new version of git_version.cpp is then added to the commit.
 
-version_regex='v([0-9]+)\.([0-9]+)\.?([0-9]*)-([0-9]+)-g([0-9|a-z]+)'
+version_regex='v([0-9]+)\.([0-9]+)\.?([0-9]*)rc?-([0-9]+)-g([0-9|a-z]+)'
 git_string=$(git describe --tags --long)
 
 if [[ $git_string =~ $version_regex ]]; then

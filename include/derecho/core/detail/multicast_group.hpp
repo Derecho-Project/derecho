@@ -67,7 +67,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
     unsigned int window_size;
     unsigned int heartbeat_ms;
     rdmc::send_algorithm rdmc_send_algorithm;
-    uint32_t rpc_port;
+    uint32_t state_transfer_port;
 
     static uint64_t compute_max_msg_size(
             const uint64_t max_payload_size,
@@ -103,14 +103,14 @@ struct DerechoParams : public mutils::ByteRepresentable {
                   unsigned int window_size,
                   unsigned int heartbeat_ms,
                   rdmc::send_algorithm rdmc_send_algorithm,
-                  uint32_t rpc_port)
+                  uint32_t state_transfer_port)
             : max_reply_msg_size(max_reply_payload_size + sizeof(header)),
               sst_max_msg_size(max_smc_payload_size + sizeof(header)),
               block_size(block_size),
               window_size(window_size),
               heartbeat_ms(heartbeat_ms),
               rdmc_send_algorithm(rdmc_send_algorithm),
-              rpc_port(rpc_port) {
+              state_transfer_port(state_transfer_port) {
         //if this is initialized above, DerechoParams turns abstract. idk why.
         max_msg_size = compute_max_msg_size(max_payload_size, block_size,
                                             max_payload_size > max_smc_payload_size);
@@ -129,7 +129,7 @@ struct DerechoParams : public mutils::ByteRepresentable {
         std::string prefix = "SUBGROUP/" + profile + "/";
         for(auto& field : Conf::subgroupProfileFields) {
             if(!hasCustomizedConfKey(prefix + field)) {
-                std::cout << "key" << (prefix + field) 
+                std::cout << "key" << (prefix + field)
                           << " not found in SUBGROUP section of derecho conf. "
                              " Look at derecho-sample.cfg for more information."
                           << std::endl;
@@ -138,29 +138,29 @@ struct DerechoParams : public mutils::ByteRepresentable {
         }
 
         uint64_t max_payload_size = getConfUInt64(prefix + Conf::subgroupProfileFields[0]);
-	uint64_t max_reply_payload_size = getConfUInt64(prefix + Conf::subgroupProfileFields[1]);
+        uint64_t max_reply_payload_size = getConfUInt64(prefix + Conf::subgroupProfileFields[1]);
         uint64_t max_smc_payload_size = getConfUInt64(prefix + Conf::subgroupProfileFields[2]);
         uint64_t block_size = getConfUInt64(prefix + Conf::subgroupProfileFields[3]);
         uint32_t window_size = getConfUInt32(prefix + Conf::subgroupProfileFields[4]);
         uint32_t timeout_ms = getConfUInt32(CONF_DERECHO_HEARTBEAT_MS);
         const std::string& algorithm = getConfString(prefix + Conf::subgroupProfileFields[5]);
-        uint32_t rpc_port = getConfUInt32(CONF_DERECHO_RPC_PORT);
+        uint32_t state_transfer_port = getConfUInt32(CONF_DERECHO_STATE_TRANSFER_PORT);
 
         return DerechoParams{
                 max_payload_size,
-		max_reply_payload_size,
+                max_reply_payload_size,
                 max_smc_payload_size,
                 block_size,
                 window_size,
                 timeout_ms,
                 DerechoParams::send_algorithm_from_string(algorithm),
-                rpc_port,
+                state_transfer_port,
         };
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(DerechoParams, max_msg_size, max_reply_msg_size,
                                   sst_max_msg_size, block_size, window_size,
-                                  heartbeat_ms, rdmc_send_algorithm, rpc_port);
+                                  heartbeat_ms, rdmc_send_algorithm, state_transfer_port);
 };
 
 /**
@@ -368,7 +368,7 @@ private:
      * @param msg_ts The timestamp of the message
      */
     void deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     /**
      * Same as the other deliver_message, but for the SSTMessage type
@@ -378,7 +378,7 @@ private:
      * @param msg_ts The timestamp of this message
      */
     void deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     /**
      * Enqueues a single message for persistence with the persistence manager.
@@ -393,7 +393,7 @@ private:
      * false if the message is a null message
      */
     bool version_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
     /**
      * Same as the other version_message, but for the SSTMessage type.
      * @param msg The message that should cause a new version to be registered
@@ -405,7 +405,7 @@ private:
      * false if the message is a null message
      */
     bool version_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
-        const persistent::version_t& version, const uint64_t& msg_timestamp);
+                         const persistent::version_t& version, const uint64_t& msg_timestamp);
 
     uint32_t get_num_senders(const std::vector<int>& shard_senders) {
         uint32_t num = 0;
