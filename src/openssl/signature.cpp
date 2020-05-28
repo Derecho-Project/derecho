@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstring>
 #include <derecho/openssl/signature.hpp>
 #include <openssl/bio.h>
 #include <openssl/err.h>
@@ -22,6 +23,40 @@ EnvelopeKey& EnvelopeKey::operator=(EnvelopeKey&& other) {
 
 int EnvelopeKey::get_max_size() {
     return EVP_PKEY_size(key.get());
+}
+
+std::string EnvelopeKey::to_pem_public() {
+    //Serialize the key to PEM format in memory
+    std::unique_ptr<BIO, DeleterFor<BIO>> memory_bio(BIO_new(BIO_s_mem()));
+    if(PEM_write_bio_PUBKEY(memory_bio.get(), key.get()) != 1) {
+        throw openssl_error(ERR_get_error(), "Write public key to memory");
+    }
+    //Copy the PEM string from the memory BIO to a C++ string
+    //(It would be nice if we could just make OpenSSL write directly into the C++ string)
+    char* memory_bio_data;
+    long data_size = BIO_get_mem_data(memory_bio.get(), &memory_bio_data);
+    std::string pem_string;
+    pem_string.resize(data_size);
+    memcpy(pem_string.data(), memory_bio_data, data_size);
+    return pem_string;
+}
+
+void EnvelopeKey::to_pem_public(const std::string& pem_file_name) {
+    FILE* pem_file = fopen(pem_file_name.c_str(), "w");
+    if(pem_file == NULL) {
+        switch(errno) {
+            case EACCES:
+            case EPERM:
+                throw permission_denied(errno, pem_file_name);
+            case ENOENT:
+                throw file_not_found(errno, pem_file_name);
+            default:
+                throw file_error(errno, pem_file_name);
+        }
+    }
+    if(PEM_write_PUBKEY(pem_file, key.get()) != 1) {
+        throw openssl_error(ERR_get_error(), "Write public key to file");
+    }
 }
 
 EnvelopeKey EnvelopeKey::from_pem_private(const std::string& pem_file_name) {

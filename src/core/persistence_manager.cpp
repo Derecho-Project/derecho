@@ -10,9 +10,11 @@
 namespace derecho {
 
 PersistenceManager::PersistenceManager(
+        std::shared_ptr<PublicKeyStore> public_key_store,
         std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
         const persistence_callback_t& _persistence_callback)
         : thread_shutdown(false),
+          node_public_keys(public_key_store),
           signature_size(0),
           persistence_callback(_persistence_callback),
           objects_by_subgroup_id(objects_map) {

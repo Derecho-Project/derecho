@@ -75,6 +75,20 @@ public:
      */
     int get_max_size();
     /**
+     * Writes the public-key component of this EnvelopeKey (i.e. the entire key
+     * if this EnvelopeKey is a public key) out to a PEM file on disk.
+     * @param pem_file_name The name (or path) of the PEM file to create
+     */
+    void to_pem_public(const std::string& pem_file_name);
+     /**
+     * Serializes the public-key component of this EnvelopeKey into PEM format,
+     * then returns the resulting PEM "file" in a string. This avoids the
+     * overhead of disk I/O if you need to send the file over the network.
+     * @return A string containing the PEM representation of this EnvelopeKey's
+     * public component.
+     */
+    std::string to_pem_public();
+    /**
      * Factory function that constructs an EnvelopeKey by loading a public key
      * from a PEM file on disk.
      * @param pem_file_name The name (or path) of the PEM file to read from

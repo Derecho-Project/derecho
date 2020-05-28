@@ -80,6 +80,15 @@ public:
      * subgroup.
      */
     SSTFieldVector<persistent::version_t> persisted_num;
+    /**
+     * This represents the highest persistent version number for which this
+     * node has verified a signature from all other nodes in the subgroup, if
+     * signatures are enabled. There is updated by the PersistenceManager, and
+     * contains one entry per subgroup. It will generally lag behind
+     * persisted_num, since updates are only verified once they have been
+     * signed locally.
+     */
+    SSTFieldVector<persistent::version_t> verified_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
@@ -177,6 +186,7 @@ public:
               delivered_num(num_subgroups),
               signatures(num_subgroups * signature_size),
               persisted_num(num_subgroups),
+              verified_num(num_subgroups),
               suspected(parameters.members.size()),
               changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
@@ -192,7 +202,8 @@ public:
               num_received_sst(num_received_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num, signatures,
-                persisted_num, vid, suspected, changes, joiner_ips,
+                persisted_num, verified_num,
+                vid, suspected, changes, joiner_ips,
                 joiner_gms_ports, joiner_state_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,

@@ -9,6 +9,7 @@
 
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/core/detail/container_template_functions.hpp>
+#include <derecho/core/detail/public_key_store.hpp>
 #include <derecho/core/detail/version_code.hpp>
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/core/git_version.hpp>
@@ -31,6 +32,7 @@ ViewManager::ViewManager(
         const bool any_persistent_objects,
         ReplicatedObjectReferenceMap& object_reference_map,
         PersistenceManager& persistence_manager,
+        std::shared_ptr<PublicKeyStore> public_key_store,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
@@ -43,7 +45,8 @@ ViewManager::ViewManager(
                         {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
-          persistence_manager(persistence_manager) {
+          persistence_manager(persistence_manager),
+          public_keys(public_key_store) {
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);
@@ -406,7 +409,7 @@ void ViewManager::truncate_logs() {
     }
 }
 
-void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
+void ViewManager::initialize_multicast_groups(const CallbackSet& callbacks) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
@@ -1409,9 +1412,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     // Set up TCP connections to the joined nodes
-    update_tcp_connections(*next_view);
-    // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(*next_view, old_shard_leaders_by_id);
+    update_tcp_connections();
+    // After doing that, shard leaders can send them RPC objects over state_transfer_port
+    send_objects_to_new_members(old_shard_leaders_by_id);
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
@@ -1428,6 +1431,11 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
             joiner_socket.write(CommitMessage::COMMIT);
         }
         joiner_sockets.clear();
+    }
+
+    // Receive keys from the joined nodes, if necessary, and send them this node's key
+    if(public_keys) {
+        exchange_keys_with_new_members();
     }
 
     // Delete the last three GMS predicates from the old SST in preparation for deleting it
@@ -1516,7 +1524,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
-void ViewManager::construct_multicast_group(CallbackSet callbacks,
+void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                             const uint32_t num_received_size,
                                             const uint32_t slot_size) {
@@ -1702,14 +1710,14 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     mutils::post_object(bind_socket_write, new_view);
 }
 
-void ViewManager::send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders) {
-    node_id_t my_id = new_view.members[new_view.my_rank];
+void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
+    node_id_t my_id = next_view->members[next_view->my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
             //if I was the leader of the shard in the old view...
             if(my_id == old_shard_leaders[subgroup_id][shard]) {
                 //send its object state to the new members
-                for(node_id_t shard_joiner : new_view.subgroup_shard_views[subgroup_id][shard].joined) {
+                for(node_id_t shard_joiner : next_view->subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }
@@ -1740,17 +1748,78 @@ void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_
     subgroup_object.send_object(joiner_socket.get());
 }
 
-void ViewManager::update_tcp_connections(const View& new_view) {
-    for(const node_id_t& removed_id : new_view.departed) {
+void ViewManager::update_tcp_connections() {
+    for(const node_id_t& removed_id : next_view->departed) {
         dbg_default_debug("Removing TCP connection for failed node {}", removed_id);
         tcp_sockets.delete_node(removed_id);
     }
-    for(const node_id_t& joiner_id : new_view.joined) {
+    for(const node_id_t& joiner_id : next_view->joined) {
         tcp_sockets.add_node(joiner_id,
-                             {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
-                              new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].state_transfer_port});
+                             {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
+                              next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
+}
+
+void ViewManager::exchange_public_keys() {
+    assert(public_keys);
+    for(int32_t i = 0; i < curr_view->num_members; ++i) {
+        if(i == curr_view->my_rank) {
+            continue;
+        }
+        bool have_other_key = public_keys->contains_key_for(curr_view->member_ips_and_ports[i].ip_address);
+        PublicKeyStatus my_status = have_other_key ? PublicKeyStatus::KEY_NOT_NEEDED : PublicKeyStatus::KEY_NEEDED;
+        PublicKeyStatus other_status;
+        tcp_sockets.exchange(curr_view->members[i], my_status, other_status);
+        //Since this node is joining the group, it should send its key first, then receive the other's
+        if(other_status == PublicKeyStatus::KEY_NEEDED) {
+            const ip_addr_t& my_ip = curr_view->member_ips_and_ports[curr_view->my_rank].ip_address;
+            std::string my_key_file = public_keys->get_key_for(my_ip).to_pem_public();
+            std::size_t size_of_file = my_key_file.size();
+            tcp_sockets.write(curr_view->members[i], reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
+            tcp_sockets.write(curr_view->members[i], my_key_file.data(), my_key_file.size());
+        }
+        if(!have_other_key) {
+            std::size_t size_of_file;
+            tcp_sockets.read(curr_view->members[i], reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
+            char file_buffer[size_of_file];
+            tcp_sockets.read(curr_view->members[i], file_buffer, size_of_file);
+            public_keys->add_public_key(curr_view->member_ips_and_ports[i].ip_address, file_buffer, size_of_file);
+            public_keys->persist_key_for(curr_view->member_ips_and_ports[i].ip_address);
+        }
+    }
+}
+
+void ViewManager::exchange_keys_with_new_members() {
+    assert(public_keys);
+    //Protocol: First, joiner and this node swap PublicKeyStatus codes.
+    //Joiner sends its key (if necessary), then receives my key (if necessary)
+    //This node receives the joiner's key (if necessary), then sends its own key (if necessary)
+    //CONCERN: Do we need to ensure that we go in the same order as exchange_public_keys, rather
+    //         than just whatever order the joined list uses? Might this deadlock?
+    for(const node_id_t& joiner_id : next_view->joined) {
+        const ip_addr_t& joiner_ip = next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address;
+        bool have_key = public_keys->contains_key_for(joiner_ip);
+        PublicKeyStatus my_status = have_key ? PublicKeyStatus::KEY_NOT_NEEDED : PublicKeyStatus::KEY_NEEDED;
+        PublicKeyStatus joiner_status;
+        tcp_sockets.exchange(joiner_id, my_status, joiner_status);
+        if(!have_key) {
+            std::size_t size_of_file;
+            tcp_sockets.read(joiner_id, reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
+            char file_buffer[size_of_file];
+            tcp_sockets.read(joiner_id, file_buffer, size_of_file);
+            public_keys->add_public_key(joiner_ip, file_buffer, size_of_file);
+            public_keys->persist_key_for(joiner_ip);
+        }
+        if(joiner_status == PublicKeyStatus::KEY_NEEDED) {
+            const ip_addr_t& my_ip = next_view->member_ips_and_ports[next_view->my_rank].ip_address;
+            std::string my_key_file = public_keys->get_key_for(my_ip).to_pem_public();
+            std::size_t size_of_file = my_key_file.size();
+            tcp_sockets.write(joiner_id, reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
+            tcp_sockets.write(joiner_id, my_key_file.data(), my_key_file.size());
+        }
+    }
+
 }
 
 uint32_t ViewManager::compute_num_received_size(const View& view) {

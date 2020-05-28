@@ -20,6 +20,7 @@
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
 #include "persistence_manager.hpp"
+#include "public_key_store.hpp"
 #include "replicated_interface.hpp"
 #include "restart_state.hpp"
 #include "rpc_manager.hpp"
@@ -100,6 +101,11 @@ struct JoinRequest {
 enum class ExternalClientRequest {
     GET_VIEW,      //!< GET_VIEW The external client wants to download the current View
     ESTABLISH_P2P  //!< ESTABLISH_P2P The external client wants to set up a P2P connection with this node
+};
+
+enum class PublicKeyStatus {
+    KEY_NEEDED,
+    KEY_NOT_NEEDED
 };
 
 template <typename T>
@@ -227,6 +233,13 @@ private:
      * persisted (because new updates have been delivered).
      */
     PersistenceManager& persistence_manager;
+    /**
+     * If signed logs are enabled, PublicKeyStore keeps track of the public keys
+     * for each node in the group; this will be null if signed logs are disabled.
+     * Needed in ViewManager because newly joining nodes must send their public
+     * keys to everyone else.
+     */
+    std::shared_ptr<PublicKeyStore> public_keys;
 
     /** Set to true in the constructor if this node must do a total restart
      * before completing group setup; false otherwise. */
@@ -367,16 +380,23 @@ private:
     std::vector<int> process_suspicions(DerechoSST& gmsSST);
     /**
      * Updates the TCP connections pool to reflect the joined and departed
-     * members in a new view. Removes connections to departed members, and
+     * members in next_view. Removes connections to departed members, and
      * initializes new connections to joined members.
-     * @param new_view The new view that is about to be installed.
      */
-    void update_tcp_connections(const View& new_view);
+    void update_tcp_connections();
+    /**
+     * Exchanges public-key information with the new members that will join in
+     * next_view, assuming signatures are enabled. This includes sending the
+     * local node's public key to each new member that doesn't already have it,
+     * and downloading public keys from the new members if this node doesn't
+     * have them.
+     */
+    void exchange_keys_with_new_members();
 
     /** Helper method for completing view changes; determines whether this node
      * needs to send Replicated Object state to each node that just joined, and then
      * sends the state if necessary. */
-    void send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders);
+    void send_objects_to_new_members(const vector_int64_2d& old_shard_leaders);
 
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
@@ -476,7 +496,6 @@ private:
      * changes in the SST.
      * @param curr_view The current view, which the proposed changes are relative to
      * @param gmsSST The SST containing the proposed/committed changes
-     * @param logger A logger for printing out debug information
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
@@ -544,7 +563,7 @@ private:
      * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      */
-    void construct_multicast_group(CallbackSet callbacks,
+    void construct_multicast_group(const CallbackSet& callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
                                    const uint32_t slot_size);
@@ -653,6 +672,8 @@ public:
      * @param persistence_manager A mutable reference to the PersistenceManager
      * stored in Group, so that ViewManager (and MulticastGroup) can send it
      * requests to persist new versions
+     * @param public_key_store A shared pointer to the PublicKeyStore set up by
+     * Group, so that ViewManager can add new keys to it when new nodes join.
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
@@ -661,6 +682,7 @@ public:
                 const bool any_persistent_objects,
                 ReplicatedObjectReferenceMap& object_reference_map,
                 PersistenceManager& persistence_manager,
+                std::shared_ptr<PublicKeyStore> public_key_store,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();
@@ -739,12 +761,19 @@ public:
     void send_logs();
 
     /**
+     * Setup method used only when signed logs are enabled: exchanges public
+     * keys with all current members of the group using TCP sockets (over the
+     * state transfer port).
+     */
+    void exchange_public_keys();
+
+    /**
      * Sets up RDMA sessions for the multicast groups within this group. This
      * should only be called once the initial view is committed by the leader.
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      */
-    void initialize_multicast_groups(CallbackSet callbacks);
+    void initialize_multicast_groups(const CallbackSet& callbacks);
 
     /**
      * Completes first-time setup of the ViewManager, including synchronizing

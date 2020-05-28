@@ -47,6 +47,20 @@ struct openssl_error : public std::runtime_error {
               reason_code(ERR_GET_REASON(error_code_packed)) {}
 };
 
+/**
+ * An exception that indicates that a function that operates on a caller-provided
+ * byte buffer failed because the buffer was too small. This is needed because
+ * of OpenSSL's C interface, which operates on raw byte buffers rather than
+ * expandable C++ containers.
+ */
+struct buffer_overflow : public std::runtime_error {
+    const std::size_t required_size;
+    buffer_overflow(const std::string& function_name, std::size_t required_size, std::size_t actual_size)
+            : runtime_error(function_name + ": needed a buffer of size " + std::to_string(required_size)
+                            + " but received one of size " + std::to_string(actual_size)),
+              required_size(required_size) {}
+};
+
 //The standard library doesn't contain any exception types to represent file-related errors,
 //but OpenSSL requires reading and writing to files, so we have to create some
 

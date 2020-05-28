@@ -20,6 +20,7 @@
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"
+#include "detail/public_key_store.hpp"
 #include "detail/rpc_manager.hpp"
 #include "detail/view_manager.hpp"
 #include "replicated.hpp"
@@ -146,8 +147,14 @@ private:
      * The user deserialization context for all objects serialized and deserialized. */
     // std::shared_ptr<IDeserializationContext> user_deserialization_context;
     IDeserializationContext* user_deserialization_context;
-
-    /** Persist the objects. Once persisted, persistence_manager updates the SST
+    /**
+     * If signed logs are enabled, this keeps track of the public keys for other
+     * nodes in the group. If not, this will be a null pointer. Shared with the
+     * ViewManager and PersistenceManager, since ViewManager receives keys from
+     * new members and PersistenceManager uses them to verify signatures.
+     */
+    std::shared_ptr<PublicKeyStore> public_keys;
+    /** Persists the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
     /** Contains all state related to managing Views, including the
@@ -242,7 +249,7 @@ private:
 public:
     /**
      * Constructor that starts or joins a Derecho group. Whether this node acts
-     * as the leader of a new group or joins an existing group is determined by 
+     * as the leader of a new group or joins an existing group is determined by
      * the Derecho configuration file (loaded by the conf module).
      *
      * @param callbacks The set of callback functions for message delivery
@@ -250,7 +257,7 @@ public:
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param deserialization_context The context used for deserialization
-     * purpose. The application is responsible to keep it alive during Group 
+     * purpose. The application is responsible to keep it alive during Group
      * object lifetime.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
@@ -266,9 +273,9 @@ public:
 
     /**
      * Constructor that starts or joins a Derecho group. Whether this node acts
-     * as the leader of a new group or joins an existing group is determined by 
+     * as the leader of a new group or joins an existing group is determined by
      * the Derecho configuration file (loaded by the conf module).
-     * 
+     *
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param factories A variable number of Factory functions, one for each

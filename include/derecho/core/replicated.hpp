@@ -63,8 +63,7 @@ inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegis
 template <typename T>
 class Replicated : public ReplicatedObject, public persistent::ITemporalQueryFrontierProvider {
 private:
-    /** persistent registry for persistent<t>
-     */
+    /** The PersistentRegistry for all Persistent<T> fields in this object */
     std::unique_ptr<persistent::PersistentRegistry> persistent_registry;
 #if defined(_PERFORMANCE_DEBUG)
 public:
@@ -90,7 +89,7 @@ private:
      */
     const uint32_t shard_num;
     /**
-     * The Signer object to use for signing updates to this object, if signatures are
+     * The Signer to use for signing updates to this object, if signatures are
      * enabled. If signatures are disabled, this will be null.
      */
     std::unique_ptr<openssl::Signer> signer;

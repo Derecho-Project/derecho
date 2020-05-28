@@ -58,6 +58,7 @@ private:
 #define CONF_PERS_MAX_DATA_SIZE "PERS/max_data_size"
 #define CONF_PERS_SIGNED_LOG "PERS/signed_log"
 #define CONF_PERS_PRIVATE_KEY_FILE "PERS/private_key_file"
+#define CONF_PERS_PUBLIC_KEY_DIRECTORY "PERS/public_key_directory"
 #define CONF_LOGGER_DEFAULT_LOG_NAME "LOGGER/default_log_name"
 #define CONF_LOGGER_DEFAULT_LOG_LEVEL "LOGGER/default_log_level"
     // Configuration Table:
@@ -104,6 +105,7 @@ private:
             {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
             {CONF_PERS_SIGNED_LOG, "false"},
             {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
+            {CONF_PERS_PUBLIC_KEY_DIRECTORY, "public_keys"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};
