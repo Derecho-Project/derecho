@@ -34,17 +34,19 @@ std::unique_ptr<rdmc::barrier_group> universal_barrier_group;
 
 struct exp_result {
     uint32_t num_nodes;
+    uint num_senders_selector;
     long long unsigned int max_msg_size;
-    uint32_t num_senders_selector;
-    uint32_t delivery_mode;
+    unsigned int window_size;
+    uint num_messages;
+    uint delivery_mode;
     double latency;
     double stddev;
 
     void print(std::ofstream& fout) {
-        fout << num_nodes << " " << max_msg_size << " "
-             << num_senders_selector << " "
-             << delivery_mode << " " << latency << " "
-             << stddev << endl;
+        fout << num_nodes << " " << num_senders_selector << " "
+             << max_msg_size << " " << window_size << " "
+             << num_messages << " " << delivery_mode << " "
+             << latency << stddev << endl;
     }
 };
 
@@ -206,7 +208,10 @@ int main(int argc, char* argv[]) {
 
     // log the result at the leader node
     if(my_rank == 0) {
-        log_results(exp_result{num_nodes, msg_size, num_senders_selector, delivery_mode, avg_latency, avg_std_dev}, "data_latency");
+        log_results(exp_result{num_nodes, num_senders_selector, msg_size,
+                               getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
+                               delivery_mode, avg_latency, avg_std_dev},
+                               "data_latency");
     }
     managed_group.barrier_sync();
     managed_group.leave();
