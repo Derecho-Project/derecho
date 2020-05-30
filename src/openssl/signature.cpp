@@ -55,8 +55,10 @@ void EnvelopeKey::to_pem_public(const std::string& pem_file_name) {
         }
     }
     if(PEM_write_PUBKEY(pem_file, key.get()) != 1) {
+        fclose(pem_file);
         throw openssl_error(ERR_get_error(), "Write public key to file");
     }
+    fclose(pem_file);
 }
 
 EnvelopeKey EnvelopeKey::from_pem_private(const std::string& pem_file_name) {
