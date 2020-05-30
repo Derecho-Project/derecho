@@ -46,7 +46,7 @@ struct exp_result {
         fout << num_nodes << " " << num_senders_selector << " "
              << max_msg_size << " " << window_size << " "
              << num_messages << " " << delivery_mode << " "
-             << latency << stddev << endl;
+             << latency << " " << stddev << endl;
     }
 };
 
