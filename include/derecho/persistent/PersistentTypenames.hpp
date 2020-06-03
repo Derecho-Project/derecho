@@ -31,15 +31,22 @@ struct PersistentObjectFunctions {
     /**
      * The "update signature" function in a persistent object should update the
      * provided Signer object (parameter 2) with the state of the object in a
-     * specific version (parameter 1).
+     * specific version (parameter 1). It returns the number of bytes that were
+     * added to the Signer.
      */
-    std::function<void(const version_t&, openssl::Signer&)> update_signature;
+    std::function<std::size_t(const version_t&, openssl::Signer&)> update_signature;
     /**
      * The "add signature" function in a persistent object should add the
      * provided signature (parameter 2) to the log at the specified version
      * number (parameter 1).
      */
     std::function<void(const version_t&, const unsigned char*)> add_signature;
+    /**
+     * The "update verifier" function should update the provided Verifier object
+     * (parameter 2) with the state of the object in a specific version
+     * (parameter 1).
+     */
+    std::function<void(const version_t&, openssl::Verifier&)> update_verifier;
     /**
      * The "persist" function in a persistent object should persist a batch of
      * versions to persistent storage, up to the specified version.

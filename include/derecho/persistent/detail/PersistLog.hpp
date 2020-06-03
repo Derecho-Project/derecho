@@ -57,6 +57,7 @@ class PersistLog {
 public:
     // LogName
     const std::string m_sName;
+    /** The size, in bytes, of a signature in the log. This is a constant based on the configured private key. */
     const uint32_t signature_size;
     // HLCIndex
     std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
@@ -150,6 +151,13 @@ public:
     virtual void add_signature(const version_t& ver, const unsigned char* signature)
             = 0;
 
+    /**
+     * Retrieve a signature from a specified version
+     * @param ver - version
+     * @param signature - A byte buffer into which the signature will be copied.
+     * Must be at least signature_size bytes.
+     */
+    virtual void get_signature(const version_t& ver, unsigned char* signature) = 0;
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]

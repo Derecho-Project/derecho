@@ -187,6 +187,12 @@ class Verifier {
 public:
     Verifier(const EnvelopeKey& public_key, DigestAlgorithm digest_type);
     /**
+     * @return the "maximum signature size" (in bytes) reported by the public
+     * key associated with this Signer. For RSA public keys, this is the exact
+     * size of every signature and can be used as the size of signature buffers.
+     */
+    int get_max_signature_size();
+    /**
      * Initializes the Verifier to start verifying a new message. Must be
      * called before add_bytes or finalize.
      */

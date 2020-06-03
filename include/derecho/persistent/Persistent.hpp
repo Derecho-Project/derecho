@@ -89,6 +89,18 @@ public:
     /* Destructor */
     virtual ~PersistentRegistry();
 
+    /**
+     * Initializes the PersistentRegistry's cache of the last signature in the
+     * log, so that the first call to sign() can correctly continue the chain
+     * of signatures. If this is called with a version of INVALID_VERSION, the
+     * "last signature" will be initialized to an empty "genesis signature."
+     * @param version The version that was signed by the last signature
+     * @param signature The last signature in the log (in a byte buffer)
+     * @param signature_size The size of the signature, in bytes
+     */
+    void initializeLastSignature(const version_t& version, const unsigned char* signature, std::size_t signature_size);
+
+
     /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false);
 
@@ -110,6 +122,18 @@ public:
      * be placed after running this function
      */
     void sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
+
+    /**
+     * Verifies the log up to the specified version against the specified
+     * signature, using a Verifier that has been initialized with the
+     * appropriate public key.
+     * @param version The version to verify up to
+     * @param verifier The Verifier object to use for digesting and verifying
+     * the log, intialized with the public key corresponding to the signature
+     * @param signature A signature over the log up to the specified version
+     * @return True if the signature verifies, false if it doesn't
+     */
+    bool verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature);
 
     /**
      * Persist versions up to a specified version, which should be the result of
@@ -233,6 +257,18 @@ protected:
      */
     std::map<std::size_t, PersistentObjectFunctions> _registry;
 
+    /**
+     * The last (most recent) signature to be added to a persistent log entry.
+     * This is cached in memory since it is needed for the next call to sign()
+     * in order to include the previous entry's signature in the next entry's
+     * signed data.
+     */
+    std::vector<unsigned char> last_signature;
+    /**
+     * The version number associated with the last signature to be added to a
+     * persistent log entry.
+     */
+    version_t last_signed_version;
     /**
      * Set the earliest version to serialize for recovery.
      */
@@ -560,8 +596,10 @@ public:
      * Update the provided Signer with the state of T at the specified version.
      * This should not finalize the Signer, since other Persistent fields in
      * the same Replicated object might need to update it too.
+     * @return the number of bytes added to the Signer, i.e. the size of the
+     * log entry at the specified version
      */
-    virtual void update_signature(const version_t& ver, openssl::Signer& signer);
+    virtual std::size_t update_signature(const version_t& ver, openssl::Signer& signer);
 
     /**
      * Add the provided signature to the specified version in the log. The length
@@ -569,6 +607,27 @@ public:
      * this log.
      */
     virtual void add_signature(const version_t& ver, const unsigned char* signature);
+
+    /**
+     * @return the size, in bytes, of each signature in this Persistent object's log.
+     * Useful for allocating a correctly-sized buffer before calling get_signature.
+     */
+    virtual std::size_t get_signature_size();
+
+    /**
+     * Retrieves the signature associated with the specified version and copies
+     * it into the provided buffer, which must be of the correct length.
+     * @param ver The version to get the signature for
+     * @param signature A byte buffer into which the signature will be placed
+     */
+    virtual void get_signature(const version_t& ver, unsigned char* signature);
+
+    /**
+     * Update the provided Verifier with the state of T at the specified version.
+     * This is analogous to update_signature, only for verifying the log against
+     * an existing signature.
+     */
+    virtual void update_verifier(const version_t& ver, openssl::Verifier& verifier);
     /**
      * persist versions
      * @param version The version to persist up to

@@ -396,6 +396,27 @@ void FilePersistLog::add_signature(const version_t& version,
     }
 }
 
+void FilePersistLog::get_signature(const version_t& version, unsigned char* signature) {
+    LogEntry* ple = nullptr;
+
+    FPL_RDLOCK;
+
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            version,
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == version) {
+        memcpy(signature, ple->fields.signature, signature_size);
+    }
+}
+
 int64_t FilePersistLog::getLength() noexcept(false) {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;
@@ -681,7 +702,7 @@ void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
         // CAUTION:
         // The persist API is changed for Edward's convenience by adding a version parameter
         // This has a widespreading on the design and needs extensive test before replying on
-        // it. 
+        // it.
         persist(LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver, true);
     } catch(uint64_t e) {
         FPL_UNLOCK;

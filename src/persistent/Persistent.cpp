@@ -10,7 +10,8 @@ PersistentRegistry::PersistentRegistry(
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
         uint32_t shard_num) : _subgroup_prefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
-                              _temporal_query_frontier_provider(tqfp) {
+                              _temporal_query_frontier_provider(tqfp),
+                              last_signed_version(INVALID_VERSION) {
 }
 
 PersistentRegistry::~PersistentRegistry() {
@@ -37,13 +38,32 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
     return min;
 }
 
+void PersistentRegistry::initializeLastSignature(const version_t& version,
+                                              const unsigned char* signature, std::size_t signature_size) {
+    if(signature_size != last_signature.size()) {
+        last_signature.resize(signature_size);
+        //On the first call to initialize_signature with version == INVALID_VERSION,
+        //this will initialize last_signature to all zeroes, which is our "genesis signature"
+    }
+    if(signature_size > 0 && version != INVALID_VERSION
+       && (last_signed_version == INVALID_VERSION || last_signed_version < version)) {
+        memcpy(last_signature.data(), signature, signature_size);
+        last_signed_version = version;
+    }
+}
+
 void PersistentRegistry::sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
     //Find the last version successfully persisted to disk so we know where to start
     version_t last_signed_version = getMinimumLatestPersistedVersion();
     for(version_t version = last_signed_version; version <= latest_version; ++version) {
         signer.init();
+        std::size_t bytes_signed = 0;
         for(auto& entry : _registry) {
-            entry.second.update_signature(version, signer);
+            bytes_signed += entry.second.update_signature(version, signer);
+        }
+        if(bytes_signed > 0) {
+            //If this version's log entry is non-empty, add the previous version's signature to the signed data
+            signer.add_bytes(last_signature.data(), last_signature.size());
         }
         signer.finalize(signature_buffer);
         //After computing a signature over all fields of the object, go back and
@@ -51,7 +71,20 @@ void PersistentRegistry::sign(const version_t& latest_version, openssl::Signer& 
         for(auto& entry : _registry) {
             entry.second.add_signature(version, signature_buffer);
         }
+        memcpy(last_signature.data(), signature_buffer, last_signature.size());
+        last_signed_version = version;
     }
+}
+
+bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature) {
+    //This only verifies the specified version, but we should probably verify a range of versions
+    verifier.init();
+    for(auto& entry : _registry) {
+        entry.second.update_verifier(version, verifier);
+    }
+    //TODO: Find the "previous" version from this one, which is not necessarily version - 1
+    //Then get its signature with entry.second.get_signature() and add that to the verifier
+    return verifier.finalize(signature, verifier.get_max_signature_size());
 }
 
 void PersistentRegistry::persist(const version_t& latest_version) noexcept(false) {

@@ -195,6 +195,10 @@ Verifier::Verifier(const EnvelopeKey& _public_key, DigestAlgorithm digest_type)
           digest_type(digest_type),
           digest_context(EVP_MD_CTX_new()) {}
 
+int Verifier::get_max_signature_size() {
+    return public_key.get_max_size();
+}
+
 void Verifier::init() {
     if(EVP_MD_CTX_reset(digest_context.get()) != 1) {
         throw openssl_error(ERR_get_error(), "EVP_MD_CTX_reset");

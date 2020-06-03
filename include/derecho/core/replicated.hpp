@@ -291,6 +291,19 @@ public:
                          unsigned char* signature) noexcept(false);
 
     /**
+     * Verifies the persistent log entry at the specified version against the
+     * provided signature.
+     * @param version The logged version to verify
+     * @param verifier The Verifier to use, initialized with the public key that
+     * should correspond to the signature
+     * @param other_signature The signature to verify against, presumably from
+     * some other node
+     */
+    virtual bool verify_log(const persistent::version_t version,
+                            openssl::Verifier& verifier,
+                            const unsigned char* other_signature);
+
+    /**
      * trim the logs to a version, inclusively.
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed

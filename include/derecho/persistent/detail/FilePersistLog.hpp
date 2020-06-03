@@ -194,6 +194,7 @@ public:
                                     const bool preLocked = false) noexcept(false);
     virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func);
     virtual void add_signature(const version_t& ver, const unsigned char* signature);
+    virtual void get_signature(const version_t& ver, unsigned char* signature);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
     virtual void trim(const HLC& hlc) noexcept(false);

@@ -121,14 +121,15 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
         //"version function" expected by PersistentRegistry.
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
-                {std::bind(&Persistent<ObjectType, storageType>::version_with_hlc, this, _1, _2),                //make new version
-                 std::bind(&Persistent<ObjectType, storageType>::update_signature, this, _1, _2),   //update signature at version
-                 std::bind(&Persistent<ObjectType, storageType>::add_signature, this, _1, _2),      //add signature to version
-                 std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),                //persist up to version
-                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),    //trim by version:(const int64_t)
-                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),           //get the latest version in memory
-                 std::bind(&Persistent<ObjectType, storageType>::getLastPersistedVersion, this),    //get the latest persisted version
-                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, _1)}               //truncate persistent versions
+                {std::bind(&Persistent<ObjectType, storageType>::version_with_hlc, this, _1, _2),  //make new version
+                 std::bind(&Persistent<ObjectType, storageType>::update_signature, this, _1, _2),  //update signature at version
+                 std::bind(&Persistent<ObjectType, storageType>::add_signature, this, _1, _2),     //add signature to version
+                 std::bind(&Persistent<ObjectType, storageType>::update_verifier, this, _1, _2),   //update verifier at version
+                 std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),               //persist up to version
+                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),   //trim by version:(const int64_t)
+                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),          //get the latest version in memory
+                 std::bind(&Persistent<ObjectType, storageType>::getLastPersistedVersion, this),   //get the latest persisted version
+                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, _1)}              //truncate persistent versions
         );
     }
 }
@@ -155,6 +156,13 @@ Persistent<ObjectType, storageType>::Persistent(
     initialize_object_from_log(object_factory, &dm);
     // Register Callbacks
     register_callbacks();
+    version_t latest_version = getLatestVersion();
+    std::unique_ptr<unsigned char[]> latest_signature;
+    if(latest_version != INVALID_VERSION) {
+        latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
+        get_signature(latest_version, latest_signature.get());
+    }
+    persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
 }
 
 template <typename ObjectType,
@@ -468,20 +476,44 @@ void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::update_signature(const version_t& ver, openssl::Signer& signer) {
-    this->m_pLog->processEntryAtVersion(ver,[&signer](const void* data,const std::size_t& size){
-            if (size > 0) {
-                signer.add_bytes(data, size);
-            }
-        });
+std::size_t Persistent<ObjectType, storageType>::update_signature(const version_t& ver, openssl::Signer& signer) {
+    std::size_t bytes_added = 0;
+    this->m_pLog->processEntryAtVersion(ver, [&signer, &bytes_added](const void* data, const std::size_t& size) {
+        if(size > 0) {
+            signer.add_bytes(data, size);
+        }
+        bytes_added = size;
+    });
+    return bytes_added;
 }
 
 template <typename ObjectType,
           StorageType storageType>
 void Persistent<ObjectType, storageType>::add_signature(const version_t& ver, const unsigned char* signature) {
-    this->m_pLog->add_signature(ver,signature);
+    this->m_pLog->add_signature(ver, signature);
 }
 
+template <typename ObjectType,
+          StorageType storageType>
+void Persistent<ObjectType, storageType>::get_signature(const version_t& ver, unsigned char* signature) {
+    this->m_pLog->get_signature(ver, signature);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+std::size_t Persistent<ObjectType, storageType>::get_signature_size() {
+    return this->m_pLog->signature_size;
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+void Persistent<ObjectType, storageType>::update_verifier(const version_t& ver, openssl::Verifier& verifier) {
+    this->m_pLog->processEntryAtVersion(ver, [&verifier](const void* data, const std::size_t& size) {
+        if(size > 0) {
+            verifier.add_bytes(data, size);
+        }
+    });
+}
 
 template <typename ObjectType,
           StorageType storageType>
