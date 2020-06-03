@@ -13,35 +13,37 @@ namespace persistent {
 #define LOG_FILE_SUFFIX "log"
 #define DATA_FILE_SUFFIX "data"
 #define SWAP_FILE_SUFFIX "swp"
+//Every log entry will be padded out to this size, which must be page-aligned
 #define MAX_LOG_ENTRY_SIZE (1024)
+//Similarly, the size of a meta header must be page-aligned
+#define META_HEADER_SIZE (256)
 
 // meta header format
-typedef union meta_header {
+union MetaHeader {
     struct {
         int64_t head;  // the head index
         int64_t tail;  // the tail index
         int64_t ver;   // the latest version number.
-                       // uint64_t d_head;  // the data head offset
-                       // uint64_t d_tail;  // the data tail offset
     } fields;
-    uint8_t bytes[256];
-    bool operator==(const union meta_header& other) {
-        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
+    uint8_t bytes[META_HEADER_SIZE];
+    bool operator==(const MetaHeader& other) {
+        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail)
+               && (this->fields.ver == other.fields.ver);
     };
-} MetaHeader;
+};
 
 // log entry format
-typedef union log_entry {
+union LogEntry {
     struct {
-        int64_t ver;     // version of the data
-        uint64_t dlen;   // length of the data
-        uint64_t ofst;   // offset of the data in the memory buffer
-        uint64_t hlc_r;  // realtime component of hlc
-        uint64_t hlc_l;  // logic component of hlc
+        int64_t ver;       // version of the data
+        uint64_t dlen;     // length of the data
+        uint64_t ofst;     // offset of the data in the memory buffer
+        uint64_t hlc_r;    // realtime component of hlc
+        uint64_t hlc_l;    // logic component of hlc
         char signature[];  // signature
     } fields;
     uint8_t bytes[MAX_LOG_ENTRY_SIZE];
-} LogEntry;
+};
 
 // TODO: make this hard-wired number configurable.
 // Currently, we allow 1M(2^20-1) log entries and
@@ -56,27 +58,25 @@ typedef union log_entry {
 
 // helpers:
 ///// READ or WRITE LOCK on LOG REQUIRED to use the following MACROs!!!!
-#define META_HEADER ((MetaHeader*)(&(this->m_currMetaHeader)))
-#define META_HEADER_PERS ((MetaHeader*)(&(this->m_persMetaHeader)))
 #define LOG_ENTRY_ARRAY ((LogEntry*)(this->m_pLog))
 
-#define NUM_USED_SLOTS (META_HEADER->fields.tail - META_HEADER->fields.head)
-// #define NUM_USED_SLOTS_PERS   (META_HEADER_PERS->tail - META_HEADER_PERS->head)
+#define NUM_USED_SLOTS (m_currMetaHeader.fields.tail - m_currMetaHeader.fields.head)
+// #define NUM_USED_SLOTS_PERS   (m_persMetaHeader.tail - m_persMetaHeader.head)
 #define NUM_FREE_SLOTS (MAX_LOG_ENTRY - 1 - NUM_USED_SLOTS)
 // #define NUM_FREE_SLOTS_PERS   (MAX_LOG_ENTRY - 1 - NUM_USERD_SLOTS_PERS)
 
 #define LOG_ENTRY_AT(idx) (LOG_ENTRY_ARRAY + (int)((idx) % MAX_LOG_ENTRY))
-#define NEXT_LOG_ENTRY LOG_ENTRY_AT(META_HEADER->fields.tail)
+#define NEXT_LOG_ENTRY LOG_ENTRY_AT(m_currMetaHeader.fields.tail)
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
-        MAX(META_HEADER_PERS->fields.tail, META_HEADER->fields.head))
-#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? -1 : META_HEADER->fields.tail - 1)
+        MAX(m_persMetaHeader.fields.tail, m_currMetaHeader.fields.head))
+#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? -1 : m_currMetaHeader.fields.tail - 1)
 #define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
 
 #define NEXT_DATA_OFST ((CURR_LOG_IDX == -1) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
 #define NEXT_DATA ((void*)((uint64_t)this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
-#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(META_HEADER->fields.head)->fields.ofst))
+#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
 #define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
 
 #define PAGE_SIZE (getpagesize())
@@ -192,7 +192,7 @@ public:
     virtual const void* getEntry(const HLC& hlc) noexcept(false);
     virtual const version_t persist(const version_t& ver,
                                     const bool preLocked = false) noexcept(false);
-    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*,const std::size_t& size)>& func);
+    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func);
     virtual void add_signature(const version_t& ver, const unsigned char* signature);
     virtual void trimByIndex(const int64_t& eno) noexcept(false);
     virtual void trim(const version_t& ver) noexcept(false);
@@ -209,7 +209,7 @@ public:
         int64_t idx;
         // RDLOCK for validation
         FPL_RDLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, m_currMetaHeader.fields.head, m_currMetaHeader.fields.tail);
         if(idx == -1) {
             FPL_UNLOCK;
             return;
@@ -220,9 +220,9 @@ public:
         // search?
         // WRLOCK for trim
         FPL_WRLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, m_currMetaHeader.fields.head, m_currMetaHeader.fields.tail);
         if(idx != -1) {
-            META_HEADER->fields.head = (idx + 1);
+            m_currMetaHeader.fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
                 // What version number should be supplied to persist in this case?
@@ -353,8 +353,8 @@ private:
     //dbg functions
     void dbgDumpMeta() {
         dbg_default_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
-        dbg_default_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)META_HEADER->fields.head, (int64_t)META_HEADER->fields.tail);
-        dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
+        dbg_default_trace("META_HEADER:head={0},tail={1}", (int64_t)m_currMetaHeader.fields.head, (int64_t)m_currMetaHeader.fields.tail);
+        dbg_default_trace("META_HEADER_PERS:head={0},tail={1}", (int64_t)m_persMetaHeader.fields.head, (int64_t)m_persMetaHeader.fields.tail);
         dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
     }
 #endif  // NDEBUG
