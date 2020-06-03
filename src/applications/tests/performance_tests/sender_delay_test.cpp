@@ -35,7 +35,7 @@ struct exp_result {
     }
 };
 
-void busy_wait(uint32_t wait_time) {
+void busy_wait(uint32_t wait_time, volatile bool& done) {
     struct timespec start_time, end_time;
     clock_gettime(CLOCK_REALTIME, &start_time);
 
@@ -43,10 +43,16 @@ void busy_wait(uint32_t wait_time) {
         // wait forever
         while(true) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
+            if(done) {
+                return;
+            }
         }
     }
 
     while(true) {
+        if(done) {
+            return;
+        }
         clock_gettime(CLOCK_REALTIME, &end_time);
         long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
         if(nanoseconds_elapsed >= wait_time * 1000) {
@@ -82,7 +88,7 @@ int main(int argc, char* argv[]) {
     uint num_slow_senders = 0;
     if(num_slow_senders_selector == 1) {
         num_slow_senders = num_nodes / 2;
-    } else if (num_slow_senders_selector == 2) {
+    } else if(num_slow_senders_selector == 2) {
         num_slow_senders = 1;
     }
 
@@ -96,14 +102,14 @@ int main(int argc, char* argv[]) {
                                num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
         // increment the total number of messages delivered
         ++num_delivered;
-        if(num_delivered == num_messages * (num_nodes-num_slow_senders)) {
+        if(num_delivered == num_messages * (num_nodes - num_slow_senders)) {
             // here take the time
             struct timespec end_time;
             clock_gettime(CLOCK_REALTIME, &end_time);
             // compute time elapsed btw the start and the delivery of a specific message (not the last one)
             nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
         }
-        if(num_delivered == num_messages * num_nodes) {
+        if(num_delivered == num_messages * (num_nodes - num_slow_senders)) {
             done = true;
         }
     };
@@ -151,8 +157,8 @@ int main(int argc, char* argv[]) {
 
     auto send_slow = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
-        for(uint i = 0; i < num_messages; ++i) {
-            busy_wait(wait_time);
+        for(uint i = 0; i < num_messages && !done; ++i) {
+            busy_wait(wait_time, done);
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
             raw_subgroup.send(max_msg_size, [](char* buf) {});
@@ -181,7 +187,7 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     // calculate bandwidth measured locally
-    double bw = (max_msg_size * num_messages * (num_nodes-num_slow_senders) + 0.0) / nanoseconds_elapsed;
+    double bw = (max_msg_size * num_messages * (num_nodes - num_slow_senders) + 0.0) / nanoseconds_elapsed;
     // aggregate bandwidth from all nodes
     double avg_bw = aggregate_bandwidth(members_order, members_order[node_rank], bw);
     // log the result at the leader node
