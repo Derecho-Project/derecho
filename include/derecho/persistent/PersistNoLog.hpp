@@ -32,12 +32,12 @@ namespace persistent {
 template <typename ObjectType, StorageType storageType = ST_FILE>
 void saveNoLogObjectInFile(
         ObjectType& obj,
-        const char* object_name) noexcept(false);
+        const char* object_name);
 
 template <typename ObjectType>
 void saveNoLogObjectInMem(
         ObjectType& obj,
-        const char* object_name) noexcept(false) {
+        const char* object_name) {
     saveNoLogObjectInFile<ObjectType, ST_MEM>(obj, object_name);
 }
 
@@ -48,12 +48,12 @@ void saveNoLogObjectInMem(
 template <typename ObjectType, StorageType storageType = ST_FILE>
 std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         const char* object_name,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
 template <typename ObjectType>
 std::unique_ptr<ObjectType> loadNoLogObjectFromMem(
         const char* object_name,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false) {
+        mutils::DeserializationManager* dm = nullptr) {
     return loadNoLogObjectFromFile<ObjectType, ST_MEM>(object_name, dm);
 }
 }

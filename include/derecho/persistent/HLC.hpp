@@ -14,16 +14,16 @@ public:
 
     // constructors
     HLC()
-    noexcept(false);
+   ;
 
     HLC(uint64_t _r, uint64_t _l);
 
     // destructors
-    virtual ~HLC() noexcept(false);
+    virtual ~HLC();
 
     // ticking method - thread safe
-    virtual void tick(bool thread_safe = true) noexcept(false);
-    virtual void tick(const HLC& msgHlc, bool thread_safe = true) noexcept(false);
+    virtual void tick(bool thread_safe = true);
+    virtual void tick(const HLC& msgHlc, bool thread_safe = true);
 
     // comparators
     virtual bool operator>(const HLC& hlc) const noexcept(true);
@@ -46,6 +46,6 @@ public:
 #define HLC_EXP_SPIN_UNLOCK(x) HLC_EXP(4, (x))
 
 // read the rtc clock in microseconds
-uint64_t read_rtc_us() noexcept(false);
+uint64_t read_rtc_us();
 
 #endif  //HLC_HPP

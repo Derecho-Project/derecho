@@ -258,27 +258,27 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const persistent::version_t get_minimum_latest_persisted_version() noexcept(false);
+    const persistent::version_t get_minimum_latest_persisted_version();
 
     /**
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) {
+    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) {
         persistent_registry_ptr->makeVersion(ver, hlc);
     };
 
     /**
      * persist the data to the latest version
      */
-    virtual void persist(const persistent::version_t version) noexcept(false);
+    virtual void persist(const persistent::version_t version);
 
     /**
      * trim the logs to a version, inclusively.
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& earliest_version) noexcept(false) {
+    virtual void trim(const persistent::version_t& earliest_version) {
         persistent_registry_ptr->trim(earliest_version);
     };
 
@@ -318,7 +318,7 @@ public:
                                             const persistent::PersistFunc& pf,
                                             const persistent::TrimFunc& tf,
                                             const persistent::LatestPersistedGetterFunc& gf,
-                                            persistent::TruncateFunc tcf) noexcept(false) {
+                                            persistent::TruncateFunc tcf) {
         this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf, tcf);
     }
 };
