@@ -3,7 +3,7 @@
 #include <time.h>
 
 // return microsecond
-uint64_t read_rtc_us() noexcept(false) {
+uint64_t read_rtc_us() {
     struct timespec tp;
     if(clock_gettime(CLOCK_REALTIME, &tp) != 0) {
         throw HLC_EXP_READ_RTC(errno);
@@ -12,7 +12,7 @@ uint64_t read_rtc_us() noexcept(false) {
     }
 }
 
-HLC::HLC() noexcept(false) {
+HLC::HLC() {
     this->m_rtc_us = read_rtc_us();
     this->m_logic = 0L;
     if(pthread_spin_init(&this->m_oLck, PTHREAD_PROCESS_SHARED) != 0) {
@@ -26,7 +26,7 @@ HLC::HLC(uint64_t _r, uint64_t _l) : m_rtc_us(_r), m_logic(_l) {
     }
 }
 
-HLC::~HLC() noexcept(false) {
+HLC::~HLC() {
     if(pthread_spin_destroy(&this->m_oLck) != 0) {
         throw HLC_EXP_SPIN_DESTROY(errno);
     }
@@ -41,7 +41,7 @@ HLC::~HLC() noexcept(false) {
         throw HLC_EXP_SPIN_UNLOCK(errno);         \
     }
 
-void HLC::tick(bool thread_safe) noexcept(false) {
+void HLC::tick(bool thread_safe) {
     if(thread_safe) {
         HLC_LOCK
     }
@@ -59,7 +59,7 @@ void HLC::tick(bool thread_safe) noexcept(false) {
     }
 }
 
-void HLC::tick(const HLC &msgHlc, bool thread_safe) noexcept(false) {
+void HLC::tick(const HLC &msgHlc, bool thread_safe) {
     if(thread_safe) {
         HLC_LOCK
     }

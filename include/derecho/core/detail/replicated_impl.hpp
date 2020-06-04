@@ -204,12 +204,12 @@ std::size_t Replicated<T>::receive_object(char* buffer) {
 }
 
 template <typename T>
-void Replicated<T>::make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false) {
+void Replicated<T>::make_version(const persistent::version_t& ver, const HLC& hlc) {
     persistent_registry->makeVersion(ver, hlc);
 }
 
 template <typename T>
-void Replicated<T>::persist(const persistent::version_t version, unsigned char* signature) noexcept(false) {
+void Replicated<T>::persist(const persistent::version_t version, unsigned char* signature) {
     persistent::version_t next_persisted_ver;
     // persist variables
     do {
@@ -233,17 +233,17 @@ bool Replicated<T>::verify_log(const persistent::version_t version, openssl::Ver
 }
 
 template <typename T>
-void Replicated<T>::trim(const persistent::version_t& earliest_version) noexcept(false) {
+void Replicated<T>::trim(const persistent::version_t& earliest_version) {
     persistent_registry->trim(earliest_version);
 }
 
 template <typename T>
-void Replicated<T>::truncate(const persistent::version_t& latest_version) noexcept(false) {
+void Replicated<T>::truncate(const persistent::version_t& latest_version) {
     persistent_registry->truncate(latest_version);
 }
 
 template <typename T>
-const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() noexcept(false) {
+const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
     return persistent_registry->getMinimumLatestPersistedVersion();
 }
 

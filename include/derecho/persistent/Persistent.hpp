@@ -102,7 +102,7 @@ public:
 
 
     /** Make a new version capturing the current state of the object. */
-    void makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false);
+    void makeVersion(const int64_t& ver, const HLC& mhlc);
 
     /**
      * Returns the minumum of the latest version across all Persistent fields.
@@ -140,13 +140,13 @@ public:
      * calling getMinimumLatestVersion().
      * @param latest_version The version to persist up to.
      */
-    void persist(const version_t& latest_version) noexcept(false);
+    void persist(const version_t& latest_version);
 
     /** Trims the log of all versions earlier than the argument. */
-    void trim(const int64_t& earliest_version) noexcept(false);
+    void trim(const int64_t& earliest_version);
 
     /** Returns the minimum of the latest persisted versions among all Persistent fields. */
-    version_t getMinimumLatestPersistedVersion() noexcept(false);
+    version_t getMinimumLatestPersistedVersion();
 
     /**
      * Set the earliest version for serialization, exclusive. This version will
@@ -174,12 +174,12 @@ public:
      * register a Persistent<T> along with its lambdas
      */
     void registerPersist(const char* obj_name,
-                         const PersistentObjectFunctions& interface_functions) noexcept(false);
+                         const PersistentObjectFunctions& interface_functions);
 
     /**
      * deregister
      */
-    void unregisterPersist(const char* obj_name) noexcept(false);
+    void unregisterPersist(const char* obj_name);
 
     /**
      * get temporal query frontier
@@ -230,7 +230,7 @@ public:
      * @param shard_num, the shard number of a subgroup
      * @return a std::string representation of the prefix
      */
-    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num) noexcept(false);
+    static std::string generate_prefix(const std::type_index& subgroup_type, uint32_t subgroup_index, uint32_t shard_num);
 
     /** match prefix
      * @param str, a string begin with a prefix like [hex64 of subgroup_type]-[subgroup_index]-[shard_num]-
@@ -317,13 +317,13 @@ template <typename ObjectType, StorageType storageType>
 class _NameMaker {
 public:
     // Constructor
-    _NameMaker() noexcept(false);
+    _NameMaker();
 
     // Destructor
     virtual ~_NameMaker() noexcept(true);
 
     // guess a name
-    std::unique_ptr<std::string> make(const char* prefix) noexcept(false);
+    std::unique_ptr<std::string> make(const char* prefix);
 
 private:
     int m_iCounter;
@@ -364,7 +364,7 @@ protected:
     /** initialize from local state.
      *  @param object_name Object name
      */
-    inline void initialize_log(const char* object_name) noexcept(false);
+    inline void initialize_log(const char* object_name);
 
     /** initialize the object from log
      */
@@ -373,11 +373,11 @@ protected:
 
     /** register the callbacks.
      */
-    inline void register_callbacks() noexcept(false);
+    inline void register_callbacks();
 
     /** unregister the callbacks.
      */
-    inline void unregister_callbacks() noexcept(false);
+    inline void unregister_callbacks();
 
 public:
     /** constructor 1 is for building a persistent<T> locally, load/create a
@@ -391,13 +391,13 @@ public:
         const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
         const char* object_name = nullptr,
         PersistentRegistry* persistent_registry = nullptr,
-        mutils::DeserializationManager dm = {{}}) noexcept(false);
+        mutils::DeserializationManager dm = {{}});
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
      * @param other The other object.
      */
-    Persistent(Persistent&& other) noexcept(false);
+    Persistent(Persistent&& other);
 
     /** constructor 3 is for deserialization. It builds a Persistent<T> from
      * the object name, a unique_ptr to the wrapped object, a unique_ptr to
@@ -412,7 +412,7 @@ public:
         std::unique_ptr<ObjectType>& wrapped_obj_ptr,
         const char* log_tail = nullptr,
         PersistentRegistry* persistent_registry = nullptr,
-        mutils::DeserializationManager dm = {{}}) noexcept(false);
+        mutils::DeserializationManager dm = {{}});
 
     /** constructor 4, the default copy constructor, is disabled
      */
@@ -452,7 +452,7 @@ public:
     template <typename Func>
     auto get(
         const Func& fun,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get the latest Value of T, returns a unique pointer to the object
@@ -468,14 +468,14 @@ public:
     auto getByIndex(
         int64_t idx,
         const Func& fun,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. returns a unique pointer to the object
      */
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
-            mutils::DeserializationManager* dm = nullptr) noexcept(false);
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of Value T, specified by version. the user lambda will be fed with
@@ -487,7 +487,7 @@ public:
     auto get(
         const int64_t& ver,
         const Func& fun,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. specified version.
@@ -495,13 +495,13 @@ public:
      */
     std::unique_ptr<ObjectType> get(
         const int64_t& ver,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
     /**
      * trim by version or index
      */
     template <typename TKey>
-    void trim(const TKey& k) noexcept(false);
+    void trim(const TKey& k);
 
     /**
      * truncate the log
@@ -519,78 +519,78 @@ public:
     auto get(
         const HLC& hlc,
         const Func& fun,
-        mutils::DeserializationManager* dm = nullptr) noexcept(false);
+        mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. specified by HLC clock.
      */
     std::unique_ptr<ObjectType> get(
             const HLC& hlc,
-            mutils::DeserializationManager* dm = nullptr) noexcept(false);
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * syntax sugar: get a specified version of T without DSM
      */
-    std::unique_ptr<ObjectType> operator[](const int64_t ver) noexcept(false) {
+    std::unique_ptr<ObjectType> operator[](const int64_t ver) {
         return this->get(ver);
     }
 
     /**
      * syntax sugar: get a specified version of T without DSM
      */
-    std::unique_ptr<ObjectType> operator[](const HLC& hlc) noexcept(false) {
+    std::unique_ptr<ObjectType> operator[](const HLC& hlc) {
         return this->get(hlc);
     }
 
     /**
      * get the number of versions excluding trimmed ones.
      */
-    virtual int64_t getNumOfVersions() noexcept(false);
+    virtual int64_t getNumOfVersions();
 
     /**
      * get the earliest index excluding trimmed ones.
      */
-    virtual int64_t getEarliestIndex() noexcept(false);
+    virtual int64_t getEarliestIndex();
 
     /**
      * get the earliest  version excluding trimmed ones.
      */
-    virtual int64_t getEarliestVersion() noexcept(false);
+    virtual int64_t getEarliestVersion();
 
     /**
      * get the latest index excluding truncated ones.
      */
-    virtual int64_t getLatestIndex() noexcept(false);
+    virtual int64_t getLatestIndex();
 
     /**
      * get the lastest version excluding truncated ones.
      */
-    virtual int64_t getLatestVersion() noexcept(false);
+    virtual int64_t getLatestVersion();
 
     /**
      * get the last persisted version.
      */
-    virtual const int64_t getLastPersistedVersion() noexcept(false);
+    virtual const int64_t getLastPersistedVersion();
 
     /**
      * make a version with a version number and mhlc clock
      */
-    virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false);
+    virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc);
 
     /**
      * make a version with a version number and mhlc clock, using the current state.
      */
-    virtual void version_with_hlc(const version_t& ver, const HLC& mhlc) noexcept(false);
+    virtual void version_with_hlc(const version_t& ver, const HLC& mhlc);
 
     /**
      * make a version with only a version number
      */
-    virtual void set(ObjectType& v, const version_t& ver) noexcept(false);
+    virtual void set(ObjectType& v, const version_t& ver);
 
     /**
      * make a version with only a version number, using the current state.
      */
-    virtual void version(const version_t& ver) noexcept(false);
+    virtual void version(const version_t& ver);
 
     /**
      * Update the provided Signer with the state of T at the specified version.
@@ -632,7 +632,7 @@ public:
      * persist versions
      * @param version The version to persist up to
      */
-    virtual void persist(const version_t& ver) noexcept(false);
+    virtual void persist(const version_t& ver);
 
 public:
     // wrapped objected
@@ -693,14 +693,14 @@ public:
             const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
-            mutils::DeserializationManager dm = {{}}) noexcept(false)
+            mutils::DeserializationManager dm = {{}})
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry) {}
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
      * @param other The other object.
      */
-    Volatile(Volatile&& other) noexcept(false)
+    Volatile(Volatile&& other)
             : Persistent<ObjectType, ST_MEM>(other) {}
 
     /** constructor 3 is for deserialization. It builds a Persistent<T> from
@@ -719,7 +719,7 @@ public:
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
             std::unique_ptr<PersistLog>& log_ptr,
             PersistentRegistry* persistent_registry = nullptr,
-            mutils::DeserializationManager dm = {{}}) noexcept(false)
+            mutils::DeserializationManager dm = {{}})
             : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}
 
     /** constructor 4, the default copy constructor, is disabled
@@ -743,7 +743,7 @@ public:
  * @return
  */
 template <typename ObjectType, StorageType storageType = ST_FILE>
-void saveObject(ObjectType& obj, const char* object_name = nullptr) noexcept(false);
+void saveObject(ObjectType& obj, const char* object_name = nullptr);
 
 /**
  * loadObject() loads a serializable object from a persistent store
@@ -751,7 +751,7 @@ void saveObject(ObjectType& obj, const char* object_name = nullptr) noexcept(fal
  *         return a nullptr.
  */
 template <typename ObjectType, StorageType storageType = ST_FILE>
-std::unique_ptr<ObjectType> loadObject(const char* object_name = nullptr) noexcept(false);
+std::unique_ptr<ObjectType> loadObject(const char* object_name = nullptr);
 
 /// get the minmum latest persisted version for a Replicated<T>
 /// identified by

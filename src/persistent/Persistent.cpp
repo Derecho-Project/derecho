@@ -18,7 +18,7 @@ PersistentRegistry::~PersistentRegistry() {
     this->_registry.clear();
 };
 
-void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false) {
+void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) {
     for(auto& entry : _registry) {
         entry.second.version(ver, mhlc);
     }
@@ -87,19 +87,19 @@ bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& ver
     return verifier.finalize(signature, verifier.get_max_signature_size());
 }
 
-void PersistentRegistry::persist(const version_t& latest_version) noexcept(false) {
+void PersistentRegistry::persist(const version_t& latest_version) {
     for(auto& entry : _registry) {
         entry.second.persist(latest_version);
     }
 };
 
-void PersistentRegistry::trim(const int64_t& earliest_version) noexcept(false) {
+void PersistentRegistry::trim(const int64_t& earliest_version) {
     for(auto& entry : _registry) {
         entry.second.trim(earliest_version);
     }
 };
 
-int64_t PersistentRegistry::getMinimumLatestPersistedVersion() noexcept(false) {
+int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
     int64_t min = -1;
     for(auto itr = _registry.begin();
         itr != _registry.end(); ++itr) {
@@ -132,7 +132,7 @@ void PersistentRegistry::truncate(const int64_t& last_version) {
 }
 
 void PersistentRegistry::registerPersist(const char* obj_name,
-                                         const PersistentObjectFunctions& interface_functions) noexcept(false) {
+                                         const PersistentObjectFunctions& interface_functions) {
     std::size_t key = std::hash<std::string>{}(obj_name);
     auto res = this->_registry.insert(std::pair<std::size_t, PersistentObjectFunctions>(key, interface_functions));
     if(res.second == false) {
@@ -142,7 +142,7 @@ void PersistentRegistry::registerPersist(const char* obj_name,
     }
 };
 
-void PersistentRegistry::unregisterPersist(const char* obj_name) noexcept(false) {
+void PersistentRegistry::unregisterPersist(const char* obj_name) {
     // The upcoming regsiterPersist() call will override this automatically.
     // this->_registry.erase(std::hash<std::string>{}(obj_name));
 }
@@ -158,7 +158,7 @@ const char* PersistentRegistry::get_subgroup_prefix() {
 std::string PersistentRegistry::generate_prefix(
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) noexcept(false) {
+        uint32_t shard_num) {
     const char* subgroup_type_name = subgroup_type.name();
 
     // SHA256 subgroup_type_name to avoid a long file name

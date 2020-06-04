@@ -121,7 +121,7 @@ public:
    *  - the configuration files
    *  - the default values.
    **/
-    Conf(int argc, char* argv[], GetPot* getpotcfg = nullptr) noexcept {
+    Conf(int argc, char* argv[], GetPot* getpotcfg = nullptr) noexcept(true) {
         // 1 - load configuration from configuration file
         if(getpotcfg != nullptr) {
             for(const std::string& key : getpotcfg->get_variable_names()) {
@@ -198,7 +198,7 @@ public:
     // before.
     static void initialize(int argc, char* argv[],
                            const char* conf_file = nullptr);
-    static const Conf* get() noexcept;
+    static const Conf* get() noexcept(true);
 
     // Defines fields used for loading subgroup profiles in multicast_group.h
     static const std::vector<std::string> subgroupProfileFields;

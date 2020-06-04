@@ -272,13 +272,13 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const persistent::version_t get_minimum_latest_persisted_version() noexcept(false);
+    const persistent::version_t get_minimum_latest_persisted_version();
 
     /**
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) noexcept(false);
+    virtual void make_version(const persistent::version_t& ver, const HLC& hlc);
 
     /**
      * Persist the data up to the specified version. Also, if the signed log is
@@ -288,7 +288,7 @@ public:
      * the correct length for this node's signing key.
      */
     virtual void persist(const persistent::version_t version,
-                         unsigned char* signature) noexcept(false);
+                         unsigned char* signature);
 
     /**
      * Verifies the persistent log entry at the specified version against the
@@ -308,7 +308,7 @@ public:
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& earliest_version) noexcept(false);
+    virtual void trim(const persistent::version_t& earliest_version);
 
     /**
      * Truncate the logs of all Persistent<T> members back to the version
@@ -332,7 +332,7 @@ public:
      * Register a persistent member
      */
     virtual void register_persistent_member(const char* object_name,
-                                            const persistent::PersistentObjectFunctions& interface_functions) noexcept(false) {
+                                            const persistent::PersistentObjectFunctions& interface_functions) {
         this->persistent_registry->registerPersist(object_name, interface_functions);
     }
 };
