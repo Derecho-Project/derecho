@@ -31,17 +31,17 @@ namespace persistent {
 // visible to outside //
 ////////////////////////
 
-FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexcept(false) : PersistLog(name),
-                                                                                             m_sDataPath(dataPath),
-                                                                                             m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
-                                                                                             m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
-                                                                                             m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
-                                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
-                                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
-                                                                                             m_iLogFileDesc(-1),
-                                                                                             m_iDataFileDesc(-1),
-                                                                                             m_pLog(MAP_FAILED),
-                                                                                             m_pData(MAP_FAILED) {
+FilePersistLog::FilePersistLog(const string& name, const string& dataPath) : PersistLog(name),
+                                                                             m_sDataPath(dataPath),
+                                                                             m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
+                                                                             m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
+                                                                             m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
+                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
+                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
+                                                                             m_iLogFileDesc(-1),
+                                                                             m_iDataFileDesc(-1),
+                                                                             m_pLog(MAP_FAILED),
+                                                                             m_pData(MAP_FAILED) {
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -56,7 +56,7 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath) noexc
     dbg_default_trace("{0} constructor: after load()", name);
 }
 
-void FilePersistLog::reset() noexcept(false) {
+void FilePersistLog::reset() {
     dbg_default_trace("{0} reset state...begin", this->m_sName);
     if(fs::exists(this->m_sMetaFile)) {
         if(!fs::remove(this->m_sMetaFile)) {
@@ -75,7 +75,7 @@ void FilePersistLog::reset() noexcept(false) {
     dbg_default_trace("{0} reset state...done", this->m_sName);
 }
 
-void FilePersistLog::load() noexcept(false) {
+void FilePersistLog::load() {
     dbg_default_trace("{0}:load state...begin", this->m_sName);
     // STEP 0: check if data path exists
     checkOrCreateDir(this->m_sDataPath);
@@ -210,7 +210,7 @@ FilePersistLog::~FilePersistLog() noexcept(true) {
     }
 }
 
-void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_t& ver, const HLC& mhlc) noexcept(false) {
+void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_t& ver, const HLC& mhlc) {
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
@@ -267,7 +267,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
     NEXT_LOG_ENTRY->fields.hlc_r = mhlc.m_rtc_us;
     NEXT_LOG_ENTRY->fields.hlc_l = mhlc.m_logic;
     /* No Sync required here.
-    if (msync(ALIGN_TO_PAGE(NEXT_LOG_ENTRY), 
+    if (msync(ALIGN_TO_PAGE(NEXT_LOG_ENTRY),
         sizeof(LogEntry) + (((uint64_t)NEXT_LOG_ENTRY) % PAGE_SIZE),MS_SYNC) != 0) {
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
@@ -290,7 +290,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
     FPL_UNLOCK;
 }
 
-void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
+void FilePersistLog::advanceVersion(const int64_t& ver) {
     FPL_WRLOCK;
     if(META_HEADER->fields.ver < ver) {
         META_HEADER->fields.ver = ver;
@@ -301,7 +301,7 @@ void FilePersistLog::advanceVersion(const int64_t& ver) noexcept(false) {
     FPL_UNLOCK;
 }
 
-const int64_t FilePersistLog::persist(const bool preLocked) noexcept(false) {
+const int64_t FilePersistLog::persist(const bool preLocked) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
@@ -370,7 +370,7 @@ const int64_t FilePersistLog::persist(const bool preLocked) noexcept(false) {
     return ver_ret;
 }
 
-int64_t FilePersistLog::getLength() noexcept(false) {
+int64_t FilePersistLog::getLength() {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;
     FPL_UNLOCK;
@@ -378,21 +378,21 @@ int64_t FilePersistLog::getLength() noexcept(false) {
     return len;
 }
 
-int64_t FilePersistLog::getEarliestIndex() noexcept(false) {
+int64_t FilePersistLog::getEarliestIndex() {
     FPL_RDLOCK;
     int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.head;
     FPL_UNLOCK;
     return idx;
 }
 
-int64_t FilePersistLog::getLatestIndex() noexcept(false) {
+int64_t FilePersistLog::getLatestIndex() {
     FPL_RDLOCK;
     int64_t idx = CURR_LOG_IDX;
     FPL_UNLOCK;
     return idx;
 }
 
-version_t FilePersistLog::getEarliestVersion() noexcept(false) {
+version_t FilePersistLog::getEarliestVersion() {
     FPL_RDLOCK;
     int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.head;
     version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
@@ -400,7 +400,7 @@ version_t FilePersistLog::getEarliestVersion() noexcept(false) {
     return ver;
 }
 
-version_t FilePersistLog::getLatestVersion() noexcept(false) {
+version_t FilePersistLog::getLatestVersion() {
     FPL_RDLOCK;
     int64_t idx = CURR_LOG_IDX;
     version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
@@ -408,7 +408,7 @@ version_t FilePersistLog::getLatestVersion() noexcept(false) {
     return ver;
 }
 
-const version_t FilePersistLog::getLastPersistedVersion() noexcept(false) {
+const version_t FilePersistLog::getLastPersistedVersion() {
     version_t last_persisted = INVALID_VERSION;
     ;
     FPL_PERS_LOCK;
@@ -440,7 +440,7 @@ int64_t FilePersistLog::getVersionIndex(const version_t& ver) {
     return l_idx;
 }
 
-const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false) {
+const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) {
     FPL_RDLOCK;
     dbg_default_trace("{0}-getEntryByIndex-head:{1},tail:{2},eidx:{3}",
                       this->m_sName, META_HEADER->fields.head, META_HEADER->fields.tail, eidx);
@@ -478,7 +478,7 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false)
 /*
   template<typename TKey,typename KeyGetter>
   int64_t FilePersistLog::binarySearch(const KeyGetter & keyGetter, const TKey & key,
-    const int64_t & logHead, const int64_t & logTail) noexcept(false) {
+    const int64_t & logHead, const int64_t & logTail) {
     if (logTail <= logHead) {
       dbg_default_trace("binary Search failed...EMPTY LOG");
       return (int64_t)-1L;
@@ -511,7 +511,7 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) noexcept(false)
   }
 */
 
-const void* FilePersistLog::getEntry(const int64_t& ver) noexcept(false) {
+const void* FilePersistLog::getEntry(const int64_t& ver) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -540,7 +540,7 @@ const void* FilePersistLog::getEntry(const int64_t& ver) noexcept(false) {
     return LOG_ENTRY_DATA(ple);
 }
 
-int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) noexcept(false) {
+int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) {
     FPL_RDLOCK;
     dbg_default_trace("getHLCIndex for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
     struct hlc_index_entry skey(rhlc, 0);
@@ -559,7 +559,7 @@ int64_t FilePersistLog::getHLCIndex(const HLC& rhlc) noexcept(false) {
     return INVALID_INDEX;
 }
 
-const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
+const void* FilePersistLog::getEntry(const HLC& rhlc) {
     LogEntry* ple = nullptr;
     //    unsigned __int128 key = ((((unsigned __int128)rhlc.m_rtc_us)<<64) | rhlc.m_logic);
 
@@ -608,7 +608,7 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) noexcept(false) {
 }
 
 // trim by index
-void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
+void FilePersistLog::trimByIndex(const int64_t& idx) {
     dbg_default_trace("{0} trim at index: {1}", this->m_sName, idx);
     FPL_RDLOCK;
     // validate check
@@ -642,14 +642,14 @@ void FilePersistLog::trimByIndex(const int64_t& idx) noexcept(false) {
     dbg_default_trace("{0} trim at index: {1}...done", this->m_sName, idx);
 }
 
-void FilePersistLog::trim(const int64_t& ver) noexcept(false) {
+void FilePersistLog::trim(const int64_t& ver) {
     dbg_default_trace("{0} trim at version: {1}", this->m_sName, ver);
     this->trim<int64_t>(ver,
                         [&](const LogEntry* ple) { return ple->fields.ver; });
     dbg_default_trace("{0} trim at version: {1}...done", this->m_sName, ver);
 }
 
-void FilePersistLog::trim(const HLC& hlc) noexcept(false) {
+void FilePersistLog::trim(const HLC& hlc) {
     dbg_default_trace("{0} trim at time: {1}.{2}", this->m_sName, hlc.m_rtc_us, hlc.m_logic);
     //    this->trim<unsigned __int128>(
     //      ((((const unsigned __int128)hlc.m_rtc_us)<<64) | hlc.m_logic),
@@ -662,7 +662,7 @@ void FilePersistLog::trim(const HLC& hlc) noexcept(false) {
     dbg_default_trace("{0} trim at time: {1}.{2}...done", this->m_sName, hlc.m_rtc_us, hlc.m_logic);
 }
 
-void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) noexcept(false) {
+void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) {
     // STEP 1: get file name
     const string swpFile = this->m_sMetaFile + "." + SWAP_FILE_SUFFIX;
 
@@ -686,7 +686,7 @@ void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) noex
     *META_HEADER_PERS = *pShadowHeader;
 }
 
-int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false) {
+int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
     int64_t rIndex = INVALID_INDEX;
 
     dbg_default_trace("{0}[{1}] - request version {2}", this->m_sName, __func__, ver);
@@ -739,7 +739,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) noexcep
 // 2) size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba);
 // 3) size_t postLogEntry(const std::function<void (char const *const, std::size_t)> f, const LogEntry *ple);
 // 4) size_t mergeLogEntryFromByteArray(const char * ba);
-size_t FilePersistLog::bytes_size(const int64_t& ver) noexcept(false) {
+size_t FilePersistLog::bytes_size(const int64_t& ver) {
     size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     if(idx != INVALID_INDEX) {
@@ -751,7 +751,7 @@ size_t FilePersistLog::bytes_size(const int64_t& ver) noexcept(false) {
     return bsize;
 }
 
-size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) noexcept(false) {
+size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest_version
@@ -772,7 +772,7 @@ size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) noexcept(false) {
 }
 
 void FilePersistLog::post_object(const std::function<void(char const* const, std::size_t)>& f,
-                                 const int64_t& ver) noexcept(false) {
+                                 const int64_t& ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     // latest_version
     int64_t latest_version = this->getLatestVersion();
@@ -789,7 +789,7 @@ void FilePersistLog::post_object(const std::function<void(char const* const, std
     }
 }
 
-void FilePersistLog::applyLogTail(char const* v) noexcept(false) {
+void FilePersistLog::applyLogTail(char const* v) {
     size_t ofst = 0;
     // latest_version
     int64_t latest_version = *(const int64_t*)(v + ofst);
@@ -805,11 +805,11 @@ void FilePersistLog::applyLogTail(char const* v) noexcept(false) {
     META_HEADER->fields.ver = latest_version;
 }
 
-size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) noexcept(false) {
+size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) {
     return sizeof(LogEntry) + ple->fields.dlen;
 }
 
-size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) noexcept(false) {
+size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) {
     size_t nr_written = 0;
     memcpy(ba, ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
@@ -820,7 +820,7 @@ size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) n
     return nr_written;
 }
 
-size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple) noexcept(false) {
+size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple) {
     size_t nr_written = 0;
     f((const char*)ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
@@ -831,7 +831,7 @@ size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, 
     return nr_written;
 }
 
-size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false) {
+size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) {
     const LogEntry* cple = (const LogEntry*)ba;
     // valid check
     // 0) version grows monotonically.
@@ -862,14 +862,14 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false
 // invisible to outside //
 //////////////////////////
 /* -- moved to util.hpp
-  void checkOrCreateDir(const string & dirPath) 
-  noexcept(false) {
+  void checkOrCreateDir(const string & dirPath)
+  {
     struct stat sb;
     if (stat(dirPath.c_str(),&sb) == 0) {
       if (! S_ISDIR(sb.st_mode)) {
         throw PERSIST_EXP_INV_PATH;
       }
-    } else { 
+    } else {
       // create it
       if (mkdir(dirPath.c_str(),0700) != 0) {
         throw PERSIST_EXP_CREATE_PATH(errno);
@@ -878,7 +878,7 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false
   }
 
   bool checkOrCreateFileWithSize(const string & file, uint64_t size)
-  noexcept(false) {
+  {
     bool bCreate = false;
     struct stat sb;
     int fd;
@@ -904,19 +904,19 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) noexcept(false
     return bCreate;
   }
 */
-bool FilePersistLog::checkOrCreateMetaFile() noexcept(false) {
+bool FilePersistLog::checkOrCreateMetaFile() {
     return checkOrCreateFileWithSize(this->m_sMetaFile, META_SIZE);
 }
 
-bool FilePersistLog::checkOrCreateLogFile() noexcept(false) {
+bool FilePersistLog::checkOrCreateLogFile() {
     return checkOrCreateFileWithSize(this->m_sLogFile, MAX_LOG_SIZE);
 }
 
-bool FilePersistLog::checkOrCreateDataFile() noexcept(false) {
+bool FilePersistLog::checkOrCreateDataFile() {
     return checkOrCreateFileWithSize(this->m_sDataFile, MAX_DATA_SIZE);
 }
 
-void FilePersistLog::truncate(const int64_t& ver) noexcept(false) {
+void FilePersistLog::truncate(const int64_t& ver) {
     dbg_default_trace("{0} truncate at version: {1}.", this->m_sName, ver);
     FPL_WRLOCK;
     // STEP 1: search for the log entry

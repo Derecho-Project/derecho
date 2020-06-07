@@ -46,7 +46,7 @@ ReturnType PersistentRegistry::callFuncMin(Args... args) {
 // _NameMaker
 //===========================================
 template <typename ObjectType, StorageType storageType>
-_NameMaker<ObjectType, storageType>::_NameMaker() noexcept(false) : m_sObjectTypeName(typeid(ObjectType).name()) {
+_NameMaker<ObjectType, storageType>::_NameMaker() : m_sObjectTypeName(typeid(ObjectType).name()) {
     this->m_iCounter = 0;
     if(pthread_spin_init(&this->m_oLck, PTHREAD_PROCESS_SHARED) != 0) {
         throw PERSIST_EXP_SPIN_INIT(errno);
@@ -59,7 +59,7 @@ _NameMaker<ObjectType, storageType>::~_NameMaker() noexcept(true) {
 }
 
 template <typename ObjectType, StorageType storageType>
-std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const char* prefix) noexcept(false) {
+std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const char* prefix) {
     int cnt;
     if(pthread_spin_lock(&this->m_oLck) != 0) {
         throw PERSIST_EXP_SPIN_LOCK(errno);
@@ -110,7 +110,7 @@ std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const cha
 //===========================================
 template <typename ObjectType,
           StorageType storageType>
-inline void Persistent<ObjectType, storageType>::initialize_log(const char* object_name) noexcept(false) {
+inline void Persistent<ObjectType, storageType>::initialize_log(const char* object_name) {
     // STEP 1: initialize log
     this->m_pLog = nullptr;
     switch(storageType) {
@@ -150,7 +150,7 @@ inline void Persistent<ObjectType, storageType>::initialize_object_from_log(cons
 
 template <typename ObjectType,
           StorageType storageType>
-inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(false) {
+inline void Persistent<ObjectType, storageType>::register_callbacks() {
     if(this->m_pRegistry != nullptr) {
         this->m_pRegistry->registerPersist(
                 this->m_pLog->m_sName.c_str(),
@@ -165,7 +165,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() noexcept(f
 
 template <typename ObjectType,
           StorageType storageType>
-inline void Persistent<ObjectType, storageType>::unregister_callbacks() noexcept(false) {
+inline void Persistent<ObjectType, storageType>::unregister_callbacks() {
     if(this->m_pRegistry != nullptr && this->m_pLog != nullptr) {
         this->m_pRegistry->unregisterPersist(this->m_pLog->m_sName.c_str());
     }
@@ -177,7 +177,7 @@ Persistent<ObjectType, storageType>::Persistent(
         const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
         const char* object_name,
         PersistentRegistry* persistent_registry,
-        mutils::DeserializationManager dm) noexcept(false)
+        mutils::DeserializationManager dm)
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
@@ -189,7 +189,7 @@ Persistent<ObjectType, storageType>::Persistent(
 
 template <typename ObjectType,
           StorageType storageType>
-Persistent<ObjectType, storageType>::Persistent(Persistent&& other) noexcept(false) {
+Persistent<ObjectType, storageType>::Persistent(Persistent&& other) {
     this->m_pWrappedObject = std::move(other.m_pWrappedObject);
     this->m_pLog = std::move(other.m_pLog);
     this->m_pRegistry = other.m_pRegistry;
@@ -203,7 +203,7 @@ Persistent<ObjectType, storageType>::Persistent(
         std::unique_ptr<ObjectType>& wrapped_obj_ptr,
         const char* log_tail,
         PersistentRegistry* persistent_registry,
-        mutils::DeserializationManager) noexcept(false)
+        mutils::DeserializationManager)
         : m_pRegistry(persistent_registry) {
     // Initialize log
     initialize_log(object_name);
@@ -261,14 +261,14 @@ template <typename ObjectType,
 template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
         const Func& fun,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     return this->getByIndex(-1L, fun, dm);
 }
 
 template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     return this->getByIndex(-1L, dm);
 }
 
@@ -278,7 +278,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
         const Func& fun,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     if
         constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
             return f(*this->getByIndex(idx, dm));
@@ -292,7 +292,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     if
         constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
             // ObjectType* ot = new ObjectType{};
@@ -316,7 +316,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
         const int64_t& ver,
         const Func& fun,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     char* pdat = (char*)this->m_pLog->getEntry(ver);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
@@ -335,7 +335,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         const int64_t& ver,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     int64_t idx = this->m_pLog->getVersionIndex(ver);
     if(idx == INVALID_INDEX) {
         throw PERSIST_EXP_INV_VERSION;
@@ -353,7 +353,7 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
 template <typename ObjectType,
           StorageType storageType>
 template <typename TKey>
-void Persistent<ObjectType, storageType>::trim(const TKey& k) noexcept(false) {
+void Persistent<ObjectType, storageType>::trim(const TKey& k) {
     dbg_default_trace("trim.");
     this->m_pLog->trim(k);
     dbg_default_trace("trim...done");
@@ -373,7 +373,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
         const HLC& hlc,
         const Func& fun,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
         throw PERSIST_EXP_BEYOND_GSF;
@@ -400,7 +400,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         const HLC& hlc,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
         throw PERSIST_EXP_BEYOND_GSF;
@@ -424,43 +424,43 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getNumOfVersions() noexcept(false) {
+int64_t Persistent<ObjectType, storageType>::getNumOfVersions() {
     return this->m_pLog->getLength();
 };
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getEarliestIndex() noexcept(false) {
+int64_t Persistent<ObjectType, storageType>::getEarliestIndex() {
     return this->m_pLog->getEarliestIndex();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getEarliestVersion() noexcept(false) {
+int64_t Persistent<ObjectType, storageType>::getEarliestVersion() {
     return this->m_pLog->getEarliestVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getLatestIndex() noexcept(false) {
+int64_t Persistent<ObjectType, storageType>::getLatestIndex() {
     return this->m_pLog->getLatestIndex();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getLatestVersion() noexcept(false) {
+int64_t Persistent<ObjectType, storageType>::getLatestVersion() {
     return this->m_pLog->getLatestVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() noexcept(false) {
+const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
     return this->m_pLog->getLastPersistedVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) noexcept(false) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if
         constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
@@ -481,7 +481,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver) noexcept(false) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver) {
     HLC mhlc;  // generate a default timestamp for it.
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
@@ -498,14 +498,14 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::version(const version_t& ver) noexcept(false) {
+void Persistent<ObjectType, storageType>::version(const version_t& ver) {
     dbg_default_trace("In Persistent<T>: make version {}.", ver);
     this->set(*this->m_pWrappedObject, ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::persist() noexcept(false) {
+const int64_t Persistent<ObjectType, storageType>::persist() {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
@@ -594,7 +594,7 @@ void Persistent<ObjectType, storageType>::print_performance_stat() {
 #endif  //_PERFORMANCE_DEBUG
 
 template <typename ObjectType, StorageType storageType>
-_NameMaker<ObjectType, storageType>& Persistent<ObjectType, storageType>::getNameMaker(const std::string& prefix) noexcept(false) {
+_NameMaker<ObjectType, storageType>& Persistent<ObjectType, storageType>::getNameMaker(const std::string& prefix) {
     static std::map<std::string, _NameMaker<ObjectType, storageType>> name_makers;
     // make sure prefix does exist.
     auto search = name_makers.find(prefix);
@@ -606,7 +606,7 @@ _NameMaker<ObjectType, storageType>& Persistent<ObjectType, storageType>::getNam
 }
 
 template <typename ObjectType, StorageType storageType>
-void saveObject(ObjectType& obj, const char* object_name) noexcept(false) {
+void saveObject(ObjectType& obj, const char* object_name) {
     switch(storageType) {
         // file system
         case ST_FILE: {
@@ -624,7 +624,7 @@ void saveObject(ObjectType& obj, const char* object_name) noexcept(false) {
 }
 
 template <typename ObjectType, StorageType storageType>
-std::unique_ptr<ObjectType> loadObject(const char* object_name) noexcept(false) {
+std::unique_ptr<ObjectType> loadObject(const char* object_name) {
     switch(storageType) {
         // file system
         case ST_FILE:
