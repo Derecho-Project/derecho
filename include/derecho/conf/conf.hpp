@@ -107,7 +107,7 @@ private:
             {CONF_PERS_SPDK_TRSVCID, ""},
             {CONF_PERS_SPDK_SUBNQN, ""},
             {CONF_PERS_SPDK_NUM_IO_THREAD, "1"},
-            {CONF_PERS_SPDK_SUBTXN_SIZE, "1"}
+            {CONF_PERS_SPDK_SUBTXN_SIZE, "1"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},
             {CONF_LOGGER_DEFAULT_LOG_LEVEL, "info"}};

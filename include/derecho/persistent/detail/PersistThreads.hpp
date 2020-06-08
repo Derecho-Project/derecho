@@ -1,6 +1,7 @@
 #include "PersistLog.hpp"
 #include "spdk/env.h"
 #include "spdk/nvme.h"
+#include "util.hpp"
 #include <atomic>
 #include <bitset>
 #include <condition_variable>
