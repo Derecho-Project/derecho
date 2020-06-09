@@ -436,11 +436,9 @@ private:
 
     void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                           uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
+                           uint32_t num_shard_senders, DerechoSST& sst,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
 
-    // Internally used to automatically send a NULL message
-    void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
     /* Get a pointer into the current buffer, to write data into it before sending
      * Now this is a private function, called by send internally */
     char* get_sendbuffer_ptr(subgroup_id_t subgroup_num, long long unsigned int payload_size, bool cooked_send);

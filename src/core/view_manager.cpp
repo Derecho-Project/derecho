@@ -1185,8 +1185,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
                     };
             curr_view->multicast_group->receiver_function(
                     subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
-                    num_shard_senders, gmsSST,
-                    curr_subgroup_settings.profile.window_size, sst_receive_handler_lambda);
+                    num_shard_senders, gmsSST, sst_receive_handler_lambda);
         }
     }
 
