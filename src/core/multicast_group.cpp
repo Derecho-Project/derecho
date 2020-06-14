@@ -251,15 +251,16 @@ bool MulticastGroup::create_rdmc_sst_groups() {
     for(const auto& p : subgroup_settings_map) {
         uint32_t subgroup_num = p.first;
         const SubgroupSettings& subgroup_settings = p.second;
-        const std::vector<node_id_t>& shard_members = subgroup_settings.members;
-        std::size_t num_shard_members = shard_members.size();
+        //const std::vector<node_id_t>& shard_members = subgroup_settings.members;
+        //std::size_t num_shard_members = shard_members.size();
         std::vector<int> shard_senders = subgroup_settings.senders;
-        uint32_t num_shard_senders = get_num_senders(shard_senders);
+        //uint32_t num_shard_senders = get_num_senders(shard_senders);
         auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
 
         sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(
                 sst, shard_sst_indices, subgroup_settings.profile.window_size, subgroup_settings.profile.sst_max_msg_size, subgroup_settings.senders,
                 subgroup_settings.num_received_offset, subgroup_settings.slot_offset);
+/*      DISABLE RDMC GROUP FORMATION - Still buggy and prevent SMC multiple groups experiments to be performed
 
         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
             // don't create RDMC group if the shard member is never going to send
@@ -424,6 +425,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 rdmc_group_num_offset++;
             }
         }
+*/
     }
     return true;
 }
@@ -867,43 +869,43 @@ void MulticastGroup::register_predicates() {
 
             persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
 
-            if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
-                    message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
-                    for(uint i = 0; i < num_shard_members; ++i) {
-                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
-                           || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                };
-                auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
-                    sender_cv.notify_all();
-                    next_message_to_deliver[subgroup_num]++;
-                };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
-            }
-        } else {
-            //This subgroup is in UNORDERED mode
-            if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members](const DerechoSST& sst) {
-                    for(uint i = 0; i < num_shard_members; ++i) {
-                        uint32_t num_received_offset = subgroup_settings.num_received_offset;
-                        if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
-                           < static_cast<int32_t>(future_message_indices[subgroup_num] - 1 - subgroup_settings.profile.window_size)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                };
-                auto sender_trig = [this](DerechoSST& sst) {
-                    sender_cv.notify_all();
-                };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
-            }
+         // if(subgroup_settings.sender_rank >= 0) {
+                // auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
+                //     message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
+                //     for(uint i = 0; i < num_shard_members; ++i) {
+                //         if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
+                //            || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
+                //             return false;
+                //         }
+                //     }
+                //     return true;
+                // };
+                // auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
+                //     sender_cv.notify_all();
+                //     next_message_to_deliver[subgroup_num]++;
+                // };
+                // sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+                //                                                         sst::PredicateType::RECURRENT));
+            // }
+        // } else {
+        //     //This subgroup is in UNORDERED mode
+        //     if(subgroup_settings.sender_rank >= 0) {
+        //         auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members](const DerechoSST& sst) {
+        //             for(uint i = 0; i < num_shard_members; ++i) {
+        //                 uint32_t num_received_offset = subgroup_settings.num_received_offset;
+        //                 if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
+        //                    < static_cast<int32_t>(future_message_indices[subgroup_num] - 1 - subgroup_settings.profile.window_size)) {
+        //                     return false;
+        //                 }
+        //             }
+        //             return true;
+        //         };
+        //         auto sender_trig = [this](DerechoSST& sst) {
+        //             sender_cv.notify_all();
+        //         };
+        //         sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+        //                                                                 sst::PredicateType::RECURRENT));
+        //     }
         }
     }
 }
