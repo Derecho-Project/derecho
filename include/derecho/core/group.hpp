@@ -145,7 +145,7 @@ private:
      * Another side effect is double free. So I change it back to the raw pointer.
      * The user deserialization context for all objects serialized and deserialized. */
     // std::shared_ptr<IDeserializationContext> user_deserialization_context;
-    IDeserializationContext* user_deserialization_context;
+    std::vector<IDeserializationContext*> user_deserialization_context;
 
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
@@ -260,7 +260,7 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          IDeserializationContext* deserialization_context,
+          const std::vector<IDeserializationContext*>& deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 

@@ -268,7 +268,7 @@ int main(int argc, char* argv[]) {
     auto store_factory = [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<ObjStore>(pr); };
 
     derecho::Group<ObjStore> group{
-                callback_set, subgroup_function, nullptr,
+                callback_set, subgroup_function, {},
                 std::vector<derecho::view_upcall_t>{},
                 store_factory};
 

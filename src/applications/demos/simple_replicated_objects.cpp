@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
     auto foo_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
     auto bar_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
 
-    derecho::Group<Foo, Bar> group(derecho::CallbackSet{}, subgroup_function, nullptr,
+    derecho::Group<Foo, Bar> group(derecho::CallbackSet{}, subgroup_function, {},
                                           std::vector<derecho::view_upcall_t>{},
                                           foo_factory, bar_factory);
 

@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     auto bar_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Bar>(); };
     auto cache_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Cache>(); };
 
-    derecho::Group<Foo, Bar, Cache> group({}, subgroup_info, nullptr,
+    derecho::Group<Foo, Bar, Cache> group({}, subgroup_info, {},
                                           std::vector<derecho::view_upcall_t>{},
                                           foo_factory, bar_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;

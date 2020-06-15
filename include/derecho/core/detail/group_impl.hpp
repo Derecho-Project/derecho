@@ -117,7 +117,7 @@ void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 IDeserializationContext* deserialization_context,
+                                 const std::vector<IDeserializationContext*>& deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
@@ -199,7 +199,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
 /* A simpler constructor that uses "default" options for callbacks, upcalls, and deserialization context */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories)
-        : Group({}, subgroup_info, nullptr, {}, factories...) {}
+        : Group({}, subgroup_info, {}, {}, factories...) {}
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {

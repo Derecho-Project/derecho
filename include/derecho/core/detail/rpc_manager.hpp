@@ -185,12 +185,11 @@ class RPCManager {
 
 public:
     RPCManager(ViewManager& group_view_manager,
-               IDeserializationContext* deserialization_context_ptr)
-            // mutils::RemoteDeserializationContext_p deserialization_context_ptr = nullptr)
+               const std::vector<IDeserializationContext*>& deserialization_context)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               view_manager(group_view_manager) {
-        if(deserialization_context_ptr != nullptr) {
+        for (const auto& deserialization_context_ptr:deserialization_context) {
             rdv.push_back(deserialization_context_ptr);
         }
         rpc_thread = std::thread(&RPCManager::p2p_receive_loop, this);
