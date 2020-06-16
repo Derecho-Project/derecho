@@ -19,7 +19,7 @@ public:
     HLC(uint64_t _r, uint64_t _l);
 
     // destructors
-    virtual ~HLC();
+    virtual ~HLC() noexcept(false);
 
     // ticking method - thread safe
     virtual void tick(bool thread_safe = true);
