@@ -33,7 +33,7 @@ class ExternalCaller;
 /**
  * The Deserialization Interface to be implemented by user applications.
  */
-struct IDeserializationContext : public mutils::RemoteDeserializationContext {};
+using DeserializationContext = mutils::RemoteDeserializationContext;
 
 namespace rpc {
 
@@ -185,7 +185,7 @@ class RPCManager {
 
 public:
     RPCManager(ViewManager& group_view_manager,
-               const std::vector<IDeserializationContext*>& deserialization_context)
+               const std::vector<DeserializationContext*>& deserialization_context)
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               view_manager(group_view_manager) {

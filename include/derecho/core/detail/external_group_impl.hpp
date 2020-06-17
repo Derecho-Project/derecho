@@ -65,7 +65,7 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
 }
 
 template <typename... ReplicatedTypes>
-ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deserialization_context)
+ExternalGroup<ReplicatedTypes...>::ExternalGroup(DeserializationContext* deserialization_context)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()) {
     if(deserialization_context != nullptr) {

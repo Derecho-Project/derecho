@@ -95,7 +95,7 @@ private:
     /** ======================== copy/paste from rpc_manager ======================== **/
 
 public:
-    ExternalGroup(IDeserializationContext* deserialization_context = nullptr);
+    ExternalGroup(DeserializationContext* deserialization_context = nullptr);
     ~ExternalGroup();
 
     template <typename SubgroupType>
