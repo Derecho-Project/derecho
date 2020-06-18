@@ -122,29 +122,15 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           user_deserialization_context(deserialization_context),
-          //This will load any existing public key files into memory
-          public_keys(getConfBoolean(CONF_PERS_SIGNED_LOG)
-                              ? std::make_shared<PublicKeyStore>(getConfString(CONF_PERS_PUBLIC_KEY_DIRECTORY))
-                              : nullptr),
-          persistence_manager(public_keys, objects_by_subgroup_id, callbacks.local_persistence_callback),
+          persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
           view_manager(subgroup_info,
                        {std::type_index(typeid(ReplicatedTypes))...},
                        std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                        objects_by_subgroup_id,
                        persistence_manager,
-                       public_keys,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
-    if(public_keys && !public_keys->contains_key_for(getConfString(CONF_DERECHO_LOCAL_IP))) {
-        //Ensure this node's own key is in the PublicKeyStore
-        std::string private_key_as_public_pem
-                = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)).to_pem_public();
-        public_keys->add_public_key(getConfString(CONF_DERECHO_LOCAL_IP),
-                                    private_key_as_public_pem.data(),
-                                    private_key_as_public_pem.size());
-        public_keys->persist_key_for(getConfString(CONF_DERECHO_LOCAL_IP));
-    }
     bool in_total_restart = view_manager.first_init();
     //State transfer must complete before an initial view can commit, and must retry if the view is aborted
     bool initial_view_confirmed = false;
@@ -196,9 +182,6 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         view_manager.leader_commit_initial_view();
     }
     //At this point the initial view is committed
-    if(public_keys) {
-        view_manager.exchange_public_keys();
-    }
     //Set up RDMA connections between each member of the view
     view_manager.initialize_multicast_groups(callbacks);
     rpc_manager.create_connections();

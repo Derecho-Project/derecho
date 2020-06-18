@@ -69,22 +69,40 @@ void PersistentRegistry::sign(const version_t& latest_version, openssl::Signer& 
         //After computing a signature over all fields of the object, go back and
         //tell each field to add that signature to its log
         for(auto& entry : _registry) {
-            entry.second.add_signature(version, signature_buffer);
+            entry.second.add_signature(version, signature_buffer, last_signed_version);
         }
         memcpy(last_signature.data(), signature_buffer, last_signature.size());
         last_signed_version = version;
     }
 }
 
-bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature) {
-    //This only verifies the specified version, but we should probably verify a range of versions
-    verifier.init();
+bool PersistentRegistry::get_signature(version_t version, unsigned char* signature_buffer) {
     for(auto& entry : _registry) {
-        entry.second.update_verifier(version, verifier);
+        if(entry.second.get_signature(version, signature_buffer) != INVALID_VERSION) {
+            return true;
+        }
     }
-    //TODO: Find the "previous" version from this one, which is not necessarily version - 1
-    //Then get its signature with entry.second.get_signature() and add that to the verifier
-    return verifier.finalize(signature, verifier.get_max_signature_size());
+    return false;
+}
+
+bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature) {
+    verifier.init();
+    for(auto& field : _registry) {
+        field.second.update_verifier(version, verifier);
+    }
+    const std::size_t signature_size = verifier.get_max_signature_size();
+    version_t prev_signed_version;
+    //Find a field that has a signature for this version; not all entries will
+    //On that field, get the previous signed version, and retrieve that signature
+    unsigned char current_sig[signature_size];
+    unsigned char previous_sig[signature_size];
+    for(auto& field : _registry) {
+        if((prev_signed_version = field.second.get_signature(version, current_sig)) != INVALID_VERSION) {
+            field.second.get_signature(prev_signed_version, previous_sig);
+        }
+    }
+    verifier.add_bytes(previous_sig, signature_size);
+    return verifier.finalize(signature, signature_size);
 }
 
 void PersistentRegistry::persist(const version_t& latest_version) {

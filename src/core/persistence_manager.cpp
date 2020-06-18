@@ -10,11 +10,9 @@
 namespace derecho {
 
 PersistenceManager::PersistenceManager(
-        std::shared_ptr<PublicKeyStore> public_key_store,
         std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
         const persistence_callback_t& _persistence_callback)
         : thread_shutdown(false),
-          node_public_keys(public_key_store),
           signature_size(0),
           persistence_callback(_persistence_callback),
           objects_by_subgroup_id(objects_map) {
@@ -23,7 +21,10 @@ PersistenceManager::PersistenceManager(
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
     if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
-        signature_size = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE)).get_max_size();
+        openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE));
+        signature_size = signing_key.get_max_size();
+        //The Verifier only needs the public key, but we loaded both public and private components from the private key file
+        signature_verifier = std::make_unique<openssl::Verifier>(signing_key, openssl::DigestAlgorithm::SHA256);
     }
 }
 
@@ -56,48 +57,15 @@ void PersistenceManager::start() {
                 continue;
             }
 
-            subgroup_id_t subgroup_id = std::get<0>(persistence_request_queue.front());
-            persistent::version_t version = std::get<1>(persistence_request_queue.front());
+            ThreadRequest request = persistence_request_queue.front();
             persistence_request_queue.pop();
             prq_lock.clear(std::memory_order_release);  // release lock
 
-            // persist
-            try {
-                //To reduce the time this thread holds the View lock, put the signature in a local array
-                //and copy it into the SST once signing is done. (We could use the SST signatures field
-                //directly as the signature array, but that would require holding the lock for longer.)
-                unsigned char signature[signature_size];
-
-                auto search = objects_by_subgroup_id.find(subgroup_id);
-                if(search != objects_by_subgroup_id.end()) {
-                    search->second.get().persist(version, signature);
-                }
-                // read lock the view
-                SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
-                // update the signature and persisted_num in SST
-                View& Vc = view_and_lock.get();
-                if(signature_size > 0) {
-                    //This will effectively do nothing if signature_size==0, but an unnecessary put() will still have overhead
-                    gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
-                                signature, signature_size);
-                    Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
-                                   (char*)std::addressof(Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
-                                   signature_size);
-                }
-                gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], version);
-                Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
-                               (char*)std::addressof(Vc.gmsSST->persisted_num[0][subgroup_id]) - Vc.gmsSST->getBaseAddress(),
-                               sizeof(long long int));
-            } catch(uint64_t exp) {
-                dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
-                std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
+            if(request.operation == RequestType::PERSIST) {
+                handle_persist_request(request.subgroup_id, request.version);
+            } else if(request.operation == RequestType::VERIFY) {
+                handle_verify_request(request.subgroup_id, request.version);
             }
-
-            // callback
-            if(this->persistence_callback != nullptr) {
-                this->persistence_callback(subgroup_id, version);
-            }
-
             if(this->thread_shutdown) {
                 while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
                     ;                                                    // spin
@@ -111,14 +79,98 @@ void PersistenceManager::start() {
     }};
 }
 
+void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version) {
+    // persist
+    try {
+        //To reduce the time this thread holds the View lock, put the signature in a local array
+        //and copy it into the SST once signing is done. (We could use the SST signatures field
+        //directly as the signature array, but that would require holding the lock for longer.)
+        unsigned char signature[signature_size];
+
+        auto search = objects_by_subgroup_id.find(subgroup_id);
+        if(search != objects_by_subgroup_id.end()) {
+            search->second.get().persist(version, signature);
+        }
+        // read lock the view
+        SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
+        // update the signature and persisted_num in SST
+        View& Vc = view_and_lock.get();
+        if(signature_size > 0) {
+            //This will effectively do nothing if signature_size==0, but an unnecessary put() will still have overhead
+            gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
+                        signature, signature_size);
+            Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
+                           (char*)std::addressof(Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
+                           signature_size);
+        }
+        gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], version);
+        Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
+                       Vc.gmsSST->persisted_num,
+                       subgroup_id);
+    } catch(uint64_t exp) {
+        dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
+        std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
+    }
+
+    // callback
+    if(this->persistence_callback != nullptr) {
+        this->persistence_callback(subgroup_id, version);
+    }
+}
+
+void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
+    if(signature_size == 0) {
+        return;
+    }
+    auto search = objects_by_subgroup_id.find(subgroup_id);
+    if(search != objects_by_subgroup_id.end()) {
+        ReplicatedObject& subgroup_object = search->second;
+        //Read lock the View while reading the SST
+        SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
+        View& Vc = view_and_lock.get();
+        std::vector<uint32_t> shard_member_ranks = Vc.multicast_group->get_shard_sst_indices(subgroup_id);
+        persistent::version_t minimum_verified_version = std::numeric_limits<persistent::version_t>::max();
+        //For each other member of this node's shard, try to verify the signature in its SST row
+        for(const uint32_t shard_member_rank : shard_member_ranks) {
+            if(shard_member_rank == Vc.gmsSST->get_local_index()) {
+                continue;
+            }
+            //The signature in the other node's "signatures" column should correspond to the version in its "persisted_num" column
+            const persistent::version_t other_signed_version = Vc.gmsSST->persisted_num[shard_member_rank][subgroup_id];
+            assert(other_signed_version >= version);
+            assert(subgroup_object.get_minimum_latest_persisted_version() >= other_signed_version);
+            signature_verifier->init();
+            bool verification_success = subgroup_object.verify_log(
+                    other_signed_version, *signature_verifier,
+                    const_cast<unsigned char*>(&Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size]));
+            if(verification_success) {
+                minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
+            }
+        }
+        //Update verified_num to the lowest version number that successfully verified across all shard members
+        if(minimum_verified_version != std::numeric_limits<persistent::version_t>::max()) {
+            gmssst::set(Vc.gmsSST->verified_num[Vc.gmsSST->get_local_index()][subgroup_id], minimum_verified_version);
+            Vc.gmsSST->put(shard_member_ranks, Vc.gmsSST->verified_num, subgroup_id);
+        }
+    }
+}
+
 /** post a persistence request */
 void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, const persistent::version_t& version) {
     // request enqueue
     while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
         ;                                                    // spin
-    persistence_request_queue.push(std::make_tuple(subgroup_id, version));
+    persistence_request_queue.push({RequestType::PERSIST, subgroup_id, version});
     prq_lock.clear(std::memory_order_release);  // release lock
     // post semaphore
+    sem_post(&persistence_request_sem);
+}
+
+void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, const persistent::version_t& version) {
+    while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
+        ;                                                    // spin
+    persistence_request_queue.push({RequestType::VERIFY, subgroup_id, version});
+    prq_lock.clear(std::memory_order_release);  // release lock
     sem_post(&persistence_request_sem);
 }
 

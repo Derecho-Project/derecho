@@ -32,7 +32,6 @@ ViewManager::ViewManager(
         const bool any_persistent_objects,
         ReplicatedObjectReferenceMap& object_reference_map,
         PersistenceManager& persistence_manager,
-        std::shared_ptr<PublicKeyStore> public_key_store,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
@@ -45,8 +44,7 @@ ViewManager::ViewManager(
                         {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
           subgroup_objects(object_reference_map),
           any_persistent_objects(any_persistent_objects),
-          persistence_manager(persistence_manager),
-          public_keys(public_key_store) {
+          persistence_manager(persistence_manager) {
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);
@@ -1433,11 +1431,6 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
         joiner_sockets.clear();
     }
 
-    // Receive keys from the joined nodes, if necessary, and send them this node's key
-    if(public_keys) {
-        exchange_keys_with_new_members();
-    }
-
     // Delete the last three GMS predicates from the old SST in preparation for deleting it
     gmsSST.predicates.remove(leader_committed_handle);
     gmsSST.predicates.remove(leader_suspicion_handle);
@@ -1759,67 +1752,6 @@ void ViewManager::update_tcp_connections() {
                               next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
-}
-
-void ViewManager::exchange_public_keys() {
-    assert(public_keys);
-    for(int32_t i = 0; i < curr_view->num_members; ++i) {
-        if(i == curr_view->my_rank) {
-            continue;
-        }
-        bool have_other_key = public_keys->contains_key_for(curr_view->member_ips_and_ports[i].ip_address);
-        PublicKeyStatus my_status = have_other_key ? PublicKeyStatus::KEY_NOT_NEEDED : PublicKeyStatus::KEY_NEEDED;
-        PublicKeyStatus other_status;
-        tcp_sockets.exchange(curr_view->members[i], my_status, other_status);
-        //Since this node is joining the group, it should send its key first, then receive the other's
-        if(other_status == PublicKeyStatus::KEY_NEEDED) {
-            const ip_addr_t& my_ip = curr_view->member_ips_and_ports[curr_view->my_rank].ip_address;
-            std::string my_key_file = public_keys->get_key_for(my_ip).to_pem_public();
-            std::size_t size_of_file = my_key_file.size();
-            tcp_sockets.write(curr_view->members[i], reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
-            tcp_sockets.write(curr_view->members[i], my_key_file.data(), my_key_file.size());
-        }
-        if(!have_other_key) {
-            std::size_t size_of_file;
-            tcp_sockets.read(curr_view->members[i], reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
-            char file_buffer[size_of_file];
-            tcp_sockets.read(curr_view->members[i], file_buffer, size_of_file);
-            public_keys->add_public_key(curr_view->member_ips_and_ports[i].ip_address, file_buffer, size_of_file);
-            public_keys->persist_key_for(curr_view->member_ips_and_ports[i].ip_address);
-        }
-    }
-}
-
-void ViewManager::exchange_keys_with_new_members() {
-    assert(public_keys);
-    //Protocol: First, joiner and this node swap PublicKeyStatus codes.
-    //Joiner sends its key (if necessary), then receives my key (if necessary)
-    //This node receives the joiner's key (if necessary), then sends its own key (if necessary)
-    //CONCERN: Do we need to ensure that we go in the same order as exchange_public_keys, rather
-    //         than just whatever order the joined list uses? Might this deadlock?
-    for(const node_id_t& joiner_id : next_view->joined) {
-        const ip_addr_t& joiner_ip = next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address;
-        bool have_key = public_keys->contains_key_for(joiner_ip);
-        PublicKeyStatus my_status = have_key ? PublicKeyStatus::KEY_NOT_NEEDED : PublicKeyStatus::KEY_NEEDED;
-        PublicKeyStatus joiner_status;
-        tcp_sockets.exchange(joiner_id, my_status, joiner_status);
-        if(!have_key) {
-            std::size_t size_of_file;
-            tcp_sockets.read(joiner_id, reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
-            char file_buffer[size_of_file];
-            tcp_sockets.read(joiner_id, file_buffer, size_of_file);
-            public_keys->add_public_key(joiner_ip, file_buffer, size_of_file);
-            public_keys->persist_key_for(joiner_ip);
-        }
-        if(joiner_status == PublicKeyStatus::KEY_NEEDED) {
-            const ip_addr_t& my_ip = next_view->member_ips_and_ports[next_view->my_rank].ip_address;
-            std::string my_key_file = public_keys->get_key_for(my_ip).to_pem_public();
-            std::size_t size_of_file = my_key_file.size();
-            tcp_sockets.write(joiner_id, reinterpret_cast<char*>(&size_of_file), sizeof(size_of_file));
-            tcp_sockets.write(joiner_id, my_key_file.data(), my_key_file.size());
-        }
-    }
-
 }
 
 uint32_t ViewManager::compute_num_received_size(const View& view) {

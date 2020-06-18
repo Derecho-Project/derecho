@@ -2,12 +2,12 @@
 #ifndef PERSISTENT_HPP
 #define PERSISTENT_HPP
 
-#include "detail/FilePersistLog.hpp"
 #include "HLC.hpp"
 #include "PersistException.hpp"
-#include "detail/PersistLog.hpp"
 #include "PersistNoLog.hpp"
 #include "PersistentTypenames.hpp"
+#include "detail/FilePersistLog.hpp"
+#include "detail/PersistLog.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <functional>
 #include <inttypes.h>
@@ -23,7 +23,7 @@
 #include <derecho/utils/logger.hpp>
 
 #if defined(_PERFORMANCE_DEBUG) || !defined(NDEBUG)
-  #include <derecho/utils/time.h>
+#include <derecho/utils/time.h>
 #endif  //_PERFORMANCE_DEBUG
 
 /**
@@ -82,9 +82,9 @@ class PersistentRegistry : public mutils::RemoteDeserializationContext {
 public:
     /* Constructor */
     PersistentRegistry(
-        ITemporalQueryFrontierProvider* tqfp,
-        const std::type_index& subgroup_type,
-        uint32_t subgroup_index, uint32_t shard_num);
+            ITemporalQueryFrontierProvider* tqfp,
+            const std::type_index& subgroup_type,
+            uint32_t subgroup_index, uint32_t shard_num);
 
     /* Destructor */
     virtual ~PersistentRegistry();
@@ -99,7 +99,6 @@ public:
      * @param signature_size The size of the signature, in bytes
      */
     void initializeLastSignature(const version_t& version, const unsigned char* signature, std::size_t signature_size);
-
 
     /** Make a new version capturing the current state of the object. */
     void makeVersion(const int64_t& ver, const HLC& mhlc);
@@ -122,6 +121,17 @@ public:
      * be placed after running this function
      */
     void sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
+
+    /**
+     * Retrieves a signature from the log for a specific version of the object,
+     * unless there is no version with that exact version number, in which case
+     * the output buffer will be unchanged.
+     * @param version The desired version
+     * @param signature_buffer A byte buffer in which the signature will be placed
+     * @return True if a signature was retrieved successfully, false if there
+     * was no version matching the requested version number
+     */
+    bool get_signature(version_t version, unsigned char* signature_buffer);
 
     /**
      * Verifies the log up to the specified version against the specified
@@ -310,7 +320,6 @@ public:
     virtual void applyDelta(char const* const) = 0;
 };
 
-
 // _NameMaker is a tool makeing the name for the log corresponding to a
 // given Persistent<ObjectType> object.
 template <typename ObjectType, StorageType storageType>
@@ -330,7 +339,6 @@ private:
     const char* m_sObjectTypeName;
     pthread_spinlock_t m_oLck;
 };
-
 
 // Persistent represents a variable backed up by persistent storage. The
 // backend is PersistLog class. PersistLog handles only raw bytes and this
@@ -360,7 +368,6 @@ template <typename ObjectType,
           StorageType storageType = ST_FILE>
 class Persistent : public mutils::ByteRepresentable {
 protected:
-
     /** initialize from local state.
      *  @param object_name Object name
      */
@@ -388,10 +395,10 @@ public:
      * @param dm The deserialization manager for deserializing local log entries.
      */
     Persistent(
-        const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
-        const char* object_name = nullptr,
-        PersistentRegistry* persistent_registry = nullptr,
-        mutils::DeserializationManager dm = {{}});
+            const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
+            const char* object_name = nullptr,
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}});
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
@@ -408,11 +415,11 @@ public:
      * @param dm The deserialization manager for deserializing local log entries.
      */
     Persistent(
-        const char* object_name,
-        std::unique_ptr<ObjectType>& wrapped_obj_ptr,
-        const char* log_tail = nullptr,
-        PersistentRegistry* persistent_registry = nullptr,
-        mutils::DeserializationManager dm = {{}});
+            const char* object_name,
+            std::unique_ptr<ObjectType>& wrapped_obj_ptr,
+            const char* log_tail = nullptr,
+            PersistentRegistry* persistent_registry = nullptr,
+            mutils::DeserializationManager dm = {{}});
 
     /** constructor 4, the default copy constructor, is disabled
      */
@@ -451,8 +458,8 @@ public:
      */
     template <typename Func>
     auto get(
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
+            const Func& fun,
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get the latest Value of T, returns a unique pointer to the object
@@ -466,9 +473,9 @@ public:
      */
     template <typename Func>
     auto getByIndex(
-        int64_t idx,
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
+            int64_t idx,
+            const Func& fun,
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. returns a unique pointer to the object
@@ -485,17 +492,17 @@ public:
      */
     template <typename Func>
     auto get(
-        const int64_t& ver,
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
+            const int64_t& ver,
+            const Func& fun,
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. specified version.
      * return a deserialized copy for the variable.
      */
     std::unique_ptr<ObjectType> get(
-        const int64_t& ver,
-        mutils::DeserializationManager* dm = nullptr);
+            const int64_t& ver,
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * trim by version or index
@@ -517,9 +524,9 @@ public:
      */
     template <typename Func>
     auto get(
-        const HLC& hlc,
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
+            const HLC& hlc,
+            const Func& fun,
+            mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a version of value T. specified by HLC clock.
@@ -596,38 +603,51 @@ public:
      * Update the provided Signer with the state of T at the specified version.
      * This should not finalize the Signer, since other Persistent fields in
      * the same Replicated object might need to update it too.
+     * @param ver The version whose data to use in updating the Signer
+     * @param signer A Signer object that has been initialized and is ready to
+     * accept bytes for signing
      * @return the number of bytes added to the Signer, i.e. the size of the
      * log entry at the specified version
      */
-    virtual std::size_t update_signature(const version_t& ver, openssl::Signer& signer);
+    virtual std::size_t updateSignature(const version_t& ver, openssl::Signer& signer);
 
     /**
      * Add the provided signature to the specified version in the log. The length
      * of the signature buffer must be equal to the configured signature length for
-     * this log.
+     * this log. Also specifies the previous version whose signature has been included
+     * in this signature, to make it easier to verify the chain of signatures.
+     * @param ver the version to add the signature to; should be the same version
+     * that was used previously in update_signature to create this signature.
+     * @param signature A byte buffer containing the signature to add to the log
+     * @param pervious_signed_version The previous version that this signature
+     * depends on (i.e. whose signature was signed when creating this signature).
      */
-    virtual void add_signature(const version_t& ver, const unsigned char* signature);
+    virtual void addSignature(const version_t& ver, const unsigned char* signature,
+                              version_t previous_signed_version);
 
     /**
      * @return the size, in bytes, of each signature in this Persistent object's log.
      * Useful for allocating a correctly-sized buffer before calling get_signature.
      */
-    virtual std::size_t get_signature_size();
+    virtual std::size_t getSignatureSize();
 
     /**
      * Retrieves the signature associated with the specified version and copies
      * it into the provided buffer, which must be of the correct length.
      * @param ver The version to get the signature for
      * @param signature A byte buffer into which the signature will be placed
+     * @return The previous version whose signature is included in this version's
+     * signature, or INVALID_VERSION if there was no version in the log with the
+     * requested version number
      */
-    virtual void get_signature(const version_t& ver, unsigned char* signature);
+    virtual version_t getSignature(const version_t& ver, unsigned char* signature);
 
     /**
      * Update the provided Verifier with the state of T at the specified version.
      * This is analogous to update_signature, only for verifying the log against
      * an existing signature.
      */
-    virtual void update_verifier(const version_t& ver, openssl::Verifier& verifier);
+    virtual void updateVerifier(const version_t& ver, openssl::Verifier& verifier);
     /**
      * persist versions
      * @param version The version to persist up to
@@ -644,7 +664,7 @@ protected:
     // Persistence Registry
     PersistentRegistry* m_pRegistry;
     // get the static name maker.
-    static _NameMaker<ObjectType,storageType>& getNameMaker(const std::string& prefix = std::string(""));
+    static _NameMaker<ObjectType, storageType>& getNameMaker(const std::string& prefix = std::string(""));
 
     //serialization supports
 public:

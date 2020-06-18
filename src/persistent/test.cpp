@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
             // by lambda
             /*
       npx.getByIndex(nv,
-        [&](VariableBytes& x) { 
+        [&](VariableBytes& x) {
           cout<<"["<<nv<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
         });
 */
@@ -285,7 +285,7 @@ int main(int argc, char** argv) {
             /*
       // by lambda
       npx.get(ver,
-        [&](VariableBytes& x) { 
+        [&](VariableBytes& x) {
           cout<<"["<<(uint64_t)(ver>>64)<<"."<<(uint64_t)ver<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
         });
 */
@@ -322,16 +322,17 @@ int main(int argc, char** argv) {
             npx.trim(hlc);
             cout << "trim till time " << hlc.m_rtc_us << " successfully" << endl;
         } else if(strcmp(argv[1], "set") == 0) {
+            version_t prev_ver = npx.getLatestVersion();
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx).buf, "%s", v);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
-            npx.update_signature(ver,signer);
+            npx.updateSignature(ver,signer);
             signer.finalize(static_cast<unsigned char*>(sig_buf));
             std::cout << "signature=" << std::endl;
             dump_binary_buffer(sig_buf,sig_size);
-            npx.add_signature(ver,sig_buf);
+            npx.addSignature(ver,sig_buf,prev_ver);
             npx.persist(ver);
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];

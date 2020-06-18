@@ -40,6 +40,7 @@ union LogEntry {
         uint64_t ofst;     // offset of the data in the memory buffer
         uint64_t hlc_r;    // realtime component of hlc
         uint64_t hlc_l;    // logic component of hlc
+        int64_t prev_signed_ver; // previous signed version, whose signature is included in this version's signature
         char signature[];  // signature
     } fields;
     uint8_t bytes[MAX_LOG_ENTRY_SIZE];
@@ -193,8 +194,8 @@ public:
     virtual const version_t persist(const version_t& ver,
                                     const bool preLocked = false);
     virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func);
-    virtual void add_signature(const version_t& ver, const unsigned char* signature);
-    virtual void get_signature(const version_t& ver, unsigned char* signature);
+    virtual void addSignature(const version_t& ver, const unsigned char* signature, version_t previous_signed_version);
+    virtual version_t getSignature(const version_t& ver, unsigned char* signature);
     virtual void trimByIndex(const int64_t& eno);
     virtual void trim(const version_t& ver);
     virtual void trim(const HLC& hlc);

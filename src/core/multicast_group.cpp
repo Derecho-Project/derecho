@@ -890,8 +890,11 @@ void MulticastGroup::register_predicates() {
                     min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
                 }
                 // callbacks
-                if((version_seen < min_persisted_num) && callbacks.global_persistence_callback) {
-                    callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+                if(min_persisted_num > version_seen) {
+                    if(callbacks.global_persistence_callback) {
+                        callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+                    }
+                    persistence_manager.post_verify_request(subgroup_num, min_persisted_num);
                     version_seen = min_persisted_num;
                 }
             };

@@ -128,10 +128,13 @@ public:
     // Get a version specified by hlc
     virtual const void* getEntry(const HLC& hlc) = 0;
 
-    // process the entry at exactly version @ver
-    // if such a version does not exist, nothing will happen.
-    // @param ver - the specified version
-    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*,const std::size_t& size)>& func) = 0;
+    /**
+     * process the entry at exactly version @ver
+     * if such a version does not exist, nothing will happen.
+     * @param ver - the specified version
+     * @param func - the function to run on the entry
+     */
+    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func) = 0;
 
     /**
      * Persist the log till specified version
@@ -147,16 +150,20 @@ public:
      * @param ver - version
      * @param signature - signature
      */
-    virtual void add_signature(const version_t& ver, const unsigned char* signature)
-            = 0;
+    virtual void addSignature(const version_t& ver, const unsigned char* signature,
+                              version_t prev_signed_ver) = 0;
 
     /**
      * Retrieve a signature from a specified version
      * @param ver - version
      * @param signature - A byte buffer into which the signature will be copied.
      * Must be at least signature_size bytes.
+     * @return The previous version whose signature this signature includes, or
+     * INVALID_VERSION if the requested version was not in the log (in this case,
+     * no signature will be returned either)
      */
-    virtual void get_signature(const version_t& ver, unsigned char* signature) = 0;
+    virtual version_t getSignature(const version_t& ver, unsigned char* signature) = 0;
+
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]

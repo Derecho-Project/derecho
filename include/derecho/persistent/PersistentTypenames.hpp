@@ -38,9 +38,17 @@ struct PersistentObjectFunctions {
     /**
      * The "add signature" function in a persistent object should add the
      * provided signature (parameter 2) to the log at the specified version
-     * number (parameter 1).
+     * number (parameter 1). It also should record the fact that the signature
+     * includes a signature from a previous version (parameter 3)
      */
-    std::function<void(const version_t&, const unsigned char*)> add_signature;
+    std::function<void(const version_t&, const unsigned char*, version_t)> add_signature;
+    /**
+     * The "get signature" function should retrieve the signature associated
+     * with a particular version of the object (parameter 1) and copy it into
+     * the byte buffer pointed to by parameter 2. It should also return the
+     * previous version whose signature is included in the data signed.
+     */
+    std::function<version_t(const version_t&, unsigned char*)> get_signature;
     /**
      * The "update verifier" function should update the provided Verifier object
      * (parameter 2) with the state of the object in a specific version

@@ -20,7 +20,6 @@
 #include "derecho_exception.hpp"
 #include "detail/derecho_internal.hpp"
 #include "detail/persistence_manager.hpp"
-#include "detail/public_key_store.hpp"
 #include "detail/rpc_manager.hpp"
 #include "detail/view_manager.hpp"
 #include "replicated.hpp"
@@ -147,13 +146,6 @@ private:
      * The user deserialization context for all objects serialized and deserialized. */
     // std::shared_ptr<IDeserializationContext> user_deserialization_context;
     IDeserializationContext* user_deserialization_context;
-    /**
-     * If signed logs are enabled, this keeps track of the public keys for other
-     * nodes in the group. If not, this will be a null pointer. Shared with the
-     * ViewManager and PersistenceManager, since ViewManager receives keys from
-     * new members and PersistenceManager uses them to verify signatures.
-     */
-    std::shared_ptr<PublicKeyStore> public_keys;
     /** Persists the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;

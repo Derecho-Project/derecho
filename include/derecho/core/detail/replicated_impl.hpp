@@ -195,11 +195,6 @@ std::size_t Replicated<T>::receive_object(char* buffer) {
     if constexpr(std::is_base_of_v<GroupReference, T>) {
         (**user_object_ptr).set_group_pointers(group, subgroup_index);
     }
-    if(signer) {
-        unsigned char latest_signature[signer->get_max_signature_size()];
-        persistent_registry->sign(persistent_registry->getMinimumLatestPersistedVersion(), *signer, latest_signature);
-        //put the signature in the SST somehow...
-    }
     return mutils::bytes_size(**user_object_ptr);
 }
 

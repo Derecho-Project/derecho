@@ -373,8 +373,9 @@ const int64_t FilePersistLog::persist(const int64_t& ver, const bool preLocked) 
     return ver_ret;
 }
 
-void FilePersistLog::add_signature(const version_t& version,
-                                   const unsigned char* signature) {
+void FilePersistLog::addSignature(const version_t& version,
+                                   const unsigned char* signature,
+                                   version_t prev_signed_ver) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -393,10 +394,11 @@ void FilePersistLog::add_signature(const version_t& version,
 
     if(ple != nullptr && ple->fields.ver == version) {
         memcpy(ple->fields.signature, signature, signature_size);
+        ple->fields.prev_signed_ver = prev_signed_ver;
     }
 }
 
-void FilePersistLog::get_signature(const version_t& version, unsigned char* signature) {
+version_t FilePersistLog::getSignature(const version_t& version, unsigned char* signature) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -414,7 +416,9 @@ void FilePersistLog::get_signature(const version_t& version, unsigned char* sign
 
     if(ple != nullptr && ple->fields.ver == version) {
         memcpy(signature, ple->fields.signature, signature_size);
+        return ple->fields.prev_signed_ver;
     }
+    return INVALID_VERSION;
 }
 
 int64_t FilePersistLog::getLength() {
