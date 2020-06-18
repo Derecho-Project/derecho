@@ -3,18 +3,19 @@
 # Pre-commit hook that ensures the file git_version.cpp is updated to reflect
 # the current version of the project as of this commit. This script parses the 
 # output of git describe to get each component of the version number (assuming 
-# the most recent tag follows the vX.Y.Z standard format), then generates 
+# the most recent tag follows the vX.Y.Z[rc] standard format), then generates 
 # git_version.cpp in which the C++ constants are defined to have these values.
 # The new version of git_version.cpp is then added to the commit.
 
-version_regex='v([0-9]+)\.([0-9]+)\.?([0-9]*)rc?-([0-9]+)-g([0-9|a-z]+)'
+# Meaning: v(number).(number)[.](optional number)[rc]-(number)-g(alphanumeric hash)
+version_regex='v([0-9]+)\.([0-9]+)\.?([0-9]*)(rc)?-([0-9]+)-g([0-9|a-z]+)'
 git_string=$(git describe --tags --long)
 
 if [[ $git_string =~ $version_regex ]]; then
 	major_version="${BASH_REMATCH[1]}"
 	minor_version="${BASH_REMATCH[2]}"
 	patch_version="${BASH_REMATCH[3]}"
-	commits_ahead="${BASH_REMATCH[4]}"
+	commits_ahead="${BASH_REMATCH[5]}"
 else
 	echo "Error: git describe did not output a valid version string. Unable to update git_version.cpp" >&2
 	exit 1
