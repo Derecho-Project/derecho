@@ -82,7 +82,7 @@ public:
      * is called on that entry.
      */
     virtual void append(const void* pdata,
-                        const uint64_t& size, const version_t& ver,
+                        uint64_t size, version_t ver,
                         const HLC& mhlc)
             = 0;
 
@@ -91,7 +91,7 @@ public:
      * to create gap between versions.
      */
     // virtual void advanceVersion(const __int128 & ver) = 0;
-    virtual void advanceVersion(const version_t& ver) = 0;
+    virtual void advanceVersion(version_t ver) = 0;
 
     // Get the length of the log
     virtual int64_t getLength() = 0;
@@ -103,7 +103,7 @@ public:
     virtual int64_t getLatestIndex() = 0;
 
     // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t& ver) = 0;
+    virtual int64_t getVersionIndex(version_t ver) = 0;
 
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) = 0;
@@ -118,10 +118,10 @@ public:
     virtual const version_t getLastPersistedVersion() = 0;
 
     // Get a version by entry number return both length and buffer
-    virtual const void* getEntryByIndex(const int64_t& eno) = 0;
+    virtual const void* getEntryByIndex(int64_t eno) = 0;
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const version_t& ver) = 0;
+    virtual const void* getEntry(version_t ver) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() = 0;
@@ -134,7 +134,7 @@ public:
      * @param ver - the specified version
      * @param func - the function to run on the entry
      */
-    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func) = 0;
+    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) = 0;
 
     /**
      * Persist the log till specified version
@@ -142,7 +142,7 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const version_t& version,
+    virtual const version_t persist(version_t version,
                                     const bool preLocked = false) = 0;
 
     /**
@@ -150,7 +150,7 @@ public:
      * @param ver - version
      * @param signature - signature
      */
-    virtual void addSignature(const version_t& ver, const unsigned char* signature,
+    virtual void addSignature(version_t ver, const unsigned char* signature,
                               version_t prev_signed_ver) = 0;
 
     /**
@@ -162,20 +162,20 @@ public:
      * INVALID_VERSION if the requested version was not in the log (in this case,
      * no signature will be returned either)
      */
-    virtual version_t getSignature(const version_t& ver, unsigned char* signature) = 0;
+    virtual version_t getSignature(version_t ver, unsigned char* signature) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed
      */
-    virtual void trimByIndex(const int64_t& idx) = 0;
+    virtual void trimByIndex(int64_t eno) = 0;
 
     /**
      * Trim the log till version, inclusively.
      * @param ver - all log entry before ver will be trimmed.
      */
-    virtual void trim(const version_t& ver) = 0;
+    virtual void trim(version_t ver) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
@@ -188,7 +188,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t bytes_size(const version_t& ver) = 0;
+    virtual size_t bytes_size(version_t ver) = 0;
 
     /**
      * Write the serialized log bytes to the given buffer
@@ -196,7 +196,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char* buf, const version_t& ver) = 0;
+    virtual size_t to_bytes(char* buf, version_t ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -205,7 +205,7 @@ public:
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver)
+                             version_t ver)
             = 0;
 
     /**
@@ -219,7 +219,7 @@ public:
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strict after ver will be truncated.
      */
-    virtual void truncate(const version_t& ver) = 0;
+    virtual void truncate(version_t ver) = 0;
 };
 }  // namespace persistent
 

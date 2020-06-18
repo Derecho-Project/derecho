@@ -278,7 +278,7 @@ public:
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent::version_t& ver, const HLC& hlc);
+    virtual void make_version(persistent::version_t ver, const HLC& hlc);
 
     /**
      * Persist the data up to the specified version. Also, if the signed log is
@@ -287,7 +287,7 @@ public:
      * @param signature The byte array in which to put the signature, assumed to be
      * the correct length for this node's signing key.
      */
-    virtual void persist(const persistent::version_t version,
+    virtual void persist(persistent::version_t version,
                          unsigned char* signature);
 
     /**
@@ -299,7 +299,7 @@ public:
      * @param other_signature The signature to verify against, presumably from
      * some other node
      */
-    virtual bool verify_log(const persistent::version_t version,
+    virtual bool verify_log(persistent::version_t version,
                             openssl::Verifier& verifier,
                             const unsigned char* other_signature);
 
@@ -308,7 +308,7 @@ public:
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& earliest_version);
+    virtual void trim(persistent::version_t earliest_version);
 
     /**
      * Truncate the logs of all Persistent<T> members back to the version
@@ -316,12 +316,12 @@ public:
      * during failure recovery when some versions must be rolled back.
      * @param latest_version The latest version number that should remain in the logs
      */
-    virtual void truncate(const persistent::version_t& latest_version);
+    virtual void truncate(persistent::version_t latest_version);
 
     /**
      * Post the next version to be handled.
      */
-    virtual void post_next_version(const persistent::version_t& version, const uint64_t& ts_us);
+    virtual void post_next_version(persistent::version_t version, uint64_t ts_us);
 
     /**
      * Get the next version to be handled.

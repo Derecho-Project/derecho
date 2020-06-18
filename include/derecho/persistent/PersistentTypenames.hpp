@@ -27,39 +27,39 @@ struct PersistentObjectFunctions {
      * the object's current state that is associated with the provided version
      * number (parameter 1) and HLC time (parameter 2).
      */
-    std::function<void(const version_t&, const HLC&)> version;
+    std::function<void(version_t, const HLC&)> version;
     /**
      * The "update signature" function in a persistent object should update the
      * provided Signer object (parameter 2) with the state of the object in a
      * specific version (parameter 1). It returns the number of bytes that were
      * added to the Signer.
      */
-    std::function<std::size_t(const version_t&, openssl::Signer&)> update_signature;
+    std::function<std::size_t(version_t, openssl::Signer&)> update_signature;
     /**
      * The "add signature" function in a persistent object should add the
      * provided signature (parameter 2) to the log at the specified version
      * number (parameter 1). It also should record the fact that the signature
      * includes a signature from a previous version (parameter 3)
      */
-    std::function<void(const version_t&, const unsigned char*, version_t)> add_signature;
+    std::function<void(version_t, const unsigned char*, version_t)> add_signature;
     /**
      * The "get signature" function should retrieve the signature associated
      * with a particular version of the object (parameter 1) and copy it into
      * the byte buffer pointed to by parameter 2. It should also return the
      * previous version whose signature is included in the data signed.
      */
-    std::function<version_t(const version_t&, unsigned char*)> get_signature;
+    std::function<version_t(version_t, unsigned char*)> get_signature;
     /**
      * The "update verifier" function should update the provided Verifier object
      * (parameter 2) with the state of the object in a specific version
      * (parameter 1).
      */
-    std::function<void(const version_t&, openssl::Verifier&)> update_verifier;
+    std::function<void(version_t, openssl::Verifier&)> update_verifier;
     /**
      * The "persist" function in a persistent object should persist a batch of
      * versions to persistent storage, up to the specified version.
      */
-    std::function<void(const version_t&)> persist;
+    std::function<void(version_t)> persist;
     /**
      * The "trim" function in a persistent object should discard old versions from
      * the object's persistent log, deleting all records earlier than the provided
@@ -82,6 +82,6 @@ struct PersistentObjectFunctions {
      * (parameter 1). This is used during failure recovery to delete recent versions
      * that must be aborted.
      */
-    std::function<void(const int64_t&)> truncate;
+    std::function<void(version_t)> truncate;
 };
 }  // namespace persistent

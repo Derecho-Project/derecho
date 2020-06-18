@@ -177,33 +177,33 @@ public:
 
     //Derived from PersistLog
     virtual void append(const void* pdata,
-                        const uint64_t& size, const int64_t& ver,
+                        uint64_t size, version_t ver,
                         const HLC& mhlc);
-    virtual void advanceVersion(const int64_t& ver);
+    virtual void advanceVersion(int64_t ver);
     virtual int64_t getLength();
     virtual int64_t getEarliestIndex();
     virtual int64_t getLatestIndex();
-    virtual int64_t getVersionIndex(const version_t& ver);
+    virtual int64_t getVersionIndex(version_t ver);
     virtual int64_t getHLCIndex(const HLC& hlc);
     virtual version_t getEarliestVersion();
     virtual version_t getLatestVersion();
     virtual const version_t getLastPersistedVersion();
-    virtual const void* getEntryByIndex(const int64_t& eno);
-    virtual const void* getEntry(const version_t& ver);
+    virtual const void* getEntryByIndex(int64_t eno);
+    virtual const void* getEntry(version_t ver);
     virtual const void* getEntry(const HLC& hlc);
-    virtual const version_t persist(const version_t& ver,
+    virtual const version_t persist(version_t ver,
                                     const bool preLocked = false);
-    virtual void processEntryAtVersion(const version_t& ver, const std::function<void(const void*, const std::size_t& size)>& func);
-    virtual void addSignature(const version_t& ver, const unsigned char* signature, version_t previous_signed_version);
-    virtual version_t getSignature(const version_t& ver, unsigned char* signature);
-    virtual void trimByIndex(const int64_t& eno);
-    virtual void trim(const version_t& ver);
+    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
+    virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
+    virtual version_t getSignature(version_t ver, unsigned char* signature);
+    virtual void trimByIndex(int64_t eno);
+    virtual void trim(version_t ver);
     virtual void trim(const HLC& hlc);
-    virtual void truncate(const version_t& ver);
-    virtual size_t bytes_size(const version_t& ver);
-    virtual size_t to_bytes(char* buf, const version_t& ver);
+    virtual void truncate(version_t ver);
+    virtual size_t bytes_size(version_t ver);
+    virtual size_t to_bytes(char* buf, version_t ver);
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver);
+                             version_t ver);
     virtual void applyLogTail(char const* v);
 
     template <typename TKey, typename KeyGetter>
@@ -274,7 +274,7 @@ private:
      * @RETURN the minimum index since the given version. INVALID_INDEX means
      *         that no log entry is available for the requested version.
      */
-    int64_t getMinimumIndexBeyondVersion(const int64_t& ver);
+    int64_t getMinimumIndexBeyondVersion(version_t ver);
     /**
      * get the byte size of log entry
      * Note: no lock protected, use FPL_RDLOCK

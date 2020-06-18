@@ -98,10 +98,10 @@ public:
      * @param signature The last signature in the log (in a byte buffer)
      * @param signature_size The size of the signature, in bytes
      */
-    void initializeLastSignature(const version_t& version, const unsigned char* signature, std::size_t signature_size);
+    void initializeLastSignature(version_t version, const unsigned char* signature, std::size_t signature_size);
 
     /** Make a new version capturing the current state of the object. */
-    void makeVersion(const int64_t& ver, const HLC& mhlc);
+    void makeVersion(version_t ver, const HLC& mhlc);
 
     /**
      * Returns the minumum of the latest version across all Persistent fields.
@@ -120,7 +120,7 @@ public:
      * @param signature_buffer A byte buffer in which the latest signature will
      * be placed after running this function
      */
-    void sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
+    void sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer);
 
     /**
      * Retrieves a signature from the log for a specific version of the object,
@@ -143,17 +143,17 @@ public:
      * @param signature A signature over the log up to the specified version
      * @return True if the signature verifies, false if it doesn't
      */
-    bool verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature);
+    bool verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature);
 
     /**
      * Persist versions up to a specified version, which should be the result of
      * calling getMinimumLatestVersion().
      * @param latest_version The version to persist up to.
      */
-    void persist(const version_t& latest_version);
+    void persist(version_t latest_version);
 
     /** Trims the log of all versions earlier than the argument. */
-    void trim(const int64_t& earliest_version);
+    void trim(version_t earliest_version);
 
     /** Returns the minimum of the latest persisted versions among all Persistent fields. */
     version_t getMinimumLatestPersistedVersion();
@@ -165,7 +165,7 @@ public:
      * (so the serialized logs exclude version ver).
      * @param ver The version after which to begin serializing logs
      */
-    static void setEarliestVersionToSerialize(const int64_t& ver) noexcept(true);
+    static void setEarliestVersionToSerialize(version_t ver) noexcept(true);
 
     /** Reset the earliest version for serialization to an invalid "uninitialized" state */
     static void resetEarliestVersionToSerialize() noexcept(true);
@@ -178,7 +178,7 @@ public:
      * Since this throws away recently-used data, it should only be used during
      * failure recovery when those versions must be rolled back.
      */
-    void truncate(const int64_t& last_version);
+    void truncate(version_t last_version);
 
     /**
      * register a Persistent<T> along with its lambdas
@@ -492,7 +492,7 @@ public:
      */
     template <typename Func>
     auto get(
-            const int64_t& ver,
+            version_t ver,
             const Func& fun,
             mutils::DeserializationManager* dm = nullptr);
 
@@ -501,7 +501,7 @@ public:
      * return a deserialized copy for the variable.
      */
     std::unique_ptr<ObjectType> get(
-            const int64_t& ver,
+            version_t ver,
             mutils::DeserializationManager* dm = nullptr);
 
     /**
@@ -514,7 +514,7 @@ public:
      * truncate the log
      * @param ver: all versions strictly newer than 'ver' will be truncated.
      */
-    void truncate(const int64_t& ver);
+    void truncate(version_t ver);
 
     /**
      * get a version of Value T, specified by HLC clock. the user lambda will be fed with
@@ -562,7 +562,7 @@ public:
     /**
      * get the earliest  version excluding trimmed ones.
      */
-    virtual int64_t getEarliestVersion();
+    virtual version_t getEarliestVersion();
 
     /**
      * get the latest index excluding truncated ones.
@@ -572,32 +572,32 @@ public:
     /**
      * get the lastest version excluding truncated ones.
      */
-    virtual int64_t getLatestVersion();
+    virtual version_t getLatestVersion();
 
     /**
      * get the last persisted version.
      */
-    virtual const int64_t getLastPersistedVersion();
+    virtual const version_t getLastPersistedVersion();
 
     /**
      * make a version with a version number and mhlc clock
      */
-    virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc);
+    virtual void set(ObjectType& v, version_t ver, const HLC& mhlc);
 
     /**
      * make a version with a version number and mhlc clock, using the current state.
      */
-    virtual void version_with_hlc(const version_t& ver, const HLC& mhlc);
+    virtual void version_with_hlc(version_t ver, const HLC& mhlc);
 
     /**
      * make a version with only a version number
      */
-    virtual void set(ObjectType& v, const version_t& ver);
+    virtual void set(ObjectType& v, version_t ver);
 
     /**
      * make a version with only a version number, using the current state.
      */
-    virtual void version(const version_t& ver);
+    virtual void version(version_t ver);
 
     /**
      * Update the provided Signer with the state of T at the specified version.
@@ -609,7 +609,7 @@ public:
      * @return the number of bytes added to the Signer, i.e. the size of the
      * log entry at the specified version
      */
-    virtual std::size_t updateSignature(const version_t& ver, openssl::Signer& signer);
+    virtual std::size_t updateSignature(version_t ver, openssl::Signer& signer);
 
     /**
      * Add the provided signature to the specified version in the log. The length
@@ -622,7 +622,7 @@ public:
      * @param pervious_signed_version The previous version that this signature
      * depends on (i.e. whose signature was signed when creating this signature).
      */
-    virtual void addSignature(const version_t& ver, const unsigned char* signature,
+    virtual void addSignature(version_t ver, const unsigned char* signature,
                               version_t previous_signed_version);
 
     /**
@@ -640,19 +640,19 @@ public:
      * signature, or INVALID_VERSION if there was no version in the log with the
      * requested version number
      */
-    virtual version_t getSignature(const version_t& ver, unsigned char* signature);
+    virtual version_t getSignature(version_t ver, unsigned char* signature);
 
     /**
      * Update the provided Verifier with the state of T at the specified version.
      * This is analogous to update_signature, only for verifying the log against
      * an existing signature.
      */
-    virtual void updateVerifier(const version_t& ver, openssl::Verifier& verifier);
+    virtual void updateVerifier(version_t ver, openssl::Verifier& verifier);
     /**
      * persist versions
      * @param version The version to persist up to
      */
-    virtual void persist(const version_t& ver);
+    virtual void persist(version_t ver);
 
 public:
     // wrapped objected

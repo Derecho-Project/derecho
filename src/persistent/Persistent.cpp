@@ -18,7 +18,7 @@ PersistentRegistry::~PersistentRegistry() {
     this->_registry.clear();
 };
 
-void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) {
+void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
     for(auto& entry : _registry) {
         entry.second.version(ver, mhlc);
     }
@@ -38,8 +38,8 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
     return min;
 }
 
-void PersistentRegistry::initializeLastSignature(const version_t& version,
-                                              const unsigned char* signature, std::size_t signature_size) {
+void PersistentRegistry::initializeLastSignature(version_t version,
+                                                 const unsigned char* signature, std::size_t signature_size) {
     if(signature_size != last_signature.size()) {
         last_signature.resize(signature_size);
         //On the first call to initialize_signature with version == INVALID_VERSION,
@@ -52,7 +52,7 @@ void PersistentRegistry::initializeLastSignature(const version_t& version,
     }
 }
 
-void PersistentRegistry::sign(const version_t& latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
+void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
     //Find the last version successfully persisted to disk so we know where to start
     version_t last_signed_version = getMinimumLatestPersistedVersion();
     for(version_t version = last_signed_version; version <= latest_version; ++version) {
@@ -85,7 +85,7 @@ bool PersistentRegistry::get_signature(version_t version, unsigned char* signatu
     return false;
 }
 
-bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& verifier, const unsigned char* signature) {
+bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature) {
     verifier.init();
     for(auto& field : _registry) {
         field.second.update_verifier(version, verifier);
@@ -105,13 +105,13 @@ bool PersistentRegistry::verify(const version_t& version, openssl::Verifier& ver
     return verifier.finalize(signature, signature_size);
 }
 
-void PersistentRegistry::persist(const version_t& latest_version) {
+void PersistentRegistry::persist(version_t latest_version) {
     for(auto& entry : _registry) {
         entry.second.persist(latest_version);
     }
 };
 
-void PersistentRegistry::trim(const int64_t& earliest_version) {
+void PersistentRegistry::trim(version_t earliest_version) {
     for(auto& entry : _registry) {
         entry.second.trim(earliest_version);
     }
@@ -131,7 +131,7 @@ int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
     return min;
 }
 
-void PersistentRegistry::setEarliestVersionToSerialize(const int64_t& ver) noexcept(true) {
+void PersistentRegistry::setEarliestVersionToSerialize(version_t ver) noexcept(true) {
     PersistentRegistry::earliest_version_to_serialize = ver;
 }
 
@@ -143,7 +143,7 @@ int64_t PersistentRegistry::getEarliestVersionToSerialize() noexcept(true) {
     return PersistentRegistry::earliest_version_to_serialize;
 }
 
-void PersistentRegistry::truncate(const int64_t& last_version) {
+void PersistentRegistry::truncate(version_t last_version) {
     for(auto& entry : _registry) {
         entry.second.truncate(last_version);
     }

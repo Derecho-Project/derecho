@@ -287,7 +287,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
-        const int64_t& ver,
+        version_t ver,
         const Func& fun,
         mutils::DeserializationManager* dm) {
     char* pdat = (char*)this->m_pLog->getEntry(ver);
@@ -305,7 +305,7 @@ auto Persistent<ObjectType, storageType>::get(
 template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
-        const int64_t& ver,
+        version_t ver,
         mutils::DeserializationManager* dm) {
     int64_t idx = this->m_pLog->getVersionIndex(ver);
     if(idx == INVALID_INDEX) {
@@ -330,7 +330,7 @@ void Persistent<ObjectType, storageType>::trim(const TKey& k) {
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::truncate(const int64_t& ver) {
+void Persistent<ObjectType, storageType>::truncate(version_t ver) {
     dbg_default_trace("truncate.");
     this->m_pLog->truncate(ver);
     dbg_default_trace("truncate...done");
@@ -425,7 +425,7 @@ const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         v.finalizeCurrentDelta([&](char const* const buf, size_t len) {
@@ -444,14 +444,14 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::version_with_hlc(const version_t& ver, const HLC& mhlc) {
+void Persistent<ObjectType, storageType>::version_with_hlc(version_t ver, const HLC& mhlc) {
     dbg_default_trace("In Persistent<T>: make version (ver={}, hlc={}us.{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     this->set(*this->m_pWrappedObject, ver, mhlc);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver) {
     HLC mhlc;  // generate a default timestamp for it.
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
@@ -468,16 +468,16 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::version(const version_t& ver) {
+void Persistent<ObjectType, storageType>::version(version_t ver) {
     dbg_default_trace("In Persistent<T>: make version {}.", ver);
     this->set(*this->m_pWrappedObject, ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-std::size_t Persistent<ObjectType, storageType>::updateSignature(const version_t& ver, openssl::Signer& signer) {
+std::size_t Persistent<ObjectType, storageType>::updateSignature(version_t ver, openssl::Signer& signer) {
     std::size_t bytes_added = 0;
-    this->m_pLog->processEntryAtVersion(ver, [&signer, &bytes_added](const void* data, const std::size_t& size) {
+    this->m_pLog->processEntryAtVersion(ver, [&signer, &bytes_added](const void* data, std::size_t size) {
         if(size > 0) {
             signer.add_bytes(data, size);
         }
@@ -488,13 +488,13 @@ std::size_t Persistent<ObjectType, storageType>::updateSignature(const version_t
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::addSignature(const version_t& ver, const unsigned char* signature, version_t prev_signed_ver) {
+void Persistent<ObjectType, storageType>::addSignature(version_t ver, const unsigned char* signature, version_t prev_signed_ver) {
     this->m_pLog->addSignature(ver, signature, prev_signed_ver);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-version_t Persistent<ObjectType, storageType>::getSignature(const version_t& ver, unsigned char* signature) {
+version_t Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature) {
     return this->m_pLog->getSignature(ver, signature);
 }
 
@@ -506,8 +506,8 @@ std::size_t Persistent<ObjectType, storageType>::getSignatureSize() {
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::updateVerifier(const version_t& ver, openssl::Verifier& verifier) {
-    this->m_pLog->processEntryAtVersion(ver, [&verifier](const void* data, const std::size_t& size) {
+void Persistent<ObjectType, storageType>::updateVerifier(version_t ver, openssl::Verifier& verifier) {
+    this->m_pLog->processEntryAtVersion(ver, [&verifier](const void* data, std::size_t size) {
         if(size > 0) {
             verifier.add_bytes(data, size);
         }
@@ -516,7 +516,7 @@ void Persistent<ObjectType, storageType>::updateVerifier(const version_t& ver, o
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::persist(const version_t& ver) {
+void Persistent<ObjectType, storageType>::persist(version_t ver) {
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
     clock_gettime(CLOCK_REALTIME, &t1);
