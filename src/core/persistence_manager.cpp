@@ -119,9 +119,6 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 }
 
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
-    if(signature_size == 0) {
-        return;
-    }
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
         ReplicatedObject& subgroup_object = search->second;
@@ -137,14 +134,19 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             }
             //The signature in the other node's "signatures" column should correspond to the version in its "persisted_num" column
             const persistent::version_t other_signed_version = Vc.gmsSST->persisted_num[shard_member_rank][subgroup_id];
+            //Copy out the signature so it can't change during verification
+            unsigned char other_signature[signature_size];
+            gmssst::set(other_signature,
+                        &Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size],
+                        signature_size);
             assert(other_signed_version >= version);
             assert(subgroup_object.get_minimum_latest_persisted_version() >= other_signed_version);
-            signature_verifier->init();
             bool verification_success = subgroup_object.verify_log(
-                    other_signed_version, *signature_verifier,
-                    const_cast<unsigned char*>(&Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size]));
+                    other_signed_version, *signature_verifier, other_signature);
             if(verification_success) {
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
+            } else {
+                dbg_default_warn("Verification of version {} from node {} failed! OpenSSL error was: {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "") );
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members
@@ -167,6 +169,10 @@ void PersistenceManager::post_persist_request(const subgroup_id_t& subgroup_id, 
 }
 
 void PersistenceManager::post_verify_request(const subgroup_id_t& subgroup_id, const persistent::version_t& version) {
+    //If signatures are disabled, ignore the request
+    if(signature_size == 0) {
+        return;
+    }
     while(prq_lock.test_and_set(std::memory_order_acquire))  // acquire lock
         ;                                                    // spin
     persistence_request_queue.push({RequestType::VERIFY, subgroup_id, version});

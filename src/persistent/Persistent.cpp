@@ -53,21 +53,20 @@ void PersistentRegistry::initializeLastSignature(version_t version,
 }
 
 void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
-    //Find the last version successfully persisted to disk so we know where to start
-    version_t last_signed_version = getMinimumLatestPersistedVersion();
-    for(version_t version = last_signed_version; version <= latest_version; ++version) {
+    for(version_t version = last_signed_version + 1; version <= latest_version; ++version) {
         signer.init();
         std::size_t bytes_signed = 0;
         for(auto& entry : _registry) {
             bytes_signed += entry.second.update_signature(version, signer);
         }
-        if(bytes_signed > 0) {
-            //If this version's log entry is non-empty, add the previous version's signature to the signed data
-            signer.add_bytes(last_signature.data(), last_signature.size());
+        if(bytes_signed == 0) {
+            //If this version did not exist in any field, there's nothing to sign
+            continue;
         }
+        signer.add_bytes(last_signature.data(), last_signature.size());
         signer.finalize(signature_buffer);
         //After computing a signature over all fields of the object, go back and
-        //tell each field to add that signature to its log
+        //tell each field to add that signature to its log.
         for(auto& entry : _registry) {
             entry.second.add_signature(version, signature_buffer, last_signed_version);
         }
@@ -96,9 +95,11 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     //On that field, get the previous signed version, and retrieve that signature
     unsigned char current_sig[signature_size];
     unsigned char previous_sig[signature_size];
+    memset(previous_sig, 0, signature_size);
     for(auto& field : _registry) {
         if((prev_signed_version = field.second.get_signature(version, current_sig)) != INVALID_VERSION) {
             field.second.get_signature(prev_signed_version, previous_sig);
+            break;
         }
     }
     verifier.add_bytes(previous_sig, signature_size);

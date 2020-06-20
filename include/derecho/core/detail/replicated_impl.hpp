@@ -228,6 +228,17 @@ bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier&
 }
 
 template <typename T>
+std::vector<unsigned char> Replicated<T>::get_signature(persistent::version_t version) {
+    std::vector<unsigned char> signature(signature_size);
+    if(persistent_registry->get_signature(version, signature.data())) {
+        return signature;
+    } else {
+        return {};
+    }
+}
+
+
+template <typename T>
 void Replicated<T>::trim(persistent::version_t earliest_version) {
     persistent_registry->trim(earliest_version);
 }

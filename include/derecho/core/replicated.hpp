@@ -291,6 +291,14 @@ public:
                          unsigned char* signature);
 
     /**
+     * Retreives a copy of the signature in the persistent log for a specified
+     * version of this object.
+     * @param version The logged version to retrieve the signature for
+     * @return The signature in the log for the requested version, or an empty
+     * vector if signatures are disabled or the requested version doesn't exist
+     */
+    std::vector<unsigned char> get_signature(persistent::version_t version);
+    /**
      * Verifies the persistent log entry at the specified version against the
      * provided signature.
      * @param version The logged version to verify

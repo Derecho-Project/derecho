@@ -36,11 +36,47 @@ using message_id_t = int32_t;
  */
 using subgroup_type_id_t = uint32_t;
 
-/** Alias for the type of std::function that is used for message delivery event callbacks. */
-// using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, char*, long long int, persistent::version_t)>;
+/**
+ * The function type for message delivery event callbacks. Expected parameters:
+ * Parameter 1: ID of the subgroup in which the message was delivered
+ * Parameter 2: Message sender's node ID
+ * Parameter 3: Message ID
+ * Parameter 4: Pair containing (message body, body size)
+ * Parameter 5: Persistent version associated with the message
+ */
 using message_callback_t = std::function<void(subgroup_id_t, node_id_t, message_id_t, std::optional<std::pair<char*, long long int>>, persistent::version_t)>;
+/**
+ * The function type for persistence callback functions. Expected parameters:
+ * Parameter 1: ID of the subgroup in which a version was persisted
+ * Parameter 2: The new version that was persisted
+ */
 using persistence_callback_t = std::function<void(subgroup_id_t, persistent::version_t)>;
+/**
+ * The function type for verification callback functions. Expected parameters:
+ * Parameter 1: ID of the subgroup in which a new version has been verified
+ * Parameter 2: The version number up to which the log has been verified
+ */
+using verified_callback_t = std::function<void(subgroup_id_t, persistent::version_t)>;
+/** A callback function used by MulticastGroup to notify RPCManager of a new message */
 using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
+
+/**
+ * Bundles together a set of callback functions for message delivery events.
+ * These will be invoked by MulticastGroup or ViewManager to hand control back
+ * to the client if it wants to implement custom logic to respond to each
+ * message's arrival. (Note, this is a client-facing constructor argument,
+ * not an internal data structure).
+ */
+struct CallbackSet {
+    /** A function to be called each time a message reaches global stability in the group. */
+    message_callback_t global_stability_callback;
+    /** A function to be called when a new version of a subgroup's state finishes persisting locally */
+    persistence_callback_t local_persistence_callback = nullptr;
+    /** A function to be called when a new version of a subgroup's state has been persisted on all replicas */
+    persistence_callback_t global_persistence_callback = nullptr;
+    /** A function to be called when a new version of a subgroup's state has been signed correctly by all replicas */
+    verified_callback_t global_verified_callback = nullptr;
+};
 
 /** The type of factory function the user must provide to the Group constructor,
  * to construct each Replicated Object that is assigned to a subgroup */

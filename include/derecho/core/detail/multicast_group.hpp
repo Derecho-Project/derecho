@@ -31,19 +31,6 @@
 namespace derecho {
 
 /**
- * Bundles together a set of callback functions for message delivery events.
- * These will be invoked by MulticastGroup or ViewManager to hand control back
- * to the client if it wants to implement custom logic to respond to each
- * message's arrival. (Note, this is a client-facing constructor argument,
- * not an internal data structure).
- */
-struct CallbackSet {
-    message_callback_t global_stability_callback;
-    persistence_callback_t local_persistence_callback = nullptr;
-    persistence_callback_t global_persistence_callback = nullptr;
-};
-
-/**
  * The header for an individual multicast message, which will always be the
  * first sizeof(header) bytes in the message's data buffer.
  */
@@ -268,9 +255,8 @@ private:
     /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
      * Constructed incrementally in create_rdmc_sst_groups(), so it can't be const.  */
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
-    /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
+    /** This callback is internal, not exposed to clients, so it's not in CallbackSet */
     rpc_handler_t rpc_callback;
-
     /** Offset to add to member ranks to form RDMC group numbers. */
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
@@ -303,14 +289,30 @@ private:
     std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> locally_stable_rdmc_messages;
     /** Same map as locally_stable_rdmc_messages, but for SST messages */
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> locally_stable_sst_messages;
+    /** For each subgroup, the set of timestamps associated with currently-pending
+     * (not yet delivered) messages. Used to compute the stability frontier. */
     std::map<subgroup_id_t, std::set<uint64_t>> pending_message_timestamps;
+    /** Tracks the timestamps of messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, uint64_t>> pending_persistence;
     /** Messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> non_persistent_sst_messages;
 
+    /** The next message ID that can be delivered in each subgroup, indexed by subgroup number. */
     std::vector<message_id_t> next_message_to_deliver;
+    /**
+     * The minimum (persistent) version number that has finished persisting in
+     * each subgroup, indexed by subgroup number.
+     */
+    std::vector<persistent::version_t> minimum_persisted_version;
+    /**
+     * The minimum (persistent) version number that has had its signature verified
+     * in each subgroup, indexed by subgroup number, if the signed log feature is
+     * enabled. (If the features is disabled, this will stay at INVALID_VERSION).
+     */
+    std::vector<persistent::version_t> minimum_verified_version;
+
     std::recursive_mutex msg_state_mtx;
     std::condition_variable_any sender_cv;
 
@@ -440,6 +442,12 @@ private:
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
+
+    void update_min_persisted_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                  uint32_t num_shard_members, DerechoSST& sst);
+
+    void update_min_verified_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                 uint32_t num_shard_members, DerechoSST& sst);
 
     // Internally used to automatically send a NULL message
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
