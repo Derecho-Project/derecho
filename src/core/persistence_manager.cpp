@@ -7,6 +7,8 @@
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/openssl/signature.hpp>
 
+#include <spdlog/fmt/bin_to_hex.h>
+
 namespace derecho {
 
 PersistenceManager::PersistenceManager(
@@ -40,8 +42,10 @@ std::size_t PersistenceManager::get_signature_size() const {
     return signature_size;
 }
 
-/** Start the persistent thread. */
 void PersistenceManager::start() {
+    //Initialize this vector now that we know the number of subgroups (the size of the objects map)
+    last_persisted_version.resize(objects_by_subgroup_id.size(), -1);
+    //Start the thread
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
         do {
@@ -80,6 +84,11 @@ void PersistenceManager::start() {
 }
 
 void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persistent::version_t version) {
+    //If a previous request already persisted a later version (due to batching), don't do anything
+    if(last_persisted_version[subgroup_id] >= version) {
+        return;
+    }
+    persistent::version_t persisted_version = version;
     // persist
     try {
         //To reduce the time this thread holds the View lock, put the signature in a local array
@@ -89,7 +98,8 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 
         auto search = objects_by_subgroup_id.find(subgroup_id);
         if(search != objects_by_subgroup_id.end()) {
-            search->second.get().persist(version, signature);
+            //Update persisted_version to the version actually persisted, which might be greater than the requested version
+            persisted_version = search->second.get().persist(version, signature);
         }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
@@ -100,13 +110,14 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
             gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
                         signature, signature_size);
             Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
-                           (char*)std::addressof(Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
+                           (char*)(&Vc.gmsSST->signatures[0][subgroup_id * signature_size]) - Vc.gmsSST->getBaseAddress(),
                            signature_size);
         }
-        gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], version);
+        gmssst::set(Vc.gmsSST->persisted_num[Vc.gmsSST->get_local_index()][subgroup_id], persisted_version);
         Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
                        Vc.gmsSST->persisted_num,
                        subgroup_id);
+        last_persisted_version[subgroup_id] = persisted_version;
     } catch(uint64_t exp) {
         dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
         std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
@@ -114,7 +125,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 
     // callback
     if(this->persistence_callback != nullptr) {
-        this->persistence_callback(subgroup_id, version);
+        this->persistence_callback(subgroup_id, persisted_version);
     }
 }
 
@@ -135,18 +146,25 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
             //The signature in the other node's "signatures" column should correspond to the version in its "persisted_num" column
             const persistent::version_t other_signed_version = Vc.gmsSST->persisted_num[shard_member_rank][subgroup_id];
             //Copy out the signature so it can't change during verification
-            unsigned char other_signature[signature_size];
-            gmssst::set(other_signature,
+            std::vector<unsigned char> other_signature(signature_size);
+            gmssst::set(other_signature.data(),
                         &Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size],
                         signature_size);
             assert(other_signed_version >= version);
             assert(subgroup_object.get_minimum_latest_persisted_version() >= other_signed_version);
+            std::vector<unsigned char> my_signature = subgroup_object.get_signature(other_signed_version);
+            if(memcmp(other_signature.data(), my_signature.data(), signature_size) == 0) {
+                dbg_default_debug("Node {}'s signature matches local signature on version {}", Vc.members[shard_member_rank], other_signed_version);
+            } else {
+                dbg_default_warn("Node {}'s signature is not byte-equal to local signature on version {}", Vc.members[shard_member_rank], other_signed_version);
+                dbg_default_warn("Local signature: {} \n Other signature: {}", spdlog::to_hex(my_signature), spdlog::to_hex(other_signature));
+            }
             bool verification_success = subgroup_object.verify_log(
-                    other_signed_version, *signature_verifier, other_signature);
+                    other_signed_version, *signature_verifier, other_signature.data());
             if(verification_success) {
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
             } else {
-                dbg_default_warn("Verification of version {} from node {} failed! OpenSSL error was: {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "") );
+                dbg_default_warn("Verification of version {} from node {} failed! OpenSSL error was: {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), ""));
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members

@@ -272,7 +272,7 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const persistent::version_t get_minimum_latest_persisted_version();
+    virtual persistent::version_t get_minimum_latest_persisted_version();
 
     /**
      * make a version for all the persistent<T> members.
@@ -281,14 +281,18 @@ public:
     virtual void make_version(persistent::version_t ver, const HLC& hlc);
 
     /**
-     * Persist the data up to the specified version. Also, if the signed log is
-     * enabled, return the signature over the latest version in the provided buffer.
+     * Persists the object's data up to at least the specified version; due to
+     * batching, a later version may actually be persisted if it is available.
+     * Returns the latest version actually persisted. If the signed log is
+     * enabled, also returns the signature over the latest persisted version in
+     * the provided buffer.
      * @param version The version to persist up to.
      * @param signature The byte array in which to put the signature, assumed to be
      * the correct length for this node's signing key.
+     * @return The version actually persisted (and signed)
      */
-    virtual void persist(persistent::version_t version,
-                         unsigned char* signature);
+    virtual persistent::version_t persist(persistent::version_t version,
+                                          unsigned char* signature);
 
     /**
      * Retreives a copy of the signature in the persistent log for a specified
@@ -297,7 +301,7 @@ public:
      * @return The signature in the log for the requested version, or an empty
      * vector if signatures are disabled or the requested version doesn't exist
      */
-    std::vector<unsigned char> get_signature(persistent::version_t version);
+    virtual std::vector<unsigned char> get_signature(persistent::version_t version);
     /**
      * Verifies the persistent log entry at the specified version against the
      * provided signature.

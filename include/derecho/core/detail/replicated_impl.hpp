@@ -204,7 +204,7 @@ void Replicated<T>::make_version(persistent::version_t ver, const HLC& hlc) {
 }
 
 template <typename T>
-void Replicated<T>::persist(persistent::version_t version, unsigned char* signature) {
+persistent::version_t Replicated<T>::persist(persistent::version_t version, unsigned char* signature) {
     persistent::version_t next_persisted_ver;
     // persist variables
     do {
@@ -219,6 +219,7 @@ void Replicated<T>::persist(persistent::version_t version, unsigned char* signat
             next_persisted_ver = version;
         }
     } while(next_persisted_ver < version);
+    return next_persisted_ver;
 };
 
 template <typename T>
@@ -249,7 +250,7 @@ void Replicated<T>::truncate(persistent::version_t latest_version) {
 }
 
 template <typename T>
-const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
+persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
     return persistent_registry->getMinimumLatestPersistedVersion();
 }
 

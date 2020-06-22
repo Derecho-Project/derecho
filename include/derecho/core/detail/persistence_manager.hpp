@@ -41,14 +41,28 @@ public:
 private:
     /** Thread handle */
     std::thread persist_thread;
-    /** A flag to singal the persistent thread to shutdown; set to true when the group is destroyed. */
+    /**
+     * A flag to signal the persistent thread to shutdown; set to true when the
+     * group is destroyed.
+     */
     std::atomic<bool> thread_shutdown;
-    /** The semaphore for persistence request the persistent thread */
+    /**
+     * A semaphore that counts the number of persistence requests available for
+     * the persistence thread to handle
+     */
     sem_t persistence_request_sem;
-    /** a queue for the requests */
+    /**
+     * Queue of requests for the persistence thread, which is shared with other
+     * threads (e.g. the predicates thread) so they can make requests
+     */
     std::queue<ThreadRequest> persistence_request_queue;
-    /** lock for persistence request queue */
+    /** A test-and-set lock guarding the persistence request queue */
     std::atomic_flag prq_lock = ATOMIC_FLAG_INIT;
+    /**
+     * The latest version that has been persisted successfully in each subgroup
+     * (indexed by subgroup number). Updated each time a persistence request completes.
+     */
+    std::vector<persistent::version_t> last_persisted_version;
     /**
      * The Verifier to use for verifying other replicas' signatures over
      * persistent log entries, if signatures are enabled. This will be null if
@@ -57,7 +71,7 @@ private:
     std::unique_ptr<openssl::Verifier> signature_verifier;
     /** The size of a signature (which is a constant), or 0 if signatures are disabled. */
     std::size_t signature_size;
-    /** persistence callback */
+    /** The global persistence callback */
     persistence_callback_t persistence_callback;
     /** Reference to the ReplicatedObjects map in the Group that owns this PersistenceManager. */
     std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_by_subgroup_id;
