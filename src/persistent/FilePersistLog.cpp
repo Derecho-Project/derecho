@@ -134,8 +134,8 @@ void FilePersistLog::load() {
         m_currMetaHeader.fields.head = 0ll;
         m_currMetaHeader.fields.tail = 0ll;
         m_currMetaHeader.fields.ver = INVALID_VERSION;
-        m_persMetaHeader.fields.head = -1ll;  // -1 means uninitialized
-        m_persMetaHeader.fields.tail = -1ll;  // -1 means uninitialized
+        m_persMetaHeader.fields.head = INVALID_INDEX;
+        m_persMetaHeader.fields.tail = INVALID_INDEX;
         m_persMetaHeader.fields.ver = INVALID_VERSION;
         // persist the header
         FPL_RDLOCK;
@@ -213,50 +213,45 @@ FilePersistLog::~FilePersistLog() noexcept(true) {
     }
 }
 
+inline void FilePersistLog::do_append_validation(const uint64_t size, const int64_t ver) {
+    if(NUM_FREE_SLOTS < 1) {
+        dbg_default_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",
+                          this->m_sName, NUM_FREE_SLOTS);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
+        throw PERSIST_EXP_NOSPACE_LOG;
+    }
+    if(NUM_FREE_BYTES < size) {
+        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",
+                          this->m_sName, NUM_FREE_BYTES, size);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl;
+        throw PERSIST_EXP_NOSPACE_DATA;
+    }
+    if((CURR_LOG_IDX != INVALID_INDEX) && (m_currMetaHeader.fields.ver >= ver)) {
+        int64_t cver = m_currMetaHeader.fields.ver;
+        dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName,
+                          (int64_t)cver, (int64_t)ver);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;
+        throw PERSIST_EXP_INV_VERSION;
+    }
+}
+
 void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, const HLC& mhlc) {
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
-#define __DO_VALIDATION                                                                                             \
-    do {                                                                                                            \
-        if(NUM_FREE_SLOTS < 1) {                                                                                    \
-            dbg_default_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",                      \
-                              this->m_sName, NUM_FREE_SLOTS);                                                       \
-            dbg_default_flush();                                                                                    \
-            FPL_UNLOCK;                                                                                             \
-            std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl; \
-            throw PERSIST_EXP_NOSPACE_LOG;                                                                          \
-        }                                                                                                           \
-        if(NUM_FREE_BYTES < size) {                                                                                 \
-            dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",               \
-                              this->m_sName, NUM_FREE_BYTES, size);                                                 \
-            dbg_default_flush();                                                                                    \
-            FPL_UNLOCK;                                                                                             \
-            std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl;      \
-            throw PERSIST_EXP_NOSPACE_DATA;                                                                         \
-        }                                                                                                           \
-        if((CURR_LOG_IDX != -1) && (m_currMetaHeader.fields.ver >= ver)) {                                          \
-            int64_t cver = m_currMetaHeader.fields.ver;                                                             \
-            dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName,          \
-                              (int64_t)cver, (int64_t)ver);                                                         \
-            dbg_default_flush();                                                                                    \
-            FPL_UNLOCK;                                                                                             \
-            std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;                    \
-            throw PERSIST_EXP_INV_VERSION;                                                                          \
-        }                                                                                                           \
-    } while(0)
+    do_append_validation(size,ver);
 
-#pragma GCC diagnostic ignored "-Wunused-variable"
-    __DO_VALIDATION;
-#pragma GCC diagnostic pop
     FPL_UNLOCK;
     dbg_default_trace("{0} append:validate check1 Finished.", this->m_sName);
 
     FPL_WRLOCK;
-//check
-#pragma GCC diagnostic ignored "-Wunused-variable"
-    __DO_VALIDATION;
-#pragma GCC diagnostic pop
+    do_append_validation(size,ver);
     dbg_default_trace("{0} append:validate check2 Finished.", this->m_sName);
 
     // copy data
@@ -312,7 +307,7 @@ const int64_t FilePersistLog::persist(version_t ver, const bool preLocked) {
     }
 
     if(m_currMetaHeader == m_persMetaHeader) {
-        if(CURR_LOG_IDX != -1) {
+        if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
             ver_ret = m_currMetaHeader.fields.ver;
         }
@@ -514,54 +509,6 @@ const void* FilePersistLog::getEntryByIndex(int64_t eidx) {
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
 }
 
-/** MOVED TO .hpp
-   * binary search through the log, return the maximum index of the entries
-   * whose key <= @param key. Note that indexes used here is 'virtual'.
-   *
-   * [ ][ ][ ][ ][X][X][X][X][ ][ ][ ]
-   *              ^logHead   ^logTail
-   * @param keyGetter: function which get the key from LogEntry
-   * @param key: the key to be search
-   * @param logArr: log array
-   * @param len: log length
-   * @return index of the log entry found or -1 if not found.
-   */
-/*
-  template<typename TKey,typename KeyGetter>
-  int64_t FilePersistLog::binarySearch(const KeyGetter & keyGetter, const TKey & key,
-    const int64_t & logHead, const int64_t & logTail) {
-    if (logTail <= logHead) {
-      dbg_default_trace("binary Search failed...EMPTY LOG");
-      return (int64_t)-1L;
-    }
-    int64_t head = logHead, tail = logTail - 1;
-    int64_t pivot = 0;
-    while (head <= tail) {
-      pivot = (head + tail)/2;
-      dbg_default_trace("Search range: {0}->[{1},{2}]",pivot,head,tail);
-      const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
-      if (p_key == key) {
-        break; // found
-      } else if (p_key < key) {
-        if (pivot + 1 >= logTail) {
-          break; // found - the last element
-        } else if (keyGetter(pivot+1) > key) {
-          break; // found - the next one is greater than key
-        } else { // search right
-          head = pivot + 1;
-        }
-      } else { // search left
-        tail = pivot - 1;
-        if (head > tail) {
-          dbg_default_trace("binary Search failed...Object does not exist.");
-          return (int64_t)-1L;
-        }
-      }
-    }
-    return pivot;
-  }
-*/
-
 const void* FilePersistLog::getEntry(version_t ver) {
     LogEntry* ple = nullptr;
 
@@ -576,7 +523,7 @@ const void* FilePersistLog::getEntry(version_t ver) {
             ver,
             m_currMetaHeader.fields.head,
             m_currMetaHeader.fields.tail);
-    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+    ple = (l_idx == INVALID_INDEX) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
 
     FPL_UNLOCK;
@@ -616,19 +563,6 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) {
 
     FPL_RDLOCK;
 
-    //  We do not user binary search any more.
-    //    //binary search
-    //    int64_t head = m_currMetaHeader.fields.head % MAX_LOG_ENTRY;
-    //    int64_t tail = m_currMetaHeader.fields.tail % MAX_LOG_ENTRY;
-    //    if (tail < head) tail += MAX_LOG_ENTRY; //because we mapped it twice
-    //    dbg_default_trace("{0} - begin binary search.",this->m_sName);
-    //    int64_t l_idx = binarySearch<unsigned __int128>(
-    //      [&](int64_t idx){
-    //        return ((((unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | LOG_ENTRY_AT(idx)->fields.hlc_l);
-    //      },
-    //      key,head,tail);
-    //    dbg_default_trace("{0} - end binary search.",this->m_sName);
-    //    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_default_trace("getEntry for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
     struct hlc_index_entry skey(rhlc, 0);
     auto key = this->hidx.upper_bound(skey);
@@ -791,7 +725,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(version_t ver) {
             m_currMetaHeader.fields.head,
             m_currMetaHeader.fields.tail);
 
-    if(l_idx == -1) {
+    if(l_idx == INVALID_INDEX) {
         // if binary search failed, it means the requested version is earlier
         // than the earliest available log so we return the earliest log entry
         // we have.
@@ -1011,8 +945,8 @@ void FilePersistLog::truncate(version_t ver) {
             },
             ver, head, tail);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
-    // STEP 2: update meta header
-    if(l_idx == -1) {  // not adequate log found. We need to remove all logs.
+    // STEP 2: update META_HEADER
+    if(l_idx == INVALID_INDEX) {  // not adequate log found. We need to remove all logs.
         // TODO: this may not be safe in case the log has been trimmed beyond 'ver' !!!
         m_currMetaHeader.fields.tail = m_currMetaHeader.fields.head;
     } else {
