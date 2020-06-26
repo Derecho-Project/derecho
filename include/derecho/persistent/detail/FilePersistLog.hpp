@@ -174,7 +174,7 @@ public:
 
     //Derived from PersistLog
     virtual void append(const void* pdata,
-                        const uint64_t& size, const int64_t& ver,
+                        const uint64_t size, const int64_t ver,
                         const HLC& mhlc);
     virtual void advanceVersion(const int64_t& ver);
     virtual int64_t getLength();
@@ -337,6 +337,14 @@ private:
         }
         return pivot;
     }
+
+    /* Validate the log before we append. It will throw exception if
+     * - there is no space
+     * - the version is not monotonic
+     * @param size: size of the data to be append in this log entry
+     * @param ver: version of the new log entry
+     */
+    void do_append_validation(const uint64_t size, const int64_t ver);
 
 #ifndef NDEBUG
     //dbg functions

@@ -210,50 +210,45 @@ FilePersistLog::~FilePersistLog() noexcept(true) {
     }
 }
 
-void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_t& ver, const HLC& mhlc) {
+inline void FilePersistLog::do_append_validation(const uint64_t size, const int64_t ver) {
+    if(NUM_FREE_SLOTS < 1) {
+        dbg_default_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",
+                          this->m_sName, NUM_FREE_SLOTS);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
+        throw PERSIST_EXP_NOSPACE_LOG;
+    }
+    if(NUM_FREE_BYTES < size) {
+        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",
+                          this->m_sName, NUM_FREE_BYTES, size);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl;
+        throw PERSIST_EXP_NOSPACE_DATA;
+    }
+    if((CURR_LOG_IDX != INVALID_INDEX) && (META_HEADER->fields.ver >= ver)) {
+        int64_t cver = META_HEADER->fields.ver;
+        dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName,
+                          (int64_t)cver, (int64_t)ver);
+        dbg_default_flush();
+        FPL_UNLOCK;
+        std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;
+        throw PERSIST_EXP_INV_VERSION;
+    }
+}
+
+void FilePersistLog::append(const void* pdat, const uint64_t size, const int64_t ver, const HLC& mhlc) {
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
-#define __DO_VALIDATION                                                                                    \
-    do {                                                                                                   \
-        if(NUM_FREE_SLOTS < 1) {                                                                           \
-            dbg_default_error("{0}-append exception no free slots in log! NUM_FREE_SLOTS={1}",             \
-                              this->m_sName, NUM_FREE_SLOTS);                                              \
-            dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                                    \
-            std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;              \
-            throw PERSIST_EXP_NOSPACE_LOG;                                                                 \
-        }                                                                                                  \
-        if(NUM_FREE_BYTES < size) {                                                                        \
-            dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",      \
-                              this->m_sName, NUM_FREE_BYTES, size);                                        \
-            dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                                    \
-            std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl; \
-            throw PERSIST_EXP_NOSPACE_DATA;                                                                \
-        }                                                                                                  \
-        if((CURR_LOG_IDX != INVALID_INDEX) && (META_HEADER->fields.ver >= ver)) {                                     \
-            int64_t cver = META_HEADER->fields.ver;                                                        \
-            dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
-                              (int64_t)cver, (int64_t)ver);                                                \
-            dbg_default_flush();                                                                           \
-            FPL_UNLOCK;                                                                                    \
-            std::cerr << "PERSIST_EXP_INV_VERSION:cver=" << cver << ",ver=" << ver << std::endl;           \
-            throw PERSIST_EXP_INV_VERSION;                                                                 \
-        }                                                                                                  \
-    } while(0)
+    do_append_validation(size,ver);
 
-#pragma GCC diagnostic ignored "-Wunused-variable"
-    __DO_VALIDATION;
-#pragma GCC diagnostic pop
     FPL_UNLOCK;
     dbg_default_trace("{0} append:validate check1 Finished.", this->m_sName);
 
     FPL_WRLOCK;
-//check
-#pragma GCC diagnostic ignored "-Wunused-variable"
-    __DO_VALIDATION;
-#pragma GCC diagnostic pop
+    do_append_validation(size,ver);
     dbg_default_trace("{0} append:validate check2 Finished.", this->m_sName);
 
     // copy data

@@ -80,7 +80,7 @@ public:
      * is called on that entry.
      */
     virtual void append(const void* pdata,
-                        const uint64_t& size, const version_t& ver,
+                        const uint64_t size, const version_t ver,
                         const HLC& mhlc)
             = 0;
 
