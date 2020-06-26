@@ -131,8 +131,8 @@ void FilePersistLog::load() {
         META_HEADER->fields.head = 0ll;
         META_HEADER->fields.tail = 0ll;
         META_HEADER->fields.ver = INVALID_VERSION;
-        META_HEADER_PERS->fields.head = -1ll;  // -1 means uninitialized
-        META_HEADER_PERS->fields.tail = -1ll;  // -1 means uninitialized
+        META_HEADER_PERS->fields.head = INVALID_INDEX;
+        META_HEADER_PERS->fields.tail = INVALID_INDEX;
         META_HEADER_PERS->fields.ver = INVALID_VERSION;
         // persist the header
         FPL_RDLOCK;
@@ -232,7 +232,7 @@ void FilePersistLog::append(const void* pdat, const uint64_t& size, const int64_
             std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl; \
             throw PERSIST_EXP_NOSPACE_DATA;                                                                \
         }                                                                                                  \
-        if((CURR_LOG_IDX != -1) && (META_HEADER->fields.ver >= ver)) {                                     \
+        if((CURR_LOG_IDX != INVALID_INDEX) && (META_HEADER->fields.ver >= ver)) {                                     \
             int64_t cver = META_HEADER->fields.ver;                                                        \
             dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName, \
                               (int64_t)cver, (int64_t)ver);                                                \
@@ -309,7 +309,7 @@ const int64_t FilePersistLog::persist(const bool preLocked) {
     }
 
     if(*META_HEADER == *META_HEADER_PERS) {
-        if(CURR_LOG_IDX != -1) {
+        if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
             ver_ret = META_HEADER->fields.ver;
         }
@@ -463,54 +463,6 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) {
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
 }
 
-/** MOVED TO .hpp
-   * binary search through the log, return the maximum index of the entries
-   * whose key <= @param key. Note that indexes used here is 'virtual'.
-   *
-   * [ ][ ][ ][ ][X][X][X][X][ ][ ][ ]
-   *              ^logHead   ^logTail
-   * @param keyGetter: function which get the key from LogEntry
-   * @param key: the key to be search
-   * @param logArr: log array
-   * @param len: log length
-   * @return index of the log entry found or -1 if not found.
-   */
-/*
-  template<typename TKey,typename KeyGetter>
-  int64_t FilePersistLog::binarySearch(const KeyGetter & keyGetter, const TKey & key,
-    const int64_t & logHead, const int64_t & logTail) {
-    if (logTail <= logHead) {
-      dbg_default_trace("binary Search failed...EMPTY LOG");
-      return (int64_t)-1L;
-    }
-    int64_t head = logHead, tail = logTail - 1;
-    int64_t pivot = 0;
-    while (head <= tail) {
-      pivot = (head + tail)/2;
-      dbg_default_trace("Search range: {0}->[{1},{2}]",pivot,head,tail);
-      const TKey p_key = keyGetter(LOG_ENTRY_AT(pivot));
-      if (p_key == key) {
-        break; // found
-      } else if (p_key < key) {
-        if (pivot + 1 >= logTail) {
-          break; // found - the last element
-        } else if (keyGetter(pivot+1) > key) {
-          break; // found - the next one is greater than key
-        } else { // search right
-          head = pivot + 1;
-        }
-      } else { // search left
-        tail = pivot - 1;
-        if (head > tail) {
-          dbg_default_trace("binary Search failed...Object does not exist.");
-          return (int64_t)-1L;
-        }
-      }
-    }
-    return pivot;
-  }
-*/
-
 const void* FilePersistLog::getEntry(const int64_t& ver) {
     LogEntry* ple = nullptr;
 
@@ -525,7 +477,7 @@ const void* FilePersistLog::getEntry(const int64_t& ver) {
             ver,
             META_HEADER->fields.head,
             META_HEADER->fields.tail);
-    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+    ple = (l_idx == INVALID_INDEX) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
 
     FPL_UNLOCK;
@@ -565,19 +517,6 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) {
 
     FPL_RDLOCK;
 
-    //  We do not user binary search any more.
-    //    //binary search
-    //    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-    //    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
-    //    if (tail < head) tail += MAX_LOG_ENTRY; //because we mapped it twice
-    //    dbg_default_trace("{0} - begin binary search.",this->m_sName);
-    //    int64_t l_idx = binarySearch<unsigned __int128>(
-    //      [&](int64_t idx){
-    //        return ((((unsigned __int128)LOG_ENTRY_AT(idx)->fields.hlc_r)<<64) | LOG_ENTRY_AT(idx)->fields.hlc_l);
-    //      },
-    //      key,head,tail);
-    //    dbg_default_trace("{0} - end binary search.",this->m_sName);
-    //    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_default_trace("getEntry for hlc({0},{1})", rhlc.m_rtc_us, rhlc.m_logic);
     struct hlc_index_entry skey(rhlc, 0);
     auto key = this->hidx.upper_bound(skey);
@@ -712,7 +651,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
             META_HEADER->fields.head,
             META_HEADER->fields.tail);
 
-    if(l_idx == -1) {
+    if(l_idx == INVALID_INDEX) {
         // if binary search failed, it means the requested version is earlier
         // than the earliest available log so we return the earliest log entry
         // we have.
@@ -933,7 +872,7 @@ void FilePersistLog::truncate(const int64_t& ver) {
             ver, head, tail);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
     // STEP 2: update META_HEADER
-    if(l_idx == -1) {  // not adequate log found. We need to remove all logs.
+    if(l_idx == INVALID_INDEX) {  // not adequate log found. We need to remove all logs.
         // TODO: this may not be safe in case the log has been trimmed beyond 'ver' !!!
         META_HEADER->fields.tail = META_HEADER->fields.head;
     } else {
