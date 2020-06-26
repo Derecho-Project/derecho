@@ -34,8 +34,6 @@ public:
 class ReplicatedT {
 };
 
-PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
-
 #define MAX_VB_SIZE (1ull << 30)
 // A variable that can change the length of its value
 class VariableBytes : public ByteRepresentable {
@@ -69,7 +67,6 @@ public:
     };
 
     static std::unique_ptr<VariableBytes> from_bytes(DeserializationManager* dsm, char const* const v) {
-        VariableBytes vb;
         std::unique_ptr<VariableBytes> pvb = std::make_unique<VariableBytes>();
         strcpy(pvb->buf, v);
         pvb->data_len = strlen(v) + 1;
@@ -167,14 +164,6 @@ void dump_binary_buffer(const unsigned char* buf, std::size_t len) {
     std::cout << "]" << std::endl;
 }
 
-Persistent<X> px1([]() { return std::make_unique<X>(); }, nullptr, &pr);
-//Persistent<X> px1;
-Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, nullptr, &pr),
-        npx_logtail([]() { return std::make_unique<VariableBytes>(); });
-//Persistent<X,ST_MEM> px2;
-Volatile<X> px2([]() { return std::make_unique<X>(); });
-Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, nullptr, &pr);
-
 template <typename OT, StorageType st = ST_FILE>
 void listvar(Persistent<OT, st>& var) {
     int64_t nv = var.getNumOfVersions();
@@ -250,6 +239,15 @@ int main(int argc, char** argv) {
         printhelp();
         return 0;
     }
+
+    PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
+    Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr);
+    //Persistent<X> px1;
+    Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, "PersistentVariableBytes", &pr),
+            npx_logtail([]() { return std::make_unique<VariableBytes>(); }, "VariableBytesLogTail");
+    //Persistent<X,ST_MEM> px2;
+    Volatile<X> px2([]() { return std::make_unique<X>(); }, "VolatileXObject");
+    Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, "PersistentIntegerWithDelta", &pr);
 
     std::cout << "command:" << argv[1] << std::endl;
 
