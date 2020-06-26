@@ -719,7 +719,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
 
 void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                        const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                                       uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
+                                       uint32_t num_shard_senders, DerechoSST& sst,
                                        const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda) {
     DerechoParams profile = subgroup_settings.profile;
     const uint64_t slot_width = profile.sst_max_msg_size + sizeof(uint64_t);
@@ -733,12 +733,12 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
             old_index++;
             slot = old_index % profile.window_size;
             dbg_default_trace("receiver_trig calling sst_receive_handler_lambda. next_seq = {}, num_received = {}, sender rank = {}. Reading from SST row {}, slot {}",
-                                received_index, old_index, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);
+                              received_index, old_index, sender_count, sender_sst_index, subgroup_settings.slot_offset + slot_width * slot);
             sst_receive_handler_lambda(sender_count,
-                                        &sst.slots[sender_sst_index]
-                                                [subgroup_settings.slot_offset + slot_width * slot],
-                                        (uint64_t&)sst.slots[sender_sst_index]
-                                                            [subgroup_settings.slot_offset + slot_width * (slot + 1) - sizeof(uint64_t)]);
+                                       &sst.slots[sender_sst_index]
+                                                 [subgroup_settings.slot_offset + slot_width * slot],
+                                       (uint64_t&)sst.slots[sender_sst_index]
+                                                           [subgroup_settings.slot_offset + slot_width * (slot + 1) - sizeof(uint64_t)]);
             sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = old_index;
         }
     }
@@ -855,10 +855,6 @@ void MulticastGroup::register_predicates() {
             return receiver_predicate(subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
-        auto batch_size = subgroup_settings.profile.window_size / 2;
-        if(!batch_size) {
-            batch_size = 1;
-        }
         auto sst_receive_handler_lambda = [this, subgroup_num, subgroup_settings, shard_ranks_by_sender_rank,
                                            num_shard_senders](uint32_t sender_rank, volatile char* data, uint64_t size) {
             sst_receive_handler(subgroup_num, subgroup_settings,
@@ -866,10 +862,10 @@ void MulticastGroup::register_predicates() {
                                 sender_rank, data, size);
         };
         auto receiver_trig = [this, subgroup_num, subgroup_settings, shard_ranks_by_sender_rank,
-                              num_shard_senders, batch_size, sst_receive_handler_lambda](DerechoSST& sst) mutable {
+                              num_shard_senders, sst_receive_handler_lambda](DerechoSST& sst) mutable {
             receiver_function(subgroup_num, subgroup_settings,
                               shard_ranks_by_sender_rank, num_shard_senders, sst,
-                              batch_size, sst_receive_handler_lambda);
+                              sst_receive_handler_lambda);
         };
         receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
                                                                   sst::PredicateType::RECURRENT));
