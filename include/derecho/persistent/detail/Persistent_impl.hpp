@@ -155,13 +155,16 @@ Persistent<ObjectType, storageType>::Persistent(
     initialize_object_from_log(object_factory, &dm);
     // Register Callbacks
     register_callbacks();
-    version_t latest_version = getLatestVersion();
-    std::unique_ptr<unsigned char[]> latest_signature;
-    if(latest_version != INVALID_VERSION) {
-        latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
-        getSignature(latest_version, latest_signature.get());
+    // Set up PersistentRegistry's last signed version
+    if(persistent_registry) {
+        version_t latest_version = getLatestVersion();
+        std::unique_ptr<unsigned char[]> latest_signature;
+        if(latest_version != INVALID_VERSION) {
+            latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
+            getSignature(latest_version, latest_signature.get());
+        }
+        persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
     }
-    persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
 }
 
 template <typename ObjectType,
@@ -279,7 +282,7 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
 
         return p;
     } else {
-        return mutils::from_bytes<ObjectType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
+        return mutils::from_bytes<ObjectType>(dm, (const char*)this->m_pLog->getEntryByIndex(idx));
     }
 };
 

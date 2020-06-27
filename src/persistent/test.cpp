@@ -153,9 +153,9 @@ void dump_binary_buffer(const unsigned char* buf, std::size_t len) {
     std::cout << "[" << std::endl;
     while (idx < len) {
         if (idx%16 == 0) {
-            std::cout << "\t" << std::endl;
+            std::cout << "\t";
         }
-        std::cout << std::hex << std::setw(3) << static_cast<unsigned>(buf[idx]);
+        std::cout << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(buf[idx]) << " ";
         idx ++;
         if (idx%16 == 0) {
             std::cout << std::endl;
@@ -253,10 +253,12 @@ int main(int argc, char** argv) {
 
     openssl::EnvelopeKey prikey = openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
     openssl::Signer signer(prikey,openssl::DigestAlgorithm::SHA256);
+    openssl::Verifier verifier(prikey, openssl::DigestAlgorithm::SHA256);
     signer.init();
+    verifier.init();
     std::size_t sig_size = signer.get_max_signature_size();
-    cout << "signer output length=" << sig_size << endl;
     unsigned char sig_buf[sig_size];
+    unsigned char prev_sig[sig_size];
 
     try {
         if(strcmp(argv[1], "list") == 0) {
@@ -327,11 +329,33 @@ int main(int argc, char** argv) {
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
             npx.updateSignature(ver,signer);
+            if(prev_ver == INVALID_VERSION) {
+                memset(prev_sig, 0, sig_size);
+            } else {
+                npx.getSignature(prev_ver, prev_sig);
+            }
+            signer.add_bytes(prev_sig, sig_size);
             signer.finalize(static_cast<unsigned char*>(sig_buf));
             std::cout << "signature=" << std::endl;
             dump_binary_buffer(sig_buf,sig_size);
             npx.addSignature(ver,sig_buf,prev_ver);
             npx.persist(ver);
+        } else if(strcmp(argv[1], "verify") == 0) {
+            version_t ver = atol(argv[2]);
+            version_t prev_ver = npx.getSignature(ver, sig_buf);
+            npx.updateVerifier(ver, verifier);
+            if(prev_ver == INVALID_VERSION) {
+                memset(prev_sig, 0, sig_size);
+            } else {
+                npx.getSignature(prev_ver, prev_sig);
+            }
+            verifier.add_bytes(prev_sig, sig_size);
+            bool success = verifier.finalize(sig_buf, sig_size);
+            if(success) {
+                std::cout << "version " << ver << " signature verified successfully, with previous version " << prev_ver << std::endl;
+            } else {
+                std::cout << "version " << ver << " signature failed to verify! Error" << openssl::get_error_string(ERR_get_error(), "") << std::endl;
+            }
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
