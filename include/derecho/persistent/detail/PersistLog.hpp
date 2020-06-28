@@ -149,6 +149,8 @@ public:
      * add a signature to corresponding version
      * @param ver - version
      * @param signature - signature
+     * @param prev_signed_ver - THe previous version whose signature is
+     * included in this signature
      */
     virtual void addSignature(version_t ver, const unsigned char* signature,
                               version_t prev_signed_ver) = 0;
@@ -158,11 +160,15 @@ public:
      * @param ver - version
      * @param signature - A byte buffer into which the signature will be copied.
      * Must be at least signature_size bytes.
-     * @return The previous version whose signature this signature includes, or
-     * INVALID_VERSION if the requested version was not in the log (in this case,
-     * no signature will be returned either)
+     * @param prev_ver A variable which will be updated to equal the previous
+     * version whose signature is included in this version's signature, or
+     * INVALID_VERSION if there was no version in the log with the requested
+     * version number (in this case, no signature will be returned either)
+     * @return true if a signature was successfully retrieved, false if there was
+     * no version in the log with the requested version number
      */
-    virtual version_t getSignature(version_t ver, unsigned char* signature) = 0;
+    virtual bool getSignature(version_t ver, unsigned char* signature,
+                              version_t& prev_signed_ver) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.

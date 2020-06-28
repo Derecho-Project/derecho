@@ -256,7 +256,7 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
 
     // copy data
     memcpy(NEXT_DATA, pdat, size);
-    dbg_default_trace("{0} append:data is copied to log.", this->m_sName);
+    dbg_default_trace("{0} append:data ({1} bytes) is copied to log.", this->m_sName, size);
 
     // fill the log entry
     NEXT_LOG_ENTRY->fields.ver = ver;
@@ -393,7 +393,7 @@ void FilePersistLog::addSignature(version_t version,
     }
 }
 
-version_t FilePersistLog::getSignature(version_t version, unsigned char* signature) {
+bool FilePersistLog::getSignature(version_t version, unsigned char* signature, version_t& previous_signed_version) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -411,9 +411,10 @@ version_t FilePersistLog::getSignature(version_t version, unsigned char* signatu
 
     if(ple != nullptr && ple->fields.ver == version) {
         memcpy(signature, ple->fields.signature, signature_size);
-        return ple->fields.prev_signed_ver;
+        previous_signed_version = ple->fields.prev_signed_ver;
+        return true;
     }
-    return INVALID_VERSION;
+    return false;
 }
 
 int64_t FilePersistLog::getLength() {
@@ -595,7 +596,7 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) {
 void FilePersistLog::processEntryAtVersion(version_t ver,
                                            const std::function<void(const void*, std::size_t)>& func) {
     LogEntry* ple = nullptr;
-
+    dbg_default_trace("{} - process entry at version {}", m_sName, ver);
     FPL_RDLOCK;
 
     //binary search
@@ -611,7 +612,7 @@ void FilePersistLog::processEntryAtVersion(version_t ver,
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == ver) {
-        func(static_cast<void*>(ple->bytes), static_cast<size_t>(ple->fields.dlen));
+        func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.dlen));
     }
 }
 

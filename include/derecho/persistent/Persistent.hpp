@@ -634,13 +634,19 @@ public:
     /**
      * Retrieves the signature associated with the specified version and copies
      * it into the provided buffer, which must be of the correct length.
+     * Note: It would be better to throw an exception to indicate that the version
+     * is invalid, but Persistent doesn't have an exception hierarchy that can be
+     * caught; it only throws integers, which can't be matched to catch blocks.
      * @param ver The version to get the signature for
      * @param signature A byte buffer into which the signature will be placed
-     * @return The previous version whose signature is included in this version's
-     * signature, or INVALID_VERSION if there was no version in the log with the
-     * requested version number
+     * @param prev_ver A variable which will be updated to equal the previous
+     * version whose signature is included in this version's signature, or
+     * INVALID_VERSION if there was no version in the log with the requested
+     * version number
+     * @return true if a signature was successfully retrieved, false if there was
+     * no version in the log with the requested version number
      */
-    virtual version_t getSignature(version_t ver, unsigned char* signature);
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver);
 
     /**
      * Update the provided Verifier with the state of T at the specified version.

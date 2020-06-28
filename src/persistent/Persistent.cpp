@@ -1,4 +1,5 @@
 #include <derecho/openssl/hash.hpp>
+#include <derecho/openssl/signature.hpp>
 #include <derecho/persistent/Persistent.hpp>
 
 namespace persistent {
@@ -56,8 +57,8 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
     for(version_t version = last_signed_version + 1; version <= latest_version; ++version) {
         signer.init();
         std::size_t bytes_signed = 0;
-        for(auto& entry : _registry) {
-            bytes_signed += entry.second.update_signature(version, signer);
+        for(auto& field : _registry) {
+            bytes_signed += field.second.update_signature(version, signer);
         }
         if(bytes_signed == 0) {
             //If this version did not exist in any field, there's nothing to sign
@@ -67,8 +68,9 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
         signer.finalize(signature_buffer);
         //After computing a signature over all fields of the object, go back and
         //tell each field to add that signature to its log.
-        for(auto& entry : _registry) {
-            entry.second.add_signature(version, signature_buffer, last_signed_version);
+        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its last_signed_version to {}", version, last_signed_version);
+        for(auto& field : _registry) {
+            field.second.add_signature(version, signature_buffer, last_signed_version);
         }
         memcpy(last_signature.data(), signature_buffer, last_signature.size());
         last_signed_version = version;
@@ -76,8 +78,9 @@ void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer,
 }
 
 bool PersistentRegistry::get_signature(version_t version, unsigned char* signature_buffer) {
-    for(auto& entry : _registry) {
-        if(entry.second.get_signature(version, signature_buffer) != INVALID_VERSION) {
+    version_t previous_signed_version;
+    for(auto& field : _registry) {
+        if(field.second.get_signature(version, signature_buffer, previous_signed_version)) {
             return true;
         }
     }
@@ -85,6 +88,11 @@ bool PersistentRegistry::get_signature(version_t version, unsigned char* signatu
 }
 
 bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature) {
+    //For objects with no persistent fields, verification should always "succeed"
+    if(_registry.empty()) {
+        return true;
+    }
+    dbg_default_debug("PersistentRegistry: Verifying signature on version {}", version);
     verifier.init();
     for(auto& field : _registry) {
         field.second.update_verifier(version, verifier);
@@ -95,10 +103,16 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     //On that field, get the previous signed version, and retrieve that signature
     unsigned char current_sig[signature_size];
     unsigned char previous_sig[signature_size];
-    memset(previous_sig, 0, signature_size);
     for(auto& field : _registry) {
-        if((prev_signed_version = field.second.get_signature(version, current_sig)) != INVALID_VERSION) {
-            field.second.get_signature(prev_signed_version, previous_sig);
+        if(field.second.get_signature(version, current_sig, prev_signed_version)) {
+            if(prev_signed_version == INVALID_VERSION) {
+                //Special case if version is the very first version,
+                //whose previous signature is the "genesis signature"
+                memset(previous_sig, 0, signature_size);
+            } else {
+                version_t dummy;
+                field.second.get_signature(prev_signed_version, previous_sig, dummy);
+            }
             break;
         }
     }

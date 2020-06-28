@@ -7,8 +7,6 @@
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/openssl/signature.hpp>
 
-#include <spdlog/fmt/bin_to_hex.h>
-
 namespace derecho {
 
 PersistenceManager::PersistenceManager(
@@ -43,11 +41,12 @@ std::size_t PersistenceManager::get_signature_size() const {
 }
 
 void PersistenceManager::start() {
-    //Initialize this vector now that we know the number of subgroups (the size of the objects map)
-    last_persisted_version.resize(objects_by_subgroup_id.size(), -1);
+    //Initialize this vector now that ViewManager is set up and we know the number of subgroups
+    last_persisted_version.resize(view_manager->get_current_view().get().subgroup_shard_views.size(), -1);
     //Start the thread
     this->persist_thread = std::thread{[this]() {
         pthread_setname_np(pthread_self(), "persist");
+        dbg_default_debug("PersistenceManager thread started");
         do {
             // wait for semaphore
             sem_wait(&persistence_request_sem);
@@ -152,19 +151,12 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
                         signature_size);
             assert(other_signed_version >= version);
             assert(subgroup_object.get_minimum_latest_persisted_version() >= other_signed_version);
-            std::vector<unsigned char> my_signature = subgroup_object.get_signature(other_signed_version);
-            if(memcmp(other_signature.data(), my_signature.data(), signature_size) == 0) {
-                dbg_default_debug("Node {}'s signature matches local signature on version {}", Vc.members[shard_member_rank], other_signed_version);
-            } else {
-                dbg_default_warn("Node {}'s signature is not byte-equal to local signature on version {}", Vc.members[shard_member_rank], other_signed_version);
-                dbg_default_warn("Local signature: {} \n Other signature: {}", spdlog::to_hex(my_signature), spdlog::to_hex(other_signature));
-            }
             bool verification_success = subgroup_object.verify_log(
                     other_signed_version, *signature_verifier, other_signature.data());
             if(verification_success) {
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
             } else {
-                dbg_default_warn("Verification of version {} from node {} failed! OpenSSL error was: {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), ""));
+                dbg_default_warn("Verification of version {} from node {} failed! {}", other_signed_version, Vc.members[shard_member_rank], openssl::get_error_string(ERR_get_error(), "OpenSSL error"));
             }
         }
         //Update verified_num to the lowest version number that successfully verified across all shard members
@@ -213,6 +205,7 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
 void PersistenceManager::shutdown(bool wait) {
     // if(replicated_objects == nullptr) return;  //skip for raw subgroups - NO DON'T
 
+    dbg_default_debug("PersistenceManager thread shutting down");
     thread_shutdown = true;
     sem_post(&persistence_request_sem);  // kick the persistence thread in case it is sleeping
 

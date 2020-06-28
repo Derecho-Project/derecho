@@ -195,7 +195,7 @@ public:
                                     const bool preLocked = false);
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
     virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
-    virtual version_t getSignature(version_t ver, unsigned char* signature);
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version);
     virtual void trimByIndex(int64_t eno);
     virtual void trim(version_t ver);
     virtual void trim(const HLC& hlc);

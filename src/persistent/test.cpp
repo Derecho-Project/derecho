@@ -332,7 +332,8 @@ int main(int argc, char** argv) {
             if(prev_ver == INVALID_VERSION) {
                 memset(prev_sig, 0, sig_size);
             } else {
-                npx.getSignature(prev_ver, prev_sig);
+                version_t temp;
+                npx.getSignature(prev_ver, prev_sig, temp);
             }
             signer.add_bytes(prev_sig, sig_size);
             signer.finalize(static_cast<unsigned char*>(sig_buf));
@@ -342,12 +343,14 @@ int main(int argc, char** argv) {
             npx.persist(ver);
         } else if(strcmp(argv[1], "verify") == 0) {
             version_t ver = atol(argv[2]);
-            version_t prev_ver = npx.getSignature(ver, sig_buf);
+            version_t prev_ver;
+            npx.getSignature(ver, sig_buf, prev_ver);
             npx.updateVerifier(ver, verifier);
             if(prev_ver == INVALID_VERSION) {
                 memset(prev_sig, 0, sig_size);
             } else {
-                npx.getSignature(prev_ver, prev_sig);
+                version_t temp;
+                npx.getSignature(prev_ver, prev_sig, temp);
             }
             verifier.add_bytes(prev_sig, sig_size);
             bool success = verifier.finalize(sig_buf, sig_size);

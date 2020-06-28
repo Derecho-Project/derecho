@@ -122,7 +122,7 @@ inline void Persistent<ObjectType, storageType>::register_callbacks() {
                 {std::bind(&Persistent<ObjectType, storageType>::version_with_hlc, this, _1, _2),  //make new version
                  std::bind(&Persistent<ObjectType, storageType>::updateSignature, this, _1, _2),   //update signature at version
                  std::bind(&Persistent<ObjectType, storageType>::addSignature, this, _1, _2, _3),  //add signature to version
-                 std::bind(&Persistent<ObjectType, storageType>::getSignature, this, _1, _2),      //read signature from version
+                 std::bind(&Persistent<ObjectType, storageType>::getSignature, this, _1, _2, _3),  //read signature from version
                  std::bind(&Persistent<ObjectType, storageType>::updateVerifier, this, _1, _2),    //update verifier at version
                  std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),               //persist up to version
                  std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),   //trim by version:(const int64_t)
@@ -160,8 +160,9 @@ Persistent<ObjectType, storageType>::Persistent(
         version_t latest_version = getLatestVersion();
         std::unique_ptr<unsigned char[]> latest_signature;
         if(latest_version != INVALID_VERSION) {
+            version_t prev_ver;  //Unused out-parameter
             latest_signature = std::make_unique<unsigned char[]>(this->m_pLog->signature_size);
-            getSignature(latest_version, latest_signature.get());
+            getSignature(latest_version, latest_signature.get(), prev_ver);
         }
         persistent_registry->initializeLastSignature(latest_version, latest_signature.get(), this->m_pLog->signature_size);
     }
@@ -497,8 +498,8 @@ void Persistent<ObjectType, storageType>::addSignature(version_t ver, const unsi
 
 template <typename ObjectType,
           StorageType storageType>
-version_t Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature) {
-    return this->m_pLog->getSignature(ver, signature);
+bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature, version_t& prev_signed_ver) {
+    return this->m_pLog->getSignature(ver, signature, prev_signed_ver);
 }
 
 template <typename ObjectType,

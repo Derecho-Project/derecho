@@ -72,9 +72,9 @@ int main(int argc, char** argv) {
     pthread_setname_np(pthread_self(), "test_main");
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
-    std::uniform_int_distribution<std::size_t> char_distribution(0, characters.size());
+    std::uniform_int_distribution<std::size_t> char_distribution(0, characters.size() - 1);
     std::mutex finish_mutex;
-    //One condition variable per subgroup to represent when they are finished logging all updates
+    //One condition variable per subgroup to represent when they are finished verifying all updates
     std::vector<std::condition_variable> subgroup_finished_condition(2);
     //The actual boolean for the condition, since wakeups can be spurious
     std::vector<bool> subgroup_finished = {false, false};
@@ -102,10 +102,15 @@ int main(int argc, char** argv) {
     std::vector<derecho::message_id_t> subgroup_last_seq_num = {subgroup_1_size * num_updates - 1,
                                                                 subgroup_2_size * num_updates - 1};
     auto global_persist_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
+        dbg_default_info("Persisted: Subgroup {}, version {}.", subgroup_id, version);
+    };
+    auto global_verified_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
         int32_t version_vid;
         derecho::message_id_t version_seq_num;
         std::tie(version_vid, version_seq_num) = persistent::unpack_version<int32_t>(version);
-        dbg_default_info("Persisted: Subgroup {}, version {}. Sequence number is {}", subgroup_id, version, version_seq_num);
+        dbg_default_info("Verified: Subgroup {}, version {}.", subgroup_id, version);
+        dbg_default_flush();
+        assert(subgroup_id < subgroup_finished_condition.size());
         if(version_seq_num >= subgroup_last_seq_num[subgroup_id]) {
             {
                 std::unique_lock<std::mutex> finish_lock(finish_mutex);
@@ -113,9 +118,6 @@ int main(int argc, char** argv) {
             }
             subgroup_finished_condition[subgroup_id].notify_all();
         }
-    };
-    auto global_verified_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        dbg_default_info("Verified: Subgroup {}, version {}", subgroup_id, version);
     };
     auto new_view_callback = [](const derecho::View& view) {
         dbg_default_info("Now on View {}", view.vid);
@@ -173,50 +175,17 @@ int main(int argc, char** argv) {
             }
         }
     }
-    //Temporary: Manually verify all the updates
-    openssl::EnvelopeKey local_key = openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
-    openssl::Verifier local_verifier(local_key, openssl::DigestAlgorithm::SHA256);
+    //Wait for all updates to finish being verified, using the condition variables updated by the callback
     if(std::find(subgroup_1_members.begin(), subgroup_1_members.end(), my_id) != subgroup_1_members.end()) {
-        {
-            std::unique_lock<std::mutex> lock(finish_mutex);
-            subgroup_finished_condition[0].wait(lock, [&]() { return subgroup_finished[0]; });
-        }
-        persistent::version_t latest_version = group.get_subgroup<OneFieldObject>().get_minimum_latest_persisted_version();
-        dbg_default_info("Verifying log for OneFieldObject against itself up to version {}", latest_version);
-        for(persistent::version_t verify_version = 0; verify_version < latest_version; ++verify_version) {
-            std::vector<unsigned char> signature = group.get_subgroup<OneFieldObject>().get_signature(verify_version);
-            if(signature.size() == 0) {
-                dbg_default_info("No signature for version {}", verify_version);
-                continue;
-            }
-            bool verify_success = group.get_subgroup<OneFieldObject>().verify_log(verify_version, local_verifier, signature.data());
-            if(verify_success) {
-                dbg_default_info("Successfully verified version {}", verify_version);
-            } else {
-                dbg_default_info("Failed to verify version {}! {}", verify_version, openssl::get_error_string(ERR_get_error(), "OpenSSL Error:"));
-            }
-        }
+        std::cout << "Waiting for final version " << subgroup_last_seq_num[0] << " to be verified" << std::endl;
+        std::unique_lock<std::mutex> lock(finish_mutex);
+        subgroup_finished_condition[0].wait(lock, [&]() { return subgroup_finished[0]; });
     } else if(std::find(subgroup_2_members.begin(), subgroup_2_members.end(), my_id) != subgroup_2_members.end()) {
-        {
-            std::unique_lock<std::mutex> lock(finish_mutex);
-            subgroup_finished_condition[1].wait(lock, [&]() { return subgroup_finished[1]; });
-        }
-        persistent::version_t latest_version = group.get_subgroup<TwoFieldObject>().get_minimum_latest_persisted_version();
-        dbg_default_info("Verifying log for TwoFieldObject against itself up to version {}", latest_version);
-        for(persistent::version_t verify_version = 0; verify_version < latest_version; ++verify_version) {
-            std::vector<unsigned char> signature = group.get_subgroup<TwoFieldObject>().get_signature(verify_version);
-            if(signature.size() == 0) {
-                dbg_default_info("No signature for version {}", verify_version);
-                continue;
-            }
-            bool verify_success = group.get_subgroup<TwoFieldObject>().verify_log(verify_version, local_verifier, signature.data());
-            if(verify_success) {
-                dbg_default_info("Successfully verified version {}", verify_version);
-            } else {
-                dbg_default_info("Failed to verify version {}! {}", verify_version, openssl::get_error_string(ERR_get_error(), "OpenSSL Error:"));
-            }
-        }
+        std::cout << "Waiting for final version " << subgroup_last_seq_num[1] << " to be verified" << std::endl;
+        std::unique_lock<std::mutex> lock(finish_mutex);
+        subgroup_finished_condition[1].wait(lock, [&]() { return subgroup_finished[1]; });
     }
-
+    std::cout << "Done" << std::endl;
+    group.barrier_sync();
     group.leave(true);
 }

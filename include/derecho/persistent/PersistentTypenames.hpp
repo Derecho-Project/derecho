@@ -45,10 +45,12 @@ struct PersistentObjectFunctions {
     /**
      * The "get signature" function should retrieve the signature associated
      * with a particular version of the object (parameter 1) and copy it into
-     * the byte buffer pointed to by parameter 2. It should also return the
-     * previous version whose signature is included in the data signed.
+     * the byte buffer pointed to by parameter 2. It should also update
+     * parameter 3 (an out parameter) to equal the previous version whose
+     * signature is included in the data signed. Returns true on success,
+     * false on failure.
      */
-    std::function<version_t(version_t, unsigned char*)> get_signature;
+    std::function<bool(version_t, unsigned char*, version_t&)> get_signature;
     /**
      * The "update verifier" function should update the provided Verifier object
      * (parameter 2) with the state of the object in a specific version
