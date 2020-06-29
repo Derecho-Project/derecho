@@ -67,10 +67,10 @@ typedef union log_entry {
 #define NEXT_LOG_ENTRY LOG_ENTRY_AT(META_HEADER->fields.tail)
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
         MAX(META_HEADER_PERS->fields.tail, META_HEADER->fields.head))
-#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? -1 : META_HEADER->fields.tail - 1)
+#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.tail - 1)
 #define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
 
-#define NEXT_DATA_OFST ((CURR_LOG_IDX == -1) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
+#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
 #define NEXT_DATA ((void*)((uint64_t) this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
@@ -174,7 +174,7 @@ public:
 
     //Derived from PersistLog
     virtual void append(const void* pdata,
-                        const uint64_t& size, const int64_t& ver,
+                        const uint64_t size, const int64_t ver,
                         const HLC& mhlc);
     virtual void advanceVersion(const int64_t& ver);
     virtual int64_t getLength();
@@ -205,7 +205,7 @@ public:
         // RDLOCK for validation
         FPL_RDLOCK;
         idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
-        if(idx == -1) {
+        if(idx == INVALID_INDEX) {
             FPL_UNLOCK;
             return;
         }
@@ -216,7 +216,7 @@ public:
         // WRLOCK for trim
         FPL_WRLOCK;
         idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
-        if(idx != -1) {
+        if(idx != INVALID_INDEX) {
             META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
@@ -302,14 +302,14 @@ private:
      * @param key: the key to be search
      * @param logArr: log array
      * @param len: log length
-     * @return index of the log entry found or -1 if not found.
+     * @return index of the log entry found or INVALID_INDEX if not found.
      */
     template <typename TKey, typename KeyGetter>
     int64_t binarySearch(const KeyGetter& keyGetter, const TKey& key,
                          const int64_t& logHead, const int64_t& logTail) {
         if(logTail <= logHead) {
             dbg_default_trace("binary Search failed...EMPTY LOG");
-            return (int64_t)-1L;
+            return INVALID_INDEX;
         }
         int64_t head = logHead, tail = logTail - 1;
         int64_t pivot = 0;
@@ -331,12 +331,20 @@ private:
                 tail = pivot - 1;
                 if(head > tail) {
                     dbg_default_trace("binary Search failed...Object does not exist.");
-                    return (int64_t)-1L;
+                    return INVALID_INDEX;
                 }
             }
         }
         return pivot;
     }
+
+    /* Validate the log before we append. It will throw exception if
+     * - there is no space
+     * - the version is not monotonic
+     * @param size: size of the data to be append in this log entry
+     * @param ver: version of the new log entry
+     */
+    void do_append_validation(const uint64_t size, const int64_t ver);
 
 #ifndef NDEBUG
     //dbg functions
