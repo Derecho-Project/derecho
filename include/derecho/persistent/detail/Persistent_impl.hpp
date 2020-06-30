@@ -114,35 +114,6 @@ inline void Persistent<ObjectType, storageType>::initialize_object_from_log(cons
 
 template <typename ObjectType,
           StorageType storageType>
-inline void Persistent<ObjectType, storageType>::register_callbacks() {
-    using namespace std::placeholders;
-    if(this->m_pRegistry != nullptr) {
-        this->m_pRegistry->registerPersist(
-                this->m_pLog->m_sName.c_str(),
-                {std::bind(&Persistent<ObjectType, storageType>::version_with_hlc, this, _1, _2),  //make new version
-                 std::bind(&Persistent<ObjectType, storageType>::updateSignature, this, _1, _2),   //update signature at version
-                 std::bind(&Persistent<ObjectType, storageType>::addSignature, this, _1, _2, _3),  //add signature to version
-                 std::bind(&Persistent<ObjectType, storageType>::getSignature, this, _1, _2, _3),  //read signature from version
-                 std::bind(&Persistent<ObjectType, storageType>::updateVerifier, this, _1, _2),    //update verifier at version
-                 std::bind(&Persistent<ObjectType, storageType>::persist, this, _1),               //persist up to version
-                 std::bind(&Persistent<ObjectType, storageType>::trim<const int64_t>, this, _1),   //trim by version:(const int64_t)
-                 std::bind(&Persistent<ObjectType, storageType>::getLatestVersion, this),          //get the latest version in memory
-                 std::bind(&Persistent<ObjectType, storageType>::getLastPersistedVersion, this),   //get the latest persisted version
-                 std::bind(&Persistent<ObjectType, storageType>::truncate, this, _1)}              //truncate persistent versions
-        );
-    }
-}
-
-template <typename ObjectType,
-          StorageType storageType>
-inline void Persistent<ObjectType, storageType>::unregister_callbacks() {
-    if(this->m_pRegistry != nullptr && this->m_pLog != nullptr) {
-        this->m_pRegistry->unregisterPersist(this->m_pLog->m_sName.c_str());
-    }
-}
-
-template <typename ObjectType,
-          StorageType storageType>
 Persistent<ObjectType, storageType>::Persistent(
         const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
         const char* object_name,
@@ -150,13 +121,13 @@ Persistent<ObjectType, storageType>::Persistent(
         mutils::DeserializationManager dm)
         : m_pRegistry(persistent_registry) {
     // Initialize log
-    initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->get_subgroup_prefix() : nullptr)).c_str() : object_name);
+    initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->getSubgroupPrefix() : nullptr)).c_str() : object_name);
     // Initialize object
     initialize_object_from_log(object_factory, &dm);
-    // Register Callbacks
-    register_callbacks();
-    // Set up PersistentRegistry's last signed version
     if(persistent_registry) {
+        // Register with PersistentRegistry
+        persistent_registry->registerPersistent(this->m_pLog->m_sName, this);
+        // Set up PersistentRegistry's last signed version
         version_t latest_version = getLatestVersion();
         std::unique_ptr<unsigned char[]> latest_signature;
         if(latest_version != INVALID_VERSION) {
@@ -174,7 +145,10 @@ Persistent<ObjectType, storageType>::Persistent(Persistent&& other) {
     this->m_pWrappedObject = std::move(other.m_pWrappedObject);
     this->m_pLog = std::move(other.m_pLog);
     this->m_pRegistry = other.m_pRegistry;
-    register_callbacks();  // this callback will override the previous registry entry.
+    if(this->m_pRegistry != nullptr) {
+        // this will override the previous registry entry
+        this->m_pRegistry->registerPersistent(this->m_pLog->m_sName, this);
+    }
 }
 
 template <typename ObjectType,
@@ -195,8 +169,10 @@ Persistent<ObjectType, storageType>::Persistent(
     // Initialize Wrapped Object
     assert(wrapped_obj_ptr != nullptr);
     this->m_pWrappedObject = std::move(wrapped_obj_ptr);
-    // Register callbacks
-    register_callbacks();
+    // Register with PersistentRegistry
+    if(this->m_pRegistry) {
+        this->m_pRegistry->registerPersistent(this->m_pLog->m_sName, this);
+    }
 }
 
 template <typename ObjectType,
@@ -210,7 +186,9 @@ Persistent<ObjectType, storageType>::~Persistent() noexcept(true) {
     // }
     // unregister the version creator and persist callback,
     // if the Persistent<T> is added to the pool dynamically.
-    unregister_callbacks();
+    if(m_pRegistry && m_pLog) {
+        m_pRegistry->unregisterPersistent(m_pLog->m_sName);
+    }
 };
 
 template <typename ObjectType,
@@ -325,10 +303,17 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
 
 template <typename ObjectType,
           StorageType storageType>
-template <typename TKey>
-void Persistent<ObjectType, storageType>::trim(const TKey& k) {
+void Persistent<ObjectType, storageType>::trim(const HLC& key) {
     dbg_default_trace("trim.");
-    this->m_pLog->trim(k);
+    this->m_pLog->trim(key);
+    dbg_default_trace("trim...done");
+}
+
+template <typename ObjectType,
+          StorageType storageType>
+void Persistent<ObjectType, storageType>::trim(version_t ver) {
+    dbg_default_trace("trim.");
+    this->m_pLog->trim(ver);
     dbg_default_trace("trim...done");
 }
 
@@ -393,37 +378,37 @@ std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getNumOfVersions() {
+int64_t Persistent<ObjectType, storageType>::getNumOfVersions() const {
     return this->m_pLog->getLength();
 };
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getEarliestIndex() {
+int64_t Persistent<ObjectType, storageType>::getEarliestIndex() const {
     return this->m_pLog->getEarliestIndex();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getEarliestVersion() {
+int64_t Persistent<ObjectType, storageType>::getEarliestVersion() const {
     return this->m_pLog->getEarliestVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getLatestIndex() {
+int64_t Persistent<ObjectType, storageType>::getLatestIndex() const {
     return this->m_pLog->getLatestIndex();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getLatestVersion() {
+version_t Persistent<ObjectType, storageType>::getLatestVersion() const {
     return this->m_pLog->getLatestVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
+version_t Persistent<ObjectType, storageType>::getLatestPersistedVersion() const {
     return this->m_pLog->getLastPersistedVersion();
 }
 
@@ -448,7 +433,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, version_t ver, cons
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::version_with_hlc(version_t ver, const HLC& mhlc) {
+void Persistent<ObjectType, storageType>::version(version_t ver, const HLC& mhlc) {
     dbg_default_trace("In Persistent<T>: make version (ver={}, hlc={}us.{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     this->set(*this->m_pWrappedObject, ver, mhlc);
 }
@@ -504,7 +489,7 @@ bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned c
 
 template <typename ObjectType,
           StorageType storageType>
-std::size_t Persistent<ObjectType, storageType>::getSignatureSize() {
+std::size_t Persistent<ObjectType, storageType>::getSignatureSize() const {
     return this->m_pLog->signature_size;
 }
 

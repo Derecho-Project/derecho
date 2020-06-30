@@ -16,7 +16,7 @@
 
 #include "../derecho_type_definitions.hpp"
 #include <derecho/persistent/HLC.hpp>
-#include <derecho/persistent/PersistentTypenames.hpp>
+#include <derecho/persistent/PersistentInterface.hpp>
 
 namespace persistent {
 class PersistentRegistry;

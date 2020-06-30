@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     for(version_t cur_version : versions) {
         //Simulate a verification request
         std::vector<unsigned char> signature(signer.get_max_signature_size());
-        bool got_signature = registry.get_signature(cur_version, signature.data());
+        bool got_signature = registry.getSignature(cur_version, signature.data());
         assert(got_signature);
         dbg_default_info("Retrieved signature for version {}: {}", cur_version, spdlog::to_hex(signature));
         bool success = registry.verify(cur_version, verifier, signature.data());

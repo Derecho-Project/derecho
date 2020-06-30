@@ -344,8 +344,8 @@ public:
      * Register a persistent member
      */
     virtual void register_persistent_member(const char* object_name,
-                                            const persistent::PersistentObjectFunctions& interface_functions) {
-        this->persistent_registry->registerPersist(object_name, interface_functions);
+                                            persistent::PersistentObject* member_pointer) {
+        this->persistent_registry->registerPersistent(object_name, member_pointer);
     }
 };
 

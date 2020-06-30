@@ -187,12 +187,12 @@ public:
     virtual int64_t getHLCIndex(const HLC& hlc);
     virtual version_t getEarliestVersion();
     virtual version_t getLatestVersion();
-    virtual const version_t getLastPersistedVersion();
+    virtual version_t getLastPersistedVersion();
     virtual const void* getEntryByIndex(int64_t eno);
     virtual const void* getEntry(version_t ver);
     virtual const void* getEntry(const HLC& hlc);
-    virtual const version_t persist(version_t ver,
-                                    const bool preLocked = false);
+    virtual version_t persist(version_t ver,
+                              bool preLocked = false);
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
     virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
     virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version);

@@ -15,7 +15,7 @@
 #include "derecho_internal.hpp"
 #include "replicated_interface.hpp"
 #include <derecho/openssl/signature.hpp>
-#include <derecho/persistent/PersistentTypenames.hpp>
+#include <derecho/persistent/PersistentInterface.hpp>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {

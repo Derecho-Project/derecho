@@ -5,7 +5,7 @@
 #include "HLC.hpp"
 #include "PersistException.hpp"
 #include "PersistNoLog.hpp"
-#include "PersistentTypenames.hpp"
+#include "PersistentInterface.hpp"
 #include "detail/FilePersistLog.hpp"
 #include "detail/PersistLog.hpp"
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -131,7 +131,7 @@ public:
      * @return True if a signature was retrieved successfully, false if there
      * was no version matching the requested version number
      */
-    bool get_signature(version_t version, unsigned char* signature_buffer);
+    bool getSignature(version_t version, unsigned char* signature_buffer);
 
     /**
      * Verifies the log up to the specified version against the specified
@@ -181,27 +181,34 @@ public:
     void truncate(version_t last_version);
 
     /**
-     * register a Persistent<T> along with its lambdas
+     * Add a Persistent<T> to the registry, identified by its name. Since
+     * PersistentRegistry does not own the pointer to the Persistent<T>, the
+     * caller must guarantee that the provided Persistent<T> outlives this
+     * PersistentRegistry.
+     * @param obj_name A string containing a name for the Persistent object
+     * @param persistent_object A pointer to the Persistent<T> that this
+     * PersistentRegistry should manage, using the type-erased base class
+     * PersistentObject.
      */
-    void registerPersist(const char* obj_name,
-                         const PersistentObjectFunctions& interface_functions);
+    void registerPersistent(const std::string& obj_name,
+                            PersistentObject* persistent_object);
 
     /**
-     * deregister
+     * Does nothing in the current implementation.
      */
-    void unregisterPersist(const char* obj_name);
+    void unregisterPersistent(const std::string& obj_name);
 
     /**
      * get temporal query frontier
      */
     inline const HLC getFrontier() {
-        if(_temporal_query_frontier_provider != nullptr) {
+        if(m_temporalQueryFrontierProvider != nullptr) {
 #ifndef NDEBUG
-            const HLC r = _temporal_query_frontier_provider->getFrontier();
+            const HLC r = m_temporalQueryFrontierProvider->getFrontier();
             dbg_default_warn("temporal_query_frontier=HLC({},{})", r.m_rtc_us, r.m_logic);
             return r;
 #else
-            return _temporal_query_frontier_provider->getFrontier();
+            return m_temporalQueryFrontierProvider->getFrontier();
 #endif  //NDEBUG
         } else {
             struct timespec t;
@@ -231,7 +238,7 @@ public:
     /**
      * Get prefix for subgroup, this will appear in the file name of Persistent<T>
      */
-    const char* get_subgroup_prefix();
+    const char* getSubgroupPrefix();
 
     /** prefix generator
      * prefix format: [hex of subgroup_type]-[subgroup_index]-[shard_num]
@@ -255,17 +262,18 @@ protected:
     /**
      * this appears in the first part of storage file for persistent<T>
      */
-    const std::string _subgroup_prefix;
+    const std::string m_subgroupPrefix;
 
     /**
      * Pointer to an entity providing TemporalQueryFrontier service.
      */
-    ITemporalQueryFrontierProvider* _temporal_query_frontier_provider;
+    ITemporalQueryFrontierProvider* m_temporalQueryFrontierProvider;
 
     /**
-     * Callback registry.
+     * Registry of pointers to Persistent objects, indexed by the hash of the
+     * object's name
      */
-    std::map<std::size_t, PersistentObjectFunctions> _registry;
+    std::map<std::size_t, PersistentObject*> m_registry;
 
     /**
      * The last (most recent) signature to be added to a persistent log entry.
@@ -273,12 +281,12 @@ protected:
      * in order to include the previous entry's signature in the next entry's
      * signed data.
      */
-    std::vector<unsigned char> last_signature;
+    std::vector<unsigned char> m_lastSignature;
     /**
      * The version number associated with the last signature to be added to a
      * persistent log entry.
      */
-    version_t last_signed_version;
+    version_t m_lastSignedVersion;
     /**
      * Set the earliest version to serialize for recovery.
      */
@@ -366,7 +374,7 @@ private:
 //TODO: Persistent<T> has to be serializable, extending from mutils::ByteRepresentable
 template <typename ObjectType,
           StorageType storageType = ST_FILE>
-class Persistent : public mutils::ByteRepresentable {
+class Persistent : public PersistentObject, public mutils::ByteRepresentable {
 protected:
     /** initialize from local state.
      *  @param object_name Object name
@@ -377,14 +385,6 @@ protected:
      */
     inline void initialize_object_from_log(const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
                                            mutils::DeserializationManager* dm);
-
-    /** register the callbacks.
-     */
-    inline void register_callbacks();
-
-    /** unregister the callbacks.
-     */
-    inline void unregister_callbacks();
 
 public:
     /** constructor 1 is for building a persistent<T> locally, load/create a
@@ -505,10 +505,14 @@ public:
             mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * trim by version or index
+     * Trim the log of all versions prior to a specific HLC timestamp
      */
-    template <typename TKey>
-    void trim(const TKey& k);
+    void trim(const HLC& key);
+
+    /**
+     * Trim the log of all versions prior to version 'ver'
+     */
+    void trim(version_t ver);
 
     /**
      * truncate the log
@@ -552,32 +556,32 @@ public:
     /**
      * get the number of versions excluding trimmed ones.
      */
-    virtual int64_t getNumOfVersions();
+    virtual int64_t getNumOfVersions() const;
 
     /**
      * get the earliest index excluding trimmed ones.
      */
-    virtual int64_t getEarliestIndex();
+    virtual int64_t getEarliestIndex() const;
 
     /**
      * get the earliest  version excluding trimmed ones.
      */
-    virtual version_t getEarliestVersion();
+    virtual version_t getEarliestVersion() const;
 
     /**
      * get the latest index excluding truncated ones.
      */
-    virtual int64_t getLatestIndex();
+    virtual int64_t getLatestIndex() const;
 
     /**
      * get the lastest version excluding truncated ones.
      */
-    virtual version_t getLatestVersion();
+    virtual version_t getLatestVersion() const;
 
     /**
      * get the last persisted version.
      */
-    virtual const version_t getLastPersistedVersion();
+    virtual version_t getLatestPersistedVersion() const;
 
     /**
      * make a version with a version number and mhlc clock
@@ -587,7 +591,7 @@ public:
     /**
      * make a version with a version number and mhlc clock, using the current state.
      */
-    virtual void version_with_hlc(version_t ver, const HLC& mhlc);
+    virtual void version(version_t ver, const HLC& mhlc);
 
     /**
      * make a version with only a version number
@@ -629,7 +633,7 @@ public:
      * @return the size, in bytes, of each signature in this Persistent object's log.
      * Useful for allocating a correctly-sized buffer before calling get_signature.
      */
-    virtual std::size_t getSignatureSize();
+    virtual std::size_t getSignatureSize() const;
 
     /**
      * Retrieves the signature associated with the specified version and copies

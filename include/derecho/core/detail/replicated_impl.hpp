@@ -231,7 +231,7 @@ bool Replicated<T>::verify_log(persistent::version_t version, openssl::Verifier&
 template <typename T>
 std::vector<unsigned char> Replicated<T>::get_signature(persistent::version_t version) {
     std::vector<unsigned char> signature(signature_size);
-    if(persistent_registry->get_signature(version, signature.data())) {
+    if(persistent_registry->getSignature(version, signature.data())) {
         return signature;
     } else {
         return {};

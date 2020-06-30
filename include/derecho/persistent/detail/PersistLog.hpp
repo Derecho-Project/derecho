@@ -7,7 +7,7 @@
 
 #include "../HLC.hpp"
 #include "../PersistException.hpp"
-#include "../PersistentTypenames.hpp"
+#include "../PersistentInterface.hpp"
 #include <functional>
 #include <inttypes.h>
 #include <map>
@@ -115,7 +115,7 @@ public:
     virtual version_t getLatestVersion() = 0;
 
     // return the last persisted version
-    virtual const version_t getLastPersistedVersion() = 0;
+    virtual version_t getLastPersistedVersion() = 0;
 
     // Get a version by entry number return both length and buffer
     virtual const void* getEntryByIndex(int64_t eno) = 0;
@@ -142,8 +142,8 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(version_t version,
-                                    const bool preLocked = false) = 0;
+    virtual version_t persist(version_t version,
+                              bool preLocked = false) = 0;
 
     /**
      * add a signature to corresponding version

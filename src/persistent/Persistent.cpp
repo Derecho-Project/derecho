@@ -10,27 +10,27 @@ PersistentRegistry::PersistentRegistry(
         ITemporalQueryFrontierProvider* tqfp,
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) : _subgroup_prefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
-                              _temporal_query_frontier_provider(tqfp),
-                              last_signed_version(INVALID_VERSION) {
+        uint32_t shard_num) : m_subgroupPrefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
+                              m_temporalQueryFrontierProvider(tqfp),
+                              m_lastSignedVersion(INVALID_VERSION) {
 }
 
 PersistentRegistry::~PersistentRegistry() {
-    this->_registry.clear();
+    this->m_registry.clear();
 };
 
 void PersistentRegistry::makeVersion(version_t ver, const HLC& mhlc) {
-    for(auto& entry : _registry) {
-        entry.second.version(ver, mhlc);
+    for(auto& entry : m_registry) {
+        entry.second->version(ver, mhlc);
     }
 };
 
 version_t PersistentRegistry::getMinimumLatestVersion() {
     version_t min = -1;
-    for(auto itr = _registry.begin();
-        itr != _registry.end(); ++itr) {
-        version_t ver = itr->second.get_latest_version();
-        if(itr == _registry.begin()) {
+    for(auto itr = m_registry.begin();
+        itr != m_registry.end(); ++itr) {
+        version_t ver = itr->second->getLatestVersion();
+        if(itr == m_registry.begin()) {
             min = ver;
         } else if(min > ver) {
             min = ver;
@@ -41,46 +41,46 @@ version_t PersistentRegistry::getMinimumLatestVersion() {
 
 void PersistentRegistry::initializeLastSignature(version_t version,
                                                  const unsigned char* signature, std::size_t signature_size) {
-    if(signature_size != last_signature.size()) {
-        last_signature.resize(signature_size);
+    if(signature_size != m_lastSignature.size()) {
+        m_lastSignature.resize(signature_size);
         //On the first call to initialize_signature with version == INVALID_VERSION,
         //this will initialize last_signature to all zeroes, which is our "genesis signature"
     }
     if(signature_size > 0 && version != INVALID_VERSION
-       && (last_signed_version == INVALID_VERSION || last_signed_version < version)) {
-        memcpy(last_signature.data(), signature, signature_size);
-        last_signed_version = version;
+       && (m_lastSignedVersion == INVALID_VERSION || m_lastSignedVersion < version)) {
+        memcpy(m_lastSignature.data(), signature, signature_size);
+        m_lastSignedVersion = version;
     }
 }
 
 void PersistentRegistry::sign(version_t latest_version, openssl::Signer& signer, unsigned char* signature_buffer) {
-    for(version_t version = last_signed_version + 1; version <= latest_version; ++version) {
+    for(version_t version = m_lastSignedVersion + 1; version <= latest_version; ++version) {
         signer.init();
         std::size_t bytes_signed = 0;
-        for(auto& field : _registry) {
-            bytes_signed += field.second.update_signature(version, signer);
+        for(auto& field : m_registry) {
+            bytes_signed += field.second->updateSignature(version, signer);
         }
         if(bytes_signed == 0) {
             //If this version did not exist in any field, there's nothing to sign
             continue;
         }
-        signer.add_bytes(last_signature.data(), last_signature.size());
+        signer.add_bytes(m_lastSignature.data(), m_lastSignature.size());
         signer.finalize(signature_buffer);
         //After computing a signature over all fields of the object, go back and
         //tell each field to add that signature to its log.
-        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its last_signed_version to {}", version, last_signed_version);
-        for(auto& field : _registry) {
-            field.second.add_signature(version, signature_buffer, last_signed_version);
+        dbg_default_debug("PersistentRegistry: Adding signature to log in version {}, setting its previous signed version to {}", version, m_lastSignedVersion);
+        for(auto& field : m_registry) {
+            field.second->addSignature(version, signature_buffer, m_lastSignedVersion);
         }
-        memcpy(last_signature.data(), signature_buffer, last_signature.size());
-        last_signed_version = version;
+        memcpy(m_lastSignature.data(), signature_buffer, m_lastSignature.size());
+        m_lastSignedVersion = version;
     }
 }
 
-bool PersistentRegistry::get_signature(version_t version, unsigned char* signature_buffer) {
+bool PersistentRegistry::getSignature(version_t version, unsigned char* signature_buffer) {
     version_t previous_signed_version;
-    for(auto& field : _registry) {
-        if(field.second.get_signature(version, signature_buffer, previous_signed_version)) {
+    for(auto& field : m_registry) {
+        if(field.second->getSignature(version, signature_buffer, previous_signed_version)) {
             return true;
         }
     }
@@ -89,13 +89,13 @@ bool PersistentRegistry::get_signature(version_t version, unsigned char* signatu
 
 bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, const unsigned char* signature) {
     //For objects with no persistent fields, verification should always "succeed"
-    if(_registry.empty()) {
+    if(m_registry.empty()) {
         return true;
     }
     dbg_default_debug("PersistentRegistry: Verifying signature on version {}", version);
     verifier.init();
-    for(auto& field : _registry) {
-        field.second.update_verifier(version, verifier);
+    for(auto& field : m_registry) {
+        field.second->updateVerifier(version, verifier);
     }
     const std::size_t signature_size = verifier.get_max_signature_size();
     version_t prev_signed_version;
@@ -103,15 +103,15 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
     //On that field, get the previous signed version, and retrieve that signature
     unsigned char current_sig[signature_size];
     unsigned char previous_sig[signature_size];
-    for(auto& field : _registry) {
-        if(field.second.get_signature(version, current_sig, prev_signed_version)) {
+    for(auto& field : m_registry) {
+        if(field.second->getSignature(version, current_sig, prev_signed_version)) {
             if(prev_signed_version == INVALID_VERSION) {
                 //Special case if version is the very first version,
                 //whose previous signature is the "genesis signature"
                 memset(previous_sig, 0, signature_size);
             } else {
                 version_t dummy;
-                field.second.get_signature(prev_signed_version, previous_sig, dummy);
+                field.second->getSignature(prev_signed_version, previous_sig, dummy);
             }
             break;
         }
@@ -121,23 +121,23 @@ bool PersistentRegistry::verify(version_t version, openssl::Verifier& verifier, 
 }
 
 void PersistentRegistry::persist(version_t latest_version) {
-    for(auto& entry : _registry) {
-        entry.second.persist(latest_version);
+    for(auto& entry : m_registry) {
+        entry.second->persist(latest_version);
     }
 };
 
 void PersistentRegistry::trim(version_t earliest_version) {
-    for(auto& entry : _registry) {
-        entry.second.trim(earliest_version);
+    for(auto& entry : m_registry) {
+        entry.second->trim(earliest_version);
     }
 };
 
 int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
     int64_t min = -1;
-    for(auto itr = _registry.begin();
-        itr != _registry.end(); ++itr) {
-        int64_t ver = itr->second.get_latest_persisted();
-        if(itr == _registry.begin()) {
+    for(auto itr = m_registry.begin();
+        itr != m_registry.end(); ++itr) {
+        int64_t ver = itr->second->getLatestPersistedVersion();
+        if(itr == m_registry.begin()) {
             min = ver;
         } else if(min > ver) {
             min = ver;
@@ -159,33 +159,33 @@ int64_t PersistentRegistry::getEarliestVersionToSerialize() noexcept(true) {
 }
 
 void PersistentRegistry::truncate(version_t last_version) {
-    for(auto& entry : _registry) {
-        entry.second.truncate(last_version);
+    for(auto& entry : m_registry) {
+        entry.second->truncate(last_version);
     }
 }
 
-void PersistentRegistry::registerPersist(const char* obj_name,
-                                         const PersistentObjectFunctions& interface_functions) {
+void PersistentRegistry::registerPersistent(const std::string& obj_name,
+                                            PersistentObject* persistent_object) {
     std::size_t key = std::hash<std::string>{}(obj_name);
-    auto res = this->_registry.insert(std::pair<std::size_t, PersistentObjectFunctions>(key, interface_functions));
+    auto res = this->m_registry.insert(std::pair<std::size_t, PersistentObject*>(key, persistent_object));
     if(res.second == false) {
         //override the previous value:
-        this->_registry.erase(res.first);
-        this->_registry.insert(std::pair<std::size_t, PersistentObjectFunctions>(key, interface_functions));
+        this->m_registry.erase(res.first);
+        this->m_registry.insert(std::pair<std::size_t, PersistentObject*>(key, persistent_object));
     }
 };
 
-void PersistentRegistry::unregisterPersist(const char* obj_name) {
+void PersistentRegistry::unregisterPersistent(const std::string& obj_name) {
     // The upcoming regsiterPersist() call will override this automatically.
     // this->_registry.erase(std::hash<std::string>{}(obj_name));
 }
 
 void PersistentRegistry::updateTemporalFrontierProvider(ITemporalQueryFrontierProvider* tqfp) {
-    this->_temporal_query_frontier_provider = tqfp;
+    this->m_temporalQueryFrontierProvider = tqfp;
 }
 
-const char* PersistentRegistry::get_subgroup_prefix() {
-    return this->_subgroup_prefix.c_str();
+const char* PersistentRegistry::getSubgroupPrefix() {
+    return this->m_subgroupPrefix.c_str();
 }
 
 std::string PersistentRegistry::generate_prefix(
