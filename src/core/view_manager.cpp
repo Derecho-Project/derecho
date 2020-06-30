@@ -30,7 +30,7 @@ ViewManager::ViewManager(
         const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
-        ReplicatedObjectReferenceMap& object_reference_map,
+        std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
         PersistenceManager& persistence_manager,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
@@ -42,7 +42,7 @@ ViewManager::ViewManager(
           tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID),
                       {{getConfUInt32(CONF_DERECHO_LOCAL_ID),
                         {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
-          subgroup_objects(object_reference_map),
+          subgroup_objects(object_pointer_map),
           any_persistent_objects(any_persistent_objects),
           persistence_manager(persistence_manager) {
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
@@ -403,7 +403,7 @@ void ViewManager::truncate_logs() {
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
         dbg_default_trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
         dbg_default_flush();
-        subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
+        subgroup_objects.at(subgroup_id)->truncate(max_delivered_version);
     }
 }
 
@@ -1537,7 +1537,7 @@ void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
             getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
+                subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             },
             persistence_manager, curr_view->failed);
 }
@@ -1561,7 +1561,7 @@ void ViewManager::transition_multicast_group(
             new_subgroup_settings,
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
+                subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             },
             next_view->failed);
 
@@ -1729,16 +1729,16 @@ void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_l
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets.get_socket(new_node_id);
     assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-    ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
-    if(subgroup_object.is_persistent()) {
+    ReplicatedObject* subgroup_object = subgroup_objects.at(subgroup_id);
+    if(subgroup_object->is_persistent()) {
         //First, read the log tail length sent by the joining node
-        int64_t persistent_log_length = 0;
+        persistent::version_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
         persistent::PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         dbg_default_debug("Got log tail length {}", persistent_log_length);
     }
     dbg_default_debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
-    subgroup_object.send_object(joiner_socket.get());
+    subgroup_object->send_object(joiner_socket.get());
 }
 
 void ViewManager::update_tcp_connections() {

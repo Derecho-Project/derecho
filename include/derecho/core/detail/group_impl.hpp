@@ -268,7 +268,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     }
                     // Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id,
-                                                   replicated_objects.template get<FirstType>().at(subgroup_index));
+                                                   &replicated_objects.template get<FirstType>().at(subgroup_index));
                 } else if(in_restart && has_previous_leader) {
                     //In restart mode, construct_objects may be called multiple times if the initial view
                     //is aborted, so we need to receive state for this shard even if we already constructed
@@ -371,10 +371,10 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = view_manager.get_transfer_socket(subgroup_and_leader.second);
-        ReplicatedObject& subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
+        ReplicatedObject* subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
         try {
-            if(subgroup_object.is_persistent()) {
-                int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
+            if(subgroup_object->is_persistent()) {
+                persistent::version_t log_tail_length = subgroup_object->get_minimum_latest_persisted_version();
                 dbg_default_debug("Sending log tail length of {} for subgroup {} to node {}.",
                                   log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
                 leader_socket.get().write(log_tail_length);
@@ -385,7 +385,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             leader_socket.get().read(buffer_size);
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
-            subgroup_object.receive_object(buffer.get());
+            subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
             //Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");

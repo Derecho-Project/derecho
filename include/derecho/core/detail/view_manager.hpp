@@ -200,9 +200,8 @@ private:
      */
     std::unique_ptr<tcp::socket> leader_connection;
 
-    using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
     /**
-     * A type-erased list of references to the Replicated<T> objects in
+     * A type-erased list of pointers to the Replicated<T> objects in
      * this group, indexed by their subgroup ID. The actual objects live in the
      * Group<ReplicatedTypes...> that owns this ViewManager, and the abstract
      * ReplicatedObject interface only provides functions for the object state
@@ -210,7 +209,7 @@ private:
      * the Group, where it is updated as replicated objects are added and
      * destroyed, so ViewManager has only a reference to it.
      */
-    ReplicatedObjectReferenceMap& subgroup_objects;
+    std::map<subgroup_id_t, ReplicatedObject*>& subgroup_objects;
     /** A function that will be called to initialize replicated objects
      * after transitioning to a new view. This transfers control back to
      * Group because the objects' constructors are only known by Group. */
@@ -646,7 +645,7 @@ public:
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
      * @param object_reference_map A mutable reference to the list of
-     * ReplicatedObject references in Group, so that ViewManager can access it
+     * ReplicatedObject pointers in Group, so that ViewManager can access it
      * while Group manages the list
      * @param persistence_manager A mutable reference to the PersistenceManager
      * stored in Group, so that ViewManager (and MulticastGroup) can send it
@@ -657,7 +656,7 @@ public:
     ViewManager(const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
-                ReplicatedObjectReferenceMap& object_reference_map,
+                std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
                 PersistenceManager& persistence_manager,
                 std::vector<view_upcall_t> _view_upcalls = {});
 

@@ -10,7 +10,7 @@
 namespace derecho {
 
 PersistenceManager::PersistenceManager(
-        std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
+        std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
         const persistence_callback_t& _persistence_callback)
         : thread_shutdown(false),
           signature_size(0),
@@ -98,7 +98,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         auto search = objects_by_subgroup_id.find(subgroup_id);
         if(search != objects_by_subgroup_id.end()) {
             //Update persisted_version to the version actually persisted, which might be greater than the requested version
-            persisted_version = search->second.get().persist(version, signature);
+            persisted_version = search->second->persist(version, signature);
         }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
@@ -131,7 +131,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
 void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persistent::version_t version) {
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
-        ReplicatedObject& subgroup_object = search->second;
+        ReplicatedObject* subgroup_object = search->second;
         //Read lock the View while reading the SST
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
         View& Vc = view_and_lock.get();
@@ -150,8 +150,8 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
                         &Vc.gmsSST->signatures[shard_member_rank][subgroup_id * signature_size],
                         signature_size);
             assert(other_signed_version >= version);
-            assert(subgroup_object.get_minimum_latest_persisted_version() >= other_signed_version);
-            bool verification_success = subgroup_object.verify_log(
+            assert(subgroup_object->get_minimum_latest_persisted_version() >= other_signed_version);
+            bool verification_success = subgroup_object->verify_log(
                     other_signed_version, *signature_verifier, other_signature.data());
             if(verification_success) {
                 minimum_verified_version = std::min(minimum_verified_version, other_signed_version);
@@ -195,7 +195,7 @@ void PersistenceManager::make_version(const subgroup_id_t& subgroup_id,
                                       const persistent::version_t& version, const HLC& mhlc) {
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
-        search->second.get().make_version(version, mhlc);
+        search->second->make_version(version, mhlc);
     }
 }
 

@@ -74,7 +74,7 @@ private:
     /** The global persistence callback */
     persistence_callback_t persistence_callback;
     /** Reference to the ReplicatedObjects map in the Group that owns this PersistenceManager. */
-    std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_by_subgroup_id;
+    std::map<subgroup_id_t, ReplicatedObject*>& objects_by_subgroup_id;
     /**
      * Pointer to the ViewManager in the Group that owns this PersistenceManager.
      * This is needed to access the SST in the current View (for updating signatures and
@@ -94,7 +94,7 @@ public:
      * new versions are done persisting
      */
     PersistenceManager(
-            std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>& objects_map,
+            std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
             const persistence_callback_t& _persistence_callback);
 
     /**
