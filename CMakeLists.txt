@@ -68,6 +68,7 @@ add_subdirectory(src/rdmc)
 add_subdirectory(src/sst)
 add_subdirectory(src/tcp)
 add_subdirectory(src/persistent)
+add_subdirectory(langs/java)
 
 # make libderecho.so
 add_library(derecho SHARED
