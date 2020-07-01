@@ -15,7 +15,7 @@ namespace persistent {
         ITemporalQueryFrontierProvider* tqfp,
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) : 
+        uint32_t shard_num) :
         _subgroup_prefix(generate_prefix(subgroup_type, subgroup_index, shard_num)),
         _temporal_query_frontier_provider(tqfp) {
     }
@@ -24,19 +24,19 @@ namespace persistent {
         this->_registry.clear();
     };
 
-    void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) noexcept(false) {
+    void PersistentRegistry::makeVersion(const int64_t& ver, const HLC& mhlc) {
         callFunc<VERSION_FUNC_IDX>(ver, mhlc);
     };
 
-    const int64_t PersistentRegistry::persist() noexcept(false) {
+    const int64_t PersistentRegistry::persist() {
         return callFuncMin<PERSIST_FUNC_IDX, int64_t>();
     };
 
-    void PersistentRegistry::trim(const int64_t& earliest_version) noexcept(false) {
+    void PersistentRegistry::trim(const int64_t& earliest_version) {
         callFunc<TRIM_FUNC_IDX>(earliest_version);
     };
 
-    const int64_t PersistentRegistry::getMinimumLatestPersistedVersion() noexcept(false) {
+    const int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
         return callFuncMin<GET_ML_PERSISTED_VER, int64_t>();
     }
 
@@ -61,7 +61,7 @@ namespace persistent {
                          const PersistFunc& pf,
                          const TrimFunc& tf,
                          const LatestPersistedGetterFunc& lpgf,
-                         const TruncateFunc& tcf) noexcept(false) {
+                         const TruncateFunc& tcf) {
         //this->_registry.push_back(std::make_tuple(vf,pf,tf));
         auto tuple_val = std::make_tuple(vf, pf, tf, lpgf, tcf);
         std::size_t key = std::hash<std::string>{}(obj_name);
@@ -73,7 +73,7 @@ namespace persistent {
         }
     };
 
-    void PersistentRegistry::unregisterPersist(const char* obj_name) noexcept(false) {
+    void PersistentRegistry::unregisterPersist(const char* obj_name) {
         // The upcoming regsiterPersist() call will override this automatically.
         // this->_registry.erase(std::hash<std::string>{}(obj_name));
     }
@@ -89,7 +89,7 @@ namespace persistent {
     std::string PersistentRegistry::generate_prefix (
         const std::type_index& subgroup_type,
         uint32_t subgroup_index,
-        uint32_t shard_num) noexcept(false){
+        uint32_t shard_num){
         const char* subgroup_type_name = subgroup_type.name();
 
         // SHA256 subgroup_type_name to avoid a long file name

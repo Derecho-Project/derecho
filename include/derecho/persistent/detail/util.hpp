@@ -40,7 +40,7 @@ inline std::string getPersFilePath() {
 // verify the existence of a folder
 // Check if directory exists or not. Create it on absence.
 // return error if creating failed
-inline void checkOrCreateDir(const std::string& dirPath) noexcept(false) {
+inline void checkOrCreateDir(const std::string& dirPath) {
     struct stat sb;
     if(stat(dirPath.c_str(), &sb) == 0) {
         if(!S_ISDIR(sb.st_mode)) {
@@ -55,7 +55,7 @@ inline void checkOrCreateDir(const std::string& dirPath) noexcept(false) {
 }
 
 // verify the existence of a regular file
-inline bool checkRegularFile(const std::string& file) noexcept(false) {
+inline bool checkRegularFile(const std::string& file) {
     struct stat sb;
     bool bRet = true;
 
@@ -72,7 +72,7 @@ inline bool checkRegularFile(const std::string& file) noexcept(false) {
 // verify the existence of a sparse file
 // Check if directory exists or not. Create it on absence.
 // return error if creating failed
-inline bool checkOrCreateFileWithSize(const std::string& file, uint64_t size) noexcept(false) {
+inline bool checkOrCreateFileWithSize(const std::string& file, uint64_t size) {
     bool bCreate = false;
     int fd;
 

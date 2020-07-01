@@ -177,7 +177,7 @@ std::size_t Replicated<T>::receive_object(char* buffer) {
 }
 
 template <typename T>
-void Replicated<T>::persist(const persistent::version_t version) noexcept(false) {
+void Replicated<T>::persist(const persistent::version_t version) {
     persistent::version_t persisted_ver;
 
     // persist variables
@@ -192,7 +192,7 @@ void Replicated<T>::persist(const persistent::version_t version) noexcept(false)
 };
 
 template <typename T>
-const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() noexcept(false) {
+const persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
     return persistent_registry_ptr->getMinimumLatestPersistedVersion();
 }
 

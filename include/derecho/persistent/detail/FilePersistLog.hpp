@@ -67,10 +67,10 @@ typedef union log_entry {
 #define NEXT_LOG_ENTRY LOG_ENTRY_AT(META_HEADER->fields.tail)
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
         MAX(META_HEADER_PERS->fields.tail, META_HEADER->fields.head))
-#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? -1 : META_HEADER->fields.tail - 1)
+#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.tail - 1)
 #define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
 
-#define NEXT_DATA_OFST ((CURR_LOG_IDX == -1) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
+#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
 #define NEXT_DATA ((void*)((uint64_t) this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
@@ -156,56 +156,56 @@ protected:
 
     // load the log from files. This method may through exceptions if read from
     // file failed.
-    virtual void load() noexcept(false);
+    virtual void load();
 
     // reset the logs. This will remove the existing persisted data.
-    virtual void reset() noexcept(false);
+    virtual void reset();
 
     // Persistent the Metadata header, we assume
     // FPL_PERS_LOCK is acquired.
-    virtual void persistMetaHeaderAtomically(MetaHeader*) noexcept(false);
+    virtual void persistMetaHeaderAtomically(MetaHeader*);
 
 public:
     //Constructor
-    FilePersistLog(const std::string& name, const std::string& dataPath) noexcept(false);
-    FilePersistLog(const std::string& name) noexcept(false) : FilePersistLog(name, getPersFilePath()){};
+    FilePersistLog(const std::string& name, const std::string& dataPath);
+    FilePersistLog(const std::string& name) : FilePersistLog(name, getPersFilePath()){};
     //Destructor
     virtual ~FilePersistLog() noexcept(true);
 
     //Derived from PersistLog
     virtual void append(const void* pdata,
-                        const uint64_t& size, const int64_t& ver,
-                        const HLC& mhlc) noexcept(false);
-    virtual void advanceVersion(const int64_t& ver) noexcept(false);
-    virtual int64_t getLength() noexcept(false);
-    virtual int64_t getEarliestIndex() noexcept(false);
-    virtual int64_t getLatestIndex() noexcept(false);
-    virtual int64_t getVersionIndex(const version_t& ver) noexcept(false);
-    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false);
-    virtual version_t getEarliestVersion() noexcept(false);
-    virtual version_t getLatestVersion() noexcept(false);
-    virtual const version_t getLastPersistedVersion() noexcept(false);
-    virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false);
-    virtual const void* getEntry(const version_t& ver) noexcept(false);
-    virtual const void* getEntry(const HLC& hlc) noexcept(false);
-    virtual const version_t persist(const bool preLocked = false) noexcept(false);
-    virtual void trimByIndex(const int64_t& eno) noexcept(false);
-    virtual void trim(const version_t& ver) noexcept(false);
-    virtual void trim(const HLC& hlc) noexcept(false);
-    virtual void truncate(const version_t& ver) noexcept(false);
-    virtual size_t bytes_size(const version_t& ver) noexcept(false);
-    virtual size_t to_bytes(char* buf, const version_t& ver) noexcept(false);
+                        const uint64_t size, const int64_t ver,
+                        const HLC& mhlc);
+    virtual void advanceVersion(const int64_t& ver);
+    virtual int64_t getLength();
+    virtual int64_t getEarliestIndex();
+    virtual int64_t getLatestIndex();
+    virtual int64_t getVersionIndex(const version_t& ver);
+    virtual int64_t getHLCIndex(const HLC& hlc);
+    virtual version_t getEarliestVersion();
+    virtual version_t getLatestVersion();
+    virtual const version_t getLastPersistedVersion();
+    virtual const void* getEntryByIndex(const int64_t& eno);
+    virtual const void* getEntry(const version_t& ver);
+    virtual const void* getEntry(const HLC& hlc);
+    virtual const version_t persist(const bool preLocked = false);
+    virtual void trimByIndex(const int64_t& eno);
+    virtual void trim(const version_t& ver);
+    virtual void trim(const HLC& hlc);
+    virtual void truncate(const version_t& ver);
+    virtual size_t bytes_size(const version_t& ver);
+    virtual size_t to_bytes(char* buf, const version_t& ver);
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver) noexcept(false);
-    virtual void applyLogTail(char const* v) noexcept(false);
+                             const version_t& ver);
+    virtual void applyLogTail(char const* v);
 
     template <typename TKey, typename KeyGetter>
-    void trim(const TKey& key, const KeyGetter& keyGetter) noexcept(false) {
+    void trim(const TKey& key, const KeyGetter& keyGetter) {
         int64_t idx;
         // RDLOCK for validation
         FPL_RDLOCK;
         idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
-        if(idx == -1) {
+        if(idx == INVALID_INDEX) {
             FPL_UNLOCK;
             return;
         }
@@ -216,7 +216,7 @@ public:
         // WRLOCK for trim
         FPL_WRLOCK;
         idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
-        if(idx != -1) {
+        if(idx != INVALID_INDEX) {
             META_HEADER->fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
@@ -246,36 +246,36 @@ public:
 
 private:
      /** verify the existence of the meta file */
-     bool checkOrCreateMetaFile() noexcept(false);
+     bool checkOrCreateMetaFile();
 
      /** verify the existence of the log file */
-     bool checkOrCreateLogFile() noexcept(false);
+     bool checkOrCreateLogFile();
 
      /** verify the existence of the data file */
-     bool checkOrCreateDataFile() noexcept(false);
+     bool checkOrCreateDataFile();
 
     /**
      * Get the minimum index greater than a given version
      * Note: no lock protected, use FPL_RDLOCK
      * @PARAM ver the given version. INVALID_VERSION means to return the earliest index.
-     * @RETURN the minimum index since the given version. INVALID_INDEX means 
+     * @RETURN the minimum index since the given version. INVALID_INDEX means
      *         that no log entry is available for the requested version.
      */
-    int64_t getMinimumIndexBeyondVersion(const int64_t& ver) noexcept(false);
+    int64_t getMinimumIndexBeyondVersion(const int64_t& ver);
     /**
      * get the byte size of log entry
      * Note: no lock protected, use FPL_RDLOCK
      * @PARAM ple - pointer to the log entry
      * @RETURN the number of bytes required for the serialized data.
      */
-    size_t byteSizeOfLogEntry(const LogEntry* ple) noexcept(false);
+    size_t byteSizeOfLogEntry(const LogEntry* ple);
     /**
      * serialize the log entry to a byte array
      * Note: no lock protected, use FPL_RDLOCK
      * @PARAM ple - the pointer to the log entry
      * @RETURN the number of bytes written to the byte array
      */
-    size_t writeLogEntryToByteArray(const LogEntry* ple, char* ba) noexcept(false);
+    size_t writeLogEntryToByteArray(const LogEntry* ple, char* ba);
     /**
      * post the log entry to a serialization function accepting a byte array
      * Note: no lock protected, use FPL_RDLOCK
@@ -283,14 +283,14 @@ private:
      * @PARAM ple - pointer to the log entry
      * @RETURN the number of bytes posted.
      */
-    size_t postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple) noexcept(false);
+    size_t postLogEntry(const std::function<void(char const* const, std::size_t)>& f, const LogEntry* ple);
     /**
      * merge the log entry to current state.
      * Note: no lock protected, use FPL_WRLOCK
      * @PARAM ba - serialize form of the entry
      * @RETURN - number of size read from the entry.
      */
-    size_t mergeLogEntryFromByteArray(const char* ba) noexcept(false);
+    size_t mergeLogEntryFromByteArray(const char* ba);
 
     /**
      * binary search through the log, return the maximum index of the entries
@@ -302,14 +302,14 @@ private:
      * @param key: the key to be search
      * @param logArr: log array
      * @param len: log length
-     * @return index of the log entry found or -1 if not found.
+     * @return index of the log entry found or INVALID_INDEX if not found.
      */
     template <typename TKey, typename KeyGetter>
     int64_t binarySearch(const KeyGetter& keyGetter, const TKey& key,
-                         const int64_t& logHead, const int64_t& logTail) noexcept(false) {
+                         const int64_t& logHead, const int64_t& logTail) {
         if(logTail <= logHead) {
             dbg_default_trace("binary Search failed...EMPTY LOG");
-            return (int64_t)-1L;
+            return INVALID_INDEX;
         }
         int64_t head = logHead, tail = logTail - 1;
         int64_t pivot = 0;
@@ -331,12 +331,20 @@ private:
                 tail = pivot - 1;
                 if(head > tail) {
                     dbg_default_trace("binary Search failed...Object does not exist.");
-                    return (int64_t)-1L;
+                    return INVALID_INDEX;
                 }
             }
         }
         return pivot;
     }
+
+    /* Validate the log before we append. It will throw exception if
+     * - there is no space
+     * - the version is not monotonic
+     * @param size: size of the data to be append in this log entry
+     * @param ver: version of the new log entry
+     */
+    void do_append_validation(const uint64_t size, const int64_t ver);
 
 #ifndef NDEBUG
     //dbg functions

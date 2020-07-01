@@ -74,57 +74,57 @@ public:
      * @param size - length of the data
      * @param ver - version of the data, the implementation is responsible for
      *              making sure it grows monotonically.
-     * @param mhlc - the hlc clock of the data, the implementation is 
+     * @param mhlc - the hlc clock of the data, the implementation is
      *               responsible for making sure it grows monotonically.
      * Note that the entry appended can only become persistent till the persist()
      * is called on that entry.
      */
     virtual void append(const void* pdata,
-                        const uint64_t& size, const version_t& ver,
-                        const HLC& mhlc) noexcept(false)
+                        const uint64_t size, const version_t ver,
+                        const HLC& mhlc)
             = 0;
 
     /**
      * Advance the version number without appendding a log. This is useful
      * to create gap between versions.
      */
-    // virtual void advanceVersion(const __int128 & ver) noexcept(false) = 0;
-    virtual void advanceVersion(const version_t& ver) noexcept(false) = 0;
+    // virtual void advanceVersion(const __int128 & ver) = 0;
+    virtual void advanceVersion(const version_t& ver) = 0;
 
     // Get the length of the log
-    virtual int64_t getLength() noexcept(false) = 0;
+    virtual int64_t getLength() = 0;
 
     // Get the Earliest Index
-    virtual int64_t getEarliestIndex() noexcept(false) = 0;
+    virtual int64_t getEarliestIndex() = 0;
 
     // Get the Latest Index
-    virtual int64_t getLatestIndex() noexcept(false) = 0;
+    virtual int64_t getLatestIndex() = 0;
 
     // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t& ver) noexcept(false) = 0;
+    virtual int64_t getVersionIndex(const version_t& ver) = 0;
 
     // Get the Index corresponding to an HLC timestamp
-    virtual int64_t getHLCIndex(const HLC& hlc) noexcept(false) = 0;
+    virtual int64_t getHLCIndex(const HLC& hlc) = 0;
 
     // Get the Earlist version
-    virtual version_t getEarliestVersion() noexcept(false) = 0;
+    virtual version_t getEarliestVersion() = 0;
 
     // Get the Latest version
-    virtual version_t getLatestVersion() noexcept(false) = 0;
+    virtual version_t getLatestVersion() = 0;
 
     // return the last persisted version
-    virtual const version_t getLastPersistedVersion() noexcept(false) = 0;
+    virtual const version_t getLastPersistedVersion() = 0;
 
     // Get a version by entry number return both length and buffer
-    virtual const void* getEntryByIndex(const int64_t& eno) noexcept(false) = 0;
+    virtual const void* getEntryByIndex(const int64_t& eno) = 0;
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const version_t& ver) noexcept(false) = 0;
+    virtual const void* getEntry(const version_t& ver) = 0;
 
     // Get the latest version - deprecated.
-    // virtual const void* getEntry() noexcept(false) = 0;
+    // virtual const void* getEntry() = 0;
     // Get a version specified by hlc
-    virtual const void* getEntry(const HLC& hlc) noexcept(false) = 0;
+    virtual const void* getEntry(const HLC& hlc) = 0;
 
     /**
      * Persist the log till specified version
@@ -132,30 +132,30 @@ public:
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const bool preLocked = false) noexcept(false) = 0;
+    virtual const version_t persist(const bool preLocked = false) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed
      */
-    virtual void trimByIndex(const int64_t& idx) noexcept(false) = 0;
+    virtual void trimByIndex(const int64_t& idx) = 0;
 
     /**
      * Trim the log till version, inclusively.
      * @param ver - all log entry before ver will be trimmed.
      */
-    virtual void trim(const version_t& ver) noexcept(false) = 0;
+    virtual void trim(const version_t& ver) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
      * @param hlc - all log entry before hlc will be trimmed.
      */
-    virtual void trim(const HLC& hlc) noexcept(false) = 0;
+    virtual void trim(const HLC& hlc) = 0;
 
     /**
      * Calculate the byte size required for serialization
-     * @PARAM ver - from which version the detal begins(tail log) 
+     * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual size_t bytes_size(const version_t& ver) = 0;
@@ -189,7 +189,7 @@ public:
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strict after ver will be truncated.
      */
-    virtual void truncate(const version_t& ver) noexcept(false) = 0;
+    virtual void truncate(const version_t& ver) = 0;
 };
 }  // namespace persistent
 

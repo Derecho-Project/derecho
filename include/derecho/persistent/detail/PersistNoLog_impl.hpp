@@ -9,7 +9,7 @@ namespace persistent {
 template <typename ObjectType, StorageType storageType>
 void saveNoLogObjectInFile(
         ObjectType& obj,
-        const char* object_name) noexcept(false) {
+        const char* object_name) {
     char filepath[256];
     char tmpfilepath[260];
 
@@ -43,7 +43,7 @@ void saveNoLogObjectInFile(
 template <typename ObjectType, StorageType storageType>
 std::unique_ptr<ObjectType> loadNoLogObjectFromFile(
         const char* object_name,
-        mutils::DeserializationManager* dm) noexcept(false) {
+        mutils::DeserializationManager* dm) {
     char filepath[256];
 
     // 0 - get object file name
