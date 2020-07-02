@@ -62,7 +62,7 @@ public:
 
     SubgroupObjectAgent(derecho::subgroup_id_t usersid, JNIEnv* env) : sid(usersid), version(env->GetVersion()) {
         jint rs = env->GetJavaVM(&this->jvm);
-        assert(rs == JNI_OK);
+        if(rs != JNI_OK) throw "JNI NOT OK";
     }
 
     /**
@@ -146,6 +146,10 @@ public:
 
             env->ReleaseByteArrayElements(java_byte_array, buf, 0);
 
+            jint rs = jvm->DetachCurrentThread();
+
+            if(rs == 0) throw "JNI NOT OK";
+
             return derecho::Bytes(ret_buf, (int)len_buf);
 
         } catch(const std::exception& e) {
@@ -191,7 +195,7 @@ public:
     CallbackSetWrapper(JNIEnv* env, jobject _callback_set) : version(env->GetVersion()),
                                                              callback_set(_callback_set) {
         jint rs = env->GetJavaVM(&this->jvm);
-        assert(rs == JNI_OK);
+        if(rs != JNI_OK) throw "JNI NOT OK";
 
         // get java callback mids:
         if(callback_set != NULL) {
@@ -233,7 +237,7 @@ public:
                             static_cast<jlong>(ver),
                             byte_buffer);
         jint rs = jvm->DetachCurrentThread();
-        assert(rs == 0);
+        if(rs != JNI_OK) throw "JNI NOT OK";
     }
     // local_persistent_callback
     void local_persistence_callback(derecho::subgroup_id_t sid, persistent::version_t ver) {
@@ -250,7 +254,7 @@ public:
                             static_cast<jint>(sid),
                             static_cast<jlong>(ver));
         jint rs = jvm->DetachCurrentThread();
-        assert(rs == 0);
+        if(rs != JNI_OK) throw "JNI NOT OK";
     }
     // global_persistent_ballback
     void global_persistence_callback(derecho::subgroup_id_t sid, persistent::version_t ver) {
@@ -267,7 +271,7 @@ public:
                             static_cast<jint>(sid),
                             static_cast<jlong>(ver));
         jint rs = jvm->DetachCurrentThread();
-        assert(rs == 0);
+        if(rs != JNI_OK) throw "JNI NOT OK";
     }
 };
 
