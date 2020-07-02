@@ -639,14 +639,7 @@ int32_t MulticastGroup::resolve_num_received(int32_t index, uint32_t num_receive
 bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_settings,
                                         const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
-    for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
-        // Equivalent to read_seq_num[sender_count] > last_seq_num[sender_count]
-        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][subgroup_settings.index_field_index]
-           > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
-            return true;
-        }
-    }
-    return false;
+    return true;
 }
 
 void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
