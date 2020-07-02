@@ -1,8 +1,22 @@
 cmake_minimum_required (VERSION 3.0)
 project(derecho_jni)
 
-find_package(Java REQUIRED)
-find_package(JNI REQUIRED)
+find_package(Java)
+
+if (NOT Java_FOUND)
+    message("Java not found - skipping building tests")
+	return()
+endif (NOT Java_FOUND)
+
+find_package(JNI)
+
+if (NOT JNI_FOUND)
+	message("JNI not found - skipping building tests")
+	return()
+endif (NOT JNI_FOUND)
+
+
+
 include(UseJava)
 
 set(CMAKE_JAVA_COMPILE_FLAGS "-source" "11" "-target" "11" "-h" "${CMAKE_CURRENT_SOURCE_DIR}/cpp")
