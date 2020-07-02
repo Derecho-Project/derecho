@@ -26,9 +26,11 @@ add_jar(derechojar
 add_jar(derechoBWjar
         java/io/derecho/test/BandwidthTest.java
     ENTRY_POINT
-	io/derecho/test/BandwidthTest
+		io/derecho/test/BandwidthTest
     OUTPUT_NAME
         bandwidth_test
+	MANIFEST
+		Manifest.txt
     INCLUDE_JARS
         derechojar
 )
@@ -39,6 +41,8 @@ add_jar(derechoLjar
 	io/derecho/test/LatencyTest
     OUTPUT_NAME
         latency_test
+	MANIFEST
+		Manifest.txt
     INCLUDE_JARS
         derechojar
 )
@@ -49,6 +53,8 @@ add_jar(derechoTSjar
 	io/derecho/test/TypedSubgroupTest
     OUTPUT_NAME
         typed_subgroup_test
+	MANIFEST
+		Manifest.txt
     INCLUDE_JARS
         derechojar
 )
@@ -59,6 +65,8 @@ add_jar(derechoTSBWjar
 	io/derecho/test/TypedSubgroupBWTest
     OUTPUT_NAME
         typed_subgroup_bw_test
+	MANIFEST
+		Manifest.txt
     INCLUDE_JARS
         derechojar
 )
