@@ -43,6 +43,7 @@ private:
      */
     JNIEnv* get_java_env() {
         JNIEnv* env;
+
         jint rs = jvm->GetEnv(reinterpret_cast<void**>(&env), version);
         if(rs == JNI_EDETACHED) {
             rs = jvm->AttachCurrentThread(reinterpret_cast<void**>(&env), NULL);
@@ -144,10 +145,6 @@ public:
             memcpy(ret_buf, (char*)buf, (int)len_buf);
 
             env->ReleaseByteArrayElements(java_byte_array, buf, 0);
-
-            jint rs = jvm->DetachCurrentThread();
-
-            assert(rs == 0);
 
             return derecho::Bytes(ret_buf, (int)len_buf);
 
