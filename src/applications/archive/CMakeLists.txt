@@ -37,10 +37,6 @@ target_link_libraries(long_subgroup_test derecho)
 add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp)
 target_link_libraries(typed_subgroup_bw_test derecho)
 
-# persistent_typed_subgroup_bw_test
-add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp)
-target_link_libraries(persistent_typed_subgroup_bw_test derecho)
-
 # objstore
 add_executable(objstore objstore.cpp)
 target_link_libraries(objstore derecho)

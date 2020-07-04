@@ -1,8 +1,8 @@
 /**
  * @file git_version.cpp
  *
- * This file is automatically created by the pre-commit hook that is distributed 
- * with Derecho in the githooks folder; this script should be installed in your 
+ * This file is automatically created by the pre-commit hook that is distributed
+ * with Derecho in the githooks folder; this script should be installed in your
  * local repository's .git/hooks/ directory.
  */
 
