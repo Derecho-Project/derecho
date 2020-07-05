@@ -85,6 +85,17 @@ add_jar(derechoTSBWjar
         derechojar
 )
 
+create_javadoc(derecho_jni_doc
+	PACKAGES io.derecho io.derecho.test
+	SOURCEPATH "${CMAKE_CURRENT_SOURCE_DIR}/java"
+	CLASSPATH ${CMAKE_JAVA_INCLUDE_PATH}
+	WINDOWTITLE "Derecho Java Documentation"
+	DOCTITLE "<h1>Derecho Java Documentation</h1>"
+	AUTHOR TRUE
+	USE TRUE
+	VERSION TRUE
+)
+
 include_directories(${JAVA_INCLUDE_PATH}
                     ${JAVA_INCLUDE_PATH2}
                     ${CMAKE_SOURCE_DIR}/include)
