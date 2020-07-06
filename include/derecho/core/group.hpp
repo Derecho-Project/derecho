@@ -144,9 +144,10 @@ private:
      * and results in an object indirectly holding a shared pointer to its self.
      * Another side effect is double free. So I change it back to the raw pointer.
      * The user deserialization context for all objects serialized and deserialized. */
-    // std::shared_ptr<IDeserializationContext> user_deserialization_context;
-    IDeserializationContext* user_deserialization_context;
-    /** Persists the objects. Once persisted, persistence_manager updates the SST
+    // std::shared_ptr<DeserializationContext> user_deserialization_context;
+    std::vector<DeserializationContext*> user_deserialization_context;
+
+    /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
     PersistenceManager persistence_manager;
     /** Contains all state related to managing Views, including the
@@ -263,7 +264,7 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          IDeserializationContext* deserialization_context,
+          const std::vector<DeserializationContext*>& deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 

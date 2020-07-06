@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
         return std::make_unique<PersistentThing>(pr);
     };
 
-    derecho::Group<PersistentThing> group(callback_set, subgroup_info, nullptr,
+    derecho::Group<PersistentThing> group(callback_set, subgroup_info, {},
                                           std::vector<derecho::view_upcall_t>{},
                                           thing_factory);
 
