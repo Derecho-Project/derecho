@@ -61,10 +61,6 @@ target_link_libraries(volatile_temporal_stability_test derecho)
 add_executable(persistent_temporal_stability_test persistent_temporal_stability_test.cpp)
 target_link_libraries(persistent_temporal_stability_test derecho)
 
-# persistent_latency_test
-add_executable(persistent_latency_test persistent_latency_test.cpp)
-target_link_libraries(persistent_latency_test derecho)
-
 # smart_membership_function
 add_executable(smart_membership_function_test smart_membership_function_test.cpp)
 target_link_libraries(smart_membership_function_test derecho)
