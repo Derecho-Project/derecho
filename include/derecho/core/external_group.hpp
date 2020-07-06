@@ -95,7 +95,7 @@ private:
     /** ======================== copy/paste from rpc_manager ======================== **/
 
 public:
-    ExternalGroup(DeserializationContext* deserialization_context = nullptr);
+    ExternalGroup(std::vector<DeserializationContext*> deserialization_contexts = {});
     ~ExternalGroup();
 
     template <typename SubgroupType>

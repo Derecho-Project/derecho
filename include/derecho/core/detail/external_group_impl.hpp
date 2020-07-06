@@ -65,11 +65,11 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
 }
 
 template <typename... ReplicatedTypes>
-ExternalGroup<ReplicatedTypes...>::ExternalGroup(DeserializationContext* deserialization_context)
+ExternalGroup<ReplicatedTypes...>::ExternalGroup(std::vector<DeserializationContext*> deserialization_contexts)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()) {
-    if(deserialization_context != nullptr) {
-        rdv.push_back(deserialization_context);
+    for(auto dc:deserialization_contexts) {
+        rdv.push_back(dc);
     }
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
