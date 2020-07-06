@@ -98,5 +98,5 @@ export LD_LIBRARY_PATH=<derecho Release>/langs/java:<derecho install dir>/lib/
 
 # Limitations and Future Work
 
-Right now, Derecho Java is still quite slow, especially at small messages. Java language and JNI draws a lot of overhead to the performance. But the slowest part is when we serialize and deserialize Java objects in typed subgroup test. We need to serialize Java objects into bytes so that they can be sent and received through the Derecho interface. We suggest that you should implement your own serialization and deserialization function for Java objects for the best performance.
+Right now, Derecho Java is still quite slow, especially at small messages. Java language and JNI draws a lot of overhead to the performance. But the slowest part is when we serialize and deserialize Java objects in typed subgroup test. We need to serialize Java objects into bytes so that they can be sent and received through the Derecho interface. If you would like to use Derecho Java to send typed objects or execute methods, we suggest that you should implement your own serialization and deserialization function for Java objects for the best performance.
 
