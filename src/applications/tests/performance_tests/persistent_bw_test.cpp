@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
-    derecho::Group<ByteArrayObject> group{callback_set, subgroup_info, nullptr,
+    derecho::Group<ByteArrayObject> group{callback_set, subgroup_info, {},
                                           std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;

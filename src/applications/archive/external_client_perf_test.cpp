@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
         }};
         auto ba_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
-        derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
+        derecho::Group<TestObject> group({},subgroup_info,{},std::vector<derecho::view_upcall_t>{},ba_factory);
         std::cout << "Finished constructing/joining Group" << std::endl;
 
         if(is_sender) {

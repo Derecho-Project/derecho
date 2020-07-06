@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
     }));
 
     derecho::Group<LoadBalancer, Cache> group({},
-					      subgroup_info, nullptr,
+					      subgroup_info, {},
 					      std::vector<derecho::view_upcall_t> {},
 					      load_balancer_factory, cache_factory);
     cout << "Finished constructing/joining Group" << endl;

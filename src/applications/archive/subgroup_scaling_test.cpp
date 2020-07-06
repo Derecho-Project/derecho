@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
         SubgroupInfo raw_groups(membership_function);
 
         Group<RawObject> managed_group(CallbackSet{stability_callback},
-                              raw_groups, nullptr, std::vector<view_upcall_t>{},
+                              raw_groups, {}, std::vector<view_upcall_t>{},
                               &raw_object_factory);
 
         cout << "Finished constructing/joining ManagedGroup" << endl;
