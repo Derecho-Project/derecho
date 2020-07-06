@@ -1,2 +1,0 @@
-Class-Path: /home/zw494/derecho/Release/langs/java/derecho.jar
-
