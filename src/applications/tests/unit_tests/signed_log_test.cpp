@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
     };
     derecho::Group<OneFieldObject, TwoFieldObject> group(
             {nullptr, nullptr, global_persist_callback, global_verified_callback},
-            subgroup_info, nullptr, {new_view_callback},
+            subgroup_info, {}, {new_view_callback},
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<OneFieldObject>(pr); },
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<TwoFieldObject>(pr); });
     //Figure out which subgroup this node got assigned to
