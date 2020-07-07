@@ -4,6 +4,7 @@
  * This program can be used to test the signed persistent log feature in Derecho.
  */
 
+#include <array>
 #include <condition_variable>
 #include <iostream>
 #include <map>
@@ -86,10 +87,14 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    const int subgroup_1_size = std::stoi(argv[argc - num_args]);
-    const int subgroup_2_size = std::stoi(argv[argc - num_args + 1]);
-    const int num_updates = std::stoi(argv[argc - 1]);
+    const unsigned int subgroup_1_size = std::stoi(argv[argc - num_args]);
+    const unsigned int subgroup_2_size = std::stoi(argv[argc - num_args + 1]);
+    const unsigned int num_updates = std::stoi(argv[argc - 1]);
     derecho::Conf::initialize(argc, argv);
+    if(derecho::getConfBoolean(CONF_PERS_SIGNED_LOG) == false) {
+        std::cout << "Error: Signed log is not enabled, but this test requires it. Check your config file." << std::endl;
+        return -1;
+    }
     derecho::SubgroupInfo subgroup_info(
             derecho::DefaultSubgroupAllocator({{std::type_index(typeid(OneFieldObject)),
                                                 derecho::one_subgroup_policy(derecho::fixed_even_shards(
@@ -98,20 +103,32 @@ int main(int argc, char** argv) {
                                                 derecho::one_subgroup_policy(derecho::fixed_even_shards(
                                                         1, subgroup_2_size))}}));
 
-    //Figure out the last version number that will be created based on the number of updates
-    std::vector<derecho::message_id_t> subgroup_last_seq_num = {subgroup_1_size * num_updates - 1,
-                                                                subgroup_2_size * num_updates - 1};
+    //Count the total number of messages delivered in each subgroup to figure out what version is assigned to the last one
+    std::array<uint32_t, 2> subgroup_total_messages = {subgroup_1_size * num_updates,
+                                                       subgroup_2_size * num_updates};
+    std::array<persistent::version_t, 2> subgroup_last_version;
+    std::array<std::atomic<bool>, 2> last_version_ready = {false, false};
+    auto stability_callback = [&subgroup_total_messages,
+                               &subgroup_last_version,
+                               &last_version_ready,
+                               num_delivered = std::vector<uint32_t>{0u, 0u}](uint32_t subgroup,
+                                                                              uint32_t sender_id,
+                                                                              long long int index,
+                                                                              std::optional<std::pair<char*, long long int>> data,
+                                                                              persistent::version_t ver) mutable {
+        num_delivered[subgroup]++;
+        if(num_delivered[subgroup] == subgroup_total_messages[subgroup]) {
+            subgroup_last_version[subgroup] = ver;
+            last_version_ready[subgroup] = true;
+        }
+    };
     auto global_persist_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
         dbg_default_info("Persisted: Subgroup {}, version {}.", subgroup_id, version);
     };
     auto global_verified_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        int32_t version_vid;
-        derecho::message_id_t version_seq_num;
-        std::tie(version_vid, version_seq_num) = persistent::unpack_version<int32_t>(version);
         dbg_default_info("Verified: Subgroup {}, version {}.", subgroup_id, version);
         dbg_default_flush();
-        assert(subgroup_id < subgroup_finished_condition.size());
-        if(version_seq_num >= subgroup_last_seq_num[subgroup_id]) {
+        if(last_version_ready[subgroup_id] && version == subgroup_last_version[subgroup_id]) {
             {
                 std::unique_lock<std::mutex> finish_lock(finish_mutex);
                 subgroup_finished[subgroup_id] = true;
@@ -135,7 +152,7 @@ int main(int argc, char** argv) {
         std::cout << "In the OneFieldObject subgroup" << std::endl;
         derecho::Replicated<OneFieldObject>& object_handle = group.get_subgroup<OneFieldObject>();
         //Send random updates
-        for(int counter = 0; counter < num_updates; ++counter) {
+        for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::string new_string('a', 32);
             std::generate(new_string.begin(), new_string.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
@@ -155,7 +172,7 @@ int main(int argc, char** argv) {
         std::cout << "In the TwoFieldObject subgroup" << std::endl;
         derecho::Replicated<TwoFieldObject>& object_handle = group.get_subgroup<TwoFieldObject>();
         //Send random updates
-        for(int counter = 0; counter < num_updates; ++counter) {
+        for(unsigned counter = 0; counter < num_updates; ++counter) {
             std::string new_foo('a', 32);
             std::string new_bar('a', 32);
             std::generate(new_foo.begin(), new_foo.end(),
@@ -177,11 +194,11 @@ int main(int argc, char** argv) {
     }
     //Wait for all updates to finish being verified, using the condition variables updated by the callback
     if(std::find(subgroup_1_members.begin(), subgroup_1_members.end(), my_id) != subgroup_1_members.end()) {
-        std::cout << "Waiting for final version " << subgroup_last_seq_num[0] << " to be verified" << std::endl;
+        std::cout << "Waiting for final version " << subgroup_last_version[0] << " to be verified" << std::endl;
         std::unique_lock<std::mutex> lock(finish_mutex);
         subgroup_finished_condition[0].wait(lock, [&]() { return subgroup_finished[0]; });
     } else if(std::find(subgroup_2_members.begin(), subgroup_2_members.end(), my_id) != subgroup_2_members.end()) {
-        std::cout << "Waiting for final version " << subgroup_last_seq_num[1] << " to be verified" << std::endl;
+        std::cout << "Waiting for final version " << subgroup_last_version[1] << " to be verified" << std::endl;
         std::unique_lock<std::mutex> lock(finish_mutex);
         subgroup_finished_condition[1].wait(lock, [&]() { return subgroup_finished[1]; });
     }

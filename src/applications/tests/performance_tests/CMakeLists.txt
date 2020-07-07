@@ -20,3 +20,7 @@ target_link_libraries(persistent_bw_test derecho)
 # persistent latency
 add_executable(persistent_latency_test persistent_latency_test.cpp aggregate_latency.cpp partial_senders_allocator.cpp bytes_object.cpp)
 target_link_libraries(persistent_latency_test derecho)
+
+# signed log bandwidth
+add_executable(signed_bw_test signed_bw_test.cpp aggregate_bandwidth.cpp partial_senders_allocator.cpp bytes_object.cpp)
+target_link_libraries(signed_bw_test derecho)
