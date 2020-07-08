@@ -829,6 +829,7 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 }
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
+    std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
     // to avoid a race condition, do not read the same counter twice
     int32_t current_committed_sst_index = committed_sst_index[subgroup_num];
     // sst.index[member_index][subgroup_settings.index_field_index] contains the old counter value
