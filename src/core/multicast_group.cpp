@@ -639,7 +639,14 @@ int32_t MulticastGroup::resolve_num_received(int32_t index, uint32_t num_receive
 bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_settings,
                                         const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
-    return true;
+    for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
+        // Equivalent to read_seq_num[sender_count] > last_seq_num[sender_count]
+        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][subgroup_settings.index_field_index]
+           > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
@@ -907,43 +914,43 @@ void MulticastGroup::register_predicates() {
 
             persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
 
-        //     if(subgroup_settings.sender_rank >= 0) {
-        //         auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
-        //             message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
-        //             for(uint i = 0; i < num_shard_members; ++i) {
-        //                 if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
-        //                    || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
-        //                     return false;
-        //                 }
-        //             }
-        //             return true;
-        //         };
-        //         auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
-        //             sender_cv.notify_all();
-        //             next_message_to_deliver[subgroup_num]++;
-        //         };
-        //         sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-        //                                                                 sst::PredicateType::RECURRENT));
-        //     }
-        // } else {
-        //     //This subgroup is in UNORDERED mode
-        //     if(subgroup_settings.sender_rank >= 0) {
-        //         auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members](const DerechoSST& sst) {
-        //             for(uint i = 0; i < num_shard_members; ++i) {
-        //                 uint32_t num_received_offset = subgroup_settings.num_received_offset;
-        //                 if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
-        //                    < static_cast<int32_t>(future_message_indices[subgroup_num] - 1 - subgroup_settings.profile.window_size)) {
-        //                     return false;
-        //                 }
-        //             }
-        //             return true;
-        //         };
-        //         auto sender_trig = [this](DerechoSST& sst) {
-        //             sender_cv.notify_all();
-        //         };
-        //         sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-        //                                                                 sst::PredicateType::RECURRENT));
-        //     }
+            //     if(subgroup_settings.sender_rank >= 0) {
+            //         auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
+            //             message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
+            //             for(uint i = 0; i < num_shard_members; ++i) {
+            //                 if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
+            //                    || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
+            //                     return false;
+            //                 }
+            //             }
+            //             return true;
+            //         };
+            //         auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
+            //             sender_cv.notify_all();
+            //             next_message_to_deliver[subgroup_num]++;
+            //         };
+            //         sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+            //                                                                 sst::PredicateType::RECURRENT));
+            //     }
+            // } else {
+            //     //This subgroup is in UNORDERED mode
+            //     if(subgroup_settings.sender_rank >= 0) {
+            //         auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members](const DerechoSST& sst) {
+            //             for(uint i = 0; i < num_shard_members; ++i) {
+            //                 uint32_t num_received_offset = subgroup_settings.num_received_offset;
+            //                 if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
+            //                    < static_cast<int32_t>(future_message_indices[subgroup_num] - 1 - subgroup_settings.profile.window_size)) {
+            //                     return false;
+            //                 }
+            //             }
+            //             return true;
+            //         };
+            //         auto sender_trig = [this](DerechoSST& sst) {
+            //             sender_cv.notify_all();
+            //         };
+            //         sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
+            //                                                                 sst::PredicateType::RECURRENT));
+            //     }
         }
     }
 }
