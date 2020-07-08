@@ -42,9 +42,6 @@ FilePersistLog::FilePersistLog(const string& name, const string& dataPath) : Per
                                                                              m_iDataFileDesc(-1),
                                                                              m_pLog(MAP_FAILED),
                                                                              m_pData(MAP_FAILED) {
-    if(MAX_LOG_ENTRY_SIZE < (sizeof(LogEntry::fields) + this->signature_size)) {
-        throw PERSIST_EXP_INV_SIGNATURE_SIZE;
-    }
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -222,12 +219,13 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
         std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
         throw PERSIST_EXP_NOSPACE_LOG;
     }
-    if(NUM_FREE_BYTES < size) {
-        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",
-                          this->m_sName, NUM_FREE_BYTES, size);
+    if(NUM_FREE_BYTES < (signature_size + size)) {
+        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}, signature_size={3}",
+                          this->m_sName, NUM_FREE_BYTES, size, signature_size);
         dbg_default_flush();
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl;
+        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size 
+                  << ",signature_size=" << signature_size << std::endl;
         throw PERSIST_EXP_NOSPACE_DATA;
     }
     if((CURR_LOG_IDX != INVALID_INDEX) && (m_currMetaHeader.fields.ver >= ver)) {
@@ -255,12 +253,13 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
     dbg_default_trace("{0} append:validate check2 Finished.", this->m_sName);
 
     // copy data
-    memcpy(NEXT_DATA, pdat, size);
+    // we reserve the first 'signature_size' bytes at the beginning of NEXT_DATA.
+    memcpy(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA)+signature_size), pdat, size);
     dbg_default_trace("{0} append:data ({1} bytes) is copied to log.", this->m_sName, size);
 
     // fill the log entry
     NEXT_LOG_ENTRY->fields.ver = ver;
-    NEXT_LOG_ENTRY->fields.dlen = size;
+    NEXT_LOG_ENTRY->fields.sdlen = signature_size + size;
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     NEXT_LOG_ENTRY->fields.hlc_r = mhlc.m_rtc_us;
     NEXT_LOG_ENTRY->fields.hlc_l = mhlc.m_logic;
@@ -270,7 +269,7 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
     }
-*/
+    */
 
     // update meta header
     this->hidx.insert(hlc_index_entry{mhlc, m_currMetaHeader.fields.tail});
@@ -282,7 +281,7 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
     }
-*/
+    */
     dbg_default_debug("{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
                       ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
@@ -326,7 +325,7 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
         size_t flush_dlen = 0, flush_llen = 0;
         MetaHeader shadow_header = m_currMetaHeader;
         if((NUM_USED_SLOTS > 0) && (NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS)) {
-            flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
+            flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
             // flush data
             flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
             flush_dlen += ((int64_t)NEXT_DATA_PERS) % PAGE_SIZE;
@@ -384,11 +383,11 @@ void FilePersistLog::addSignature(version_t version,
             m_currMetaHeader.fields.head,
             m_currMetaHeader.fields.tail);
     ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
-
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == version) {
-        memcpy(ple->fields.signature, signature, signature_size);
+        memcpy(LOG_ENTRY_SIGNATURE(ple), signature, signature_size);
+
         ple->fields.prev_signed_ver = prev_signed_ver;
     }
 }
@@ -410,7 +409,7 @@ bool FilePersistLog::getSignature(version_t version, unsigned char* signature, v
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == version) {
-        memcpy(signature, ple->fields.signature, signature_size);
+        memcpy(signature, LOG_ENTRY_SIGNATURE(ple), signature_size);
         previous_signed_version = ple->fields.prev_signed_ver;
         return true;
     }
@@ -612,7 +611,7 @@ void FilePersistLog::processEntryAtVersion(version_t ver,
     FPL_UNLOCK;
 
     if(ple != nullptr && ple->fields.ver == ver) {
-        func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.dlen));
+        func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.sdlen - this->signature_size));
     }
 }
 
@@ -820,16 +819,16 @@ void FilePersistLog::applyLogTail(char const* v) {
 }
 
 size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) {
-    return sizeof(LogEntry) + ple->fields.dlen;
+    return sizeof(LogEntry) + ple->fields.sdlen;
 }
 
 size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) {
     size_t nr_written = 0;
     memcpy(ba, ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
-    if(ple->fields.dlen > 0) {
-        memcpy((void*)(ba + nr_written), (void*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
-        nr_written += ple->fields.dlen;
+    if(ple->fields.sdlen > 0) {
+        memcpy((void*)(ba + nr_written), (void*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
+        nr_written += ple->fields.sdlen;
     }
     return nr_written;
 }
@@ -838,9 +837,9 @@ size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, 
     size_t nr_written = 0;
     f((const char*)ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
-    if(ple->fields.dlen > 0) {
-        f((const char*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
-        nr_written += ple->fields.dlen;
+    if(ple->fields.sdlen > 0) {
+        f((const char*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
+        nr_written += ple->fields.sdlen;
     }
     return nr_written;
 }
@@ -851,26 +850,26 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) {
     // 0) version grows monotonically.
     if(cple->fields.ver <= m_currMetaHeader.fields.ver) {
         dbg_default_trace("{0} skip log entry version {1}, we are at {2}.", __func__, cple->fields.ver, m_currMetaHeader.fields.ver);
-        return cple->fields.dlen + sizeof(LogEntry);
+        return cple->fields.sdlen + sizeof(LogEntry);
     }
     // 1) do we have space to merge it?
     if(NUM_FREE_SLOTS == 0) {
         dbg_default_trace("{0} failed to merge log entry, we don't empty log entry.", __func__);
         throw PERSIST_EXP_NOSPACE_LOG;
     }
-    if(NUM_FREE_BYTES < cple->fields.dlen) {
-        dbg_default_trace("{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.dlen, NUM_FREE_BYTES);
+    if(NUM_FREE_BYTES < cple->fields.sdlen) {
+        dbg_default_trace("{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.sdlen, NUM_FREE_BYTES);
         throw PERSIST_EXP_NOSPACE_DATA;
     }
     // 2) merge it!
-    memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.dlen);
+    memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.sdlen);
     memcpy(NEXT_LOG_ENTRY, cple, sizeof(LogEntry));
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r, cple->fields.hlc_l}, m_currMetaHeader.fields.tail});
     m_currMetaHeader.fields.tail++;
     m_currMetaHeader.fields.ver = cple->fields.ver;
     dbg_default_trace("{0} merge log:log entry and meta data are updated.", __func__);
-    return cple->fields.dlen + sizeof(LogEntry);
+    return cple->fields.sdlen + sizeof(LogEntry);
 }
 //////////////////////////
 // invisible to outside //

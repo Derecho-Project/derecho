@@ -14,7 +14,7 @@ namespace persistent {
 #define DATA_FILE_SUFFIX "data"
 #define SWAP_FILE_SUFFIX "swp"
 //Every log entry will be padded out to this size, which must be page-aligned
-#define MAX_LOG_ENTRY_SIZE (1024)
+#define MAX_LOG_ENTRY_SIZE (64)
 //Similarly, the size of a meta header must be page-aligned
 #define META_HEADER_SIZE (256)
 
@@ -32,16 +32,22 @@ union MetaHeader {
     };
 };
 
-// log entry format
+/**
+ * The log entry format
+ * 
+ * Although there is no explicit storage for the log signature, we do carefully reserve space for it: The first
+ * 'PersistLog::signature_size' bytes pointed by 'LogEntry::ofst' are reserved for signature. If
+ * 'PersistLog::signature_size' is zero, which means the signature feature is disabled, there is no signature space 
+ * reserved. This design avoids wasting space for applications without extremely strong security requirement.
+ */
 union LogEntry {
     struct {
         int64_t ver;       // version of the data
-        uint64_t dlen;     // length of the data
-        uint64_t ofst;     // offset of the data in the memory buffer
+        uint64_t sdlen;     // length of the data plus the signature_size (signature first data second)
+        uint64_t ofst;     // offset of the data (and the signature, if exists) in the memory buffer
         uint64_t hlc_r;    // realtime component of hlc
         uint64_t hlc_l;    // logic component of hlc
         int64_t prev_signed_ver; // previous signed version, whose signature is included in this version's signature
-        char signature[];  // signature
     } fields;
     uint8_t bytes[MAX_LOG_ENTRY_SIZE];
 };
@@ -71,13 +77,14 @@ union LogEntry {
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
         MAX(m_persMetaHeader.fields.tail, m_currMetaHeader.fields.head))
 #define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : m_currMetaHeader.fields.tail - 1)
-#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
+#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst + this->signature_size) % MAX_DATA_SIZE))
+#define LOG_ENTRY_SIGNATURE(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst) % MAX_DATA_SIZE))
 
-#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
-#define NEXT_DATA ((void*)((uint64_t)this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
+#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen))
+#define NEXT_DATA ((void*)(reinterpret_cast<uint64_t>(this->m_pData) + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
-#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
+#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
 #define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
 
 #define PAGE_SIZE (getpagesize())
