@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
         dbg_default_info("Now on View {}", view.vid);
     };
     derecho::Group<OneFieldObject, TwoFieldObject> group(
-            {nullptr, nullptr, global_persist_callback, global_verified_callback},
+            {stability_callback, nullptr, global_persist_callback, global_verified_callback},
             subgroup_info, {}, {new_view_callback},
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<OneFieldObject>(pr); },
             [](persistent::PersistentRegistry* pr, derecho::subgroup_id_t id) { return std::make_unique<TwoFieldObject>(pr); });
@@ -158,16 +158,6 @@ int main(int argc, char** argv) {
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update_state)>(new_string);
         }
-        //Read the final state, just to make sure we wait for a response from all replicas
-        derecho::rpc::QueryResults<std::string> results = object_handle.ordered_send<RPC_NAME(get_state)>();
-        derecho::rpc::QueryResults<std::string>::ReplyMap& replies = results.get();
-        for(auto& reply_pair : replies) {
-            try {
-                reply_pair.second.get();
-            } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
-            }
-        }
     } else if(std::find(subgroup_2_members.begin(), subgroup_2_members.end(), my_id) != subgroup_2_members.end()) {
         std::cout << "In the TwoFieldObject subgroup" << std::endl;
         derecho::Replicated<TwoFieldObject>& object_handle = group.get_subgroup<TwoFieldObject>();
@@ -180,16 +170,6 @@ int main(int argc, char** argv) {
             std::generate(new_bar.begin(), new_bar.end(),
                           [&]() { return characters[char_distribution(random_generator)]; });
             object_handle.ordered_send<RPC_NAME(update)>(new_foo, new_bar);
-        }
-        //Read the final state, just to make sure we wait for a response from all replicas
-        derecho::rpc::QueryResults<std::string> results = object_handle.ordered_send<RPC_NAME(get_foo)>();
-        derecho::rpc::QueryResults<std::string>::ReplyMap& replies = results.get();
-        for(auto& reply_pair : replies) {
-            try {
-                reply_pair.second.get();
-            } catch(derecho::rpc::node_removed_from_group_exception& ex) {
-                dbg_default_info("No query reply due to node_removed_from_group_exception: {}", ex.what());
-            }
         }
     }
     //Wait for all updates to finish being verified, using the condition variables updated by the callback
