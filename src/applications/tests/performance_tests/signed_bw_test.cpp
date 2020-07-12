@@ -177,34 +177,39 @@ int main(int argc, char* argv[]) {
     }
     int64_t send_nanosec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
     double send_millisec = static_cast<double>(send_nanosec) / 1000000;
-    double send_thp_gbps = (static_cast<double>(num_msgs) * msg_size * 8) / send_nanosec;
-    double send_thp_ops = (static_cast<double>(num_msgs) * 1000000000) / send_nanosec;
-    std::cout << "(send)timespan: " << send_millisec << " milliseconds." << std::endl;
-    std::cout << "(send)throughput: " << send_thp_gbps << "Gbit/s." << std::endl;
-    std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
-
     int64_t persist_nanosec = duration_cast<nanoseconds>(persist_complete_time - begin_time).count();
     double persist_millisec = static_cast<double>(persist_nanosec) / 1000000;
-    double persist_thp_gbps = (static_cast<double>(num_msgs) * msg_size * 8) / persist_nanosec;
-    double persist_thp_ops = (static_cast<double>(num_msgs) * 1000000000) / persist_nanosec;
-    std::cout << "(pers)timespan: " << persist_millisec << " millisecond." << std::endl;
-    std::cout << "(pers)throughput: " << persist_thp_gbps << "Gbit/s." << std::endl;
-    std::cout << "(pers)throughput: " << persist_thp_ops << "ops." << std::endl;
-
     int64_t verified_nanosec = duration_cast<nanoseconds>(verify_complete_time - begin_time).count();
     double verified_millisec = static_cast<double>(verified_nanosec) / 1000000;
-    double verified_thp_gbps = (static_cast<double>(num_msgs) * msg_size * 8) / verified_nanosec;
-    double verified_thp_ops = (static_cast<double>(num_msgs) * 1000000000) / verified_nanosec;
-    std::cout << "(pers)timespan: " << verified_millisec << " millisecond." << std::endl;
-    std::cout << "(pers)throughput: " << verified_thp_gbps << "Gbit/s." << std::endl;
-    std::cout << "(pers)throughput: " << verified_thp_ops << "ops." << std::endl;
+
+    //Calculate bandwidth
+    //Bytes / nanosecond just happens to be equivalent to GigaBytes / second (in "decimal" GB)
+    //Note that total_num_messages already incorporates multiplying by the number of senders
+    double send_thp_gbps = (static_cast<double>(total_num_messages) * msg_size) / send_nanosec;
+    double send_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / send_nanosec;
+    std::cout << "(send)timespan: " << send_millisec << " milliseconds." << std::endl;
+    std::cout << "(send)throughput: " << send_thp_gbps << "GB/s." << std::endl;
+    std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
+
+    //Since this test tends to be pretty slow, let's use MB/s instead of GB/s
+    double persist_thp_mbs = (static_cast<double>(total_num_messages) * msg_size * 1000) / persist_nanosec;
+    double persist_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / persist_nanosec;
+    std::cout << "(pers)timespan: " << persist_millisec << " millisecond." << std::endl;
+    std::cout << "(pers)throughput: " << persist_thp_mbs << "MB/s." << std::endl;
+    std::cout << "(pers)throughput: " << persist_thp_ops << "ops." << std::endl;
+
+    double verified_thp_mbs = (static_cast<double>(total_num_messages) * msg_size * 1000) / verified_nanosec;
+    double verified_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / verified_nanosec;
+    std::cout << "(verify)timespan: " << verified_millisec << " millisecond." << std::endl;
+    std::cout << "(verify)throughput: " << verified_thp_mbs << "MB/s." << std::endl;
+    std::cout << "(verify)throughput: " << verified_thp_ops << "ops." << std::endl;
 
     std::cout << std::flush;
 
     auto members = group.get_members();
     double avg_pers_bw, avg_verified_bw;
     std::tie(avg_pers_bw, avg_verified_bw) = aggregate_bandwidth(members, members[node_rank],
-                                                                 {persist_thp_gbps, verified_thp_gbps});
+                                                                 {persist_thp_mbs, verified_thp_mbs});
 
     if(node_rank == 0) {
         log_results(signed_bw_result{num_of_nodes, static_cast<std::underlying_type_t<PartialSendMode>>(sender_selector),
