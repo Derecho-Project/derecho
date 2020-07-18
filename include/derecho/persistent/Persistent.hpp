@@ -407,11 +407,11 @@ public:
     Persistent(Persistent&& other);
 
     /** constructor 3 is for deserialization. It builds a Persistent<T> from
-     * the object name, a unique_ptr to the wrapped object, a unique_ptr to
+     * the object name, a unique_ptr to the wrapped object, and a pointer to
      * the log.
      * @param object_name The name is used for persistent data in file.
      * @param wrapped_obj_ptr A unique pointer to the wrapped object.
-     * @param log_ptr A unique pointer to the log.
+     * @param log_ptr A pointer to the beginning of the log within the serialized buffer
      * @param dm The deserialization manager for deserializing local log entries.
      */
     Persistent(
@@ -724,7 +724,7 @@ public:
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}})
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry) {}
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry, std::move(dm)) {}
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
@@ -734,12 +734,12 @@ public:
             : Persistent<ObjectType, ST_MEM>(other) {}
 
     /** constructor 3 is for deserialization. It builds a Persistent<T> from
-     * the object name, a unique_ptr to the wrapped object, a unique_ptr to
+     * the object name, a unique_ptr to the wrapped object, and a pointer to
      * the log.
      * @param object_factory factory for ObjectType
      * @param object_name The name is used for persistent data in file.
      * @param wrapped_obj_ptr A unique pointer to the wrapped object.
-     * @param log_ptr A unique pointer to the log.
+     * @param log_ptr A pointer to the beginning of the log within the serialized buffer
      * @param persistent_registry A normal pointer to the registry.
      * @param dm DeserializationManager for deserializing logged object.
      */
@@ -747,10 +747,10 @@ public:
             const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
-            std::unique_ptr<PersistLog>& log_ptr,
+            const char* log_tail,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}})
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_ptr, persistent_registry) {}
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_tail, persistent_registry, std::move(dm)) {}
 
     /** constructor 4, the default copy constructor, is disabled
      */
