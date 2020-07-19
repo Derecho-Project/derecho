@@ -31,17 +31,18 @@ namespace persistent {
 // visible to outside //
 ////////////////////////
 
-FilePersistLog::FilePersistLog(const string& name, const string& dataPath) : PersistLog(name),
-                                                                             m_sDataPath(dataPath),
-                                                                             m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
-                                                                             m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
-                                                                             m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
-                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
-                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
-                                                                             m_iLogFileDesc(-1),
-                                                                             m_iDataFileDesc(-1),
-                                                                             m_pLog(MAP_FAILED),
-                                                                             m_pData(MAP_FAILED) {
+FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool enableSignatures)
+        : PersistLog(name, enableSignatures),
+          m_sDataPath(dataPath),
+          m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
+          m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
+          m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
+          m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
+          m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
+          m_iLogFileDesc(-1),
+          m_iDataFileDesc(-1),
+          m_pLog(MAP_FAILED),
+          m_pData(MAP_FAILED) {
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -224,7 +225,7 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
                           this->m_sName, NUM_FREE_BYTES, size, signature_size);
         dbg_default_flush();
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size 
+        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size
                   << ",signature_size=" << signature_size << std::endl;
         throw PERSIST_EXP_NOSPACE_DATA;
     }
@@ -243,18 +244,18 @@ void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, cons
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
-    do_append_validation(size,ver);
+    do_append_validation(size, ver);
 
     FPL_UNLOCK;
     dbg_default_trace("{0} append:validate check1 Finished.", this->m_sName);
 
     FPL_WRLOCK;
-    do_append_validation(size,ver);
+    do_append_validation(size, ver);
     dbg_default_trace("{0} append:validate check2 Finished.", this->m_sName);
 
     // copy data
     // we reserve the first 'signature_size' bytes at the beginning of NEXT_DATA.
-    memcpy(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA)+signature_size), pdat, size);
+    memcpy(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA) + signature_size), pdat, size);
     dbg_default_trace("{0} append:data ({1} bytes) is copied to log.", this->m_sName, size);
 
     // fill the log entry
@@ -370,6 +371,9 @@ version_t FilePersistLog::persist(version_t ver, bool preLocked) {
 void FilePersistLog::addSignature(version_t version,
                                   const unsigned char* signature,
                                   version_t prev_signed_ver) {
+    if(signature_size == 0) {
+        return;
+    }
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -393,6 +397,9 @@ void FilePersistLog::addSignature(version_t version,
 }
 
 bool FilePersistLog::getSignature(version_t version, unsigned char* signature, version_t& previous_signed_version) {
+    if(signature_size == 0) {
+        return false;
+    }
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;

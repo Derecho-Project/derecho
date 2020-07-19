@@ -24,8 +24,8 @@ class DummyReplicated {};
 int main(int argc, char** argv) {
     using namespace persistent;
     PersistentRegistry registry(nullptr, std::type_index(typeid(DummyReplicated)), 0, 0);
-    Persistent<std::string> pers_field_1(std::make_unique<std::string>, "PersistentString", &registry);
-    Persistent<int> pers_field_2(std::make_unique<int>, "PersistentInteger", &registry);
+    Persistent<std::string> pers_field_1(std::make_unique<std::string>, "PersistentString", &registry, true);
+    Persistent<int> pers_field_2(std::make_unique<int>, "PersistentInteger", &registry, true);
 
     openssl::EnvelopeKey private_key = openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
     openssl::Signer signer(private_key,openssl::DigestAlgorithm::SHA256);

@@ -379,7 +379,7 @@ protected:
     /** initialize from local state.
      *  @param object_name Object name
      */
-    inline void initialize_log(const char* object_name);
+    inline void initialize_log(const char* object_name, bool enable_signatures);
 
     /** initialize the object from log
      */
@@ -392,12 +392,14 @@ public:
      * @param object_factory A factory to create an empty Object.
      * @param object_name This name is used for persistent data in file.
      * @param persistent_registry A normal pointer to the registry.
+     * @param enable_signatures True if each update to this Persistent<T> should be signed, false otherwise
      * @param dm The deserialization manager for deserializing local log entries.
      */
     Persistent(
             const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
+            bool enable_signatures = false,
             mutils::DeserializationManager dm = {{}});
 
     /** constructor 2 is move constructor. It "steals" the resource from
@@ -411,12 +413,15 @@ public:
      * the log.
      * @param object_name The name is used for persistent data in file.
      * @param wrapped_obj_ptr A unique pointer to the wrapped object.
+     * @param enable_signatures True if the received log has signatures in it, false if not
      * @param log_ptr A pointer to the beginning of the log within the serialized buffer
+     * @param persistent_registry A pointer to the persistent registry
      * @param dm The deserialization manager for deserializing local log entries.
      */
     Persistent(
             const char* object_name,
             std::unique_ptr<ObjectType>& wrapped_obj_ptr,
+            bool enable_signatures,
             const char* log_tail = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}});
@@ -724,7 +729,7 @@ public:
             const char* object_name = nullptr,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}})
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry, std::move(dm)) {}
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, persistent_registry, false, std::move(dm)) {}
 
     /** constructor 2 is move constructor. It "steals" the resource from
      * another object.
@@ -750,7 +755,7 @@ public:
             const char* log_tail,
             PersistentRegistry* persistent_registry = nullptr,
             mutils::DeserializationManager dm = {{}})
-            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, log_tail, persistent_registry, std::move(dm)) {}
+            : Persistent<ObjectType, ST_MEM>(object_factory, object_name, wrapped_obj_ptr, false, log_tail, persistent_registry, std::move(dm)) {}
 
     /** constructor 4, the default copy constructor, is disabled
      */

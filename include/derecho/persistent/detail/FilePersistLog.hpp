@@ -34,10 +34,10 @@ union MetaHeader {
 
 /**
  * The log entry format
- * 
+ *
  * Although there is no explicit storage for the log signature, we do carefully reserve space for it: The first
  * 'PersistLog::signature_size' bytes pointed by 'LogEntry::ofst' are reserved for signature. If
- * 'PersistLog::signature_size' is zero, which means the signature feature is disabled, there is no signature space 
+ * 'PersistLog::signature_size' is zero, which means the signature feature is disabled, there is no signature space
  * reserved. This design avoids wasting space for applications without extremely strong security requirement.
  */
 union LogEntry {
@@ -177,8 +177,8 @@ protected:
 
 public:
     //Constructor
-    FilePersistLog(const std::string& name, const std::string& dataPath);
-    FilePersistLog(const std::string& name) : FilePersistLog(name, getPersFilePath()){};
+    FilePersistLog(const std::string& name, const std::string& dataPath, bool enableSignatures);
+    FilePersistLog(const std::string& name, bool enableSignatures) : FilePersistLog(name, getPersFilePath(), enableSignatures){};
     //Destructor
     virtual ~FilePersistLog() noexcept(true);
 

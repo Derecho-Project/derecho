@@ -90,11 +90,14 @@ public:
     /**
      * Constructor.
      * @param objects_map A reference to the objects_by_subgroup_id from Group.
+     * @param any_signed_objects True if at least one of the replicated objects
+     * uses a Persistent<T> field with signatures enabled, false otherwise
      * @param _persistence_callback The persistence callback function to call when
      * new versions are done persisting
      */
     PersistenceManager(
             std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
+            bool any_signed_objects,
             const persistence_callback_t& _persistence_callback);
 
     /**

@@ -35,12 +35,28 @@ class GroupReference;
 class PersistsFields {};
 
 /**
+ * This is a marker interface for user-defined Replicated Objects (i.e. objects
+ * that will be used with the Replicated<T> template) to indicate that the
+ * object has Persistent<T> fields with signatures enabled. Users should inherit
+ * from this class if their object constructs Persistent<T> fields with signatures
+ * enabled; it is a subclass of PersistsFields, so it will also enable persistence.
+ */
+class SignedPersistentFields : public PersistsFields {};
+
+/**
  * A template whose member field "value" will be true if type T inherits from
  * PersistsFields, and false otherwise. Just a convenient specialization of
  * std::is_base_of.
  */
 template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
+
+/**
+ * A template whose member field "value" will be true if type T inherits from
+ * SignedPersistentFields.
+ */
+template <typename T>
+using has_signed_fields = std::is_base_of<SignedPersistentFields, T>;
 
 /**
  * An empty class to be used as the "replicated type" for a subgroup that
@@ -166,6 +182,15 @@ public:
      */
     virtual bool is_persistent() const {
         return has_persistent_fields<T>::value;
+    }
+
+    /**
+     * @return The value of has_signed_fields<T> for this Replicated<T>'s
+     * template parameter. This should be true if the user object T has
+     * persistent fields that were initialized with signatures enabled.
+     */
+    virtual bool is_signed() const {
+        return has_signed_fields<T>::value;
     }
 
     /**

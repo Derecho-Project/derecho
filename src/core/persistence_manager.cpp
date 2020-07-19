@@ -11,6 +11,7 @@ namespace derecho {
 
 PersistenceManager::PersistenceManager(
         std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
+        bool any_signed_objects,
         const persistence_callback_t& _persistence_callback)
         : thread_shutdown(false),
           signature_size(0),
@@ -20,7 +21,7 @@ PersistenceManager::PersistenceManager(
     if(sem_init(&persistence_request_sem, 1, 0) != 0) {
         throw derecho_exception("Cannot initialize persistent_request_sem:errno=" + std::to_string(errno));
     }
-    if(getConfBoolean(CONF_PERS_SIGNED_LOG)) {
+    if(any_signed_objects) {
         openssl::EnvelopeKey signing_key = openssl::EnvelopeKey::from_pem_private(getConfString(CONF_PERS_PRIVATE_KEY_FILE));
         signature_size = signing_key.get_max_size();
         //The Verifier only needs the public key, but we loaded both public and private components from the private key file
@@ -95,8 +96,10 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         //directly as the signature array, but that would require holding the lock for longer.)
         unsigned char signature[signature_size];
 
+        bool object_has_signature = false;
         auto search = objects_by_subgroup_id.find(subgroup_id);
         if(search != objects_by_subgroup_id.end()) {
+            object_has_signature = search->second->is_signed();
             //Update persisted_version to the version actually persisted, which might be greater than the requested version
             persisted_version = search->second->persist(version, signature);
         }
@@ -104,8 +107,7 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
         // update the signature and persisted_num in SST
         View& Vc = view_and_lock.get();
-        if(signature_size > 0) {
-            //This will effectively do nothing if signature_size==0, but an unnecessary put() will still have overhead
+        if(object_has_signature) {
             gmssst::set(&(Vc.gmsSST->signatures[Vc.gmsSST->get_local_index()][subgroup_id * signature_size]),
                         signature, signature_size);
             Vc.gmsSST->put(Vc.multicast_group->get_shard_sst_indices(subgroup_id),
@@ -132,6 +134,10 @@ void PersistenceManager::handle_verify_request(subgroup_id_t subgroup_id, persis
     auto search = objects_by_subgroup_id.find(subgroup_id);
     if(search != objects_by_subgroup_id.end()) {
         ReplicatedObject* subgroup_object = search->second;
+        //If signatures are disabled for this subgroup, do nothing
+        if(!subgroup_object->is_signed()) {
+            return;
+        }
         //Read lock the View while reading the SST
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
         View& Vc = view_and_lock.get();

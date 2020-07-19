@@ -74,13 +74,13 @@ std::unique_ptr<std::string> _NameMaker<ObjectType, storageType>::make(const cha
 //===========================================
 template <typename ObjectType,
           StorageType storageType>
-inline void Persistent<ObjectType, storageType>::initialize_log(const char* object_name) {
+inline void Persistent<ObjectType, storageType>::initialize_log(const char* object_name, bool enable_signatures) {
     // STEP 1: initialize log
     this->m_pLog = nullptr;
     switch(storageType) {
         // file system
         case ST_FILE:
-            this->m_pLog = std::make_unique<FilePersistLog>(object_name);
+            this->m_pLog = std::make_unique<FilePersistLog>(object_name, enable_signatures);
             if(this->m_pLog == nullptr) {
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
@@ -88,7 +88,7 @@ inline void Persistent<ObjectType, storageType>::initialize_log(const char* obje
         // volatile
         case ST_MEM: {
             // const std::string tmpfsPath = "/dev/shm/volatile_t";
-            this->m_pLog = std::make_unique<FilePersistLog>(object_name, getPersRamdiskPath());
+            this->m_pLog = std::make_unique<FilePersistLog>(object_name, getPersRamdiskPath(), enable_signatures);
             if(this->m_pLog == nullptr) {
                 throw PERSIST_EXP_NEW_FAILED_UNKNOWN;
             }
@@ -118,10 +118,14 @@ Persistent<ObjectType, storageType>::Persistent(
         const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
         const char* object_name,
         PersistentRegistry* persistent_registry,
+        bool enable_signatures,
         mutils::DeserializationManager dm)
         : m_pRegistry(persistent_registry) {
     // Initialize log
-    initialize_log((object_name == nullptr) ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->getSubgroupPrefix() : nullptr)).c_str() : object_name);
+    initialize_log((object_name == nullptr)
+                           ? (*Persistent::getNameMaker().make(persistent_registry ? persistent_registry->getSubgroupPrefix() : nullptr)).c_str()
+                           : object_name,
+                   enable_signatures);
     // Initialize object
     initialize_object_from_log(object_factory, &dm);
     if(persistent_registry) {
@@ -156,12 +160,13 @@ template <typename ObjectType,
 Persistent<ObjectType, storageType>::Persistent(
         const char* object_name,
         std::unique_ptr<ObjectType>& wrapped_obj_ptr,
+        bool enable_signatures,
         const char* log_tail,
         PersistentRegistry* persistent_registry,
         mutils::DeserializationManager)
         : m_pRegistry(persistent_registry) {
     // Initialize log
-    initialize_log(object_name);
+    initialize_log(object_name, enable_signatures);
     // patch it
     if(log_tail != nullptr) {
         this->m_pLog->applyLogTail(log_tail);
@@ -528,6 +533,10 @@ std::size_t Persistent<ObjectType, storageType>::to_bytes(char* ret) const {
     // wrapped object
     dbg_default_trace("{0}[{1}] wrapped_object starts at {2}", this->m_pLog->m_sName, __func__, sz);
     sz += mutils::to_bytes(*this->m_pWrappedObject, ret + sz);
+    // flag to indicate whether the log has signatures
+    dbg_default_trace("{0}[{1}] signatures_enabled starts at {2}", this->m_pLog->m_sName, __func__, sz);
+    const bool signatures_enabled = this->m_pLog->signature_size > 0;
+    sz += mutils::to_bytes(signatures_enabled, ret + sz);
     // and the log
     dbg_default_trace("{0}[{1}] log starts at {2}", this->m_pLog->m_sName, __func__, sz);
     sz += this->m_pLog->to_bytes(ret + sz, PersistentRegistry::getEarliestVersionToSerialize());
@@ -546,6 +555,7 @@ void Persistent<ObjectType, storageType>::post_object(const std::function<void(c
         const {
     mutils::post_object(f, this->m_pLog->m_sName);
     mutils::post_object(f, *this->m_pWrappedObject);
+    mutils::post_object(f, (this->m_pLog->signature_size > 0));
     this->m_pLog->post_object(f, PersistentRegistry::getEarliestVersionToSerialize());
 }
 
@@ -561,13 +571,16 @@ std::unique_ptr<Persistent<ObjectType, storageType>> Persistent<ObjectType, stor
     auto wrapped_obj = mutils::from_bytes<ObjectType>(dsm, v + ofst);
     ofst += mutils::bytes_size(*wrapped_obj);
 
+    dbg_default_trace("{0} signatures_enabled is loaded at {1}", __func__, ofst);
+    bool signatures_enabled = *mutils::from_bytes_noalloc<bool>(dsm, v + ofst);
+    ofst += mutils::bytes_size(signatures_enabled);
     dbg_default_trace("{0} log is loaded at {1}", __func__, ofst);
     PersistentRegistry* pr = nullptr;
     if(dsm != nullptr) {
         pr = &dsm->mgr<PersistentRegistry>();
     }
     dbg_default_trace("{0}[{1}] create object from serialized bytes.", obj_name->c_str(), __func__);
-    return std::make_unique<Persistent>(obj_name->data(), wrapped_obj, v + ofst, pr);
+    return std::make_unique<Persistent>(obj_name->data(), wrapped_obj, signatures_enabled, v + ofst, pr);
 }
 
 template <typename ObjectType,

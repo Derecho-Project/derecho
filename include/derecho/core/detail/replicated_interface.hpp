@@ -20,6 +20,7 @@ public:
     virtual void send_object_raw(tcp::socket& receiver_socket) const = 0;
     virtual std::size_t receive_object(char* buffer) = 0;
     virtual bool is_persistent() const = 0;
+    virtual bool is_signed() const = 0;
     virtual void make_version(persistent::version_t ver, const HLC& hlc) = 0;
     virtual persistent::version_t get_minimum_latest_persisted_version() = 0;
     virtual persistent::version_t persist(persistent::version_t version, unsigned char* signature) = 0;

@@ -52,24 +52,35 @@ struct hlc_index_entry_comp {
     }
 };
 
-// Persistent log interfaces
+/**
+ * Persistent log interface.
+ * This class defines the interface that all persistent logs must implement, and
+ * declares some common member variables such as the log's name.
+ */
 class PersistLog {
 public:
     // LogName
     const std::string m_sName;
-    /** The size, in bytes, of a signature in the log. This is a constant based on the configured private key. */
+    /**
+     * The size, in bytes, of a signature in the log. This is a constant based
+     * on the configured private key. It is 0 if signatures are disabled.
+     */
     const uint32_t signature_size;
     // HLCIndex
     std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
 #ifndef NDEBUG
     void dump_hidx();
 #endif  //NDEBUG
-    // Constructor:
-    // Remark: the constructor will check the persistent storage
-    // to make sure if this named log(by "name" in the template
-    // parameters) is already there. If it is, load it from disk.
-    // Otherwise, create the log.
-    PersistLog(const std::string& name) noexcept(true);
+    /**
+     * Constructor.
+     * Remark: A subclass's constructor should check the persistent storage to
+     * see if a log with this name (using the parameter "name") is already
+     * there. If it is, load it from disk. Otherwise, create the log.
+     * @param name The name of the log.
+     * @param enable_signatures True if this log should sign every entry, false
+     * if there are no signatures.
+     */
+    PersistLog(const std::string& name, bool enable_signatures) noexcept(true);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append
@@ -146,7 +157,7 @@ public:
                               bool preLocked = false) = 0;
 
     /**
-     * add a signature to corresponding version
+     * Add a signature to a specific version; does nothing if signatures are disabled
      * @param ver - version
      * @param signature - signature
      * @param prev_signed_ver - THe previous version whose signature is
@@ -156,7 +167,7 @@ public:
                               version_t prev_signed_ver) = 0;
 
     /**
-     * Retrieve a signature from a specified version
+     * Retrieve a signature from a specified version, assuming signatures are enabled.
      * @param ver - version
      * @param signature - A byte buffer into which the signature will be copied.
      * Must be at least signature_size bytes.
@@ -165,7 +176,8 @@ public:
      * INVALID_VERSION if there was no version in the log with the requested
      * version number (in this case, no signature will be returned either)
      * @return true if a signature was successfully retrieved, false if there was
-     * no version in the log with the requested version number
+     * no version in the log with the requested version number or signatures are
+     * disabled.
      */
     virtual bool getSignature(version_t ver, unsigned char* signature,
                               version_t& prev_signed_ver) = 0;

@@ -17,7 +17,7 @@ using std::cout;
 using std::endl;
 using namespace persistent;
 
-class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
+class ByteArrayObject : public mutils::ByteRepresentable, public derecho::SignedPersistentFields {
 public:
     Persistent<test::Bytes> pers_bytes;
 
@@ -25,11 +25,12 @@ public:
         *pers_bytes = bytes;
     }
 
-    // deserialization constructor
-    ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
     // default constructor
     ByteArrayObject(PersistentRegistry* pr)
-            : pers_bytes(std::make_unique<test::Bytes>, nullptr, pr) {}
+            : pers_bytes(std::make_unique<test::Bytes>, nullptr, pr, true) {}
+
+    // deserialization constructor
+    ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
 
     REGISTER_RPC_FUNCTIONS(ByteArrayObject, change_pers_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
@@ -61,11 +62,6 @@ int main(int argc, char* argv[]) {
     pthread_setname_np(pthread_self(), "signed_bw_test");
 
     derecho::Conf::initialize(argc, argv);
-
-    if(derecho::getConfBoolean(CONF_PERS_SIGNED_LOG) == false) {
-        std::cout << "Error: Signed log is not enabled, but this test requires it. Check your config file." << std::endl;
-        return -1;
-    }
 
     //The maximum number of bytes that can be sent to change_pers_bytes() is not quite MAX_PAYLOAD_SIZE.
     //The serialized Bytes object will include its size field as well as the actual buffer, and

@@ -239,19 +239,20 @@ int main(int argc, char** argv) {
         printhelp();
         return 0;
     }
+    //If the private key file exists, assume signatures should be enabled
+    bool use_signature = checkRegularFile(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
 
     PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
-    Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr);
+    Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr, use_signature);
     //Persistent<X> px1;
-    Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, "PersistentVariableBytes", &pr),
-            npx_logtail([]() { return std::make_unique<VariableBytes>(); }, "VariableBytesLogTail");
+    Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, "PersistentVariableBytes", &pr, use_signature),
+            npx_logtail([]() { return std::make_unique<VariableBytes>(); }, "VariableBytesLogTail", nullptr, use_signature);
     //Persistent<X,ST_MEM> px2;
     Volatile<X> px2([]() { return std::make_unique<X>(); }, "VolatileXObject");
-    Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, "PersistentIntegerWithDelta", &pr);
+    Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, "PersistentIntegerWithDelta", &pr, use_signature);
 
     std::cout << "command:" << argv[1] << std::endl;
 
-    bool use_signature = derecho::getConfBoolean(CONF_PERS_SIGNED_LOG);
 
     std::unique_ptr<openssl::EnvelopeKey> prikey;
     std::unique_ptr<openssl::Signer> signer;

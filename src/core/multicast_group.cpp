@@ -930,7 +930,7 @@ void MulticastGroup::register_predicates() {
 
             persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
 
-            //If the signed log is enabled, add a similar predicate to check/update the minimum verified_num
+            //In case there are persistent objects with signatures, add a similar predicate to check/update the minimum verified_num
             auto verified_pred = [](const DerechoSST& sst) {
                 return true;
             };
@@ -938,7 +938,7 @@ void MulticastGroup::register_predicates() {
                 update_min_verified_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
-            if(getConfBoolean(CONF_PERS_SIGNED_LOG) && callbacks.global_verified_callback) {
+            if(callbacks.global_verified_callback) {
                 persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
             }
 
