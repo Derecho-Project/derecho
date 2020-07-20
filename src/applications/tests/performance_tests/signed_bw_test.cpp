@@ -187,17 +187,16 @@ int main(int argc, char* argv[]) {
     std::cout << "(send)throughput: " << send_thp_gbps << "GB/s." << std::endl;
     std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
 
-    //Since this test tends to be pretty slow, let's use MB/s instead of GB/s
-    double persist_thp_mbs = (static_cast<double>(total_num_messages) * msg_size * 1000) / persist_nanosec;
+    double persist_thp_gbs = (static_cast<double>(total_num_messages) * msg_size) / persist_nanosec;
     double persist_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / persist_nanosec;
     std::cout << "(pers)timespan: " << persist_millisec << " millisecond." << std::endl;
-    std::cout << "(pers)throughput: " << persist_thp_mbs << "MB/s." << std::endl;
+    std::cout << "(pers)throughput: " << persist_thp_gbs << "GB/s." << std::endl;
     std::cout << "(pers)throughput: " << persist_thp_ops << "ops." << std::endl;
 
-    double verified_thp_mbs = (static_cast<double>(total_num_messages) * msg_size * 1000) / verified_nanosec;
+    double verified_thp_gbs = (static_cast<double>(total_num_messages) * msg_size) / verified_nanosec;
     double verified_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / verified_nanosec;
     std::cout << "(verify)timespan: " << verified_millisec << " millisecond." << std::endl;
-    std::cout << "(verify)throughput: " << verified_thp_mbs << "MB/s." << std::endl;
+    std::cout << "(verify)throughput: " << verified_thp_gbs << "GB/s." << std::endl;
     std::cout << "(verify)throughput: " << verified_thp_ops << "ops." << std::endl;
 
     std::cout << std::flush;
@@ -205,7 +204,7 @@ int main(int argc, char* argv[]) {
     auto members = group.get_members();
     double avg_pers_bw, avg_verified_bw;
     std::tie(avg_pers_bw, avg_verified_bw) = aggregate_bandwidth(members, members[node_rank],
-                                                                 {persist_thp_mbs, verified_thp_mbs});
+                                                                 {persist_thp_gbs, verified_thp_gbs});
 
     if(node_rank == 0) {
         log_results(signed_bw_result{num_of_nodes, static_cast<std::underlying_type_t<PartialSendMode>>(sender_selector),
