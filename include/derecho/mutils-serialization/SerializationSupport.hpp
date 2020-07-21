@@ -23,78 +23,76 @@ struct DeserializationManager;
  */
 struct ByteRepresentable {
     /**
-   * Write this class's marshalled representation into the array found at v.
-   * assume v has at least bytes_size() of free memory available; behavior
-   * is undefined otherwise.
-   *
-   * Returns number of bytes written, which should be the same as bytes_size().
-   *
-   * NOTE: it is recommended that users not call this directly, and prefer
-   * to use mutils::to_bytes(T,v) instead.
-   */
+     * Write this class's marshalled representation into the array found at v.
+     * assume v has at least bytes_size() of free memory available; behavior
+     * is undefined otherwise.
+     *
+     * Returns number of bytes written, which should be the same as bytes_size().
+     *
+     * NOTE: it is recommended that users not call this directly, and prefer
+     * to use mutils::to_bytes(T,v) instead.
+     */
     virtual std::size_t to_bytes(char* v) const = 0;
 
     /**
-   * Pass a pointer to a buffer containing this class's marshalled
-   * representation into the function f.  This pointer is not guaranteed to live
-   * beyond the duration of the call to f, so make a copy if you need to keep it
-   * around.
-   *
-   * NOTE: it is recommended that users not call this directly, and prefer
-   * to use mutils::post_object(f,T) instead.
-   */
+     * Pass a pointer to a buffer containing this class's marshalled
+     * representation into the function f.  This pointer is not guaranteed to live
+     * beyond the duration of the call to f, so make a copy if you need to keep it
+     * around.
+     *
+     * NOTE: it is recommended that users not call this directly, and prefer
+     * to use mutils::post_object(f,T) instead.
+     */
     virtual void post_object(
             const std::function<void(char const* const, std::size_t)>&) const = 0;
 
     /**
-   * the size of the marshalled representation of this object.
-   * useful when allocating arrays in which to store this object.
-   *
-   * NOTE: it is recommended that users not call this directly, and prefer
-   * to use mutils::bytes_size(T,v) instead.
-   */
+     * the size of the marshalled representation of this object.
+     * useful when allocating arrays in which to store this object.
+     *
+     * NOTE: it is recommended that users not call this directly, and prefer
+     * to use mutils::bytes_size(T,v) instead.
+     */
     virtual std::size_t bytes_size() const = 0;
 
 #ifdef MUTILS_DEBUG
     /**
-   * If this object requires context in order to correctly
-   * deserialize, this method will associate that context
-   * with the provided DeserializationManager.  Many objects
-   * will not require context, and so can leave this function
-   * empty.
-   */
+     * If this object requires context in order to correctly
+     * deserialize, this method will associate that context
+     * with the provided DeserializationManager.  Many objects
+     * will not require context, and so can leave this function
+     * empty.
+     */
     virtual void ensure_registered(DeserializationManager&) = 0;
 #endif
     virtual ~ByteRepresentable() {}
 
     /**
-   * from_bytes takes the DeserializationManager which manages this object's
-   * context (or nullptr, if this object does not require a context), a byte
-   * array of size at least bytes_size(), and returns a new heap-allocated
-   * instance of that object.
-   *
-   * NOTE: it is recommended that users not call this directly, and prefer
-   * to use mutils::from_bytes<T>(DeserializationManager*,v) instead.
-   */
+     * from_bytes takes the DeserializationManager which manages this object's
+     * context (or nullptr, if this object does not require a context), a byte
+     * array of size at least bytes_size(), and returns a new heap-allocated
+     * instance of that object.
+     *
+     * NOTE: it is recommended that users not call this directly, and prefer
+     * to use mutils::from_bytes<T>(DeserializationManager*,v) instead.
+     */
     // needs to exist, but can't declare virtual statics
-    // virtual static std::unique_ptr<T> from_bytes(DeserializationManager *p,
-    // const char *v) const  = 0;
+    // virtual static std::unique_ptr<T> from_bytes(DeserializationManager *p, const char *v) const  = 0;
 
     /**
-   * from_bytes_noalloc takes the DeserializationManager which manages this
-   * object's context (or nullptr, if this object does not require a context), a
-   * byte array of size at least bytes_size(), and returns an instance of that
-   * object.  This instance may share storage with the provided byte array, and
-   * is not valid past the end of life of the byte array.
-   *
-   * NOTE: it is recommended that users not call this directly, and prefer
-   * to use mutils::deserialize_and_run<T>(DeserializationManager*,v, f)
-   * instead.  If the cost of passing a function is too high, please still
-   * prefer mutils::from_bytes_noalloc<T>(DeserializationManager*,v).
-   */
+     * from_bytes_noalloc takes the DeserializationManager which manages this
+     * object's context (or nullptr, if this object does not require a context), a
+     * byte array of size at least bytes_size(), and returns an instance of that
+     * object.  This instance may share storage with the provided byte array, and
+     * is not valid past the end of life of the byte array.
+     *
+     * NOTE: it is recommended that users not call this directly, and prefer
+     * to use mutils::deserialize_and_run<T>(DeserializationManager*,v, f)
+     * instead.  If the cost of passing a function is too high, please still
+     * prefer mutils::from_bytes_noalloc<T>(DeserializationManager*,v).
+     */
     // needs to exist, but can't declare virtual statics
-    // virtual static context_ptr<T> from_bytes_noalloc(DeserializationManager *p,
-    // const char *v) const  = 0;
+    // virtual static context_ptr<T> from_bytes_noalloc(DeserializationManager *p, const char *v) const  = 0;
 };
 
 /**
@@ -131,12 +129,12 @@ using RemoteDeserialization_v = std::vector<RemoteDeserializationContext_p>;
  */
 struct DeserializationManager {
     /**
-   * Various registered managers. Please note that this class
-   * does *not* own these pointers; you need to keep them
-   * managed somewhere else. Also ensure lifetime of this
-   * class is shorter than or the same as those registered
-   * contexts.
-   */
+     * Various registered managers. Please note that this class
+     * does *not* own these pointers; you need to keep them
+     * managed somewhere else. Also ensure lifetime of this
+     * class is shorter than or the same as those registered
+     * contexts.
+     */
     RemoteDeserialization_v registered_v;
     DeserializationManager(RemoteDeserialization_v rv) : registered_v(rv) {}
 
@@ -151,10 +149,10 @@ struct DeserializationManager {
     }
 
     /**
-   * Lookup the context registered at this DeserializationManager
-   * whose type is T.  Note this means we assume that types uniquely
-   * identify contexts.
-   */
+     * Lookup the context registered at this DeserializationManager
+     * whose type is T.  Note this means we assume that types uniquely
+     * identify contexts.
+     */
     template <typename T>
     T& mgr() {
         for(auto& candidate : registered_v) {
@@ -167,8 +165,8 @@ struct DeserializationManager {
     }
 
     /**
-   * As the above, but const.
-   */
+     * As the above, but const.
+     */
     template <typename T>
     const T& mgr() const {
         for(auto& candidate : registered_v) {
@@ -181,9 +179,9 @@ struct DeserializationManager {
     }
 
     /**
-   * checks to see if a context of type T has been
-   * registered with this DeserializationManager.
-   */
+     * checks to see if a context of type T has been
+     * registered with this DeserializationManager.
+     */
     template <typename T>
     bool registered() const {
         for(auto& candidate : registered_v) {
@@ -498,10 +496,7 @@ template <typename... T>
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
                  const std::tuple<T...>& t) {
     //std::apply(std::bind(post_object_helper<T...>,f,/*variadic template?*/), t);
-    std::apply([f](T... args) {
-        post_object_helper(f, args...);
-    },
-               t);
+    std::apply([f](T... args) { post_object_helper(f, args...); }, t);
 }
 
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
@@ -555,9 +550,8 @@ void post_object(const std::function<void(char const* const, std::size_t)>& f,
 
 // end post_object section
 
-// to_bytes definitions -- these must come after bytes_size and post_object
-// definitions To reduce code duplication, these are all implemented in terms of
-// post_object
+// to_bytes definitions -- these must come after bytes_size and post_object definitions.
+// To reduce code duplication, these are all implemented in terms of post_object
 
 /**
  * Special to_bytes for POD types, which just uses memcpy
