@@ -384,10 +384,10 @@ from_bytes_noalloc(
         DeserializationManager* ctx, char const* const v,
         context_ptr<const std::decay_t<T>> = context_ptr<const std::decay_t<T>>{}) {
     // Uncomment the stuff below if we ever get a chance to use a recent g++
-    // if constexpr (std::is_const<T>::value ){
-    return std::decay_t<T>::from_bytes_noalloc_const(ctx, v);
-    //}
-    // else return std::decay_t<T>::from_bytes_noalloc(ctx,v);
+    if constexpr(std::is_const<T>::value) {
+        return std::decay_t<T>::from_bytes_noalloc_const(ctx, v);
+    } else
+        return std::decay_t<T>::from_bytes_noalloc(ctx, v);
 }
 
 /**
