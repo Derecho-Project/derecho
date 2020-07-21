@@ -460,6 +460,43 @@ struct marshalled : public ByteRepresentable {
 // end forward-declaring; everything past this point is implementation,
 // and not essential to understanding  the interface.
 
+// Templates that become true_type when matched to the thing they identify,
+// or become false_type if they fail to match, similar to std::is_pod
+
+template <typename>
+struct is_pair : std::false_type {};
+
+template <typename T, typename U>
+struct is_pair<std::pair<T, U>> : std::true_type {};
+
+/* use the definition in mutils/tuple_extras.hpp +21
+template <typename> struct is_tuple : std::false_type {};
+
+template <typename...T>
+struct is_tuple<std::tuple<T...>> : std::true_type {};
+*/
+
+template <typename>
+struct is_list : std::false_type {};
+
+template <typename T>
+struct is_list<std::list<T>> : std::true_type {};
+
+template <typename>
+struct is_map : std::false_type {};
+
+template <typename K, typename V>
+struct is_map<std::map<K, V>> : std::true_type {};
+
+template <typename>
+struct is_string : std::false_type {};
+
+template <>
+struct is_string<std::string> : std::true_type {};
+
+template <>
+struct is_string<const std::string> : std::true_type {};
+
 /**
  * Constructs a buffer-consuming function that will copy its input to the
  * provided destination buffer at the specified index. The created function
@@ -473,10 +510,137 @@ struct marshalled : public ByteRepresentable {
 std::function<void(char const* const, std::size_t)>
 post_to_buffer(std::size_t& index, char* dest_buf);
 
-// post_object definitions -- must come before to_bytes definitions that use
-// them
+// Forward declarations of post_object functions for STL types
+
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
                  const std::string& str);
+
+template <typename T, typename V>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::pair<T, V>& pair);
+
+template <typename... T>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::tuple<T...>& t);
+
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::vector<bool>& vec);
+
+template <typename T>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::vector<T>& vec);
+
+template <typename T>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::list<T>& list);
+
+template <typename T>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::set<T>& s);
+
+template <typename K, typename V>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::map<K, V>& map);
+
+// Forward declarations of to_bytes functions for STL types
+
+template <typename T, restrict(std::is_pod<T>::value)>
+std::size_t to_bytes(const T& t, char* buffer);
+
+std::size_t to_bytes(const std::vector<bool>& vec, char* buffer);
+
+template <typename T>
+std::size_t to_bytes(const std::vector<T>& vec, char* buffer);
+
+template <typename T>
+std::size_t to_bytes(const std::list<T>& list, char* buffer);
+
+template <typename T, typename V>
+std::size_t to_bytes(const std::pair<T, V>& pair, char* buffer);
+
+template <typename... T>
+std::size_t to_bytes(const std::tuple<T...>& tuple, char* buffer);
+
+template <typename T>
+std::size_t to_bytes(const std::set<T>& s, char* _v);
+
+template <typename K, typename V>
+std::size_t to_bytes(const std::map<K, V>& m, char* buffer);
+
+// Forward declarations of from_bytes functions for STL types
+
+template <typename T>
+std::enable_if_t<std::is_pod<T>::value, std::unique_ptr<std::decay_t<T>>>
+from_bytes(DeserializationManager*, char const* v);
+
+template <typename T>
+std::enable_if_t<std::is_pod<T>::value, context_ptr<std::decay_t<T>>>
+from_bytes_noalloc(DeserializationManager*, char* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::enable_if_t<std::is_pod<T>::value, context_ptr<const std::decay_t<T>>>
+from_bytes_noalloc(DeserializationManager*, char const* const v,
+                   context_ptr<T>);
+
+template <typename T>
+std::unique_ptr<type_check<is_string, T>> from_bytes(DeserializationManager*,
+                                                     char const* v);
+
+template <typename T>
+context_ptr<type_check<is_string, T>>
+from_bytes_noalloc(DeserializationManager*, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::unique_ptr<type_check<is_set, T>> from_bytes(DeserializationManager* ctx,
+                                                  const char* _v);
+
+template <typename T>
+context_ptr<type_check<is_set, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::unique_ptr<type_check<is_pair, T>> from_bytes(DeserializationManager* ctx,
+                                                   const char* v);
+template <typename L>
+std::unique_ptr<type_check<is_list, L>> from_bytes(DeserializationManager* ctx,
+                                                   const char* buffer);
+
+template <typename T>
+context_ptr<type_check<is_pair, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::unique_ptr<T> boolvec_from_bytes(DeserializationManager* ctx,
+                                      char const* v);
+
+template <typename T>
+std::unique_ptr<type_check<is_tuple, T>> from_bytes(DeserializationManager* ctx, char const* v);
+
+template <typename T>
+std::enable_if_t<is_vector<T>::value, std::unique_ptr<T>>
+from_bytes(DeserializationManager* ctx, char const* v);
+
+template <typename T>
+context_ptr<type_check<is_vector, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+std::enable_if_t<is_map<T>::value, std::unique_ptr<T>>
+from_bytes(DeserializationManager* ctx, char const* buffer);
+
+template <typename T>
+context_ptr<type_check<is_map, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+// End forward declarations of STL support
+
+// Implementations of post_object functions for STL types
 
 template <typename T, typename V>
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
@@ -498,9 +662,6 @@ void post_object(const std::function<void(char const* const, std::size_t)>& f,
     //std::apply(std::bind(post_object_helper<T...>,f,/*variadic template?*/), t);
     std::apply([f](T... args) { post_object_helper(f, args...); }, t);
 }
-
-void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                 const std::vector<bool>& vec);
 
 template <typename T>
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
@@ -550,7 +711,7 @@ void post_object(const std::function<void(char const* const, std::size_t)>& f,
 
 // end post_object section
 
-// to_bytes definitions -- these must come after bytes_size and post_object definitions.
+// Implementation of to_bytes functions for STL types
 // To reduce code duplication, these are all implemented in terms of post_object
 
 /**
@@ -657,22 +818,14 @@ from_string(DeserializationManager*, char const* v, std::size_t length) {
     return std::make_unique<T>(std::stold(std::string{v, length}));
 }
 
-template <typename>
-struct is_string : std::false_type {};
-
-template <>
-struct is_string<std::string> : std::true_type {};
-
-template <>
-struct is_string<const std::string> : std::true_type {};
-
 template <typename T>
 std::unique_ptr<type_check<is_string, T>>
 from_string(DeserializationManager*, char const* v, std::size_t length) {
     return std::make_unique<T>(std::string{v, length});
 }
 
-// from_bytes definitions
+// Implementation of from_bytes functions for STL types
+
 template <typename T>
 std::enable_if_t<std::is_pod<T>::value, std::unique_ptr<std::decay_t<T>>>
 from_bytes(DeserializationManager*, char const* v) {
@@ -688,7 +841,7 @@ from_bytes(DeserializationManager*, char const* v) {
 template <typename T>
 std::enable_if_t<std::is_pod<T>::value, context_ptr<std::decay_t<T>>>
 from_bytes_noalloc(DeserializationManager*, char* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     using T2 = std::decay_t<T>;
     return context_ptr<T2>{(T2*)v};
 }
@@ -701,34 +854,6 @@ from_bytes_noalloc(DeserializationManager*, char const* const v,
     return context_ptr<const T2>{(const T2*)v};
 }
 
-// Templates that become true_type when matched to the thing they identify,
-// or become false_type if they fail to match, similar to std::is_pod
-
-template <typename>
-struct is_pair : std::false_type {};
-
-template <typename T, typename U>
-struct is_pair<std::pair<T, U>> : std::true_type {};
-
-/* use the definition in mutils/tuple_extras.hpp +21
-template <typename> struct is_tuple : std::false_type {};
-
-template <typename...T>
-struct is_tuple<std::tuple<T...>> : std::true_type {};
-*/
-
-template <typename>
-struct is_list : std::false_type {};
-
-template <typename T>
-struct is_list<std::list<T>> : std::true_type {};
-
-template <typename>
-struct is_map : std::false_type {};
-
-template <typename K, typename V>
-struct is_map<std::map<K, V>> : std::true_type {};
-
 template <typename T>
 std::unique_ptr<type_check<is_string, T>> from_bytes(DeserializationManager*,
                                                      char const* v) {
@@ -739,7 +864,7 @@ std::unique_ptr<type_check<is_string, T>> from_bytes(DeserializationManager*,
 template <typename T>
 context_ptr<type_check<is_string, T>>
 from_bytes_noalloc(DeserializationManager*, char const* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     assert(v);
     return context_ptr<T>(new std::string{v});
 }
@@ -761,7 +886,7 @@ std::unique_ptr<type_check<is_set, T>> from_bytes(DeserializationManager* ctx,
 template <typename T>
 context_ptr<type_check<is_set, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     return context_ptr<T>{from_bytes<T>(ctx, v).release()};
 }
 
@@ -793,13 +918,9 @@ std::unique_ptr<type_check<is_list, L>> from_bytes(DeserializationManager* ctx,
 template <typename T>
 context_ptr<type_check<is_pair, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     return context_ptr<T>{from_bytes<T>(ctx, v).release()};
 }
-
-template <typename T>
-std::unique_ptr<T> boolvec_from_bytes(DeserializationManager* ctx,
-                                      char const* v);
 
 template <typename TupleType, std::size_t N>
 auto from_bytes_helper(DeserializationManager* ctx, char const* v) {
@@ -859,7 +980,7 @@ from_bytes(DeserializationManager* ctx, char const* v) {
 template <typename T>
 context_ptr<type_check<is_vector, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     return context_ptr<T>{from_bytes<T>(ctx, v).release()};
 }
 
@@ -885,7 +1006,7 @@ from_bytes(DeserializationManager* ctx, char const* buffer) {
 template <typename T>
 context_ptr<type_check<is_map, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
-                   context_ptr<T> = context_ptr<T>{}) {
+                   context_ptr<T>) {
     return context_ptr<T>{from_bytes<T>(ctx, v).release()};
 }
 
