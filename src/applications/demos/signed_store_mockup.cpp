@@ -119,11 +119,17 @@ void CompletionTracker::start_tracking_version(persistent::version_t version) {
 }
 
 void CompletionTracker::notify_version_finished(persistent::version_t version) {
-    //Fullfill the promise for this version, then delete it from the map
+    //Fullfill the promise for this version and all prior versions,
+    //since the global persistence upcall is only called once per batch
     std::unique_lock<std::mutex> lock(promise_map_mutex);
-    auto promise_in_map = version_finished_promises.find(version);
-    promise_in_map->second.set_value();
-    version_finished_promises.erase(promise_in_map);
+    auto version_location = version_finished_promises.find(version);
+    //The map is sorted by version, so just consume entries from the beginning to the current version
+    for(auto promise_iter = version_finished_promises.begin(); promise_iter != version_location; ) {
+        promise_iter->second.set_value();
+        promise_iter = version_finished_promises.erase(promise_iter);
+    }
+    version_location->second.set_value();
+    version_finished_promises.erase(version_location);
 }
 
 void CompletionTracker::await_version_finished(persistent::version_t version) {
@@ -247,7 +253,7 @@ std::tuple<persistent::version_t, uint64_t> ObjectStore::ordered_update(const Bl
     persistence_tracker->start_tracking_version(std::get<0>(next_version));
     //Update the Persistent object, generating a new version
     *object_log = new_data;
-    dbg_default_debug("Returning ({},{}) from ordered_update", std::get<0>(next_version), std::get<1>(next_version));
+    dbg_default_debug("Returning ({}, {}) from ordered_update", std::get<0>(next_version), std::get<1>(next_version));
     return next_version;
 }
 
@@ -364,8 +370,7 @@ int main(int argc, char** argv) {
             //P2P send to myself, as if a client called P2P send
             auto query_result = this_subgroup.p2p_send<RPC_NAME(submit_update)>(my_id, test_update);
             //Block and wait for the results
-            std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> version_and_signature
-                    = query_result.get().get(my_id);
+            ClientTier::version_signature version_and_signature = query_result.get().get(my_id);
 
             std::cout << "Update " << counter << " submitted. Result: Version = " << std::get<0>(version_and_signature)
                       << " timestamp = " << std::get<1>(version_and_signature) << " Signature = "

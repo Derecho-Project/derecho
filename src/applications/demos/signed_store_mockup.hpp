@@ -188,13 +188,15 @@ class ClientTier : public mutils::ByteRepresentable,
 public:
     ClientTier();
 
+	//Type alias for the overly-long return type of submit_update
+	using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
     /**
      * RPC function that submits an update to the object store and gets its hash signed;
      * intended to be called by an outside client using ExternalGroup.
      * @return The version assigned to the update, the timestamp assigned to the update,
      * and the signature assigned to the update.
      */
-    std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> submit_update(const Blob& data);
+    version_signature submit_update(const Blob& data);
 
     REGISTER_RPC_FUNCTIONS(ClientTier, submit_update);
 

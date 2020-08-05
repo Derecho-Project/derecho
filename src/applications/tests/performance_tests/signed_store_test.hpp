@@ -110,9 +110,15 @@ class ObjectStore : public mutils::ByteRepresentable,
      */
     std::shared_ptr<CompletionTracker> persistence_tracker;
     using derecho::GroupReference::group;
+	/**
+	 * Shared with the main thread to tell it when the experiment is done and it should
+	 * call group.leave() (which can't be done from inside this subgroup object).
+	 */
+	std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
-    ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker);
+    ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
+                std::shared_ptr<std::atomic<bool>> experiment_done);
     /** Deserialization constructor */
     ObjectStore(persistent::Persistent<Blob>& other_log) : object_log(std::move(other_log)) {}
     /**
@@ -165,9 +171,15 @@ class SignatureStore : public mutils::ByteRepresentable,
      * re-link this with the global callback?
      */
     std::shared_ptr<CompletionTracker> verified_tracker;
+	/**
+	 * Shared with the main thread to tell it when the experiment is done and it should
+	 * call group.leave() (which can't be done from inside this subgroup object).
+	 */
+	std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
-    SignatureStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker);
+    SignatureStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
+                   std::shared_ptr<std::atomic<bool>> experiment_done);
     /** Deserialization constructor */
     SignatureStore(persistent::Persistent<SHA256Hash>& other_hashes) : hashes(std::move(other_hashes)) {}
 
@@ -197,25 +209,23 @@ class ClientTier : public mutils::ByteRepresentable,
                    public derecho::GroupReference {
     using derecho::GroupReference::group;
     openssl::Hasher hasher;
-    //Workaround to let update_batch_test return a time_point to the main thread,
-    //even though time_point isn't serializable and thus can't be an "RPC" return
-    std::shared_ptr<std::chrono::steady_clock::time_point> persistence_finished_time;
-    std::shared_ptr<std::chrono::steady_clock::time_point> signature_finished_time;
+	//Used to pick random members of the storage and signature subgroups to contact
+	std::mt19937 random_engine;
     //This ensures the test data is allocated before the test starts
     Blob test_data;
 
 public:
-    ClientTier(std::size_t test_data_size,
-               std::shared_ptr<std::chrono::steady_clock::time_point> persistence_finished_time,
-               std::shared_ptr<std::chrono::steady_clock::time_point> signature_finished_time);
+    ClientTier(std::size_t test_data_size);
 
+	//Type alias for the overly-long return type of submit_update
+	using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
     /**
      * RPC function that submits an update to the object store and gets its hash signed;
      * intended to be called by an outside client using ExternalGroup.
      * @return The version assigned to the update, the timestamp assigned to the update,
      * and the signature assigned to the update.
      */
-    std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> submit_update(const Blob& data);
+    version_signature submit_update(const Blob& data);
     /**
      * The main function of the signed store bandwidth test. Returns a useless bool so that
      * the actual "main" thread can block waiting for it to complete.
@@ -235,7 +245,6 @@ public:
 
     //This should never be called, but needs to exist
     static std::unique_ptr<ClientTier> from_bytes(mutils::DeserializationManager*, const char* const v) {
-        return std::make_unique<ClientTier>(0, std::make_shared<std::chrono::steady_clock::time_point>(),
-                                            std::make_shared<std::chrono::steady_clock::time_point>());
+        return std::make_unique<ClientTier>(0);
     };
 };
