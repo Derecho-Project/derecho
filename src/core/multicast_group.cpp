@@ -750,10 +750,8 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
     bool update_sst = false;
     bool non_null_msgs_delivered = false;
     persistent::version_t assigned_version = persistent::INVALID_VERSION;
-    while(true) {
-        if(locally_stable_rdmc_messages[subgroup_num].empty() && locally_stable_sst_messages[subgroup_num].empty()) {
-            break;
-        }
+    
+    if(!locally_stable_rdmc_messages[subgroup_num].empty() || !locally_stable_sst_messages[subgroup_num].empty()) {
         int32_t least_undelivered_rdmc_seq_num, least_undelivered_sst_seq_num;
         least_undelivered_rdmc_seq_num = least_undelivered_sst_seq_num = std::numeric_limits<int32_t>::max();
         if(!locally_stable_rdmc_messages[subgroup_num].empty()) {
@@ -789,8 +787,6 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
             non_null_msgs_delivered |= version_message(msg, subgroup_num, assigned_version, msg_ts);
             sst.delivered_num[member_index][subgroup_num] = least_undelivered_sst_seq_num;
             locally_stable_sst_messages[subgroup_num].erase(locally_stable_sst_messages[subgroup_num].begin());
-        } else {
-            break;
         }
     }
     if(update_sst) {
