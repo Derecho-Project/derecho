@@ -148,7 +148,12 @@ int main(int argc, char* argv[]) {
     // this function sends all the messages
     auto send_fast = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
-        for(uint i = 0; i < num_messages; ++i) {
+        // Here, the !done condition is necessary to a void a deadlock.
+        //   In fact, since in baseline we do not have the null-scheme enabled,
+        //   after "done = true" this function would still try to send other
+        //   messages, and so it will wait for the others to send, but the others
+        //   will never send due to the logic of this test.
+        for(uint i = 0; i < num_messages && !done; ++i) {
             // the lambda function writes the message contents into the provided memory buffer
             // in this case, we do not touch the memory region
             raw_subgroup.send(max_msg_size, [](char* buf) {});
