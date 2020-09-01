@@ -300,19 +300,19 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 }
 
                 auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
-                /* NULL Send Scheme */
-                // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
-                if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
-                    if(subgroup_settings.sender_rank < (int)sender_rank) {
-                        while(future_message_indices[subgroup_num] <= new_num_received) {
-                            get_buffer_and_send_auto_null(subgroup_num);
-                        }
-                    } else if(subgroup_settings.sender_rank > (int)sender_rank) {
-                        while(future_message_indices[subgroup_num] < new_num_received) {
-                            get_buffer_and_send_auto_null(subgroup_num);
-                        }
-                    }
-                }
+                // /* NULL Send Scheme */
+                // // only if I am a sender in the subgroup and the subgroup is not in UNORDERED mode
+                // if(subgroup_settings.sender_rank >= 0 && subgroup_settings.mode != Mode::UNORDERED) {
+                //     if(subgroup_settings.sender_rank < (int)sender_rank) {
+                //         while(future_message_indices[subgroup_num] <= new_num_received) {
+                //             get_buffer_and_send_auto_null(subgroup_num);
+                //         }
+                //     } else if(subgroup_settings.sender_rank > (int)sender_rank) {
+                //         while(future_message_indices[subgroup_num] < new_num_received) {
+                //             get_buffer_and_send_auto_null(subgroup_num);
+                //         }
+                //     }
+                // }
 
                 // deliver immediately if in UNORDERED mode
                 if(subgroup_settings.mode == Mode::UNORDERED) {
