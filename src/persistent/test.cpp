@@ -427,11 +427,13 @@ int main(int argc, char** argv) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
             listvar<IntegerWithDelta>(dx);
         } else if(strcmp(argv[1], "delta-getbyidx") == 0) {
-            int64_t index = std::stoi(argv[1]);
+            int64_t index = std::stoi(argv[2]);
             cout << "dx[idx:" << index << "] = " << dx.getByIndex(index)->value << endl;
+            cout << "dx.delta[idx:" << index << "] = " << *dx.template getDeltaByIndex<int>(index) << endl;
         } else if(strcmp(argv[1], "delta-getbyver") == 0) {
-            int64_t version = std::stoi(argv[1]);
+            int64_t version = std::stoi(argv[2]);
             cout << "dx[idx:" << version << "] = " << dx[version]->value << endl;
+            cout << "dx.delta[idx:" << version << "] = " << *dx.template getDelta<int>(version) << endl;
         } else {
             cout << "unknown command: " << argv[1] << endl;
             printhelp();

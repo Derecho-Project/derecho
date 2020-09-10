@@ -457,6 +457,62 @@ public:
         mutils::DeserializationManager* dm = nullptr);
 
     /**
+     * get the latest delta Value of T. The user lambda will be fed with the latest object
+     * zerocopy:this object will not live once it returns.
+     * return value is decided by user lambda
+     */
+    template <typename DeltaType, typename Func>
+    auto getDelta(
+        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value,const Func>& fun,
+        mutils::DeserializationManager* dm = nullptr);
+
+    /**
+     * get the latest delta Value of T, returns a unique pointer to the object
+     */
+    template <typename DeltaType>
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDelta(mutils::DeserializationManager* dm = nullptr);
+
+    /**
+     * get the delta version of Value T. the user lambda will be fed with the given object
+     * zerocopy:this object will not live once it returns.
+     * return value is decided by user lambda
+     */
+    template <typename DeltaType, typename Func>
+    auto getDeltaByIndex(
+        int64_t idx,
+        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value,const Func>& fun,
+        mutils::DeserializationManager* dm = nullptr);
+
+    /**
+     * get delta version of value T. returns a unique pointer to the object
+     */
+    template <typename DeltaType>
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDeltaByIndex(
+            int64_t idx,
+            mutils::DeserializationManager* dm = nullptr);
+
+    /**
+     * get a delta version of Value T, specified by version. the user lambda will be fed with
+     * an object of T.
+     * zerocopy: this object will not live once it returns.
+     * return value is decided by the user lambda.
+     */
+    template <typename DeltaType, typename Func>
+    auto getDelta(
+        const int64_t& ver,
+        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value,const Func>& fun,
+        mutils::DeserializationManager* dm = nullptr);
+
+    /**
+     * get a delta version of value T. specified version.
+     * return a deserialized copy for the variable.
+     */
+    template <typename DeltaType>
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDelta(
+        const int64_t& ver,
+        mutils::DeserializationManager* dm = nullptr);
+
+    /**
      * trim by version or index
      */
     template <typename TKey>
