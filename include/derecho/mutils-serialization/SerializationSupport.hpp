@@ -686,7 +686,11 @@ from_bytes(DeserializationManager*, char const* v) {
     if(v) {
         auto t = std::make_unique<T2>(*(T2*)v);
         // std::memcpy(t.get(),v,sizeof(T));
+#if __GNUC_PREREQ(9,0)
+        return t; // RVO optimization is default for 
+#else
         return std::move(t);
+#endif
     } else
         return nullptr;
 }
@@ -885,7 +889,11 @@ from_bytes(DeserializationManager* ctx, char const* buffer) {
         buf_ptr += bytes_size(*value);
         new_map->emplace(*key, *value);
     }
+#if __GNUC_PREREQ(9,0)
+    return new_map; // RVO
+#else
     return std::move(new_map);
+#endif
 }
 
 template <typename T>
