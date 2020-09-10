@@ -458,6 +458,9 @@ void MulticastGroup::initialize_sst_row() {
             sst->delivered_num[i][j] = -1;
             sst->persisted_num[i][j] = -1;
         }
+        for(uint j = 0; j < total_num_subgroups; j++) {
+            sst->index[i][j] = -1;
+        }
     }
     sst->put();
     sst->sync_with_members();

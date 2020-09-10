@@ -117,6 +117,10 @@ int main(int argc, char* argv[]) {
         }
     };
 
+    // This is a temporary patch 
+    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+    group.barrier_sync();
+    
     struct timespec start_time;
     // start timer
     clock_gettime(CLOCK_REALTIME, &start_time);
