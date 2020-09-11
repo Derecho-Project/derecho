@@ -100,8 +100,12 @@ public:
     // Get the Latest Index
     virtual int64_t getLatestIndex() = 0;
 
-    // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t& ver) = 0;
+    /** Get the Index corresponding to a version equal or immediately eariler than ver
+     *  @param ver - the version
+     *  @param exact - exact match
+     *  @return index of the corresponding log entry
+     */
+    virtual int64_t getVersionIndex(const version_t& ver, bool exact = false) = 0;
 
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) = 0;
@@ -119,7 +123,10 @@ public:
     virtual const void* getEntryByIndex(const int64_t& eno) = 0;
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const version_t& ver) = 0;
+    // @param ver - version requested
+    // @param exact - ask for the exact version
+    // @return the pointer to the data, nullptr if exact is true and no corresponding version are found.
+    virtual const void* getEntry(const version_t& ver, bool exact = false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() = 0;

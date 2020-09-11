@@ -374,7 +374,7 @@ auto Persistent<ObjectType, storageType>::getDelta(
         const int64_t& ver,
         std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value,const Func>& fun,
         mutils::DeserializationManager* dm) {
-    char* pdat = (char*)this->m_pLog->getEntry(ver);
+    char* pdat = (char*)this->m_pLog->getEntry(ver,true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
@@ -406,7 +406,7 @@ template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDelta(
         const int64_t& ver,
         mutils::DeserializationManager* dm) {
-    int64_t idx = this->m_pLog->getVersionIndex(ver);
+    int64_t idx = this->m_pLog->getVersionIndex(ver,true);
     if(idx == INVALID_INDEX) {
         throw PERSIST_EXP_INV_VERSION;
     }
