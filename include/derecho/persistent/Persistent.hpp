@@ -588,6 +588,11 @@ public:
     virtual const int64_t getLastPersistedVersion();
 
     /**
+     * get latest version before time.
+     */
+    virtual const int64_t getIndexAtTime(const HLC& hlc);
+
+    /**
      * make a version with a version number and mhlc clock
      */
     virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc);

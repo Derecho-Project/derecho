@@ -524,6 +524,12 @@ const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
 
 template <typename ObjectType,
           StorageType storageType>
+const int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) {
+    return this->m_pLog->getHLCIndex(hlc);
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if
