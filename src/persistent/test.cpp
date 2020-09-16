@@ -436,7 +436,7 @@ int main(int argc, char** argv) {
             int64_t version = std::stoi(argv[2]);
             cout << "dx[ver:" << version << "] = " << dx[version]->value << endl;
             cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version) << "\t- by copy" << endl;
-            dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl; return;});
+            dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl;});
         } else {
             cout << "unknown command: " << argv[1] << endl;
             printhelp();

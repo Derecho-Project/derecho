@@ -460,10 +460,9 @@ public:
      * get the latest delta Value of T. The user lambda will be fed with the latest object
      * zerocopy:this object will not live once it returns.
      * return value is decided by user lambda
-     * TODO: see 'auto getDelta(const int64& ver, const Func& fun, mutils::DeserializationManager* dm = nullptr)'
      */
     template <typename DeltaType, typename Func>
-    auto getDelta(const Func& fun, mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDelta(const Func& fun, mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get the latest delta Value of T, returns a unique pointer to the object
@@ -475,10 +474,9 @@ public:
      * get the delta version of Value T. the user lambda will be fed with the given object
      * zerocopy:this object will not live once it returns.
      * return value is decided by user lambda
-     * TODO: see 'auto getDelta(const int64& ver, const Func& fun, mutils::DeserializationManager* dm = nullptr)'
      */
     template <typename DeltaType, typename Func>
-    auto getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get delta version of value T. returns a unique pointer to the object
@@ -493,15 +491,9 @@ public:
      * an object of T.
      * zerocopy: this object will not live once it returns.
      * return value is decided by the user lambda.
-     * 
-     * TODO: consider using SFINAE to enable it when std::is_base_of<IDeltaSupport<ObjectType>,ObjectType>::value is
-     * true. However, the test depends on class template arguments, and applying SFINAE on Func does not work because it
-     * has to be as is for mutils::deserialize_and_run(...). Should test 
-     * std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>,ObjectType>::value, std::result_of_t<Func>>
-     * as return type.
      */
     template <typename DeltaType, typename Func>
-    auto getDelta(const int64_t& ver, const Func& fun, mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDelta(const int64_t& ver, const Func& fun, mutils::DeserializationManager* dm = nullptr);
 
     /**
      * get a delta version of value T. specified version.
