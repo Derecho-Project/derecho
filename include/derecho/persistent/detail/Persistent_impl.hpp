@@ -268,9 +268,12 @@ auto Persistent<ObjectType, storageType>::get(
 template <typename ObjectType,
          StorageType storageType>
 template <typename DeltaType, typename Func>
-auto Persistent<ObjectType, storageType>::getDelta(
-        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, const Func>& fun,
-        mutils::DeserializationManager* dm) {
+auto Persistent<ObjectType, storageType>::getDelta(const Func& fun, mutils::DeserializationManager* dm) {
+    if constexpr (!std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        throw std::runtime_error(std::string("Persistent<") + typeid(ObjectType).name() +
+                    ">::getDelta(func,dsm) was called. But " + typeid(ObjectType).name() +
+                    " did not implement IDeltaSupport interface.");
+    }
     return this->template getDeltaByIndex<DeltaType,Func>(-1L, fun, dm);
 }
 
@@ -298,21 +301,24 @@ auto Persistent<ObjectType, storageType>::getByIndex(
         mutils::DeserializationManager* dm) {
     if
         constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
-            return f(*this->getByIndex(idx, dm));
+            return fun(*this->getByIndex(idx, dm));
         }
     else {
-        return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+        // return mutils::deserialize_and_run<ObjectType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+        return mutils::deserialize_and_run(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
     }
 }
 
 template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
-auto Persistent<ObjectType, storageType>::getDeltaByIndex(
-        int64_t idx,
-        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, const Func>& fun,
-        mutils::DeserializationManager* dm) {
-    return mutils::deserialize_and_run<DeltaType>(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
+auto Persistent<ObjectType, storageType>::getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm) {
+    if constexpr (!std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        throw std::runtime_error(std::string("Persistent<") + typeid(ObjectType).name() +
+                    ">::getDelta(func,dsm) was called. But " + typeid(ObjectType).name() +
+                    " did not implement IDeltaSupport interface.");
+    }
+    return mutils::deserialize_and_run(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
 }
 
 template <typename ObjectType,
@@ -363,22 +369,25 @@ auto Persistent<ObjectType, storageType>::get(
             return f(*this->get(ver, dm));
         }
     else {
-        return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
+        return mutils::deserialize_and_run(dm, pdat, fun);
     }
 }
 
 template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
-auto Persistent<ObjectType, storageType>::getDelta(
-        const int64_t& ver,
-        std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value,const Func>& fun,
-        mutils::DeserializationManager* dm) {
+auto Persistent<ObjectType, storageType>::getDelta(const int64_t& ver, const Func& fun, mutils::DeserializationManager* dm) {
+    if constexpr (!std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
+        throw std::runtime_error(std::string("Persistent<") + typeid(ObjectType).name() +
+                    ">::getDelta(func,dsm) was called. But " + typeid(ObjectType).name() +
+                    " did not implement IDeltaSupport interface.");
+    }
+
     char* pdat = (char*)this->m_pLog->getEntry(ver,true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
     }
-    return mutils::deserialize_and_run<DeltaType>(dm, pdat, fun);
+    return mutils::deserialize_and_run(dm, pdat, fun);
 }
 
 template <typename ObjectType,
@@ -456,7 +465,7 @@ auto Persistent<ObjectType, storageType>::get(
         if(pdat == nullptr) {
             throw PERSIST_EXP_INV_HLC;
         }
-        return mutils::deserialize_and_run<ObjectType>(dm, pdat, fun);
+        return mutils::deserialize_and_run(dm, pdat, fun);
     }
 };
 

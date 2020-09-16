@@ -24,7 +24,7 @@ void sig_handler(int num) {
 class X {
 public:
     int x;
-    const std::string to_string() {
+    const std::string to_string() const {
         return std::to_string(x);
     }
 };
@@ -60,7 +60,7 @@ public:
             // do nothing, we don't need DSM.
     };
 
-    virtual std::string to_string() {
+    virtual std::string to_string() const {
         return std::string{buf};
     };
 
@@ -70,6 +70,14 @@ public:
         pvb->data_len = strlen(v) + 1;
         return pvb;
     };
+
+    static mutils::context_ptr<VariableBytes> from_bytes_noalloc(DeserializationManager*dsm, char const* const v) {
+        return mutils::context_ptr<VariableBytes>(from_bytes(dsm,v).release());
+    }
+
+    static mutils::context_ptr<const VariableBytes> from_bytes_noalloc_const(DeserializationManager*dsm, char const* const v) {
+        return mutils::context_ptr<const VariableBytes>(from_bytes(dsm,v).release());
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -105,7 +113,7 @@ public:
         return std::make_unique<IntegerWithDelta>();
     }
 
-    virtual const std::string to_string() {
+    virtual const std::string to_string() const {
         return std::to_string(this->value);
     };
 
@@ -152,19 +160,17 @@ void listvar(Persistent<OT, st>& var) {
     int64_t idx = var.getEarliestIndex();
     cout << "Number of Versions:\t" << nv << endl;
     while(nv--) {
-        /*
-    // by lambda
-    var.getByIndex(nv,
-      [&](OT& x) {
-        cout<<"["<<nv<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
-      });
-*/
+        // by lambda
+        var.getByIndex(idx,
+            [&](const OT& x) {
+                cout<< "[" << idx << "]\t" << x.to_string() << "\t//by lambda" << endl;
+            });
         // by copy
         cout << "[" << idx << "]\t" << var.getByIndex(idx)->to_string() << "\t//by copy" << endl;
         idx++;
     }
     // list minimum latest persisted version:
-    cout << "list minimum latest persisted version:" << getMinimumLatestPersistedVersion(typeid(ReplicatedT), 123, 321) << endl;
+    // cout << "list minimum latest persisted version:" << getMinimumLatestPersistedVersion(typeid(ReplicatedT), 123, 321) << endl;
 }
 
 static void nologsave(int value) {
@@ -244,37 +250,32 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "getbyidx") == 0) {
             int64_t nv = atol(argv[2]);
             // by lambda
-            /*
-      npx.getByIndex(nv,
-        [&](VariableBytes& x) {
-          cout<<"["<<nv<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
-        });
-*/
+            npx.template getByIndex(nv,
+                [&](const VariableBytes& x) {
+                    cout<<"["<<nv<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
+                });
             // by copy
             cout << "[" << nv << "]\t" << npx.getByIndex(nv)->to_string() << "\t//by copy" << endl;
         } else if(strcmp(argv[1], "getbyver") == 0) {
             int64_t ver = atoi(argv[2]);
-            /*
-      // by lambda
-      npx.get(ver,
-        [&](VariableBytes& x) {
-          cout<<"["<<(uint64_t)(ver>>64)<<"."<<(uint64_t)ver<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
-        });
-*/
+            // by lambda
+            npx.get(ver,
+                [&](const VariableBytes& x) {
+                    cout<<"["<<(uint64_t)ver<<"]\t"<<x.to_string()<<"\t//by lambda"<<endl;
+                });
             // by copy
             cout << "[" << ver << "]\t" << npx.get(ver)->to_string() << "\t//by copy" << endl;
         } else if(strcmp(argv[1], "getbytime") == 0) {
             HLC hlc;
             hlc.m_rtc_us = atol(argv[2]);
             hlc.m_logic = 0;
-            /*
-      npx.get(hlc,
-        [&](VariableBytes& x) {
-          cout<<"[("<<hlc.m_rtc_us<<",0)]\t"<<x.to_string()<<"\t//bylambda"<<endl;
-        });
-*/
-            cout << "["
-                 << "[(" << hlc.m_rtc_us << ",0)]\t" << npx.get(hlc)->to_string() << "\t//by copy" << endl;
+            // by lambda
+            npx.get(hlc,
+                [&](const VariableBytes& x) {
+                    cout<<"[("<<hlc.m_rtc_us<<",0)]\t"<<x.to_string()<<"\t//bylambda"<<endl;
+                });
+            // by copy
+            cout << "[(" << hlc.m_rtc_us << ",0)]\t" << npx.get(hlc)->to_string() << "\t//by copy" << endl;
         } else if(strcmp(argv[1], "trimbyidx") == 0) {
             int64_t nv = atol(argv[2]);
             npx.trim(nv);
@@ -429,11 +430,13 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "delta-getbyidx") == 0) {
             int64_t index = std::stoi(argv[2]);
             cout << "dx[idx:" << index << "] = " << dx.getByIndex(index)->value << endl;
-            cout << "dx.delta[idx:" << index << "] = " << *dx.template getDeltaByIndex<int>(index) << endl;
+            cout << "dx.delta[idx:" << index << "] = " << *dx.template getDeltaByIndex<int>(index) << "\t- by copy"<< endl;
+            dx.template getDeltaByIndex<int>(index, [index](const int& x){ cout << "dx.delta[idx:" << index << "] = " << x << "\t- by lambda" << std::endl;});
         } else if(strcmp(argv[1], "delta-getbyver") == 0) {
             int64_t version = std::stoi(argv[2]);
-            cout << "dx[idx:" << version << "] = " << dx[version]->value << endl;
-            cout << "dx.delta[idx:" << version << "] = " << *dx.template getDelta<int>(version) << endl;
+            cout << "dx[ver:" << version << "] = " << dx[version]->value << endl;
+            cout << "dx.delta[ver:" << version << "] = " << *dx.template getDelta<int>(version) << "\t- by copy" << endl;
+            dx.template getDelta<int>(version, [version](const int& x){ cout << "dx.delta[ver:" << version << "] = " << x << "\t- by lambda" << std::endl; return;});
         } else {
             cout << "unknown command: " << argv[1] << endl;
             printhelp();
