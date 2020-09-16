@@ -664,10 +664,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     header* h = (header*)data;
     int32_t index = h->index;
 
-    const uint32_t iterations = (h->num_nulls == 0) ? 1 : h->num_nulls;
-
-    // If I receive many nulls, repeat this cycle for every null    
-    for(uint32_t i = 0; i < iterations; i++, index++) {
+    uint32_t iteration = 0;
+    do {
 
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
@@ -731,7 +729,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
             }
         }
         sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
-    }
+        index++;
+    } while(h->num_nulls > 0 &&  ++iteration < h->num_nulls);
 }
 
 void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
@@ -862,7 +861,7 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
     int32_t current_committed_sst_index = committed_sst_index[subgroup_num];
     int32_t old_index = sst.index[member_index][subgroup_settings.index_field_index];
     
-    if(nulls_to_be_sent[subgroup_num] > 0) {        // Case with nulls
+    if(nulls_to_be_sent[subgroup_num] > 0) { // Case with nulls
      
         //PART 1 - first appl. messages + first null
         uint32_t to_be_sent = first_null_index[subgroup_num] - old_index;
