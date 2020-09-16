@@ -868,7 +868,10 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
         uint32_t to_be_sent = first_null_index[subgroup_num] - old_index;
         sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
 
-        //PART 2 - remaining appl. messages
+        //PART 2 - increment the counter including the nulls we avoided to send
+        sst.index[member_index][subgroup_settings.index_field_index]+= nulls_to_be_sent[subgroup_num]-1;
+
+        //PART 3 - remaining appl. messages
         to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
         if(to_be_sent > 0) {
             sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
