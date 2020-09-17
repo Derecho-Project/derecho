@@ -50,6 +50,7 @@ struct __attribute__((__packed__)) header {
     uint32_t header_size;
     int32_t index;
     uint64_t timestamp;
+    uint32_t num_nulls;
     bool cooked_send;
 };
 
@@ -289,6 +290,8 @@ private:
     std::vector<std::optional<RDMCMessage>> next_sends;
     std::map<uint32_t, bool> pending_sst_sends;
     std::vector<uint32_t> committed_sst_index;
+    std::vector<uint32_t> nulls_to_be_sent;
+    std::vector<int32_t> first_null_index;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
