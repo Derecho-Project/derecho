@@ -259,38 +259,6 @@ const std::string& Persistent<ObjectType, storageType>::getObjectName() {
 template <typename ObjectType,
           StorageType storageType>
 template <typename Func>
-auto Persistent<ObjectType, storageType>::get(
-        const Func& fun,
-        mutils::DeserializationManager* dm) {
-    return this->getByIndex(-1L, fun, dm);
-}
-
-template <typename ObjectType,
-         StorageType storageType>
-template <typename DeltaType, typename Func>
-std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
-Persistent<ObjectType, storageType>::getDelta(const Func& fun, mutils::DeserializationManager* dm) {
-    return this->template getDeltaByIndex<DeltaType,Func>(-1L, fun, dm);
-}
-
-template <typename ObjectType,
-          StorageType storageType>
-std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
-        mutils::DeserializationManager* dm) {
-    return this->getByIndex(-1L, dm);
-}
-
-template <typename ObjectType,
-          StorageType storageType>
-template <typename DeltaType>
-std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>,ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDelta(
-        mutils::DeserializationManager* dm) {
-    return this->template getDeltaByIndex<DeltaType>(-1L, dm);
-}
-
-template <typename ObjectType,
-          StorageType storageType>
-template <typename Func>
 auto Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
         const Func& fun,
@@ -348,7 +316,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
-        const int64_t& ver,
+        const version_t ver,
         const Func& fun,
         mutils::DeserializationManager* dm) {
     char* pdat = (char*)this->m_pLog->getEntry(ver);
@@ -369,7 +337,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
-Persistent<ObjectType, storageType>::getDelta(const int64_t& ver, const Func& fun, mutils::DeserializationManager* dm) {
+Persistent<ObjectType, storageType>::getDelta(const version_t ver, const Func& fun, mutils::DeserializationManager* dm) {
     char* pdat = (char*)this->m_pLog->getEntry(ver,true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
@@ -380,7 +348,7 @@ Persistent<ObjectType, storageType>::getDelta(const int64_t& ver, const Func& fu
 template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
-        const int64_t& ver,
+        const version_t ver,
         mutils::DeserializationManager* dm) {
     int64_t idx = this->m_pLog->getVersionIndex(ver);
     if(idx == INVALID_INDEX) {
@@ -400,7 +368,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDelta(
-        const int64_t& ver,
+        const version_t ver,
         mutils::DeserializationManager* dm) {
     int64_t idx = this->m_pLog->getVersionIndex(ver,true);
     if(idx == INVALID_INDEX) {
@@ -421,7 +389,7 @@ void Persistent<ObjectType, storageType>::trim(const TKey& k) {
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::truncate(const int64_t& ver) {
+void Persistent<ObjectType, storageType>::truncate(const version_t ver) {
     dbg_default_trace("truncate.");
     this->m_pLog->truncate(ver);
     dbg_default_trace("truncate...done");
@@ -496,7 +464,7 @@ int64_t Persistent<ObjectType, storageType>::getEarliestIndex() {
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getEarliestVersion() {
+version_t Persistent<ObjectType, storageType>::getEarliestVersion() {
     return this->m_pLog->getEarliestVersion();
 }
 
@@ -508,25 +476,25 @@ int64_t Persistent<ObjectType, storageType>::getLatestIndex() {
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getLatestVersion() {
+version_t Persistent<ObjectType, storageType>::getLatestVersion() {
     return this->m_pLog->getLatestVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
+version_t Persistent<ObjectType, storageType>::getLastPersistedVersion() {
     return this->m_pLog->getLastPersistedVersion();
 }
 
 template <typename ObjectType,
           StorageType storageType>
-const int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) {
+int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) {
     return this->m_pLog->getHLCIndex(hlc);
 }
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver, const HLC& mhlc) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t ver, const HLC& mhlc) {
     dbg_default_trace("append to log with ver({}),hlc({},{})", ver, mhlc.m_rtc_us, mhlc.m_logic);
     if
         constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
@@ -547,7 +515,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ver) {
+void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t ver) {
     HLC mhlc;  // generate a default timestamp for it.
 #if defined(_PERFORMANCE_DEBUG)
     struct timespec t1, t2;
@@ -564,7 +532,7 @@ void Persistent<ObjectType, storageType>::set(ObjectType& v, const version_t& ve
 
 template <typename ObjectType,
           StorageType storageType>
-void Persistent<ObjectType, storageType>::version(const version_t& ver) {
+void Persistent<ObjectType, storageType>::version(const version_t ver) {
     dbg_default_trace("In Persistent<T>: make version {}.", ver);
     this->set(*this->m_pWrappedObject, ver);
 }

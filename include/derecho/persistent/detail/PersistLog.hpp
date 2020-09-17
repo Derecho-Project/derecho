@@ -150,13 +150,13 @@ public:
 
     /**
      * Trim the log till version, inclusively.
-     * @param ver - all log entry before ver will be trimmed.
+     * @param ver - all log entries before ver will be trimmed.
      */
     virtual void trim(const version_t& ver) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
-     * @param hlc - all log entry before hlc will be trimmed.
+     * @param hlc - all log entries before hlc will be trimmed.
      */
     virtual void trim(const HLC& hlc) = 0;
 
@@ -194,7 +194,7 @@ public:
 
     /**
      * Truncate the log strictly newer than 'ver'.
-     * @param ver - all log entry strict after ver will be truncated.
+     * @param ver - all log entry strictly after ver will be truncated.
      */
     virtual void truncate(const version_t& ver) = 0;
 };

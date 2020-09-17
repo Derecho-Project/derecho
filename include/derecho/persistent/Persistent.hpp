@@ -339,12 +339,16 @@ protected:
     inline void unregister_callbacks();
 
 public:
-    /** constructor 1 is for building a persistent<T> locally, load/create a
+    /**
+     * Persistent(std::unqieu_ptr<ObjectType>&,const char*,PersistentRegistry*,mutils::DeserializationManager)
+     *
+     * constructor 1 is for building a persistent<T> locally, load/create a
      * log and register itself to a persistent registry.
-     * @param object_factory A factory to create an empty Object.
-     * @param object_name This name is used for persistent data in file.
-     * @param persistent_registry A normal pointer to the registry.
-     * @param dm The deserialization manager for deserializing local log entries.
+     *
+     * @param object_factory        A factory to create an empty Object.
+     * @param object_name           This name is used for persistent data in file.
+     * @param persistent_registry   A normal pointer to the registry.
+     * @param dm                    The deserialization manager for deserializing local log entries.
      */
     Persistent(
         const std::function<std::unique_ptr<ObjectType>(void)>& object_factory,
@@ -352,19 +356,28 @@ public:
         PersistentRegistry* persistent_registry = nullptr,
         mutils::DeserializationManager dm = {{}});
 
-    /** constructor 2 is move constructor. It "steals" the resource from
+    /**
+     * Persistent(Persistent&&)
+     *
+     * constructor 2 is move constructor. It "steals" the resource from
      * another object.
+     *
      * @param other The other object.
      */
     Persistent(Persistent&& other);
 
-    /** constructor 3 is for deserialization. It builds a Persistent<T> from
+    /** 
+     * Persistent(const char*,std::unqieu_ptr<ObjectType>&,const char*,
+     *            PersistentRegistry*,mutils::DeserializationManager)
+     *
+     * constructor 3 is for deserialization. It builds a Persistent<T> from
      * the object name, a unique_ptr to the wrapped object, a unique_ptr to
      * the log.
-     * @param object_name The name is used for persistent data in file.
-     * @param wrapped_obj_ptr A unique pointer to the wrapped object.
-     * @param log_ptr A unique pointer to the log.
-     * @param dm The deserialization manager for deserializing local log entries.
+     *
+     * @param object_name       The name is used for persistent data in file.
+     * @param wrapped_obj_ptr   A unique pointer to the wrapped object.
+     * @param log_ptr           A unique pointer to the log.
+     * @param dm                The deserialization manager for deserializing local log entries.
      */
     Persistent(
         const char* object_name,
@@ -373,113 +386,184 @@ public:
         PersistentRegistry* persistent_registry = nullptr,
         mutils::DeserializationManager dm = {{}});
 
-    /** constructor 4, the default copy constructor, is disabled
+    /**
+     * Persistent(const Persistent&)
+     *
+     * constructor 4, the default copy constructor, is disabled
      */
     Persistent(const Persistent&) = delete;
 
-    /** destructor: release the resources
+    /**
+     * ~Persistent()
+     *
+     * destructor: release the resources
      */
     virtual ~Persistent() noexcept(true);
 
     /**
+     * *()
+     *
      * * operator to get the memory version
-     * @return ObjectType&
+     *
+     * @return a reference to the current ObjectType object.
      */
     ObjectType& operator*();
 
     /**
+     * -> ()
+     *
      * overload the '->' operator to access the wrapped object
+     *
+     * @return a pointer to the current ObjectType object.
      */
     ObjectType* operator->();
 
     /**
+     * getConstRef()
+     *
      * get a const reference to the wrapped object
-     * @return const ObjectType&
+     *
+     * @return a const reference to the current ObjectType object.
      */
     const ObjectType& getConstRef() const;
 
     /**
+     * getObjectName()
+     *
      * get object name
+     *
+     * @return a const reference to the object name.
      */
     const std::string& getObjectName();
 
     /**
-     * get the latest Value of T. The user lambda will be fed with the latest object
-     * zerocopy:this object will not live once it returns.
-     * return value is decided by user lambda
+     * getByIndex(int64_t,const Func&,mutils::DeserializationManager*)
+     *
+     * Get a version of Value T by log index. The user lambda will be fed with the given object of type
+     * (const ObjectType&). Please note that due to zero copy design, this object may not be accessible anymore after
+     * it returns.
+     *
+     * A note for ObjectType implementing IDeltaSupport<> interface: a history state will be reconstructed from the very
+     * first log entry, making it extremely inefficient. @TODO: use cached checkpoint to accelerate it.
+     *
+     * @param idx   index
+     * @param fun   the user function to process a const ObjectType& object
+     * @param dm    the deserialization manager
+     *
+     * @return  Returns whatever fun returns.
+     *
+     * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t) if the idx is not found.
      */
-    template <typename Func>
-    auto get(
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
+     template <typename Func>
+     auto getByIndex(
+         int64_t idx,
+         const Func& fun,
+         mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get the latest Value of T, returns a unique pointer to the object
-     */
-    std::unique_ptr<ObjectType> get(mutils::DeserializationManager* dm = nullptr);
-
-    /**
-     * get a version of Value T. the user lambda will be fed with the given object
-     * zerocopy:this object will not live once it returns.
-     * return value is decided by user lambda
-     */
-    template <typename Func>
-    auto getByIndex(
-        int64_t idx,
-        const Func& fun,
-        mutils::DeserializationManager* dm = nullptr);
-
-    /**
-     * get a version of value T. returns a unique pointer to the object
+     * getByIndex(int64_t,mutils::DeserializationManager)
+     *
+     * Get a version of value T by log index. Returns a copy of the object.
+     *
+     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     *
+     * @param idx   index
+     * @param dm    the deserialization manager
+     *
+     * @return Return a copy of the object held by a unique pointer. 
+     *
+     * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t), if the idx is not found.
      */
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
             mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get a version of Value T, specified by version. the user lambda will be fed with
-     * an object of T.
-     * zerocopy: this object will not live once it returns.
-     * return value is decided by the user lambda.
+     * get(const version_t,const Func&,mutils::DeserializationManager*)
+     *
+     * Get a version of Value T by log version. The user lambda will be fed with the given object of type
+     * (const ObjectType&). Please note that due to zero copy design, this object may not be accessible anymore after
+     * it returns.
+     *
+     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     *
+     * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
+     *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
+     *              'fun'; if the latest state before 'ver' is empty, it throws PERSIST_EXP_INV_VERSION.
+     * @param fun   the user function to process a const ObjectType& object
+     * @param dm    the deserialization manager
+     *
+     * @return Returns whatever fun returns.
+     *
+     * @throws PERSIST_EXP_INV_VERSION, when the state at 'ver' has no state.
      */
     template <typename Func>
     auto get(
-        const int64_t& ver,
+        const version_t ver,
         const Func& fun,
         mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get a version of value T. specified version.
-     * return a deserialized copy for the variable.
+     * get(const version_t,mutils::DeserializationManager*)
+     *
+     * Get a version of value T. specified version.
+     *
+     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     *
+     * @param ver   if 'ver', the specified version, matches a log entry, the state corresponding to that entry will be
+     *              send to 'fun'; if 'ver' does not match a log entry, the latest state before 'ver' will be applied to
+     *              'fun'; if the latest state before 'ver' is empty, it throws PERSIST_EXP_INV_VERSION.
+     * @param dm    the deserialization manager
+     *
+     * @return a unique pointer to the deserialized copy of ObjectType.
+     *
+     * @throws PERSIST_EXP_INV_VERSION, when the state at 'ver' has no state.
      */
     std::unique_ptr<ObjectType> get(
-        const int64_t& ver,
+        const version_t ver,
         mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get the latest delta Value of T. The user lambda will be fed with the latest object
-     * zerocopy:this object will not live once it returns.
-     * return value is decided by user lambda
+     * getDeltaByIndex(int64_t,const Func&,mutils::DeserializationManager*)
+     *
+     * Get a delta of ObjectType at a given log index. The user lambda will be fed with the given object of type
+     * (const DeltaType&). Please note that due to zero copy design, this object may not be accessible anymore after
+     * it returns.
+     *
+     * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
+     * 
+     * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
+     * @tparam Func         User-specified function type, which is usually deduced.
+     *
+     * @param idx   index
+     * @param fun   the user function to process a const DeltaType& object
+     * @param dm    the deserialization manager
+     *
+     * @return Returns whatever fun returns.
+     *
+     * @throws PERSIST_EXP_INV_INDEX, when the index 'idx' does not exists.
      */
     template <typename DeltaType, typename Func>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDelta(const Func& fun, mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> 
+    getDeltaByIndex(int64_t idx, 
+                    const Func& fun, 
+                    mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get the latest delta Value of T, returns a unique pointer to the object
-     */
-    template <typename DeltaType>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDelta(mutils::DeserializationManager* dm = nullptr);
-
-    /**
-     * get the delta version of Value T. the user lambda will be fed with the given object
-     * zerocopy:this object will not live once it returns.
-     * return value is decided by user lambda
-     */
-    template <typename DeltaType, typename Func>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm = nullptr);
-
-    /**
-     * get delta version of value T. returns a unique pointer to the object
+     * getDeltaByIndex(int64_t,mutils::DeserializationManager*)
+     *
+     * Get a delta of ObjectType at a given log index. A copy of the delta will be returned.
+     *
+     * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
+     *
+     * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
+     *
+     * @param idx   index
+     * @param dm    the deserialization manager
+     *
+     * @return Returns a unique pointer to the copied DeltaType object.
+     *
+     * @throws PERSIST_EXP_INV_INDEX, when the index 'idx' does not exists.
      */
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDeltaByIndex(
@@ -487,40 +571,91 @@ public:
             mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get a delta version of Value T, specified by version. the user lambda will be fed with
-     * an object of T.
-     * zerocopy: this object will not live once it returns.
-     * return value is decided by the user lambda.
+     * getDelta(const version_t,const Func&,mutils::DeserializationManager*)
+     *
+     * Get a delta of ObjectType at a given version. The user lambda will be fed with the given object of type
+     * (const DeltaType&). Please note that due to zero copy design, this object may not be accessible anymore after
+     * it returns.
+     *
+     * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
+     * 
+     * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
+     * @tparam Func         User-specified function type, which is usually deduced.
+     *
+     * @param ver   version
+     * @param fun   the user function to process a const DeltaType& object
+     * @param dm    the deserialization manager
+     *
+     * @return Returns whatever fun returns.
+     *
+     * @throws PERSIST_EXP_INV_VERSION, when version 'ver' is not found in the log.
      */
     template <typename DeltaType, typename Func>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>> getDelta(const int64_t& ver, const Func& fun, mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
+    getDelta(const version_t ver,
+             const Func& fun,
+             mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get a delta version of value T. specified version.
-     * return a deserialized copy for the variable.
+     * getDelta(const version_t,mutils::DeserializationManager*)
+     *
+     * Get a delta of ObjectType at a given version. A copy of the delta will be returned.
+     *
+     * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
+     * 
+     * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
+     *
+     * @param ver   version
+     * @param dm    the deserialization manager
+     *
+     * @return Returns a unique pointer to the copied DeltaType object.
+     *
+     * @throws PERSIST_EXP_INV_VERSION, when version 'ver' is not found in the log.
      */
     template <typename DeltaType>
-    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDelta(
-        const int64_t& ver,
-        mutils::DeserializationManager* dm = nullptr);
+    std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
+    getDelta(const version_t ver,
+             mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * trim by version or index
+     * trim(TKey& k)
+     *
+     * Trim by version or HLC clock.
+     *
+     * @tparam TKey TKey can be either version_t or HLC.
+     *
+     * @param k if k is of type version_t, all log entries inclusively before ver will be trimmed; if k is of type HLC,
+     * all log entries inclusively before hlc will be trimmed.
      */
     template <typename TKey>
     void trim(const TKey& k);
 
     /**
-     * truncate the log
+     * truncate(const version_t)
+     *
+     * Truncate the log by version.
+     *
      * @param ver: all versions strictly newer than 'ver' will be truncated.
      */
-    void truncate(const int64_t& ver);
+    void truncate(const version_t ver);
 
     /**
-     * get a version of Value T, specified by HLC clock. the user lambda will be fed with
-     * an object of T.
-     * zerocopy: this object will not live once it returns.
-     * return value is decided by the user lambda.
+     * get(const HLC&,const Func&,mutils::DeserializationManager*)
+     *
+     * Get a version of ObjectType, specified by HLC clock. the user function will be fed with an object of type 'const
+     * ObjectType&'. Due to the zero-copy design, this object might not be accessible after get() returns.
+     *
+     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     *
+     * @tparam Func         User-specified function type, which is usually deduced.
+     *
+     * @param hlc   the HLC timestamp
+     * @param fun   the user function to process a const ObjectType& object
+     * @param dm    the deserialization manager
+     *
+     * @return Returns whatever fun returns.
+     *
+     * @throws PERSIST_EXP_BEYOND_GSF if hlc is beyond the global stability frontier.
      */
     template <typename Func>
     auto get(
@@ -529,83 +664,158 @@ public:
         mutils::DeserializationManager* dm = nullptr);
 
     /**
-     * get a version of value T. specified by HLC clock.
+     * get(const HLC&,mutils::DeserializationManager*)
+     *
+     * Get a version of ObjectType, specified by HLC clock. A copy of ObjectType object will be returned.
+     *
+     * @TODO: see getByIndex(int64_t,const Func&,mutils::DeserializationManager*) for more on the performance.
+     *
+     * @param hlc   the HLC timestamp
+     * @param dm    the deserialization manager
+     *
+     * @return a unique pointer to the copied ObjectType object.
+     *
+     * @throws PERSIST_EXP_BEYOND_GSF if hlc is beyond the global stability frontier.
      */
     std::unique_ptr<ObjectType> get(
             const HLC& hlc,
             mutils::DeserializationManager* dm = nullptr);
 
     /**
+     * [](const version_t)
+     *
      * syntax sugar: get a specified version of T without DSM
+     *
+     * @param ver   version
+     *
+     * @return a unique_pointer to the copied ObjectType object.
      */
-    std::unique_ptr<ObjectType> operator[](const int64_t ver) {
+    std::unique_ptr<ObjectType> operator[](const version_t ver) {
         return this->get(ver);
     }
 
     /**
+     * [](const HLC& hlc)
+     *
      * syntax sugar: get a specified version of T without DSM
+     *
+     * @param hlc   HLC timestamp
+     *
+     * @return a unique_pointer to the copied ObjectType object.
      */
     std::unique_ptr<ObjectType> operator[](const HLC& hlc) {
         return this->get(hlc);
     }
 
     /**
-     * get the number of versions excluding trimmed ones.
+     * getNumOfVersions()
+     *
+     * Get the number of versions excluding trimmed/truncated ones.
+     * 
+     * @return the number of versions.
      */
     virtual int64_t getNumOfVersions();
 
     /**
-     * get the earliest index excluding trimmed ones.
+     * getEarliestIndex()
+     *
+     * Get the earliest index excluding trimmed ones.
+     *
+     * @return the earliest index.
      */
     virtual int64_t getEarliestIndex();
 
     /**
-     * get the earliest  version excluding trimmed ones.
+     * getEarlisestVersion()
+     *
+     * Get the earliest  version excluding trimmed ones.
+     *
+     * @return the earliest version.
      */
-    virtual int64_t getEarliestVersion();
+    virtual version_t getEarliestVersion();
 
     /**
-     * get the latest index excluding truncated ones.
+     * getLatestIndex()
+     *
+     * Get the latest index excluding truncated ones.
+     *
+     * @return the latest index.
      */
     virtual int64_t getLatestIndex();
 
     /**
-     * get the lastest version excluding truncated ones.
+     * getLatestVersion()
+     *
+     * Get the lastest version excluding truncated ones.
+     *
+     * @return the latest version.
      */
-    virtual int64_t getLatestVersion();
+    virtual version_t getLatestVersion();
 
     /**
-     * get the last persisted version.
+     * getLastPersistedVersion()
+     *
+     * Get the last persisted version.
+     *
+     * @return the last persisted version.
      */
-    virtual const int64_t getLastPersistedVersion();
+    virtual version_t getLastPersistedVersion();
 
     /**
-     * get latest version before time.
+     * getIndexAtTime
+     *
+     * Get the latest index inclusively before time.
      */
-    virtual const int64_t getIndexAtTime(const HLC& hlc);
+    virtual int64_t getIndexAtTime(const HLC& hlc);
 
     /**
-     * make a version with a version number and mhlc clock
+     * set(ObjectType&,const version_t,const HLC&)
+     *
+     * Make a version with a version number and mhlc clock
+     *
+     * @param v     the value to be set.
+     * @param ver   the version of this value, if ver is inclusively lower than the latest version in the log, set()
+     *              will throw an exception.
+     * @param mhlc  the timestamp for this value, normally assigned by callbacks in PersistentRegistry.
+     *
+     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
      */
-    virtual void set(ObjectType& v, const version_t& ver, const HLC& mhlc);
+    virtual void set(ObjectType& v, const version_t ver, const HLC& mhlc);
 
     /**
-     * make a version with only a version number
+     * set(ObjectType&,const version_t)
+     *
+     * Make a version with version 'ver' and use current clock time for this log entry.
+     *
+     * @param v     the value to be set.
+     * @param ver   the version of this value, if ver is inclusively lower than the latest version in the log, set()
+     *              will throw an exception.
+     *
+     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
      */
-    virtual void set(ObjectType& v, const version_t& ver);
+    virtual void set(ObjectType& v, const version_t ver);
 
     /**
-     * make a version with only a version number, using the current state.
+     * version(const version_t)
+     *
+     * Make a version with a version number, using the current state as value.
+     *
+     * @param ver   the version of this value, if ver is inclusively lower than the latest version in the log, set()
+     *              will throw an exception.
+     *
+     * @throws  PERSIST_EXP_INV_VERSION when ver is inclusively lower than the latest version in the log.
      */
-    virtual void version(const version_t& ver);
+    virtual void version(const version_t ver);
 
-    /** persist till version
-     * @param ver version number
-     * @return the given version to be persisted.
+    /** 
+     * persist()
+     *
+     * Persist as many log entries as possible.
+     *
+     * @return the given version has been persisted.
      */
-    virtual const int64_t persist();
+    virtual const version_t persist();
 
-public:
     // wrapped objected
     std::unique_ptr<ObjectType> m_pWrappedObject;
 
