@@ -165,18 +165,22 @@ int main(int argc, char* argv[]) {
     }
     int64_t send_nanosec = duration_cast<nanoseconds>(send_complete_time - begin_time).count();
     double send_millisec = static_cast<double>(send_nanosec) / 1000000;
-    double send_thp_gbps = (static_cast<double>(num_msgs) * msg_size * 8) / send_nanosec;
-    double send_thp_ops = (static_cast<double>(num_msgs) * 1000000000) / send_nanosec;
-    std::cout << "(send)timespan: " << send_millisec << " milliseconds." << std::endl;
-    std::cout << "(send)throughput: " << send_thp_gbps << "Gbit/s." << std::endl;
-    std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
-
     int64_t persist_nanosec = duration_cast<nanoseconds>(persist_complete_time - begin_time).count();
     double persist_millisec = static_cast<double>(persist_nanosec) / 1000000;
-    double thp_gbps = (static_cast<double>(num_msgs) * msg_size * 8) / persist_nanosec;
-    double thp_ops = (static_cast<double>(num_msgs) * 1000000000) / persist_nanosec;
+
+    //Calculate bandwidth
+    //Bytes / nanosecond just happens to be equivalent to GigaBytes / second (in "decimal" GB)
+    //Note that total_num_messages already incorporates multiplying by the number of senders
+    double send_thp_gbps = (static_cast<double>(total_num_messages) * msg_size) / send_nanosec;
+    double send_thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / send_nanosec;
+    std::cout << "(send)timespan: " << send_millisec << " milliseconds." << std::endl;
+    std::cout << "(send)throughput: " << send_thp_gbps << "GB/s." << std::endl;
+    std::cout << "(send)throughput: " << send_thp_ops << "ops." << std::endl;
+
+    double thp_gbps = (static_cast<double>(total_num_messages) * msg_size) / persist_nanosec;
+    double thp_ops = (static_cast<double>(total_num_messages) * 1000000000) / persist_nanosec;
     std::cout << "(pers)timespan: " << persist_millisec << " millisecond." << std::endl;
-    std::cout << "(pers)throughput: " << thp_gbps << "Gbit/s." << std::endl;
+    std::cout << "(pers)throughput: " << thp_gbps << "GB/s." << std::endl;
     std::cout << "(pers)throughput: " << thp_ops << "ops." << std::endl;
     std::cout << std::flush;
 
