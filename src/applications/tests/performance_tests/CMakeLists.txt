@@ -13,6 +13,7 @@ target_link_libraries(bandwidth_test derecho)
 add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
 target_link_libraries(latency_test derecho)
 
+<<<<<<< HEAD
 # single_active_subgroup_test
 add_executable(single_active_subgroup_test single_active_subgroup_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(single_active_subgroup_test derecho)
@@ -29,10 +30,16 @@ target_link_libraries(sender_delay_test derecho)
 add_executable(deliver_predicate_delay deliver_predicate_delay.cpp aggregate_bandwidth.cpp)
 target_link_libraries(deliver_predicate_delay derecho)
 
+=======
+>>>>>>> master
 # persistent bandwidth
 add_executable(persistent_bw_test persistent_bw_test.cpp aggregate_bandwidth.cpp partial_senders_allocator.cpp bytes_object.cpp)
 target_link_libraries(persistent_bw_test derecho)
 
 # persistent latency
 add_executable(persistent_latency_test persistent_latency_test.cpp aggregate_latency.cpp partial_senders_allocator.cpp bytes_object.cpp)
+<<<<<<< HEAD
 target_link_libraries(persistent_latency_test derecho)
+=======
+target_link_libraries(persistent_latency_test derecho)
+>>>>>>> master
