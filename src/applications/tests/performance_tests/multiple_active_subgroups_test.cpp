@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
 
     // join the group
     Group<RawObject> group(CallbackSet{stability_callback},
-                           raw_groups, nullptr, std::vector<view_upcall_t>{},
+                           raw_groups, {}, std::vector<view_upcall_t>{},
                            &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
