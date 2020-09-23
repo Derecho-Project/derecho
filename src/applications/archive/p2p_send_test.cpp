@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     auto foo_factory = [](PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<Foo>(-1); };
 
     derecho::Group<Foo> group(
-            {}, subgroup_info, nullptr,
+            {}, subgroup_info, {},
             std::vector<derecho::view_upcall_t>{},
             foo_factory);
 

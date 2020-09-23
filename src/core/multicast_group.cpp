@@ -1249,7 +1249,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
         std::string exp_msg("Can't send messages of size larger than the maximum message size which is equal to ");
-        exp_msg += subgroup_settings.profile.max_msg_size;
+        exp_msg += std::to_string(subgroup_settings.profile.max_msg_size);
         throw derecho_exception(exp_msg);
     }
 

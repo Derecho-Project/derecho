@@ -231,7 +231,7 @@ int main(int argc, char* argv[]) {
         main_cv.notify_all();
     };
 
-    Group<State> group({}, subgroup_info, nullptr, {announce_view_changed}, state_subgroup_factory);
+    Group<State> group({}, subgroup_info, {}, {announce_view_changed}, state_subgroup_factory);
 
     auto group_members = group.get_members();
     uint32_t my_rank = -1;

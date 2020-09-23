@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
         cout << endl;
     };
 
-    Group<test1_str> managed_group({stability_callback}, subgroup_info, nullptr,
+    Group<test1_str> managed_group({stability_callback}, subgroup_info, {},
                                    {new_view_callback},
                                    [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<test1_str>(); });
 
