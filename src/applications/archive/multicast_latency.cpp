@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
             }
             clock_gettime(CLOCK_REALTIME, &send_times[i]);
-            g.send();
+            g.send(g.commit_send());
         }
     }
     while(!done) {

@@ -16,7 +16,7 @@ template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
-   // the number of messages acknowledged by all the nodes
+    // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
     const uint32_t my_row;
@@ -73,7 +73,7 @@ public:
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
                     uint32_t slots_offset = 0,
-                     int32_t index_field_index = 0)
+                    int32_t index_field_index = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
@@ -139,37 +139,95 @@ public:
         }
     }
 
-    void send(uint32_t ready_to_be_sent = 1, bool null_to_be_sent = false, size_t header_size = 0) {        
-        uint32_t first_slot = (sst->index[my_row][index_field_index]+1) % window_size;
-        sst->index[my_row][index_field_index] += ready_to_be_sent;
-	    
-        //slots are contiguous
-        //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
-        if(first_slot + ready_to_be_sent <= window_size) {
-            uint size;
-            if(null_to_be_sent) {
-                size = (max_msg_size * (ready_to_be_sent-1)) + header_size;
+    // In ORDERED MODE, we should hold the lock on msg_state_mtx
+    uint32_t commit_send(uint32_t ready_to_be_sent = 1) {
+        return sst->index[my_row][index_field_index] += ready_to_be_sent;
+    }
+
+    // This function invocation should be always preceded by the commit_send,
+    // that returns the first parameter (committed index) to be used here.
+    void send(uint32_t committed_index, uint32_t ready_to_be_sent = 1, uint32_t nulls_to_be_sent = 0, int32_t first_null_index = -1, size_t header_size = 0) {
+        uint32_t old_index = committed_index - ready_to_be_sent;
+        uint32_t first_slot = (old_index + 1) % window_size;
+
+        if(nulls_to_be_sent == 0) {  // NO NULLS: Regular send
+            //slots are contiguous
+            //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
+            if(first_slot + ready_to_be_sent <= window_size) {
+                sst->put(
+                        (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                        max_msg_size * ready_to_be_sent);
             } else {
-                size = max_msg_size * ready_to_be_sent;
+                //slots are not contiguous
+                //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
+                sst->put(
+                        (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                        max_msg_size * (window_size - first_slot));
+                sst->put(
+                        (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                        max_msg_size * (first_slot + ready_to_be_sent - window_size));
             }
-            sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
-                            size);
-        } else { //slots are not contiguous
-                 //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 4 ][ 1 ].
-            sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+        } else {  // NULLS: send only the header of the first null, skip the others
+            assert(first_null_index >= 0);
+            // Here we send three batches of messages:
+            // 1) application messages
+            // 2) nulls, of which we actually send only the header of the first
+            // 3) application messages (optional)
+            // Each of the batches can wrap around the ring buffer, so we should consider all these cases.
+
+            uint32_t first_message_batch_size = first_null_index - 1 - old_index;
+            uint32_t last_message_batch_size = ready_to_be_sent - nulls_to_be_sent - first_message_batch_size;
+                       
+            uint32_t first_null_slot = first_null_index % window_size;
+            uint32_t last_batch_first_slot = (first_null_index + nulls_to_be_sent) % window_size;
+            uint32_t last_batch_last_slot = committed_index % window_size;
+
+            if(first_null_slot >= first_slot) {  // (1) and (2) have all contiguous messages
+                //Send (1) and (2)
+                sst->put(
+                        (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                        (max_msg_size * first_message_batch_size) + header_size);
+                if(last_message_batch_size > 0) {
+                    if(last_batch_first_slot <= last_batch_last_slot) {  // (3) has contiguous messages
+                        sst->put(
+                                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * last_batch_first_slot]) - sst->getBaseAddress(),
+                                max_msg_size * last_message_batch_size);
+                    } else {  // (3) has wrapping messages
+                        sst->put(
+                                (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * last_batch_first_slot]) - sst->getBaseAddress(),
+                                max_msg_size * (window_size - last_batch_first_slot));
+                        sst->put(
+                                (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                                max_msg_size * (last_batch_first_slot + last_message_batch_size - window_size));
+                    }
+                }
+            } else {                        // (1) and (2) wrap
+                if(first_null_slot == 0) {  // (1) has contiguous messages, (2) wraps
+                    //Send (1)
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * first_message_batch_size);
+                    //Send (2)
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                            header_size);
+                } else {  // (1) wraps
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
                             max_msg_size * (window_size - first_slot));
-            uint remaining_size;
-            if(null_to_be_sent) {
-                remaining_size = (max_msg_size * (first_slot + (ready_to_be_sent - 1) - window_size)) + header_size;
-            } else {
-                remaining_size = max_msg_size * (first_slot + ready_to_be_sent - window_size);
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
+                            (max_msg_size * (first_slot + first_message_batch_size - window_size)) + header_size);
+                }
+                if(last_message_batch_size > 0) {
+                    // (3) has contiguous messages
+                    sst->put(
+                            (char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * last_batch_first_slot]) - sst->getBaseAddress(),
+                            max_msg_size * last_message_batch_size);
+                }
             }
-            sst->put(
-                (char*)std::addressof(sst->slots[0][slots_offset]) - sst->getBaseAddress(),
-                            remaining_size);
         }
+        // Push the index
         sst->put(sst->index, index_field_index);
     }
 

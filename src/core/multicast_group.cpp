@@ -868,33 +868,18 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
-    int32_t current_committed_sst_index, old_index;
+    int32_t current_committed_index, to_be_sent;
     {
         std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-        current_committed_sst_index = committed_sst_index[subgroup_num];
-        old_index = sst.index[member_index][subgroup_settings.index_field_index];
+        to_be_sent = committed_sst_index[subgroup_num] - sst.index[member_index][subgroup_settings.index_field_index];
+        if(to_be_sent > 0) {
+            current_committed_index = sst_multicast_group_ptrs[subgroup_num]->commit_send(to_be_sent);
+        }
     }
-    if(nulls_to_be_sent[subgroup_num] > 0) {  // Case with nulls
-
-        //PART 1 - first appl. messages + first null
-        uint32_t to_be_sent = first_null_index[subgroup_num] - old_index;
-        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, true, sizeof(header));
-
-        //PART 2 - increment the counter including the nulls we avoided to send
-        sst.index[member_index][subgroup_settings.index_field_index] += nulls_to_be_sent[subgroup_num] - 1;
-
-        //PART 3 - remaining appl. messages
-        to_be_sent = current_committed_sst_index - sst.index[member_index][subgroup_settings.index_field_index];
-        if(to_be_sent > 0) {
-            sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
-        }
-
-    } else {
-        // Regular case
-        uint32_t to_be_sent = current_committed_sst_index - old_index;
-        if(to_be_sent > 0) {
-            sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent);
-        }
+    // Here lock is released
+    if(to_be_sent > 0) {
+        sst_multicast_group_ptrs[subgroup_num]->send(current_committed_index, to_be_sent, nulls_to_be_sent[subgroup_num], 
+                                                                              first_null_index[subgroup_num], sizeof(header));
     }
 }
 
