@@ -139,7 +139,7 @@ public:
         }
     }
 
-    void send(uint32_t ready_to_be_sent = 1, uint32_t nulls_to_be_sent = 0, int32_t first_null_index = -1, size_t header_size = 0) {
+    void send(uint32_t ready_to_be_sent = 1, uint32_t num_nulls_queued = 0, int32_t first_null_index = -1, size_t header_size = 0) {
         
         // Save the old index
         uint32_t old_index = sst->index[my_row][index_offset];
@@ -149,7 +149,7 @@ public:
         //Go ahead with the send logic
         uint32_t first_slot = (old_index + 1) % window_size;
 
-        if(nulls_to_be_sent == 0) {  // NO NULLS: Regular send
+        if(num_nulls_queued == 0) {  // NO NULLS: Regular send
             //slots are contiguous
             //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
             if(first_slot + ready_to_be_sent <= window_size) {
@@ -175,10 +175,10 @@ public:
             // Each of the batches can wrap around the ring buffer, so we should consider all these cases.
 
             uint32_t first_message_batch_size = first_null_index - 1 - old_index;
-            uint32_t last_message_batch_size = ready_to_be_sent - nulls_to_be_sent - first_message_batch_size;
+            uint32_t last_message_batch_size = ready_to_be_sent - num_nulls_queued - first_message_batch_size;
                        
             uint32_t first_null_slot = first_null_index % window_size;
-            uint32_t last_batch_first_slot = (first_null_index + nulls_to_be_sent) % window_size;
+            uint32_t last_batch_first_slot = (first_null_index + num_nulls_queued) % window_size;
             uint32_t last_batch_last_slot = committed_index % window_size;
 
             if(first_null_slot >= first_slot) {  // (1) and (2) have all contiguous messages

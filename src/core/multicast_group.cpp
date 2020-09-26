@@ -46,7 +46,7 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-          nulls_to_be_sent(total_num_subgroups, 0),
+          num_nulls_queued(total_num_subgroups, 0),
           first_null_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
@@ -110,7 +110,7 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-          nulls_to_be_sent(total_num_subgroups, 0),
+          num_nulls_queued(total_num_subgroups, 0),
           first_null_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
@@ -740,7 +740,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     DerechoParams profile = subgroup_settings.profile;
     const uint64_t slot_width = profile.sst_max_msg_size + sizeof(uint64_t);
     std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-    nulls_to_be_sent[subgroup_num] = 0;
+    num_nulls_queued[subgroup_num] = 0;
     first_null_index[subgroup_num] = -1;
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
         const uint32_t sender_sst_index = node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
@@ -766,10 +766,10 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
             sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = old_index;
         }
     }
-    if(nulls_to_be_sent[subgroup_num] > 0) {
+    if(num_nulls_queued[subgroup_num] > 0) {
         auto null_slot = first_null_index[subgroup_num] % profile.window_size;
         header* h = (header*)&sst.slots[member_index][subgroup_settings.slot_offset + slot_width * null_slot];
-        h->num_nulls = nulls_to_be_sent[subgroup_num];
+        h->num_nulls = num_nulls_queued[subgroup_num];
     }
     sst.put((char*)std::addressof(sst.num_received_sst[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
             sizeof(decltype(sst.num_received_sst)::value_type) * num_shard_senders);
@@ -859,7 +859,7 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
     std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
     uint32_t to_be_sent = committed_sst_index[subgroup_num] - sst.index[member_index][subgroup_settings.index_offset];;
     if(to_be_sent > 0) {
-        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, nulls_to_be_sent[subgroup_num], first_null_index[subgroup_num], sizeof(header));
+        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, num_nulls_queued[subgroup_num], first_null_index[subgroup_num], sizeof(header));
     }
 }
 
@@ -1207,7 +1207,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         if(first_null_index[subgroup_num] < 0) {
             first_null_index[subgroup_num] = committed_sst_index[subgroup_num];
         }
-        nulls_to_be_sent[subgroup_num]++;
+        num_nulls_queued[subgroup_num]++;
     }
 }
 
