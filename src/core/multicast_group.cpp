@@ -663,8 +663,8 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                                          volatile char* data, uint64_t size) {
     header* h = (header*)data;
     int32_t index = h->index;
+    int32_t num_nulls = h->num_nulls;
 
-    uint32_t iteration = 0;
     do {
 
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
@@ -730,7 +730,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
         }
         sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
         index++;
-    } while(h->num_nulls > 0 &&  ++iteration < h->num_nulls);
+    } while(--num_nulls > 0);
 }
 
 void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
@@ -740,8 +740,6 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     DerechoParams profile = subgroup_settings.profile;
     const uint64_t slot_width = profile.sst_max_msg_size + sizeof(uint64_t);
     std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-    num_nulls_queued[subgroup_num] = 0;
-    first_null_index[subgroup_num] = -1;
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
         const uint32_t sender_sst_index = node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
         uint32_t slot;
@@ -762,7 +760,7 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
             header* h = (header*)&sst.slots[sender_sst_index][subgroup_settings.slot_offset + slot_width * slot];
             if(h->num_nulls > 0) {
                 old_index += h->num_nulls - 1;
-            }            
+            }
             sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count] = old_index;
         }
     }
@@ -859,7 +857,10 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
     std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
     uint32_t to_be_sent = committed_sst_index[subgroup_num] - sst.index[member_index][subgroup_settings.index_offset];;
     if(to_be_sent > 0) {
-        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, num_nulls_queued[subgroup_num], first_null_index[subgroup_num], sizeof(header));
+      sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, num_nulls_queued[subgroup_num], first_null_index[subgroup_num], sizeof(header));
+      // reset num_nulls_queued and first_null_index
+      num_nulls_queued[subgroup_num] = 0;
+      first_null_index[subgroup_num] = -1;
     }
 }
 
