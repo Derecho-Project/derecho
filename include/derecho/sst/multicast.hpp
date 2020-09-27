@@ -36,7 +36,7 @@ class multicast_group {
 
     // start indexes for sst fields it uses
     // need to know the range it can operate on
-    const uint32_t index_field_index;
+    const uint32_t index_offset;
     const uint32_t num_received_offset;
     const uint32_t slots_offset;
 
@@ -56,7 +56,7 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            sst->index[i][index_field_index] = -1;
+            sst->index[i][index_offset] = -1;
             for(uint j = 0; j < window_size; ++j) {
                 sst->slots[i][slots_offset + max_msg_size * j] = 0;
                 (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
@@ -73,7 +73,7 @@ public:
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
                     uint32_t slots_offset = 0,
-                    int32_t index_field_index = 0)
+                    int32_t index_offset = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
@@ -84,7 +84,7 @@ public:
                       return is_sender;
                   }
               }()),
-              index_field_index(index_field_index),
+              index_offset(index_offset),
               num_received_offset(num_received_offset),
               slots_offset(slots_offset),
               num_members(row_indices.size()),
@@ -141,16 +141,16 @@ public:
 
     // In ORDERED MODE, we should hold the lock on msg_state_mtx
     uint32_t commit_send(uint32_t ready_to_be_sent = 1) {
-        return sst->index[my_row][index_field_index] += ready_to_be_sent;
+        return sst->index[my_row][index_offset] += ready_to_be_sent;
     }
 
     // This function invocation should be always preceded by the commit_send,
     // that returns the first parameter (committed index) to be used here.
-    void send(uint32_t committed_index, uint32_t ready_to_be_sent = 1, uint32_t nulls_to_be_sent = 0, int32_t first_null_index = -1, size_t header_size = 0) {
+    void send(uint32_t committed_index, uint32_t ready_to_be_sent = 1, uint32_t num_nulls_queued = 0, int32_t first_null_index = -1, size_t header_size = 0) {
         uint32_t old_index = committed_index - ready_to_be_sent;
         uint32_t first_slot = (old_index + 1) % window_size;
 
-        if(nulls_to_be_sent == 0) {  // NO NULLS: Regular send
+        if(num_nulls_queued == 0) {  // NO NULLS: Regular send
             //slots are contiguous
             //E.g. [ 1 ][ 2 ][ 3 ][ 4 ] and I have to send [ 2 ][ 3 ].
             if(first_slot + ready_to_be_sent <= window_size) {
@@ -176,10 +176,10 @@ public:
             // Each of the batches can wrap around the ring buffer, so we should consider all these cases.
 
             uint32_t first_message_batch_size = first_null_index - 1 - old_index;
-            uint32_t last_message_batch_size = ready_to_be_sent - nulls_to_be_sent - first_message_batch_size;
+            uint32_t last_message_batch_size = ready_to_be_sent - num_nulls_queued - first_message_batch_size;
                        
             uint32_t first_null_slot = first_null_index % window_size;
-            uint32_t last_batch_first_slot = (first_null_index + nulls_to_be_sent) % window_size;
+            uint32_t last_batch_first_slot = (first_null_index + num_nulls_queued) % window_size;
             uint32_t last_batch_last_slot = committed_index % window_size;
 
             if(first_null_slot >= first_slot) {  // (1) and (2) have all contiguous messages
@@ -228,7 +228,7 @@ public:
             }
         }
         // Push the index
-        sst->put(sst->index, index_field_index);
+        sst->put(sst->index, index_offset);
     }
 
     void debug_print() {

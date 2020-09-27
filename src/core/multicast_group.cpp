@@ -46,7 +46,7 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-          nulls_to_be_sent(total_num_subgroups, 0),
+          num_nulls_queued(total_num_subgroups, 0),
           first_null_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
@@ -110,7 +110,7 @@ MulticastGroup::MulticastGroup(
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
           committed_sst_index(total_num_subgroups, -1),
-          nulls_to_be_sent(total_num_subgroups, 0),
+          num_nulls_queued(total_num_subgroups, 0),
           first_null_index(total_num_subgroups, -1),
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
@@ -265,7 +265,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
 
         sst_multicast_group_ptrs[subgroup_num] = std::make_unique<sst::multicast_group<DerechoSST>>(
                 sst, shard_sst_indices, subgroup_settings.profile.window_size, subgroup_settings.profile.sst_max_msg_size, subgroup_settings.senders,
-                subgroup_settings.num_received_offset, subgroup_settings.slot_offset, subgroup_settings.index_field_index);
+                subgroup_settings.num_received_offset, subgroup_settings.slot_offset, subgroup_settings.index_offset);
         /*      DISABLE RDMC GROUP FORMATION - Still buggy and prevent SMC multiple groups experiments to be performed
 
         for(uint shard_rank = 0, sender_rank = -1; shard_rank < num_shard_members; ++shard_rank) {
@@ -650,7 +650,7 @@ bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_setting
                                         uint32_t num_shard_senders, const DerechoSST& sst) {
     for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
         // Equivalent to read_seq_num[sender_count] > last_seq_num[sender_count]
-        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][subgroup_settings.index_field_index]
+        if((message_id_t)sst.index[node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)])][subgroup_settings.index_offset]
            > sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count]) {
             return true;
         }
@@ -664,8 +664,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
                                          volatile char* data, uint64_t size) {
     header* h = (header*)data;
     int32_t index = h->index;
-
-    uint32_t iteration = 0;
+    int32_t num_nulls = h->num_nulls;
     do {
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
@@ -730,7 +729,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
         }
         sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
         index++;
-    } while(h->num_nulls > 0 && ++iteration < h->num_nulls);
+    } while(--num_nulls > 0);
 }
 
 void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
@@ -743,13 +742,11 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
     bool put_new_seq_num = false;
     {
         std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-        nulls_to_be_sent[subgroup_num] = 0;
-        first_null_index[subgroup_num] = -1;
         for(uint sender_count = 0; sender_count < num_shard_senders; ++sender_count) {
             const uint32_t sender_sst_index = node_id_to_sst_index.at(subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_count)]);
             uint32_t slot;
             message_id_t old_index = sst.num_received_sst[member_index][subgroup_settings.num_received_offset + sender_count];
-            const message_id_t received_index = sst.index[sender_sst_index][subgroup_settings.index_field_index];
+            const message_id_t received_index = sst.index[sender_sst_index][subgroup_settings.index_offset];
             while(received_index > old_index) {
                 old_index++;
                 slot = old_index % profile.window_size;
@@ -779,10 +776,10 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
                 put_new_seq_num = true;
             }
         }
-        if(nulls_to_be_sent[subgroup_num] > 0) {
+        if(num_nulls_queued[subgroup_num] > 0) {
             auto null_slot = first_null_index[subgroup_num] % profile.window_size;
             header* h = (header*)&sst.slots[member_index][subgroup_settings.slot_offset + slot_width * null_slot];
-            h->num_nulls = nulls_to_be_sent[subgroup_num];
+            h->num_nulls = num_nulls_queued[subgroup_num];
         }
     }
     // lock released: puts can happen.
@@ -868,18 +865,25 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
-    int32_t current_committed_index, to_be_sent;
+    int32_t current_committed_index, to_be_sent, current_first_null_index;
+    uint32_t current_num_nulls_queued;
     {
         std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-        to_be_sent = committed_sst_index[subgroup_num] - sst.index[member_index][subgroup_settings.index_field_index];
+        to_be_sent = committed_sst_index[subgroup_num] - sst.index[member_index][subgroup_settings.index_offset];
         if(to_be_sent > 0) {
             current_committed_index = sst_multicast_group_ptrs[subgroup_num]->commit_send(to_be_sent);
+            // Save current values and reset null-related counters.
+            current_first_null_index = first_null_index[subgroup_num];
+            current_num_nulls_queued = num_nulls_queued[subgroup_num];
+            first_null_index[subgroup_num] = -1;
+            num_nulls_queued[subgroup_num] = 0;
         }
     }
+
     // Here lock is released
     if(to_be_sent > 0) {
-        sst_multicast_group_ptrs[subgroup_num]->send(current_committed_index, to_be_sent, nulls_to_be_sent[subgroup_num], 
-                                                                              first_null_index[subgroup_num], sizeof(header));
+        sst_multicast_group_ptrs[subgroup_num]->send(current_committed_index, to_be_sent, current_num_nulls_queued,
+                                                     current_first_null_index, sizeof(header));
     }
 }
 
@@ -1223,7 +1227,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         if(first_null_index[subgroup_num] < 0) {
             first_null_index[subgroup_num] = committed_sst_index[subgroup_num];
         }
-        nulls_to_be_sent[subgroup_num]++;
+        num_nulls_queued[subgroup_num]++;
     }
 }
 
