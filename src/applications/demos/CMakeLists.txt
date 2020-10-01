@@ -9,6 +9,10 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 add_executable(random_messages random_messages.cpp)
 target_link_libraries(random_messages derecho)
 
+# random_messages
+add_executable(random_messages_subgroups random_messages_subgroups.cpp)
+target_link_libraries(random_messages_subgroups derecho)
+
 # simple_replicated_objects
 add_executable(simple_replicated_objects simple_replicated_objects.cpp)
 target_link_libraries(simple_replicated_objects derecho)

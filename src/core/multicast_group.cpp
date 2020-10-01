@@ -670,6 +670,10 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
+        // Debug
+        char* buf = (char*)data + sizeof(header);
+        std::cout << "Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
+        
         locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
         auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
