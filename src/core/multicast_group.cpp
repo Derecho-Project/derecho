@@ -865,7 +865,9 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
 
 void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                       const uint32_t num_shard_members, DerechoSST& sst) {
-    int32_t current_committed_index, to_be_sent, current_first_null_index;
+    int32_t current_committed_index;
+    int32_t to_be_sent;
+    int32_t current_first_null_index;
     uint32_t current_num_nulls_queued;
     {
         std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
