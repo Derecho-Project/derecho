@@ -175,29 +175,29 @@ public:
     //Derived from PersistLog
     virtual void append(const void* pdata,
                         const uint64_t size, const int64_t ver,
-                        const HLC& mhlc);
-    virtual void advanceVersion(const int64_t& ver);
-    virtual int64_t getLength();
-    virtual int64_t getEarliestIndex();
-    virtual int64_t getLatestIndex();
-    virtual int64_t getVersionIndex(const version_t& ver);
-    virtual int64_t getHLCIndex(const HLC& hlc);
-    virtual version_t getEarliestVersion();
-    virtual version_t getLatestVersion();
-    virtual const version_t getLastPersistedVersion();
-    virtual const void* getEntryByIndex(const int64_t& eno);
-    virtual const void* getEntry(const version_t& ver);
-    virtual const void* getEntry(const HLC& hlc);
-    virtual const version_t persist(const bool preLocked = false);
-    virtual void trimByIndex(const int64_t& eno);
-    virtual void trim(const version_t& ver);
-    virtual void trim(const HLC& hlc);
-    virtual void truncate(const version_t& ver);
-    virtual size_t bytes_size(const version_t& ver);
-    virtual size_t to_bytes(char* buf, const version_t& ver);
+                        const HLC& mhlc) override;
+    virtual void advanceVersion(const int64_t& ver) override;
+    virtual int64_t getLength() override;
+    virtual int64_t getEarliestIndex() override;
+    virtual int64_t getLatestIndex() override;
+    virtual int64_t getVersionIndex(const version_t& ver,bool exact) override;
+    virtual int64_t getHLCIndex(const HLC& hlc) override;
+    virtual version_t getEarliestVersion() override;
+    virtual version_t getLatestVersion() override;
+    virtual const version_t getLastPersistedVersion() override;
+    virtual const void* getEntryByIndex(const int64_t& eno) override;
+    virtual const void* getEntry(const version_t& ver, bool exact = false) override;
+    virtual const void* getEntry(const HLC& hlc) override;
+    virtual const version_t persist(const bool preLocked = false) override;
+    virtual void trimByIndex(const int64_t& eno) override;
+    virtual void trim(const version_t& ver) override;
+    virtual void trim(const HLC& hlc) override;
+    virtual void truncate(const version_t& ver) override;
+    virtual size_t bytes_size(const version_t& ver) override;
+    virtual size_t to_bytes(char* buf, const version_t& ver) override;
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver);
-    virtual void applyLogTail(char const* v);
+                             const version_t& ver) override;
+    virtual void applyLogTail(char const* v) override;
 
     template <typename TKey, typename KeyGetter>
     void trim(const TKey& key, const KeyGetter& keyGetter) {

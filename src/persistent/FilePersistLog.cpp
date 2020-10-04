@@ -414,7 +414,7 @@ const version_t FilePersistLog::getLastPersistedVersion() {
     return last_persisted;
 }
 
-int64_t FilePersistLog::getVersionIndex(const version_t& ver) {
+int64_t FilePersistLog::getVersionIndex(const version_t& ver, bool exact) {
     FPL_RDLOCK;
 
     //binary search
@@ -429,6 +429,10 @@ int64_t FilePersistLog::getVersionIndex(const version_t& ver) {
     dbg_default_trace("{0} - end binary search.", this->m_sName);
 
     FPL_UNLOCK;
+
+    if ((l_idx != INVALID_INDEX) && (LOG_ENTRY_AT(l_idx)->fields.ver != ver) && exact) {
+        l_idx = INVALID_INDEX;
+    }
 
     dbg_default_trace("{0} getVersionIndex({1}) at index {2}", this->m_sName, ver, l_idx);
 
@@ -458,7 +462,7 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) {
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
 }
 
-const void* FilePersistLog::getEntry(const int64_t& ver) {
+const void* FilePersistLog::getEntry(const int64_t& ver, bool exact) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -478,7 +482,7 @@ const void* FilePersistLog::getEntry(const int64_t& ver) {
     FPL_UNLOCK;
 
     // no object exists before the requested timestamp.
-    if(ple == nullptr) {
+    if(ple == nullptr || (exact && (ple->fields.ver != ver))) {
         return nullptr;
     }
 

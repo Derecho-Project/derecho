@@ -100,8 +100,12 @@ public:
     // Get the Latest Index
     virtual int64_t getLatestIndex() = 0;
 
-    // Get the Index corresponding to a version
-    virtual int64_t getVersionIndex(const version_t& ver) = 0;
+    /** Get the Index corresponding to a version equal or immediately eariler than ver
+     *  @param ver - the version
+     *  @param exact - exact match
+     *  @return index of the corresponding log entry
+     */
+    virtual int64_t getVersionIndex(const version_t& ver, bool exact = false) = 0;
 
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) = 0;
@@ -119,7 +123,10 @@ public:
     virtual const void* getEntryByIndex(const int64_t& eno) = 0;
 
     // Get the latest version equal or earlier than ver.
-    virtual const void* getEntry(const version_t& ver) = 0;
+    // @param ver - version requested
+    // @param exact - ask for the exact version
+    // @return the pointer to the data, nullptr if exact is true and no corresponding version are found.
+    virtual const void* getEntry(const version_t& ver, bool exact = false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() = 0;
@@ -143,13 +150,13 @@ public:
 
     /**
      * Trim the log till version, inclusively.
-     * @param ver - all log entry before ver will be trimmed.
+     * @param ver - all log entries before ver will be trimmed.
      */
     virtual void trim(const version_t& ver) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
-     * @param hlc - all log entry before hlc will be trimmed.
+     * @param hlc - all log entries before hlc will be trimmed.
      */
     virtual void trim(const HLC& hlc) = 0;
 
@@ -187,7 +194,7 @@ public:
 
     /**
      * Truncate the log strictly newer than 'ver'.
-     * @param ver - all log entry strict after ver will be truncated.
+     * @param ver - all log entry strictly after ver will be truncated.
      */
     virtual void truncate(const version_t& ver) = 0;
 };

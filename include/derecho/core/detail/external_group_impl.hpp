@@ -149,7 +149,7 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
         sock.read(buffer, size_of_view);
         prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
-    } catch(tcp::connection_failure) {
+    } catch(tcp::connection_failure&) {
         dbg_default_error("Failed to connect to group member {} when reqeusting new view.", nid);
         dbg_default_flush();
         return false;
