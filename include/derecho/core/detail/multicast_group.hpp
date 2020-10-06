@@ -437,7 +437,7 @@ private:
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
-                             volatile char* data, uint64_t size);
+                             volatile char* data, uint64_t& size);
 
     bool receiver_predicate(const SubgroupSettings& subgroup_settings,
                             const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
@@ -446,7 +446,7 @@ private:
     void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                            uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
-                           const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
+                           const std::function<void(uint32_t, volatile char*, uint64_t&)>& sst_receive_handler_lambda);
 
     // Internally used to automatically send a NULL message
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);

@@ -108,7 +108,7 @@ auto membership_function = [num_subgroups, num_nodes](
         }
     };
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     send_in_one_subgroup();
     // wait for delivery of all messages
     while(!done) {

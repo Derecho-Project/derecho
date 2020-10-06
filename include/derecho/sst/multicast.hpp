@@ -145,6 +145,7 @@ public:
         uint32_t old_index = sst->index[my_row][index_offset];
         // Increase the value of the index in the local sst
         uint32_t committed_index = sst->index[my_row][index_offset] += ready_to_be_sent;
+        std::cout << "Updating index to " << sst->index[my_row][index_offset] << std::endl;
 
         //Go ahead with the send logic
         uint32_t first_slot = (old_index + 1) % window_size;
@@ -227,6 +228,7 @@ public:
             }
         }
         // Push the index
+        std::cout << "Pushing index " << sst->index[my_row][index_offset] << std::endl;
         sst->put(sst->index, index_offset);
     }
 

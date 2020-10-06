@@ -1179,7 +1179,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
             auto sst_receive_handler_lambda =
                     [this, subgroup_id, curr_subgroup_settings,
                      shard_ranks_by_sender_rank, num_shard_senders](
-                            uint32_t sender_rank, volatile char* data, uint32_t size) {
+                            uint32_t sender_rank, volatile char* data, uint64_t& size) {
                         curr_view->multicast_group->sst_receive_handler(
                                 subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
                                 num_shard_senders, sender_rank, data, size);

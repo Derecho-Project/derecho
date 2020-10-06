@@ -660,7 +660,7 @@ bool MulticastGroup::receiver_predicate(const SubgroupSettings& subgroup_setting
 void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                          const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                          uint32_t num_shard_senders, uint32_t sender_rank,
-                                         volatile char* data, uint64_t size) {
+                                         volatile char* data, uint64_t& size) {
     header* h = (header*)data;
     int32_t index = h->index;
     int32_t num_nulls = h->num_nulls;
@@ -672,6 +672,10 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
 
         // Debug
         char* buf = (char*)data + sizeof(header);
+        std::cout << "Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
+        while(size == 0) {
+
+        }
         std::cout << "Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
         
         locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
@@ -740,7 +744,7 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
 void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                                        const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                                        uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
-                                       const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda) {
+                                       const std::function<void(uint32_t, volatile char*, uint64_t&)>& sst_receive_handler_lambda) {
     DerechoParams profile = subgroup_settings.profile;
     const uint64_t slot_width = profile.sst_max_msg_size + sizeof(uint64_t);
     std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
@@ -892,7 +896,7 @@ void MulticastGroup::register_predicates() {
             batch_size = 1;
         }
         auto sst_receive_handler_lambda = [this, subgroup_num, subgroup_settings, shard_ranks_by_sender_rank,
-                                           num_shard_senders](uint32_t sender_rank, volatile char* data, uint64_t size) {
+                                           num_shard_senders](uint32_t sender_rank, volatile char* data, uint64_t& size) {
             sst_receive_handler(subgroup_num, subgroup_settings,
                                 shard_ranks_by_sender_rank, num_shard_senders,
                                 sender_rank, data, size);
@@ -1342,6 +1346,7 @@ bool MulticastGroup::send(subgroup_id_t subgroup_num, long long unsigned int pay
     }
     // call to the user supplied message generator
     msg_generator(buf);
+    std::cout << "Buffer content: " << std::string(&buf[0], payload_size) << std::endl;
 
     if(last_transfer_medium[subgroup_num]) {
         assert(next_sends[subgroup_num]);
