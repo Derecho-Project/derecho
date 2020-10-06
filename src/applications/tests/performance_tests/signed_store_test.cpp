@@ -299,7 +299,7 @@ persistent::version_t SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     verified_tracker->start_tracking_version(std::get<0>(next_version));
     //Append the new hash to the Persistent log, thus generating a version
     *hashes = hash;
-	dbg_default_debug("SHA256 hash added for version {}", std::get<0>(next_version));
+    dbg_default_debug("SHA256 hash added for version {}", std::get<0>(next_version));
     return std::get<0>(next_version);
 }
 

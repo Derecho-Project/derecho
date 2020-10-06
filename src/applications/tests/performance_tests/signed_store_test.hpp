@@ -110,11 +110,11 @@ class ObjectStore : public mutils::ByteRepresentable,
      */
     std::shared_ptr<CompletionTracker> persistence_tracker;
     using derecho::GroupReference::group;
-	/**
-	 * Shared with the main thread to tell it when the experiment is done and it should
-	 * call group.leave() (which can't be done from inside this subgroup object).
-	 */
-	std::shared_ptr<std::atomic<bool>> experiment_done;
+    /**
+     * Shared with the main thread to tell it when the experiment is done and it should
+     * call group.leave() (which can't be done from inside this subgroup object).
+     */
+    std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
     ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
@@ -171,11 +171,11 @@ class SignatureStore : public mutils::ByteRepresentable,
      * re-link this with the global callback?
      */
     std::shared_ptr<CompletionTracker> verified_tracker;
-	/**
-	 * Shared with the main thread to tell it when the experiment is done and it should
-	 * call group.leave() (which can't be done from inside this subgroup object).
-	 */
-	std::shared_ptr<std::atomic<bool>> experiment_done;
+    /**
+     * Shared with the main thread to tell it when the experiment is done and it should
+     * call group.leave() (which can't be done from inside this subgroup object).
+     */
+    std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
     SignatureStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
@@ -209,16 +209,16 @@ class ClientTier : public mutils::ByteRepresentable,
                    public derecho::GroupReference {
     using derecho::GroupReference::group;
     openssl::Hasher hasher;
-	//Used to pick random members of the storage and signature subgroups to contact
-	std::mt19937 random_engine;
+    //Used to pick random members of the storage and signature subgroups to contact
+    std::mt19937 random_engine;
     //This ensures the test data is allocated before the test starts
     Blob test_data;
 
 public:
     ClientTier(std::size_t test_data_size);
 
-	//Type alias for the overly-long return type of submit_update
-	using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
+    //Type alias for the overly-long return type of submit_update
+    using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
     /**
      * RPC function that submits an update to the object store and gets its hash signed;
      * intended to be called by an outside client using ExternalGroup.
