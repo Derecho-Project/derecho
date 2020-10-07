@@ -82,7 +82,7 @@ public:
      * @return the Persistent object's newest version that has been persisted
      * successfully
      */
-    virtual version_t getLatestPersistedVersion() const = 0;
+    virtual version_t getLastPersistedVersion() const = 0;
     /**
      * Truncates the log, deleting all versions newer than the provided argument.
      * Since this throws away recently-used data, it should only be used during

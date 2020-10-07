@@ -10,7 +10,7 @@ bool tcp_connections::add_connection(const node_id_t other_id,
     if(other_id < my_id) {
         try {
             sockets[other_id] = socket(other_ip_and_port.first, other_ip_and_port.second);
-        } catch(connection_failure) {
+        } catch(connection_failure&) {
             std::cerr << "WARNING: failed to connect to node " << other_id << " at "
                       << other_ip_and_port.first << ":" << other_ip_and_port.second << std::endl;
             return false;

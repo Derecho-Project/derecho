@@ -42,12 +42,12 @@ union MetaHeader {
  */
 union LogEntry {
     struct {
-        int64_t ver;       // version of the data
-        uint64_t sdlen;     // length of the data plus the signature_size (signature first data second)
-        uint64_t ofst;     // offset of the data (and the signature, if exists) in the memory buffer
-        uint64_t hlc_r;    // realtime component of hlc
-        uint64_t hlc_l;    // logic component of hlc
-        int64_t prev_signed_ver; // previous signed version, whose signature is included in this version's signature
+        int64_t ver;              // version of the data
+        uint64_t sdlen;           // length of the data plus the signature_size (signature first data second)
+        uint64_t ofst;            // offset of the data (and the signature, if exists) in the memory buffer
+        uint64_t hlc_r;           // realtime component of hlc
+        uint64_t hlc_l;           // logic component of hlc
+        int64_t prev_signed_ver;  // previous signed version, whose signature is included in this version's signature
     } fields;
     uint8_t bytes[MAX_LOG_ENTRY_SIZE];
 };
@@ -185,33 +185,33 @@ public:
     //Derived from PersistLog
     virtual void append(const void* pdata,
                         uint64_t size, version_t ver,
-                        const HLC& mhlc);
-    virtual void advanceVersion(int64_t ver);
-    virtual int64_t getLength();
-    virtual int64_t getEarliestIndex();
-    virtual int64_t getLatestIndex();
-    virtual int64_t getVersionIndex(version_t ver);
-    virtual int64_t getHLCIndex(const HLC& hlc);
-    virtual version_t getEarliestVersion();
-    virtual version_t getLatestVersion();
-    virtual version_t getLastPersistedVersion();
-    virtual const void* getEntryByIndex(int64_t eno);
-    virtual const void* getEntry(version_t ver);
-    virtual const void* getEntry(const HLC& hlc);
+                        const HLC& mhlc) override;
+    virtual void advanceVersion(int64_t ver) override;
+    virtual int64_t getLength() override;
+    virtual int64_t getEarliestIndex() override;
+    virtual int64_t getLatestIndex() override;
+    virtual int64_t getVersionIndex(version_t ver, bool exact) override;
+    virtual int64_t getHLCIndex(const HLC& hlc) override;
+    virtual version_t getEarliestVersion() override;
+    virtual version_t getLatestVersion() override;
+    virtual version_t getLastPersistedVersion() override;
+    virtual const void* getEntryByIndex(int64_t eno) override;
+    virtual const void* getEntry(version_t ver, bool exact = false) override;
+    virtual const void* getEntry(const HLC& hlc) override;
     virtual version_t persist(version_t ver,
-                              bool preLocked = false);
+                              bool preLocked = false) override;
     virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
     virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
     virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version);
-    virtual void trimByIndex(int64_t eno);
-    virtual void trim(version_t ver);
-    virtual void trim(const HLC& hlc);
-    virtual void truncate(version_t ver);
-    virtual size_t bytes_size(version_t ver);
-    virtual size_t to_bytes(char* buf, version_t ver);
+    virtual void trimByIndex(int64_t eno) override;
+    virtual void trim(version_t ver) override;
+    virtual void trim(const HLC& hlc) override;
+    virtual void truncate(version_t ver) override;
+    virtual size_t bytes_size(version_t ver) override;
+    virtual size_t to_bytes(char* buf, version_t ver) override;
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             version_t ver);
-    virtual void applyLogTail(char const* v);
+                             version_t ver) override;
+    virtual void applyLogTail(char const* v) override;
 
     template <typename TKey, typename KeyGetter>
     void trim(const TKey& key, const KeyGetter& keyGetter) {
@@ -265,14 +265,14 @@ public:
     static const uint64_t getMinimumLatestPersistedVersion(const std::string& prefix);
 
 private:
-     /** verify the existence of the meta file */
-     bool checkOrCreateMetaFile();
+    /** verify the existence of the meta file */
+    bool checkOrCreateMetaFile();
 
-     /** verify the existence of the log file */
-     bool checkOrCreateLogFile();
+    /** verify the existence of the log file */
+    bool checkOrCreateLogFile();
 
-     /** verify the existence of the data file */
-     bool checkOrCreateDataFile();
+    /** verify the existence of the data file */
+    bool checkOrCreateDataFile();
 
     /**
      * Get the minimum index greater than a given version

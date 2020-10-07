@@ -136,7 +136,7 @@ int64_t PersistentRegistry::getMinimumLatestPersistedVersion() {
     int64_t min = -1;
     for(auto itr = m_registry.begin();
         itr != m_registry.end(); ++itr) {
-        int64_t ver = itr->second->getLatestPersistedVersion();
+        int64_t ver = itr->second->getLastPersistedVersion();
         if(itr == m_registry.begin()) {
             min = ver;
         } else if(min > ver) {
