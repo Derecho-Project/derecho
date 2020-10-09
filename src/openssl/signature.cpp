@@ -79,7 +79,7 @@ EnvelopeKey EnvelopeKey::from_pem_private(const std::string& pem_file_name) {
     if(!private_key) {
         throw openssl_error(ERR_get_error(), "Load private key");
     }
-    return std::move(private_key);
+    return private_key;
 }
 EnvelopeKey EnvelopeKey::from_pem_private(const void* byte_buffer, std::size_t buffer_size) {
     std::unique_ptr<BIO, DeleterFor<BIO>> buffer_bio(BIO_new_mem_buf(byte_buffer, buffer_size));
@@ -87,7 +87,7 @@ EnvelopeKey EnvelopeKey::from_pem_private(const void* byte_buffer, std::size_t b
     if(!private_key) {
         throw openssl_error(ERR_get_error(), "Load private key");
     }
-    return std::move(private_key);
+    return private_key;
 }
 
 EnvelopeKey EnvelopeKey::from_pem_public(const std::string& pem_file_name) {
@@ -108,7 +108,7 @@ EnvelopeKey EnvelopeKey::from_pem_public(const std::string& pem_file_name) {
     if(!public_key) {
         throw openssl_error(ERR_get_error(), "Load public key");
     }
-    return std::move(public_key);
+    return public_key;
 }
 
 EnvelopeKey EnvelopeKey::from_pem_public(const void* byte_buffer, std::size_t buffer_size) {
@@ -117,7 +117,7 @@ EnvelopeKey EnvelopeKey::from_pem_public(const void* byte_buffer, std::size_t bu
     if(!public_key) {
         throw openssl_error(ERR_get_error(), "Load public key");
     }
-    return std::move(public_key);
+    return public_key;
 }
 
 Signer::Signer(const EnvelopeKey& _private_key, DigestAlgorithm digest_type)
