@@ -673,11 +673,11 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
         // Debug
         char* buf = (char*)data + sizeof(header);
         std::cout << "Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
-        while(size == 0) {
-
+        if(size == 0)  {
+            while(size == 0) {fflush(stdout);}
+                std::cout << "* Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
         }
-        std::cout << "Received msg_seq " << sequence_number << " with size " << size << " and content " << std::string(&buf[0], 8) << std::endl;
-        
+        fflush(stdout);
         locally_stable_sst_messages[subgroup_num][sequence_number] = {node_id, index, size, data};
 
         auto new_num_received = resolve_num_received(index, subgroup_settings.num_received_offset + sender_rank);
