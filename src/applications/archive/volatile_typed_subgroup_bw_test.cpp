@@ -41,7 +41,7 @@ public:
     }
     // the default constructor
     ByteArrayObject(PersistentRegistry* pr) :  //    pers_bytes(nullptr,pr) {
-                                              vola_bytes([](){return std::unique_ptr<derecho::Bytes>();}, nullptr, pr) {
+                                              vola_bytes([](){return std::unique_ptr<derecho::Bytes>(new derecho::Bytes());}, nullptr, pr) {
     }
 };
 
