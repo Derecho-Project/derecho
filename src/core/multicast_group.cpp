@@ -8,6 +8,7 @@
 #include <derecho/core/detail/multicast_group.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/rdmc/detail/util.hpp>
+#include <derecho/utils/time.h>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -1057,12 +1058,6 @@ void MulticastGroup::send_loop() {
             pending_sends[subgroup_to_send].pop();
         }
     }
-}
-
-uint64_t MulticastGroup::get_time() {
-    struct timespec start_time;
-    clock_gettime(CLOCK_REALTIME, &start_time);
-    return start_time.tv_sec * 1e9 + start_time.tv_nsec;
 }
 
 const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
