@@ -1008,8 +1008,7 @@ void MulticastGroup::send_loop() {
         assert(num_shard_members >= 1);
         if(subgroup_settings.mode != Mode::UNORDERED) {
             for(uint i = 0; i < num_shard_members; ++i) {
-                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)
-                   || (sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index))) {
+                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)) {
                     return false;
                 }
             }
