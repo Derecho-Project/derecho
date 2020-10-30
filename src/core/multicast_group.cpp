@@ -8,6 +8,7 @@
 #include <derecho/core/detail/multicast_group.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/rdmc/detail/util.hpp>
+#include <derecho/utils/time.h>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -946,8 +947,7 @@ void MulticastGroup::register_predicates() {
                 auto sender_pred = [=](const DerechoSST& sst) {
                     message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
                     for(uint i = 0; i < num_shard_members; ++i) {
-                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
-                           || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
+                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num) {
                             return false;
                         }
                     }
@@ -1051,8 +1051,7 @@ void MulticastGroup::send_loop() {
         assert(num_shard_members >= 1);
         if(subgroup_settings.mode != Mode::UNORDERED) {
             for(uint i = 0; i < num_shard_members; ++i) {
-                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)
-                   || (sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index))) {
+                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)) {
                     return false;
                 }
             }
@@ -1101,12 +1100,6 @@ void MulticastGroup::send_loop() {
             pending_sends[subgroup_to_send].pop();
         }
     }
-}
-
-uint64_t MulticastGroup::get_time() {
-    struct timespec start_time;
-    clock_gettime(CLOCK_REALTIME, &start_time);
-    return start_time.tv_sec * 1e9 + start_time.tv_nsec;
 }
 
 const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {

@@ -353,8 +353,6 @@ private:
      * implements the sender thread. */
     void send_loop();
 
-    uint64_t get_time();
-
     /** Checks for failures when a sender reaches its timeout. This function
      * implements the timeout thread. */
     void check_failures_loop();
