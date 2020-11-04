@@ -107,12 +107,12 @@ namespace sst {
     template <class DerivedSST>
     auto Predicates<DerivedSST>::insert(pred predicate, trig trigger, PredicateType type) -> pred_handle {
         std::lock_guard<std::mutex> lock(predicate_mutex);
-        PredicateStatistics pred_stats;
-        const uint32_t id = pred_stats.get_id();
-        // pred wrapped_predicate = [&](auto args) {pred_stats.evaluated(id); return predicate(args);};
-        // trig wrapped_trigger = [&](auto args) {pred_stats.fired(id); return trigger(args);};
-        pred wrapped_predicate = [&](const DerivedSST& args) {pred_stats.evaluated(id); return predicate(args);};
-        trig wrapped_trigger = [&](DerivedSST& args) {pred_stats.fired(id); return trigger(args);};
+        // PredicateStatistics PredicateStatistics::;
+        const uint32_t id = PredicateStatistics::get_id();
+        // pred wrapped_predicate = [&](auto args) {PredicateStatistics::evaluated(id); return predicate(args);};
+        // trig wrapped_trigger = [&](auto args) {PredicateStatistics::fired(id); return trigger(args);};
+        pred wrapped_predicate = [&](const DerivedSST& args) {PredicateStatistics::evaluated(id); return predicate(args);};
+        trig wrapped_trigger = [&](DerivedSST& args) {PredicateStatistics::fired(id); return trigger(args);};
         if (type == PredicateType::ONE_TIME) {
             one_time_predicates.push_back(std::make_unique<std::pair<pred, std::shared_ptr<trig>>>(
                 wrapped_predicate, std::make_shared<trig>(wrapped_trigger)));

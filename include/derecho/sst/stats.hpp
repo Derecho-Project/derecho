@@ -12,11 +12,11 @@ public:
 
 class PredicateStatistics {
 public:
-  PredicateStatistics();
-  uint32_t get_id();
-  void fired(uint32_t);
-  void evaluated(uint32_t);
+  // PredicateStatistics();
+  static uint32_t get_id();
+  static void fired(uint32_t);
+  static void evaluated(uint32_t);
 private:
-  uint32_t next_id;
-  std::map<uint32_t, StatBlock> table;
+  static uint32_t next_id;
+  static std::map<uint32_t, StatBlock> table;
 };
