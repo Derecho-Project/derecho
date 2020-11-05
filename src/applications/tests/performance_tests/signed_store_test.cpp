@@ -372,7 +372,7 @@ bool member_of_shards(node_id_t node_id, const std::vector<std::vector<node_id_t
 
 struct signed_store_results {
     unsigned int num_client_nodes;
-    unsigned int update_size;
+    std::size_t update_size;
     unsigned int num_updates;
     double signed_bw;
 
@@ -482,7 +482,7 @@ int main(int argc, char** argv) {
                                  / batch_complete_nanosec;
         std::cout << "Total time elapsed: " << static_cast<double>(batch_complete_nanosec) / 1000000 << "ms" << std::endl;
         std::cout << "Signed updates throughput: " << signed_thpt_gbs << " GB/s" << std::endl;
-        log_results(signed_store_results{client_tier_shards.size(), update_size, num_updates,
+        log_results(signed_store_results{num_client_nodes, update_size, num_updates,
                                          signed_thpt_gbs},
                     "data_signed_store_test");
         //One node in the client tier should send the "end test" message to all the storage members,
