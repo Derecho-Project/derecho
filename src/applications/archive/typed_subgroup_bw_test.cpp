@@ -140,5 +140,6 @@ int main(int argc, char* argv[]) {
                     "data_derecho_typed_subgroup_bw");
     }
 
-    std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
+    group.barrier_sync();
+    group.leave();
 }
