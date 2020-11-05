@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
     };
     derecho::CallbackSet callback_set{
             stability_callback,
+            nullptr,
             persistence_callback};
 
     derecho::SubgroupInfo subgroup_info(PartialSendersAllocator(num_of_nodes, sender_selector));
