@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
     using namespace std::chrono;
 
     if(argc < 4) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <num_msgs>" << std::endl;
+        std::cout << "usage:" << argv[0] << "[<derecho config options> -- ]<all|half|one> <num_of_nodes> <num_msgs>" << std::endl;
         return -1;
     }
     pthread_setname_np(pthread_self(), "persistent_bw_test");
@@ -69,11 +69,11 @@ int main(int argc, char* argv[]) {
                                         + derecho::remote_invocation_utilities::header_space();
 
     PartialSendMode sender_selector = PartialSendMode::ALL_SENDERS;
-    if(strcmp(argv[1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
-    if(strcmp(argv[1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
-    const int num_of_nodes = atoi(argv[2]);
+    if(strcmp(argv[argc - 3], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
+    if(strcmp(argv[argc - 3], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
+    const int num_of_nodes = atoi(argv[argc - 2]);
     const int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
-    const int num_msgs = atoi(argv[3]);
+    const int num_msgs = atoi(argv[argc - 1]);
     steady_clock::time_point begin_time, send_complete_time, persist_complete_time;
 
     bool is_sending = true;
@@ -124,6 +124,7 @@ int main(int argc, char* argv[]) {
     };
     derecho::CallbackSet callback_set{
             stability_callback,
+            nullptr,
             persistence_callback};
 
     derecho::SubgroupInfo subgroup_info(PartialSendersAllocator(num_of_nodes, sender_selector));
