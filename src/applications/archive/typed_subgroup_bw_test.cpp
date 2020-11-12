@@ -5,6 +5,9 @@
 #include <time.h>
 #include <vector>
 
+#include "log_results.hpp"
+#include "aggregate_bandwidth.cpp"
+#include "aggregate_bandwidth.hpp"
 #include "bytes_object.hpp"
 #include <derecho/core/derecho.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -12,6 +15,8 @@
 #include <derecho/conf/conf.hpp>
 
 using derecho::Bytes;
+using std::endl;
+
 /**
  * RPC Object with a single function that accepts a string
  */
@@ -28,6 +33,25 @@ public:
     }
 
     REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
+};
+
+struct exp_result {
+    int num_nodes;
+    long long unsigned int max_msg_size;
+    unsigned int window_size;
+    int count;
+    double avg_msec;
+    double avg_gbps;
+    double avg_ops;
+
+
+    void print(std::ofstream& fout) {
+        fout << num_nodes <<  " "
+             << max_msg_size << " " << window_size << " "
+             << count << " "
+             << avg_msec << " " << avg_gbps << " " 
+	     << avg_ops <<  endl;
+    }
 };
 
 int main(int argc, char* argv[]) {
@@ -82,6 +106,7 @@ int main(int argc, char* argv[]) {
         handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
 
+    auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
     if(node_rank == 0) {
         derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
@@ -102,7 +127,19 @@ int main(int argc, char* argv[]) {
     std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
-    std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
-    while(true) {
+    // aggregate bandwidth from all nodes
+    double avg_msec = aggregate_bandwidth(members_order, members_order[node_rank], msec);
+    double avg_gbps = aggregate_bandwidth(members_order, members_order[node_rank], thp_gbps);
+    double avg_ops = aggregate_bandwidth(members_order, members_order[node_rank], thp_ops);
+
+
+    if(node_rank == 0) {
+        log_results(exp_result{num_of_nodes, max_msg_size,
+                               derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), count,
+                               avg_msec, avg_gbps, avg_ops},
+                    "data_derecho_typed_subgroup_bw");
     }
+
+    group.barrier_sync();
+    group.leave();
 }
