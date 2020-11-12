@@ -107,7 +107,7 @@ namespace sst {
     template <class DerivedSST>
     auto Predicates<DerivedSST>::insert(pred predicate, trig trigger, PredicateType type) -> pred_handle {
         std::lock_guard<std::mutex> lock(predicate_mutex);
-        const uint32_t id = PredicateStatistics::get_id();
+        const uint32_t id = PredicateStatistics::gen_id();
         // pred wrapped_predicate = [&](auto args) {PredicateStatistics::evaluated(id); return predicate(args);};
         // trig wrapped_trigger = [&](auto args) {PredicateStatistics::fired(id); return trigger(args);};
         pred wrapped_predicate = [=](const DerivedSST& args) -> bool {PredicateStatistics::evaluated(id); return predicate(args);};
