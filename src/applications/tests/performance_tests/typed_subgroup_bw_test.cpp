@@ -14,7 +14,7 @@
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/conf/conf.hpp>
 
-using derecho::Bytes;
+using test::Bytes;
 using std::endl;
 
 /**
