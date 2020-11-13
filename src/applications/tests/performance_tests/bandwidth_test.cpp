@@ -45,20 +45,30 @@ struct exp_result {
     }
 };
 
+#define DEFAULT_PROC_NAME   "bw_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
+
+    int dashdash_pos = argc - 1;
+    while (dashdash_pos > 0) {
+        if (strcmp(argv[dashdash_pos],"--") == 0) {
+            break;
+        }
+        dashdash_pos -- ;
+    }
+
+    if((argc-dashdash_pos) < 5) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
-        cout << "Thank you" << endl;
+        cout << "USAGE:" << argv[0] << "[ derecho-config-list ] -- num_nodes, sender_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode) [proc_name]" << endl;
+        cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << endl;
         return -1;
     }
-    pthread_setname_np(pthread_self(), "bw_test");
 
     // initialize the special arguments for this test
-    const uint32_t num_nodes = std::stoi(argv[argc - 4]);
-    const uint32_t num_senders_selector = std::stoi(argv[argc - 3]);
-    const uint32_t num_messages = std::stoi(argv[argc - 2]);
-    const uint32_t delivery_mode = std::stoi(argv[argc - 1]);
+    const uint32_t num_nodes = std::stoi(argv[dashdash_pos + 1]);
+    const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 2]);
+    const uint32_t num_messages = std::stoi(argv[dashdash_pos + 3]);
+    const uint32_t delivery_mode = std::stoi(argv[dashdash_pos + 4]);
     // Convert this integer to a more readable enum value
     const PartialSendMode senders_mode = num_senders_selector == 0
                                                  ? PartialSendMode::ALL_SENDERS
@@ -66,6 +76,11 @@ int main(int argc, char* argv[]) {
                                                             ? PartialSendMode::HALF_SENDERS
                                                             : PartialSendMode::ONE_SENDER);
 
+    if (dashdash_pos + 5 < argc) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
 
