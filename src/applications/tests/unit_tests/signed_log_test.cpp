@@ -36,7 +36,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(OneFieldObject, string_field);
-    REGISTER_RPC_FUNCTIONS(OneFieldObject, get_state, update_state);
+    REGISTER_RPC_FUNCTIONS(OneFieldObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 };
 
 class TwoFieldObject : public mutils::ByteRepresentable, public derecho::SignedPersistentFields {
@@ -66,7 +66,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(TwoFieldObject, foo, bar);
-    REGISTER_RPC_FUNCTIONS(TwoFieldObject, get_foo, get_bar, update);
+    REGISTER_RPC_FUNCTIONS(TwoFieldObject, P2P_TARGETS(get_foo, get_bar), ORDERED_TARGETS(update));
 };
 
 class UnsignedObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
@@ -86,7 +86,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(UnsignedObject, string_field);
-    REGISTER_RPC_FUNCTIONS(UnsignedObject, get_state, update_state);
+    REGISTER_RPC_FUNCTIONS(UnsignedObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 };
 
 /**

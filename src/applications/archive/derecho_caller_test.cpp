@@ -5,9 +5,9 @@
 #include <time.h>
 #include <vector>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
 #include <spdlog/spdlog.h>
-#include <derecho/conf/conf.hpp>
 
 using std::cout;
 using std::endl;
@@ -24,7 +24,7 @@ int count = 0;
 
 struct test1_str {
     int state;
-    int read_state() {
+    int read_state() const {
         cout << "Returning state, it is: " << state << endl;
         return state;
     }
@@ -35,7 +35,8 @@ struct test1_str {
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(test1_str, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(test1_str, P2P_TARGETS(read_state, change_state),
+                           ORDERED_TARGETS(read_state, change_state));
 };
 
 template <typename T>
@@ -57,12 +58,12 @@ int main(int argc, char* argv[]) {
 
     Conf::initialize(argc, argv);
 
-    auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index, 
+    auto stability_callback = [](uint32_t subgroup_num, int sender_id, long long int index,
                                  std::optional<std::pair<char*, long long int>>,
                                  persistent::version_t ver) {};
 
     SubgroupInfo subgroup_info{&one_subgroup_entire_view};
-    
+
     auto new_view_callback = [](const View& new_view) {
         std::vector<node_id_t> old_members;
         old_members.insert(old_members.begin(), new_view.departed.begin(), new_view.departed.end());
@@ -85,7 +86,7 @@ int main(int argc, char* argv[]) {
 
     Group<test1_str> managed_group({stability_callback}, subgroup_info, {},
                                    {new_view_callback},
-                                   [](PersistentRegistry* pr,derecho::subgroup_id_t) { return std::make_unique<test1_str>(); });
+                                   [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<test1_str>(); });
 
     cout << "Finished constructing/joining Group" << endl;
 

@@ -39,7 +39,7 @@ public:
         *vola_bytes = bytes;
     }
 
-    REGISTER_RPC_FUNCTIONS(ByteArrayObject, change_vola_bytes);
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_vola_bytes));
 
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, vola_bytes);

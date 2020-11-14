@@ -482,23 +482,23 @@ const_partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args
  * @tparam Args The argument type of the function
  */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
-partial_wrapped<Tag, Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...)) {
+partial_wrapped<to_internal_tag<false>(Tag), Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...)) {
     //Convert the user's desired tag to an "internal" tag, which distinguishes ordered from P2P functions
     return tag<to_internal_tag<false>(Tag), NewClass, Ret, Args...>(fun);
 }
 
 /** Exactly the same as tag_ordered(), but for const member functions. */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
-const_partial_wrapped<Tag, Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...) const) {
+const_partial_wrapped<to_internal_tag<false>(Tag), Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...) const) {
     return tag<to_internal_tag<false>(Tag), NewClass, Ret, Args...>(fun);
 }
 
 /**
  * User-facing function that binds a FunctionTag to a class's member function,
- * in order to register it as a "p2p-callable" RPC function. It returns an
+ * in order to register it as a "P2P-callable" RPC function. It returns an
  * instance of the partial_wrapped struct that must be returned by a
  * "replicated object" class's register_functions() method. This function can
- * only be called on const member functions, since p2p-callable RPC functions
+ * only be called on const member functions, since P2P-callable RPC functions
  * should not modify the state of the replicated object.
  * @param fun A pointer-to-member-function from the class in the template parameters
  * @return A const_partial_wrapped struct, which must be further constructed with a
@@ -510,7 +510,26 @@ const_partial_wrapped<Tag, Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*f
  * @tparam Args The argument type of the function
  */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
-const_partial_wrapped<Tag, Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...) const) {
+const_partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...) const) {
+    return tag<to_internal_tag<true>(Tag), NewClass, Ret, Args...>(fun);
+}
+
+/**
+ * This function should not be used. It tags a non-const member function as P2P
+ * callable, which means the replicated state of an object could be modified by
+ * a non-multicast message. Unfortunately, it needs to exist and will be used
+ * for the moment, because Persistent<T> is not const-correct. A const member
+ * function cannot retrieve the value from a Persistent<T> field even though
+ * that is a read-only operation, because Persistent<T>::get() and its related
+ * methods are not marked as const.
+ * @param fun A pointer-to-member function from the class in the template parameters
+ * @return A partial_wrapped struct, which must be further constructed with a call
+ * call to bind_to_instance(std::unique_ptr<NewClass>*, const partial_wrapped<...>&)
+ */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...)) {
+    //When we fix Persistent<T> to be const-correct, un-comment this assertion
+    //static_assert(std::is_const<decltype(fun)>::value, "Non-const methods cannot be tagged as P2P-callable!");
     return tag<to_internal_tag<true>(Tag), NewClass, Ret, Args...>(fun);
 }
 

@@ -153,7 +153,8 @@ public:
     void end_test();
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, object_log);
-    REGISTER_RPC_FUNCTIONS(ObjectStore, update, ordered_update, await_persistence, get, get_latest, end_test);
+    REGISTER_RPC_FUNCTIONS(ObjectStore, ORDERED_TARGETS(ordered_update),
+                           P2P_TARGETS(update, await_persistence, get, get_latest, end_test));
 };
 
 using SHA256Hash = std::array<unsigned char, 32>;
@@ -202,7 +203,7 @@ public:
     void end_test();
 
     DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
-    REGISTER_RPC_FUNCTIONS(SignatureStore, add_hash, ordered_add_hash, end_test);
+    REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash, end_test), ORDERED_TARGETS(ordered_add_hash));
 };
 
 class ClientTier : public mutils::ByteRepresentable,
@@ -231,7 +232,7 @@ public:
      * the actual "main" thread can block waiting for it to complete.
      */
     bool update_batch_test(const int& num_updates);
-    REGISTER_RPC_FUNCTIONS(ClientTier, submit_update, update_batch_test);
+    REGISTER_RPC_FUNCTIONS(ClientTier, P2P_TARGETS(submit_update, update_batch_test));
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
     //We must still provide trivial implementations of these functions.

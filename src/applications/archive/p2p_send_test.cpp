@@ -3,7 +3,33 @@
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
-#include "test_objects.hpp"
+
+struct Foo : mutils::ByteRepresentable {
+
+    int state;
+
+    int read_state() const {
+        return state;
+    }
+    bool change_state(int new_state) {
+        if(new_state == state) {
+            return false;
+        }
+        state = new_state;
+        return true;
+    }
+
+    REGISTER_RPC_FUNCTIONS(Foo, P2P_TARGETS(read_state, change_state));
+    /**
+     * Constructs a Foo with an initial value.
+     * @param initial_state
+     */
+    Foo(int initial_state = 0) : state(initial_state) {}
+    Foo() = default;
+    Foo(const Foo&) = default;
+    DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
+};
+
 
 using derecho::ExternalCaller;
 using derecho::Replicated;

@@ -28,10 +28,10 @@ public:
     void put(const std::string& key, const std::string& value) {
         cache_map[key] = value;
     }
-    std::string get(const std::string& key) {
-        return cache_map[key];
+    std::string get(const std::string& key) const {
+        return cache_map.at(key);
     }
-    bool contains(const std::string& key) {
+    bool contains(const std::string& key) const {
         return cache_map.find(key) != cache_map.end();
     }
     bool invalidate(const std::string& key) {
@@ -42,7 +42,7 @@ public:
         cache_map.erase(key_pos);
         return true;
     }
-    REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
+    REGISTER_RPC_FUNCTIONS(Cache, ORDERED_TARGETS(put, invalidate), P2P_TARGETS(get, contains));
 
     Cache() : cache_map() {}
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
@@ -57,7 +57,7 @@ public:
     //I can't think of any RPC methods this class needs, but it can't be a Replicated Object without an RPC method
     void dummy() {}
 
-    REGISTER_RPC_FUNCTIONS(LoadBalancer, dummy);
+    REGISTER_RPC_FUNCTIONS(LoadBalancer, ORDERED_TARGETS(dummy));
 
     LoadBalancer() : LoadBalancer({{"a", "i"}, {"j", "r"}, {"s", "z"}}) {}
     LoadBalancer(const std::vector<std::pair<std::string, std::string>>& key_ranges_by_shard)

@@ -140,7 +140,8 @@ public:
     Blob get_latest();
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, object_log);
-    REGISTER_RPC_FUNCTIONS(ObjectStore, update, ordered_update, await_persistence, get, get_latest);
+    REGISTER_RPC_FUNCTIONS(ObjectStore, ORDERED_TARGETS(ordered_update),
+                           P2P_TARGETS(update, await_persistence, get, get_latest));
 };
 
 using SHA256Hash = std::array<unsigned char, 32>;
@@ -177,7 +178,7 @@ public:
     persistent::version_t ordered_add_hash(const SHA256Hash& hash);
 
     DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
-    REGISTER_RPC_FUNCTIONS(SignatureStore, add_hash, ordered_add_hash);
+    REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash), ORDERED_TARGETS(ordered_add_hash));
 };
 
 class ClientTier : public mutils::ByteRepresentable,
@@ -198,7 +199,7 @@ public:
      */
     version_signature submit_update(const Blob& data);
 
-    REGISTER_RPC_FUNCTIONS(ClientTier, submit_update);
+    REGISTER_RPC_FUNCTIONS(ClientTier, P2P_TARGETS(submit_update));
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
     //We must still provide trivial implementations of these functions.

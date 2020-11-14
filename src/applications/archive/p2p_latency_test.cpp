@@ -10,7 +10,7 @@ using std::string;
 
 struct test1_str {
     int state;
-    int read_state() {
+    int read_state() const {
         // cout << "In the read state function" << endl;
         return state;
     }
@@ -19,7 +19,7 @@ struct test1_str {
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(test1_str, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(test1_str, P2P_TARGETS(read_state), ORDERED_TARGETS(change_state));
 };
 
 template <typename T>

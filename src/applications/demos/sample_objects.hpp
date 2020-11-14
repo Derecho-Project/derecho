@@ -78,7 +78,7 @@ public:
     Bar(const std::string& s = "") : log(s) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
-    REGISTER_RPC_FUNCTIONS(Bar, ORDERED_TARGETS(append, clear), P2P_TARGETS(print));
+    REGISTER_RPC_FUNCTIONS(Bar, ORDERED_TARGETS(append, clear, print));
 };
 
 /**
@@ -116,6 +116,6 @@ public:
      */
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
 
-    REGISTER_RPC_FUNCTIONS(Cache, ORDERED_TARGETS(put, get, invalidate), P2P_TARGETS(get, contains));
+    REGISTER_RPC_FUNCTIONS(Cache, ORDERED_TARGETS(put, get, invalidate, contains), P2P_TARGETS(get, contains));
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
 };

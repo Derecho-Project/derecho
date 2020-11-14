@@ -416,7 +416,7 @@ public:
      */
     Persistent(Persistent&& other);
 
-    /** 
+    /**
      * Persistent(const char*,std::unqieu_ptr<ObjectType>&,const char*,
      *            PersistentRegistry*,mutils::DeserializationManager)
      *
@@ -522,7 +522,7 @@ public:
      * @param idx   index
      * @param dm    the deserialization manager
      *
-     * @return Return a copy of the object held by a unique pointer. 
+     * @return Return a copy of the object held by a unique pointer.
      *
      * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t), if the idx is not found.
      */
@@ -583,7 +583,7 @@ public:
      * it returns.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      * @tparam Func         User-specified function type, which is usually deduced.
      *
@@ -630,7 +630,7 @@ public:
      * it returns.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      * @tparam Func         User-specified function type, which is usually deduced.
      *
@@ -654,7 +654,7 @@ public:
      * Get a delta of ObjectType at a given version. A copy of the delta will be returned.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      *
      * @param ver   version
@@ -678,7 +678,7 @@ public:
 
     /**
      * Trim versions prior to the specified timestamp.
-     * 
+     *
      * @param key all log entries inclusively before this HLC timestamp will be trimmed
      */
     void trim(const HLC& key);
@@ -764,7 +764,7 @@ public:
      * getNumOfVersions()
      *
      * Get the number of versions excluding trimmed/truncated ones.
-     * 
+     *
      * @return the number of versions.
      */
     virtual int64_t getNumOfVersions() const;
@@ -865,10 +865,10 @@ public:
      */
     virtual void version(version_t ver);
 
-    /** 
+    /**
      * persist(version_t)
      *
-     * Persist log entries up to the specified version. To avoid inefficiency, this 
+     * Persist log entries up to the specified version. To avoid inefficiency, this
      * should be the latest version.
      *
      * @param latest_version The version to persist up to
