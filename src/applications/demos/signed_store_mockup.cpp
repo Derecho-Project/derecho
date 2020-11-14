@@ -202,7 +202,7 @@ std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) {
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_add_hash)>(hash);
     auto& replies = query_results.get();
     std::vector<unsigned char> signature(hashes.getSignatureSize());
-    persistent::version_t hash_log_version;
+    persistent::version_t hash_log_version = persistent::INVALID_VERSION;
     for(auto& reply_pair : replies) {
         hash_log_version = reply_pair.second.get();
     }
