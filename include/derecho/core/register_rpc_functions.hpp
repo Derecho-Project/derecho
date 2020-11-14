@@ -2,7 +2,6 @@
 #include "detail/rpc_utils.hpp"
 #include <derecho/utils/map_macro.hpp>
 
-
 #define make_p2p_tagger_expr(x) derecho::rpc::tag_p2p<derecho::rpc::hash_cstr(#x)>(&classname::x)
 #define make_ordered_tagger_expr(x) derecho::rpc::tag_ordered<derecho::rpc::hash_cstr(#x)>(&classname::x)
 #define applyp2p_(x) make_p2p_tagger_expr(x),
@@ -10,7 +9,6 @@
 
 #define applyordered_(x) make_ordered_tagger_expr(x),
 #define applyordered(...) EVAL(MAP(applyordered_, __VA_ARGS__))
-
 
 /**
  * This macro automatically generates a register_functions() method for a Derecho
@@ -27,19 +25,19 @@
  * that should be callable by a P2P send.
  * @param arg2 Either ORDERED_TARGETS or P2P_TARGETS, just like arg1
  */
-#define REGISTER_RPC_FUNCTIONS(name, arg1, arg2...)     static auto register_functions() { \
-	constexpr char first_arg[] =  #arg1 ;				\
-	constexpr char second_arg[] =  #arg2 ;				\
-	constexpr bool firstarg_well_formed = derecho::rpc::well_formed_macro(first_arg); \
-	constexpr bool secondarg_well_formed = derecho::rpc::well_formed_macro(second_arg); \
-	if constexpr (firstarg_well_formed && secondarg_well_formed) {	\
-	    using classname = name;					\
-	    return std::tuple_cat(std::make_tuple(arg1), std::make_tuple(arg2)); \
-	}								\
-	else {								\
-	    static_assert(firstarg_well_formed && secondarg_well_formed, "Error: bad invocation of REGISTER_RPC_FUNCTIONS, args were " #arg1 #arg2); \
-	    return std::tuple<>{};					\
-	}								\
+#define REGISTER_RPC_FUNCTIONS(name, arg1, arg2...)                                                                                                  \
+    static auto register_functions() {                                                                                                               \
+        constexpr char first_arg[] = #arg1;                                                                                                          \
+        constexpr char second_arg[] = #arg2;                                                                                                         \
+        constexpr bool firstarg_well_formed = derecho::rpc::well_formed_macro(first_arg);                                                            \
+        constexpr bool secondarg_well_formed = derecho::rpc::well_formed_macro(second_arg);                                                          \
+        if constexpr(firstarg_well_formed && secondarg_well_formed) {                                                                                \
+            using classname = name;                                                                                                                  \
+            return std::tuple_cat(std::make_tuple(arg1), std::make_tuple(arg2));                                                                     \
+        } else {                                                                                                                                     \
+            static_assert(firstarg_well_formed && secondarg_well_formed, "Error: bad invocation of REGISTER_RPC_FUNCTIONS, args were " #arg1 #arg2); \
+            return std::tuple<>{};                                                                                                                   \
+        }                                                                                                                                            \
     }
 
 /**
@@ -47,24 +45,22 @@
  * parameters should be a list of method names that should be tagged as
  * P2P-callable RPC functions.
  */
-#define P2P_TARGETS(arg1,args...)					\
-    IF_ELSE(HAS_ARGS(args))(						\
-	applyp2p(args)							\
-	)(/* Do nothing */)						\
-    make_p2p_tagger_expr(arg1)
-
+#define P2P_TARGETS(arg1, args...)            \
+    IF_ELSE(HAS_ARGS(args))                   \
+    (                                         \
+            applyp2p(args))(/* Do nothing */) \
+            make_p2p_tagger_expr(arg1)
 
 /**
  * This macro is one of the possible arugments to REGISTER_RPC_FUNCTIONS; its
  * parameters should be a list of method names that should be tagged as RPC
  * functions that can only be invoked via an ordered_send.
  */
-#define ORDERED_TARGETS(arg1,args...)					\
-    IF_ELSE(HAS_ARGS(args))(						\
-	applyordered(args)						\
-	)(/*Do nothing */)						\
-    make_ordered_tagger_expr(arg1)
-
+#define ORDERED_TARGETS(arg1, args...)           \
+    IF_ELSE(HAS_ARGS(args))                      \
+    (                                            \
+            applyordered(args))(/*Do nothing */) \
+            make_ordered_tagger_expr(arg1)
 
 /**
  * This macro generates the same "name" for an RPC function that REGISTER_RPC_FUNCTIONS
