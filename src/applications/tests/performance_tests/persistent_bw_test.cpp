@@ -16,6 +16,7 @@
 using std::cout;
 using std::endl;
 using namespace persistent;
+using namespace std::chrono;
 
 class ByteArrayObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
@@ -49,18 +50,25 @@ struct persistent_bw_result {
     }
 };
 
-int main(int argc, char* argv[]) {
-    //std::chrono is too verbose
-    using namespace std::chrono;
+#define DEFAULT_PROC_NAME   "pers_bw_test"
 
-    if(argc < 4) {
-        std::cout << "usage:" << argv[0] << "[<derecho config options> -- ]<all|half|one> <num_of_nodes> <num_msgs>" << std::endl;
+int main(int argc, char* argv[]) {
+
+    int dashdash_pos = argc - 1;
+    while (dashdash_pos > 0) {
+        if (strcmp(argv[dashdash_pos],"--") == 0) {
+            break;
+        }
+        dashdash_pos -- ;
+    }
+
+    if((argc-dashdash_pos) < 4) {
+        cout << "Invalid command line arguments." << endl;
+        std::cout << "Usage:" << argv[0] << "[<derecho config options> -- ]<all|half|one> <num_of_nodes> <num_msgs> [proc_name]" << std::endl;
+        std::cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
-    pthread_setname_np(pthread_self(), "persistent_bw_test");
-
-    derecho::Conf::initialize(argc, argv);
-
+    
     //The maximum number of bytes that can be sent to change_pers_bytes() is not quite MAX_PAYLOAD_SIZE.
     //The serialized Bytes object will include its size field as well as the actual buffer, and
     //the RPC function header contains an InvocationID (which is a size_t) as well as the header
@@ -69,13 +77,21 @@ int main(int argc, char* argv[]) {
                                         + derecho::remote_invocation_utilities::header_space();
 
     PartialSendMode sender_selector = PartialSendMode::ALL_SENDERS;
-    if(strcmp(argv[argc - 3], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
-    if(strcmp(argv[argc - 3], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
-    const int num_of_nodes = atoi(argv[argc - 2]);
+    if(strcmp(argv[dashdash_pos + 1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
+    if(strcmp(argv[dashdash_pos + 1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
+    const int num_of_nodes = atoi(argv[dashdash_pos + 2]);
     const int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
-    const int num_msgs = atoi(argv[argc - 1]);
-    steady_clock::time_point begin_time, send_complete_time, persist_complete_time;
+    const int num_msgs = atoi(argv[dashdash_pos + 3]);
 
+    if ((argc-dashdash_pos) > 4) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 4]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
+
+    derecho::Conf::initialize(argc, argv);
+
+    steady_clock::time_point begin_time, send_complete_time, persist_complete_time;
     bool is_sending = true;
 
     long total_num_messages;

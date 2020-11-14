@@ -54,17 +54,35 @@ struct exp_result {
     }
 };
 
+#define DEFAULT_PROC_NAME   "typed_bw_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        std::cout << "Usage:" << argv[0] << " <num_of_nodes> <count> [configuration options...]" << std::endl;
+
+    int dashdash_pos = argc - 1;
+    while (dashdash_pos > 0) {
+        if (strcmp(argv[dashdash_pos],"--") == 0) {
+            break;
+        }
+        dashdash_pos -- ;
+    }
+
+    if((argc-dashdash_pos) < 3) {
+        std::cout << "Invalid command line arguments." << std::endl;
+        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list ] -- <num_of_nodes> <count> [proc_name]" << std::endl;
+        std::cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
 
     derecho::Conf::initialize(argc, argv);
 
-    int num_of_nodes = std::stoi(argv[1]);
+    int num_of_nodes = std::stoi(argv[dashdash_pos + 1]);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-    int count = std::stoi(argv[2]);
+    int count = std::stoi(argv[dashdash_pos + 2]);
+    if (dashdash_pos + 3 < argc) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes](
             const std::vector<std::type_index>& subgroup_type_order,
