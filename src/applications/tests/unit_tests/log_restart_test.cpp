@@ -45,7 +45,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(PersistentThing, state);
-    REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(PersistentThing, ORDERED_TARGETS(read_state, change_state));
 };
 
 class NonPersistentThing : public mutils::ByteRepresentable {
@@ -60,7 +60,7 @@ public:
         state = new_int;
     }
     DEFAULT_SERIALIZATION_SUPPORT(NonPersistentThing, state);
-    REGISTER_RPC_FUNCTIONS(NonPersistentThing, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(NonPersistentThing, ORDERED_TARGETS(read_state, change_state));
 };
 
 /* Test parameters */

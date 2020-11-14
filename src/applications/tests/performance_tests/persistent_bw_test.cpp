@@ -31,7 +31,7 @@ public:
     ByteArrayObject(PersistentRegistry* pr)
             : pers_bytes(std::make_unique<test::Bytes>, nullptr, pr) {}
 
-    REGISTER_RPC_FUNCTIONS(ByteArrayObject, change_pers_bytes);
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes));
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
 };
 

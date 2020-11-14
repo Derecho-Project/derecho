@@ -31,7 +31,7 @@ struct Foo : public mutils::ByteRepresentable {
 
     int state;
 
-    int read_state() {
+    int read_state() const {
         return state;
     }
     bool change_state(const int& new_state) {
@@ -50,7 +50,7 @@ struct Foo : public mutils::ByteRepresentable {
     Foo(const Foo&) = default;
 
     DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
-    REGISTER_RPC_FUNCTIONS(Foo, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(Foo, P2P_TARGETS(read_state), ORDERED_TARGETS(read_state, change_state))
 };
 
 /**
@@ -66,7 +66,7 @@ public:
     void clear() {
         log.clear();
     }
-    std::string print() {
+    std::string print() const {
         return log;
     }
 
@@ -78,7 +78,7 @@ public:
     Bar(const std::string& s = "") : log(s) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
-    REGISTER_RPC_FUNCTIONS(Bar, append, clear, print);
+    REGISTER_RPC_FUNCTIONS(Bar, ORDERED_TARGETS(append, clear), P2P_TARGETS(print));
 };
 
 /**
@@ -92,10 +92,10 @@ public:
     void put(const std::string& key, const std::string& value) {
         cache_map[key] = value;
     }
-    std::string get(const std::string& key) {
-        return cache_map[key];
+    std::string get(const std::string& key) const {
+        return cache_map.at(key);
     }
-    bool contains(const std::string& key) {
+    bool contains(const std::string& key) const {
         return cache_map.find(key) != cache_map.end();
     }
     bool invalidate(const std::string& key) {
@@ -116,6 +116,6 @@ public:
      */
     Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
 
-    REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
+    REGISTER_RPC_FUNCTIONS(Cache, ORDERED_TARGETS(put, get, invalidate), P2P_TARGETS(get, contains));
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
 };
