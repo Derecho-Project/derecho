@@ -1,6 +1,6 @@
+#include <derecho/conf/conf.hpp>
 #include <derecho/persistent/detail/FilePersistLog.hpp>
 #include <derecho/persistent/detail/util.hpp>
-#include <derecho/conf/conf.hpp>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -31,17 +31,18 @@ namespace persistent {
 // visible to outside //
 ////////////////////////
 
-FilePersistLog::FilePersistLog(const string& name, const string& dataPath) : PersistLog(name),
-                                                                             m_sDataPath(dataPath),
-                                                                             m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
-                                                                             m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
-                                                                             m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
-                                                                             m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
-                                                                             m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
-                                                                             m_iLogFileDesc(-1),
-                                                                             m_iDataFileDesc(-1),
-                                                                             m_pLog(MAP_FAILED),
-                                                                             m_pData(MAP_FAILED) {
+FilePersistLog::FilePersistLog(const string& name, const string& dataPath, bool enableSignatures)
+        : PersistLog(name, enableSignatures),
+          m_sDataPath(dataPath),
+          m_sMetaFile(dataPath + "/" + name + "." + META_FILE_SUFFIX),
+          m_sLogFile(dataPath + "/" + name + "." + LOG_FILE_SUFFIX),
+          m_sDataFile(dataPath + "/" + name + "." + DATA_FILE_SUFFIX),
+          m_iMaxLogEntry(derecho::getConfUInt64(CONF_PERS_MAX_LOG_ENTRY)),
+          m_iMaxDataSize(derecho::getConfUInt64(CONF_PERS_MAX_DATA_SIZE)),
+          m_iLogFileDesc(-1),
+          m_iDataFileDesc(-1),
+          m_pLog(MAP_FAILED),
+          m_pData(MAP_FAILED) {
     if(pthread_rwlock_init(&this->m_rwlock, NULL) != 0) {
         throw PERSIST_EXP_RWLOCK_INIT(errno);
     }
@@ -128,18 +129,18 @@ void FilePersistLog::load() {
     dbg_default_trace("{0}:data/meta file mapped to memory", this->m_sName);
     // STEP 4: initialize the header for new created Metafile
     if(bCreate) {
-        META_HEADER->fields.head = 0ll;
-        META_HEADER->fields.tail = 0ll;
-        META_HEADER->fields.ver = INVALID_VERSION;
-        META_HEADER_PERS->fields.head = INVALID_INDEX;
-        META_HEADER_PERS->fields.tail = INVALID_INDEX;
-        META_HEADER_PERS->fields.ver = INVALID_VERSION;
+        m_currMetaHeader.fields.head = 0ll;
+        m_currMetaHeader.fields.tail = 0ll;
+        m_currMetaHeader.fields.ver = INVALID_VERSION;
+        m_persMetaHeader.fields.head = INVALID_INDEX;
+        m_persMetaHeader.fields.tail = INVALID_INDEX;
+        m_persMetaHeader.fields.ver = INVALID_VERSION;
         // persist the header
         FPL_RDLOCK;
         FPL_PERS_LOCK;
 
         try {
-            persistMetaHeaderAtomically(META_HEADER);
+            persistMetaHeaderAtomically(&m_currMetaHeader);
         } catch(uint64_t e) {
             FPL_PERS_UNLOCK;
             FPL_UNLOCK;
@@ -148,7 +149,7 @@ void FilePersistLog::load() {
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;
         dbg_default_info("{0}:new header initialized.", this->m_sName);
-    } else {  // load META_HEADER from disk
+    } else {  // load meta header from disk
         FPL_WRLOCK;
         FPL_PERS_LOCK;
         try {
@@ -156,15 +157,15 @@ void FilePersistLog::load() {
             if(fd == -1) {
                 throw PERSIST_EXP_OPEN_FILE(errno);
             }
-            ssize_t nRead = read(fd, (void*)META_HEADER_PERS, sizeof(MetaHeader));
+            ssize_t nRead = read(fd, (void*)&m_persMetaHeader, sizeof(MetaHeader));
             if(nRead != sizeof(MetaHeader)) {
                 close(fd);
                 throw PERSIST_EXP_READ_FILE(errno);
             }
             close(fd);
-            *META_HEADER = *META_HEADER_PERS;
+            m_currMetaHeader = m_persMetaHeader;
             // update mhlc index
-            for(int64_t idx = META_HEADER->fields.head; idx < META_HEADER->fields.tail; idx++) {
+            for(int64_t idx = m_currMetaHeader.fields.head; idx < m_currMetaHeader.fields.tail; idx++) {
                 struct hlc_index_entry _ent;
                 _ent.hlc.m_rtc_us = LOG_ENTRY_AT(idx)->fields.hlc_r;
                 _ent.hlc.m_logic = LOG_ENTRY_AT(idx)->fields.hlc_l;
@@ -181,7 +182,7 @@ void FilePersistLog::load() {
         FPL_UNLOCK;
     }
     // STEP 5: update m_hlcLE with the latest event: we don't need this anymore
-    //if (META_HEADER->fields.eno >0) {
+    //if (m_currMetaHeader.fields.eno >0) {
     //  if (this->m_hlcLE.m_rtc_us < CURR_LOG_ENTRY->fields.hlc_r &&
     //    this->m_hlcLE.m_logic < CURR_LOG_ENTRY->fields.hlc_l){
     //    this->m_hlcLE.m_rtc_us = CURR_LOG_ENTRY->fields.hlc_r;
@@ -219,16 +220,17 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
         std::cerr << "PERSIST_EXP_NOSPACE_LOG: FREESLOT=" << NUM_FREE_SLOTS << ",version=" << ver << std::endl;
         throw PERSIST_EXP_NOSPACE_LOG;
     }
-    if(NUM_FREE_BYTES < size) {
-        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}",
-                          this->m_sName, NUM_FREE_BYTES, size);
+    if(NUM_FREE_BYTES < (signature_size + size)) {
+        dbg_default_error("{0}-append exception no space for data: NUM_FREE_BYTES={1}, size={2}, signature_size={3}",
+                          this->m_sName, NUM_FREE_BYTES, size, signature_size);
         dbg_default_flush();
         FPL_UNLOCK;
-        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size << std::endl;
+        std::cerr << "PERSIST_EXP_NOSPACE_DATA: FREE:" << NUM_FREE_BYTES << ",size=" << size
+                  << ",signature_size=" << signature_size << std::endl;
         throw PERSIST_EXP_NOSPACE_DATA;
     }
-    if((CURR_LOG_IDX != INVALID_INDEX) && (META_HEADER->fields.ver >= ver)) {
-        int64_t cver = META_HEADER->fields.ver;
+    if((CURR_LOG_IDX != INVALID_INDEX) && (m_currMetaHeader.fields.ver >= ver)) {
+        int64_t cver = m_currMetaHeader.fields.ver;
         dbg_default_error("{0}-append version already exists! cur_ver:{1} new_ver:{2}", this->m_sName,
                           (int64_t)cver, (int64_t)ver);
         dbg_default_flush();
@@ -238,26 +240,27 @@ inline void FilePersistLog::do_append_validation(const uint64_t size, const int6
     }
 }
 
-void FilePersistLog::append(const void* pdat, const uint64_t size, const int64_t ver, const HLC& mhlc) {
+void FilePersistLog::append(const void* pdat, uint64_t size, version_t ver, const HLC& mhlc) {
     dbg_default_trace("{0} append event ({1},{2})", this->m_sName, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_RDLOCK;
 
-    do_append_validation(size,ver);
+    do_append_validation(size, ver);
 
     FPL_UNLOCK;
     dbg_default_trace("{0} append:validate check1 Finished.", this->m_sName);
 
     FPL_WRLOCK;
-    do_append_validation(size,ver);
+    do_append_validation(size, ver);
     dbg_default_trace("{0} append:validate check2 Finished.", this->m_sName);
 
     // copy data
-    memcpy(NEXT_DATA, pdat, size);
-    dbg_default_trace("{0} append:data is copied to log.", this->m_sName);
+    // we reserve the first 'signature_size' bytes at the beginning of NEXT_DATA.
+    memcpy(reinterpret_cast<void*>(reinterpret_cast<uint64_t>(NEXT_DATA) + signature_size), pdat, size);
+    dbg_default_trace("{0} append:data ({1} bytes) is copied to log.", this->m_sName, size);
 
     // fill the log entry
     NEXT_LOG_ENTRY->fields.ver = ver;
-    NEXT_LOG_ENTRY->fields.dlen = size;
+    NEXT_LOG_ENTRY->fields.sdlen = signature_size + size;
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
     NEXT_LOG_ENTRY->fields.hlc_r = mhlc.m_rtc_us;
     NEXT_LOG_ENTRY->fields.hlc_l = mhlc.m_logic;
@@ -267,28 +270,28 @@ void FilePersistLog::append(const void* pdat, const uint64_t size, const int64_t
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
     }
-*/
+    */
 
     // update meta header
-    this->hidx.insert(hlc_index_entry{mhlc, META_HEADER->fields.tail});
-    META_HEADER->fields.tail++;
-    META_HEADER->fields.ver = ver;
+    this->hidx.insert(hlc_index_entry{mhlc, m_currMetaHeader.fields.tail});
+    m_currMetaHeader.fields.tail++;
+    m_currMetaHeader.fields.ver = ver;
     dbg_default_trace("{0} append:log entry and meta data are updated.", this->m_sName);
     /* No sync
     if (msync(this->m_pMeta,sizeof(MetaHeader),MS_SYNC) != 0) {
       FPL_UNLOCK;
       throw PERSIST_EXP_MSYNC(errno);
     }
-*/
+    */
     dbg_default_debug("{0} append a log ver:{1} hlc:({2},{3})", this->m_sName,
                       ver, mhlc.m_rtc_us, mhlc.m_logic);
     FPL_UNLOCK;
 }
 
-void FilePersistLog::advanceVersion(const int64_t& ver) {
+void FilePersistLog::advanceVersion(version_t ver) {
     FPL_WRLOCK;
-    if(META_HEADER->fields.ver < ver) {
-        META_HEADER->fields.ver = ver;
+    if(m_currMetaHeader.fields.ver < ver) {
+        m_currMetaHeader.fields.ver = ver;
     } else {
         FPL_UNLOCK;
         throw PERSIST_EXP_INV_VERSION;
@@ -296,17 +299,17 @@ void FilePersistLog::advanceVersion(const int64_t& ver) {
     FPL_UNLOCK;
 }
 
-const int64_t FilePersistLog::persist(const bool preLocked) {
+version_t FilePersistLog::persist(version_t ver, bool preLocked) {
     int64_t ver_ret = INVALID_VERSION;
     if(!preLocked) {
         FPL_PERS_LOCK;
         FPL_RDLOCK;
     }
 
-    if(*META_HEADER == *META_HEADER_PERS) {
+    if(m_currMetaHeader == m_persMetaHeader) {
         if(CURR_LOG_IDX != INVALID_INDEX) {
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = META_HEADER->fields.ver;
+            ver_ret = m_currMetaHeader.fields.ver;
         }
         if(!preLocked) {
             FPL_UNLOCK;
@@ -321,9 +324,9 @@ const int64_t FilePersistLog::persist(const bool preLocked) {
         // shadow the current state
         void *flush_dstart = nullptr, *flush_lstart = nullptr;
         size_t flush_dlen = 0, flush_llen = 0;
-        MetaHeader shadow_header = *META_HEADER;
+        MetaHeader shadow_header = m_currMetaHeader;
         if((NUM_USED_SLOTS > 0) && (NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS)) {
-            flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
+            flush_dlen = (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - NEXT_LOG_ENTRY_PERS->fields.ofst);
             // flush data
             flush_dstart = ALIGN_TO_PAGE(NEXT_DATA_PERS);
             flush_dlen += ((int64_t)NEXT_DATA_PERS) % PAGE_SIZE;
@@ -334,7 +337,7 @@ const int64_t FilePersistLog::persist(const bool preLocked) {
         if(NUM_USED_SLOTS > 0) {
             //get the latest flushed version
             //ver_ret = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
-            ver_ret = META_HEADER->fields.ver;
+            ver_ret = m_currMetaHeader.fields.ver;
         }
         if(!preLocked) {
             FPL_UNLOCK;
@@ -365,6 +368,61 @@ const int64_t FilePersistLog::persist(const bool preLocked) {
     return ver_ret;
 }
 
+void FilePersistLog::addSignature(version_t version,
+                                  const unsigned char* signature,
+                                  version_t prev_signed_ver) {
+    if(signature_size == 0) {
+        return;
+    }
+    LogEntry* ple = nullptr;
+
+    FPL_RDLOCK;
+
+    //binary search
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            version,
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == version) {
+        memcpy(LOG_ENTRY_SIGNATURE(ple), signature, signature_size);
+
+        ple->fields.prev_signed_ver = prev_signed_ver;
+    }
+}
+
+bool FilePersistLog::getSignature(version_t version, unsigned char* signature, version_t& previous_signed_version) {
+    if(signature_size == 0) {
+        return false;
+    }
+    LogEntry* ple = nullptr;
+
+    FPL_RDLOCK;
+
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            version,
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == version) {
+        memcpy(signature, LOG_ENTRY_SIGNATURE(ple), signature_size);
+        previous_signed_version = ple->fields.prev_signed_ver;
+        return true;
+    }
+    return false;
+}
+
 int64_t FilePersistLog::getLength() {
     FPL_RDLOCK;
     int64_t len = NUM_USED_SLOTS;
@@ -375,7 +433,7 @@ int64_t FilePersistLog::getLength() {
 
 int64_t FilePersistLog::getEarliestIndex() {
     FPL_RDLOCK;
-    int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.head;
+    int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : m_currMetaHeader.fields.head;
     FPL_UNLOCK;
     return idx;
 }
@@ -389,7 +447,7 @@ int64_t FilePersistLog::getLatestIndex() {
 
 version_t FilePersistLog::getEarliestVersion() {
     FPL_RDLOCK;
-    int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.head;
+    int64_t idx = (NUM_USED_SLOTS == 0) ? INVALID_INDEX : m_currMetaHeader.fields.head;
     version_t ver = (idx == INVALID_INDEX) ? INVALID_VERSION : (LOG_ENTRY_AT(idx)->fields.ver);
     FPL_UNLOCK;
     return ver;
@@ -403,18 +461,18 @@ version_t FilePersistLog::getLatestVersion() {
     return ver;
 }
 
-const version_t FilePersistLog::getLastPersistedVersion() {
+version_t FilePersistLog::getLastPersistedVersion() {
     version_t last_persisted = INVALID_VERSION;
     ;
     FPL_PERS_LOCK;
 
-    last_persisted = META_HEADER_PERS->fields.ver;
+    last_persisted = m_persMetaHeader.fields.ver;
 
     FPL_PERS_UNLOCK;
     return last_persisted;
 }
 
-int64_t FilePersistLog::getVersionIndex(const version_t& ver, bool exact) {
+int64_t FilePersistLog::getVersionIndex(version_t ver, bool exact) {
     FPL_RDLOCK;
 
     //binary search
@@ -424,8 +482,8 @@ int64_t FilePersistLog::getVersionIndex(const version_t& ver, bool exact) {
                 return ple->fields.ver;
             },
             ver,
-            META_HEADER->fields.head,
-            META_HEADER->fields.tail);
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
 
     FPL_UNLOCK;
@@ -439,14 +497,14 @@ int64_t FilePersistLog::getVersionIndex(const version_t& ver, bool exact) {
     return l_idx;
 }
 
-const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) {
+const void* FilePersistLog::getEntryByIndex(int64_t eidx) {
     FPL_RDLOCK;
     dbg_default_trace("{0}-getEntryByIndex-head:{1},tail:{2},eidx:{3}",
-                      this->m_sName, META_HEADER->fields.head, META_HEADER->fields.tail, eidx);
+                      this->m_sName, m_currMetaHeader.fields.head, m_currMetaHeader.fields.tail, eidx);
 
-    int64_t ridx = (eidx < 0) ? (META_HEADER->fields.tail + eidx) : eidx;
+    int64_t ridx = (eidx < 0) ? (m_currMetaHeader.fields.tail + eidx) : eidx;
 
-    if(META_HEADER->fields.tail <= ridx || ridx < META_HEADER->fields.head) {
+    if(m_currMetaHeader.fields.tail <= ridx || ridx < m_currMetaHeader.fields.head) {
         FPL_UNLOCK;
         throw PERSIST_EXP_INV_ENTRY_IDX(eidx);
     }
@@ -462,7 +520,7 @@ const void* FilePersistLog::getEntryByIndex(const int64_t& eidx) {
     return LOG_ENTRY_DATA(LOG_ENTRY_AT(ridx));
 }
 
-const void* FilePersistLog::getEntry(const int64_t& ver, bool exact) {
+const void* FilePersistLog::getEntry(version_t ver, bool exact) {
     LogEntry* ple = nullptr;
 
     FPL_RDLOCK;
@@ -474,8 +532,8 @@ const void* FilePersistLog::getEntry(const int64_t& ver, bool exact) {
                 return ple->fields.ver;
             },
             ver,
-            META_HEADER->fields.head,
-            META_HEADER->fields.tail);
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
     ple = (l_idx == INVALID_INDEX) ? nullptr : LOG_ENTRY_AT(l_idx);
     dbg_default_trace("{0} - end binary search.", this->m_sName);
 
@@ -545,12 +603,35 @@ const void* FilePersistLog::getEntry(const HLC& rhlc) {
     return LOG_ENTRY_DATA(ple);
 }
 
+void FilePersistLog::processEntryAtVersion(version_t ver,
+                                           const std::function<void(const void*, std::size_t)>& func) {
+    LogEntry* ple = nullptr;
+    dbg_default_trace("{} - process entry at version {}", m_sName, ver);
+    FPL_RDLOCK;
+
+    //binary search
+    int64_t l_idx = binarySearch<int64_t>(
+            [&](const LogEntry* ple) {
+                return ple->fields.ver;
+            },
+            ver,
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
+    ple = (l_idx == -1) ? nullptr : LOG_ENTRY_AT(l_idx);
+
+    FPL_UNLOCK;
+
+    if(ple != nullptr && ple->fields.ver == ver) {
+        func(LOG_ENTRY_DATA(ple), static_cast<size_t>(ple->fields.sdlen - this->signature_size));
+    }
+}
+
 // trim by index
-void FilePersistLog::trimByIndex(const int64_t& idx) {
+void FilePersistLog::trimByIndex(int64_t idx) {
     dbg_default_trace("{0} trim at index: {1}", this->m_sName, idx);
     FPL_RDLOCK;
     // validate check
-    if(idx < META_HEADER->fields.head || idx >= META_HEADER->fields.tail) {
+    if(idx < m_currMetaHeader.fields.head || idx >= m_currMetaHeader.fields.tail) {
         FPL_UNLOCK;
         return;
     }
@@ -559,14 +640,19 @@ void FilePersistLog::trimByIndex(const int64_t& idx) {
     FPL_PERS_LOCK;
     FPL_WRLOCK;
     //validate check again
-    if(idx < META_HEADER->fields.head || idx >= META_HEADER->fields.tail) {
+    if(idx < m_currMetaHeader.fields.head || idx >= m_currMetaHeader.fields.tail) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;
         return;
     }
-    META_HEADER->fields.head = idx + 1;
+    m_currMetaHeader.fields.head = idx + 1;
     try {
-        persist(true);
+        //What version number should be supplied to persist in this case?
+        // CAUTION:
+        // The persist API is changed for Edward's convenience by adding a version parameter
+        // This has a widespreading on the design and needs extensive test before replying on
+        // it.
+        persist(LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver, true);
     } catch(uint64_t e) {
         FPL_UNLOCK;
         FPL_PERS_UNLOCK;
@@ -580,7 +666,7 @@ void FilePersistLog::trimByIndex(const int64_t& idx) {
     dbg_default_trace("{0} trim at index: {1}...done", this->m_sName, idx);
 }
 
-void FilePersistLog::trim(const int64_t& ver) {
+void FilePersistLog::trim(version_t ver) {
     dbg_default_trace("{0} trim at version: {1}", this->m_sName, ver);
     this->trim<int64_t>(ver,
                         [&](const LogEntry* ple) { return ple->fields.ver; });
@@ -621,10 +707,10 @@ void FilePersistLog::persistMetaHeaderAtomically(MetaHeader* pShadowHeader) {
     }
 
     // STEP 4: update the persisted header in memory
-    *META_HEADER_PERS = *pShadowHeader;
+    m_persMetaHeader = *pShadowHeader;
 }
 
-int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
+int64_t FilePersistLog::getMinimumIndexBeyondVersion(version_t ver) {
     int64_t rIndex = INVALID_INDEX;
 
     dbg_default_trace("{0}[{1}] - request version {2}", this->m_sName, __func__, ver);
@@ -637,7 +723,7 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
     if(ver == INVALID_VERSION) {
         dbg_default_trace("{0}[{1}] - request all logs", this->m_sName, __func__);
         // return the earliest log we have.
-        return META_HEADER->fields.head;
+        return m_currMetaHeader.fields.head;
     }
 
     // binary search
@@ -647,16 +733,16 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
                 return ple->fields.ver;
             },
             ver,
-            META_HEADER->fields.head,
-            META_HEADER->fields.tail);
+            m_currMetaHeader.fields.head,
+            m_currMetaHeader.fields.tail);
 
     if(l_idx == INVALID_INDEX) {
         // if binary search failed, it means the requested version is earlier
         // than the earliest available log so we return the earliest log entry
         // we have.
-        rIndex = META_HEADER->fields.head;
+        rIndex = m_currMetaHeader.fields.head;
         dbg_default_trace("{0}[{1}] - binary search failed, return the earliest version {2}", this->m_sName, __func__, ver);
-    } else if((l_idx + 1) == META_HEADER->fields.tail) {
+    } else if((l_idx + 1) == m_currMetaHeader.fields.tail) {
         // if binary search found the last one, it means ver is in the future return INVALID_INDEX.
         // use the default rIndex value (INVALID_INDEX)
         dbg_default_trace("{0}[{1}] - binary search returns the last entry in the log. return INVALID_INDEX.", this->m_sName, __func__);
@@ -677,11 +763,11 @@ int64_t FilePersistLog::getMinimumIndexBeyondVersion(const int64_t& ver) {
 // 2) size_t writeLogEntryToByteArray(const LogEntry * ple, char * ba);
 // 3) size_t postLogEntry(const std::function<void (char const *const, std::size_t)> f, const LogEntry *ple);
 // 4) size_t mergeLogEntryFromByteArray(const char * ba);
-size_t FilePersistLog::bytes_size(const int64_t& ver) {
+size_t FilePersistLog::bytes_size(version_t ver) {
     size_t bsize = (sizeof(int64_t) + sizeof(int64_t));
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     if(idx != INVALID_INDEX) {
-        while(idx < META_HEADER->fields.tail) {
+        while(idx < m_currMetaHeader.fields.tail) {
             bsize += byteSizeOfLogEntry(LOG_ENTRY_AT(idx));
             idx++;
         }
@@ -689,7 +775,7 @@ size_t FilePersistLog::bytes_size(const int64_t& ver) {
     return bsize;
 }
 
-size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) {
+size_t FilePersistLog::to_bytes(char* buf, version_t ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     size_t ofst = 0;
     // latest_version
@@ -697,11 +783,11 @@ size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) {
     *(int64_t*)(buf + ofst) = latest_version;
     ofst += sizeof(int64_t);
     // nr_log_entry
-    *(int64_t*)(buf + ofst) = (idx == INVALID_INDEX) ? 0 : (META_HEADER->fields.tail - idx);
+    *(int64_t*)(buf + ofst) = (idx == INVALID_INDEX) ? 0 : (m_currMetaHeader.fields.tail - idx);
     ofst += sizeof(int64_t);
     // log_entries
     if(idx != INVALID_INDEX) {
-        while(idx < META_HEADER->fields.tail) {
+        while(idx < m_currMetaHeader.fields.tail) {
             ofst += writeLogEntryToByteArray(LOG_ENTRY_AT(idx), buf + ofst);
             idx++;
         }
@@ -710,17 +796,17 @@ size_t FilePersistLog::to_bytes(char* buf, const int64_t& ver) {
 }
 
 void FilePersistLog::post_object(const std::function<void(char const* const, std::size_t)>& f,
-                                 const int64_t& ver) {
+                                 version_t ver) {
     int64_t idx = this->getMinimumIndexBeyondVersion(ver);
     // latest_version
     int64_t latest_version = this->getLatestVersion();
     f((char*)&latest_version, sizeof(int64_t));
     // nr_log_entry
-    int64_t nr_log_entry = (idx == INVALID_INDEX) ? 0 : (META_HEADER->fields.tail - idx);
+    int64_t nr_log_entry = (idx == INVALID_INDEX) ? 0 : (m_currMetaHeader.fields.tail - idx);
     f((char*)&nr_log_entry, sizeof(int64_t));
     // log_entries
     if(idx != INVALID_INDEX) {
-        while(idx < META_HEADER->fields.tail) {
+        while(idx < m_currMetaHeader.fields.tail) {
             postLogEntry(f, LOG_ENTRY_AT(idx));
             idx++;
         }
@@ -740,20 +826,20 @@ void FilePersistLog::applyLogTail(char const* v) {
         ofst += mergeLogEntryFromByteArray(v + ofst);
     }
     // update the latest version.
-    META_HEADER->fields.ver = latest_version;
+    m_currMetaHeader.fields.ver = latest_version;
 }
 
 size_t FilePersistLog::byteSizeOfLogEntry(const LogEntry* ple) {
-    return sizeof(LogEntry) + ple->fields.dlen;
+    return sizeof(LogEntry) + ple->fields.sdlen;
 }
 
 size_t FilePersistLog::writeLogEntryToByteArray(const LogEntry* ple, char* ba) {
     size_t nr_written = 0;
     memcpy(ba, ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
-    if(ple->fields.dlen > 0) {
-        memcpy((void*)(ba + nr_written), (void*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
-        nr_written += ple->fields.dlen;
+    if(ple->fields.sdlen > 0) {
+        memcpy((void*)(ba + nr_written), (void*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
+        nr_written += ple->fields.sdlen;
     }
     return nr_written;
 }
@@ -762,9 +848,9 @@ size_t FilePersistLog::postLogEntry(const std::function<void(char const* const, 
     size_t nr_written = 0;
     f((const char*)ple, sizeof(LogEntry));
     nr_written += sizeof(LogEntry);
-    if(ple->fields.dlen > 0) {
-        f((const char*)LOG_ENTRY_DATA(ple), ple->fields.dlen);
-        nr_written += ple->fields.dlen;
+    if(ple->fields.sdlen > 0) {
+        f((const char*)LOG_ENTRY_SIGNATURE(ple), ple->fields.sdlen);
+        nr_written += ple->fields.sdlen;
     }
     return nr_written;
 }
@@ -773,28 +859,28 @@ size_t FilePersistLog::mergeLogEntryFromByteArray(const char* ba) {
     const LogEntry* cple = (const LogEntry*)ba;
     // valid check
     // 0) version grows monotonically.
-    if(cple->fields.ver <= META_HEADER->fields.ver) {
-        dbg_default_trace("{0} skip log entry version {1}, we are at {2}.", __func__, cple->fields.ver, META_HEADER->fields.ver);
-        return cple->fields.dlen + sizeof(LogEntry);
+    if(cple->fields.ver <= m_currMetaHeader.fields.ver) {
+        dbg_default_trace("{0} skip log entry version {1}, we are at {2}.", __func__, cple->fields.ver, m_currMetaHeader.fields.ver);
+        return cple->fields.sdlen + sizeof(LogEntry);
     }
     // 1) do we have space to merge it?
     if(NUM_FREE_SLOTS == 0) {
         dbg_default_trace("{0} failed to merge log entry, we don't empty log entry.", __func__);
         throw PERSIST_EXP_NOSPACE_LOG;
     }
-    if(NUM_FREE_BYTES < cple->fields.dlen) {
-        dbg_default_trace("{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.dlen, NUM_FREE_BYTES);
+    if(NUM_FREE_BYTES < cple->fields.sdlen) {
+        dbg_default_trace("{0} failed to merge log entry, we need {1} bytes data space, but we have only {2} bytes.", __func__, cple->fields.sdlen, NUM_FREE_BYTES);
         throw PERSIST_EXP_NOSPACE_DATA;
     }
     // 2) merge it!
-    memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.dlen);
+    memcpy(NEXT_DATA, (const void*)(ba + sizeof(LogEntry)), cple->fields.sdlen);
     memcpy(NEXT_LOG_ENTRY, cple, sizeof(LogEntry));
     NEXT_LOG_ENTRY->fields.ofst = NEXT_DATA_OFST;
-    this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r, cple->fields.hlc_l}, META_HEADER->fields.tail});
-    META_HEADER->fields.tail++;
-    META_HEADER->fields.ver = cple->fields.ver;
+    this->hidx.insert(hlc_index_entry{HLC{cple->fields.hlc_r, cple->fields.hlc_l}, m_currMetaHeader.fields.tail});
+    m_currMetaHeader.fields.tail++;
+    m_currMetaHeader.fields.ver = cple->fields.ver;
     dbg_default_trace("{0} merge log:log entry and meta data are updated.", __func__);
-    return cple->fields.dlen + sizeof(LogEntry);
+    return cple->fields.sdlen + sizeof(LogEntry);
 }
 //////////////////////////
 // invisible to outside //
@@ -854,14 +940,14 @@ bool FilePersistLog::checkOrCreateDataFile() {
     return checkOrCreateFileWithSize(this->m_sDataFile, MAX_DATA_SIZE);
 }
 
-void FilePersistLog::truncate(const int64_t& ver) {
+void FilePersistLog::truncate(version_t ver) {
     dbg_default_trace("{0} truncate at version: {1}.", this->m_sName, ver);
     FPL_WRLOCK;
     // STEP 1: search for the log entry
     // TODO
     //binary search
-    int64_t head = META_HEADER->fields.head % MAX_LOG_ENTRY;
-    int64_t tail = META_HEADER->fields.tail % MAX_LOG_ENTRY;
+    int64_t head = m_currMetaHeader.fields.head % MAX_LOG_ENTRY;
+    int64_t tail = m_currMetaHeader.fields.tail % MAX_LOG_ENTRY;
     if(tail < head) tail += MAX_LOG_ENTRY;
     dbg_default_trace("{0} - begin binary search.", this->m_sName);
     int64_t l_idx = binarySearch<int64_t>(
@@ -873,17 +959,17 @@ void FilePersistLog::truncate(const int64_t& ver) {
     // STEP 2: update META_HEADER
     if(l_idx == INVALID_INDEX) {  // not adequate log found. We need to remove all logs.
         // TODO: this may not be safe in case the log has been trimmed beyond 'ver' !!!
-        META_HEADER->fields.tail = META_HEADER->fields.head;
+        m_currMetaHeader.fields.tail = m_currMetaHeader.fields.head;
     } else {
-        int64_t _idx = (META_HEADER->fields.head + l_idx - head) + ((head > l_idx) ? MAX_LOG_ENTRY : 0);
-        META_HEADER->fields.tail = _idx + 1;
+        int64_t _idx = (m_currMetaHeader.fields.head + l_idx - head) + ((head > l_idx) ? MAX_LOG_ENTRY : 0);
+        m_currMetaHeader.fields.tail = _idx + 1;
     }
-    if(META_HEADER->fields.ver > ver)
-        META_HEADER->fields.ver = ver;
+    if(m_currMetaHeader.fields.ver > ver)
+        m_currMetaHeader.fields.ver = ver;
     // STEP 3: update PERSISTENT STATE
     FPL_PERS_LOCK;
     try {
-        persistMetaHeaderAtomically(META_HEADER);
+        persistMetaHeaderAtomically(&m_currMetaHeader);
     } catch(uint64_t e) {
         FPL_PERS_UNLOCK;
         FPL_UNLOCK;

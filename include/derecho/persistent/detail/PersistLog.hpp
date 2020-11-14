@@ -7,7 +7,7 @@
 
 #include "../HLC.hpp"
 #include "../PersistException.hpp"
-#include "../PersistentTypenames.hpp"
+#include "../PersistentInterface.hpp"
 #include <functional>
 #include <inttypes.h>
 #include <map>
@@ -52,22 +52,35 @@ struct hlc_index_entry_comp {
     }
 };
 
-// Persistent log interfaces
+/**
+ * Persistent log interface.
+ * This class defines the interface that all persistent logs must implement, and
+ * declares some common member variables such as the log's name.
+ */
 class PersistLog {
 public:
     // LogName
     const std::string m_sName;
+    /**
+     * The size, in bytes, of a signature in the log. This is a constant based
+     * on the configured private key. It is 0 if signatures are disabled.
+     */
+    const uint32_t signature_size;
     // HLCIndex
     std::set<hlc_index_entry, hlc_index_entry_comp> hidx;
 #ifndef NDEBUG
     void dump_hidx();
 #endif  //NDEBUG
-    // Constructor:
-    // Remark: the constructor will check the persistent storage
-    // to make sure if this named log(by "name" in the template
-    // parameters) is already there. If it is, load it from disk.
-    // Otherwise, create the log.
-    PersistLog(const std::string& name) noexcept(true);
+    /**
+     * Constructor.
+     * Remark: A subclass's constructor should check the persistent storage to
+     * see if a log with this name (using the parameter "name") is already
+     * there. If it is, load it from disk. Otherwise, create the log.
+     * @param name The name of the log.
+     * @param enable_signatures True if this log should sign every entry, false
+     * if there are no signatures.
+     */
+    PersistLog(const std::string& name, bool enable_signatures) noexcept(true);
     virtual ~PersistLog() noexcept(true);
     /** Persistent Append
      * @param pdata - serialized data to be append
@@ -80,7 +93,7 @@ public:
      * is called on that entry.
      */
     virtual void append(const void* pdata,
-                        const uint64_t size, const version_t ver,
+                        uint64_t size, version_t ver,
                         const HLC& mhlc)
             = 0;
 
@@ -89,7 +102,7 @@ public:
      * to create gap between versions.
      */
     // virtual void advanceVersion(const __int128 & ver) = 0;
-    virtual void advanceVersion(const version_t& ver) = 0;
+    virtual void advanceVersion(version_t ver) = 0;
 
     // Get the length of the log
     virtual int64_t getLength() = 0;
@@ -105,7 +118,7 @@ public:
      *  @param exact - exact match
      *  @return index of the corresponding log entry
      */
-    virtual int64_t getVersionIndex(const version_t& ver, bool exact = false) = 0;
+    virtual int64_t getVersionIndex(version_t ver, bool exact = false) = 0;
 
     // Get the Index corresponding to an HLC timestamp
     virtual int64_t getHLCIndex(const HLC& hlc) = 0;
@@ -117,16 +130,16 @@ public:
     virtual version_t getLatestVersion() = 0;
 
     // return the last persisted version
-    virtual const version_t getLastPersistedVersion() = 0;
+    virtual version_t getLastPersistedVersion() = 0;
 
     // Get a version by entry number return both length and buffer
-    virtual const void* getEntryByIndex(const int64_t& eno) = 0;
+    virtual const void* getEntryByIndex(int64_t eno) = 0;
 
     // Get the latest version equal or earlier than ver.
     // @param ver - version requested
     // @param exact - ask for the exact version
     // @return the pointer to the data, nullptr if exact is true and no corresponding version are found.
-    virtual const void* getEntry(const version_t& ver, bool exact = false) = 0;
+    virtual const void* getEntry(version_t ver, bool exact = false) = 0;
 
     // Get the latest version - deprecated.
     // virtual const void* getEntry() = 0;
@@ -134,25 +147,60 @@ public:
     virtual const void* getEntry(const HLC& hlc) = 0;
 
     /**
+     * process the entry at exactly version @ver
+     * if such a version does not exist, nothing will happen.
+     * @param ver - the specified version
+     * @param func - the function to run on the entry
+     */
+    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func) = 0;
+
+    /**
      * Persist the log till specified version
      * @return - the version till which has been persisted.
      * Note that the return value could be higher than the the version asked
      * is lower than the log that has been actually persisted.
      */
-    virtual const version_t persist(const bool preLocked = false) = 0;
+    virtual version_t persist(version_t version,
+                              bool preLocked = false) = 0;
+
+    /**
+     * Add a signature to a specific version; does nothing if signatures are disabled
+     * @param ver - version
+     * @param signature - signature
+     * @param prev_signed_ver - THe previous version whose signature is
+     * included in this signature
+     */
+    virtual void addSignature(version_t ver, const unsigned char* signature,
+                              version_t prev_signed_ver) = 0;
+
+    /**
+     * Retrieve a signature from a specified version, assuming signatures are enabled.
+     * @param ver - version
+     * @param signature - A byte buffer into which the signature will be copied.
+     * Must be at least signature_size bytes.
+     * @param prev_ver A variable which will be updated to equal the previous
+     * version whose signature is included in this version's signature, or
+     * INVALID_VERSION if there was no version in the log with the requested
+     * version number (in this case, no signature will be returned either)
+     * @return true if a signature was successfully retrieved, false if there was
+     * no version in the log with the requested version number or signatures are
+     * disabled.
+     */
+    virtual bool getSignature(version_t ver, unsigned char* signature,
+                              version_t& prev_signed_ver) = 0;
 
     /**
      * Trim the log till entry number eno, inclusively.
      * For exmaple, there is a log: [7,8,9,4,5,6]. After trim(3), it becomes [5,6]
      * @param eno -  the log number to be trimmed
      */
-    virtual void trimByIndex(const int64_t& idx) = 0;
+    virtual void trimByIndex(int64_t eno) = 0;
 
     /**
      * Trim the log till version, inclusively.
      * @param ver - all log entries before ver will be trimmed.
      */
-    virtual void trim(const version_t& ver) = 0;
+    virtual void trim(version_t ver) = 0;
 
     /**
      * Trim the log till HLC clock, inclusively.
@@ -165,7 +213,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t bytes_size(const version_t& ver) = 0;
+    virtual size_t bytes_size(version_t ver) = 0;
 
     /**
      * Write the serialized log bytes to the given buffer
@@ -173,7 +221,7 @@ public:
      * @PARAM ver - from which version the detal begins(tail log)
      *   INVALID_VERSION means to include all of the tail logs
      */
-    virtual size_t to_bytes(char* buf, const version_t& ver) = 0;
+    virtual size_t to_bytes(char* buf, version_t ver) = 0;
 
     /**
      * Post the serialized log bytes to a function
@@ -182,7 +230,7 @@ public:
      *   INVALID_VERSION means to include all of the tail logs
      */
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver)
+                             version_t ver)
             = 0;
 
     /**
@@ -196,7 +244,7 @@ public:
      * Truncate the log strictly newer than 'ver'.
      * @param ver - all log entry strictly after ver will be truncated.
      */
-    virtual void truncate(const version_t& ver) = 0;
+    virtual void truncate(version_t ver) = 0;
 };
 }  // namespace persistent
 

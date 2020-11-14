@@ -1,6 +1,7 @@
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/HLC.hpp>
 #include <derecho/persistent/Persistent.hpp>
+#include <derecho/openssl/signature.hpp>
 #include <derecho/persistent/detail/util.hpp>
 #include <iostream>
 #include <signal.h>
@@ -9,6 +10,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <time.h>
+#include <iomanip>
 
 using namespace persistent;
 using namespace mutils;
@@ -154,6 +156,22 @@ printhelp() {
          << "to remove this limitation." << endl;
 }
 
+void dump_binary_buffer(const unsigned char* buf, std::size_t len) {
+    std::size_t idx=0;
+    std::cout << "[" << std::endl;
+    while (idx < len) {
+        if (idx%16 == 0) {
+            std::cout << "\t";
+        }
+        std::cout << std::hex << std::setfill('0') << std::setw(2) << static_cast<unsigned>(buf[idx]) << " ";
+        idx ++;
+        if (idx%16 == 0) {
+            std::cout << std::endl;
+        }
+    }
+    std::cout << "]" << std::endl;
+}
+
 template <typename OT, StorageType st = ST_FILE>
 void listvar(Persistent<OT, st>& var) {
     int64_t nv = var.getNumOfVersions();
@@ -196,10 +214,10 @@ static void eval_write(std::size_t osize, int nops, bool batch) {
     clock_gettime(CLOCK_REALTIME, &ts);
     while(cnt-- > 0) {
         pvar.set(writeMe, ver++);
-        if(!batch) pvar.persist();
+        if(!batch) pvar.persist(ver-1);
     }
     if(batch) {
-        pvar.persist();
+        pvar.persist(ver);
     }
 
 #if defined(_PERFORMANCE_DEBUG)
@@ -222,21 +240,43 @@ int main(int argc, char** argv) {
 
     signal(SIGSEGV, sig_handler);
 
+
     if(argc < 2) {
         printhelp();
         return 0;
     }
+    //If the private key file exists, assume signatures should be enabled
+    bool use_signature = checkRegularFile(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE));
 
     PersistentRegistry pr(nullptr, typeid(ReplicatedT), 123, 321);
-    Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr);
+    Persistent<X> px1([]() { return std::make_unique<X>(); }, "PersistentXObject", &pr, use_signature);
     //Persistent<X> px1;
-    Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, "PersistentVariableBytes", &pr),
-            npx_logtail([]() { return std::make_unique<VariableBytes>(); }, "VariableBytesLogTail");
+    Persistent<VariableBytes> npx([]() { return std::make_unique<VariableBytes>(); }, "PersistentVariableBytes", &pr, use_signature),
+            npx_logtail([]() { return std::make_unique<VariableBytes>(); }, "VariableBytesLogTail", nullptr, use_signature);
     //Persistent<X,ST_MEM> px2;
     Volatile<X> px2([]() { return std::make_unique<X>(); }, "VolatileXObject");
-    Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, "PersistentIntegerWithDelta", &pr);
+    Persistent<IntegerWithDelta> dx([]() { return std::make_unique<IntegerWithDelta>(); }, "PersistentIntegerWithDelta", &pr, use_signature);
 
     std::cout << "command:" << argv[1] << std::endl;
+
+
+    std::unique_ptr<openssl::EnvelopeKey> prikey;
+    std::unique_ptr<openssl::Signer> signer;
+    std::unique_ptr<openssl::Verifier> verifier;
+
+    std::size_t sig_size;
+    unsigned char sig_buf[512];
+    unsigned char prev_sig[512];
+
+    if (use_signature) {
+        prikey = std::make_unique<openssl::EnvelopeKey>(
+                std::move(openssl::EnvelopeKey::from_pem_private(derecho::getConfString(CONF_PERS_PRIVATE_KEY_FILE))));
+        signer = std::make_unique<openssl::Signer>(*prikey,openssl::DigestAlgorithm::SHA256);
+        verifier = std::make_unique<openssl::Verifier>(*prikey, openssl::DigestAlgorithm::SHA256);
+        signer->init();
+        verifier->init();
+        sig_size = signer->get_max_signature_size();
+    }
 
     try {
         if(strcmp(argv[1], "list") == 0) {
@@ -279,12 +319,10 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "trimbyidx") == 0) {
             int64_t nv = atol(argv[2]);
             npx.trim(nv);
-            npx.persist();
             cout << "trim till index " << nv << " successfully" << endl;
         } else if(strcmp(argv[1], "trimbyver") == 0) {
             int64_t ver = atol(argv[2]);
             npx.trim(ver);
-            npx.persist();
             cout << "trim till ver " << ver << " successfully" << endl;
         } else if(strcmp(argv[1], "truncate") == 0) {
             int64_t ver = atol(argv[2]);
@@ -295,22 +333,58 @@ int main(int argc, char** argv) {
             hlc.m_rtc_us = atol(argv[2]);
             hlc.m_logic = 0;
             npx.trim(hlc);
-            npx.persist();
             cout << "trim till time " << hlc.m_rtc_us << " successfully" << endl;
         } else if(strcmp(argv[1], "set") == 0) {
+            version_t prev_ver = npx.getLatestVersion();
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx).buf, "%s", v);
             (*npx).data_len = strlen(v) + 1;
             npx.version(ver);
-            npx.persist();
+            if (use_signature) {
+                npx.updateSignature(ver,*signer);
+                if(prev_ver == INVALID_VERSION) {
+                    memset(prev_sig, 0, sig_size);
+                } else {
+                    version_t temp;
+                    npx.getSignature(prev_ver, prev_sig, temp);
+                }
+                signer->add_bytes(prev_sig, sig_size);
+                signer->finalize(static_cast<unsigned char*>(sig_buf));
+                std::cout << "signature=" << std::endl;
+                dump_binary_buffer(sig_buf,sig_size);
+                npx.addSignature(ver,sig_buf,prev_ver);
+            }
+            npx.persist(ver);
+        } else if(strcmp(argv[1], "verify") == 0) {
+            if (!use_signature) {
+                std::cout << "unable to verify without signature...exit." << std::endl;
+            } else {
+                version_t ver = atol(argv[2]);
+                version_t prev_ver;
+                npx.getSignature(ver, sig_buf, prev_ver);
+                npx.updateVerifier(ver, *verifier);
+                if(prev_ver == INVALID_VERSION) {
+                    memset(prev_sig, 0, sig_size);
+                } else {
+                    version_t temp;
+                    npx.getSignature(prev_ver, prev_sig, temp);
+                }
+                verifier->add_bytes(prev_sig, sig_size);
+                bool success = verifier->finalize(sig_buf, sig_size);
+                if(success) {
+                    std::cout << "version " << ver << " signature verified successfully, with previous version " << prev_ver << std::endl;
+                } else {
+                    std::cout << "version " << ver << " signature failed to verify! Error" << openssl::get_error_string(ERR_get_error(), "") << std::endl;
+                }
+            }
         } else if(strcmp(argv[1], "logtail-set") == 0) {
             char* v = argv[2];
             int64_t ver = (int64_t)atoi(argv[3]);
             sprintf((*npx_logtail).buf, "%s", v);
             (*npx_logtail).data_len = strlen(v) + 1;
             npx_logtail.version(ver);
-            npx_logtail.persist();
+            npx_logtail.persist(ver);
         }
 #define LOGTAIL_FILE "logtail.ser"
         else if(strcmp(argv[1], "logtail-serialize") == 0) {
@@ -344,7 +418,6 @@ int main(int argc, char** argv) {
         } else if(strcmp(argv[1], "logtail-trim") == 0) {
             int64_t ver = atol(argv[2]);
             npx_logtail.trim(ver);
-            npx_logtail.persist();
             cout << "logtail-trim till ver " << ver << " successfully" << endl;
         } else if(strcmp(argv[1], "logtail-apply") == 0) {
             //load the serialized logtail.
@@ -376,17 +449,17 @@ int main(int argc, char** argv) {
             X x;
             x.x = 1;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 1" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 10;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 10" << endl;
             listvar<X, ST_MEM>(px2);
             x.x = 100;
             px2.set(x, ver++);
-            px2.persist();
+            px2.persist(ver-1);
             cout << "after set 100" << endl;
             listvar<X, ST_MEM>(px2);
         } else if(strcmp(argv[1], "hlc") == 0) {
@@ -417,13 +490,13 @@ int main(int argc, char** argv) {
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "add(" << op << ") = " << (*dx).add(op) << endl;
             dx.version(ver);
-            dx.persist();
+            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-sub") == 0) {
             int op = std::stoi(argv[2]);
             int64_t ver = (int64_t)atoi(argv[3]);
             cout << "sub(" << op << ") = " << (*dx).sub(op) << endl;
             dx.version(ver);
-            dx.persist();
+            dx.persist(ver);
         } else if(strcmp(argv[1], "delta-list") == 0) {
             cout << "Persistent<IntegerWithDelta>:" << endl;
             listvar<IntegerWithDelta>(dx);

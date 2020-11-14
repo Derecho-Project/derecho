@@ -13,33 +13,44 @@ namespace persistent {
 #define LOG_FILE_SUFFIX "log"
 #define DATA_FILE_SUFFIX "data"
 #define SWAP_FILE_SUFFIX "swp"
+//Every log entry will be padded out to this size, which must be page-aligned
+#define MAX_LOG_ENTRY_SIZE (64)
+//Similarly, the size of a meta header must be page-aligned
+#define META_HEADER_SIZE (256)
 
 // meta header format
-typedef union meta_header {
+union MetaHeader {
     struct {
         int64_t head;  // the head index
         int64_t tail;  // the tail index
         int64_t ver;   // the latest version number.
-                       // uint64_t d_head;  // the data head offset
-                       // uint64_t d_tail;  // the data tail offset
     } fields;
-    uint8_t bytes[256];
-    bool operator==(const union meta_header& other) {
-        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail) && (this->fields.ver == other.fields.ver);
+    uint8_t bytes[META_HEADER_SIZE];
+    bool operator==(const MetaHeader& other) {
+        return (this->fields.head == other.fields.head) && (this->fields.tail == other.fields.tail)
+               && (this->fields.ver == other.fields.ver);
     };
-} MetaHeader;
+};
 
-// log entry format
-typedef union log_entry {
+/**
+ * The log entry format
+ *
+ * Although there is no explicit storage for the log signature, we do carefully reserve space for it: The first
+ * 'PersistLog::signature_size' bytes pointed by 'LogEntry::ofst' are reserved for signature. If
+ * 'PersistLog::signature_size' is zero, which means the signature feature is disabled, there is no signature space
+ * reserved. This design avoids wasting space for applications without extremely strong security requirement.
+ */
+union LogEntry {
     struct {
-        int64_t ver;     // version of the data
-        uint64_t dlen;   // length of the data
-        uint64_t ofst;   // offset of the data in the memory buffer
-        uint64_t hlc_r;  // realtime component of hlc
-        uint64_t hlc_l;  // logic component of hlc
+        int64_t ver;              // version of the data
+        uint64_t sdlen;           // length of the data plus the signature_size (signature first data second)
+        uint64_t ofst;            // offset of the data (and the signature, if exists) in the memory buffer
+        uint64_t hlc_r;           // realtime component of hlc
+        uint64_t hlc_l;           // logic component of hlc
+        int64_t prev_signed_ver;  // previous signed version, whose signature is included in this version's signature
     } fields;
-    uint8_t bytes[64];
-} LogEntry;
+    uint8_t bytes[MAX_LOG_ENTRY_SIZE];
+};
 
 // TODO: make this hard-wired number configurable.
 // Currently, we allow 1M(2^20-1) log entries and
@@ -54,27 +65,26 @@ typedef union log_entry {
 
 // helpers:
 ///// READ or WRITE LOCK on LOG REQUIRED to use the following MACROs!!!!
-#define META_HEADER ((MetaHeader*)(&(this->m_currMetaHeader)))
-#define META_HEADER_PERS ((MetaHeader*)(&(this->m_persMetaHeader)))
 #define LOG_ENTRY_ARRAY ((LogEntry*)(this->m_pLog))
 
-#define NUM_USED_SLOTS (META_HEADER->fields.tail - META_HEADER->fields.head)
-// #define NUM_USED_SLOTS_PERS   (META_HEADER_PERS->tail - META_HEADER_PERS->head)
+#define NUM_USED_SLOTS (m_currMetaHeader.fields.tail - m_currMetaHeader.fields.head)
+// #define NUM_USED_SLOTS_PERS   (m_persMetaHeader.tail - m_persMetaHeader.head)
 #define NUM_FREE_SLOTS (MAX_LOG_ENTRY - 1 - NUM_USED_SLOTS)
 // #define NUM_FREE_SLOTS_PERS   (MAX_LOG_ENTRY - 1 - NUM_USERD_SLOTS_PERS)
 
 #define LOG_ENTRY_AT(idx) (LOG_ENTRY_ARRAY + (int)((idx) % MAX_LOG_ENTRY))
-#define NEXT_LOG_ENTRY LOG_ENTRY_AT(META_HEADER->fields.tail)
+#define NEXT_LOG_ENTRY LOG_ENTRY_AT(m_currMetaHeader.fields.tail)
 #define NEXT_LOG_ENTRY_PERS LOG_ENTRY_AT( \
-        MAX(META_HEADER_PERS->fields.tail, META_HEADER->fields.head))
-#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : META_HEADER->fields.tail - 1)
-#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + (e)->fields.ofst % MAX_DATA_SIZE))
+        MAX(m_persMetaHeader.fields.tail, m_currMetaHeader.fields.head))
+#define CURR_LOG_IDX ((NUM_USED_SLOTS == 0) ? INVALID_INDEX : m_currMetaHeader.fields.tail - 1)
+#define LOG_ENTRY_DATA(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst + this->signature_size) % MAX_DATA_SIZE))
+#define LOG_ENTRY_SIGNATURE(e) ((void*)((uint8_t*)this->m_pData + ((e)->fields.ofst) % MAX_DATA_SIZE))
 
-#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen))
-#define NEXT_DATA ((void*)((uint64_t) this->m_pData + NEXT_DATA_OFST % MAX_DATA_SIZE))
+#define NEXT_DATA_OFST ((CURR_LOG_IDX == INVALID_INDEX) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen))
+#define NEXT_DATA ((void*)(reinterpret_cast<uint64_t>(this->m_pData) + NEXT_DATA_OFST % MAX_DATA_SIZE))
 #define NEXT_DATA_PERS ((NEXT_LOG_ENTRY > NEXT_LOG_ENTRY_PERS) ? LOG_ENTRY_DATA(NEXT_LOG_ENTRY_PERS) : NULL)
 
-#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.dlen - LOG_ENTRY_AT(META_HEADER->fields.head)->fields.ofst))
+#define NUM_USED_BYTES ((NUM_USED_SLOTS == 0) ? 0 : (LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ofst + LOG_ENTRY_AT(CURR_LOG_IDX)->fields.sdlen - LOG_ENTRY_AT(m_currMetaHeader.fields.head)->fields.ofst))
 #define NUM_FREE_BYTES (MAX_DATA_SIZE - NUM_USED_BYTES)
 
 #define PAGE_SIZE (getpagesize())
@@ -167,36 +177,40 @@ protected:
 
 public:
     //Constructor
-    FilePersistLog(const std::string& name, const std::string& dataPath);
-    FilePersistLog(const std::string& name) : FilePersistLog(name, getPersFilePath()){};
+    FilePersistLog(const std::string& name, const std::string& dataPath, bool enableSignatures);
+    FilePersistLog(const std::string& name, bool enableSignatures) : FilePersistLog(name, getPersFilePath(), enableSignatures){};
     //Destructor
     virtual ~FilePersistLog() noexcept(true);
 
     //Derived from PersistLog
     virtual void append(const void* pdata,
-                        const uint64_t size, const int64_t ver,
+                        uint64_t size, version_t ver,
                         const HLC& mhlc) override;
-    virtual void advanceVersion(const int64_t& ver) override;
+    virtual void advanceVersion(int64_t ver) override;
     virtual int64_t getLength() override;
     virtual int64_t getEarliestIndex() override;
     virtual int64_t getLatestIndex() override;
-    virtual int64_t getVersionIndex(const version_t& ver,bool exact) override;
+    virtual int64_t getVersionIndex(version_t ver, bool exact) override;
     virtual int64_t getHLCIndex(const HLC& hlc) override;
     virtual version_t getEarliestVersion() override;
     virtual version_t getLatestVersion() override;
-    virtual const version_t getLastPersistedVersion() override;
-    virtual const void* getEntryByIndex(const int64_t& eno) override;
-    virtual const void* getEntry(const version_t& ver, bool exact = false) override;
+    virtual version_t getLastPersistedVersion() override;
+    virtual const void* getEntryByIndex(int64_t eno) override;
+    virtual const void* getEntry(version_t ver, bool exact = false) override;
     virtual const void* getEntry(const HLC& hlc) override;
-    virtual const version_t persist(const bool preLocked = false) override;
-    virtual void trimByIndex(const int64_t& eno) override;
-    virtual void trim(const version_t& ver) override;
+    virtual version_t persist(version_t ver,
+                              bool preLocked = false) override;
+    virtual void processEntryAtVersion(version_t ver, const std::function<void(const void*, std::size_t)>& func);
+    virtual void addSignature(version_t ver, const unsigned char* signature, version_t previous_signed_version);
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& previous_signed_version);
+    virtual void trimByIndex(int64_t eno) override;
+    virtual void trim(version_t ver) override;
     virtual void trim(const HLC& hlc) override;
-    virtual void truncate(const version_t& ver) override;
-    virtual size_t bytes_size(const version_t& ver) override;
-    virtual size_t to_bytes(char* buf, const version_t& ver) override;
+    virtual void truncate(version_t ver) override;
+    virtual size_t bytes_size(version_t ver) override;
+    virtual size_t to_bytes(char* buf, version_t ver) override;
     virtual void post_object(const std::function<void(char const* const, std::size_t)>& f,
-                             const version_t& ver) override;
+                             version_t ver) override;
     virtual void applyLogTail(char const* v) override;
 
     template <typename TKey, typename KeyGetter>
@@ -204,7 +218,7 @@ public:
         int64_t idx;
         // RDLOCK for validation
         FPL_RDLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, m_currMetaHeader.fields.head, m_currMetaHeader.fields.tail);
         if(idx == INVALID_INDEX) {
             FPL_UNLOCK;
             return;
@@ -215,12 +229,18 @@ public:
         // search?
         // WRLOCK for trim
         FPL_WRLOCK;
-        idx = binarySearch<TKey>(keyGetter, key, META_HEADER->fields.head, META_HEADER->fields.tail);
+        idx = binarySearch<TKey>(keyGetter, key, m_currMetaHeader.fields.head, m_currMetaHeader.fields.tail);
         if(idx != INVALID_INDEX) {
-            META_HEADER->fields.head = (idx + 1);
+            m_currMetaHeader.fields.head = (idx + 1);
             FPL_PERS_LOCK;
             try {
-                persist(true);
+                // What version number should be supplied to persist in this case?
+                // CAUTION:
+                // The persist API is changed for Edward's convenience by adding a version parameter
+                // This has a widespreading on the design and needs extensive test before replying on
+                // it.
+                version_t ver = LOG_ENTRY_AT(CURR_LOG_IDX)->fields.ver;
+                persist(ver, true);
             } catch(uint64_t e) {
                 FPL_UNLOCK;
                 FPL_PERS_UNLOCK;
@@ -245,14 +265,14 @@ public:
     static const uint64_t getMinimumLatestPersistedVersion(const std::string& prefix);
 
 private:
-     /** verify the existence of the meta file */
-     bool checkOrCreateMetaFile();
+    /** verify the existence of the meta file */
+    bool checkOrCreateMetaFile();
 
-     /** verify the existence of the log file */
-     bool checkOrCreateLogFile();
+    /** verify the existence of the log file */
+    bool checkOrCreateLogFile();
 
-     /** verify the existence of the data file */
-     bool checkOrCreateDataFile();
+    /** verify the existence of the data file */
+    bool checkOrCreateDataFile();
 
     /**
      * Get the minimum index greater than a given version
@@ -261,7 +281,7 @@ private:
      * @RETURN the minimum index since the given version. INVALID_INDEX means
      *         that no log entry is available for the requested version.
      */
-    int64_t getMinimumIndexBeyondVersion(const int64_t& ver);
+    int64_t getMinimumIndexBeyondVersion(version_t ver);
     /**
      * get the byte size of log entry
      * Note: no lock protected, use FPL_RDLOCK
@@ -350,12 +370,12 @@ private:
     //dbg functions
     void dbgDumpMeta() {
         dbg_default_trace("m_pData={0},m_pLog={1}", (void*)this->m_pData, (void*)this->m_pLog);
-        dbg_default_trace("MEAT_HEADER:head={0},tail={1}", (int64_t)META_HEADER->fields.head, (int64_t)META_HEADER->fields.tail);
-        dbg_default_trace("MEAT_HEADER_PERS:head={0},tail={1}", (int64_t)META_HEADER_PERS->fields.head, (int64_t)META_HEADER_PERS->fields.tail);
+        dbg_default_trace("META_HEADER:head={0},tail={1}", (int64_t)m_currMetaHeader.fields.head, (int64_t)m_currMetaHeader.fields.tail);
+        dbg_default_trace("META_HEADER_PERS:head={0},tail={1}", (int64_t)m_persMetaHeader.fields.head, (int64_t)m_persMetaHeader.fields.tail);
         dbg_default_trace("NEXT_LOG_ENTRY={0},NEXT_LOG_ENTRY_PERS={1}", (void*)NEXT_LOG_ENTRY, (void*)NEXT_LOG_ENTRY_PERS);
     }
 #endif  // NDEBUG
 };
-}
+}  // namespace persistent
 
 #endif  //FILE_PERSIST_LOG_HPP

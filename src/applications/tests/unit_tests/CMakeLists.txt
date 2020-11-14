@@ -24,3 +24,12 @@ target_link_libraries(subgroup_function_tester derecho)
 
 add_executable(log_restart_test log_restart_test.cpp)
 target_link_libraries(log_restart_test derecho)
+
+add_executable(signed_log_test signed_log_test.cpp)
+target_link_libraries(signed_log_test derecho)
+
+add_executable(openssl_test openssl_test.cpp)
+target_link_libraries(openssl_test derecho)
+
+add_executable(signature_chain_test signature_chain_test.cpp)
+target_link_libraries(signature_chain_test derecho)
