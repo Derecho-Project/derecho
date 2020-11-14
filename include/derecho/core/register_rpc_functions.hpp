@@ -47,14 +47,24 @@
  * parameters should be a list of method names that should be tagged as
  * P2P-callable RPC functions.
  */
-#define P2P_TARGETS(arg1,args...) applyp2p(args) make_p2p_tagger_expr(arg1)
+#define P2P_TARGETS(arg1,args...)					\
+    IF_ELSE(HAS_ARGS(args))(						\
+	applyp2p(args)							\
+	)(/* Do nothing */)						\
+    make_p2p_tagger_expr(arg1)
+
 
 /**
  * This macro is one of the possible arugments to REGISTER_RPC_FUNCTIONS; its
  * parameters should be a list of method names that should be tagged as RPC
  * functions that can only be invoked via an ordered_send.
  */
-#define ORDERED_TARGETS(arg1,args...) applyordered(args) make_ordered_tagger_expr(arg1)
+#define ORDERED_TARGETS(arg1,args...)					\
+    IF_ELSE(HAS_ARGS(args))(						\
+	applyordered(args)						\
+	)(/*Do nothing */)						\
+    make_ordered_tagger_expr(arg1)
+
 
 /**
  * This macro generates the same "name" for an RPC function that REGISTER_RPC_FUNCTIONS
