@@ -50,25 +50,24 @@ struct persistent_bw_result {
     }
 };
 
-#define DEFAULT_PROC_NAME   "pers_bw_test"
+#define DEFAULT_PROC_NAME "pers_bw_test"
 
 int main(int argc, char* argv[]) {
-
     int dashdash_pos = argc - 1;
-    while (dashdash_pos > 0) {
-        if (strcmp(argv[dashdash_pos],"--") == 0) {
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
             break;
         }
-        dashdash_pos -- ;
+        dashdash_pos--;
     }
 
-    if((argc-dashdash_pos) < 4) {
+    if((argc - dashdash_pos) < 4) {
         cout << "Invalid command line arguments." << endl;
-        std::cout << "Usage:" << argv[0] << "[<derecho config options> -- ]<all|half|one> <num_of_nodes> <num_msgs> [proc_name]" << std::endl;
-        std::cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << std::endl;
+        std::cout << "Usage: " << argv[0] << " [<derecho config options> -- ] <all|half|one> <num_of_nodes> <num_msgs> [proc_name]" << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
-    
+
     //The maximum number of bytes that can be sent to change_pers_bytes() is not quite MAX_PAYLOAD_SIZE.
     //The serialized Bytes object will include its size field as well as the actual buffer, and
     //the RPC function header contains an InvocationID (which is a size_t) as well as the header
@@ -83,7 +82,7 @@ int main(int argc, char* argv[]) {
     const int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     const int num_msgs = atoi(argv[dashdash_pos + 3]);
 
-    if ((argc-dashdash_pos) > 4) {
+    if((argc - dashdash_pos) > 4) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 4]);
     } else {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
@@ -147,8 +146,7 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
-    derecho::Group<ByteArrayObject> group{callback_set, subgroup_info, {},
-                                          std::vector<derecho::view_upcall_t>{}, ba_factory};
+    derecho::Group<ByteArrayObject> group{callback_set, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
     std::cout << "Finished constructing/joining Group" << std::endl;
 

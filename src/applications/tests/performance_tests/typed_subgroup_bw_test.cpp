@@ -5,17 +5,17 @@
 #include <time.h>
 #include <vector>
 
-#include "log_results.hpp"
 #include "aggregate_bandwidth.cpp"
 #include "aggregate_bandwidth.hpp"
 #include "bytes_object.hpp"
+#include "log_results.hpp"
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include <derecho/conf/conf.hpp>
 
-using test::Bytes;
 using std::endl;
+using test::Bytes;
 
 /**
  * RPC Object with a single function that accepts a string
@@ -44,32 +44,30 @@ struct exp_result {
     double avg_gbps;
     double avg_ops;
 
-
     void print(std::ofstream& fout) {
-        fout << num_nodes <<  " "
+        fout << num_nodes << " "
              << max_msg_size << " " << window_size << " "
              << count << " "
-             << avg_msec << " " << avg_gbps << " " 
-	     << avg_ops <<  endl;
+             << avg_msec << " " << avg_gbps << " "
+             << avg_ops << endl;
     }
 };
 
-#define DEFAULT_PROC_NAME   "typed_bw_test"
+#define DEFAULT_PROC_NAME "typed_bw_test"
 
 int main(int argc, char* argv[]) {
-
     int dashdash_pos = argc - 1;
-    while (dashdash_pos > 0) {
-        if (strcmp(argv[dashdash_pos],"--") == 0) {
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
             break;
         }
-        dashdash_pos -- ;
+        dashdash_pos--;
     }
 
-    if((argc-dashdash_pos) < 3) {
+    if((argc - dashdash_pos) < 3) {
         std::cout << "Invalid command line arguments." << std::endl;
-        std::cout << "USAGE:" << argv[0] << "[ derecho-config-list ] -- <num_of_nodes> <count> [proc_name]" << std::endl;
-        std::cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << std::endl;
+        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_of_nodes> <count> [proc_name]" << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
 
@@ -78,15 +76,15 @@ int main(int argc, char* argv[]) {
     int num_of_nodes = std::stoi(argv[dashdash_pos + 1]);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     int count = std::stoi(argv[dashdash_pos + 2]);
-    if (dashdash_pos + 3 < argc) {
+    if(dashdash_pos + 3 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
     } else {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
     }
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                                const std::vector<std::type_index>& subgroup_type_order,
+                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
             throw derecho::subgroup_provisioning_exception();
@@ -105,9 +103,9 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
+    auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group({},subgroup_info,{},std::vector<derecho::view_upcall_t>{},ba_factory);
+    derecho::Group<TestObject> group({}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
@@ -149,7 +147,6 @@ int main(int argc, char* argv[]) {
     double avg_msec = aggregate_bandwidth(members_order, members_order[node_rank], msec);
     double avg_gbps = aggregate_bandwidth(members_order, members_order[node_rank], thp_gbps);
     double avg_ops = aggregate_bandwidth(members_order, members_order[node_rank], thp_ops);
-
 
     if(node_rank == 0) {
         log_results(exp_result{num_of_nodes, max_msg_size,

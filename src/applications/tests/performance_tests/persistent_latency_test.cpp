@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
     if((argc-dashdash_pos) < 5) {
         cout << "Invalid command line arguments." << endl;
         std::cout << "USAGE:" << argv[0] << " <all|half|one> <num_of_nodes> <num_msgs> <max_ops> [proc_name]" << std::endl;
-        std::cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
     PartialSendMode sender_selector = PartialSendMode::ALL_SENDERS;

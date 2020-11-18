@@ -7,12 +7,12 @@
  * in the only subgroup that consists of all the nodes
  * Upon completion, the results are appended to file data_derecho_bw on the leader
  */
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <optional>
-#include <chrono>
 #include <vector>
 
 #include <derecho/core/derecho.hpp>
@@ -45,22 +45,21 @@ struct exp_result {
     }
 };
 
-#define DEFAULT_PROC_NAME   "bw_test"
+#define DEFAULT_PROC_NAME "bw_test"
 
 int main(int argc, char* argv[]) {
-
     int dashdash_pos = argc - 1;
-    while (dashdash_pos > 0) {
-        if (strcmp(argv[dashdash_pos],"--") == 0) {
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
             break;
         }
-        dashdash_pos -- ;
+        dashdash_pos--;
     }
 
-    if((argc-dashdash_pos) < 5) {
+    if((argc - dashdash_pos) < 5) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list ] -- num_nodes, sender_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode) [proc_name]" << endl;
-        cout << "Note:proc_name is for ps and pkill commands, default to " DEFAULT_PROC_NAME << endl;
+        cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] num_nodes, sender_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode) [proc_name]" << endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
 
@@ -76,7 +75,7 @@ int main(int argc, char* argv[]) {
                                                             ? PartialSendMode::HALF_SENDERS
                                                             : PartialSendMode::ONE_SENDER);
 
-    if (dashdash_pos + 5 < argc) {
+    if(dashdash_pos + 5 < argc) {
         pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
     } else {
         pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);

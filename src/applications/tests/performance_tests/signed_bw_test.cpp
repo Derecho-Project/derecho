@@ -51,12 +51,24 @@ struct signed_bw_result {
     }
 };
 
+#define DEFAULT_PROC_NAME "signed_bw_test"
+
 int main(int argc, char* argv[]) {
     //std::chrono is too verbose
     using namespace std::chrono;
 
-    if(argc < 4) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <num_msgs>" << std::endl;
+    int dashdash_pos = argc - 1;
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
+            break;
+        }
+        dashdash_pos--;
+    }
+
+    if((argc - dashdash_pos) < 4) {
+        std::cout << "Invalid command line arguments." << std::endl;
+        std::cout << "Usage: " << argv[0] << " [<derecho config options> -- ] <all|half|one> <num_of_nodes> <num_msgs> [proc_name]" << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
     pthread_setname_np(pthread_self(), "signed_bw_test");
@@ -71,13 +83,19 @@ int main(int argc, char* argv[]) {
                                         + derecho::remote_invocation_utilities::header_space();
 
     PartialSendMode sender_selector = PartialSendMode::ALL_SENDERS;
-    if(strcmp(argv[1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
-    if(strcmp(argv[1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
-    const int num_of_nodes = atoi(argv[2]);
+    if(strcmp(argv[dashdash_pos + 1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
+    if(strcmp(argv[dashdash_pos + 1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
+    const int num_of_nodes = atoi(argv[dashdash_pos + 2]);
     const int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
-    const int num_msgs = atoi(argv[3]);
-    steady_clock::time_point begin_time, send_complete_time, persist_complete_time, verify_complete_time;
+    const int num_msgs = atoi(argv[dashdash_pos + 3]);
 
+    if((argc - dashdash_pos) > 4) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 4]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
+
+    steady_clock::time_point begin_time, send_complete_time, persist_complete_time, verify_complete_time;
     bool is_sending = true;
 
     long total_num_messages;
