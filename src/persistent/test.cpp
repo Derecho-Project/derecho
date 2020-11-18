@@ -276,6 +276,8 @@ int main(int argc, char** argv) {
         signer->init();
         verifier->init();
         sig_size = signer->get_max_signature_size();
+    } else {
+        sig_size = 0;
     }
 
     try {
