@@ -8,6 +8,7 @@
 #include <derecho/core/detail/multicast_group.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/rdmc/detail/util.hpp>
+#include <derecho/utils/time.h>
 #include <derecho/utils/logger.hpp>
 
 namespace derecho {
@@ -33,7 +34,7 @@ MulticastGroup::MulticastGroup(
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         unsigned int sender_timeout,
         const subgroup_post_next_version_func_t& post_next_version_callback,
-        const persistence_manager_callbacks_t& persistence_manager_callbacks,
+        PersistenceManager& persistence_manager_ref,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
@@ -48,12 +49,14 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
+          minimum_persisted_version(total_num_subgroups, persistent::INVALID_VERSION),
+          minimum_verified_version(total_num_subgroups, persistent::INVALID_VERSION),
           sender_timeout(sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
           post_next_version_callback(post_next_version_callback),
-          persistence_manager_callbacks(persistence_manager_callbacks) {
+          persistence_manager(persistence_manager_ref) {
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
     }
@@ -93,7 +96,6 @@ MulticastGroup::MulticastGroup(
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         const subgroup_post_next_version_func_t& post_next_version_callback,
-        const persistence_manager_callbacks_t& persistence_manager_callbacks,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
@@ -109,12 +111,14 @@ MulticastGroup::MulticastGroup(
           pending_sends(total_num_subgroups),
           current_sends(total_num_subgroups),
           next_message_to_deliver(total_num_subgroups),
+          minimum_persisted_version(total_num_subgroups, persistent::INVALID_VERSION),
+          minimum_verified_version(total_num_subgroups, persistent::INVALID_VERSION),
           sender_timeout(old_group.sender_timeout),
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
           post_next_version_callback(post_next_version_callback),
-          persistence_manager_callbacks(persistence_manager_callbacks) {
+          persistence_manager(old_group.persistence_manager) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
@@ -452,7 +456,9 @@ void MulticastGroup::initialize_sst_row() {
             sst->seq_num[i][j] = -1;
             sst->delivered_num[i][j] = -1;
             sst->persisted_num[i][j] = -1;
+            sst->verified_num[i][j] = -1;
         }
+        memset(const_cast<unsigned char*>(sst->signatures[i]), 0, sst->signatures.size());
     }
     sst->put();
     sst->sync_with_members();
@@ -520,7 +526,7 @@ bool MulticastGroup::version_message(RDMCMessage& msg, const subgroup_id_t& subg
         clock_gettime(CLOCK_REALTIME, &now);
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
-    std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
+    persistence_manager.make_version(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;
 }
 
@@ -542,7 +548,7 @@ bool MulticastGroup::version_message(SSTMessage& msg, const subgroup_id_t& subgr
         clock_gettime(CLOCK_REALTIME, &now);
         msg_ts_us = (uint64_t)now.tv_sec * 1e6 + now.tv_nsec / 1e3;
     }
-    std::get<0>(persistence_manager_callbacks)(subgroup_num, version, HLC{msg_ts_us, 0});
+    persistence_manager.make_version(subgroup_num, version, HLC{msg_ts_us, 0});
     return true;
 }
 
@@ -594,7 +600,7 @@ void MulticastGroup::deliver_messages_upto(
              sst->delivered_num, subgroup_num);
     if(non_null_msgs_delivered) {
         //Call the persistence_manager_post_persist_func
-        std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
+        persistence_manager.post_persist_request(subgroup_num, assigned_version);
     }
 }
 
@@ -823,10 +829,48 @@ void MulticastGroup::delivery_trigger(subgroup_id_t subgroup_num, const Subgroup
                 sst.delivered_num, subgroup_num);
         // post persistence request for ordered mode.
         if(non_null_msgs_delivered) {
-            std::get<1>(persistence_manager_callbacks)(subgroup_num, assigned_version);
+            persistence_manager.post_persist_request(subgroup_num, assigned_version);
         }
     }
 }
+
+void MulticastGroup::update_min_persisted_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                              uint32_t num_shard_members, DerechoSST& sst) {
+    std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
+    // compute the min of the persisted_num
+    persistent::version_t min_persisted_num
+            = sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[0])][subgroup_num];
+    for(uint32_t i = 1; i < num_shard_members; ++i) {
+        persistent::version_t persisted_num_copy = sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])]
+                                                                    [subgroup_num];
+        min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
+    }
+    // callbacks
+    if(min_persisted_num > minimum_persisted_version[subgroup_num]) {
+        if(callbacks.global_persistence_callback) {
+            callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+        }
+        persistence_manager.post_verify_request(subgroup_num, min_persisted_num);
+        minimum_persisted_version[subgroup_num] = min_persisted_num;
+    }
+}
+
+void MulticastGroup::update_min_verified_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                             uint32_t num_shard_members, DerechoSST& sst) {
+    //Do I need msg_state_mtx here? What does it guard?
+    persistent::version_t min_verified_num
+            = sst.verified_num[node_id_to_sst_index.at(subgroup_settings.members[0])][subgroup_num];
+    for(uint32_t i = 1; i < num_shard_members; ++i) {
+        persistent::version_t member_verified_num = sst.verified_num[node_id_to_sst_index.at(subgroup_settings.members[i])]
+                                                                    [subgroup_num];
+        min_verified_num = std::min(min_verified_num, member_verified_num);
+    }
+    if(min_verified_num > minimum_verified_version[subgroup_num]) {
+        callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        minimum_verified_version[subgroup_num] = min_verified_num;
+    }
+}
+
 void MulticastGroup::register_predicates() {
     for(const auto& p : subgroup_settings_map) {
         subgroup_id_t subgroup_num = p.first;
@@ -842,7 +886,7 @@ void MulticastGroup::register_predicates() {
             }
         }
 
-        auto receiver_pred = [this, subgroup_settings, shard_ranks_by_sender_rank, num_shard_senders](const DerechoSST& sst) {
+        auto receiver_pred = [=](const DerechoSST& sst) {
             return receiver_predicate(subgroup_settings,
                                       shard_ranks_by_sender_rank, num_shard_senders, sst);
         };
@@ -850,14 +894,12 @@ void MulticastGroup::register_predicates() {
         if(!batch_size) {
             batch_size = 1;
         }
-        auto sst_receive_handler_lambda = [this, subgroup_num, subgroup_settings, shard_ranks_by_sender_rank,
-                                           num_shard_senders](uint32_t sender_rank, volatile char* data, uint64_t size) {
+        auto sst_receive_handler_lambda = [=](uint32_t sender_rank, volatile char* data, uint64_t size) {
             sst_receive_handler(subgroup_num, subgroup_settings,
                                 shard_ranks_by_sender_rank, num_shard_senders,
                                 sender_rank, data, size);
         };
-        auto receiver_trig = [this, subgroup_num, subgroup_settings, shard_ranks_by_sender_rank,
-                              num_shard_senders, batch_size, sst_receive_handler_lambda](DerechoSST& sst) mutable {
+        auto receiver_trig = [=](DerechoSST& sst) mutable {
             receiver_function(subgroup_num, subgroup_settings,
                               shard_ranks_by_sender_rank, num_shard_senders, sst,
                               batch_size, sst_receive_handler_lambda);
@@ -869,47 +911,49 @@ void MulticastGroup::register_predicates() {
             auto delivery_pred = [](const DerechoSST& sst) {
                 return true;
             };
-            auto delivery_trig = [this, subgroup_num, subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
+            auto delivery_trig = [=](DerechoSST& sst) mutable {
                 delivery_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
             delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig,
                                                                       sst::PredicateType::RECURRENT));
 
+            //This predicate should be "current min over persisted_num is greater than the last
+            //observed minimum persisted_num," but computing the current min in the predicate is
+            //redundant with computing it in the trigger. To save time, we just make the predicate
+            //do nothing, and make the trigger both compute and update the minimum persisted_num
             auto persistence_pred = [](const DerechoSST& sst) {
                 return true;
             };
-            auto persistence_trig = [this, subgroup_num, subgroup_settings, num_shard_members,
-                                     version_seen = persistent::INVALID_VERSION](DerechoSST& sst) mutable {
-                std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-                // compute the min of the persisted_num
-                persistent::version_t min_persisted_num
-                        = sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[0])][subgroup_num];
-                for(uint i = 1; i < num_shard_members; ++i) {
-                    persistent::version_t persisted_num_copy = sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num];
-                    min_persisted_num = std::min(min_persisted_num, persisted_num_copy);
-                }
-                // callbacks
-                if((version_seen < min_persisted_num) && callbacks.global_persistence_callback) {
-                    callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
-                    version_seen = min_persisted_num;
-                }
+            auto persistence_trig = [=](DerechoSST& sst) mutable {
+                update_min_persisted_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
             persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
 
+            //In case there are persistent objects with signatures, add a similar predicate to check/update the minimum verified_num
+            auto verified_pred = [](const DerechoSST& sst) {
+                return true;
+            };
+            auto verified_trig = [=](DerechoSST& sst) {
+                update_min_verified_num(subgroup_num, subgroup_settings, num_shard_members, sst);
+            };
+
+            if(callbacks.global_verified_callback) {
+                persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
+            }
+
             if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members, num_shard_senders](const DerechoSST& sst) {
+                auto sender_pred = [=](const DerechoSST& sst) {
                     message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
                     for(uint i = 0; i < num_shard_members; ++i) {
-                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num
-                           || (sst.persisted_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num)) {
+                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num) {
                             return false;
                         }
                     }
                     return true;
                 };
-                auto sender_trig = [this, subgroup_num](DerechoSST& sst) {
+                auto sender_trig = [=](DerechoSST& sst) {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
@@ -919,7 +963,7 @@ void MulticastGroup::register_predicates() {
         } else {
             //This subgroup is in UNORDERED mode
             if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [this, subgroup_num, subgroup_settings, num_shard_members](const DerechoSST& sst) {
+                auto sender_pred = [=](const DerechoSST& sst) {
                     for(uint i = 0; i < num_shard_members; ++i) {
                         uint32_t num_received_offset = subgroup_settings.num_received_offset;
                         if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
@@ -1007,8 +1051,7 @@ void MulticastGroup::send_loop() {
         assert(num_shard_members >= 1);
         if(subgroup_settings.mode != Mode::UNORDERED) {
             for(uint i = 0; i < num_shard_members; ++i) {
-                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)
-                   || (sst->persisted_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index))) {
+                if(sst->delivered_num[node_id_to_sst_index.at(shard_members[i])][subgroup_num] < static_cast<message_id_t>((msg.index - subgroup_settings.profile.window_size) * num_shard_senders + shard_sender_index)) {
                     return false;
                 }
             }
@@ -1057,12 +1100,6 @@ void MulticastGroup::send_loop() {
             pending_sends[subgroup_to_send].pop();
         }
     }
-}
-
-uint64_t MulticastGroup::get_time() {
-    struct timespec start_time;
-    clock_gettime(CLOCK_REALTIME, &start_time);
-    return start_time.tv_sec * 1e9 + start_time.tv_nsec;
 }
 
 const uint64_t MulticastGroup::compute_global_stability_frontier(uint32_t subgroup_num) {
@@ -1167,7 +1204,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
     const SubgroupSettings& subgroup_settings = subgroup_settings_map.at(subgroup_num);
     if(msg_size > subgroup_settings.profile.max_msg_size) {
         std::string exp_msg("Can't send messages of size larger than the maximum message size which is equal to ");
-        exp_msg += subgroup_settings.profile.max_msg_size;
+        exp_msg += std::to_string(subgroup_settings.profile.max_msg_size);
         throw derecho_exception(exp_msg);
     }
 

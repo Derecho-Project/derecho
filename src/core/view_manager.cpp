@@ -9,6 +9,7 @@
 
 #include <derecho/core/derecho_exception.hpp>
 #include <derecho/core/detail/container_template_functions.hpp>
+#include <derecho/core/detail/public_key_store.hpp>
 #include <derecho/core/detail/version_code.hpp>
 #include <derecho/core/detail/view_manager.hpp>
 #include <derecho/core/git_version.hpp>
@@ -29,8 +30,8 @@ ViewManager::ViewManager(
         const SubgroupInfo& subgroup_info,
         const std::vector<std::type_index>& subgroup_type_order,
         const bool any_persistent_objects,
-        ReplicatedObjectReferenceMap& object_reference_map,
-        const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+        std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
+        PersistenceManager& persistence_manager,
         std::vector<view_upcall_t> _view_upcalls)
         : server_socket(getConfUInt16(CONF_DERECHO_GMS_PORT)),
           thread_shutdown(false),
@@ -41,9 +42,9 @@ ViewManager::ViewManager(
           tcp_sockets(getConfUInt32(CONF_DERECHO_LOCAL_ID),
                       {{getConfUInt32(CONF_DERECHO_LOCAL_ID),
                         {getConfString(CONF_DERECHO_LOCAL_IP), getConfUInt16(CONF_DERECHO_STATE_TRANSFER_PORT)}}}),
-          subgroup_objects(object_reference_map),
+          subgroup_objects(object_pointer_map),
           any_persistent_objects(any_persistent_objects),
-          persistence_manager_callbacks(_persistence_manager_callbacks) {
+          persistence_manager(persistence_manager) {
     rls_default_info("Derecho library running version {}.{}.{} + {} commits",
                      derecho::MAJOR_VERSION, derecho::MINOR_VERSION, derecho::PATCH_VERSION,
                      derecho::COMMITS_AHEAD_OF_VERSION);
@@ -402,11 +403,11 @@ void ViewManager::truncate_logs() {
                 my_shard_ragged_trim->vid, my_shard_ragged_trim->max_received_by_sender);
         dbg_default_trace("Truncating persistent log for subgroup {} to version {}", subgroup_id, max_delivered_version);
         dbg_default_flush();
-        subgroup_objects.at(subgroup_id).get().truncate(max_delivered_version);
+        subgroup_objects.at(subgroup_id)->truncate(max_delivered_version);
     }
 }
 
-void ViewManager::initialize_multicast_groups(CallbackSet callbacks) {
+void ViewManager::initialize_multicast_groups(const CallbackSet& callbacks) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
     auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
@@ -1409,9 +1410,9 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     // Set up TCP connections to the joined nodes
-    update_tcp_connections(*next_view);
-    // After doing that, shard leaders can send them RPC objects
-    send_objects_to_new_members(*next_view, old_shard_leaders_by_id);
+    update_tcp_connections();
+    // After doing that, shard leaders can send them RPC objects over state_transfer_port
+    send_objects_to_new_members(old_shard_leaders_by_id);
 
     // Re-initialize this node's RPC objects, which includes receiving them
     // from shard leaders if it is newly a member of a subgroup
@@ -1516,18 +1517,19 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 
 /* ------------- 3. Helper Functions for Predicates and Triggers ------------- */
 
-void ViewManager::construct_multicast_group(CallbackSet callbacks,
+void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                             const uint32_t num_received_size,
                                             const uint32_t slot_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
+    const std::size_t signature_size = persistence_manager.get_signature_size();
 
     curr_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(
                     curr_view->members, curr_view->members[curr_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     curr_view->failed, false),
-            num_subgroups, num_received_size, slot_size);
+            num_subgroups, signature_size, num_received_size, slot_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -1535,22 +1537,23 @@ void ViewManager::construct_multicast_group(CallbackSet callbacks,
             getConfUInt32(CONF_DERECHO_HEARTBEAT_MS),
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
+                subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             },
-            persistence_manager_callbacks, curr_view->failed);
+            persistence_manager, curr_view->failed);
 }
 
 void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
         const uint32_t new_num_received_size, const uint32_t new_slot_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
+    const std::size_t signature_size = persistence_manager.get_signature_size();
 
     next_view->gmsSST = std::make_shared<DerechoSST>(
             sst::SSTParams(
                     next_view->members, next_view->members[next_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     next_view->failed, false),
-            num_subgroups, new_num_received_size, new_slot_size);
+            num_subgroups, signature_size, new_num_received_size, new_slot_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
@@ -1558,9 +1561,9 @@ void ViewManager::transition_multicast_group(
             new_subgroup_settings,
             [this](const subgroup_id_t& subgroup_id, const persistent::version_t& ver, const uint64_t& msg_ts) {
                 assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-                subgroup_objects.at(subgroup_id).get().post_next_version(ver, msg_ts);
+                subgroup_objects.at(subgroup_id)->post_next_version(ver, msg_ts);
             },
-            persistence_manager_callbacks, next_view->failed);
+            next_view->failed);
 
     curr_view->multicast_group.reset();
 
@@ -1700,14 +1703,14 @@ void ViewManager::send_view(const View& new_view, tcp::socket& client_socket) {
     mutils::post_object(bind_socket_write, new_view);
 }
 
-void ViewManager::send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders) {
-    node_id_t my_id = new_view.members[new_view.my_rank];
+void ViewManager::send_objects_to_new_members(const vector_int64_2d& old_shard_leaders) {
+    node_id_t my_id = next_view->members[next_view->my_rank];
     for(subgroup_id_t subgroup_id = 0; subgroup_id < old_shard_leaders.size(); ++subgroup_id) {
         for(uint32_t shard = 0; shard < old_shard_leaders[subgroup_id].size(); ++shard) {
             //if I was the leader of the shard in the old view...
             if(my_id == old_shard_leaders[subgroup_id][shard]) {
                 //send its object state to the new members
-                for(node_id_t shard_joiner : new_view.subgroup_shard_views[subgroup_id][shard].joined) {
+                for(node_id_t shard_joiner : next_view->subgroup_shard_views[subgroup_id][shard].joined) {
                     if(shard_joiner != my_id) {
                         send_subgroup_object(subgroup_id, shard_joiner);
                     }
@@ -1726,27 +1729,27 @@ void ViewManager::send_objects_to_new_members(const View& new_view, const vector
 void ViewManager::send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id) {
     LockedReference<std::unique_lock<std::mutex>, tcp::socket> joiner_socket = tcp_sockets.get_socket(new_node_id);
     assert(subgroup_objects.find(subgroup_id) != subgroup_objects.end());
-    ReplicatedObject& subgroup_object = subgroup_objects.at(subgroup_id);
-    if(subgroup_object.is_persistent()) {
+    ReplicatedObject* subgroup_object = subgroup_objects.at(subgroup_id);
+    if(subgroup_object->is_persistent()) {
         //First, read the log tail length sent by the joining node
-        int64_t persistent_log_length = 0;
+        persistent::version_t persistent_log_length = 0;
         joiner_socket.get().read(persistent_log_length);
         persistent::PersistentRegistry::setEarliestVersionToSerialize(persistent_log_length);
         dbg_default_debug("Got log tail length {}", persistent_log_length);
     }
     dbg_default_debug("Sending Replicated Object state for subgroup {} to node {}", subgroup_id, new_node_id);
-    subgroup_object.send_object(joiner_socket.get());
+    subgroup_object->send_object(joiner_socket.get());
 }
 
-void ViewManager::update_tcp_connections(const View& new_view) {
-    for(const node_id_t& removed_id : new_view.departed) {
+void ViewManager::update_tcp_connections() {
+    for(const node_id_t& removed_id : next_view->departed) {
         dbg_default_debug("Removing TCP connection for failed node {}", removed_id);
         tcp_sockets.delete_node(removed_id);
     }
-    for(const node_id_t& joiner_id : new_view.joined) {
+    for(const node_id_t& joiner_id : next_view->joined) {
         tcp_sockets.add_node(joiner_id,
-                             {new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].ip_address,
-                              new_view.member_ips_and_ports[new_view.rank_of(joiner_id)].state_transfer_port});
+                             {next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].ip_address,
+                              next_view->member_ips_and_ports[next_view->rank_of(joiner_id)].state_transfer_port});
         dbg_default_debug("Established a TCP connection to node {}", joiner_id);
     }
 }

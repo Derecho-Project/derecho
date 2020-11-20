@@ -3,12 +3,12 @@
 #include <derecho/sst/sst.hpp>
 #include <vector>
 
-class ResultSST : public sst::SST<ResultSST> {
+class LatencyResultSST : public sst::SST<LatencyResultSST> {
 public:
     sst::SSTField<double> latency;
     sst::SSTField<double> latency_std_dev;
-    ResultSST(const sst::SSTParams& params)
-            : SST<ResultSST>(this, params) {
+    LatencyResultSST(const sst::SSTParams& params)
+            : SST<LatencyResultSST>(this, params) {
         SSTInit(latency, latency_std_dev);
     }
 };

@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -18,7 +19,10 @@
 #include "derecho_internal.hpp"
 #include "locked_reference.hpp"
 #include "multicast_group.hpp"
+#include "persistence_manager.hpp"
+#include "replicated_interface.hpp"
 #include "restart_state.hpp"
+#include "rpc_manager.hpp"
 #include <derecho/conf/conf.hpp>
 
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -26,18 +30,12 @@
 
 namespace derecho {
 
-/*--- Forward declarations ---*/
+/*--- Forward declarations to break circular include dependencies ---*/
 
 template <typename T>
 class Replicated;
 template <typename T>
 class ExternalCaller;
-
-class ReplicatedObject;
-
-namespace rpc {
-class RPCManager;
-}
 
 /**
  * A little helper class that implements a threadsafe queue by requiring all
@@ -202,9 +200,8 @@ private:
      */
     std::unique_ptr<tcp::socket> leader_connection;
 
-    using ReplicatedObjectReferenceMap = std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>>;
     /**
-     * A type-erased list of references to the Replicated<T> objects in
+     * A type-erased list of pointers to the Replicated<T> objects in
      * this group, indexed by their subgroup ID. The actual objects live in the
      * Group<ReplicatedTypes...> that owns this ViewManager, and the abstract
      * ReplicatedObject interface only provides functions for the object state
@@ -212,7 +209,7 @@ private:
      * the Group, where it is updated as replicated objects are added and
      * destroyed, so ViewManager has only a reference to it.
      */
-    ReplicatedObjectReferenceMap& subgroup_objects;
+    std::map<subgroup_id_t, ReplicatedObject*>& subgroup_objects;
     /** A function that will be called to initialize replicated objects
      * after transitioning to a new view. This transfers control back to
      * Group because the objects' constructors are only known by Group. */
@@ -222,6 +219,13 @@ private:
      * field, false if none of them do
      */
     const bool any_persistent_objects;
+
+    /**
+     * A reference to the PersistenceManager for this group, which is owned by
+     * Group. Used to notify PersistenceManager when new versions need to be
+     * persisted (because new updates have been delivered).
+     */
+    PersistenceManager& persistence_manager;
 
     /** Set to true in the constructor if this node must do a total restart
      * before completing group setup; false otherwise. */
@@ -242,9 +246,6 @@ private:
      * finished "waking up"), false otherwise.
      */
     bool active_leader;
-
-    /** The persistence request func is from persistence manager*/
-    persistence_manager_callbacks_t persistence_manager_callbacks;
 
     /**
      * A 2-dimensional vector, indexed by (subgroup ID -> shard number),
@@ -365,16 +366,15 @@ private:
     std::vector<int> process_suspicions(DerechoSST& gmsSST);
     /**
      * Updates the TCP connections pool to reflect the joined and departed
-     * members in a new view. Removes connections to departed members, and
+     * members in next_view. Removes connections to departed members, and
      * initializes new connections to joined members.
-     * @param new_view The new view that is about to be installed.
      */
-    void update_tcp_connections(const View& new_view);
+    void update_tcp_connections();
 
     /** Helper method for completing view changes; determines whether this node
      * needs to send Replicated Object state to each node that just joined, and then
      * sends the state if necessary. */
-    void send_objects_to_new_members(const View& new_view, const vector_int64_2d& old_shard_leaders);
+    void send_objects_to_new_members(const vector_int64_2d& old_shard_leaders);
 
     /** Sends a single subgroup's replicated object to a new member after a view change. */
     void send_subgroup_object(subgroup_id_t subgroup_id, node_id_t new_node_id);
@@ -474,7 +474,6 @@ private:
      * changes in the SST.
      * @param curr_view The current view, which the proposed changes are relative to
      * @param gmsSST The SST containing the proposed/committed changes
-     * @param logger A logger for printing out debug information
      * @return A View object for the next view
      */
     static std::unique_ptr<View> make_next_view(const std::unique_ptr<View>& curr_view,
@@ -542,7 +541,7 @@ private:
      * @param subgroup_settings The subgroup settings map to supply to the MulticastGroup
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      */
-    void construct_multicast_group(CallbackSet callbacks,
+    void construct_multicast_group(const CallbackSet& callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
                                    const uint32_t slot_size);
@@ -572,7 +571,7 @@ private:
     std::pair<uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
                                                            std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
-//Note: This function is public so that RestartLeaderState can access it.
+    //Note: This function is public so that RestartLeaderState can access it.
 public:
     /**
      * Initializes curr_view with subgroup information based on the membership
@@ -588,6 +587,7 @@ public:
     static void make_subgroup_maps(const SubgroupInfo& subgroup_info,
                                    const std::unique_ptr<View>& prev_view,
                                    View& curr_view);
+
 private:
     /**
      * Recomputes num_received_size (the length of the num_received column in
@@ -645,17 +645,19 @@ public:
      * @param any_persistent_objects True if any of the subgroup types in this
      * group use Persistent<T> fields, false otherwise
      * @param object_reference_map A mutable reference to the list of
-     * ReplicatedObject references in Group, so that ViewManager can access it
+     * ReplicatedObject pointers in Group, so that ViewManager can access it
      * while Group manages the list
-     * @param _persistence_manager_callbacks The persistence manager callbacks.
+     * @param persistence_manager A mutable reference to the PersistenceManager
+     * stored in Group, so that ViewManager (and MulticastGroup) can send it
+     * requests to persist new versions
      * @param _view_upcalls Any extra View Upcalls to be called when a view
      * changes.
      */
     ViewManager(const SubgroupInfo& subgroup_info,
                 const std::vector<std::type_index>& subgroup_type_order,
                 const bool any_persistent_objects,
-                ReplicatedObjectReferenceMap& object_reference_map,
-                const persistence_manager_callbacks_t& _persistence_manager_callbacks,
+                std::map<subgroup_id_t, ReplicatedObject*>& object_pointer_map,
+                PersistenceManager& persistence_manager,
                 std::vector<view_upcall_t> _view_upcalls = {});
 
     ~ViewManager();
@@ -739,7 +741,7 @@ public:
      * @param callbacks The set of callback functions for message delivery
      * events in this group.
      */
-    void initialize_multicast_groups(CallbackSet callbacks);
+    void initialize_multicast_groups(const CallbackSet& callbacks);
 
     /**
      * Completes first-time setup of the ViewManager, including synchronizing

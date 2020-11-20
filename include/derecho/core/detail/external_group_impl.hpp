@@ -65,11 +65,11 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
 }
 
 template <typename... ReplicatedTypes>
-ExternalGroup<ReplicatedTypes...>::ExternalGroup(IDeserializationContext* deserialization_context)
+ExternalGroup<ReplicatedTypes...>::ExternalGroup(std::vector<DeserializationContext*> deserialization_contexts)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           receivers(new std::decay_t<decltype(*receivers)>()) {
-    if(deserialization_context != nullptr) {
-        rdv.push_back(deserialization_context);
+    for(auto dc:deserialization_contexts) {
+        rdv.push_back(dc);
     }
 #ifdef USE_VERBS_API
     sst::verbs_initialize({},
@@ -149,7 +149,7 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
         sock.read(buffer, size_of_view);
         prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
-    } catch(tcp::connection_failure) {
+    } catch(tcp::connection_failure&) {
         dbg_default_error("Failed to connect to group member {} when reqeusting new view.", nid);
         dbg_default_flush();
         return false;
@@ -428,5 +428,38 @@ uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type(const std::type_in
                                                                                : 0)
             + ... + 0);
     //return index_of_type<SubgroupType, ReplicatedTypes...>;
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type() {
+    return get_index_of_type(typeid(SubgroupType));
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_subgroups() {
+    uint32_t type_idx = this->template get_index_of_type<SubgroupType>();
+    if (curr_view->subgroup_ids_by_type_id.find(type_idx) != curr_view->subgroup_ids_by_type_id.end()){
+        return curr_view->subgroup_ids_by_type_id.at(type_idx).size();
+    }
+    return 0;
+}
+
+template <typename...ReplicatedTypes>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_shards(uint32_t subgroup_id) {
+    if (subgroup_id < curr_view->subgroup_shard_views.size()) {
+        return curr_view->subgroup_shard_views[subgroup_id].size();
+    }
+    return 0;
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_shards(uint32_t subgroup_index) {
+    if (subgroup_index < this->template get_number_of_subgroups<SubgroupType>()) {
+        return get_number_of_shards(curr_view->subgroup_ids_by_type_id.at(this->template get_index_of_type<SubgroupType>())[subgroup_index]);
+    }
+    return 0;
 }
 }  // namespace derecho

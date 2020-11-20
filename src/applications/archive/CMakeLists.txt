@@ -33,14 +33,6 @@ target_link_libraries(typed_subgroup_test derecho)
 add_executable(long_subgroup_test long_subgroup_test.cpp)
 target_link_libraries(long_subgroup_test derecho)
 
-# typed_subgroup_bw_test
-add_executable(typed_subgroup_bw_test typed_subgroup_bw_test.cpp)
-target_link_libraries(typed_subgroup_bw_test derecho)
-
-# persistent_typed_subgroup_bw_test
-add_executable(persistent_typed_subgroup_bw_test persistent_typed_subgroup_bw_test.cpp)
-target_link_libraries(persistent_typed_subgroup_bw_test derecho)
-
 # objstore
 add_executable(objstore objstore.cpp)
 target_link_libraries(objstore derecho)
@@ -64,10 +56,6 @@ target_link_libraries(volatile_temporal_stability_test derecho)
 # persistent_temporal_stability_test
 add_executable(persistent_temporal_stability_test persistent_temporal_stability_test.cpp)
 target_link_libraries(persistent_temporal_stability_test derecho)
-
-# persistent_latency_test
-add_executable(persistent_latency_test persistent_latency_test.cpp)
-target_link_libraries(persistent_latency_test derecho)
 
 # smart_membership_function
 add_executable(smart_membership_function_test smart_membership_function_test.cpp)

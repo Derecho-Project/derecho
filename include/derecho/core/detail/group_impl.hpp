@@ -117,17 +117,19 @@ void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
                                  const SubgroupInfo& subgroup_info,
-                                 IDeserializationContext* deserialization_context,
+                                 const std::vector<DeserializationContext*>& deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
                                  Factory<ReplicatedTypes>... factories)
         : my_id(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
           user_deserialization_context(deserialization_context),
-          persistence_manager(objects_by_subgroup_id, callbacks.local_persistence_callback),
+          persistence_manager(objects_by_subgroup_id,
+                              std::disjunction_v<std::is_base_of<SignedPersistentFields, ReplicatedTypes>...>,
+                              callbacks.local_persistence_callback),
           view_manager(subgroup_info,
                        {std::type_index(typeid(ReplicatedTypes))...},
                        std::disjunction_v<has_persistent_fields<ReplicatedTypes>...>,
                        objects_by_subgroup_id,
-                       persistence_manager.get_callbacks(),
+                       persistence_manager,
                        _view_upcalls),
           rpc_manager(view_manager, deserialization_context),
           factories(make_kind_map(factories...)) {
@@ -181,11 +183,9 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         //(this function does nothing if we're not doing total restart)
         view_manager.leader_commit_initial_view();
     }
-    //Once the initial view is committed, we can make RDMA connections
+    //At this point the initial view is committed
+    //Set up RDMA connections between each member of the view
     view_manager.initialize_multicast_groups(callbacks);
-    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
-        rpc_manager.add_connections(node_ids);
-    });
     rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
@@ -199,7 +199,7 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
 /* A simpler constructor that uses "default" options for callbacks, upcalls, and deserialization context */
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::Group(const SubgroupInfo& subgroup_info, Factory<ReplicatedTypes>... factories)
-        : Group({}, subgroup_info, nullptr, {}, factories...) {}
+        : Group({}, subgroup_info, {}, {}, factories...) {}
 
 template <typename... ReplicatedTypes>
 Group<ReplicatedTypes...>::~Group() {
@@ -270,7 +270,7 @@ std::set<std::pair<subgroup_id_t, node_id_t>> Group<ReplicatedTypes...>::constru
                     }
                     // Store a reference to the Replicated<T> just constructed
                     objects_by_subgroup_id.emplace(subgroup_id,
-                                                   replicated_objects.template get<FirstType>().at(subgroup_index));
+                                                   &replicated_objects.template get<FirstType>().at(subgroup_index));
                 } else if(in_restart && has_previous_leader) {
                     //In restart mode, construct_objects may be called multiple times if the initial view
                     //is aborted, so we need to receive state for this shard even if we already constructed
@@ -302,11 +302,16 @@ template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     //Give PersistenceManager this pointer to break the circular dependency
     persistence_manager.set_view_manager(view_manager);
+    //Connect ViewManager's external_join_handler to RPCManager
+    view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
+        rpc_manager.add_connections(node_ids);
+    });
     //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
     SharedLockedReference<View> curr_view = view_manager.get_current_view();
     curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
         rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
+    //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {
         rpc_manager.new_view_callback(new_view);
     });
@@ -368,10 +373,10 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
     for(const auto& subgroup_and_leader : subgroups_and_leaders) {
         LockedReference<std::unique_lock<std::mutex>, tcp::socket> leader_socket
                 = view_manager.get_transfer_socket(subgroup_and_leader.second);
-        ReplicatedObject& subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
+        ReplicatedObject* subgroup_object = objects_by_subgroup_id.at(subgroup_and_leader.first);
         try {
-            if(subgroup_object.is_persistent()) {
-                int64_t log_tail_length = subgroup_object.get_minimum_latest_persisted_version();
+            if(subgroup_object->is_persistent()) {
+                persistent::version_t log_tail_length = subgroup_object->get_minimum_latest_persisted_version();
                 dbg_default_debug("Sending log tail length of {} for subgroup {} to node {}.",
                                   log_tail_length, subgroup_and_leader.first, subgroup_and_leader.second);
                 leader_socket.get().write(log_tail_length);
@@ -382,7 +387,7 @@ void Group<ReplicatedTypes...>::receive_objects(const std::set<std::pair<subgrou
             leader_socket.get().read(buffer_size);
             std::unique_ptr<char[]> buffer = std::make_unique<char[]>(buffer_size);
             leader_socket.get().read(buffer.get(), buffer_size);
-            subgroup_object.receive_object(buffer.get());
+            subgroup_object->receive_object(buffer.get());
         } catch(tcp::socket_error& e) {
             //Convert socket exceptions to a more readable error message, since this will cause a crash
             throw derecho_exception("Fatal error: Node " + std::to_string(subgroup_and_leader.second) + " failed during state transfer!");

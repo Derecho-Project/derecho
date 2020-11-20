@@ -7,17 +7,19 @@
  * in the only subgroup that consists of all the nodes
  * Upon completion, the results are appended to file data_derecho_bw on the leader
  */
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <optional>
-#include <time.h>
 #include <vector>
 
-#include "aggregate_bandwidth.hpp"
 #include <derecho/core/derecho.hpp>
+
+#include "aggregate_bandwidth.hpp"
 #include "log_results.hpp"
+#include "partial_senders_allocator.hpp"
 
 using std::cout;
 using std::endl;
@@ -28,11 +30,11 @@ using namespace derecho;
 
 struct exp_result {
     uint32_t num_nodes;
-    uint num_senders_selector;
+    uint32_t num_senders_selector;
     long long unsigned int max_msg_size;
     unsigned int window_size;
-    uint num_messages;
-    uint delivery_mode;
+    uint32_t num_messages;
+    uint32_t delivery_mode;
     double bw;
 
     void print(std::ofstream& fout) {
@@ -43,46 +45,73 @@ struct exp_result {
     }
 };
 
+#define DEFAULT_PROC_NAME "bw_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
+    int dashdash_pos = argc - 1;
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
+            break;
+        }
+        dashdash_pos--;
+    }
+
+    if((argc - dashdash_pos) < 5) {
         cout << "Invalid command line arguments." << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
-        cout << "Thank you" << endl;
+        cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] num_nodes, sender_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode) [proc_name]" << endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
-    pthread_setname_np(pthread_self(), "bw_test");
 
     // initialize the special arguments for this test
-    const uint num_nodes = std::stoi(argv[argc - 4]);
-    const uint num_senders_selector = std::stoi(argv[argc - 3]);
-    const uint num_messages = std::stoi(argv[argc - 2]);
-    const uint delivery_mode = std::stoi(argv[argc - 1]);
+    const uint32_t num_nodes = std::stoi(argv[dashdash_pos + 1]);
+    const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 2]);
+    const uint32_t num_messages = std::stoi(argv[dashdash_pos + 3]);
+    const uint32_t delivery_mode = std::stoi(argv[dashdash_pos + 4]);
+    // Convert this integer to a more readable enum value
+    const PartialSendMode senders_mode = num_senders_selector == 0
+                                                 ? PartialSendMode::ALL_SENDERS
+                                                 : (num_senders_selector == 1
+                                                            ? PartialSendMode::HALF_SENDERS
+                                                            : PartialSendMode::ONE_SENDER);
 
+    if(dashdash_pos + 5 < argc) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
+
+    // Compute the total number of messages that should be delivered
+    uint64_t total_num_messages = 0;
+    switch(senders_mode) {
+        case PartialSendMode::ALL_SENDERS:
+            total_num_messages = num_messages * num_nodes;
+            break;
+        case PartialSendMode::HALF_SENDERS:
+            total_num_messages = num_messages * (num_nodes / 2);
+            break;
+        case PartialSendMode::ONE_SENDER:
+            total_num_messages = num_messages;
+            break;
+    }
 
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
-    auto stability_callback = [&num_messages,
-                               &done,
-                               &num_nodes,
-                               num_senders_selector,
-                               num_delivered = 0u](uint32_t subgroup, uint32_t sender_id, long long int index, std::optional<std::pair<char*, long long int>> data, persistent::version_t ver) mutable {
-        // increment the total number of messages delivered
+    auto stability_callback = [&done,
+                               total_num_messages,
+                               num_delivered = 0u](uint32_t subgroup,
+                                                   uint32_t sender_id,
+                                                   long long int index,
+                                                   std::optional<std::pair<char*, long long int>> data,
+                                                   persistent::version_t ver) mutable {
+        // Count the total number of messages delivered
         ++num_delivered;
-        if(num_senders_selector == 0) {
-            if(num_delivered == num_messages * num_nodes) {
-                done = true;
-            }
-        } else if(num_senders_selector == 1) {
-            if(num_delivered == num_messages * (num_nodes / 2)) {
-                done = true;
-            }
-        } else {
-            if(num_delivered == num_messages) {
-                done = true;
-            }
+        // Check for completion
+        if(num_delivered == total_num_messages) {
+            done = true;
         }
     };
 
@@ -91,51 +120,14 @@ int main(int argc, char* argv[]) {
         mode = Mode::UNORDERED;
     }
 
-    auto membership_function = [num_senders_selector, mode, num_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
-        subgroup_shard_layout_t subgroup_vector(1);
-        auto num_members = curr_view.members.size();
-        // wait for all nodes to join the group
-        if(num_members < num_nodes) {
-            throw subgroup_provisioning_exception();
-        }
-        // all senders case
-        if(num_senders_selector == 0) {
-            // a call to make_subview without the sender information
-            // defaults to all members sending
-            subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode));
-        } else {
-            // configure the number of senders
-            vector<int> is_sender(num_members, 1);
-            // half senders case
-            if(num_senders_selector == 1) {
-                // mark members ranked 0 to num_members/2 as non-senders
-                for(uint i = 0; i <= (num_members - 1) / 2; ++i) {
-                    is_sender[i] = 0;
-                }
-            } else {
-                // mark all members except the last ranked one as non-senders
-                for(uint i = 0; i < num_members - 1; ++i) {
-                    is_sender[i] = 0;
-                }
-            }
-            // provide the sender information in a call to make_subview
-            subgroup_vector[0].emplace_back(curr_view.make_subview(curr_view.members, mode, is_sender));
-        }
-        curr_view.next_unassigned_rank = curr_view.members.size();
-        //Since we know there is only one subgroup type, just put a single entry in the map
-        derecho::subgroup_allocation_map_t subgroup_allocation;
-        subgroup_allocation.emplace(std::type_index(typeid(RawObject)), std::move(subgroup_vector));
-        return subgroup_allocation;
-    };
+    auto membership_function = PartialSendersAllocator(num_nodes, senders_mode, mode);
 
     //Wrap the membership function in a SubgroupInfo
     SubgroupInfo one_raw_group(membership_function);
 
     // join the group
     Group<RawObject> group(CallbackSet{stability_callback},
-                           one_raw_group, nullptr, std::vector<view_upcall_t>{},
+                           one_raw_group, {}, std::vector<view_upcall_t>{},
                            &raw_object_factory);
 
     cout << "Finished constructing/joining Group" << endl;
@@ -154,13 +146,12 @@ int main(int argc, char* argv[]) {
         }
     };
 
-    struct timespec start_time;
     // start timer
-    clock_gettime(CLOCK_REALTIME, &start_time);
+    auto start_time = std::chrono::steady_clock::now();
     // send all messages or skip if not a sender
-    if(num_senders_selector == 0) {
+    if(senders_mode == PartialSendMode::ALL_SENDERS) {
         send_all();
-    } else if(num_senders_selector == 1) {
+    } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
         if(node_rank > (num_nodes - 1) / 2) {
             send_all();
         }
@@ -173,14 +164,13 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
     // end timer
-    struct timespec end_time;
-    clock_gettime(CLOCK_REALTIME, &end_time);
-    long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
+    auto end_time = std::chrono::steady_clock::now();
+    long long int nanoseconds_elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     // calculate bandwidth measured locally
     double bw;
-    if(num_senders_selector == 0) {
+    if(senders_mode == PartialSendMode::ALL_SENDERS) {
         bw = (max_msg_size * num_messages * num_nodes + 0.0) / nanoseconds_elapsed;
-    } else if(num_senders_selector == 1) {
+    } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
         bw = (max_msg_size * num_messages * (num_nodes / 2) + 0.0) / nanoseconds_elapsed;
     } else {
         bw = (max_msg_size * num_messages + 0.0) / nanoseconds_elapsed;

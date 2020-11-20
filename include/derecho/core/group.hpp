@@ -144,8 +144,8 @@ private:
      * and results in an object indirectly holding a shared pointer to its self.
      * Another side effect is double free. So I change it back to the raw pointer.
      * The user deserialization context for all objects serialized and deserialized. */
-    // std::shared_ptr<IDeserializationContext> user_deserialization_context;
-    IDeserializationContext* user_deserialization_context;
+    // std::shared_ptr<DeserializationContext> user_deserialization_context;
+    std::vector<DeserializationContext*> user_deserialization_context;
 
     /** Persist the objects. Once persisted, persistence_manager updates the SST
      * so that the persistent progress is known by group members. */
@@ -175,18 +175,22 @@ private:
      */
     mutils::KindMap<external_caller_index_map, ReplicatedTypes...> external_callers;
     /**
-     * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry at
-     * index X is a reference to the Replicated<T> for this node's shard of
-     * subgroup X, which may or may not be valid. The references are the abstract
-     * base type ReplicatedObject because they are only used for state transfer, not
-     * ordered sends. Since the values in this map are references to objects that
-     * are owned by replicated_objects, it is NOT thread-safe to use it outside of
-     * view_manager's predicates - a reference may become temporarily null during a
-     * view change if the Replicated<T> it points to is deleted by the view change.
-     * Note that this is a std::map solely so that we can initialize it out-of-order;
-     * its keys are continuous integers starting at 0 and it should be a std::vector.
+     * Alternate view of the Replicated<T>s, indexed by subgroup ID. The entry
+     * at index X is a pointer to the Replicated<T> for this node's shard of
+     * subgroup X, if this node is a member of subgroup X. (There is no entry
+     * if this node is not a member of the subgroup). The pointers are the
+     * abstract base type ReplicatedObject so that they can be used by
+     * components like ViewManager that don't know the parameter types (T), and
+     * consequently they can't be used to call ordered_send. Although these
+     * pointers are never null during normal operation (they are simply
+     * observers for objects that already exist in replicated_objects), it is
+     * NOT safe to use them outside of view_manager's predicates without owning
+     * a read lock on curr_view: a pointer may become temporarily null during a
+     * view change if the Replicated<T> it points to is reconstructed by the view
+     * change, and the map entry might disappear entirely if this node is
+     * removed from the subgroup.
      */
-    std::map<subgroup_id_t, std::reference_wrapper<ReplicatedObject>> objects_by_subgroup_id;
+    std::map<subgroup_id_t, ReplicatedObject*> objects_by_subgroup_id;
 
     /**
      * Updates the state of the replicated objects that correspond to subgroups
@@ -242,7 +246,7 @@ private:
 public:
     /**
      * Constructor that starts or joins a Derecho group. Whether this node acts
-     * as the leader of a new group or joins an existing group is determined by 
+     * as the leader of a new group or joins an existing group is determined by
      * the Derecho configuration file (loaded by the conf module).
      *
      * @param callbacks The set of callback functions for message delivery
@@ -250,7 +254,7 @@ public:
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param deserialization_context The context used for deserialization
-     * purpose. The application is responsible to keep it alive during Group 
+     * purpose. The application is responsible to keep it alive during Group
      * object lifetime.
      * @param _view_upcalls A list of functions to be called when the group
      * experiences a View-Change event (optional).
@@ -260,15 +264,15 @@ public:
      */
     Group(const CallbackSet& callbacks,
           const SubgroupInfo& subgroup_info,
-          IDeserializationContext* deserialization_context,
+          const std::vector<DeserializationContext*>& deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},
           Factory<ReplicatedTypes>... factories);
 
     /**
      * Constructor that starts or joins a Derecho group. Whether this node acts
-     * as the leader of a new group or joins an existing group is determined by 
+     * as the leader of a new group or joins an existing group is determined by
      * the Derecho configuration file (loaded by the conf module).
-     * 
+     *
      * @param subgroup_info The set of functions that define how membership in
      * each subgroup and shard will be determined in this group.
      * @param factories A variable number of Factory functions, one for each

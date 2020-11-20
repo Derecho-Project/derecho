@@ -35,12 +35,28 @@ class GroupReference;
 class PersistsFields {};
 
 /**
+ * This is a marker interface for user-defined Replicated Objects (i.e. objects
+ * that will be used with the Replicated<T> template) to indicate that the
+ * object has Persistent<T> fields with signatures enabled. Users should inherit
+ * from this class if their object constructs Persistent<T> fields with signatures
+ * enabled; it is a subclass of PersistsFields, so it will also enable persistence.
+ */
+class SignedPersistentFields : public PersistsFields {};
+
+/**
  * A template whose member field "value" will be true if type T inherits from
  * PersistsFields, and false otherwise. Just a convenient specialization of
  * std::is_base_of.
  */
 template <typename T>
 using has_persistent_fields = std::is_base_of<PersistsFields, T>;
+
+/**
+ * A template whose member field "value" will be true if type T inherits from
+ * SignedPersistentFields.
+ */
+template <typename T>
+using has_signed_fields = std::is_base_of<SignedPersistentFields, T>;
 
 /**
  * An empty class to be used as the "replicated type" for a subgroup that
@@ -63,9 +79,8 @@ inline std::unique_ptr<RawObject> raw_object_factory(persistent::PersistentRegis
 template <typename T>
 class Replicated : public ReplicatedObject, public persistent::ITemporalQueryFrontierProvider {
 private:
-    /** persistent registry for persistent<t>
-     */
-    std::unique_ptr<persistent::PersistentRegistry> persistent_registry_ptr;
+    /** The PersistentRegistry for all Persistent<T> fields in this object */
+    std::unique_ptr<persistent::PersistentRegistry> persistent_registry;
 #if defined(_PERFORMANCE_DEBUG)
 public:
 #endif
@@ -89,10 +104,25 @@ private:
      * shard within the same subgroup (and hence its Replicated state is obsolete).
      */
     const uint32_t shard_num;
+    /**
+     * The Signer to use for signing updates to this object, if signatures are
+     * enabled. If signatures are disabled, this will be null.
+     */
+    std::unique_ptr<openssl::Signer> signer;
+    /**
+     * The size of a signature, which is a fixed run-time constant based on the
+     * security parameter of the private key being used. This will be 0 if
+     * signatures are disabled.
+     */
+    std::size_t signature_size;
     /** Reference to the RPCManager for the Group this Replicated is in */
     rpc::RPCManager& group_rpc_manager;
     /** The actual implementation of Replicated<T>, hiding its ugly template parameters. */
     std::unique_ptr<rpc::RemoteInvocableOf<T>> wrapped_this;
+    /**
+     * A type-erased pointer to the Group that contains this Replicated. Will
+     * never be null since Group owns and outlives Replicated.
+     */
     _Group* group;
     /** The version number being processed and corresponding timestamp */
     persistent::version_t next_version = persistent::INVALID_VERSION;
@@ -152,6 +182,15 @@ public:
      */
     virtual bool is_persistent() const {
         return has_persistent_fields<T>::value;
+    }
+
+    /**
+     * @return The value of has_signed_fields<T> for this Replicated<T>'s
+     * template parameter. This should be true if the user object T has
+     * persistent fields that were initialized with signatures enabled.
+     */
+    virtual bool is_signed() const {
+        return has_signed_fields<T>::value;
     }
 
     /**
@@ -258,29 +297,55 @@ public:
      * fields of this object, i.e. the longest consistent cut of all the logs.
      * @return A version number
      */
-    const persistent::version_t get_minimum_latest_persisted_version();
+    virtual persistent::version_t get_minimum_latest_persisted_version();
 
     /**
      * make a version for all the persistent<T> members.
      * @param ver - the version number to be made
      */
-    virtual void make_version(const persistent::version_t& ver, const HLC& hlc) {
-        persistent_registry_ptr->makeVersion(ver, hlc);
-    };
+    virtual void make_version(persistent::version_t ver, const HLC& hlc);
 
     /**
-     * persist the data to the latest version
+     * Persists the object's data up to at least the specified version; due to
+     * batching, a later version may actually be persisted if it is available.
+     * Returns the latest version actually persisted. If the signed log is
+     * enabled, also returns the signature over the latest persisted version in
+     * the provided buffer.
+     * @param version The version to persist up to.
+     * @param signature The byte array in which to put the signature, assumed to be
+     * the correct length for this node's signing key.
+     * @return The version actually persisted (and signed)
      */
-    virtual void persist(const persistent::version_t version);
+    virtual persistent::version_t persist(persistent::version_t version,
+                                          unsigned char* signature);
+
+    /**
+     * Retreives a copy of the signature in the persistent log for a specified
+     * version of this object.
+     * @param version The logged version to retrieve the signature for
+     * @return The signature in the log for the requested version, or an empty
+     * vector if signatures are disabled or the requested version doesn't exist
+     */
+    virtual std::vector<unsigned char> get_signature(persistent::version_t version);
+    /**
+     * Verifies the persistent log entry at the specified version against the
+     * provided signature.
+     * @param version The logged version to verify
+     * @param verifier The Verifier to use, initialized with the public key that
+     * should correspond to the signature
+     * @param other_signature The signature to verify against, presumably from
+     * some other node
+     */
+    virtual bool verify_log(persistent::version_t version,
+                            openssl::Verifier& verifier,
+                            const unsigned char* other_signature);
 
     /**
      * trim the logs to a version, inclusively.
      * @param earliest_version - the version number, before which, logs are
      * going to be trimmed
      */
-    virtual void trim(const persistent::version_t& earliest_version) {
-        persistent_registry_ptr->trim(earliest_version);
-    };
+    virtual void trim(persistent::version_t earliest_version);
 
     /**
      * Truncate the logs of all Persistent<T> members back to the version
@@ -288,38 +353,24 @@ public:
      * during failure recovery when some versions must be rolled back.
      * @param latest_version The latest version number that should remain in the logs
      */
-    virtual void truncate(const persistent::version_t& latest_version) {
-        persistent_registry_ptr->truncate(latest_version);
-    }
+    virtual void truncate(persistent::version_t latest_version);
 
     /**
      * Post the next version to be handled.
      */
-    virtual void post_next_version(const persistent::version_t& version, const uint64_t & ts_us) {
-        next_version = version;
-        next_timestamp_us = ts_us;
-    }
+    virtual void post_next_version(persistent::version_t version, uint64_t ts_us);
 
     /**
      * Get the next version to be handled.
      */
-    virtual std::tuple<persistent::version_t,uint64_t> get_next_version() {
-        return std::tie(next_version,next_timestamp_us);
-    }
+    virtual std::tuple<persistent::version_t, uint64_t> get_next_version();
 
     /**
      * Register a persistent member
-     * @param vf - the version function
-     * @param pf - the persistent function
-     * @param tf - the trim function
      */
     virtual void register_persistent_member(const char* object_name,
-                                            const persistent::VersionFunc& vf,
-                                            const persistent::PersistFunc& pf,
-                                            const persistent::TrimFunc& tf,
-                                            const persistent::LatestPersistedGetterFunc& gf,
-                                            persistent::TruncateFunc tcf) {
-        this->persistent_registry_ptr->registerPersist(object_name, vf, pf, tf, gf, tcf);
+                                            persistent::PersistentObject* member_pointer) {
+        this->persistent_registry->registerPersistent(object_name, member_pointer);
     }
 };
 

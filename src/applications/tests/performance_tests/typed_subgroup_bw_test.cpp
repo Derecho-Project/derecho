@@ -5,13 +5,18 @@
 #include <time.h>
 #include <vector>
 
+#include "aggregate_bandwidth.cpp"
+#include "aggregate_bandwidth.hpp"
 #include "bytes_object.hpp"
+#include "log_results.hpp"
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/persistent/Persistent.hpp>
-#include <derecho/conf/conf.hpp>
 
-using derecho::Bytes;
+using std::endl;
+using test::Bytes;
+
 /**
  * RPC Object with a single function that accepts a string
  */
@@ -30,21 +35,56 @@ public:
     REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
 };
 
+struct exp_result {
+    int num_nodes;
+    long long unsigned int max_msg_size;
+    unsigned int window_size;
+    int count;
+    double avg_msec;
+    double avg_gbps;
+    double avg_ops;
+
+    void print(std::ofstream& fout) {
+        fout << num_nodes << " "
+             << max_msg_size << " " << window_size << " "
+             << count << " "
+             << avg_msec << " " << avg_gbps << " "
+             << avg_ops << endl;
+    }
+};
+
+#define DEFAULT_PROC_NAME "typed_bw_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 3) {
-        std::cout << "Usage:" << argv[0] << " <num_of_nodes> <count> [configuration options...]" << std::endl;
+    int dashdash_pos = argc - 1;
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
+            break;
+        }
+        dashdash_pos--;
+    }
+
+    if((argc - dashdash_pos) < 3) {
+        std::cout << "Invalid command line arguments." << std::endl;
+        std::cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] <num_of_nodes> <count> [proc_name]" << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
 
     derecho::Conf::initialize(argc, argv);
 
-    int num_of_nodes = std::stoi(argv[1]);
+    int num_of_nodes = std::stoi(argv[dashdash_pos + 1]);
     uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-    int count = std::stoi(argv[2]);
+    int count = std::stoi(argv[dashdash_pos + 2]);
+    if(dashdash_pos + 3 < argc) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 3]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
 
     derecho::SubgroupInfo subgroup_info{[num_of_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                                const std::vector<std::type_index>& subgroup_type_order,
+                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
             throw derecho::subgroup_provisioning_exception();
@@ -63,9 +103,9 @@ int main(int argc, char* argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
+    auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group({},subgroup_info,nullptr,std::vector<derecho::view_upcall_t>{},ba_factory);
+    derecho::Group<TestObject> group({}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
@@ -82,6 +122,7 @@ int main(int argc, char* argv[]) {
         handle.ordered_send<RPC_NAME(bytes_fun)>(bytes);
     }
 
+    auto members_order = group.get_members();
     uint32_t node_rank = group.get_my_rank();
     if(node_rank == 0) {
         derecho::rpc::QueryResults<bool> results = handle.ordered_send<RPC_NAME(finishing_call)>(0);
@@ -102,7 +143,18 @@ int main(int argc, char* argv[]) {
     std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
-    std::cout << "Reached end of main(), entering infinite loop so program doesn't exit" << std::endl;
-    while(true) {
+    // aggregate bandwidth from all nodes
+    double avg_msec = aggregate_bandwidth(members_order, members_order[node_rank], msec);
+    double avg_gbps = aggregate_bandwidth(members_order, members_order[node_rank], thp_gbps);
+    double avg_ops = aggregate_bandwidth(members_order, members_order[node_rank], thp_ops);
+
+    if(node_rank == 0) {
+        log_results(exp_result{num_of_nodes, max_msg_size,
+                               derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), count,
+                               avg_msec, avg_gbps, avg_ops},
+                    "data_derecho_typed_subgroup_bw");
     }
+
+    group.barrier_sync();
+    group.leave();
 }
