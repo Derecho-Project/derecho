@@ -144,14 +144,17 @@ int main(int argc, char* argv[]) {
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
     // aggregate bandwidth from all nodes
-    double avg_msec = aggregate_bandwidth(members_order, members_order[node_rank], msec);
-    double avg_gbps = aggregate_bandwidth(members_order, members_order[node_rank], thp_gbps);
-    double avg_ops = aggregate_bandwidth(members_order, members_order[node_rank], thp_ops);
+    std::pair<double, double> bw_laten(thp_gbps,msec);
+
+    bw_laten = aggregate_bandwidth(members_order, members_order[node_rank], bw_laten);
+
+    double avg_gbps = bw_laten.first;
+    double avg_msec = bw_laten.second;
 
     if(node_rank == 0) {
         log_results(exp_result{num_of_nodes, max_msg_size,
                                derecho::getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), count,
-                               avg_msec, avg_gbps, avg_ops},
+                               avg_msec, avg_gbps},
                     "data_derecho_typed_subgroup_bw");
     }
 
