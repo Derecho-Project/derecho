@@ -11,173 +11,437 @@
  * file.
  */
 
-#define REGISTER_RPC_FUNCTIONS2(classname, a)                                           \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a)); \
-    }
-#define REGISTER_RPC_FUNCTIONS3(classname, a, b)                                        \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b)); \
-    }
-#define REGISTER_RPC_FUNCTIONS4(classname, a, b, c)                                     \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c)); \
-    }
-#define REGISTER_RPC_FUNCTIONS5(classname, a, b, c, d)                                  \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d)); \
-    }
-#define REGISTER_RPC_FUNCTIONS6(classname, a, b, c, d, e)                               \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e)); \
-    }
-#define REGISTER_RPC_FUNCTIONS7(classname, a, b, c, d, e, f)                            \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f)); \
-    }
-#define REGISTER_RPC_FUNCTIONS8(classname, a, b, c, d, e, f, g)                         \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g)); \
-    }
-#define REGISTER_RPC_FUNCTIONS9(classname, a, b, c, d, e, f, g, h)                      \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h)); \
-    }
-#define REGISTER_RPC_FUNCTIONS10(classname, a, b, c, d, e, f, g, h, i)                  \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i)); \
-    }
-#define REGISTER_RPC_FUNCTIONS11(classname, a, b, c, d, e, f, g, h, i, j)               \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),  \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j)); \
-    }
-#define REGISTER_RPC_FUNCTIONS12(classname, a, b, c, d, e, f, g, h, i, j, k)            \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),  \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j),  \
-                               derecho::rpc::tag<CT_STRING(k)::hash()>(&classname::k)); \
-    }
-#define REGISTER_RPC_FUNCTIONS13(classname, a, b, c, d, e, f, g, h, i, j, k, l)         \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),  \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j),  \
-                               derecho::rpc::tag<CT_STRING(k)::hash()>(&classname::k),  \
-                               derecho::rpc::tag<CT_STRING(l)::hash()>(&classname::l)); \
-    }
-#define REGISTER_RPC_FUNCTIONS14(classname, a, b, c, d, e, f, g, h, i, j, k, l, m)      \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),  \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j),  \
-                               derecho::rpc::tag<CT_STRING(k)::hash()>(&classname::k),  \
-                               derecho::rpc::tag<CT_STRING(l)::hash()>(&classname::l),  \
-                               derecho::rpc::tag<CT_STRING(m)::hash()>(&classname::m)); \
-    }
-#define REGISTER_RPC_FUNCTIONS15(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n)   \
-    static auto register_functions() {                                                  \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),  \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),  \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),  \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),  \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),  \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),  \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),  \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),  \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),  \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j),  \
-                               derecho::rpc::tag<CT_STRING(k)::hash()>(&classname::k),  \
-                               derecho::rpc::tag<CT_STRING(l)::hash()>(&classname::l),  \
-                               derecho::rpc::tag<CT_STRING(m)::hash()>(&classname::m),  \
-                               derecho::rpc::tag<CT_STRING(n)::hash()>(&classname::n)); \
-    }
+#define REGISTER_RPC_FUNCTIONS2(classname, a) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a));\
+    } 
+#define REGISTER_RPC_FUNCTIONS3(classname, a, b) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b));\
+    } 
+#define REGISTER_RPC_FUNCTIONS4(classname, a, b, c) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c));\
+    } 
+#define REGISTER_RPC_FUNCTIONS5(classname, a, b, c, d) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d));\
+    } 
+#define REGISTER_RPC_FUNCTIONS6(classname, a, b, c, d, e) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e));\
+    } 
+#define REGISTER_RPC_FUNCTIONS7(classname, a, b, c, d, e, f) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f));\
+    } 
+#define REGISTER_RPC_FUNCTIONS8(classname, a, b, c, d, e, f, g) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g));\
+    } 
+#define REGISTER_RPC_FUNCTIONS9(classname, a, b, c, d, e, f, g, h) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h));\
+    } 
+#define REGISTER_RPC_FUNCTIONS10(classname, a, b, c, d, e, f, g, h, i) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i));\
+    } 
+#define REGISTER_RPC_FUNCTIONS11(classname, a, b, c, d, e, f, g, h, i, j) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j));\
+    } 
+#define REGISTER_RPC_FUNCTIONS12(classname, a, b, c, d, e, f, g, h, i, j, k) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k));\
+    } 
+#define REGISTER_RPC_FUNCTIONS13(classname, a, b, c, d, e, f, g, h, i, j, k, l) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l));\
+    } 
+#define REGISTER_RPC_FUNCTIONS14(classname, a, b, c, d, e, f, g, h, i, j, k, l, m) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m));\
+    } 
+#define REGISTER_RPC_FUNCTIONS15(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n));\
+    } 
 #define REGISTER_RPC_FUNCTIONS16(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) \
-    static auto register_functions() {                                                   \
-        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(&classname::a),   \
-                               derecho::rpc::tag<CT_STRING(b)::hash()>(&classname::b),   \
-                               derecho::rpc::tag<CT_STRING(c)::hash()>(&classname::c),   \
-                               derecho::rpc::tag<CT_STRING(d)::hash()>(&classname::d),   \
-                               derecho::rpc::tag<CT_STRING(e)::hash()>(&classname::e),   \
-                               derecho::rpc::tag<CT_STRING(f)::hash()>(&classname::f),   \
-                               derecho::rpc::tag<CT_STRING(g)::hash()>(&classname::g),   \
-                               derecho::rpc::tag<CT_STRING(h)::hash()>(&classname::h),   \
-                               derecho::rpc::tag<CT_STRING(i)::hash()>(&classname::i),   \
-                               derecho::rpc::tag<CT_STRING(j)::hash()>(&classname::j),   \
-                               derecho::rpc::tag<CT_STRING(k)::hash()>(&classname::k),   \
-                               derecho::rpc::tag<CT_STRING(l)::hash()>(&classname::l),   \
-                               derecho::rpc::tag<CT_STRING(m)::hash()>(&classname::m),   \
-                               derecho::rpc::tag<CT_STRING(n)::hash()>(&classname::n),   \
-                               derecho::rpc::tag<CT_STRING(o)::hash()>(&classname::o));  \
-    }
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o));\
+    } 
+#define REGISTER_RPC_FUNCTIONS17(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p));\
+    } 
+#define REGISTER_RPC_FUNCTIONS18(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q));\
+    } 
+#define REGISTER_RPC_FUNCTIONS19(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r));\
+    } 
+#define REGISTER_RPC_FUNCTIONS20(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s));\
+    } 
+#define REGISTER_RPC_FUNCTIONS21(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t));\
+    } 
+#define REGISTER_RPC_FUNCTIONS22(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u));\
+    } 
+#define REGISTER_RPC_FUNCTIONS23(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u),\
+                               derecho::rpc::tag<CT_STRING(v)::hash()>(& classname :: v));\
+    } 
+#define REGISTER_RPC_FUNCTIONS24(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u),\
+                               derecho::rpc::tag<CT_STRING(v)::hash()>(& classname :: v),\
+                               derecho::rpc::tag<CT_STRING(w)::hash()>(& classname :: w));\
+    } 
+#define REGISTER_RPC_FUNCTIONS25(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u),\
+                               derecho::rpc::tag<CT_STRING(v)::hash()>(& classname :: v),\
+                               derecho::rpc::tag<CT_STRING(w)::hash()>(& classname :: w),\
+                               derecho::rpc::tag<CT_STRING(x)::hash()>(& classname :: x));\
+    } 
+#define REGISTER_RPC_FUNCTIONS26(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u),\
+                               derecho::rpc::tag<CT_STRING(v)::hash()>(& classname :: v),\
+                               derecho::rpc::tag<CT_STRING(w)::hash()>(& classname :: w),\
+                               derecho::rpc::tag<CT_STRING(x)::hash()>(& classname :: x),\
+                               derecho::rpc::tag<CT_STRING(y)::hash()>(& classname :: y));\
+    } 
+#define REGISTER_RPC_FUNCTIONS27(classname, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z) \
+    static auto register_functions() {\
+        return std::make_tuple(derecho::rpc::tag<CT_STRING(a)::hash()>(& classname :: a),\
+                               derecho::rpc::tag<CT_STRING(b)::hash()>(& classname :: b),\
+                               derecho::rpc::tag<CT_STRING(c)::hash()>(& classname :: c),\
+                               derecho::rpc::tag<CT_STRING(d)::hash()>(& classname :: d),\
+                               derecho::rpc::tag<CT_STRING(e)::hash()>(& classname :: e),\
+                               derecho::rpc::tag<CT_STRING(f)::hash()>(& classname :: f),\
+                               derecho::rpc::tag<CT_STRING(g)::hash()>(& classname :: g),\
+                               derecho::rpc::tag<CT_STRING(h)::hash()>(& classname :: h),\
+                               derecho::rpc::tag<CT_STRING(i)::hash()>(& classname :: i),\
+                               derecho::rpc::tag<CT_STRING(j)::hash()>(& classname :: j),\
+                               derecho::rpc::tag<CT_STRING(k)::hash()>(& classname :: k),\
+                               derecho::rpc::tag<CT_STRING(l)::hash()>(& classname :: l),\
+                               derecho::rpc::tag<CT_STRING(m)::hash()>(& classname :: m),\
+                               derecho::rpc::tag<CT_STRING(n)::hash()>(& classname :: n),\
+                               derecho::rpc::tag<CT_STRING(o)::hash()>(& classname :: o),\
+                               derecho::rpc::tag<CT_STRING(p)::hash()>(& classname :: p),\
+                               derecho::rpc::tag<CT_STRING(q)::hash()>(& classname :: q),\
+                               derecho::rpc::tag<CT_STRING(r)::hash()>(& classname :: r),\
+                               derecho::rpc::tag<CT_STRING(s)::hash()>(& classname :: s),\
+                               derecho::rpc::tag<CT_STRING(t)::hash()>(& classname :: t),\
+                               derecho::rpc::tag<CT_STRING(u)::hash()>(& classname :: u),\
+                               derecho::rpc::tag<CT_STRING(v)::hash()>(& classname :: v),\
+                               derecho::rpc::tag<CT_STRING(w)::hash()>(& classname :: w),\
+                               derecho::rpc::tag<CT_STRING(x)::hash()>(& classname :: x),\
+                               derecho::rpc::tag<CT_STRING(y)::hash()>(& classname :: y),\
+                               derecho::rpc::tag<CT_STRING(z)::hash()>(& classname :: z));\
+    } 
 
-#define REGISTER_RPC_FUNCTIONS_IMPL2(count, ...) REGISTER_RPC_FUNCTIONS##count(__VA_ARGS__)
+#define REGISTER_RPC_FUNCTIONS_IMPL2(count, ...) REGISTER_RPC_FUNCTIONS ## count (__VA_ARGS__)
 #define REGISTER_RPC_FUNCTIONS_IMPL(count, ...) REGISTER_RPC_FUNCTIONS_IMPL2(count, __VA_ARGS__)
 
 /**
@@ -200,6 +464,4 @@
  *
  * thing_handle.ordered_send<RPC_NAME(foo)>(foo_args);
  */
-#define RPC_NAME(...)      \
-    CT_STRING(__VA_ARGS__) \
-    ::hash()
+#define RPC_NAME(...) CT_STRING(__VA_ARGS__)::hash()
