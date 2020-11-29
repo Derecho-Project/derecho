@@ -216,7 +216,7 @@ const ObjectType& Persistent<ObjectType, storageType>::getConstRef() const {
 
 template <typename ObjectType,
           StorageType storageType>
-const std::string& Persistent<ObjectType, storageType>::getObjectName() {
+const std::string& Persistent<ObjectType, storageType>::getObjectName() const {
     return this->m_pLog->m_sName;
 }
 
@@ -226,7 +226,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
         const Func& fun,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         return fun(*this->getByIndex(idx, dm));
     } else {
@@ -239,7 +239,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
-Persistent<ObjectType, storageType>::getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm) {
+Persistent<ObjectType, storageType>::getDeltaByIndex(int64_t idx, const Func& fun, mutils::DeserializationManager* dm) const {
     return mutils::deserialize_and_run(dm, (char*)this->m_pLog->getEntryByIndex(idx), fun);
 }
 
@@ -247,7 +247,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::getByIndex(
         int64_t idx,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     if constexpr(std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value) {
         // ObjectType* ot = new ObjectType{};
         std::unique_ptr<ObjectType> p = ObjectType::create(dm);
@@ -268,7 +268,7 @@ template <typename ObjectType,
 template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDeltaByIndex(
         int64_t idx,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     return mutils::from_bytes<DeltaType>(dm, (char const*)this->m_pLog->getEntryByIndex(idx));
 }
 
@@ -278,7 +278,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
         version_t ver,
         const Func& fun,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     char* pdat = (char*)this->m_pLog->getEntry(ver);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
@@ -295,7 +295,7 @@ template <typename ObjectType,
           StorageType storageType>
 template <typename DeltaType, typename Func>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
-Persistent<ObjectType, storageType>::getDelta(const version_t ver, const Func& fun, mutils::DeserializationManager* dm) {
+Persistent<ObjectType, storageType>::getDelta(const version_t ver, const Func& fun, mutils::DeserializationManager* dm) const {
     char* pdat = (char*)this->m_pLog->getEntry(ver, true);
     if(pdat == nullptr) {
         throw PERSIST_EXP_INV_VERSION;
@@ -307,7 +307,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         version_t ver,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     int64_t idx = this->m_pLog->getVersionIndex(ver);
     if(idx == INVALID_INDEX) {
         throw PERSIST_EXP_INV_VERSION;
@@ -325,7 +325,7 @@ template <typename ObjectType,
 template <typename DeltaType>
 std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> Persistent<ObjectType, storageType>::getDelta(
         const version_t ver,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     int64_t idx = this->m_pLog->getVersionIndex(ver, true);
     if(idx == INVALID_INDEX) {
         throw PERSIST_EXP_INV_VERSION;
@@ -364,7 +364,7 @@ template <typename Func>
 auto Persistent<ObjectType, storageType>::get(
         const HLC& hlc,
         const Func& fun,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
         throw PERSIST_EXP_BEYOND_GSF;
@@ -389,7 +389,7 @@ template <typename ObjectType,
           StorageType storageType>
 std::unique_ptr<ObjectType> Persistent<ObjectType, storageType>::get(
         const HLC& hlc,
-        mutils::DeserializationManager* dm) {
+        mutils::DeserializationManager* dm) const {
     // global stability frontier test
     if(m_pRegistry != nullptr && m_pRegistry->getFrontier() <= hlc) {
         throw PERSIST_EXP_BEYOND_GSF;
@@ -447,7 +447,7 @@ version_t Persistent<ObjectType, storageType>::getLastPersistedVersion() const {
 
 template <typename ObjectType,
           StorageType storageType>
-int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) {
+int64_t Persistent<ObjectType, storageType>::getIndexAtTime(const HLC& hlc) const {
     return this->m_pLog->getHLCIndex(hlc);
 }
 

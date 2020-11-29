@@ -345,7 +345,7 @@ public:
 private:
     int m_iCounter;
     const char* m_sObjectTypeName;
-    pthread_spinlock_t m_oLck;
+    mutable pthread_spinlock_t m_oLck;
 };
 
 // Persistent represents a variable backed up by persistent storage. The
@@ -486,7 +486,7 @@ public:
      *
      * @return a const reference to the object name.
      */
-    const std::string& getObjectName();
+    const std::string& getObjectName() const;
 
     /**
      * getByIndex(int64_t,const Func&,mutils::DeserializationManager*)
@@ -510,7 +510,7 @@ public:
     auto getByIndex(
             int64_t idx,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getByIndex(int64_t,mutils::DeserializationManager)
@@ -528,7 +528,7 @@ public:
      */
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const version_t,const Func&,mutils::DeserializationManager*)
@@ -553,7 +553,7 @@ public:
     auto get(
             version_t ver,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const version_t,mutils::DeserializationManager*)
@@ -573,7 +573,7 @@ public:
      */
     std::unique_ptr<ObjectType> get(
             const version_t ver,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDeltaByIndex(int64_t,const Func&,mutils::DeserializationManager*)
@@ -599,7 +599,7 @@ public:
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDeltaByIndex(int64_t idx,
                     const Func& fun,
-                    mutils::DeserializationManager* dm = nullptr);
+                    mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDeltaByIndex(int64_t,mutils::DeserializationManager*)
@@ -620,7 +620,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDeltaByIndex(
             int64_t idx,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDelta(const version_t,const Func&,mutils::DeserializationManager*)
@@ -646,7 +646,7 @@ public:
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDelta(const version_t ver,
              const Func& fun,
-             mutils::DeserializationManager* dm = nullptr);
+             mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDelta(const version_t,mutils::DeserializationManager*)
@@ -667,7 +667,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
     getDelta(const version_t ver,
-             mutils::DeserializationManager* dm = nullptr);
+             mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * Trim versions prior to the specified version.
@@ -714,7 +714,7 @@ public:
     auto get(
             const HLC& hlc,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const HLC&,mutils::DeserializationManager*)
@@ -732,7 +732,7 @@ public:
      */
     std::unique_ptr<ObjectType> get(
             const HLC& hlc,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * [](const version_t)
@@ -743,7 +743,7 @@ public:
      *
      * @return a unique_pointer to the copied ObjectType object.
      */
-    std::unique_ptr<ObjectType> operator[](const version_t ver) {
+    std::unique_ptr<ObjectType> operator[](const version_t ver) const {
         return this->get(ver);
     }
 
@@ -756,7 +756,7 @@ public:
      *
      * @return a unique_pointer to the copied ObjectType object.
      */
-    std::unique_ptr<ObjectType> operator[](const HLC& hlc) {
+    std::unique_ptr<ObjectType> operator[](const HLC& hlc) const {
         return this->get(hlc);
     }
 
@@ -819,7 +819,7 @@ public:
      *
      * Get the latest index inclusively before time.
      */
-    virtual int64_t getIndexAtTime(const HLC& hlc);
+    virtual int64_t getIndexAtTime(const HLC& hlc) const;
 
     /**
      * set(ObjectType&, version_t,const HLC&)
