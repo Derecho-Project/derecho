@@ -88,7 +88,6 @@ int main(int argc, char* argv[]) {
                         std::cout << "(pers)throughput:" << thp_ops << "ops." << std::endl;
                         std::cout << std::flush;
                     }
-                    exit(0);
                 }
             }};
 
