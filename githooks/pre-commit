@@ -1,9 +1,9 @@
 #!/bin/bash
 # 
 # Pre-commit hook that ensures the file git_version.cpp is updated to reflect
-# the current version of the project as of this commit. This script parses the 
-# output of git describe to get each component of the version number (assuming 
-# the most recent tag follows the vX.Y.Z[rc] standard format), then generates 
+# the current version of the project as of this commit. This script parses the
+# output of git describe to get each component of the version number (assuming
+# the most recent tag follows the vX.Y.Z[rc] standard format), then generates
 # git_version.cpp in which the C++ constants are defined to have these values.
 # The new version of git_version.cpp is then added to the commit.
 
@@ -29,8 +29,8 @@ cat > $(pwd)/src/core/git_version.cpp <<EOM
 /**
  * @file git_version.cpp
  *
- * This file is automatically created by the pre-commit hook that is distributed 
- * with Derecho in the githooks folder; this script should be installed in your 
+ * This file is automatically created by the pre-commit hook that is distributed
+ * with Derecho in the githooks folder; this script should be installed in your
  * local repository's .git/hooks/ directory.
  */
 
