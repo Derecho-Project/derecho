@@ -1119,7 +1119,7 @@ void MulticastGroup::check_failures_loop() {
         if(sst) {
             {
                 std::unique_lock<std::recursive_mutex> lock(msg_state_mtx);
-                auto current_time = get_time();
+                auto current_time = get_walltime();
                 for(auto p : subgroup_settings_map) {
                     auto subgroup_num = p.first;
                     auto members = p.second.members;
@@ -1166,7 +1166,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
         msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
         free_message_buffers[subgroup_num].pop_back();
 
-        auto current_time = get_time();
+        auto current_time = get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         // Fill header
@@ -1184,7 +1184,7 @@ void MulticastGroup::get_buffer_and_send_auto_null(subgroup_id_t subgroup_num) {
 
         assert(buf);
 
-        auto current_time = get_time();
+        auto current_time = get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         ((header*)buf)->header_size = sizeof(header);
@@ -1255,7 +1255,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
         msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
         free_message_buffers[subgroup_num].pop_back();
 
-        auto current_time = get_time();
+        auto current_time = get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         // Fill header
@@ -1285,7 +1285,7 @@ char* MulticastGroup::get_sendbuffer_ptr(subgroup_id_t subgroup_num,
             pending_sst_sends[subgroup_num] = false;
             return nullptr;
         }
-        auto current_time = get_time();
+        auto current_time = get_walltime();
         pending_message_timestamps[subgroup_num].insert(current_time);
 
         ((header*)buf)->header_size = sizeof(header);
