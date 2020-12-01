@@ -45,14 +45,12 @@ struct exp_result {
     uint32_t count;
     double avg_msec;
     double avg_gbps;
-    double avg_ops;
 
     void print(std::ofstream& fout) {
-        fout << num_nodes << " " << num_sender_sel
+        fout << num_nodes << " " << num_sender_sel << " "
              << max_msg_size << " " << window_size << " "
              << count << " "
-             << avg_msec << " " << avg_gbps << " "
-             << avg_ops << endl;
+             << avg_msec << " " << avg_gbps << endl;
     }
 };
 
