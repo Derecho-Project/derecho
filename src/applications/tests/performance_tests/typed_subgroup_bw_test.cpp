@@ -202,17 +202,17 @@ int main(int argc, char* argv[]) {
     int64_t nsec = ((int64_t)t2.tv_sec - t1.tv_sec) * 1000000000 + t2.tv_nsec - t1.tv_nsec;
 
     if(senders_mode == PartialSendMode::ALL_SENDERS) {
-        thp_gbps = ((double)count * max_msg_size * 8 * num_nodes) / nsec;
+        thp_gbps = ((double)count * max_msg_size * num_nodes) / nsec;
     } else if(senders_mode == PartialSendMode::HALF_SENDERS) {
-        thp_gbps = ((double)count * max_msg_size * 8 * num_nodes/2) / nsec;
+        thp_gbps = ((double)count * max_msg_size * num_nodes/2) / nsec;
     } else {
-        thp_gbps = ((double)count * max_msg_size * 8) / nsec;
+        thp_gbps = ((double)count * max_msg_size) / nsec;
     }
 
     double msec = (double)nsec / 1000000;
     double thp_ops = ((double)count * 1000000000) / nsec;
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
-    std::cout << "throughput:" << thp_gbps << "Gbit/s." << std::endl;
+    std::cout << "throughput:" << thp_gbps << "GB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
 
     // aggregate bandwidth from all nodes
