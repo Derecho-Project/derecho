@@ -228,7 +228,7 @@ public:
      * of the RPC function being invoked
      */
     template <rpc::FunctionTag tag, typename... Args>
-    auto p2p_send(node_id_t dest_node, Args&&... args);
+    auto p2p_send(node_id_t dest_node, Args&&... args) const;
 
     /**
      * Sends a multicast to the entire subgroup that replicates this Replicated<T>,

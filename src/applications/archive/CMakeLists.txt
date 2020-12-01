@@ -9,10 +9,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
 
-# derecho_caller_test
-add_executable(derecho_caller_test derecho_caller_test.cpp)
-target_link_libraries(derecho_caller_test derecho)
-
 # p2p_latency_test
 add_executable(p2p_latency_test p2p_latency_test.cpp)
 target_link_libraries(p2p_latency_test derecho)

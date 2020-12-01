@@ -462,6 +462,13 @@ public:
     ObjectType& operator*();
 
     /**
+     * const version of * operator (gets the in-memory version for reads only)
+     *
+     * @return a const reference to the current ObjectType object
+     */
+    const ObjectType& operator*() const;
+
+    /**
      * -> ()
      *
      * overload the '->' operator to access the wrapped object
@@ -922,7 +929,7 @@ public:
      * @return true if a signature was successfully retrieved, false if there was
      * no version in the log with the requested version number
      */
-    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver);
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver) const;
 
     /**
      * Update the provided Verifier with the state of T at the specified version.

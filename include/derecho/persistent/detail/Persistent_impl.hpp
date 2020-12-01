@@ -204,6 +204,12 @@ ObjectType& Persistent<ObjectType, storageType>::operator*() {
 
 template <typename ObjectType,
           StorageType storageType>
+const ObjectType& Persistent<ObjectType, storageType>::operator*() const {
+    return *this->m_pWrappedObject;
+}
+
+template <typename ObjectType,
+          StorageType storageType>
 ObjectType* Persistent<ObjectType, storageType>::operator->() {
     return this->m_pWrappedObject.get();
 }
@@ -522,7 +528,7 @@ void Persistent<ObjectType, storageType>::addSignature(version_t ver, const unsi
 
 template <typename ObjectType,
           StorageType storageType>
-bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature, version_t& prev_signed_ver) {
+bool Persistent<ObjectType, storageType>::getSignature(version_t ver, unsigned char* signature, version_t& prev_signed_ver) const {
     return this->m_pLog->getSignature(ver, signature, prev_signed_ver);
 }
 

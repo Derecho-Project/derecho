@@ -21,7 +21,7 @@ class PFoo : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     virtual ~PFoo() noexcept(true) {
     }
-    int read_state() {
+    int read_state() const {
         return *pint;
     }
     bool change_state(int new_int) {

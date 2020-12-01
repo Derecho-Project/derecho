@@ -62,7 +62,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
        return value mechanism.
      */
 
-    #define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
+#define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
     PendingResults<Ret> results_vector[MAX_CONCURRENT_RPCS_PER_INVOKER];
     std::atomic<unsigned short> invocation_id_sequencer;
     // std::mutex map_lock; - we don't need a lock on the result map anymore.
@@ -117,7 +117,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         std::size_t invocation_id = invocation_id_sequencer++;
         invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
         std::size_t size = mutils::bytes_size(invocation_id);
-        size += (mutils::bytes_size(remote_args) +...+ 0);
+        size += (mutils::bytes_size(remote_args) + ... + 0);
 
         char* serialized_args = out_alloc(size);
         {
@@ -517,19 +517,18 @@ const_partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2
 /**
  * This function should not be used. It tags a non-const member function as P2P
  * callable, which means the replicated state of an object could be modified by
- * a non-multicast message. Unfortunately, it needs to exist and will be used
- * for the moment, because Persistent<T> is not const-correct. A const member
- * function cannot retrieve the value from a Persistent<T> field even though
- * that is a read-only operation, because Persistent<T>::get() and its related
- * methods are not marked as const.
+ * a non-multicast message. Unfortunately, it needs to exist for a few edge cases
+ * where a P2P-callable function modifies *non-replicated* local state in the
+ * object (i.e. fields that are not serialized), since there is no way to
+ * distingush replicated from non-replicated fields at the language level.
  * @param fun A pointer-to-member function from the class in the template parameters
  * @return A partial_wrapped struct, which must be further constructed with a call
  * call to bind_to_instance(std::unique_ptr<NewClass>*, const partial_wrapped<...>&)
  */
 template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
 partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...)) {
-    //When we fix Persistent<T> to be const-correct, un-comment this assertion
-    //static_assert(std::is_const<decltype(fun)>::value, "Non-const methods cannot be tagged as P2P-callable!");
+    //It would be nice to have this assertion, but it won't work as long as objects need non-replicated local state
+    // static_assert(std::is_const<decltype(fun)>::value, "Non-const methods cannot be tagged as P2P-callable!");
     return tag<to_internal_tag<true>(Tag), NewClass, Ret, Args...>(fun);
 }
 

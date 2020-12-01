@@ -95,7 +95,7 @@ Replicated<T>::~Replicated() {
 
 template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
-auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) {
+auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
     if(is_valid()) {
         if(group_rpc_manager.view_manager.get_current_view().get().rank_of(dest_node) == -1) {
             throw invalid_node_exception("Cannot send a p2p request to node "

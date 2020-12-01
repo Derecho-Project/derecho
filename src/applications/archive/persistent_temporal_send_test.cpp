@@ -123,17 +123,17 @@ public:
         *pers_bytes = bytes;
     }
 
-    int query_const_int(uint64_t query_us) {
+    int query_const_int(uint64_t query_us) const {
         return 100;
     }
 
-    Bytes query_const_bytes(uint64_t query_us) {
+    Bytes query_const_bytes(uint64_t query_us) const {
         char bytes[1000000];
         Bytes b(bytes, 1000000);
         return b;
     }
 
-    Bytes query_pers_bytes(uint64_t query_us) {
+    Bytes query_pers_bytes(uint64_t query_us) const {
         HLC hlc{query_us, 0};
         try {
             return *pers_bytes.get(hlc);

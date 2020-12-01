@@ -133,7 +133,7 @@ public:
         return b;
     }
 
-    Bytes query_vola_bytes(uint64_t query_us) {
+    Bytes query_vola_bytes(uint64_t query_us) const {
         HLC hlc{query_us, 0};
         try {
             return *vola_bytes.get(hlc);
