@@ -925,10 +925,10 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         gmssst::set(gmsSST.changes[my_rank][last_change_index].end_of_view, false);
     } else {
         //Push all the proposed changes, including joiner information if any joins were proposed
-        gmsSST.put(gmsSST.changes);
+        gmsSST.put_with_completion(gmsSST.changes);
         if(!proposed_join_sockets.empty()) {
-            gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+            gmsSST.put_with_completion(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+                                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         }
         gmsSST.put(gmsSST.num_changes);
     }
@@ -1054,8 +1054,8 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
         make_subgroup_maps(subgroup_info, curr_view, *next_view);
         //Push the entire new changes vector and the associated joiner_ip vectors
         gmsSST.put(gmsSST.changes);
-        gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+        gmsSST.put_with_completion(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
+                                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         gmsSST.put(gmsSST.num_changes);
     }
     //Allow this node to advance num_committed as the active leader
@@ -1108,7 +1108,7 @@ void ViewManager::acknowledge_proposed_change(DerechoSST& gmsSST) {
         //This pushes the contiguous set of joiner_xxx_ports fields all at once
         gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
                    gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
-        gmsSST.put(gmsSST.num_changes);
+        gmsSST.put_with_completion(gmsSST.num_changes);
         gmsSST.put(gmsSST.num_committed);
     }
     gmsSST.put(gmsSST.num_acked);
@@ -1477,7 +1477,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
     dbg_default_debug("Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
 
-    // New members can now proceed to view_manager.start(), which will call sync()
+    // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
     next_view->gmsSST->put();
     next_view->gmsSST->sync_with_members();
     {
@@ -2233,7 +2233,7 @@ void ViewManager::leader_ragged_edge_cleanup(const subgroup_id_t subgroup_num,
 
     dbg_default_debug("Shard leader for subgroup {} finished computing global_min", subgroup_num);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
-    Vc.gmsSST->put(
+    Vc.gmsSST->put_with_completion(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
@@ -2261,7 +2261,7 @@ void ViewManager::follower_ragged_edge_cleanup(
                 &Vc.gmsSST->global_min[shard_leader_rank][num_received_offset],
                 num_shard_senders);
     gmssst::set(Vc.gmsSST->global_min_ready[myRank][subgroup_num], true);
-    Vc.gmsSST->put(
+    Vc.gmsSST->put_with_completion(
             Vc.multicast_group->get_shard_sst_indices(subgroup_num),
             (char*)std::addressof(Vc.gmsSST->global_min[0][num_received_offset]) - Vc.gmsSST->getBaseAddress(),
             sizeof(Vc.gmsSST->global_min[0][num_received_offset]) * num_shard_senders);
