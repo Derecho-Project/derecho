@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     derecho::Conf::initialize(argc, argv);
 
     const int num_nodes = std::stoi(argv[dashdash_pos + 1]);
-    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - 20;
+    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 
