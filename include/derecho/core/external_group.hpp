@@ -61,7 +61,7 @@ private:
     void clean_up();
     volatile char* get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYPE type);
     void finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, rpc::PendingBase& pending_results_handle);
-    uint32_t get_index_of_type(const std::type_info& ti);
+    uint32_t get_index_of_type(const std::type_info& ti) const;
 
 
     /** ======================== copy/paste from rpc_manager ======================== **/
@@ -112,17 +112,22 @@ public:
      */
     bool update_view();
     /**
+     * Get local node id
+     * @return node id
+     */
+    inline node_id_t get_my_id() const { return this->my_id; }
+    /**
      * Get all members in the top level group.
      * @return      A vector including the node ids of all members.
      */
-    std::vector<node_id_t> get_members();
+    std::vector<node_id_t> get_members() const;
     /**
      * Get members in a shard.
      * @param subgroup_id   The subgroup id
      * @param shard_num     The shard number in subgroup specified by 'subgroup_id'
      * @return      A vector including the node ids of all members in the specified shard.
      */
-    std::vector<node_id_t> get_shard_members(uint32_t subgroup_id, uint32_t shard_num);
+    std::vector<node_id_t> get_shard_members(uint32_t subgroup_id, uint32_t shard_num) const;
     /**
      * Get members in a shard.
      * @tparam SubgroupType     The type of the subgroup containing the shard.
@@ -131,27 +136,27 @@ public:
      * @return      A vector including the node ids of all members in the specified shard.
      */
     template <typename SubgroupType>
-    std::vector<node_id_t> get_shard_members(uint32_t subgroup_index, uint32_t shard_num);
+    std::vector<node_id_t> get_shard_members(uint32_t subgroup_index, uint32_t shard_num) const;
     /**
      * Get the index of a type
      * @tparam SubgroupType     The subgroup type
      * @return      The index of the type in ReplicatedTypes... list, start from 0.
      */
     template <typename SubgroupType>
-    uint32_t get_index_of_type();
+    uint32_t get_index_of_type() const;
     /**
      * Get the number of subgroups of a type.
      * @tparam SubgroupType The type of the subgroup.
      * @return      The number of subgroups of type 'SubgroupType', whose indexes start from 0.
      */
     template <typename SubgroupType>
-    uint32_t get_number_of_subgroups();
+    uint32_t get_number_of_subgroups() const;
     /**
      * Get the number of shards in a subgroup.
      * @param subgroup_id   The subgroup id
      * @return      The number of shards in the specified subgroup.
      */
-    uint32_t get_number_of_shards(uint32_t subgroup_id);
+    uint32_t get_number_of_shards(uint32_t subgroup_id) const;
     /**
      * Get the number of shards in a subgroup.
      * @tparam SubgroupType     The type of the subgroup containing the shard
@@ -159,7 +164,7 @@ public:
      * @return      The number of shards in the specified subgroup.
      */
     template <typename SubgroupType>
-    uint32_t get_number_of_shards(uint32_t subgroup_index = 0);
+    uint32_t get_number_of_shards(uint32_t subgroup_index = 0) const;
 };
 }  // namespace derecho
 
