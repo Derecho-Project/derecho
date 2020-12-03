@@ -410,9 +410,7 @@ void ViewManager::truncate_logs() {
 void ViewManager::initialize_multicast_groups(const CallbackSet& callbacks) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
-    uint32_t num_received_size = sizes.first;
-    uint32_t slot_size = sizes.second;
+    auto [num_received_size, slot_size] = derive_subgroup_settings(*curr_view, subgroup_settings_map);
     dbg_default_trace("Initial view is: {}", curr_view->debug_string());
     if(any_persistent_objects) {
         //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
@@ -1381,9 +1379,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     std::map<subgroup_id_t, SubgroupSettings> next_subgroup_settings;
-    auto sizes = derive_subgroup_settings(*next_view, next_subgroup_settings);
-    uint32_t new_num_received_size = sizes.first;
-    uint32_t new_slot_size = sizes.second;
+    auto [new_num_received_size, new_slot_size] = derive_subgroup_settings(*next_view, next_subgroup_settings);
 
     dbg_default_debug("Ready to transition to the next View: {}", next_view->debug_string());
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs

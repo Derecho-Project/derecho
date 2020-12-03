@@ -42,19 +42,31 @@ struct __attribute__((__packed__)) header {
 };
 
 /**
- * Bundles together a set of low-level parameters for configuring Derecho groups.
- * All of the parameters except max payload size and block size have sensible
- * defaults, but the correct block size to set depends on the user's desired max
- * payload size.
+ * Bundles together a set of low-level parameters for configuring Derecho
+ * subgroups and shards, mostly related to the way multicast messages are sent.
  */
 struct DerechoParams : public mutils::ByteRepresentable {
+    /**
+     * The maximum size, in bytes, of an RDMC message. Controls the size of the
+     * RDMA buffers allocated by RDMC. Headers and payload must fit within this.
+     */
     uint64_t max_msg_size;
+    /** The maximum size (in bytes) of a message sent in reply to an ordered_send RPC message. */
     uint64_t max_reply_msg_size;
+    /** The maximum size (in bytes) of an SST Multicast message. */
     uint64_t sst_max_msg_size;
+    /** The size of a single block for RDMC. */
     uint64_t block_size;
+    /**
+     * The number of messages that can be in-progress before further sends are
+     * blocked. Controls the number of message buffers that are allocated.
+     */
     unsigned int window_size;
+    /** The number of milliseconds between heartbeat messages sent to detect failures. */
     unsigned int heartbeat_ms;
+    /** The algorithm to use for RDMC (binomial, chain, sequential, or tree). */
     rdmc::send_algorithm rdmc_send_algorithm;
+    /** The TCP port to use when transferring state to new members. */
     uint32_t state_transfer_port;
 
     static uint64_t compute_max_msg_size(
@@ -204,27 +216,30 @@ struct SSTMessage {
 };
 
 /**
- * A collection of settings for a single subgroup that this node is a member of.
- * Mostly extracted from SubView, but tailored specifically to what MulticastGroup
- * needs to know about subgroups and shards.
+ * A collection of settings for a single subgroup that this node is a member of,
+ * specifically the single shard within that subgroup that this node is a member
+ * of (if the subgroup is sharded). This includes the same membership and
+ * delivery-mode information found in the SubView for the shard, along with some
+ * lower-level details needed specifically by MulticastGroup.
  */
 struct SubgroupSettings {
     /** This node's shard number within the subgroup */
     uint32_t shard_num;
     /** This node's rank within its shard of the subgroup */
     uint32_t shard_rank;
-    /** The members of the subgroup */
+    /** The members of this node's shard of the subgroup */
     std::vector<node_id_t> members;
-    /** The "is_sender" flags for members of the subgroup */
+    /** The "is_sender" flags for members of this node's shard of the subgroup */
     std::vector<int> senders;
-    /** This node's sender rank within the subgroup (as defined by SubView::sender_rank_of) */
+    /** This node's sender rank within the shard (as defined by SubView::sender_rank_of) */
     int sender_rank;
     /** The offset of this node's num_received counter within the subgroup's SST section */
     uint32_t num_received_offset;
     /** The offset of this node's slot within the subgroup's SST section */
     uint32_t slot_offset;
-    /** The operation mode of the subgroup */
+    /** The operation mode of the shard */
     Mode mode;
+    /** The multicast parameters for the shard */
     DerechoParams profile;
 };
 
