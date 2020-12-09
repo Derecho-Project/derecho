@@ -40,7 +40,6 @@ inline ChangeProposal make_change_proposal(uint16_t leader_id, uint16_t change_i
  * class defines all the fields in this SST.
  */
 class DerechoSST : public sst::SST<DerechoSST> {
-    static_assert(std::is_trivially_copyable<ChangeProposal>::value, "ChangeProposal is not trivially copyable, but it should be because it's an SST field!");
 public:
     // MulticastGroup members, related only to tracking message delivery
     /**
