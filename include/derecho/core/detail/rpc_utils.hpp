@@ -109,18 +109,6 @@ constexpr FunctionTag to_internal_tag(FunctionTag user_tag) {
     }
 }
 
-/*
-template<>
-constexpr FunctionTag to_internal_tag<true>(FunctionTag user_tag) {
-    return 2 * user_tag + 1;
-}
-
-template<>
-constexpr FunctionTag to_internal_tag<false>(FunctionTag user_tag) {
-    return 2 * user_tag;
-}
-*/
-
 /**
  * An RPC function call can be uniquely identified by the tuple
  * (class, subgroup ID, function ID, is-reply), which is what this struct
@@ -200,7 +188,6 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        //        mutils::DeserializationManager* dsm,
         mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 
