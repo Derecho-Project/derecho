@@ -43,18 +43,37 @@ public:
             : pers_bytes([]() { return std::make_unique<Bytes>(); }, nullptr, pr) {}
 };
 
+#define DEFAULT_PROC_NAME   "pers_lat_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 5) {
-        std::cout << "usage:" << argv[0] << " <all|half|one> <num_of_nodes> <num_msgs> <max_ops>" << std::endl;
+    int dashdash_pos = argc - 1;
+    while (dashdash_pos > 0) {
+        if (strcmp(argv[dashdash_pos],"--") == 0) {
+            break;
+        }
+        dashdash_pos -- ;
+    }
+
+    if((argc-dashdash_pos) < 5) {
+        cout << "Invalid command line arguments." << endl;
+        std::cout << "USAGE:" << argv[0] << " <all|half|one> <num_of_nodes> <num_msgs> <max_ops> [proc_name]" << std::endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
     PartialSendMode sender_selector = PartialSendMode::ALL_SENDERS;
-    if(strcmp(argv[1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
-    if(strcmp(argv[1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
-    int num_of_nodes = atoi(argv[2]);
-    uint32_t num_msgs = (uint32_t)atoi(argv[3]);
-    int max_ops = atoi(argv[4]);
+    if(strcmp(argv[dashdash_pos + 1], "half") == 0) sender_selector = PartialSendMode::HALF_SENDERS;
+    if(strcmp(argv[dashdash_pos + 1], "one") == 0) sender_selector = PartialSendMode::ONE_SENDER;
+    int num_of_nodes = atoi(argv[dashdash_pos + 2]);
+    uint32_t num_msgs = (uint32_t)atoi(argv[dashdash_pos + 3]);
+    int max_ops = atoi(argv[dashdash_pos + 4]);
     uint64_t si_us = (1000000l / max_ops);
+    if (dashdash_pos + 5 < argc) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
+
+    derecho::Conf::initialize(argc,argv);
 
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();

@@ -19,6 +19,7 @@
 #include "connection_manager.hpp"
 #include "derecho_internal.hpp"
 #include "derecho_sst.hpp"
+#include "persistence_manager.hpp"
 #include <derecho/conf/conf.hpp>
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -28,19 +29,6 @@
 #include <spdlog/spdlog.h>
 
 namespace derecho {
-
-/**
- * Bundles together a set of callback functions for message delivery events.
- * These will be invoked by MulticastGroup or ViewManager to hand control back
- * to the client if it wants to implement custom logic to respond to each
- * message's arrival. (Note, this is a client-facing constructor argument,
- * not an internal data structure).
- */
-struct CallbackSet {
-    message_callback_t global_stability_callback;
-    persistence_callback_t local_persistence_callback = nullptr;
-    persistence_callback_t global_persistence_callback = nullptr;
-};
 
 /**
  * The header for an individual multicast message, which will always be the
@@ -55,19 +43,31 @@ struct __attribute__((__packed__)) header {
 };
 
 /**
- * Bundles together a set of low-level parameters for configuring Derecho groups.
- * All of the parameters except max payload size and block size have sensible
- * defaults, but the correct block size to set depends on the user's desired max
- * payload size.
+ * Bundles together a set of low-level parameters for configuring Derecho
+ * subgroups and shards, mostly related to the way multicast messages are sent.
  */
 struct DerechoParams : public mutils::ByteRepresentable {
+    /**
+     * The maximum size, in bytes, of an RDMC message. Controls the size of the
+     * RDMA buffers allocated by RDMC. Headers and payload must fit within this.
+     */
     uint64_t max_msg_size;
+    /** The maximum size (in bytes) of a message sent in reply to an ordered_send RPC message. */
     uint64_t max_reply_msg_size;
+    /** The maximum size (in bytes) of an SST Multicast message. */
     uint64_t sst_max_msg_size;
+    /** The size of a single block for RDMC. */
     uint64_t block_size;
+    /**
+     * The number of messages that can be in-progress before further sends are
+     * blocked. Controls the number of message buffers that are allocated.
+     */
     unsigned int window_size;
+    /** The number of milliseconds between heartbeat messages sent to detect failures. */
     unsigned int heartbeat_ms;
+    /** The algorithm to use for RDMC (binomial, chain, sequential, or tree). */
     rdmc::send_algorithm rdmc_send_algorithm;
+    /** The TCP port to use when transferring state to new members. */
     uint32_t state_transfer_port;
 
     static uint64_t compute_max_msg_size(
@@ -217,20 +217,22 @@ struct SSTMessage {
 };
 
 /**
- * A collection of settings for a single subgroup that this node is a member of.
- * Mostly extracted from SubView, but tailored specifically to what MulticastGroup
- * needs to know about subgroups and shards.
+ * A collection of settings for a single subgroup that this node is a member of,
+ * specifically the single shard within that subgroup that this node is a member
+ * of (if the subgroup is sharded). This includes the same membership and
+ * delivery-mode information found in the SubView for the shard, along with some
+ * lower-level details needed specifically by MulticastGroup.
  */
 struct SubgroupSettings {
     /** This node's shard number within the subgroup */
     uint32_t shard_num;
     /** This node's rank within its shard of the subgroup */
     uint32_t shard_rank;
-    /** The members of the subgroup */
+    /** The members of this node's shard of the subgroup */
     std::vector<node_id_t> members;
-    /** The "is_sender" flags for members of the subgroup */
+    /** The "is_sender" flags for members of this node's shard of the subgroup */
     std::vector<int> senders;
-    /** This node's sender rank within the subgroup (as defined by SubView::sender_rank_of) */
+    /** This node's sender rank within the shard (as defined by SubView::sender_rank_of) */
     int sender_rank;
     /** The offset of this node's num_received counter within the subgroup's SST section */
     uint32_t num_received_offset;
@@ -238,8 +240,9 @@ struct SubgroupSettings {
     uint32_t slot_offset;
     /** The index of the SST index used to track SMC messages in a specific subgroup */
     uint32_t index_offset;
-    /** The operation mode of the subgroup */
+    /** The operation mode of the shard */
     Mode mode;
+    /** The multicast parameters for the shard */
     DerechoParams profile;
 };
 
@@ -270,9 +273,8 @@ private:
     /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
      * Constructed incrementally in create_rdmc_sst_groups(), so it can't be const.  */
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
-    /** These two callbacks are internal, not exposed to clients, so they're not in CallbackSet */
+    /** This callback is internal, not exposed to clients, so it's not in CallbackSet */
     rpc_handler_t rpc_callback;
-
     /** Offset to add to member ranks to form RDMC group numbers. */
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
@@ -308,14 +310,30 @@ private:
     std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> locally_stable_rdmc_messages;
     /** Same map as locally_stable_rdmc_messages, but for SST messages */
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> locally_stable_sst_messages;
+    /** For each subgroup, the set of timestamps associated with currently-pending
+     * (not yet delivered) messages. Used to compute the stability frontier. */
     std::map<subgroup_id_t, std::set<uint64_t>> pending_message_timestamps;
+    /** Tracks the timestamps of messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, uint64_t>> pending_persistence;
     /** Messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, RDMCMessage>> non_persistent_messages;
     /** Messages that are currently being written to persistent storage */
     std::map<subgroup_id_t, std::map<message_id_t, SSTMessage>> non_persistent_sst_messages;
 
+    /** The next message ID that can be delivered in each subgroup, indexed by subgroup number. */
     std::vector<message_id_t> next_message_to_deliver;
+    /**
+     * The minimum (persistent) version number that has finished persisting in
+     * each subgroup, indexed by subgroup number.
+     */
+    std::vector<persistent::version_t> minimum_persisted_version;
+    /**
+     * The minimum (persistent) version number that has had its signature verified
+     * in each subgroup, indexed by subgroup number, if the signed log feature is
+     * enabled. (If the features is disabled, this will stay at INVALID_VERSION).
+     */
+    std::vector<persistent::version_t> minimum_verified_version;
+
     std::recursive_mutex msg_state_mtx;
     std::condition_variable_any sender_cv;
 
@@ -348,14 +366,13 @@ private:
      * that the user code know the current version being handled. */
     subgroup_post_next_version_func_t post_next_version_callback;
 
-    /** persistence manager callbacks */
-    persistence_manager_callbacks_t persistence_manager_callbacks;
+    /** A reference to the PersistenceManager that lives in Group, used to
+     * alert it when a new version needs to be persisted. */
+    PersistenceManager& persistence_manager;
 
     /** Continuously waits for a new pending send, then sends it. This function
      * implements the sender thread. */
     void send_loop();
-
-    uint64_t get_time();
 
     /** Checks for failures when a sender reaches its timeout. This function
      * implements the timeout thread. */
@@ -448,6 +465,12 @@ private:
                            uint32_t num_shard_senders, DerechoSST& sst,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
 
+    void update_min_persisted_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                  uint32_t num_shard_members, DerechoSST& sst);
+
+    void update_min_verified_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                                 uint32_t num_shard_members, DerechoSST& sst);
+
     // Internally used to automatically send a NULL message
     void get_buffer_and_send_auto_null(subgroup_id_t subgroup_num);
     /* Get a pointer into the current buffer, to write data into it before sending
@@ -469,7 +492,7 @@ public:
      * subgroup this node belongs to, indexed by subgroup ID
      * @param post_next_version_callback The callback for posting the upcoming
      *        version to be delivered in a subgroup.
-     * @param persistence_manager_callbacks The callbacks to PersistenceManager
+     * @param persistence_manager_ref A reference to the PersistenceManager
      * that will be used to persist received messages
      * @param already_failed (Optional) A Boolean vector indicating which
      * elements of _members are nodes that have already failed in this view
@@ -482,7 +505,7 @@ public:
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             unsigned int sender_timeout,
             const subgroup_post_next_version_func_t& post_next_version_callback,
-            const persistence_manager_callbacks_t& persistence_manager_callbacks,
+            PersistenceManager& persistence_manager_ref,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
      * preserving the same settings but providing a new list of members. */
@@ -493,7 +516,6 @@ public:
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             const subgroup_post_next_version_func_t& post_next_version_callback,
-            const persistence_manager_callbacks_t& persistence_manager_callbacks,
             std::vector<char> already_failed = {});
 
     ~MulticastGroup();

@@ -1,6 +1,6 @@
 /*
  * This test measures the latency of Derecho raw (uncooked) sends in microseconds as a function of
- * 1. the number of nodes 
+ * 1. the number of nodes
  * 2. the number of senders (all sending, half nodes sending, one sending)
  * 3. number of messages sent per sender
  * 4. delivery mode (atomic multicast or unordered)
@@ -50,19 +50,35 @@ struct exp_result {
     }
 };
 
+#define DEFAULT_PROC_NAME "lat_test"
+
 int main(int argc, char* argv[]) {
-    if(argc < 5 || (argc > 5 && strcmp("--", argv[argc - 5]))) {
+    int dashdash_pos = argc - 1;
+    while(dashdash_pos > 0) {
+        if(strcmp(argv[dashdash_pos], "--") == 0) {
+            break;
+        }
+        dashdash_pos--;
+    }
+
+    if((argc - dashdash_pos) < 5) {
         cout << "Insufficient number of command line arguments" << endl;
-        cout << "USAGE:" << argv[0] << "[ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode)" << endl;
+        cout << "USAGE: " << argv[0] << " [ derecho-config-list -- ] num_nodes, num_senders_selector (0 - all senders, 1 - half senders, 2 - one sender), num_messages, delivery_mode (0 - ordered mode, 1 - unordered mode) [proc_name]" << endl;
+        std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
-    pthread_setname_np(pthread_self(), "latency_test");
 
     // initialize the special arguments for this test
-    uint32_t num_nodes = std::stoi(argv[argc - 4]);
-    const uint32_t num_senders_selector = std::stoi(argv[argc - 3]);
-    const uint32_t num_messages = std::stoi(argv[argc - 2]);
-    const uint32_t delivery_mode = std::stoi(argv[argc - 1]);
+    uint32_t num_nodes = std::stoi(argv[dashdash_pos + 1]);
+    const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 2]);
+    const uint32_t num_messages = std::stoi(argv[dashdash_pos + 3]);
+    const uint32_t delivery_mode = std::stoi(argv[dashdash_pos + 4]);
+
+    if((argc - dashdash_pos) > 5) {
+        pthread_setname_np(pthread_self(), argv[dashdash_pos + 5]);
+    } else {
+        pthread_setname_np(pthread_self(), DEFAULT_PROC_NAME);
+    }
 
     // Read configurations from the command line options as well as the default config file
     Conf::initialize(argc, argv);
@@ -211,7 +227,7 @@ int main(int argc, char* argv[]) {
         log_results(exp_result{num_nodes, num_senders_selector, msg_size,
                                getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE), num_messages,
                                delivery_mode, avg_latency, avg_std_dev},
-                               "data_latency");
+                    "data_latency");
     }
     managed_group.barrier_sync();
     managed_group.leave();

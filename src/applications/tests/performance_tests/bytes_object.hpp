@@ -16,6 +16,11 @@ namespace test {
 class Bytes : public mutils::ByteRepresentable {
     char* bytes;
     std::size_t size;
+    //Indicates that this instance was created inside from_bytes_noalloc and doesn't own the bytes
+    bool is_temporary;
+    //Private constructor only used by from_bytes_noalloc.
+    //The third parameter is just to make it distinct from the public one; it always sets is_temporary to true
+    Bytes(char* buffer, std::size_t size, bool is_temporary);
 
 public:
     Bytes(const char* buffer, std::size_t size);

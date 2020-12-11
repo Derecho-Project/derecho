@@ -16,6 +16,12 @@ inline uint64_t get_time() {
     return now.tv_sec * 1000000000L + now.tv_nsec;
 }
 
+inline uint64_t get_walltime() {
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    return now.tv_sec * 1000000000L + now.tv_nsec;
+}
+
 // Returns the number of nanoseconds of CPU time that have been used by this
 // process since some fixed time in the past.
 inline uint64_t get_process_time() {

@@ -31,6 +31,7 @@ void DerechoSST::init_local_row_from_previous(const DerechoSST& old_sst, const i
     memcpy(const_cast<uint16_t*>(joiner_external_ports[local_row]),
            const_cast<const uint16_t*>(old_sst.joiner_external_ports[row] + num_changes_installed),
            (old_sst.joiner_external_ports.size() - num_changes_installed) * sizeof(uint16_t));
+    //TODO: Copy over the last committed signature here? Or will the new view start with no signatures?
     for(size_t i = 0; i < suspected.size(); ++i) {
         suspected[local_row][i] = false;
     }

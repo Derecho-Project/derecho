@@ -149,7 +149,7 @@ bool ExternalGroup<ReplicatedTypes...>::get_view(const node_id_t nid) {
         sock.read(buffer, size_of_view);
         prev_view = std::move(curr_view);
         curr_view = mutils::from_bytes<View>(nullptr, buffer);
-    } catch(tcp::connection_failure) {
+    } catch(tcp::connection_failure&) {
         dbg_default_error("Failed to connect to group member {} when reqeusting new view.", nid);
         dbg_default_flush();
         return false;
@@ -208,16 +208,16 @@ bool ExternalGroup<ReplicatedTypes...>::update_view() {
     return false;
 }
 template <typename... ReplicatedTypes>
-std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_members() {
+std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_members() const {
     return curr_view->members;
 }
 template <typename... ReplicatedTypes>
-std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint32_t subgroup_id, uint32_t shard_num) {
+std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint32_t subgroup_id, uint32_t shard_num) const {
     return curr_view->subgroup_shard_views[subgroup_id][shard_num].members;
 }
 template <typename... ReplicatedTypes>
 template <typename SubgroupType>
-std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint32_t subgroup_index, uint32_t shard_num) {
+std::vector<node_id_t> ExternalGroup<ReplicatedTypes...>::get_shard_members(uint32_t subgroup_index, uint32_t shard_num) const {
     const subgroup_type_id_t subgroup_type_id = get_index_of_type(typeid(SubgroupType));
     const auto& subgroup_ids = curr_view->subgroup_ids_by_type_id.at(subgroup_type_id);
     const subgroup_id_t subgroup_id = subgroup_ids.at(subgroup_index);
@@ -421,12 +421,45 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
 }
 
 template <typename... ReplicatedTypes>
-uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) {
+uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type(const std::type_info& ti) const {
     assert_always((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)} || ... || false));
     return (((std::type_index{ti} == std::type_index{typeid(ReplicatedTypes)}) ?  //
                      (index_of_type<ReplicatedTypes, ReplicatedTypes...>)
                                                                                : 0)
             + ... + 0);
     //return index_of_type<SubgroupType, ReplicatedTypes...>;
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_index_of_type() const {
+    return get_index_of_type(typeid(SubgroupType));
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_subgroups() const {
+    uint32_t type_idx = this->template get_index_of_type<SubgroupType>();
+    if (curr_view->subgroup_ids_by_type_id.find(type_idx) != curr_view->subgroup_ids_by_type_id.end()){
+        return curr_view->subgroup_ids_by_type_id.at(type_idx).size();
+    }
+    return 0;
+}
+
+template <typename...ReplicatedTypes>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_shards(uint32_t subgroup_id) const {
+    if (subgroup_id < curr_view->subgroup_shard_views.size()) {
+        return curr_view->subgroup_shard_views[subgroup_id].size();
+    }
+    return 0;
+}
+
+template <typename...ReplicatedTypes>
+template <typename SubgroupType>
+uint32_t ExternalGroup<ReplicatedTypes...>::get_number_of_shards(uint32_t subgroup_index) const {
+    if (subgroup_index < this->template get_number_of_subgroups<SubgroupType>()) {
+        return get_number_of_shards(curr_view->subgroup_ids_by_type_id.at(this->template get_index_of_type<SubgroupType>())[subgroup_index]);
+    }
+    return 0;
 }
 }  // namespace derecho

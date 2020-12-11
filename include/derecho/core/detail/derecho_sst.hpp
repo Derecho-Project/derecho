@@ -36,11 +36,10 @@ inline ChangeProposal make_change_proposal(uint16_t leader_id, uint16_t change_i
 }
 
 /**
- * The GMS and derecho_group will share the same SST for efficiency. This class
- * defines all the fields in this SST.
+ * ViewManager and MulticastGroup will share the same SST for efficiency. This
+ * class defines all the fields in this SST.
  */
 class DerechoSST : public sst::SST<DerechoSST> {
-    static_assert(std::is_trivially_copyable<ChangeProposal>::value, "ChangeProposal is not trivially copyable, but it should be because it's an SST field!");
 public:
     // MulticastGroup members, related only to tracking message delivery
     /**
@@ -52,22 +51,43 @@ public:
      * (1,1), ... which is 0, 1, 2, 3, 4, 5, ....
      *
      * This variable is the highest sequence number that has been received
-     * in-order by this node; if a node updates seq_num, it has received all
-     * messages up to seq_num in the global round-robin order.
+     * in-order by this node at each subgroup; if a node updates seq_num[i],
+     * it has received all messages up to seq_num in the global round-robin
+     * order for subgroup i.
      */
     SSTFieldVector<message_id_t> seq_num;
     /**
      * This represents the highest sequence number that has been delivered
-     * at this node. Messages are only delivered once stable (received by all),
-     * so it must be at least stable_num.
+     * at this node for each subgroup; delivered_num[i] is the latest delivered
+     * message for subgroup i. Messages are only delivered once stable
+     * (received by all), so delivered_num[i] >= seq_num[i].
      */
     SSTFieldVector<message_id_t> delivered_num;
     /**
+     * This contains this node's signature over the latest update that has been
+     * delivered locally, if signatures are enabled. The vector is really an
+     * array of arrays: there is one entry for each subgroup (just like
+     * delivered_num), and each entry is an array of bytes of a constant size
+     * (the length of a signature). The signature for subgroup i is at
+     * signatures[i * signature_length].
+     */
+    SSTFieldVector<unsigned char> signatures;
+    /**
      * This represents the highest persistent version number that has been
      * persisted to disk at this node, if persistence is enabled. This is
-     * updated by the PersistenceManager.
+     * updated by the PersistenceManager, and contains one entry for each
+     * subgroup.
      */
     SSTFieldVector<persistent::version_t> persisted_num;
+    /**
+     * This represents the highest persistent version number for which this
+     * node has verified a signature from all other nodes in the subgroup, if
+     * signatures are enabled. There is updated by the PersistenceManager, and
+     * contains one entry per subgroup. It will generally lag behind
+     * persisted_num, since updates are only verified once they have been
+     * signed locally.
+     */
+    SSTFieldVector<persistent::version_t> verified_num;
 
     // Group management service members, related only to handling view changes
     /** View ID associated with this SST. VIDs monotonically increase as views change. */
@@ -119,8 +139,12 @@ public:
      */
     SSTField<int> num_installed;
     /**
-     * Local count of number of received messages by sender.  For each
-     * sender k, nReceived[k] is the number received (a.k.a. "locally stable").
+     * Local count of number of received messages by sender. For each subgroup,
+     * there is a range of num_shard_senders entries in this array, and entry k
+     * in that range represents the number of messages received from sender k.
+     * (Thus, it's really an array of arrays, with one array per subgroup).
+     * Each subgroup has a num_received_offset that indicates where its range
+     * begins in this array.
      */
     SSTFieldVector<int32_t> num_received;
     /**
@@ -129,8 +153,10 @@ public:
      */
     SSTField<bool> wedged;
     /**
-     * Array of how many messages to accept from each sender in the current
-     * view change.
+     * Indicates the number of messages to accept from each sender (of each
+     * subgroup) in the current view change. Just like num_received, each
+     * subgroup has its own range of entries in this array, starting at that
+     * subgroup's num_received_offset and consisting of one entry per sender.
      */
     SSTFieldVector<int> global_min;
     /**
@@ -154,11 +180,13 @@ public:
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t num_received_size, uint64_t slot_size, uint32_t index_field_size)
+    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t signature_size, uint32_t num_received_size, uint64_t slot_size, uint32_t index_field_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
               delivered_num(num_subgroups),
+              signatures(num_subgroups * signature_size),
               persisted_num(num_subgroups),
+              verified_num(num_subgroups),
               suspected(parameters.members.size()),
               changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
@@ -174,8 +202,9 @@ public:
               num_received_sst(num_received_size),
               index(index_field_size),
               local_stability_frontier(num_subgroups) {
-        SSTInit(seq_num, delivered_num,
-                persisted_num, vid, suspected, changes, joiner_ips,
+        SSTInit(seq_num, delivered_num, signatures,
+                persisted_num, verified_num,
+                vid, suspected, changes, joiner_ips,
                 joiner_gms_ports, joiner_state_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
