@@ -453,20 +453,28 @@ bool MulticastGroup::create_rdmc_sst_groups() {
 void MulticastGroup::initialize_sst_row() {
     auto num_received_size = sst->num_received.size();
     auto seq_num_size = sst->seq_num.size();
-    for(uint i = 0; i < num_members; ++i) {
-        for(uint j = 0; j < num_received_size; ++j) {
-            sst->num_received[i][j] = -1;
-        }
-        for(uint j = 0; j < seq_num_size; ++j) {
-            sst->seq_num[i][j] = -1;
-            sst->delivered_num[i][j] = -1;
-            sst->persisted_num[i][j] = -1;
-        }
-        for(uint j = 0; j < total_num_subgroups; j++) {
-            sst->index[i][j] = -1;
+    // Initializes only the local row. Later, in the ViewManager::finish_setup() 
+    // or in the ViewManager::finish_view_change(), I will push this local row
+    // and sync with the others to receive their row.
+    for(uint j = 0; j < num_received_size; ++j) {
+        sst->num_received[member_index][j] = -1;
+    }
+    for(uint j = 0; j < seq_num_size; ++j) {
+        sst->seq_num[member_index][j] = -1;
+        sst->delivered_num[member_index][j] = -1;
+        sst->persisted_num[member_index][j] = -1;
+    }
+    for(uint j = 0; j < total_num_subgroups; j++) {
+        sst->index[member_index][j] = -1;
+        auto base = &(sst->slots[member_index][j]) + sizeof(header);
+        for(uint k = 0; k < 8; k++) {
+            *base = (char)('0' + member_index);
+            base += sizeof(char);
         }
     }
-    sst->put();
+    // Here I do not put() my row since it is not completely initialized. 
+    // The put() will happen in ViewManager::finish_setup() or in
+    // ViewManager::finish_view_change().
     sst->sync_with_members();
 }
 
@@ -1379,35 +1387,21 @@ std::vector<uint32_t> MulticastGroup::get_shard_sst_indices(subgroup_id_t subgro
 void MulticastGroup::debug_print() {
     using std::cout;
     using std::endl;
-    cout << "SST has " << sst->get_num_rows()
-         << " rows; member_index is " << member_index << endl;
-    cout << "Printing SST" << endl;
-    for(const auto& p : subgroup_settings_map) {
-        uint32_t subgroup_num = p.first;
-        auto subgroup_settings = p.second;
-        cout << "Subgroup " << subgroup_num << endl;
-        auto shard_sst_indices = get_shard_sst_indices(subgroup_num);
-        cout << "Printing seq_num, delivered_num" << endl;
-        for(auto i : shard_sst_indices) {
-            cout << sst->seq_num[i][subgroup_num] << " " << sst->delivered_num[i][subgroup_num] << endl;
+
+    std::cout << "SST address: " << static_cast<void*>(sst.get()) << std::endl;
+    std::cout << "Local index is: " << member_index << std::endl;
+    for(uint i = 0; i < 9; i++) {
+        std::cout << i << " ";
+        for(uint j  = 0; j < 8; j++) {
+            std::cout << (char)(*(&(sst->slots[i][0]) + sizeof(header) + j * sizeof(char)));
         }
-        cout << "Printing last_received_messages" << endl;
-        for(auto i : shard_sst_indices) {
-            uint32_t num_shard_senders = subgroup_settings.senders.size();
-            for(uint j = 0; j < num_shard_senders; ++j) {
-                cout << sst->num_received[i][subgroup_settings.num_received_offset + j] << " ";
-            }
-            cout << endl;
-        }
-        cout << "Printing multicastSST fields" << endl;
-        sst_multicast_group_ptrs[subgroup_num]->debug_print();
-        cout << endl;
+        std::cout << " [index " << sst->index[i][0] << "]" << std::endl;
     }
 
-    std::cout << "Printing memory usage of free_message_buffers" << std::endl;
-    for(const auto& p : free_message_buffers) {
-        std::cout << "Subgroup " << p.first << ", Number of free buffers " << p.second.size() << std::endl;
-    }
+    // std::cout << "Printing memory usage of free_message_buffers" << std::endl;
+    // for(const auto& p : free_message_buffers) {
+    //     std::cout << "Subgroup " << p.first << ", Number of free buffers " << p.second.size() << std::endl;
+    // }
 }
 
 }  // namespace derecho

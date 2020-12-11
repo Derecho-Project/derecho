@@ -16,7 +16,7 @@ template <typename sstType>
 class multicast_group {
     // number of messages for which get_buffer has been called
     long long int queued_num = -1;
-   // the number of messages acknowledged by all the nodes
+    // the number of messages acknowledged by all the nodes
     long long int finished_multicasts_num = -1;
     // row of the node in the sst
     const uint32_t my_row;
@@ -56,11 +56,6 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            sst->index[i][index_offset] = -1;
-            for(uint j = 0; j < window_size; ++j) {
-                sst->slots[i][slots_offset + max_msg_size * j] = 0;
-                (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
-            }
         }
         sst->sync_with_members(row_indices);
     }
@@ -73,7 +68,7 @@ public:
                     std::vector<int> is_sender = {},
                     uint32_t num_received_offset = 0,
                     uint32_t slots_offset = 0,
-                     int32_t index_offset = 0)
+                    int32_t index_offset = 0)
             : my_row(sst->get_local_index()),
               sst(sst),
               row_indices(row_indices),
@@ -140,7 +135,6 @@ public:
     }
 
     void send(uint32_t ready_to_be_sent = 1, uint32_t num_nulls_queued = 0, int32_t first_null_index = -1, size_t header_size = 0) {
-        
         // Save the old index
         uint32_t old_index = sst->index[my_row][index_offset];
         // Increase the value of the index in the local sst
