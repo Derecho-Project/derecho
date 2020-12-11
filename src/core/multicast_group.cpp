@@ -452,21 +452,19 @@ bool MulticastGroup::create_rdmc_sst_groups() {
 void MulticastGroup::initialize_sst_row() {
     auto num_received_size = sst->num_received.size();
     auto seq_num_size = sst->seq_num.size();
-    for(uint i = 0; i < num_members; ++i) {
-        for(uint j = 0; j < num_received_size; ++j) {
-            sst->num_received[i][j] = -1;
-        }
-        for(uint j = 0; j < seq_num_size; ++j) {
-            sst->seq_num[i][j] = -1;
-            sst->delivered_num[i][j] = -1;
-            sst->persisted_num[i][j] = -1;
-        }
-        for(uint j = 0; j < total_num_subgroups; j++) {
-            sst->index[i][j] = -1;
-        }
+    // Initializes only the local row
+    for(uint j = 0; j < num_received_size; ++j) {
+        sst->num_received[member_index][j] = -1;
     }
-    sst->put();
-    sst->sync_with_members();
+    for(uint j = 0; j < seq_num_size; ++j) {
+        sst->seq_num[member_index][j] = -1;
+        sst->delivered_num[member_index][j] = -1;
+        sst->persisted_num[member_index][j] = -1;
+    }
+    for(uint j = 0; j < total_num_subgroups; j++) {
+        sst->index[member_index][j] = -1;
+    }
+    // No put(), no sync(). The caller will issue them later.
 }
 
 void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,

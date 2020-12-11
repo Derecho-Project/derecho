@@ -56,13 +56,7 @@ class multicast_group {
             for(uint j = num_received_offset; j < num_received_offset + num_senders; ++j) {
                 sst->num_received_sst[i][j] = -1;
             }
-            sst->index[i][index_offset] = -1;
-            for(uint j = 0; j < window_size; ++j) {
-                sst->slots[i][slots_offset + max_msg_size * j] = 0;
-                (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] = 0;
-            }
         }
-        sst->sync_with_members(row_indices);
     }
 
 public:

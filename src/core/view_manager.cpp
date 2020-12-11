@@ -437,7 +437,7 @@ void ViewManager::finish_setup() {
     leader_connection.reset();
 
     last_suspected = std::vector<bool>(curr_view->members.size());
-    curr_view->gmsSST->put();
+    curr_view->gmsSST->put_with_completion();
     curr_view->gmsSST->sync_with_members();
     dbg_default_debug("Done setting up initial SST and RDMC");
 
@@ -445,7 +445,7 @@ void ViewManager::finish_setup() {
         // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
         // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
         curr_view->gmsSST->init_local_change_proposals(curr_view->find_rank_of_leader());
-        curr_view->gmsSST->put();
+        curr_view->gmsSST->put_with_completion();
         dbg_default_debug("Joining node initialized its SST row from the leader");
     }
     create_threads();
@@ -1478,7 +1478,7 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     dbg_default_debug("Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
 
     // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
-    next_view->gmsSST->put();
+    next_view->gmsSST->put_with_completion();
     next_view->gmsSST->sync_with_members();
     {
         lock_guard_t old_views_lock(old_views_mutex);
