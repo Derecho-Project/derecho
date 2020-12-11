@@ -57,7 +57,6 @@ class multicast_group {
                 sst->num_received_sst[i][j] = -1;
             }
         }
-        sst->sync_with_members(row_indices);
     }
 
 public:

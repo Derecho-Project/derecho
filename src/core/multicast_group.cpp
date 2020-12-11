@@ -475,7 +475,6 @@ void MulticastGroup::initialize_sst_row() {
     // Here I do not put() my row since it is not completely initialized. 
     // The put() will happen in ViewManager::finish_setup() or in
     // ViewManager::finish_view_change().
-    sst->sync_with_members();
 }
 
 void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
