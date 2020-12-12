@@ -269,6 +269,11 @@ public:
     void init_local_change_proposals(const int other_row);
 
     /**
+     * Pushes the entire local SST row except the SMC slots.
+     */
+    void push_row_except_slots();
+
+    /**
      * Creates a string representation of the local row (not the whole table).
      * This should be converted to an ostream operator<< to follow standards.
      */
