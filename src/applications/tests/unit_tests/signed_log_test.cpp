@@ -27,7 +27,7 @@ public:
     OneFieldObject(persistent::Persistent<std::string>& other_value)
             : string_field(std::move(other_value)) {}
 
-    std::string get_state() {
+    std::string get_state() const {
         return *string_field;
     }
 
@@ -52,11 +52,11 @@ public:
             : foo(std::move(other_foo)),
               bar(std::move(other_bar)) {}
 
-    std::string get_foo() {
+    std::string get_foo() const {
         return *foo;
     }
 
-    std::string get_bar() {
+    std::string get_bar() const {
         return *bar;
     }
 
@@ -77,7 +77,7 @@ public:
             : string_field(std::make_unique<std::string>, "UnsignedObjectField", registry, false) {}
     UnsignedObject(persistent::Persistent<std::string>& other_field)
             : string_field(std::move(other_field)) {}
-    std::string get_state() {
+    std::string get_state() const {
         return *string_field;
     }
 

@@ -17,10 +17,6 @@ target_link_libraries(p2p_latency_test derecho)
 add_executable(subgroup_test subgroup_test.cpp)
 target_link_libraries(subgroup_test derecho)
 
-# p2p_send_test
-add_executable(p2p_send_test p2p_send_test.cpp)
-target_link_libraries(p2p_send_test derecho)
-
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp)
 target_link_libraries(typed_subgroup_test derecho)

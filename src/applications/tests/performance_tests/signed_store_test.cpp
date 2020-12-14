@@ -304,7 +304,7 @@ persistent::version_t SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     return std::get<0>(next_version);
 }
 
-void SignatureStore::end_test() {
+void SignatureStore::end_test() const {
     std::cout << "Received the end_test message, shutting down" << std::endl;
     *experiment_done = true;
 }
@@ -354,7 +354,7 @@ Blob ObjectStore::get_latest() const {
     return *object_log;
 }
 
-void ObjectStore::end_test() {
+void ObjectStore::end_test() const {
     std::cout << "Recieved the end_test message, shutting down" << std::endl;
     *experiment_done = true;
 }

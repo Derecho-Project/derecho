@@ -150,7 +150,7 @@ public:
      * Causes the program to exit. Called at the end of the test to signal that the
      * client nodes are done sending updates.
      */
-    void end_test();
+    void end_test() const;
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, object_log);
     REGISTER_RPC_FUNCTIONS(ObjectStore, ORDERED_TARGETS(ordered_update),
@@ -200,7 +200,7 @@ public:
      * Causes the program to exit. Called at the end of the test to signal that the
      * client nodes are done sending updates.
      */
-    void end_test();
+    void end_test() const;
 
     DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
     REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash, end_test), ORDERED_TARGETS(ordered_add_hash));
