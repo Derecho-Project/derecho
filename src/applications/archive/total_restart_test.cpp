@@ -51,7 +51,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(PersistentThing, state);
-    REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state, print_log);
+    REGISTER_RPC_FUNCTIONS(PersistentThing, ORDERED_TARGETS(read_state, change_state, print_log));
 };
 
 int main(int argc, char** argv) {

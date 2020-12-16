@@ -49,7 +49,7 @@ auto ExternalClientCaller<T, ExternalGroupType>::p2p_send(node_id_t dest_node, A
         group.p2p_connections->add_connections({dest_node});
     }
 
-    auto return_pair = wrapped_this->template send<tag>(
+    auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
             [this, &dest_node](size_t size) -> char* {
                 const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                 if(size <= max_p2p_request_payload_size) {
@@ -113,7 +113,7 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(std::vector<DeserializationCont
             NULL});
 
     rpc_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::p2p_receive_loop, this);
-} 
+}
 
 template <typename... ReplicatedTypes>
 ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {

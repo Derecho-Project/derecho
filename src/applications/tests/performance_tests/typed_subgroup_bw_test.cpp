@@ -34,7 +34,7 @@ public:
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
+    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(fun, bytes_fun, finishing_call));
 };
 
 struct exp_result {

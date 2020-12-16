@@ -27,7 +27,7 @@ public:
     OneFieldObject(persistent::Persistent<std::string>& other_value)
             : string_field(std::move(other_value)) {}
 
-    std::string get_state() {
+    std::string get_state() const {
         return *string_field;
     }
 
@@ -36,7 +36,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(OneFieldObject, string_field);
-    REGISTER_RPC_FUNCTIONS(OneFieldObject, get_state, update_state);
+    REGISTER_RPC_FUNCTIONS(OneFieldObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 };
 
 class TwoFieldObject : public mutils::ByteRepresentable, public derecho::SignedPersistentFields {
@@ -52,11 +52,11 @@ public:
             : foo(std::move(other_foo)),
               bar(std::move(other_bar)) {}
 
-    std::string get_foo() {
+    std::string get_foo() const {
         return *foo;
     }
 
-    std::string get_bar() {
+    std::string get_bar() const {
         return *bar;
     }
 
@@ -66,7 +66,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(TwoFieldObject, foo, bar);
-    REGISTER_RPC_FUNCTIONS(TwoFieldObject, get_foo, get_bar, update);
+    REGISTER_RPC_FUNCTIONS(TwoFieldObject, P2P_TARGETS(get_foo, get_bar), ORDERED_TARGETS(update));
 };
 
 class UnsignedObject : public mutils::ByteRepresentable, public derecho::PersistsFields {
@@ -77,7 +77,7 @@ public:
             : string_field(std::make_unique<std::string>, "UnsignedObjectField", registry, false) {}
     UnsignedObject(persistent::Persistent<std::string>& other_field)
             : string_field(std::move(other_field)) {}
-    std::string get_state() {
+    std::string get_state() const {
         return *string_field;
     }
 
@@ -86,7 +86,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(UnsignedObject, string_field);
-    REGISTER_RPC_FUNCTIONS(UnsignedObject, get_state, update_state);
+    REGISTER_RPC_FUNCTIONS(UnsignedObject, P2P_TARGETS(get_state), ORDERED_TARGETS(update_state));
 };
 
 /**

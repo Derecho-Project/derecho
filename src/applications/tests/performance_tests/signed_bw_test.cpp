@@ -32,7 +32,7 @@ public:
     // deserialization constructor
     ByteArrayObject(Persistent<test::Bytes>& _p_bytes) : pers_bytes(std::move(_p_bytes)) {}
 
-    REGISTER_RPC_FUNCTIONS(ByteArrayObject, change_pers_bytes);
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes));
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
 };
 

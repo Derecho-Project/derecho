@@ -31,7 +31,7 @@ public:
     State(int v) : value(v) {}
     State(const State&) = default;
 
-    int read_value() { return value; }
+    int read_value() const { return value; }
     bool change_value(int v) {
         if(value == v)
             return false;
@@ -42,7 +42,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(State, value);
-    REGISTER_RPC_FUNCTIONS(State, read_value, change_value);
+    REGISTER_RPC_FUNCTIONS(State, ORDERED_TARGETS(read_value, change_value));
 };
 
 /**

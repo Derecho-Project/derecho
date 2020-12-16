@@ -76,29 +76,29 @@ public:
     }
 
     std::size_t to_bytes(char *v) const {
-        ((std::size_t *)(v))[0] = size; 
+        ((std::size_t *)(v))[0] = size;
         if(size > 0) {
             memcpy(v + sizeof(size), bytes, size);
-        }   
+        }
         return size + sizeof(size);
-    }   
-    
+    }
+
     std::size_t bytes_size() const {
         return size + sizeof(size);
-    }   
-    
+    }
+
     void post_object(const std::function<void(char const *const, std::size_t)> &f) const {
         f((char *)&size, sizeof(size));
         f(bytes, size);
-    }   
-    
-    void ensure_registered(mutils::DeserializationManager &) {}
-    
-    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager *, const char *const v) {
-        return std::make_unique<Blob>(v + sizeof(std::size_t), ((std::size_t *)(v))[0]); 
-    }   
+    }
 
-    // we disabled from_bytes_noalloc calls for now.    
+    void ensure_registered(mutils::DeserializationManager &) {}
+
+    static std::unique_ptr<Blob> from_bytes(mutils::DeserializationManager *, const char *const v) {
+        return std::make_unique<Blob>(v + sizeof(std::size_t), ((std::size_t *)(v))[0]);
+    }
+
+    // we disabled from_bytes_noalloc calls for now.
 };
 
 class OSObject : public mutils::ByteRepresentable {
@@ -165,14 +165,7 @@ public:
         return this->inv_obj;
     }
 
-    enum Functions { PUT_OBJ, GET_OBJ };
-
-    static auto register_functions() {
-      return std::make_tuple(
-        derecho::rpc::tag<PUT_OBJ>(&ObjStore::put),
-        derecho::rpc::tag<GET_OBJ>(&ObjStore::get)
-      );
-    }
+    REGISTER_RPC_FUNCTIONS(ObjStore, ORDERED_TARGETS(put, get));
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjStore, objects);
 
@@ -243,7 +236,7 @@ int main(int argc, char* argv[]) {
                     std::cout << "(pers)throughput:" << thp_ops << "ops." << std::endl;
                     std::cout << std::flush;
                 }
-            }}; // global persistent frontier 
+            }}; // global persistent frontier
 
     derecho::SubgroupInfo subgroup_function{[num_of_nodes](
             const std::vector<std::type_index>& subgroup_type_order,
@@ -285,7 +278,7 @@ int main(int argc, char* argv[]) {
         // send
         try {
           for (uint32_t i=0;i<(uint32_t)num_of_objs;i++)
-            handle.ordered_send<ObjStore::PUT_OBJ>(*g_objs[i]);
+            handle.ordered_send<RPC_NAME(put)>(*g_objs[i]);
         } catch (uint64_t exp) {
             std::cout << "Exception caught:0x" << std::hex << exp << std::endl;
         }
@@ -295,7 +288,7 @@ int main(int argc, char* argv[]) {
     {
         OSObject obj1;
         uint64_t key = num_of_nodes - node_rank - 1;
-        auto results = handle.ordered_send<ObjStore::GET_OBJ>(key);
+        auto results = handle.ordered_send<RPC_NAME(get)>(key);
         decltype(results)::ReplyMap& replies = results.get();
         std::cout<<"Got a reply map!"<<std::endl;
         for (auto& ritr:replies) {

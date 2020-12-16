@@ -7,16 +7,15 @@
 #include <time.h>
 #include <vector>
 
+#include <derecho/conf/conf.hpp>
 #include <derecho/core/derecho.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/mutils-serialization/context_ptr.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/persistent/detail/util.hpp>
-#include <derecho/conf/conf.hpp>
 
 using mutils::context_ptr;
 using namespace persistent;
-
 
 //the payload is used to identify the user timestamp
 typedef struct _payload {
@@ -28,10 +27,10 @@ typedef struct _payload {
 
 //This class is modified from Matt's implementation
 struct Bytes : public mutils::ByteRepresentable {
-    char *bytes;
+    char* bytes;
     std::size_t size;
 
-    Bytes(const char *b, decltype(size) s)
+    Bytes(const char* b, decltype(size) s)
             : size(s) {
         bytes = nullptr;
         if(s > 0) {
@@ -39,7 +38,7 @@ struct Bytes : public mutils::ByteRepresentable {
             memcpy(bytes, b, s);
         }
     }
-    Bytes(const Bytes &rhs)
+    Bytes(const Bytes& rhs)
             : Bytes(rhs.bytes, rhs.size) {
     }
     Bytes() {
@@ -52,8 +51,8 @@ struct Bytes : public mutils::ByteRepresentable {
         }
     }
 
-    Bytes &operator=(Bytes &&other) {
-        char *swp_bytes = other.bytes;
+    Bytes& operator=(Bytes&& other) {
+        char* swp_bytes = other.bytes;
         std::size_t swp_size = other.size;
         other.bytes = bytes;
         other.size = size;
@@ -62,7 +61,7 @@ struct Bytes : public mutils::ByteRepresentable {
         return *this;
     }
 
-    Bytes &operator=(const Bytes &other) {
+    Bytes& operator=(const Bytes& other) {
         if(bytes != nullptr) {
             delete bytes;
         }
@@ -76,8 +75,8 @@ struct Bytes : public mutils::ByteRepresentable {
         return *this;
     }
 
-    std::size_t to_bytes(char *v) const {
-        ((std::size_t *)(v))[0] = size;
+    std::size_t to_bytes(char* v) const {
+        ((std::size_t*)(v))[0] = size;
         if(size > 0) {
             memcpy(v + sizeof(size), bytes, size);
         }
@@ -88,23 +87,23 @@ struct Bytes : public mutils::ByteRepresentable {
         return size + sizeof(size);
     }
 
-    void post_object(const std::function<void(char const *const, std::size_t)> &f) const {
-        f((char *)&size, sizeof(size));
+    void post_object(const std::function<void(char const* const, std::size_t)>& f) const {
+        f((char*)&size, sizeof(size));
         f(bytes, size);
     }
 
-    void ensure_registered(mutils::DeserializationManager &) {}
+    void ensure_registered(mutils::DeserializationManager&) {}
 
-    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager *, const char *const v) {
-        return std::make_unique<Bytes>(v + sizeof(std::size_t), ((std::size_t *)(v))[0]);
+    static std::unique_ptr<Bytes> from_bytes(mutils::DeserializationManager*, const char* const v) {
+        return std::make_unique<Bytes>(v + sizeof(std::size_t), ((std::size_t*)(v))[0]);
     }
 
-    static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager *, const char *const v) {
-        return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t *)(v))[0])};
+    static context_ptr<Bytes> from_bytes_noalloc(mutils::DeserializationManager*, const char* const v) {
+        return context_ptr<Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 
-    static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager *, const char *const v) {
-        return context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t *)(v))[0])};
+    static context_ptr<const Bytes> from_bytes_noalloc_const(mutils::DeserializationManager*, const char* const v) {
+        return context_ptr<const Bytes>{new Bytes(v + sizeof(std::size_t), ((std::size_t*)(v))[0])};
     }
 };
 
@@ -120,21 +119,21 @@ public:
     //  *pers_bytes = bytes;
     //}
 
-    void change_pers_bytes(const Bytes &bytes) {
+    void change_pers_bytes(const Bytes& bytes) {
         *pers_bytes = bytes;
     }
 
-    int query_const_int(uint64_t query_us) {
+    int query_const_int(uint64_t query_us) const {
         return 100;
     }
 
-    Bytes query_const_bytes(uint64_t query_us) {
+    Bytes query_const_bytes(uint64_t query_us) const {
         char bytes[1000000];
         Bytes b(bytes, 1000000);
         return b;
     }
 
-    Bytes query_pers_bytes(uint64_t query_us) {
+    Bytes query_pers_bytes(uint64_t query_us) const {
         HLC hlc{query_us, 0};
         try {
             return *pers_bytes.get(hlc);
@@ -144,37 +143,23 @@ public:
         return Bytes();
     }
 
-    /** Named integers that will be used to tag the RPC methods */
-    //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-    enum Functions { CHANGE_PERS_BYTES,
-                     QUERY_PERS_BYTES,
-                     QUERY_CONST_INT,
-                     QUERY_CONST_BYTES };
-
-    static auto register_functions() {
-        return std::make_tuple(
-                //      derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-                derecho::rpc::tag<QUERY_PERS_BYTES>(&ByteArrayObject::query_pers_bytes),
-                derecho::rpc::tag<QUERY_CONST_INT>(&ByteArrayObject::query_const_int),
-                derecho::rpc::tag<QUERY_CONST_BYTES>(&ByteArrayObject::query_const_bytes),
-                derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-    }
-
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes),
+                           P2P_TARGETS(query_const_int, query_const_bytes, query_pers_bytes));
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
     //  ByteArrayObject(Persistent<Bytes> & _p_bytes,Persistent<Bytes,ST_MEM> & _v_bytes):
-    ByteArrayObject(Persistent<Bytes> &_p_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
+    ByteArrayObject(Persistent<Bytes>& _p_bytes) :  //  ByteArrayObject(Persistent<Bytes> & _p_bytes):
                                                     //    pers_bytes(std::move(_p_bytes)) {
                                                    pers_bytes(std::move(_p_bytes)) {
     }
     // the default constructor
-    ByteArrayObject(PersistentRegistry *pr) :  //    pers_bytes(nullptr,pr) {
-                                              pers_bytes([](){return std::make_unique<Bytes>();}, nullptr, pr) {
+    ByteArrayObject(PersistentRegistry* pr) :  //    pers_bytes(nullptr,pr) {
+                                              pers_bytes([]() { return std::make_unique<Bytes>(); }, nullptr, pr) {
     }
 };
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if(argc != 6) {
         std::cout << "usage:" << argv[0] << "<shard_size> <num_of_shards> <ops_per_sec> <min_dur_sec> <query_cnt>" << std::endl;
         return -1;
@@ -191,8 +176,8 @@ int main(int argc, char *argv[]) {
     int msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
     derecho::SubgroupInfo subgroup_info{[shard_size, num_of_shards, num_of_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
+                                                const std::vector<std::type_index>& subgroup_type_order,
+                                                const std::unique_ptr<derecho::View>& prev_view, derecho::View& curr_view) {
         if(curr_view.num_members < num_of_nodes) {
             std::cout << "not enough members yet:" << curr_view.num_members << " < " << num_of_nodes << std::endl;
             throw derecho::subgroup_provisioning_exception();
@@ -215,7 +200,7 @@ int main(int argc, char *argv[]) {
         return subgroup_allocation;
     }};
 
-    auto ba_factory = [](PersistentRegistry *pr,derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
+    auto ba_factory = [](PersistentRegistry* pr, derecho::subgroup_id_t) { return std::make_unique<ByteArrayObject>(pr); };
 
     derecho::Group<ByteArrayObject> group{{}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory};
 
@@ -226,7 +211,7 @@ int main(int argc, char *argv[]) {
     // ordered send.
     if(node_rank < (num_of_nodes - 1)) {
         dbg_default_debug("begin to send message for {} seconds. Message size={}", min_dur_sec, msg_size);
-        char *bbuf = new char[msg_size];
+        char* bbuf = new char[msg_size];
         bzero(bbuf, msg_size);
         Bytes bs(bbuf, msg_size);
 
@@ -242,7 +227,7 @@ int main(int argc, char *argv[]) {
 
 #define DELTA_T_US(t1, t2) ((double)(((t2).tv_sec - (t1).tv_sec) * 1e6 + ((t2).tv_nsec - (t1).tv_nsec) * 1e-3))
 
-            auto &handle = group.get_subgroup<ByteArrayObject>();
+            auto& handle = group.get_subgroup<ByteArrayObject>();
             while(DELTA_T_US(start, cur) / 1e6 < min_dur_sec) {
                 do {
                     pthread_yield();
@@ -250,12 +235,12 @@ int main(int argc, char *argv[]) {
                 } while(DELTA_T_US(last, cur) < (double)si_us);
 
                 {
-                    ((PayLoad *)bs.bytes)->node_rank = (uint32_t)node_rank;
-                    ((PayLoad *)bs.bytes)->msg_seqno = (uint32_t)seqno++;
-                    ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
-                    ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
+                    ((PayLoad*)bs.bytes)->node_rank = (uint32_t)node_rank;
+                    ((PayLoad*)bs.bytes)->msg_seqno = (uint32_t)seqno++;
+                    ((PayLoad*)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
+                    ((PayLoad*)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
 
-                    handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
+                    handle.ordered_send<RPC_NAME(change_pers_bytes)>(bs);
                 }
                 last = cur;
             };
@@ -280,11 +265,11 @@ int main(int argc, char *argv[]) {
             auto shard_iterator = group.get_shard_iterator<ByteArrayObject>();
             // auto query_results_vec = shard_iterator.p2p_send<ByteArrayObject::QUERY_VOLA_BYTES>(query_ts_us);
             clock_gettime(CLOCK_REALTIME, &tqm1);
-            auto query_results_vec = shard_iterator.p2p_send<ByteArrayObject::QUERY_PERS_BYTES>(query_ts_us);
+            auto query_results_vec = shard_iterator.p2p_send<RPC_NAME(query_pers_bytes)>(query_ts_us);
             clock_gettime(CLOCK_REALTIME, &tqm);
-            for(auto &query_result : query_results_vec) {
-                auto &reply_map = query_result.get();
-                PayLoad *pl = (PayLoad *)reply_map.begin()->second.get().bytes;
+            for(auto& query_result : query_results_vec) {
+                auto& reply_map = query_result.get();
+                PayLoad* pl = (PayLoad*)reply_map.begin()->second.get().bytes;
                 volatile uint32_t seq = pl->msg_seqno;
                 seq = seq;
                 // volatile int x = reply_map.begin()->second.get();

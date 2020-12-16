@@ -91,7 +91,7 @@ class CompletionTracker {
 public:
     CompletionTracker() : my_subgroup_id(0){};
     void set_subgroup_id(derecho::subgroup_id_t id);
-    derecho::subgroup_id_t get_subgroup_id();
+    derecho::subgroup_id_t get_subgroup_id() const;
     void start_tracking_version(persistent::version_t version);
     void notify_version_finished(persistent::version_t version);
     void await_version_finished(persistent::version_t version);
@@ -118,7 +118,7 @@ public:
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
     */
-    std::tuple<persistent::version_t, uint64_t> update(const Blob& new_data);
+    std::tuple<persistent::version_t, uint64_t> update(const Blob& new_data) const;
 
     /** Actual implementation of update, only callable from within the subgroup as an ordered send. */
     std::tuple<persistent::version_t, uint64_t> ordered_update(const Blob& new_data);
@@ -128,19 +128,20 @@ public:
      * Returns "true" so that the RPC function sends a reply message, since there is currently
      * no way to determine when a void RPC function actually finishes executing on the callee.
      */
-    bool await_persistence(const persistent::version_t& version);
+    bool await_persistence(const persistent::version_t& version) const;
 
     /**
      * Retrieves the data in the log at a specific version number. P2P-callable.
      */
-    Blob get(const persistent::version_t& version);
+    Blob get(const persistent::version_t& version) const;
     /**
      * Retrieves the data in the log at the latest (current) version. P2P-callable.
      */
-    Blob get_latest();
+    Blob get_latest() const;
 
     DEFAULT_SERIALIZATION_SUPPORT(ObjectStore, object_log);
-    REGISTER_RPC_FUNCTIONS(ObjectStore, update, ordered_update, await_persistence, get, get_latest);
+    REGISTER_RPC_FUNCTIONS(ObjectStore, ORDERED_TARGETS(ordered_update),
+                           P2P_TARGETS(update, await_persistence, get, get_latest));
 };
 
 using SHA256Hash = std::array<unsigned char, 32>;
@@ -168,7 +169,7 @@ public:
      * P2P-callable function that appends a new object-update hash to the signed log.
      * @return The signature generated on this hash (to eventually return to the client)
      */
-    std::vector<unsigned char> add_hash(const SHA256Hash& hash);
+    std::vector<unsigned char> add_hash(const SHA256Hash& hash) const;
 
     /**
      * Ordered-send component of add_hash: appends to the log and returns the new version,
@@ -177,13 +178,12 @@ public:
     persistent::version_t ordered_add_hash(const SHA256Hash& hash);
 
     DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
-    REGISTER_RPC_FUNCTIONS(SignatureStore, add_hash, ordered_add_hash);
+    REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash), ORDERED_TARGETS(ordered_add_hash));
 };
 
 class ClientTier : public mutils::ByteRepresentable,
                    public derecho::GroupReference {
     using derecho::GroupReference::group;
-    openssl::Hasher hasher;
 
 public:
     ClientTier();
@@ -196,9 +196,9 @@ public:
      * @return The version assigned to the update, the timestamp assigned to the update,
      * and the signature assigned to the update.
      */
-    version_signature submit_update(const Blob& data);
+    version_signature submit_update(const Blob& data) const;
 
-    REGISTER_RPC_FUNCTIONS(ClientTier, submit_update);
+    REGISTER_RPC_FUNCTIONS(ClientTier, P2P_TARGETS(submit_update));
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
     //We must still provide trivial implementations of these functions.

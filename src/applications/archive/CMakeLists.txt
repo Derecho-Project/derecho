@@ -9,10 +9,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(subgroup_scaling_test subgroup_scaling_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(subgroup_scaling_test derecho)
 
-# derecho_caller_test
-add_executable(derecho_caller_test derecho_caller_test.cpp)
-target_link_libraries(derecho_caller_test derecho)
-
 # p2p_latency_test
 add_executable(p2p_latency_test p2p_latency_test.cpp)
 target_link_libraries(p2p_latency_test derecho)
@@ -20,10 +16,6 @@ target_link_libraries(p2p_latency_test derecho)
 # subgroup_test
 add_executable(subgroup_test subgroup_test.cpp)
 target_link_libraries(subgroup_test derecho)
-
-# p2p_send_test
-add_executable(p2p_send_test p2p_send_test.cpp)
-target_link_libraries(p2p_send_test derecho)
 
 # typed_subgroup_test
 add_executable(typed_subgroup_test typed_subgroup_test.cpp)
@@ -137,8 +129,8 @@ add_executable(custom_subgroup_profiles_test custom_subgroup_profiles_test.cpp)
 target_link_libraries(custom_subgroup_profiles_test derecho)
 
 # external_client_tester
-add_executable(external_client_tester external_client_tester.cpp)
-target_link_libraries(external_client_tester derecho)
+# add_executable(external_client_tester external_client_tester.cpp)
+# target_link_libraries(external_client_tester derecho)
 
 # external_client_perf_test
 add_executable(external_client_perf_test external_client_perf_test.cpp)
