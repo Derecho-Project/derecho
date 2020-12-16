@@ -160,7 +160,7 @@ derecho::subgroup_id_t CompletionTracker::get_subgroup_id() const {
 ClientTier::ClientTier(std::size_t test_data_size)
         : test_data(nullptr, test_data_size){};
 
-std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) {
+std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) const {
     derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
@@ -196,7 +196,7 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     return {std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp), signature_reply};
 }
 
-bool ClientTier::update_batch_test(const int& num_updates) {
+bool ClientTier::update_batch_test(const int& num_updates) const {
     using derecho::rpc::QueryResults;
     using persistent::version_t;
     using namespace std::chrono;

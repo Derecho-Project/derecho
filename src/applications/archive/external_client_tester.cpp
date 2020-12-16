@@ -11,6 +11,9 @@ struct Foo : mutils::ByteRepresentable {
     int read_state() const {
         return state;
     }
+    //This function should not be a P2P target because it modifies replicated state,
+    //but this test won't work if it's an ordered target because the test depends on
+    //external clients being able to call change_state.
     bool change_state(int new_state) {
         if(new_state == state) {
             return false;
@@ -38,10 +41,6 @@ using namespace persistent;
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
-
-    //Each replicated type needs a factory; this can be used to supply constructor arguments
-    //for the subgroup's initial state
-    // auto foo_factory = [](PersistentRegistry*) { return std::make_unique<Foo>(-1); };
 
     derecho::ExternalGroup<Foo> group;
 

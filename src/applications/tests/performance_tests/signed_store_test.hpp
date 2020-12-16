@@ -209,8 +209,8 @@ public:
 class ClientTier : public mutils::ByteRepresentable,
                    public derecho::GroupReference {
     using derecho::GroupReference::group;
-    //Used to pick random members of the storage and signature subgroups to contact
-    std::mt19937 random_engine;
+    //Used to pick random members of the storage and signature subgroups to contact; not replicated
+    mutable std::mt19937 random_engine;
     //This ensures the test data is allocated before the test starts
     Blob test_data;
 
@@ -221,18 +221,16 @@ public:
     using version_signature = std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>>;
     /**
      * RPC function that submits an update to the object store and gets its hash signed;
-     * intended to be called by an outside client using ExternalGroup. Note that this
-     * should be a const method, but it needs to generate a random number (to pick a
-     * member to target) and std::mt19937 can't be used in a const context.
+     * intended to be called by an outside client using ExternalGroup.
      * @return The version assigned to the update, the timestamp assigned to the update,
      * and the signature assigned to the update.
      */
-    version_signature submit_update(const Blob& data);
+    version_signature submit_update(const Blob& data) const;
     /**
      * The main function of the signed store bandwidth test. Returns a useless bool so that
      * the actual "main" thread can block waiting for it to complete.
      */
-    bool update_batch_test(const int& num_updates);
+    bool update_batch_test(const int& num_updates) const;
     REGISTER_RPC_FUNCTIONS(ClientTier, P2P_TARGETS(submit_update, update_batch_test));
 
     //This class has no serialized state, so DEFAULT_SERIALIZATION_SUPPORT won't work.
