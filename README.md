@@ -4,7 +4,29 @@ Full source documentation can be found at https://derecho-project.github.io/.
 # Derecho [![Build Status](https://travis-ci.com/Derecho-Project/derecho.svg?branch=master)](https://travis-ci.com/Derecho-Project/derecho)
 This is the main repository for the Derecho project. It contains all of the Derecho library code, as well as several sample applications and test programs.
 
-## Intended use cases and assumptions.
+# Table of Contents
+* [Intended use cases and assumptions](#intended-use-cases-and-assumptions)
+* [Organization](#organization)
+* [Installation](#installation)
+  * [Prerequisites](#prerequisites)
+  * [Getting Started](#getting-started)
+    * [Configuring Core Derecho](#configuring-core-derecho)
+    * [Configuring RDMA Devices](#configuring-rdma-devices)
+    * [Configuring Persistent Behavior](#configuring-persistent-behavior)
+    * [Specify Configuration with Command Line Arguments](#specify-configuration-with-command-line-arguments)
+  * [Setup and Testing](#setup-and-testing)
+* [Using Derecho](#using-derecho)
+  * [Replicated Objects](#replicated-objects)
+  * [Groups and Subgroups](#groups-and-subgroups)
+    * [Defining Subgroup Membership](#defining-subgroup-membership)
+    * [Constructing a Group](#constructing-a-group)
+  * [Invoking RPC Functions](#invoking-rpc-functions)
+    * [Using QueryResults Objects](#using-queryresults-objects)
+  * [Tracking Updates with Version Vectors](#tracking-updates-with-version-vectors)
+* [Notes on Very Large Deployments](#notes-on-very-large-deployments)
+
+
+## Intended use cases and assumptions
 Derecho is aimed at supporting what are called "cloud micro-services", meaning pools of servers that would reside in a cluster or on a cloud data-center, probably to support the "first tier" where requests arrive from external clients, and that perform some kind of well-defined subtask like data cleaning, image classification, compression and deduplication, etc.  Although the system could definitely run in other settings, if you stray too far from our intended use cases, you'll probably trigger timeout-related crashes that we might not be very eager to try and "fix".  We recommend using Zookeeper or some other tool if you are aiming at a very different setup.
 
 Derecho was created to leverage modern RDMA hardware, which is becoming quite common.  However, it can run on high-speed, low-latency TCP links (there is a configuration option to tell it what you want us to use, and we can also support Intel OMNI-Path and a few other options, too).  The one request we would make is that the nodes have rather uniform properties, and that this also be true for the links between them.  Derecho also assumes a relatively low rate of membership changes.  Processes can join or leave, and we even batch joins and leaves if a burst of them occurs, but the design of the system really assumes long periods (think "minutes") of stability, and we basically lock everything down during the short periods (think "hundreds of milliseconds") needed for reconfiguration.
