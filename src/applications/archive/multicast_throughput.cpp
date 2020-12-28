@@ -134,9 +134,9 @@ int main(int argc, char* argv[]) {
             if(time_to_push) {
                 break;
             }
-	    if(completed.size() > 0) {
-		break;
-	    }
+            if(completed.size() > 0) {
+                break;
+            }
         }
         sst.put(sst.num_received_sst.get_base() - sst.getBaseAddress(),
                 sizeof(sst.num_received_sst[0][0]) * num_senders);
@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
     sst::multicast_group<multicast_sst> g(sst, indices, window_size, max_msg_size, is_sender);
 
     DEBUG_MSG("Group created");
-    
+
     // now
     sst->predicates.insert(receiver_pred, receiver_trig,
                            sst::PredicateType::RECURRENT);

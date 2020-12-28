@@ -929,7 +929,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         gmsSST.put(gmsSST.changes);
         if(!proposed_join_sockets.empty()) {
             gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+                       gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         }
         gmsSST.put(gmsSST.num_changes);
     }
@@ -1056,7 +1056,7 @@ void ViewManager::new_leader_takeover(DerechoSST& gmsSST) {
         //Push the entire new changes vector and the associated joiner_ip vectors
         gmsSST.put(gmsSST.changes);
         gmsSST.put(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
-                                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
+                   gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
         gmsSST.put(gmsSST.num_changes);
     }
     //Allow this node to advance num_committed as the active leader

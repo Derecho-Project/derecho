@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
     auto send_fast = [&]() {
         Replicated<RawObject>& raw_subgroup = group.get_subgroup<RawObject>();
         // Here, the !done condition would not be necessary to a void a deadlock,
-        // because we do have the null-scheme enabled. Anyway, it speeds up the 
+        // because we do have the null-scheme enabled. Anyway, it speeds up the
         // test termination (we are not interested in the messages after the "done").
         for(uint i = 0; i < num_messages && !done; ++i) {
             // the lambda function writes the message contents into the provided memory buffer

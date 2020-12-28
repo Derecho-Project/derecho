@@ -88,8 +88,8 @@ int main(int argc, char* argv[]) {
     Mode mode = Mode::ORDERED;
 
     auto membership_function = [num_nodes, mode](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
+                                       const std::vector<std::type_index>& subgroup_type_order,
+                                       const std::unique_ptr<View>& prev_view, View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(1);
         auto num_members = curr_view.members.size();
         // wait for all nodes to join the group
@@ -144,11 +144,11 @@ int main(int argc, char* argv[]) {
     // end timer
     struct timespec end_time;
     clock_gettime(CLOCK_REALTIME, &end_time);
-    
+
     // calculate bandwidth measured locally
     long long int nanoseconds_elapsed = (end_time.tv_sec - start_time.tv_sec) * (long long int)1e9 + (end_time.tv_nsec - start_time.tv_nsec);
     double bw = (max_msg_size * num_messages * num_nodes + 0.0) / nanoseconds_elapsed;
-   
+
     // aggregate bandwidth from all nodes
     double avg_bw = aggregate_bandwidth(members_order, members_order[node_rank], bw);
     // log the result at the leader node

@@ -574,7 +574,7 @@ private:
      * the current View's subgroup membership
      */
     std::tuple<uint32_t, uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
-                                                           std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
+                                                                      std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings);
 
     //Note: This function is public so that RestartLeaderState can access it.
 public:

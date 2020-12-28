@@ -188,7 +188,7 @@ public:
               persisted_num(num_subgroups),
               verified_num(num_subgroups),
               suspected(parameters.members.size()),
-              changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
+              changes(100 + parameters.members.size()),  //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
               joiner_gms_ports(100 + parameters.members.size()),
               joiner_state_transfer_ports(100 + parameters.members.size()),

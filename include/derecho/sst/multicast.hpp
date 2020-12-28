@@ -150,11 +150,11 @@ public:
         }
 
         uint32_t first_slot = (committed_index - ready_to_be_sent + 1) % window_size;
-	uint64_t size_to_push;
+        uint64_t size_to_push;
         if(num_nulls_queued == 0) {
             uint32_t last_slot = std::min(first_slot + ready_to_be_sent - 1, window_size - 1);
             size_to_push = (last_slot - first_slot + 1) * max_msg_size;
-	    ready_to_be_sent -= last_slot - first_slot + 1;
+            ready_to_be_sent -= last_slot - first_slot + 1;
         } else {
             uint32_t first_null_slot = first_null_index % window_size;
             if(first_null_slot < first_slot) {

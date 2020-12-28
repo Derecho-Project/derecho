@@ -8,8 +8,8 @@
 #include <derecho/core/detail/multicast_group.hpp>
 #include <derecho/persistent/Persistent.hpp>
 #include <derecho/rdmc/detail/util.hpp>
-#include <derecho/utils/time.h>
 #include <derecho/utils/logger.hpp>
+#include <derecho/utils/time.h>
 
 namespace derecho {
 
@@ -293,7 +293,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                     message_id_t sequence_number = index * num_shard_senders + sender_rank;
 
                     dbg_default_trace("Locally received message in subgroup {}, sender rank {}, index {}",
-                                    subgroup_num, shard_rank, index);
+                                      subgroup_num, shard_rank, index);
                     // Move message from current_receives to locally_stable_rdmc_messages.
                     if(node_id == members[member_index]) {
                         assert(current_sends[subgroup_num]);
@@ -332,7 +332,7 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                             i <= new_num_received; ++i) {
                             message_id_t seq_num = i * num_shard_senders + sender_rank;
                             if(!locally_stable_sst_messages[subgroup_num].empty()
-                            && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
+                               && locally_stable_sst_messages[subgroup_num].begin()->first == seq_num) {
                                 auto& msg = locally_stable_sst_messages[subgroup_num].begin()->second;
                                 char* buf = const_cast<char*>(msg.buf);
                                 header* h = (header*)(buf);
@@ -373,18 +373,18 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                         sst->num_received[member_index][subgroup_settings.num_received_offset + sender_rank] = new_num_received;
                         // std::atomic_signal_fence(std::memory_order_acq_rel);
                         auto* min_ptr = std::min_element(&sst->num_received[member_index][subgroup_settings.num_received_offset],
-                                                        &sst->num_received[member_index][subgroup_settings.num_received_offset + num_shard_senders]);
+                                                         &sst->num_received[member_index][subgroup_settings.num_received_offset + num_shard_senders]);
                         uint min_index = std::distance(&sst->num_received[member_index][subgroup_settings.num_received_offset], min_ptr);
                         auto new_seq_num = (*min_ptr + 1) * num_shard_senders + min_index - 1;
                         if(static_cast<message_id_t>(new_seq_num) > sst->seq_num[member_index][subgroup_num]) {
                             dbg_default_trace("Updating seq_num for subgroup {} to {}", subgroup_num, new_seq_num);
                             sst->seq_num[member_index][subgroup_num] = new_seq_num;
                             sst->put(shard_sst_indices,
-                                    sst->seq_num, subgroup_num);
+                                     sst->seq_num, subgroup_num);
                         }
                         sst->put(shard_sst_indices,
-                                sst->num_received,
-                                subgroup_settings.num_received_offset + sender_rank);
+                                 sst->num_received,
+                                 subgroup_settings.num_received_offset + sender_rank);
                     }
                 };
                 // Capture rdmc_receive_handler by copy! The reference to it won't be valid after this constructor ends!
@@ -410,39 +410,39 @@ bool MulticastGroup::create_rdmc_sst_groups() {
                 if(node_id == members[member_index]) {
                     //Create a group in which this node is the sender, and only self-receives happen
                     if(!rdmc::create_group(
-                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                            [](size_t length) -> rdmc::receive_destination {
-                                assert_always(false);
-                                return {nullptr, 0};
-                            },
-                            receive_handler_plus_notify,
-                            [](std::optional<uint32_t>) {})) {
+                               rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
+                               [](size_t length) -> rdmc::receive_destination {
+                                   assert_always(false);
+                                   return {nullptr, 0};
+                               },
+                               receive_handler_plus_notify,
+                               [](std::optional<uint32_t>) {})) {
                         return false;
                     }
                     subgroup_to_rdmc_group[subgroup_num] = rdmc_group_num_offset;
                     rdmc_group_num_offset++;
                 } else {
                     if(!rdmc::create_group(
-                            rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
-                            [this, subgroup_num, node_id](size_t length) {
-                                std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
-                                assert(!free_message_buffers[subgroup_num].empty());
-                                //Create a Message struct to receive the data into.
-                                RDMCMessage msg;
-                                msg.sender_id = node_id;
-                                // The length variable is not the exact size of the msg,
-                                // but it is the nearest multiple of the block size greater then the size
-                                // so we will set the size in the receive handler
-                                msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
-                                free_message_buffers[subgroup_num].pop_back();
+                               rdmc_group_num_offset, rotated_shard_members, subgroup_settings.profile.block_size, subgroup_settings.profile.rdmc_send_algorithm,
+                               [this, subgroup_num, node_id](size_t length) {
+                                   std::lock_guard<std::recursive_mutex> lock(msg_state_mtx);
+                                   assert(!free_message_buffers[subgroup_num].empty());
+                                   //Create a Message struct to receive the data into.
+                                   RDMCMessage msg;
+                                   msg.sender_id = node_id;
+                                   // The length variable is not the exact size of the msg,
+                                   // but it is the nearest multiple of the block size greater then the size
+                                   // so we will set the size in the receive handler
+                                   msg.message_buffer = std::move(free_message_buffers[subgroup_num].back());
+                                   free_message_buffers[subgroup_num].pop_back();
 
-                                rdmc::receive_destination ret{msg.message_buffer.mr, 0};
-                                current_receives[{subgroup_num, node_id}] = std::move(msg);
+                                   rdmc::receive_destination ret{msg.message_buffer.mr, 0};
+                                   current_receives[{subgroup_num, node_id}] = std::move(msg);
 
-                                assert(ret.mr->buffer != nullptr);
-                                return ret;
-                            },
-                            rdmc_receive_handler, [](std::optional<uint32_t>) {})) {
+                                   assert(ret.mr->buffer != nullptr);
+                                   return ret;
+                               },
+                               rdmc_receive_handler, [](std::optional<uint32_t>) {})) {
                         return false;
                     }
                     rdmc_group_num_offset++;

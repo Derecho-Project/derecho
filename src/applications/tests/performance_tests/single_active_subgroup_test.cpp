@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "aggregate_bandwidth.hpp"
-#include <derecho/core/derecho.hpp>
 #include "log_results.hpp"
+#include <derecho/core/derecho.hpp>
 
 using std::cout;
 using std::endl;
@@ -29,7 +29,7 @@ struct exp_result {
         fout << num_nodes << " "
              << max_msg_size << " " << window_size << " "
              << num_messages << " "
-	     << num_subgroups << " "
+             << num_subgroups << " "
              << bw << endl;
     }
 };
@@ -67,8 +67,8 @@ int main(int argc, char* argv[]) {
     };
 
     auto membership_function = [num_subgroups, num_nodes](
-            const std::vector<std::type_index>& subgroup_type_order,
-            const std::unique_ptr<View>& prev_view, View& curr_view) {
+                                       const std::vector<std::type_index>& subgroup_type_order,
+                                       const std::unique_ptr<View>& prev_view, View& curr_view) {
         subgroup_shard_layout_t subgroup_vector(num_subgroups);
         auto num_members = curr_view.members.size();
         // wait for all nodes to join the group
@@ -130,7 +130,7 @@ int main(int argc, char* argv[]) {
         log_results(exp_result{num_nodes, max_msg_size,
                                getConfUInt32(CONF_SUBGROUP_DEFAULT_WINDOW_SIZE),
                                num_messages,
-			       num_subgroups,
+                               num_subgroups,
                                avg_bw},
                     "data_single_active_subgroup");
     }
