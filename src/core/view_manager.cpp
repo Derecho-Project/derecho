@@ -410,7 +410,10 @@ void ViewManager::truncate_logs() {
 void ViewManager::initialize_multicast_groups(const CallbackSet& callbacks) {
     initialize_rdmc_sst();
     std::map<subgroup_id_t, SubgroupSettings> subgroup_settings_map;
-    auto [num_received_size, slot_size] = derive_subgroup_settings(*curr_view, subgroup_settings_map);
+    auto sizes = derive_subgroup_settings(*curr_view, subgroup_settings_map);
+    uint32_t num_received_size = std::get<0>(sizes);
+    uint32_t slot_size = std::get<1>(sizes);
+    int32_t index_field_size = std::get<2>(sizes);
     dbg_default_trace("Initial view is: {}", curr_view->debug_string());
     if(any_persistent_objects) {
         //Persist the initial View to disk as soon as possible, which is after my_subgroups has been initialized
@@ -418,7 +421,7 @@ void ViewManager::initialize_multicast_groups(const CallbackSet& callbacks) {
     }
 
     dbg_default_debug("Initializing SST and RDMC for the first time.");
-    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size, slot_size);
+    construct_multicast_group(callbacks, subgroup_settings_map, num_received_size, slot_size, index_field_size);
     curr_view->gmsSST->vid[curr_view->my_rank] = curr_view->vid;
 }
 
@@ -435,7 +438,7 @@ void ViewManager::finish_setup() {
     leader_connection.reset();
 
     last_suspected = std::vector<bool>(curr_view->members.size());
-    curr_view->gmsSST->put();
+    curr_view->gmsSST->push_row_except_slots();
     curr_view->gmsSST->sync_with_members();
     dbg_default_debug("Done setting up initial SST and RDMC");
 
@@ -443,7 +446,7 @@ void ViewManager::finish_setup() {
         // If this node is joining an existing group with a non-initial view, copy the leader's num_changes, num_acked, and num_committed
         // Otherwise, you'll immediately think that there's a new proposed view change because gmsSST.num_changes[leader] > num_acked[my_rank]
         curr_view->gmsSST->init_local_change_proposals(curr_view->find_rank_of_leader());
-        curr_view->gmsSST->put();
+        curr_view->gmsSST->push_row_except_slots();
         dbg_default_debug("Joining node initialized its SST row from the leader");
     }
     create_threads();
@@ -1184,8 +1187,7 @@ void ViewManager::terminate_epoch(DerechoSST& gmsSST) {
                     };
             curr_view->multicast_group->receiver_function(
                     subgroup_id, curr_subgroup_settings, shard_ranks_by_sender_rank,
-                    num_shard_senders, gmsSST,
-                    curr_subgroup_settings.profile.window_size, sst_receive_handler_lambda);
+                    num_shard_senders, gmsSST, sst_receive_handler_lambda);
         }
     }
 
@@ -1379,7 +1381,10 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     std::map<subgroup_id_t, SubgroupSettings> next_subgroup_settings;
-    auto [new_num_received_size, new_slot_size] = derive_subgroup_settings(*next_view, next_subgroup_settings);
+    auto sizes = derive_subgroup_settings(*next_view, next_subgroup_settings);
+    uint32_t new_num_received_size = std::get<0>(sizes);
+    uint32_t new_slot_size = std::get<1>(sizes);
+    uint32_t new_index_field_size = std::get<2>(sizes);
 
     dbg_default_debug("Ready to transition to the next View: {}", next_view->debug_string());
     // Determine the shard leaders in the old view and re-index them by new subgroup IDs
@@ -1470,11 +1475,11 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
     }
 
     // This will block until everyone responds to SST/RDMC initial handshakes
-    transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size);
+    transition_multicast_group(next_subgroup_settings, new_num_received_size, new_slot_size, new_index_field_size);
     dbg_default_debug("Done setting up SST and MulticastGroup for view {}; about to do a sync_with_members()", next_view->vid);
 
-    // New members can now proceed to view_manager.start(), which will call sync()
-    next_view->gmsSST->put();
+    // New members can now proceed to view_manager.finish_setup(), which will call put() and sync()
+    next_view->gmsSST->push_row_except_slots();
     next_view->gmsSST->sync_with_members();
     {
         lock_guard_t old_views_lock(old_views_mutex);
@@ -1516,7 +1521,8 @@ void ViewManager::finish_view_change(DerechoSST& gmsSST) {
 void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
                                             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                             const uint32_t num_received_size,
-                                            const uint32_t slot_size) {
+                                            const uint32_t slot_size,
+                                            const uint32_t index_field_size) {
     const auto num_subgroups = curr_view->subgroup_shard_views.size();
     const std::size_t signature_size = persistence_manager.get_signature_size();
 
@@ -1525,7 +1531,7 @@ void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
                     curr_view->members, curr_view->members[curr_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     curr_view->failed, false),
-            num_subgroups, signature_size, num_received_size, slot_size);
+            num_subgroups, signature_size, num_received_size, slot_size, index_field_size);
 
     curr_view->multicast_group = std::make_unique<MulticastGroup>(
             curr_view->members, curr_view->members[curr_view->my_rank],
@@ -1540,7 +1546,7 @@ void ViewManager::construct_multicast_group(const CallbackSet& callbacks,
 
 void ViewManager::transition_multicast_group(
         const std::map<subgroup_id_t, SubgroupSettings>& new_subgroup_settings,
-        const uint32_t new_num_received_size, const uint32_t new_slot_size) {
+        const uint32_t new_num_received_size, const uint32_t new_slot_size, const uint32_t new_index_field_size) {
     const auto num_subgroups = next_view->subgroup_shard_views.size();
     const std::size_t signature_size = persistence_manager.get_signature_size();
 
@@ -1549,7 +1555,7 @@ void ViewManager::transition_multicast_group(
                     next_view->members, next_view->members[next_view->my_rank],
                     [this](const uint32_t node_id) { report_failure(node_id); },
                     next_view->failed, false),
-            num_subgroups, signature_size, new_num_received_size, new_slot_size);
+            num_subgroups, signature_size, new_num_received_size, new_slot_size, new_index_field_size);
 
     next_view->multicast_group = std::make_unique<MulticastGroup>(
             next_view->members, next_view->members[next_view->my_rank],
@@ -1824,10 +1830,11 @@ void ViewManager::make_subgroup_maps(const SubgroupInfo& subgroup_info,
     }
 }
 
-std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
-                                                                    std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
+std::tuple<uint32_t, uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
+                                                                               std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings) {
     uint32_t num_received_offset = 0;
     uint32_t slot_offset = 0;
+    uint32_t index_field_size = view.subgroup_shard_views.size();
     view.my_subgroups.clear();
     for(subgroup_id_t subgroup_id = 0; subgroup_id < view.subgroup_shard_views.size(); ++subgroup_id) {
         uint32_t num_shards = view.subgroup_shard_views.at(subgroup_id).size();
@@ -1840,7 +1847,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
             max_shard_senders = std::max(shard_view.num_senders(), max_shard_senders);
 
             const DerechoParams& profile = DerechoParams::from_profile(shard_view.profile);
-            uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + 2 * sizeof(uint64_t));
+            uint32_t slot_size_for_shard = profile.window_size * (profile.sst_max_msg_size + sizeof(uint64_t));
             uint64_t payload_size = profile.max_msg_size - sizeof(header);
             max_payload_size = std::max(payload_size, max_payload_size);
             view_max_rpc_reply_payload_size = std::max(
@@ -1863,6 +1870,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
                         shard_view.sender_rank_of(shard_view.my_rank),
                         num_received_offset,
                         slot_offset,
+                        subgroup_id,
                         shard_view.mode,
                         profile,
                 };
@@ -1873,7 +1881,7 @@ std::pair<uint32_t, uint32_t> ViewManager::derive_subgroup_settings(View& view,
         max_payload_sizes[subgroup_id] = max_payload_size;
     }  // for(subgroup_id)
 
-    return {num_received_offset, slot_offset};
+    return {num_received_offset, slot_offset, index_field_size};
 }
 
 std::map<subgroup_id_t, uint64_t> ViewManager::get_max_payload_sizes() {

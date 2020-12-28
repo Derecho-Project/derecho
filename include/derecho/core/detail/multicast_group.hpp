@@ -38,6 +38,7 @@ struct __attribute__((__packed__)) header {
     uint32_t header_size;
     int32_t index;
     uint64_t timestamp;
+    uint32_t num_nulls;
     bool cooked_send;
 };
 
@@ -237,6 +238,8 @@ struct SubgroupSettings {
     uint32_t num_received_offset;
     /** The offset of this node's slot within the subgroup's SST section */
     uint32_t slot_offset;
+    /** The index of the SST index used to track SMC messages in a specific subgroup */
+    uint32_t index_offset;
     /** The operation mode of the shard */
     Mode mode;
     /** The multicast parameters for the shard */
@@ -288,6 +291,9 @@ private:
      * It is std::nullopt when there is no message to send. */
     std::vector<std::optional<RDMCMessage>> next_sends;
     std::map<uint32_t, bool> pending_sst_sends;
+    std::vector<uint32_t> committed_sst_index;
+    std::vector<uint32_t> num_nulls_queued;
+    std::vector<int32_t> first_null_index;
     /** Messages that are ready to be sent, but must wait until the current send finishes. */
     std::vector<std::queue<RDMCMessage>> pending_sends;
     /** Vector of messages that are currently being sent out using RDMC, or boost::none otherwise. */
@@ -442,6 +448,9 @@ private:
     void delivery_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                           const uint32_t num_shard_members, DerechoSST& sst);
 
+    void sst_send_trigger(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
+                          const uint32_t num_shard_members, DerechoSST& sst);
+
     void sst_receive_handler(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                              const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
                              uint32_t num_shard_senders, uint32_t sender_rank,
@@ -453,7 +462,7 @@ private:
 
     void receiver_function(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,
                            const std::map<uint32_t, uint32_t>& shard_ranks_by_sender_rank,
-                           uint32_t num_shard_senders, DerechoSST& sst, unsigned int batch_size,
+                           uint32_t num_shard_senders, DerechoSST& sst,
                            const std::function<void(uint32_t, volatile char*, uint32_t)>& sst_receive_handler_lambda);
 
     void update_min_persisted_num(subgroup_id_t subgroup_num, const SubgroupSettings& subgroup_settings,

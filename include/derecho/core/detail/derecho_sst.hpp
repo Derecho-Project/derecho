@@ -167,6 +167,7 @@ public:
     /** for SST multicast */
     SSTFieldVector<char> slots;
     SSTFieldVector<int32_t> num_received_sst;
+    SSTFieldVector<int32_t> index;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
@@ -179,7 +180,7 @@ public:
      * @param parameters The SST parameters, which will be forwarded to the
      * standard SST constructor.
      */
-    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t signature_size, uint32_t num_received_size, uint64_t slot_size)
+    DerechoSST(const sst::SSTParams& parameters, uint32_t num_subgroups, uint32_t signature_size, uint32_t num_received_size, uint64_t slot_size, uint32_t index_field_size)
             : sst::SST<DerechoSST>(this, parameters),
               seq_num(num_subgroups),
               delivered_num(num_subgroups),
@@ -187,7 +188,7 @@ public:
               persisted_num(num_subgroups),
               verified_num(num_subgroups),
               suspected(parameters.members.size()),
-              changes(100 + parameters.members.size()), //The extra 100 entries allows for more joins at startup, when the group is very small
+              changes(100 + parameters.members.size()),  //The extra 100 entries allows for more joins at startup, when the group is very small
               joiner_ips(100 + parameters.members.size()),
               joiner_gms_ports(100 + parameters.members.size()),
               joiner_state_transfer_ports(100 + parameters.members.size()),
@@ -199,6 +200,7 @@ public:
               global_min_ready(num_subgroups),
               slots(slot_size),
               num_received_sst(num_received_size),
+              index(index_field_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num, signatures,
                 persisted_num, verified_num,
@@ -206,7 +208,7 @@ public:
                 joiner_gms_ports, joiner_state_transfer_ports, joiner_sst_ports, joiner_rdmc_ports, joiner_external_ports,
                 num_changes, num_committed, num_acked, num_installed,
                 num_received, wedged, global_min, global_min_ready,
-                slots, num_received_sst, local_stability_frontier, rip);
+                slots, num_received_sst, index, local_stability_frontier, rip);
         //Once superclass constructor has finished, table entries can be initialized
         for(unsigned int row = 0; row < get_num_rows(); ++row) {
             vid[row] = 0;
@@ -265,6 +267,11 @@ public:
      * @param other_row The row to copy values from.
      */
     void init_local_change_proposals(const int other_row);
+
+    /**
+     * Pushes the entire local SST row except the SMC slots.
+     */
+    void push_row_except_slots();
 
     /**
      * Creates a string representation of the local row (not the whole table).
