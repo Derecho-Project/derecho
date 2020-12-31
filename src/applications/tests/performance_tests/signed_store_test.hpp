@@ -102,13 +102,15 @@ class ObjectStore : public mutils::ByteRepresentable,
                     public derecho::PersistsFields,
                     public derecho::GroupReference {
     persistent::Persistent<Blob> object_log;
+    /** A local cache of QueryResults from ordered_update() calls. Not part of the replicated state. */
+    mutable std::map<persistent::version_t, derecho::rpc::QueryResults<void>> update_results;
     /**
      * Shared with the global persistence callback, so await_persistence can be notified
      * when persistence completes, assuming ordered_update has added an entry for the version.
      * PROBLEM: What about serialization? What happens on a reconfiguration/restore from logs to
      * re-link this with the global callback?
      */
-    std::shared_ptr<CompletionTracker> persistence_tracker;
+    // std::shared_ptr<CompletionTracker> persistence_tracker;
     using derecho::GroupReference::group;
     /**
      * Shared with the main thread to tell it when the experiment is done and it should
@@ -117,7 +119,7 @@ class ObjectStore : public mutils::ByteRepresentable,
     std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
-    ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
+    ObjectStore(persistent::PersistentRegistry* pr,
                 std::shared_ptr<std::atomic<bool>> experiment_done);
     /** Deserialization constructor */
     ObjectStore(persistent::Persistent<Blob>& other_log) : object_log(std::move(other_log)) {}
@@ -125,13 +127,15 @@ public:
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
     */
-    std::tuple<persistent::version_t, uint64_t> update(const Blob& new_data) const;
+    std::pair<persistent::version_t, uint64_t> update(const Blob& new_data) const;
 
     /** Actual implementation of update, only callable from within the subgroup as an ordered send. */
-    std::tuple<persistent::version_t, uint64_t> ordered_update(const Blob& new_data);
+    void ordered_update(const Blob& new_data);
 
     /**
      * P2P-callable function that blocks until the specified version has finished persisting.
+     * This only works if it is called on the same replica that was originally contacted to
+     * submit the update via update(), since other replicas won't have a QueryResults for it.
      * Returns "true" so that the RPC function sends a reply message, since there is currently
      * no way to determine when a void RPC function actually finishes executing on the callee.
      */

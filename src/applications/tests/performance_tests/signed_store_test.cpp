@@ -179,9 +179,9 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     hasher.add_bytes(data.bytes, data.size);
     //Wait for the storage query to complete and return the assigned version and timestamp (which must get hashed)
     dbg_default_debug("Waiting for storage query to complete");
-    std::tuple<persistent::version_t, uint64_t> version_and_timestamp = storage_query_results.get().get(storage_member_to_contact);
-    hasher.add_bytes(&std::get<0>(version_and_timestamp), sizeof(persistent::version_t));
-    hasher.add_bytes(&std::get<1>(version_and_timestamp), sizeof(uint64_t));
+    std::pair<persistent::version_t, uint64_t> version_and_timestamp = storage_query_results.get().get(storage_member_to_contact);
+    hasher.add_bytes(&version_and_timestamp.first, sizeof(persistent::version_t));
+    hasher.add_bytes(&version_and_timestamp.second, sizeof(uint64_t));
     hasher.finalize(update_hash.data());
     //When the hash is complete, send it to the signature subgroup
     dbg_default_debug("Hashing complete, sending hash to node {}", signature_member_to_contact);
@@ -189,11 +189,11 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     //Now wait for persistence and verification stability
     dbg_default_debug("Querying node {} to await persistence of version {}", storage_member_to_contact, std::get<0>(version_and_timestamp));
     auto persistence_query_results = storage_subgroup.p2p_send<RPC_NAME(await_persistence)>(
-            storage_member_to_contact, std::get<0>(version_and_timestamp));
+            storage_member_to_contact, version_and_timestamp.first);
     persistence_query_results.get().get(storage_member_to_contact);
     dbg_default_debug("Waiting for hash query to complete");
     std::vector<unsigned char> signature_reply = signature_query_results.get().get(signature_member_to_contact);
-    return {std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp), signature_reply};
+    return {version_and_timestamp.first, version_and_timestamp.second, signature_reply};
 }
 
 bool ClientTier::update_batch_test(const int& num_updates) const {
@@ -215,7 +215,7 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
      * window limit - we can't actually have all of those P2P queries for update() "in flight"
      * at the same time.
      */
-    std::vector<QueryResults<std::tuple<version_t, uint64_t>>> storage_query_results;
+    std::vector<QueryResults<std::pair<version_t, uint64_t>>> storage_query_results;
     std::vector<QueryResults<bool>> persistence_query_results;
     std::vector<QueryResults<std::vector<unsigned char>>> signature_query_results;
     //First, launch all the object store update queries
@@ -244,11 +244,11 @@ bool ClientTier::update_batch_test(const int& num_updates) const {
     for(int counter = 0; counter < num_updates; ++counter) {
         //Wait for the RPC call that submits the update to finish
         dbg_default_debug("Waiting for version to be returned from RPC call #{}", counter);
-        std::tuple<version_t, uint64_t> version_and_timestamp = storage_query_results[counter].get().get(storage_member_to_contact);
+        std::pair<version_t, uint64_t> version_and_timestamp = storage_query_results[counter].get().get(storage_member_to_contact);
         //Make an RPC call that waits for persistence
-        dbg_default_debug("Sending RPC call to await persistence on {}", std::get<0>(version_and_timestamp));
+        dbg_default_debug("Sending RPC call to await persistence on {}", version_and_timestamp.first);
         persistence_query_results.emplace_back(storage_subgroup.p2p_send<RPC_NAME(await_persistence)>(
-                storage_member_to_contact, std::get<0>(version_and_timestamp)));
+                storage_member_to_contact, version_and_timestamp.first));
     }
     dbg_default_debug("Awaiting persistence on all updates");
     //Wait for all the await-persistence calls to return; this waits for the slowest update to finish persisting
@@ -311,38 +311,48 @@ void SignatureStore::end_test() const {
 
 /* ----------------- ObjectStore implementation ------------------------ */
 
-ObjectStore::ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
+ObjectStore::ObjectStore(persistent::PersistentRegistry* pr,
                          std::shared_ptr<std::atomic<bool>> experiment_done)
         : object_log(std::make_unique<Blob>, "BlobLog", pr, false),
-          persistence_tracker(tracker),
+        //   persistence_tracker(tracker),
           experiment_done(experiment_done) {}
 
-std::tuple<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) const {
+std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) const {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
+    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_update)>(new_data);
-    auto& replies = query_results.get();
-    std::tuple<persistent::version_t, uint64_t> version_and_timestamp;
-    for(auto& reply_pair : replies) {
-        version_and_timestamp = reply_pair.second.get();
+    std::pair<persistent::version_t, uint64_t> version = query_results.get_persistent_version();
+    if(version.first == std::get<0>(next_version)) {
+        dbg_default_debug("Version returned by ordered_send matched version returned by get_next_version.");
+    } else {
+        dbg_default_error("Version returned by get_next_version was {}, but query_results.get_persistent_version was {}", std::get<0>(next_version), version.first);
     }
-    dbg_default_debug("Returning ({}, {}) from update", std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp));
-    return version_and_timestamp;
+    update_results.emplace(version.first, std::move(query_results));
+    // auto& replies = query_results.get();
+    // std::tuple<persistent::version_t, uint64_t> version_and_timestamp;
+    // for(auto& reply_pair : replies) {
+    //     version_and_timestamp = reply_pair.second.get();
+    // }
+    // dbg_default_debug("Returning ({}, {}) from update", std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp));
+    return version;
 }
 
-std::tuple<persistent::version_t, uint64_t> ObjectStore::ordered_update(const Blob& new_data) {
-    derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
+void ObjectStore::ordered_update(const Blob& new_data) {
+    // derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to generate
-    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
-    persistence_tracker->start_tracking_version(std::get<0>(next_version));
+    // std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
+    // persistence_tracker->start_tracking_version(std::get<0>(next_version));
     //Update the Persistent object, generating a new version
     *object_log = new_data;
-    dbg_default_debug("Returning ({}, {}) from ordered_update", std::get<0>(next_version), std::get<1>(next_version));
-    return next_version;
+    // dbg_default_debug("Returning ({}, {}) from ordered_update", std::get<0>(next_version), std::get<1>(next_version));
 }
 
 bool ObjectStore::await_persistence(const persistent::version_t& version) const {
     dbg_default_debug("Awaiting persistence on version {}", version);
-    persistence_tracker->await_version_finished(version);
+    auto update_result_iter = update_results.find(version);
+    update_result_iter->second.await_global_persistence();
+    update_results.erase(update_result_iter);
+    // persistence_tracker->await_version_finished(version);
     return true;
 }
 
@@ -413,15 +423,15 @@ int main(int argc, char** argv) {
     std::shared_ptr<std::atomic<bool>> experiment_done = std::make_shared<std::atomic<bool>>(false);
 
     //Set up the persistence-complete tracker for the ObjectStore subgroup
-    std::shared_ptr<CompletionTracker> objectstore_persisted_tracker = std::make_shared<CompletionTracker>();
-    auto global_persistence_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        if(subgroup_id == objectstore_persisted_tracker->get_subgroup_id()) {
-            objectstore_persisted_tracker->notify_version_finished(version);
-        }
-    };
+    // std::shared_ptr<CompletionTracker> objectstore_persisted_tracker = std::make_shared<CompletionTracker>();
+    // auto global_persistence_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
+        // if(subgroup_id == objectstore_persisted_tracker->get_subgroup_id()) {
+            // objectstore_persisted_tracker->notify_version_finished(version);
+        // }
+    // };
     auto object_subgroup_factory = [&](persistent::PersistentRegistry* registry, derecho::subgroup_id_t subgroup_id) {
-        objectstore_persisted_tracker->set_subgroup_id(subgroup_id);
-        return std::make_unique<ObjectStore>(registry, objectstore_persisted_tracker, experiment_done);
+        // objectstore_persisted_tracker->set_subgroup_id(subgroup_id);
+        return std::make_unique<ObjectStore>(registry, experiment_done);
     };
     //Set up the verification-finished tracker for the SignatureStore subgroup
     std::shared_ptr<CompletionTracker> verified_tracker = std::make_shared<CompletionTracker>();
@@ -449,7 +459,7 @@ int main(int argc, char** argv) {
     };
     //Set up and join the group
     derecho::Group<ClientTier, ObjectStore, SignatureStore> group(
-            {nullptr, nullptr, global_persistence_callback, global_verification_callback},
+            {nullptr, nullptr, nullptr, global_verification_callback},
             subgroup_layout,
             {}, {},
             client_node_factory,

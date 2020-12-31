@@ -542,7 +542,8 @@ private:
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      * @param index_field_size The number of fields "index" in the SST (to send in different groups)
      */
-    void construct_multicast_group(const CallbackSet& callbacks,
+    void construct_multicast_group(const UserMessageCallbacks& callbacks,
+                                   const MulticastGroupCallbacks& internal_callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
                                    const uint32_t slot_size,
@@ -570,7 +571,7 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size, slot_size, index_field_size for the SST based on 
+     * @return num_received_size, slot_size, index_field_size for the SST based on
      * the current View's subgroup membership
      */
     std::tuple<uint32_t, uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
@@ -743,10 +744,14 @@ public:
     /**
      * Sets up RDMA sessions for the multicast groups within this group. This
      * should only be called once the initial view is committed by the leader.
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
+     * @param callbacks The set of user-defined callback functions for message
+     * delivery events in this group.
+     * @param internal_callbacks The set of additional callbacks for MulticastGroup
+     * needed by internal components. Copied in so that ViewManager can add its own
+     * callback to the struct.
      */
-    void initialize_multicast_groups(const CallbackSet& callbacks);
+    void initialize_multicast_groups(const UserMessageCallbacks& callbacks,
+                                     MulticastGroupCallbacks internal_callbacks);
 
     /**
      * Completes first-time setup of the ViewManager, including synchronizing

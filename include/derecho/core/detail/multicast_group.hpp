@@ -246,6 +246,27 @@ struct SubgroupSettings {
     DerechoParams profile;
 };
 
+/**
+ * Additional message-delivery-related callbacks needed by MulticastGroup that
+ * are not in the user-facing set of callbacks defined in UserMessageCallbacks.
+ */
+struct MulticastGroupCallbacks {
+    /** A function to be called upon receipt of a multicast RPC message */
+    rpc_handler_t rpc_callback;
+    /**
+     * The callback for posting the upcoming version to be delivered in a
+     * subgroup to Replicated<T>. Called just before delivering a message so
+     * that the user code knows the current version being handled.
+     */
+    subgroup_post_next_version_func_t post_next_version_callback;
+    /**
+     * A callback to notify internal components that a new version has reached
+     * global persistence (separate from the user-defined global persistence
+     * callback in UserMessageCallbacks).
+     */
+    persistence_callback_t global_persistence_callback;
+};
+
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,
  * using RDMC to deliver messages and SST to track their arrival and stability.
  * This class should only be used as part of a Group, since it does not know how
@@ -263,7 +284,9 @@ private:
     /** index of the local node in the members vector, which should also be its row index in the SST */
     const int member_index;
     /** Message-delivery event callbacks, supplied by the client, for "raw" sends */
-    const CallbackSet callbacks;
+    const UserMessageCallbacks callbacks;
+    /** Other message-delivery event callbacks for internal components */
+    const MulticastGroupCallbacks internal_callbacks;
     uint32_t total_num_subgroups;
     /** Maps subgroup IDs (for subgroups this node is a member of) to an immutable
      * set of configuration options for that subgroup. */
@@ -273,8 +296,6 @@ private:
     /** Maps subgroup IDs for which this node is a sender to the RDMC group it should use to send.
      * Constructed incrementally in create_rdmc_sst_groups(), so it can't be const.  */
     std::map<subgroup_id_t, uint32_t> subgroup_to_rdmc_group;
-    /** This callback is internal, not exposed to clients, so it's not in CallbackSet */
-    rpc_handler_t rpc_callback;
     /** Offset to add to member ranks to form RDMC group numbers. */
     uint16_t rdmc_group_num_offset;
     /** false if RDMC groups haven't been created successfully */
@@ -362,9 +383,6 @@ private:
 
     std::vector<bool> last_transfer_medium;
 
-    /** post the next version to a subgroup just before deliver a message so
-     * that the user code know the current version being handled. */
-    subgroup_post_next_version_func_t post_next_version_callback;
 
     /** A reference to the PersistenceManager that lives in Group, used to
      * alert it when a new version needs to be persisted. */
@@ -480,18 +498,19 @@ private:
 public:
     /**
      * Standard constructor for setting up a MulticastGroup for the first time.
-     * @param _members A list of node IDs of members in this group
+     * @param members A list of node IDs of members in this group
      * @param my_node_id The rank (ID) of this node in the group
-     * @param _sst The SST this group will use; created by the GMS (membership
+     * @param sst The SST this group will use; created by the GMS (membership
      * service) for this group.
-     * @param _callbacks A set of functions to call when messages have reached
-     * various levels of stability
+     * @param callbacks A set of user-supplied functions to call when messages
+     * have reached various levels of stability
+     * @param internal_callbacks Some internal functions to call in response to
+     * message events (documented in MulticastGroupCallbacks)
      * @param total_num_subgroups The total number of subgroups in this Derecho
      * Group
      * @param subgroup_settings_by_id A list of SubgroupSettings, one for each
      * subgroup this node belongs to, indexed by subgroup ID
-     * @param post_next_version_callback The callback for posting the upcoming
-     *        version to be delivered in a subgroup.
+     * @param sender_timeout
      * @param persistence_manager_ref A reference to the PersistenceManager
      * that will be used to persist received messages
      * @param already_failed (Optional) A Boolean vector indicating which
@@ -500,11 +519,11 @@ public:
     MulticastGroup(
             std::vector<node_id_t> members, node_id_t my_node_id,
             std::shared_ptr<DerechoSST> sst,
-            CallbackSet callbacks,
+            UserMessageCallbacks callbacks,
+            MulticastGroupCallbacks internal_callbacks,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
             unsigned int sender_timeout,
-            const subgroup_post_next_version_func_t& post_next_version_callback,
             PersistenceManager& persistence_manager_ref,
             std::vector<char> already_failed = {});
     /** Constructor to initialize a new MulticastGroup from an old one,
@@ -515,16 +534,9 @@ public:
             MulticastGroup&& old_group,
             uint32_t total_num_subgroups,
             const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-            const subgroup_post_next_version_func_t& post_next_version_callback,
             std::vector<char> already_failed = {});
 
     ~MulticastGroup();
-
-    /**
-     * Registers a function to be called upon receipt of a multicast RPC message
-     * @param handler A function that will handle RPC messages.
-     */
-    void register_rpc_callback(rpc_handler_t handler) { rpc_callback = std::move(handler); }
 
     void deliver_messages_upto(const std::vector<int32_t>& max_indices_for_senders, subgroup_id_t subgroup_num, uint32_t num_shard_senders);
     /** Send now internally calls get_sendbuffer_ptr.

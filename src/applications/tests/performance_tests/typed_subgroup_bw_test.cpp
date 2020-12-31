@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
                                                             ? PartialSendMode::HALF_SENDERS
                                                             : PartialSendMode::ONE_SENDER);
 
-    
+
     // Compute the total number of messages that should be delivered
     uint64_t total_num_messages = 0;
     switch(senders_mode) {
@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
             total_num_messages = count;
             break;
     }
-    
+
     // variable 'done' tracks the end of the test
     volatile bool done = false;
     // callback into the application code at each message delivery
@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
 
     auto ba_factory = [](persistent::PersistentRegistry*, derecho::subgroup_id_t) { return std::make_unique<TestObject>(); };
 
-    derecho::Group<TestObject> group(derecho::CallbackSet{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
+    derecho::Group<TestObject> group(derecho::UserMessageCallbacks{stability_callback}, subgroup_info, {}, std::vector<derecho::view_upcall_t>{}, ba_factory);
     std::cout << "Finished constructing/joining Group" << std::endl;
 
     derecho::Replicated<TestObject>& handle = group.get_subgroup<TestObject>();
@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
 #pragma GCC diagnostic ignored "-Wunused-variable"
         decltype(results)::ReplyMap& replies = results.get();
 #pragma GCC diagnostic pop
-    } 
+    }
     */
 
     while(!done){

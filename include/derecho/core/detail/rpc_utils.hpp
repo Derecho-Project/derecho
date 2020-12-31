@@ -100,7 +100,7 @@ using FunctionTag = unsigned long long;
  * @return A FunctionTag that is even if the RPC function is ordered, and odd
  * if the RPC function is P2P-callable
  */
-template<bool IsP2P>
+template <bool IsP2P>
 constexpr FunctionTag to_internal_tag(FunctionTag user_tag) {
     if constexpr(IsP2P) {
         return 2 * user_tag + 1;
@@ -196,7 +196,7 @@ using receive_fun_t = std::function<recv_ret(
  * should be the return type of the query.
  */
 template <typename T>
-using reply_map = std::map<node_id_t, std::future<T>>;
+using futures_map = std::map<node_id_t, std::future<T>>;
 
 /**
  * Data structure that (indirectly) holds a set of futures for a single RPC
@@ -212,16 +212,22 @@ using reply_map = std::map<node_id_t, std::future<T>>;
 template <typename Ret>
 class QueryResults {
 public:
-    using map_fut = std::future<std::unique_ptr<reply_map<Ret>>>;
-    using map = reply_map<Ret>;
+    /** A future for a futures_map held by unique_ptr (so it can be more easily moved) */
+    using map_fut = std::future<std::unique_ptr<futures_map<Ret>>>;
     using type = Ret;
 
+    /**
+     * A wrapper around a std::map from node IDs to std::futures. Implements
+     * the iterator interface by passing calls through to the underlying std::map,
+     * so ReplyMap can be iterated over in a for-each loop as if it is actually
+     * a map rather than a wrapper around a map.
+     */
     class ReplyMap {
     private:
         QueryResults& parent;
 
     public:
-        map rmap;
+        futures_map<Ret> rmap;
 
         ReplyMap(QueryResults& qr) : parent(qr){};
         ReplyMap(const ReplyMap&) = delete;
@@ -244,6 +250,10 @@ public:
 
         Ret get(const node_id_t& nid) {
             if(rmap.size() == 0) {
+                //This should never happen. Since the ReplyMap member is private, the only way to
+                //invoke get(nid) on a ReplyMap is to retrieve a reference to it with the parent
+                //QueryResults's wait() or get(), which must have executed the assignment
+                //replies.rmap = std::move(*pending_rmap.get()).
                 assert(parent.pending_rmap.valid());
                 rmap = std::move(*parent.pending_rmap.get());
             }
@@ -258,12 +268,34 @@ public:
 
 private:
     ReplyMap replies{*this};
+    /** This will be fulfilled with this RPC function call's version-timestamp pair, once it has been assigned */
+    std::future<std::pair<persistent::version_t, uint64_t>> persistent_version;
+    /** This signals that local persistence has completed for the version assigned to this RPC function call */
+    std::future<void> local_persistence_done;
+    /** This signals that local persistence has completed for the version assigned to this RPC function call */
+    std::future<void> global_persistence_done;
 
 public:
-    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
+    /**
+     * Constructs a QueryResults from a future for a reply-map (which is itself
+     * a map of futures), and the futures for the persistent events it will also
+     * track. The promise ends of these futures should reside in a corresponding
+     * PendingResults that constructed this QueryResults.
+     */
+    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+                 std::future<void> local_persistence_done, std::future<void> global_persistence_done)
+            : pending_rmap(std::move(reply_map_future)),
+              persistent_version(std::move(persistent_version)),
+              local_persistence_done(std::move(local_persistence_done)),
+              global_persistence_done(std::move(global_persistence_done)) {}
+    /** Move constructor for QueryResults. */
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
-              replies{std::move(o.replies)} {}
+              replies{std::move(o.replies)},
+              persistent_version{std::move(o.persistent_version)},
+              local_persistence_done{std::move(o.local_persistence_done)},
+              global_persistence_done{std::move(o.global_persistence_done)} {}
+    /** QueryResults, like std::future, is not copyable. */
     QueryResults(const QueryResults&) = delete;
 
     /**
@@ -295,6 +327,34 @@ public:
             }
         }
     }
+
+    /**
+     * Retrieves the persistent version number and timestamp that has been assigned
+     * to this RPC function call. The persistent version number is only available
+     * once the ReplyMap has been fulfilled (they are set at the same time), so this
+     * will block unless get() has been previously called on the QueryResults.
+     */
+    std::pair<persistent::version_t, uint64_t> get_persistent_version() {
+        return persistent_version.get();
+    }
+
+    /**
+     * Blocks until the update caused by this RPC function call has finished
+     * persisting locally (i.e. the version number assigned to it has reached
+     * the "locally persisted" state).
+     */
+    void await_local_persistence() {
+        local_persistence_done.get();
+    }
+
+    /**
+     * Blocks until the update caused by this RPC function call has finished
+     * persisting on all replicas (i.e. the version number assigned to it has
+     * reached the "globally persisted" state).
+     */
+    void await_global_persistence() {
+        global_persistence_done.get();
+    }
 };
 
 /**
@@ -308,7 +368,6 @@ template <>
 class QueryResults<void> {
 public:
     using map_fut = std::future<std::unique_ptr<std::set<node_id_t>>>;
-    using map = std::set<node_id_t>;
     using type = void;
 
     class ReplyMap {
@@ -316,7 +375,7 @@ public:
         QueryResults& parent;
 
     public:
-        map rmap;
+        std::set<node_id_t> rmap;
 
         ReplyMap(QueryResults& qr) : parent(qr){};
         ReplyMap(const ReplyMap&) = delete;
@@ -342,12 +401,26 @@ public:
 
 private:
     ReplyMap replies{*this};
+    /** This will be fulfilled with this RPC function call's version-timestamp pair, once it has been assigned */
+    std::future<std::pair<persistent::version_t, uint64_t>> persistent_version;
+    /** This signals that local persistence has completed for the version assigned to this RPC function call */
+    std::future<void> local_persistence_done;
+    /** This signals that local persistence has completed for the version assigned to this RPC function call */
+    std::future<void> global_persistence_done;
 
 public:
-    QueryResults(map_fut pm) : pending_rmap(std::move(pm)) {}
+    QueryResults(map_fut reply_map_future, std::future<std::pair<persistent::version_t, uint64_t>> persistent_version,
+                 std::future<void> local_persistence_done, std::future<void> global_persistence_done)
+            : pending_rmap(std::move(reply_map_future)),
+              persistent_version(std::move(persistent_version)),
+              local_persistence_done(std::move(local_persistence_done)),
+              global_persistence_done(std::move(global_persistence_done)) {}
     QueryResults(QueryResults&& o)
             : pending_rmap{std::move(o.pending_rmap)},
-              replies{std::move(o.replies)} {}
+              replies{std::move(o.replies)},
+              persistent_version{std::move(o.persistent_version)},
+              local_persistence_done{std::move(o.local_persistence_done)},
+              global_persistence_done{std::move(o.global_persistence_done)} {}
     QueryResults(const QueryResults&) = delete;
 
     /**
@@ -379,6 +452,34 @@ public:
             }
         }
     }
+
+    /**
+     * Retrieves the persistent version number and timestamp that has been assigned
+     * to this RPC function call. The persistent version number is only available
+     * once the ReplyMap has been fulfilled (they are set at the same time), so this
+     * will block unless get() has been previously called on the QueryResults.
+     */
+    std::pair<persistent::version_t, uint64_t> get_persistent_version() {
+        return persistent_version.get();
+    }
+
+    /**
+     * Blocks until the update caused by this RPC function call has finished
+     * persisting locally (i.e. the version number assigned to it has reached
+     * the "locally persisted" state).
+     */
+    void await_local_persistence() {
+        local_persistence_done.get();
+    }
+
+    /**
+     * Blocks until the update caused by this RPC function call has finished
+     * persisting on all replicas (i.e. the version number assigned to it has
+     * reached the "globally persisted" state).
+     */
+    void await_global_persistence() {
+        global_persistence_done.get();
+    }
 };
 
 /**
@@ -389,6 +490,9 @@ public:
 class PendingBase {
 public:
     virtual void fulfill_map(const node_list_t&) = 0;
+    virtual void set_persistent_version(persistent::version_t, uint64_t) = 0;
+    virtual void set_local_persistence() = 0;
+    virtual void set_global_persistence() = 0;
     virtual void set_exception_for_removed_node(const node_id_t&) = 0;
     virtual void set_exception_for_caller_removed() = 0;
     virtual bool all_responded() const = 0;
@@ -410,7 +514,7 @@ private:
     /** A promise for a map containing one future for each reply to the RPC function
      * call. The future end of this promise lives in QueryResults, and is fulfilled
      * when the RPC function call is actually sent and the set of repliers is known. */
-    std::promise<std::unique_ptr<reply_map<Ret>>> promise_for_pending_map;
+    std::promise<std::unique_ptr<futures_map<Ret>>> promise_for_pending_map;
 
     std::promise<std::map<node_id_t, std::promise<Ret>>> promise_for_reply_promises;
     /** A future for a map containing one promise for each reply to the RPC function
@@ -423,6 +527,10 @@ private:
     bool map_fulfilled = false;
     std::set<node_id_t> dest_nodes, responded_nodes;
 
+    std::promise<std::pair<persistent::version_t, uint64_t>> version_promise;
+    std::promise<void> local_persistence_promise;
+    std::promise<void> global_persistence_promise;
+
 public:
     PendingResults()
             : reply_promises_are_ready(promise_for_reply_promises.get_future()) {}
@@ -434,7 +542,10 @@ public:
      * @return A new QueryResults holding a set of futures for this RPC function call
      */
     QueryResults<Ret> get_future() {
-        return QueryResults<Ret>{promise_for_pending_map.get_future()};
+        return QueryResults<Ret>{promise_for_pending_map.get_future(),
+                                 version_promise.get_future(),
+                                 local_persistence_promise.get_future(),
+                                 global_persistence_promise.get_future()};
     }
 
     /**
@@ -444,15 +555,15 @@ public:
      */
     void fulfill_map(const node_list_t& who) {
         dbg_default_trace("Got a call to fulfill_map for PendingResults<{}>", typeid(Ret).name());
-        std::unique_ptr<reply_map<Ret>> futures_map = std::make_unique<reply_map<Ret>>();
-        std::map<node_id_t, std::promise<Ret>> promises_map;
+        std::unique_ptr<futures_map<Ret>> futures = std::make_unique<futures_map<Ret>>();
+        std::map<node_id_t, std::promise<Ret>> promises;
         for(const auto& e : who) {
-            futures_map->emplace(e, promises_map[e].get_future());
+            futures->emplace(e, promises[e].get_future());
         }
         dest_nodes.insert(who.begin(), who.end());
         dbg_default_trace("Setting a value for reply_promises_are_ready");
-        promise_for_reply_promises.set_value(std::move(promises_map));
-        promise_for_pending_map.set_value(std::move(futures_map));
+        promise_for_reply_promises.set_value(std::move(promises));
+        promise_for_pending_map.set_value(std::move(futures));
         map_fulfilled = true;
     }
 
@@ -529,10 +640,37 @@ public:
     }
 
     /**
+     * Fulfills the promise for the persistent version number.
+     * @param assigned_version The persistent version number that was assigned
+     * to the update generated by this RPC function call
+     */
+    void set_persistent_version(persistent::version_t assigned_version, uint64_t assigned_timestamp) {
+        version_promise.set_value({assigned_version, assigned_timestamp});
+    }
+
+    /**
+     * Fulfills the local persistence promise, unblocking the future end. This
+     * should be called to signal client code that the update has finished
+     * persisting locally.
+     */
+    void set_local_persistence() {
+        local_persistence_promise.set_value();
+    }
+
+    /**
+     * Fulfills the global persistence promise, unblocking the future end. This
+     * should be called to signal client code that the update has finished
+     * persisting on all replicas.
+     */
+    void set_global_persistence() {
+        global_persistence_promise.set_value();
+    }
+
+    /**
      * reset this object.
      */
     void reset() {
-        promise_for_pending_map = std::promise<std::unique_ptr<reply_map<Ret>>>();
+        promise_for_pending_map = std::promise<std::unique_ptr<futures_map<Ret>>>();
         promise_for_reply_promises = std::promise<std::map<node_id_t, std::promise<Ret>>>();
         reply_promises_are_ready = promise_for_reply_promises.get_future();
         // reply_promises_are_ready_mutex
@@ -540,24 +678,34 @@ public:
         map_fulfilled = false;
         dest_nodes.clear();
         responded_nodes.clear();
+        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
+        local_persistence_promise = std::promise<void>();
+        global_persistence_promise = std::promise<void>();
     }
 };
 
 /**
  * Specialization of PendingResults for void functions, which do not generate
- * replies. Its only functionality is to fulfill the "reply map" in its
- * corresponding QueryResults<void>, which is just a set of nodes to which the
- * RPC message was delivered.
+ * replies. It still fulfills the "reply map" in its corresponding QueryResults<void>,
+ * which is just a set of nodes to which the RPC message was delivered. It also
+ * fulfills the local and global persistence promises, since void functions can still
+ * cause new persistent versions to be generated.
  */
 template <>
 class PendingResults<void> : public PendingBase {
 private:
     std::promise<std::unique_ptr<std::set<node_id_t>>> promise_for_pending_map;
     bool map_fulfilled = false;
+    std::promise<std::pair<persistent::version_t, uint64_t>> version_promise;
+    std::promise<void> local_persistence_promise;
+    std::promise<void> global_persistence_promise;
 
 public:
     QueryResults<void> get_future() {
-        return QueryResults<void>(promise_for_pending_map.get_future());
+        return QueryResults<void>(promise_for_pending_map.get_future(),
+                                  version_promise.get_future(),
+                                  local_persistence_promise.get_future(),
+                                  global_persistence_promise.get_future());
     }
 
     void fulfill_map(const node_list_t& sent_nodes) {
@@ -582,9 +730,39 @@ public:
         return map_fulfilled;
     }
 
+    /**
+     * Fulfills the promise for the persistent version number.
+     * @param assigned_version The persistent version number that was assigned
+     * to the update generated by this RPC function call
+     */
+    void set_persistent_version(persistent::version_t assigned_version, uint64_t assigned_timestamp) {
+        version_promise.set_value({assigned_version, assigned_timestamp});
+    }
+
+    /**
+     * Fulfills the local persistence promise, unblocking the future end. This
+     * should be called to signal client code that the update has finished
+     * persisting locally.
+     */
+    void set_local_persistence() {
+        local_persistence_promise.set_value();
+    }
+
+    /**
+     * Fulfills the global persistence promise, unblocking the future end. This
+     * should be called to signal client code that the update has finished
+     * persisting on all replicas.
+     */
+    void set_global_persistence() {
+        global_persistence_promise.set_value();
+    }
+
     void reset() {
         promise_for_pending_map = std::promise<std::unique_ptr<std::set<node_id_t>>>();
         map_fulfilled = false;
+        version_promise = std::promise<std::pair<persistent::version_t, uint64_t>>();
+        local_persistence_promise = std::promise<void>();
+        global_persistence_promise = std::promise<void>();
     }
 };
 

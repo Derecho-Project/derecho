@@ -54,7 +54,7 @@ public:
      */
     int get_hash_size();
     /**
-     * Initializese the Hasher to start hashing a new sequence of bytes. Must
+     * Initializes the Hasher to start hashing a new sequence of bytes. Must
      * be called before add_bytes or finalize.
      */
     void init();
