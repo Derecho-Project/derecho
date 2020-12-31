@@ -21,7 +21,7 @@ class PFoo : public mutils::ByteRepresentable, public derecho::PersistsFields {
 public:
     virtual ~PFoo() noexcept(true) {
     }
-    int read_state() {
+    int read_state() const {
         return *pint;
     }
     bool change_state(int new_int) {
@@ -32,13 +32,7 @@ public:
         return true;
     }
 
-    enum Functions { READ_STATE,
-                     CHANGE_STATE };
-
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&PFoo::read_state),
-                               derecho::rpc::tag<CHANGE_STATE>(&PFoo::change_state));
-    }
+    REGISTER_RPC_FUNCTIONS(PFoo, ORDERED_TARGETS(read_state, change_state));
 
     // constructor for PersistentRegistry
     PFoo(PersistentRegistry* pr) : pint([](){return std::make_unique<int>(0);}, nullptr, pr) {}
@@ -89,13 +83,13 @@ int main(int argc, char** argv) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
 
         cout << "Reading PFoo's state just to allow node 1's message to be delivered" << endl;
-        pfoo_rpc_handle.ordered_send<PFoo::READ_STATE>();
+        pfoo_rpc_handle.ordered_send<RPC_NAME(read_state)>();
     }
     if(node_rank == 1) {
         Replicated<PFoo>& pfoo_rpc_handle = group.get_subgroup<PFoo>();
         int new_value = 3;
         cout << "Changing PFoo's state to " << new_value << endl;
-        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_send<PFoo::CHANGE_STATE>(new_value);
+        derecho::rpc::QueryResults<bool> resultx = pfoo_rpc_handle.ordered_send<RPC_NAME(change_state)>(new_value);
         decltype(resultx)::ReplyMap& repliex = resultx.get();
         cout << "Got a reply map!" << endl;
         for(auto& reply_pair : repliex) {

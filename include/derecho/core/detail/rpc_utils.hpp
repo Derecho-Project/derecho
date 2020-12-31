@@ -33,25 +33,81 @@ namespace derecho {
 namespace rpc {
 
 /**
- * This "compile-time String" puts a short sequence of characters into a type's
- * template parameter, allowing it to be accessed at compile-time in a constexpr
- * hash function. This allows us to generate FunctionTags at compile time from
- * the literal names of functions.
+ * Computes a simple hash of a C-string (raw array of char) in a constexpr
+ * function that can be run at compile-time. This allows us to generate
+ * FunctionTags at compile time, inside template parameters, using the literal
+ * names of functions (which can be converted to C-string constants using macro
+ * stringization).
  */
-template <char... str>
-struct String {
-    static constexpr uint64_t hash() {
-        char string[] = {str...};
-        uint64_t hash_code = 0;
-        for(const int c : string) {
-            if(c == 0) break;  //NUL character terminates the string
-            hash_code = hash_code * 31 + c;
-        }
-        return hash_code;
+template <typename Carr>
+constexpr std::size_t hash_cstr(Carr&& c_str) {
+    std::size_t hash_code = 0;
+    for(char c : c_str) {
+        if(c == 0) break;
+        hash_code = hash_code * 31 + c;
     }
-};
+    return hash_code;
+}
+
+/**
+ * A helper function that examines a C-string to determine whether it matches
+ * one of the two method-registering macros in register_rpc_functions, P2P_TARGETS
+ * and ORDERED_TARGETS. This is used by the REGISTER_RPC_FUNCTIONS macro to
+ * ensure that it is only called with the correct arguments.
+ */
+template <typename Carr>
+constexpr bool well_formed_macro(Carr&& c_str) {
+    constexpr char option1[] = "P2P_TARGETS";
+    constexpr std::size_t length1 = 11;
+    constexpr char option2[] = "ORDERED_TARGETS";
+    constexpr std::size_t length2 = 15;
+    bool option1_active = false;
+    bool option2_active = false;
+    std::size_t index = 0;
+    for(char c : c_str) {
+        if(c == 0 || (index >= length1 && option1_active) || (index >= length2 && option2_active))
+            return true;
+        else if(!option1_active && !option2_active && index == 0) {
+            //first iter
+            if(c == option1[0])
+                option1_active = true;
+            else if(c == option2[0])
+                option2_active = true;
+            else
+                return false;
+            ++index;
+        } else if(option1_active) {
+            if(c != option1[index]) return false;
+            ++index;
+        } else if(option2_active) {
+            if(c != option2[index]) return false;
+            ++index;
+        } else
+            return false;
+    }
+    return true;
+}
 
 using FunctionTag = unsigned long long;
+
+/**
+ * Converts a user-supplied FunctionTag (from the result of hash_cstr) to an
+ * "internal" FunctionTag, which uses its least-significant bit to indicate
+ * whether it is an ordered function or a P2P function.
+ * @tparam IsP2P true if this tag is for a P2P-callable function, false if it
+ * is for an ordered function
+ * @param user_tag The user-supplied FunctionTag based on the function's name
+ * @return A FunctionTag that is even if the RPC function is ordered, and odd
+ * if the RPC function is P2P-callable
+ */
+template<bool IsP2P>
+constexpr FunctionTag to_internal_tag(FunctionTag user_tag) {
+    if constexpr(IsP2P) {
+        return 2 * user_tag + 1;
+    } else {
+        return 2 * user_tag;
+    }
+}
 
 /**
  * An RPC function call can be uniquely identified by the tuple
@@ -132,7 +188,6 @@ struct recv_ret {
  * some RPC message is received.
  */
 using receive_fun_t = std::function<recv_ret(
-        //        mutils::DeserializationManager* dsm,
         mutils::RemoteDeserialization_v* rdv, const node_id_t&, const char* recv_buf,
         const std::function<char*(int)>& out_alloc)>;
 

@@ -13,11 +13,11 @@ class Server : public mutils::ByteRepresentable {
     string bytes;
 
 public:
-    string exchange(const string& client_bytes) {
+    string exchange(const string& client_bytes) const {
         return bytes;
     }
 
-    REGISTER_RPC_FUNCTIONS(Server, exchange);
+    REGISTER_RPC_FUNCTIONS(Server, P2P_TARGETS(exchange));
     DEFAULT_SERIALIZATION_SUPPORT(Server, bytes);
 
     Server(string bytes) : bytes(bytes) {}

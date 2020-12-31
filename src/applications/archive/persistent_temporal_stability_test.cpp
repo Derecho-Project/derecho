@@ -33,14 +33,7 @@ public:
         *pers_bytes = bytes;
     }
 
-    /** Named integers that will be used to tag the RPC methods */
-    //  enum Functions { CHANGE_PERS_BYTES, CHANGE_VOLA_BYTES };
-    enum Functions { CHANGE_PERS_BYTES };
-
-    static auto register_functions() {
-        return std::make_tuple(
-                derecho::rpc::tag<CHANGE_PERS_BYTES>(&ByteArrayObject::change_pers_bytes));
-    }
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, ORDERED_TARGETS(change_pers_bytes));
 
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, pers_bytes);
     // constructor
@@ -221,7 +214,7 @@ int main(int argc, char *argv[]) {
                     ((PayLoad *)bs.bytes)->tv_sec = (uint64_t)cur.tv_sec;
                     ((PayLoad *)bs.bytes)->tv_nsec = (uint64_t)cur.tv_nsec;
                     local_message_time_us[i] = ((cur.tv_sec) * 1e6 + cur.tv_nsec / 1e3);
-                    handle.ordered_send<ByteArrayObject::CHANGE_PERS_BYTES>(bs);
+                    handle.ordered_send<RPC_NAME(change_pers_bytes)>(bs);
                 }
             }
 

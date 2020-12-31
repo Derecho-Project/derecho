@@ -55,7 +55,7 @@ public:
      * was no version matching the requested version number (in which case the
      * output parameters will be unmodified)
      */
-    virtual bool getSignature(version_t version, unsigned char* signature, version_t& prev_signed_ver) = 0;
+    virtual bool getSignature(version_t version, unsigned char* signature, version_t& prev_signed_ver) const = 0;
     /**
      * Updates the provided Verifier object with the state of the Persistent
      * object at a specific version.

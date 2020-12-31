@@ -35,7 +35,7 @@ public:
     DEFAULT_SERIALIZATION_SUPPORT(CookedMessages, msgs);
 
     // what operations you want as part of the subgroup
-    REGISTER_RPC_FUNCTIONS(CookedMessages, send, get_msgs);
+    REGISTER_RPC_FUNCTIONS(CookedMessages, ORDERED_TARGETS(send, get_msgs));
 };
 
 bool verify_local_order(vector<pair<uint, uint>> msgs) {

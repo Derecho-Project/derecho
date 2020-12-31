@@ -345,7 +345,7 @@ public:
 private:
     int m_iCounter;
     const char* m_sObjectTypeName;
-    pthread_spinlock_t m_oLck;
+    mutable pthread_spinlock_t m_oLck;
 };
 
 // Persistent represents a variable backed up by persistent storage. The
@@ -416,7 +416,7 @@ public:
      */
     Persistent(Persistent&& other);
 
-    /** 
+    /**
      * Persistent(const char*,std::unqieu_ptr<ObjectType>&,const char*,
      *            PersistentRegistry*,mutils::DeserializationManager)
      *
@@ -462,6 +462,13 @@ public:
     ObjectType& operator*();
 
     /**
+     * const version of * operator (gets the in-memory version for reads only)
+     *
+     * @return a const reference to the current ObjectType object
+     */
+    const ObjectType& operator*() const;
+
+    /**
      * -> ()
      *
      * overload the '->' operator to access the wrapped object
@@ -486,7 +493,7 @@ public:
      *
      * @return a const reference to the object name.
      */
-    const std::string& getObjectName();
+    const std::string& getObjectName() const;
 
     /**
      * getByIndex(int64_t,const Func&,mutils::DeserializationManager*)
@@ -510,7 +517,7 @@ public:
     auto getByIndex(
             int64_t idx,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getByIndex(int64_t,mutils::DeserializationManager)
@@ -522,13 +529,13 @@ public:
      * @param idx   index
      * @param dm    the deserialization manager
      *
-     * @return Return a copy of the object held by a unique pointer. 
+     * @return Return a copy of the object held by a unique pointer.
      *
      * @throws PERSIST_EXP_INV_ENTRY_IDX(int64_t), if the idx is not found.
      */
     std::unique_ptr<ObjectType> getByIndex(
             int64_t idx,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const version_t,const Func&,mutils::DeserializationManager*)
@@ -553,7 +560,7 @@ public:
     auto get(
             version_t ver,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const version_t,mutils::DeserializationManager*)
@@ -573,7 +580,7 @@ public:
      */
     std::unique_ptr<ObjectType> get(
             const version_t ver,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDeltaByIndex(int64_t,const Func&,mutils::DeserializationManager*)
@@ -583,7 +590,7 @@ public:
      * it returns.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      * @tparam Func         User-specified function type, which is usually deduced.
      *
@@ -599,7 +606,7 @@ public:
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDeltaByIndex(int64_t idx,
                     const Func& fun,
-                    mutils::DeserializationManager* dm = nullptr);
+                    mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDeltaByIndex(int64_t,mutils::DeserializationManager*)
@@ -620,7 +627,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>> getDeltaByIndex(
             int64_t idx,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDelta(const version_t,const Func&,mutils::DeserializationManager*)
@@ -630,7 +637,7 @@ public:
      * it returns.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      * @tparam Func         User-specified function type, which is usually deduced.
      *
@@ -646,7 +653,7 @@ public:
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::result_of_t<Func(const DeltaType&)>>
     getDelta(const version_t ver,
              const Func& fun,
-             mutils::DeserializationManager* dm = nullptr);
+             mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * getDelta(const version_t,mutils::DeserializationManager*)
@@ -654,7 +661,7 @@ public:
      * Get a delta of ObjectType at a given version. A copy of the delta will be returned.
      *
      * This function is enabled only if ObjectType implements IDeltaSupport<> interface.
-     * 
+     *
      * @tparam DeltaType    User-specified DeltaType. DeltaType must be a pod type or implement mutils::ByteRepresentable.
      *
      * @param ver   version
@@ -667,7 +674,7 @@ public:
     template <typename DeltaType>
     std::enable_if_t<std::is_base_of<IDeltaSupport<ObjectType>, ObjectType>::value, std::unique_ptr<DeltaType>>
     getDelta(const version_t ver,
-             mutils::DeserializationManager* dm = nullptr);
+             mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * Trim versions prior to the specified version.
@@ -678,7 +685,7 @@ public:
 
     /**
      * Trim versions prior to the specified timestamp.
-     * 
+     *
      * @param key all log entries inclusively before this HLC timestamp will be trimmed
      */
     void trim(const HLC& key);
@@ -714,7 +721,7 @@ public:
     auto get(
             const HLC& hlc,
             const Func& fun,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * get(const HLC&,mutils::DeserializationManager*)
@@ -732,7 +739,7 @@ public:
      */
     std::unique_ptr<ObjectType> get(
             const HLC& hlc,
-            mutils::DeserializationManager* dm = nullptr);
+            mutils::DeserializationManager* dm = nullptr) const;
 
     /**
      * [](const version_t)
@@ -743,7 +750,7 @@ public:
      *
      * @return a unique_pointer to the copied ObjectType object.
      */
-    std::unique_ptr<ObjectType> operator[](const version_t ver) {
+    std::unique_ptr<ObjectType> operator[](const version_t ver) const {
         return this->get(ver);
     }
 
@@ -756,7 +763,7 @@ public:
      *
      * @return a unique_pointer to the copied ObjectType object.
      */
-    std::unique_ptr<ObjectType> operator[](const HLC& hlc) {
+    std::unique_ptr<ObjectType> operator[](const HLC& hlc) const {
         return this->get(hlc);
     }
 
@@ -764,7 +771,7 @@ public:
      * getNumOfVersions()
      *
      * Get the number of versions excluding trimmed/truncated ones.
-     * 
+     *
      * @return the number of versions.
      */
     virtual int64_t getNumOfVersions() const;
@@ -819,7 +826,7 @@ public:
      *
      * Get the latest index inclusively before time.
      */
-    virtual int64_t getIndexAtTime(const HLC& hlc);
+    virtual int64_t getIndexAtTime(const HLC& hlc) const;
 
     /**
      * set(ObjectType&, version_t,const HLC&)
@@ -865,10 +872,10 @@ public:
      */
     virtual void version(version_t ver);
 
-    /** 
+    /**
      * persist(version_t)
      *
-     * Persist log entries up to the specified version. To avoid inefficiency, this 
+     * Persist log entries up to the specified version. To avoid inefficiency, this
      * should be the latest version.
      *
      * @param latest_version The version to persist up to
@@ -922,7 +929,7 @@ public:
      * @return true if a signature was successfully retrieved, false if there was
      * no version in the log with the requested version number
      */
-    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver);
+    virtual bool getSignature(version_t ver, unsigned char* signature, version_t& prev_ver) const;
 
     /**
      * Update the provided Verifier with the state of T at the specified version.

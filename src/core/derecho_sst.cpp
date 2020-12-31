@@ -79,6 +79,13 @@ void DerechoSST::init_local_change_proposals(const int other_row) {
     num_installed[local_row] = num_installed[other_row];
 }
 
+void DerechoSST::push_row_except_slots() {
+    const size_t first_push_size = (char*)std::addressof(slots[0][0]) - getBaseAddress();
+    const size_t last_push_size = slots.rowLen - slots.field_len - first_push_size;
+    put(0, first_push_size);
+    put_with_completion(first_push_size + slots.field_len, last_push_size);
+}
+
 std::string DerechoSST::to_string() const {
     std::stringstream s;
     uint num_rows = get_num_rows();

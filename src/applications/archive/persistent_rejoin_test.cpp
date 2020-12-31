@@ -45,7 +45,7 @@ public:
     }
 
     DEFAULT_SERIALIZATION_SUPPORT(PersistentThing, state);
-    REGISTER_RPC_FUNCTIONS(PersistentThing, read_state, change_state, print_log);
+    REGISTER_RPC_FUNCTIONS(PersistentThing, ORDERED_TARGETS(read_state, change_state, print_log));
 };
 
 class TestThing : public mutils::ByteRepresentable {
@@ -53,14 +53,14 @@ class TestThing : public mutils::ByteRepresentable {
 
 public:
     TestThing(const int init_state) : state(init_state) {}
-    int read_state() {
+    int read_state() const {
         return state;
     }
     void change_state(int new_int) {
         state = new_int;
     }
     DEFAULT_SERIALIZATION_SUPPORT(TestThing, state);
-    REGISTER_RPC_FUNCTIONS(TestThing, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(TestThing, ORDERED_TARGETS(read_state, change_state));
 };
 
 int main(int argc, char** argv) {

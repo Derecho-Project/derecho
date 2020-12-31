@@ -29,7 +29,7 @@ using sst::resources;
 
 namespace sst {
 
-// strongly assumes that no counter in the SST row 
+// strongly assumes that no counter in the SST row
 // is greater than sizeof(long long), typically 8 bytes
 const int alignTo = sizeof(long long);
 
@@ -65,6 +65,7 @@ public:
  */
 template <typename T>
 class SSTField : public _SSTField {
+    static_assert(std::is_trivially_copyable<T>::value, "SSTField types must be trivially copyable!");
 public:
     using _SSTField::base;
     using _SSTField::field_len;
@@ -93,6 +94,7 @@ public:
  */
 template <typename T>
 class SSTFieldVector : public _SSTField {
+    static_assert(std::is_trivially_copyable<T>::value, "SSTFieldVector types must be trivially copyable!");
 private:
     const size_t length;
 
