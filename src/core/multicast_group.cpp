@@ -780,11 +780,6 @@ void MulticastGroup::receiver_function(subgroup_id_t subgroup_num, const Subgrou
                 put_new_seq_num = true;
             }
         }
-        if(num_nulls_queued[subgroup_num] > 0) {
-            auto null_slot = first_null_index[subgroup_num] % profile.window_size;
-            header* h = (header*)&sst.slots[member_index][subgroup_settings.slot_offset + slot_width * null_slot];
-            h->num_nulls = num_nulls_queued[subgroup_num];
-        }
     }
     // lock released: puts can happen.
     sst.put((char*)std::addressof(sst.num_received_sst[0][subgroup_settings.num_received_offset]) - sst.getBaseAddress(),
@@ -887,6 +882,14 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
     }
     // Here lock is released
     if(to_be_sent > 0) {
+        if(current_num_nulls_queued > 0) {
+            DerechoParams profile = subgroup_settings.profile;
+            const uint64_t slot_width = profile.sst_max_msg_size + sizeof(uint64_t);
+            auto null_slot = current_first_null_index % profile.window_size;
+            header* h = (header*)&sst.slots[member_index][subgroup_settings.slot_offset + slot_width * null_slot];
+            h->num_nulls = current_num_nulls_queued;
+        }
+
         sst_multicast_group_ptrs[subgroup_num]->send(current_committed_index, to_be_sent, current_num_nulls_queued,
                                                      current_first_null_index, sizeof(header));
     }
