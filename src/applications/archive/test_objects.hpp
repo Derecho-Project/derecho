@@ -27,11 +27,11 @@
  * Example replicated object, containing some serializable state and providing
  * two RPC methods.
  */
-struct Foo{
+struct Foo: mutils::ByteRepresentable {
 
     int state;
 
-    int read_state() {
+    int read_state() const {
         return state;
     }
     bool change_state(int new_state) {
@@ -42,7 +42,7 @@ struct Foo{
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(Foo, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(Foo, P2P_TARGETS(read_state), ORDERED_TARGETS(read_state, change_state));
     /**
      * Constructs a Foo with an initial value.
      * @param initial_state
@@ -50,6 +50,7 @@ struct Foo{
     Foo(int initial_state = 0) : state(initial_state) {}
     Foo() = default;
     Foo(const Foo&) = default;
+    DEFAULT_SERIALIZATION_SUPPORT(Foo, state);
 };
 
 class Bar : public mutils::ByteRepresentable {
@@ -62,11 +63,11 @@ public:
     void clear() {
         log.clear();
     }
-    std::string print() {
+    std::string print() const {
         return log;
     }
 
-    REGISTER_RPC_FUNCTIONS(Bar, append, clear, print);
+    REGISTER_RPC_FUNCTIONS(Bar, P2P_TARGETS(print), ORDERED_TARGETS(append, clear, print));
 
     DEFAULT_SERIALIZATION_SUPPORT(Bar, log);
     Bar(const std::string& s = "") : log(s) {}
@@ -79,10 +80,10 @@ public:
     void put(const std::string& key, const std::string& value) {
         cache_map[key] = value;
     }
-    std::string get(const std::string& key) {
-        return cache_map[key];
+    std::string get(const std::string& key) const {
+        return cache_map.at(key);
     }
-    bool contains(const std::string& key) {
+    bool contains(const std::string& key) const {
         return cache_map.find(key) != cache_map.end();
     }
     bool invalidate(const std::string& key) {
@@ -94,7 +95,7 @@ public:
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(Cache, put, get, contains, invalidate);
+    REGISTER_RPC_FUNCTIONS(Cache, P2P_TARGETS(get, contains), ORDERED_TARGETS(put, get, contains, invalidate));
 
     Cache() : cache_map() {}
     /**

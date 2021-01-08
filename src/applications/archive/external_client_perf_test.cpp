@@ -12,22 +12,20 @@ using derecho::Replicated;
 using std::cout;
 using std::endl;
 using derecho::Bytes;
-/**
- * RPC Object with a single function that accepts a string
- */
+
 class TestObject {
 public:
-    void fun(const std::string& words) {
+    void fun(const std::string& words) const {
     }
 
-    void bytes_fun(const Bytes& bytes) {
+    void bytes_fun(const Bytes& bytes) const {
     }
 
-    bool finishing_call(int x) {
+    bool finishing_call(int x) const {
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
+    REGISTER_RPC_FUNCTIONS(TestObject, P2P_TARGETS(fun, bytes_fun, finishing_call));
 };
 
 int main(int argc, char** argv) {

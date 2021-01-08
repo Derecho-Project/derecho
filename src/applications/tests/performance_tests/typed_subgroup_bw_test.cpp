@@ -34,7 +34,7 @@ public:
         return true;
     }
 
-    REGISTER_RPC_FUNCTIONS(TestObject, fun, bytes_fun, finishing_call);
+    REGISTER_RPC_FUNCTIONS(TestObject, ORDERED_TARGETS(fun, bytes_fun, finishing_call));
 };
 
 struct exp_result {
@@ -74,8 +74,15 @@ int main(int argc, char* argv[]) {
 
     derecho::Conf::initialize(argc, argv);
 
+    //The maximum number of bytes that can be sent to change_pers_bytes() is not quite MAX_PAYLOAD_SIZE.
+    //The serialized Bytes object will include its size field as well as the actual buffer, and
+    //the RPC function header contains an InvocationID (which is a size_t) as well as the header
+    //fields defined by remote_invocation_utilites::header_space().
+    const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
+                                        + derecho::remote_invocation_utilities::header_space();
+
     const int num_nodes = std::stoi(argv[dashdash_pos + 1]);
-    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
+    const uint64_t max_msg_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 

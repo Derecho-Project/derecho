@@ -32,7 +32,7 @@ public:
     StringObject(const std::string& s = "") : log(s) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(StringObject, log);
-    REGISTER_RPC_FUNCTIONS(StringObject, append, clear, print);
+    REGISTER_RPC_FUNCTIONS(StringObject, ORDERED_TARGETS(append, clear, print));
 };
 
 int main(int argc, char** argv) {

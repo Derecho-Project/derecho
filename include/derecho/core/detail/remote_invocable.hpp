@@ -62,7 +62,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
        return value mechanism.
      */
 
-    #define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
+#define MAX_CONCURRENT_RPCS_PER_INVOKER (4096)
     PendingResults<Ret> results_vector[MAX_CONCURRENT_RPCS_PER_INVOKER];
     std::atomic<unsigned short> invocation_id_sequencer;
     // std::mutex map_lock; - we don't need a lock on the result map anymore.
@@ -117,7 +117,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         std::size_t invocation_id = invocation_id_sequencer++;
         invocation_id %= MAX_CONCURRENT_RPCS_PER_INVOKER;
         std::size_t size = mutils::bytes_size(invocation_id);
-        size += (mutils::bytes_size(remote_args) +...+ 0);
+        size += (mutils::bytes_size(remote_args) + ... + 0);
 
         char* serialized_args = out_alloc(size);
         {
@@ -441,13 +441,10 @@ wrapped<Tag, std::function<Ret(Args...)>> bind_to_instance(std::unique_ptr<NewCl
 }
 
 /**
- * User-facing entry point for the series of functions that binds a FunctionTag
- * to a class's member function. A user's "replicated object" class should use
- * this function in its register_functions() method in order to supply the
- * parameters to setup_rpc_class.
+ * Begins the process of binding a FunctionTag to a class's member function.
  * @param fun A pointer-to-member-function from the class in the template parameters
  * @return A partial_wrapped struct, which must be further constructed with a
- * call to wrap(std::unique_ptr<NewClass>*, const partial_wrapped<...>&)
+ * call to bind_to_instance(std::unique_ptr<NewClass>*, const partial_wrapped<...>&)
  * @tparam Tag The compile-time constant that should be used to "name" this
  * member function
  * @tparam NewClass The class that the function is a member of
@@ -468,6 +465,66 @@ const_partial_wrapped<Tag, Ret, NewClass, Args...> tag(Ret (NewClass::*fun)(Args
     static_assert(!std::is_reference<Ret>::value && !std::is_pointer<Ret>::value, "RPC-registered functions cannot return references or pointers!");
     static_assert(((std::is_reference<Args>::value || sizeof(Args) < 2 * sizeof(void*)) && ...), "RPC-registered functions must take non-pointer-size arguments by reference to avoid extra copying.");
     return const_partial_wrapped<Tag, Ret, NewClass, Args...>{fun};
+}
+
+/**
+ * User-facing function that binds a FunctionTag to a class's member function,
+ * in order to register it as an "ordered-callable" RPC function. It returns
+ * an instance of the partial_wrapped struct that must be returned by a
+ * "replicated object" class's register_functions() method.
+ * @param fun A pointer-to-member-function from the class in the template parameters
+ * @return A partial_wrapped struct, which must be further constructed with a
+ * call to bind_to_instance(std::unique_ptr<NewClass>*, const partial_wrapped<...>&)
+ * @tparam Tag The compile-time constant that should be used to "name" this
+ * member function
+ * @tparam NewClass The class that the function is a member of
+ * @tparam Ret The return type of the function
+ * @tparam Args The argument type of the function
+ */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+partial_wrapped<to_internal_tag<false>(Tag), Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...)) {
+    //Convert the user's desired tag to an "internal" tag, which distinguishes ordered from P2P functions
+    return tag<to_internal_tag<false>(Tag), NewClass, Ret, Args...>(fun);
+}
+
+/** Exactly the same as tag_ordered(), but for const member functions. */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+const_partial_wrapped<to_internal_tag<false>(Tag), Ret, NewClass, Args...> tag_ordered(Ret (NewClass::*fun)(Args...) const) {
+    return tag<to_internal_tag<false>(Tag), NewClass, Ret, Args...>(fun);
+}
+
+/**
+ * User-facing function that binds a FunctionTag to a class's member function,
+ * in order to register it as a "P2P-callable" RPC function. It returns an
+ * instance of the partial_wrapped struct that must be returned by a
+ * "replicated object" class's register_functions() method. This function can
+ * only be called on const member functions, since P2P-callable RPC functions
+ * should not modify the state of the replicated object.
+ * @param fun A pointer-to-member-function from the class in the template parameters
+ * @return A const_partial_wrapped struct, which must be further constructed with a
+ * call to bind_to_instance(std::unique_ptr<NewClass>*, const const_partial_wrapped<...>&)
+ * @tparam Tag The compile-time constant that should be used to "name" this
+ * member function
+ * @tparam NewClass The class that the function is a member of
+ * @tparam Ret The return type of the function
+ * @tparam Args The argument type of the function
+ */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+const_partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...) const) {
+    return tag<to_internal_tag<true>(Tag), NewClass, Ret, Args...>(fun);
+}
+
+/**
+ * This function exists only to generate a nice error message, rather than pages
+ * and pages of template deduction failures, when a user attempts to tag a
+ * non-const method as a P2P target. If this non-const version of tag_p2p is
+ * ever matched by template deduction, the static_assert will fail.
+ */
+template <FunctionTag Tag, typename NewClass, typename Ret, typename... Args>
+partial_wrapped<to_internal_tag<true>(Tag), Ret, NewClass, Args...> tag_p2p(Ret (NewClass::*fun)(Args...)) {
+    static_assert(std::is_const<decltype(fun)>::value, "Non-const methods cannot be tagged as P2P-callable!");
+    //This code will never be executed but needs to be here anyway
+    return tag<to_internal_tag<true>(Tag), NewClass, Ret, Args...>(fun);
 }
 
 /* Technically, RemoteInvocablePairs specializes this template for the cases

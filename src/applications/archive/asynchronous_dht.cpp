@@ -18,12 +18,6 @@ private:
 public:
     using derecho::GroupReference::group;
     using derecho::GroupReference::subgroup_index;
-    enum Functions {
-        PUT,
-        GET,
-        FUN,
-        PRINT
-    };
 
     void put(uint64_t key, const DataType& value) {
         table[key] = value;
@@ -46,17 +40,12 @@ public:
         }
         derecho::Replicated<HashTable<DataType>>& subgroup_handle = group->template get_subgroup<HashTable<DataType>>();
         std::thread temp([&]() {
-            subgroup_handle.template ordered_send<HashTable<DataType>::PRINT>();
+            subgroup_handle.template ordered_send<RPC_NAME(print)>();
         });
         temp.detach();
     }
 
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<PUT>(&HashTable<DataType>::put),
-                               derecho::rpc::tag<GET>(&HashTable<DataType>::get),
-                               derecho::rpc::tag<FUN>(&HashTable<DataType>::fun),
-                               derecho::rpc::tag<PRINT>(&HashTable<DataType>::print));
-    }
+    REGISTER_RPC_FUNCTIONS(HashTable, ORDERED_TARGETS(put, get, fun, print));
 
     HashTable() : table() {}
 
@@ -109,9 +98,9 @@ int main(int argc, char* argv[]) {
     uint32_t node_rank = group.get_my_rank();
 
     if(node_rank == 0) {
-        subgroup_handle.ordered_send<HashTable<std::string>::FUN>("hello", "hi", "bye");
+        subgroup_handle.ordered_send<RPC_NAME(fun)>("hello", "hi", "bye");
     } else {
-        subgroup_handle.ordered_send<HashTable<std::string>::PRINT>();
+        subgroup_handle.ordered_send<RPC_NAME(print)>();
     }
     std::cout << "Entering infinite loop" << std::endl;
     while(true) {

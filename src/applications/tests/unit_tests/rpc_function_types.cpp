@@ -26,7 +26,7 @@ public:
     ConstTest(int initial_state = 0) : state(initial_state) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(ConstTest, state);
-    REGISTER_RPC_FUNCTIONS(ConstTest, read_state, change_state);
+    REGISTER_RPC_FUNCTIONS(ConstTest, ORDERED_TARGETS(read_state, change_state));
 };
 
 class ReferenceTest : public mutils::ByteRepresentable {
@@ -54,7 +54,7 @@ public:
     ReferenceTest(const std::string& initial_state = "") : state(initial_state) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(ReferenceTest, state);
-    REGISTER_RPC_FUNCTIONS(ReferenceTest, get_state, set_state, append_string);
+    REGISTER_RPC_FUNCTIONS(ReferenceTest, ORDERED_TARGETS(get_state, set_state, append_string));
 };
 
 using derecho::fixed_even_shards;

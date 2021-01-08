@@ -8,7 +8,7 @@ class Foo : public mutils::ByteRepresentable {
     int state;
 
 public:
-    int read_state() {
+    int read_state() const {
         return state;
     }
     bool change_state(int new_state) {
@@ -19,21 +19,7 @@ public:
         return true;
     }
 
-    /** Named integers that will be used to tag the RPC methods */
-    enum Functions { READ_STATE,
-                     CHANGE_STATE };
-
-    /**
-     * All replicated objects must provide this static method, which should
-     * return a tuple containing all the methods that can be invoked by RPC.
-     * Each method should be "tagged" with derecho::rpc::tag(), whose template
-     * parameter indicates which numeric constant will identify the method.
-     * @return A tuple of "tagged" function pointers.
-     */
-    static auto register_functions() {
-        return std::make_tuple(derecho::rpc::tag<READ_STATE>(&Foo::read_state),
-                               derecho::rpc::tag<CHANGE_STATE>(&Foo::change_state));
-    }
+    REGISTER_RPC_FUNCTIONS(Foo, P2P_TARGETS(read_state), ORDERED_TARGETS(change_state));
 
     /**
      * Constructs a Foo with an initial value.
@@ -77,14 +63,14 @@ int main(int argc, char** argv) {
     // all shards change their state to a unique integer
     if(node_rank < num_nodes - 1 && node_rank % 2 == 0) {
         auto& foo_handle = group.get_subgroup<Foo>();
-        foo_handle.ordered_send<Foo::CHANGE_STATE>(node_rank);
+        foo_handle.ordered_send<RPC_NAME(change_state)>(node_rank);
         std::cout << "Done calling ordered_send" << std::endl;
     }
     group.barrier_sync();
     // node 13 queries for the state of each shard
     if(node_rank == num_nodes - 1) {
         auto shard_iterator = group.get_shard_iterator<Foo>();
-        auto query_results_vec = shard_iterator.p2p_send<Foo::READ_STATE>();
+        auto query_results_vec = shard_iterator.p2p_send<RPC_NAME(read_state)>();
         uint cnt = 0;
         for(auto& query_result : query_results_vec) {
             auto& reply_map = query_result.get();

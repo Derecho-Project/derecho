@@ -123,17 +123,17 @@ public:
         *vola_bytes = bytes;
     }
 
-    int query_const_int(uint64_t query_us) {
+    int query_const_int(uint64_t query_us) const {
         return 100;
     }
 
-    Bytes query_const_bytes(uint64_t query_us) {
+    Bytes query_const_bytes(uint64_t query_us) const {
         char bytes[1000000];
         Bytes b(bytes, 1000000);
         return b;
     }
 
-    Bytes query_vola_bytes(uint64_t query_us) {
+    Bytes query_vola_bytes(uint64_t query_us) const {
         HLC hlc{query_us, 0};
         try {
             return *vola_bytes.get(hlc);
@@ -143,7 +143,7 @@ public:
         return Bytes();
     }
 
-    REGISTER_RPC_FUNCTIONS(ByteArrayObject, query_vola_bytes, query_const_int, query_const_bytes, change_vola_bytes);
+    REGISTER_RPC_FUNCTIONS(ByteArrayObject, P2P_TARGETS(query_vola_bytes, query_const_int, query_const_bytes), ORDERED_TARGETS(change_vola_bytes));
 
     //  DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject,pers_bytes,vola_bytes);
     DEFAULT_SERIALIZATION_SUPPORT(ByteArrayObject, vola_bytes);

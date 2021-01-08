@@ -81,7 +81,11 @@ void P2PConnectionManager::update_incoming_seq_num() {
 std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
     for(const auto& [node_id, p2p_conn] : p2p_connections) {
         auto buf = p2p_conn->probe();
-        if(buf && buf[0]) {
+        // In include/derecho/core/detail/rpc_utils.hpp:
+        // Please note that populate_header() put payload_size(size_t) at the beginning of buffer.
+        // If we only test buf[0], it will fall in the wrong path if the least significant byte of the payload size is
+        // zero.
+        if(buf && reinterpret_cast<size_t*>(buf)[0]) {
             last_node_id = node_id;
             return std::pair<node_id_t, char*>(node_id, buf);
         } else if(buf) {

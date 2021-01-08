@@ -151,17 +151,16 @@ void CompletionTracker::set_subgroup_id(derecho::subgroup_id_t id) {
     my_subgroup_id = id;
 }
 
-derecho::subgroup_id_t CompletionTracker::get_subgroup_id() {
+derecho::subgroup_id_t CompletionTracker::get_subgroup_id() const {
     return my_subgroup_id;
 }
 
 /* ------------------- ClientTier implementation ------------------- */
 
 ClientTier::ClientTier(std::size_t test_data_size)
-        : hasher(openssl::DigestAlgorithm::SHA256),
-          test_data(nullptr, test_data_size){};
+        : test_data(nullptr, test_data_size){};
 
-std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) {
+std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTier::submit_update(const Blob& data) const {
     derecho::ExternalCaller<ObjectStore>& storage_subgroup = group->template get_nonmember_subgroup<ObjectStore>();
     derecho::ExternalCaller<SignatureStore>& signature_subgroup = group->template get_nonmember_subgroup<SignatureStore>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<ObjectStore>();
@@ -175,6 +174,7 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_member_to_contact, data);
     //Meanwhile, start hashing the update (this might take a long time)
     SHA256Hash update_hash;
+    openssl::Hasher hasher(openssl::DigestAlgorithm::SHA256);
     hasher.init();
     hasher.add_bytes(data.bytes, data.size);
     //Wait for the storage query to complete and return the assigned version and timestamp (which must get hashed)
@@ -196,7 +196,7 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     return {std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp), signature_reply};
 }
 
-bool ClientTier::update_batch_test(const int& num_updates) {
+bool ClientTier::update_batch_test(const int& num_updates) const {
     using derecho::rpc::QueryResults;
     using persistent::version_t;
     using namespace std::chrono;
@@ -225,6 +225,7 @@ bool ClientTier::update_batch_test(const int& num_updates) {
                 storage_member_to_contact, test_data));
     }
     dbg_default_debug("Starting to hash all the updates");
+    openssl::Hasher hasher(openssl::DigestAlgorithm::SHA256);
     auto hash_start_time = std::chrono::steady_clock::now();
     SHA256Hash update_hash;
     //Pretend to hash the whole batch of updates, though really they're all the same
@@ -276,7 +277,7 @@ SignatureStore::SignatureStore(persistent::PersistentRegistry* pr, std::shared_p
         : hashes(std::make_unique<SHA256Hash>, "SignedHashLog", pr, true), verified_tracker(tracker),
           experiment_done(experiment_done) {}
 
-std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) {
+std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) const {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_add_hash)>(hash);
     auto& replies = query_results.get();
@@ -303,7 +304,7 @@ persistent::version_t SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     return std::get<0>(next_version);
 }
 
-void SignatureStore::end_test() {
+void SignatureStore::end_test() const {
     std::cout << "Received the end_test message, shutting down" << std::endl;
     *experiment_done = true;
 }
@@ -316,7 +317,7 @@ ObjectStore::ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<Com
           persistence_tracker(tracker),
           experiment_done(experiment_done) {}
 
-std::tuple<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) {
+std::tuple<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) const {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_update)>(new_data);
     auto& replies = query_results.get();
@@ -339,21 +340,21 @@ std::tuple<persistent::version_t, uint64_t> ObjectStore::ordered_update(const Bl
     return next_version;
 }
 
-bool ObjectStore::await_persistence(const persistent::version_t& version) {
+bool ObjectStore::await_persistence(const persistent::version_t& version) const {
     dbg_default_debug("Awaiting persistence on version {}", version);
     persistence_tracker->await_version_finished(version);
     return true;
 }
 
-Blob ObjectStore::get(const persistent::version_t& version) {
+Blob ObjectStore::get(const persistent::version_t& version) const {
     return *object_log[version];
 }
 
-Blob ObjectStore::get_latest() {
+Blob ObjectStore::get_latest() const {
     return *object_log;
 }
 
-void ObjectStore::end_test() {
+void ObjectStore::end_test() const {
     std::cout << "Recieved the end_test message, shutting down" << std::endl;
     *experiment_done = true;
 }
