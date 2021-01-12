@@ -669,7 +669,11 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     header* h = (header*)data;
     int32_t index = h->index;
     int32_t num_nulls = h->num_nulls;
+
     do {
+        if (num_nulls > 0) {
+	    size = h->header_size;
+	}
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
