@@ -100,9 +100,16 @@ class RPCManager {
      * and the view-change thread, guarding the P2P connections pointer.
      */
     std::mutex p2p_connections_mutex;
-    /** This mutex guards both pending_results_to_fulfill and fulfilled_pending_results. */
+    /**
+     * This mutex guards all the pending_results maps.
+     * Technically it's only needed between two of them at a time, so it would
+     * be possible to achieve more concurrency with more fine-grained locks.
+     */
     std::mutex pending_results_mutex;
-    /** This condition variable is to resolve a race condition in using pending_results_to_fulfill and fulfilled_pending_results */
+    /**
+     * This condition variable is to resolve a race condition in using
+     * pending_results_to_fulfill and results_pending_local_persistence
+     */
     std::condition_variable pending_results_cv;
     /**
      * For each subgroup, contains a queue of PendingResults references that still
@@ -117,10 +124,26 @@ class RPCManager {
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been delivered locally but RPCManager
-     * may still need to use the PendingResults to report that persistence has finished
-     * or that a node has failed.
+     * still needs to use the PendingResults to report that persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> fulfilled_pending_results;
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_pending_local_persistence;
+    /**
+     * For each subgroup, contains a map from version number to the PendingResults
+     * for that version's RPC call (i.e., a set of PendingResults indexed by
+     * version number). These RPC messages have been persisted locally but RPCManager
+     * still needs to use the PendingResults to report that global persistence has finished.
+     */
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_pending_global_persistence;
+    /**
+     * For each subgroup, contains a list of PendingResults references for RPC
+     * messages that have completed all of their promise events (fulfilling
+     * ReplyMaps, persistence, etc.) and are only being kept around in case
+     * RPCManager needs to notify them of a removed node on a View change. (I
+     * think the only useful members of this list are the P2P-message-related
+     * PendingResults, since an ordered message that reaches global persistence
+     * can't possibly get a removed_node_exception)
+     */
+    std::map<subgroup_id_t, std::list<PendingBase_ref>> completed_pending_results;
 
     bool thread_start = false;
     /** Mutex for thread_start_cv. */
