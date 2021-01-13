@@ -136,9 +136,6 @@ target_link_libraries(custom_subgroup_profiles_test derecho)
 add_executable(external_client_perf_test external_client_perf_test.cpp)
 target_link_libraries(external_client_perf_test derecho)
 
-#multicast throughput
-add_executable(multicast_throughput multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
-target_link_libraries(multicast_throughput derecho)
 
 #multicast latency
 add_executable(multicast_latency multicast_latency.cpp initialize.cpp aggregate_bandwidth.cpp)
