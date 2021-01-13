@@ -175,7 +175,7 @@ public:
     void debug_print() {
         using std::cout;
         using std::endl;
-        cout << "Printing slots::next_seq" << endl;
+        cout << "Printing slots::size" << endl;
         for(auto i : row_indices) {
             for(uint j = 0; j < window_size; ++j) {
                 cout << (uint64_t&)sst->slots[i][slots_offset + (max_msg_size * (j + 1)) - sizeof(uint64_t)] << " ";
