@@ -19,6 +19,10 @@
 using std::endl;
 using test::Bytes;
 using namespace std::chrono;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 94f1f53869b1fc254a9ec86dd4dfac6e5e84e804
 /**
  * RPC Object with a single function that accepts a string
  */
@@ -86,6 +90,8 @@ int main(int argc, char* argv[]) {
     const uint32_t count = std::stoi(argv[dashdash_pos + 2]);
     const uint32_t num_senders_selector = std::stoi(argv[dashdash_pos + 3]);
 
+    steady_clock::time_point begin_time, send_complete_time;
+
     // Convert this integer to a more readable enum value
     const PartialSendMode senders_mode = num_senders_selector == 0
                                                  ? PartialSendMode::ALL_SENDERS
@@ -116,7 +122,8 @@ int main(int argc, char* argv[]) {
     auto stability_callback = [&done,
                                &send_complete_time,
                                total_num_messages,
-                               num_delivered = 0u](uint32_t subgroup,
+                               num_delivered = 0u,
+    			       &send_complete_time](uint32_t subgroup,
                                                    uint32_t sender_id,
                                                    long long int index,
                                                    std::optional<std::pair<char*, long long int>> data,
@@ -126,7 +133,7 @@ int main(int argc, char* argv[]) {
         // Check for completion
         if(num_delivered == total_num_messages) {
             send_complete_time = std::chrono::steady_clock::now();
-	    done = true;
+            done = true;
         }
     };
 
@@ -189,6 +196,7 @@ int main(int argc, char* argv[]) {
     std::cout << "timespan:" << msec << " millisecond." << std::endl;
     std::cout << "throughput:" << thp_gbps << "GB/s." << std::endl;
     std::cout << "throughput:" << thp_ops << "ops." << std::endl;
+    std::cout << std::flush;
 
     // aggregate bandwidth from all nodes
     std::pair<double, double> bw_laten(thp_gbps,msec);
