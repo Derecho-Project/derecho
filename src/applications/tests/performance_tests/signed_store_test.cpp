@@ -187,7 +187,7 @@ std::tuple<persistent::version_t, uint64_t, std::vector<unsigned char>> ClientTi
     dbg_default_debug("Hashing complete, sending hash to node {}", signature_member_to_contact);
     auto signature_query_results = signature_subgroup.p2p_send<RPC_NAME(add_hash)>(signature_member_to_contact, update_hash);
     //Now wait for persistence and verification stability
-    dbg_default_debug("Querying node {} to await persistence of version {}", storage_member_to_contact, std::get<0>(version_and_timestamp));
+    dbg_default_debug("Querying node {} to await persistence of version {}", storage_member_to_contact, version_and_timestamp.first);
     auto persistence_query_results = storage_subgroup.p2p_send<RPC_NAME(await_persistence)>(
             storage_member_to_contact, version_and_timestamp.first);
     persistence_query_results.get().get(storage_member_to_contact);
@@ -334,6 +334,7 @@ std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_d
     //     version_and_timestamp = reply_pair.second.get();
     // }
     // dbg_default_debug("Returning ({}, {}) from update", std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp));
+    dbg_default_debug("Returning ({}, {}) from update", version.first, version.second);
     return version;
 }
 
@@ -352,6 +353,7 @@ bool ObjectStore::await_persistence(const persistent::version_t& version) const 
     auto update_result_iter = update_results.find(version);
     update_result_iter->second.await_global_persistence();
     update_results.erase(update_result_iter);
+    dbg_default_debug("Version {} finished global persistence", version);
     // persistence_tracker->await_version_finished(version);
     return true;
 }
