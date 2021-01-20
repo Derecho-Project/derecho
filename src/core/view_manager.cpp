@@ -926,7 +926,7 @@ void ViewManager::propose_changes(DerechoSST& gmsSST) {
         gmssst::set(gmsSST.changes[my_rank][last_change_index].end_of_view, false);
     } else {
         //Push all the proposed changes, including joiner information if any joins were proposed
-        gmsSST.put_with_completion(gmsSST.changes);
+        gmsSST.put(gmsSST.changes);
         if(!proposed_join_sockets.empty()) {
             gmsSST.put_with_completion(gmsSST.joiner_ips.get_base() - gmsSST.getBaseAddress(),
                                        gmsSST.num_changes.get_base() - gmsSST.joiner_ips.get_base());
