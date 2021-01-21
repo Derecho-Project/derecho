@@ -34,5 +34,8 @@ target_link_libraries(openssl_test derecho)
 add_executable(signature_chain_test signature_chain_test.cpp)
 target_link_libraries(signature_chain_test derecho)
 
+add_executable(sst_counting sst_counting.cpp initialize.cpp)
+target_link_libraries(sst_counting derecho)
+
 add_executable(sst_multicast_throughput sst_multicast_throughput.cpp initialize.cpp aggregate_bandwidth.cpp)
 target_link_libraries(sst_multicast_throughput derecho)
