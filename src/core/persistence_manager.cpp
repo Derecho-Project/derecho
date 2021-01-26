@@ -107,6 +107,13 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
             //Update persisted_version to the version actually persisted, which might be greater than the requested version
             persisted_version = search->second->persist(version, signature);
         }
+        // Call the local persistence callbacks before updating the SST
+        // (as soon as the SST is updated, the global persistence callback may fire)
+        for(auto& persistence_callback : persistence_callbacks) {
+            if(persistence_callback) {
+                persistence_callback(subgroup_id, persisted_version);
+            }
+        }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
         // update the signature and persisted_num in SST
@@ -126,13 +133,6 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
     } catch(uint64_t exp) {
         dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
         std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
-    }
-
-    // callback
-    for(auto& persistence_callback : persistence_callbacks) {
-        if(persistence_callback) {
-            persistence_callback(subgroup_id, persisted_version);
-        }
     }
 }
 
