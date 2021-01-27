@@ -280,28 +280,25 @@ SignatureStore::SignatureStore(persistent::PersistentRegistry* pr, std::shared_p
 std::vector<unsigned char> SignatureStore::add_hash(const SHA256Hash& hash) const {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_add_hash)>(hash);
-    auto& replies = query_results.get();
+    //Get the version assigned to this update so we can wait for it to be verified
+    std::pair<persistent::version_t, uint64_t> hash_log_version = query_results.get_persistent_version();
+
     std::vector<unsigned char> signature(hashes.getSignatureSize());
-    persistent::version_t hash_log_version = 0;
-    for(auto& reply_pair : replies) {
-        hash_log_version = reply_pair.second.get();
-    }
-    dbg_default_debug("In add_hash, waiting for version {} to be verified", hash_log_version);
-    verified_tracker->await_version_finished(hash_log_version);
+    dbg_default_debug("In add_hash, waiting for version {} to be verified", hash_log_version.first);
+    verified_tracker->await_version_finished(hash_log_version.first);
     persistent::version_t previous_signed_version;
-    hashes.getSignature(hash_log_version, signature.data(), previous_signed_version);
+    hashes.getSignature(hash_log_version.first, signature.data(), previous_signed_version);
     return signature;
 }
 
-persistent::version_t SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
+void SignatureStore::ordered_add_hash(const SHA256Hash& hash) {
     derecho::Replicated<SignatureStore>& this_subgroup = group->get_subgroup<SignatureStore>(this->subgroup_index);
-    //Ask the Replicated interface what version it's about to generate
-    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
-    verified_tracker->start_tracking_version(std::get<0>(next_version));
-    //Append the new hash to the Persistent log, thus generating a version
+    //Ask the Replicated interface what version it's about to persist
+    std::tuple<persistent::version_t, uint64_t> curr_version = this_subgroup.get_current_version();
+    verified_tracker->start_tracking_version(std::get<0>(curr_version));
+    //Append the new hash to the Persistent log
     *hashes = hash;
-    dbg_default_debug("SHA256 hash added for version {}", std::get<0>(next_version));
-    return std::get<0>(next_version);
+    dbg_default_debug("SHA256 hash added for version {}", std::get<0>(curr_version));
 }
 
 void SignatureStore::end_test() const {
@@ -314,38 +311,24 @@ void SignatureStore::end_test() const {
 ObjectStore::ObjectStore(persistent::PersistentRegistry* pr,
                          std::shared_ptr<std::atomic<bool>> experiment_done)
         : object_log(std::make_unique<Blob>, "BlobLog", pr, false),
-        //   persistence_tracker(tracker),
           experiment_done(experiment_done) {}
 
 std::pair<persistent::version_t, uint64_t> ObjectStore::update(const Blob& new_data) const {
     derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
-    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_update)>(new_data);
     std::pair<persistent::version_t, uint64_t> version = query_results.get_persistent_version();
-    if(version.first == std::get<0>(next_version)) {
-        dbg_default_debug("Version returned by ordered_send matched version returned by get_next_version.");
-    } else {
-        dbg_default_error("Version returned by get_next_version was {}, but query_results.get_persistent_version was {}", std::get<0>(next_version), version.first);
-    }
     update_results.emplace(version.first, std::move(query_results));
-    // auto& replies = query_results.get();
-    // std::tuple<persistent::version_t, uint64_t> version_and_timestamp;
-    // for(auto& reply_pair : replies) {
-    //     version_and_timestamp = reply_pair.second.get();
-    // }
-    // dbg_default_debug("Returning ({}, {}) from update", std::get<0>(version_and_timestamp), std::get<1>(version_and_timestamp));
     dbg_default_debug("Returning ({}, {}) from update", version.first, version.second);
     return version;
 }
 
 void ObjectStore::ordered_update(const Blob& new_data) {
-    // derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
+    derecho::Replicated<ObjectStore>& this_subgroup = group->get_subgroup<ObjectStore>(this->subgroup_index);
     //Ask the Replicated interface what version it's about to generate
-    // std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_next_version();
-    // persistence_tracker->start_tracking_version(std::get<0>(next_version));
+    std::tuple<persistent::version_t, uint64_t> next_version = this_subgroup.get_current_version();
+    dbg_default_debug("Got a version of ({}, {}) in ordered_update", std::get<0>(next_version), std::get<1>(next_version));
     //Update the Persistent object, generating a new version
     *object_log = new_data;
-    // dbg_default_debug("Returning ({}, {}) from ordered_update", std::get<0>(next_version), std::get<1>(next_version));
 }
 
 bool ObjectStore::await_persistence(const persistent::version_t& version) const {
@@ -354,7 +337,6 @@ bool ObjectStore::await_persistence(const persistent::version_t& version) const 
     update_result_iter->second.await_global_persistence();
     update_results.erase(update_result_iter);
     dbg_default_debug("Version {} finished global persistence", version);
-    // persistence_tracker->await_version_finished(version);
     return true;
 }
 
@@ -424,15 +406,7 @@ int main(int argc, char** argv) {
     //if this node ends up in that group
     std::shared_ptr<std::atomic<bool>> experiment_done = std::make_shared<std::atomic<bool>>(false);
 
-    //Set up the persistence-complete tracker for the ObjectStore subgroup
-    // std::shared_ptr<CompletionTracker> objectstore_persisted_tracker = std::make_shared<CompletionTracker>();
-    // auto global_persistence_callback = [&](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
-        // if(subgroup_id == objectstore_persisted_tracker->get_subgroup_id()) {
-            // objectstore_persisted_tracker->notify_version_finished(version);
-        // }
-    // };
     auto object_subgroup_factory = [&](persistent::PersistentRegistry* registry, derecho::subgroup_id_t subgroup_id) {
-        // objectstore_persisted_tracker->set_subgroup_id(subgroup_id);
         return std::make_unique<ObjectStore>(registry, experiment_done);
     };
     //Set up the verification-finished tracker for the SignatureStore subgroup

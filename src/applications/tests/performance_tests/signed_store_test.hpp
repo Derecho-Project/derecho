@@ -104,13 +104,7 @@ class ObjectStore : public mutils::ByteRepresentable,
     persistent::Persistent<Blob> object_log;
     /** A local cache of QueryResults from ordered_update() calls. Not part of the replicated state. */
     mutable std::map<persistent::version_t, derecho::rpc::QueryResults<void>> update_results;
-    /**
-     * Shared with the global persistence callback, so await_persistence can be notified
-     * when persistence completes, assuming ordered_update has added an entry for the version.
-     * PROBLEM: What about serialization? What happens on a reconfiguration/restore from logs to
-     * re-link this with the global callback?
-     */
-    // std::shared_ptr<CompletionTracker> persistence_tracker;
+
     using derecho::GroupReference::group;
     /**
      * Shared with the main thread to tell it when the experiment is done and it should
@@ -195,10 +189,11 @@ public:
     std::vector<unsigned char> add_hash(const SHA256Hash& hash) const;
 
     /**
-     * Ordered-send component of add_hash: appends to the log and returns the new version,
-     * which can then be used to retrieve the signature from the log
+     * Ordered-send component of add_hash: actually appends to the log and
+     * generates a new version, which will be signed.
+     * @param hash The object hash to append and sign.
      */
-    persistent::version_t ordered_add_hash(const SHA256Hash& hash);
+    void ordered_add_hash(const SHA256Hash& hash);
 
     /**
      * Causes the program to exit. Called at the end of the test to signal that the

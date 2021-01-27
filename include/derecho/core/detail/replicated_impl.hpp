@@ -265,13 +265,13 @@ persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
 
 template <typename T>
 void Replicated<T>::post_next_version(persistent::version_t version, uint64_t ts_us) {
-    next_version = version;
-    next_timestamp_us = ts_us;
+    current_version = version;
+    current_timestamp_us = ts_us;
 }
 
 template <typename T>
-std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_next_version() {
-    return std::tie(next_version, next_timestamp_us);
+std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_current_version() {
+    return std::tie(current_version, current_timestamp_us);
 }
 
 template <typename T>
