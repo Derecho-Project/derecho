@@ -476,6 +476,10 @@ void MulticastGroup::initialize_sst_row() {
 void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subgroup_num,
                                      const persistent::version_t& version,
                                      const uint64_t& msg_ts_us) {
+    if(msg.size <= sizeof(header)) {
+        return;
+    }
+
     char* buf = msg.message_buffer.buffer.get();
     header* h = (header*)(buf);
     // cooked send
@@ -488,7 +492,7 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
         }
-    } else if(msg.size > h->header_size && callbacks.global_stability_callback) {
+    } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
