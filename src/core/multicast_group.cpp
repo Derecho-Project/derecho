@@ -498,6 +498,10 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
 void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgroup_num,
                                      const persistent::version_t& version,
                                      const uint64_t& msg_ts_us) {
+    if(msg.size <= sizeof(header)) {
+        return;
+    }
+
     char* buf = const_cast<char*>(msg.buf);
     header* h = (header*)(buf);
     // cooked send
@@ -510,7 +514,7 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
         }
-    } else if(msg.size > h->header_size && callbacks.global_stability_callback) {
+    } else if(callbacks.global_stability_callback) {
         callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index,
                                             {{buf + h->header_size, msg.size - h->header_size}},
                                             version);
@@ -671,9 +675,9 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     int32_t num_nulls = h->num_nulls;
 
     do {
-        if (num_nulls > 0) {
-	    size = h->header_size;
-	}
+        if(num_nulls > 0) {
+            size = h->header_size;
+        }
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
