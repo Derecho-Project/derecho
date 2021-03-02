@@ -5,7 +5,7 @@
  */
 
 #pragma once
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <string>
 
@@ -74,7 +74,7 @@ public:
 };
 
 class Cache : public mutils::ByteRepresentable {
-    std::map<std::string, std::string> cache_map;
+    std::unordered_map<std::string, std::string> cache_map;
 
 public:
     void put(const std::string& key, const std::string& value) {
@@ -103,7 +103,7 @@ public:
      * to reconstruct an object after deserialization.
      * @param cache_map The state of the cache.
      */
-    Cache(const std::map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
+    Cache(const std::unordered_map<std::string, std::string>& cache_map) : cache_map(cache_map) {}
 
     DEFAULT_SERIALIZATION_SUPPORT(Cache, cache_map);
 };
