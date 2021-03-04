@@ -347,6 +347,8 @@ private:
 
     std::thread timeout_thread;
 
+    std::thread observer_thread;
+
     /** The SST, shared between this group and its GMS. */
     std::shared_ptr<DerechoSST> sst;
 

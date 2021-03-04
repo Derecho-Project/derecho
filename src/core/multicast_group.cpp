@@ -90,6 +90,27 @@ MulticastGroup::MulticastGroup(
     register_predicates();
     sender_thread = std::thread(&MulticastGroup::send_loop, this);
     timeout_thread = std::thread(&MulticastGroup::check_failures_loop, this);
+
+    observer_thread = std::thread([this]() {
+        const node_id_t row_index = 2;
+        if(members.size() <= row_index) {
+            std::cout << "Exiting abruptly from observer_thread" << std::endl;
+            exit(1);
+        }
+    	struct timespec start_time, cur_time;
+    	clock_gettime(CLOCK_REALTIME, &start_time);
+        int32_t last_index = -1;
+        while(true) {
+            const int32_t cur_index = this->sst->index[row_index][subgroup_settings_map.at(0).index_offset];
+            if(cur_index > last_index) {
+                clock_gettime(CLOCK_REALTIME, &cur_time);
+                double time_elapsed_in_ms = (cur_time.tv_sec - start_time.tv_sec) * 1e3
+                                            + (cur_time.tv_nsec - start_time.tv_nsec) / 1e6;
+                DERECHO_LOG(time_elapsed_in_ms, cur_index, "Received message from rank 2");
+    		last_index = cur_index;
+            }
+        }
+    });
 }
 
 MulticastGroup::MulticastGroup(
@@ -125,6 +146,7 @@ MulticastGroup::MulticastGroup(
           last_transfer_medium(total_num_subgroups),
           post_next_version_callback(post_next_version_callback),
           persistence_manager(old_group.persistence_manager) {
+    std::cout << "In the move constructor" << std::endl;
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
 
