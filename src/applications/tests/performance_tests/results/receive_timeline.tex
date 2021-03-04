@@ -1,0 +1,39 @@
+\documentclass{standalone}
+
+\usepackage{standalone}
+\usepackage{pgfplots}
+\usepackage{graphicx}
+
+\begin{document}
+\begin{tikzpicture}
+  \begin{axis}[
+    legend style={
+      cells={anchor=west},
+      legend pos={north west},
+      font=\footnotesize,
+    },
+    xlabel = Batch size,
+    ylabel = Average time gap (in microseconds),
+    width = 12cm,
+    height = 6cm,
+    ]
+    \addplot[
+    forget plot,
+    only marks,
+    mark=*,
+    mark options={fill=blue, color=blue},
+    ] table[x index=0, y index=1] {w_100_stats};
+    \addplot[
+    forget plot,
+    only marks,
+    mark=*,
+    mark options={fill=red, color=red},
+    ] table[x index=0, y index=1] {8_nodes/w_100_stats};
+
+    \addlegendimage{no markers, blue, thick}
+    \addlegendentry{w = 100, n = 4}
+    \addlegendimage{no markers, red, thick}
+    \addlegendentry{w = 100, n = 8}
+  \end{axis}
+\end{tikzpicture}
+\end{document}
