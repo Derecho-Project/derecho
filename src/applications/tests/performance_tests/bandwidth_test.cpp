@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <derecho/core/derecho.hpp>
+#include <derecho/rdmc/detail/util.hpp>
 
 #include "aggregate_bandwidth.hpp"
 #include "log_results.hpp"
@@ -184,6 +185,8 @@ int main(int argc, char* argv[]) {
                                delivery_mode, avg_bw},
                     "data_derecho_bw");
     }
+
+    flush_events();
 
     group.barrier_sync();
     group.leave();
