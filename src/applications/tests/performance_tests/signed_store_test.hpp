@@ -67,37 +67,6 @@ private:
     Blob(char* buffer, std::size_t size, bool temporary);
 };
 
-/**
- * This object is a workaround for the fact that Derecho has no way for clients
- * to wait for a specific update to a subgroup to reach persistence-stability
- * (or signature-stability). It is shared between the global persistence callback,
- * which calls notify_version_finished each time an update from the desired
- * subgroup reaches persistence, and the subgroup's Replicated Object, which calls
- * start_tracking_version each time an RPC method is called.
- */
-class CompletionTracker {
-    derecho::subgroup_id_t my_subgroup_id;
-    /** Guards inserts/deletes into version_finished_promises */
-    std::mutex promise_map_mutex;
-    /** Guards inserts/deletes into version_finished_futures */
-    std::mutex future_map_mutex;
-    /** Contains the promise end of a promise-future pair for each version being tracked. */
-    std::map<persistent::version_t, std::promise<void>> version_finished_promises;
-    /**
-     * Contains the future end of a promise-future pair for each version being tracked.
-     * The future is fulfilled when the version it's matched with finishes persisting.
-     */
-    std::map<persistent::version_t, std::future<void>> version_finished_futures;
-
-public:
-    CompletionTracker() : my_subgroup_id(0){};
-    void set_subgroup_id(derecho::subgroup_id_t id);
-    derecho::subgroup_id_t get_subgroup_id() const;
-    void start_tracking_version(persistent::version_t version);
-    void notify_version_finished(persistent::version_t version);
-    void await_version_finished(persistent::version_t version);
-};
-
 class ObjectStore : public mutils::ByteRepresentable,
                     public derecho::PersistsFields,
                     public derecho::GroupReference {
@@ -163,13 +132,7 @@ class SignatureStore : public mutils::ByteRepresentable,
     using derecho::GroupReference::group;
 
     persistent::Persistent<SHA256Hash> hashes;
-    /**
-     * Shared with the global verification callback, so add_hash can be notified when
-     * verification completes, assuming ordered_add_hash has added an entry for that version.
-     * PROBLEM: What about serialization? What happens on a reconfiguration/restore from logs to
-     * re-link this with the global callback?
-     */
-    std::shared_ptr<CompletionTracker> verified_tracker;
+
     /**
      * Shared with the main thread to tell it when the experiment is done and it should
      * call group.leave() (which can't be done from inside this subgroup object).
@@ -177,7 +140,7 @@ class SignatureStore : public mutils::ByteRepresentable,
     std::shared_ptr<std::atomic<bool>> experiment_done;
 
 public:
-    SignatureStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker,
+    SignatureStore(persistent::PersistentRegistry* pr,
                    std::shared_ptr<std::atomic<bool>> experiment_done);
     /** Deserialization constructor */
     SignatureStore(persistent::Persistent<SHA256Hash>& other_hashes) : hashes(std::move(other_hashes)) {}

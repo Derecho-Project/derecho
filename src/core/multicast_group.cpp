@@ -669,9 +669,9 @@ void MulticastGroup::sst_receive_handler(subgroup_id_t subgroup_num, const Subgr
     int32_t num_nulls = h->num_nulls;
 
     do {
-        if (num_nulls > 0) {
-	    size = h->header_size;
-	}
+        if(num_nulls > 0) {
+            size = h->header_size;
+        }
         message_id_t sequence_number = index * num_shard_senders + sender_rank;
         node_id_t node_id = subgroup_settings.members[shard_ranks_by_sender_rank.at(sender_rank)];
 
@@ -932,7 +932,12 @@ void MulticastGroup::update_min_verified_num(subgroup_id_t subgroup_num, const S
         min_verified_num = std::min(min_verified_num, member_verified_num);
     }
     if(min_verified_num > minimum_verified_version[subgroup_num]) {
-        callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        if(callbacks.global_verified_callback) {
+            callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        }
+        if(internal_callbacks.global_verified_callback) {
+            internal_callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        }
         minimum_verified_version[subgroup_num] = min_verified_num;
     }
 }

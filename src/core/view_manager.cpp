@@ -2420,6 +2420,14 @@ int32_t ViewManager::get_my_shard(subgroup_type_id_t subgroup_type, uint32_t sub
     }
 }
 
+bool ViewManager::subgroup_is_persistent(subgroup_id_t subgroup_id) const {
+    return subgroup_objects.at(subgroup_id)->is_persistent();
+}
+
+bool ViewManager::subgroup_is_signed(subgroup_id_t subgroup_id) const {
+    return subgroup_objects.at(subgroup_id)->is_signed();
+}
+
 void ViewManager::barrier_sync() {
     shared_lock_t read_lock(view_mutex);
     curr_view->gmsSST->sync_with_members();

@@ -126,14 +126,23 @@ class RPCManager {
      * version number). These RPC messages have been delivered locally but RPCManager
      * still needs to use the PendingResults to report that persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_pending_local_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_local_persistence;
     /**
      * For each subgroup, contains a map from version number to the PendingResults
      * for that version's RPC call (i.e., a set of PendingResults indexed by
      * version number). These RPC messages have been persisted locally but RPCManager
      * still needs to use the PendingResults to report that global persistence has finished.
      */
-    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_pending_global_persistence;
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_global_persistence;
+    /**
+     * For each subgroup, contains a map from version number to the PendingResults
+     * for that version's RPC call (i.e., a set of PendingResults indexed by
+     * version number). These RPC messages have finished global persistence but
+     * were sent to subgroups with signatures enabled, so RPCManager still
+     * needs to use the PendingResults to report that the signature
+     * verification has finished.
+     */
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_signature;
     /**
      * For each subgroup, contains a list of PendingResults references for RPC
      * messages that have completed all of their promise events (fulfilling
@@ -334,6 +343,8 @@ public:
      * finished persisting in that subgroup
      */
     void notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version);
+
+    void notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
     /**
      * Sends the next message in the MulticastGroup's send buffer (which is

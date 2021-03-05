@@ -195,6 +195,10 @@ Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
             //Global persistence callback
             [this](subgroup_id_t subgroup, persistent::version_t version) {
                 rpc_manager.notify_global_persistence_finished(subgroup, version);
+            },
+            //Verification callback
+            [this](subgroup_id_t subgroup, persistent::version_t version) {
+                rpc_manager.notify_verification_finished(subgroup, version);
             }};
     view_manager.initialize_multicast_groups(callbacks, internal_callbacks);
     rpc_manager.create_connections();

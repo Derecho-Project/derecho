@@ -265,6 +265,12 @@ struct MulticastGroupCallbacks {
      * callback in UserMessageCallbacks).
      */
     persistence_callback_t global_persistence_callback;
+    /**
+     * A callback to notify internal components that a new version has been
+     * signed and verified on all replicas (separate from the user-defined
+     * verification callback in UserMessageCallbacks).
+     */
+    verified_callback_t global_verified_callback;
 };
 
 /** Implements the low-level mechanics of tracking multicasts in a Derecho group,

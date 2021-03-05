@@ -802,6 +802,7 @@ public:
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+    /** Returns the number of shards in a subgroup, identified by its type and index. */
     std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     /**
      * If this node is a member of the given subgroup (identified by its type
@@ -809,9 +810,31 @@ public:
      * Otherwise, returns -1.
      */
     int32_t get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
-    /** Instructs the managed DerechoGroup's to send the next message. This
-     * returns immediately in sending through RDMC; the send is scheduled to happen some time in the future.
-     * if sending through SST, the RDMA write is issued in this call*/
+
+    /**
+     * Determines whether a subgroup (identified by its ID) uses persistence.
+     * Used by RPCManager, which doesn't have direct access to the Replicated
+     * Objects represented by subgroups.
+     * @return true if the subgroup represents a Replicated Object with
+     * Persistent<T> fields, false otherwise
+     */
+    bool subgroup_is_persistent(subgroup_id_t subgroup_num) const;
+
+    /**
+     * Determines whether a subgroup (identified by its ID) has signatures
+     * enabled. Used by RPCManager, which doesn't have direct access to the
+     * Replicated Objects.
+     * @return true if the subgroup represents a Replicated Object with a
+     * signatures enabled, false otherwise
+     */
+    bool subgroup_is_signed(subgroup_id_t subgroup_num) const;
+
+    /**
+     * Instructs the managed MulticastGroup to send a message. This returns
+     * immediately if sending through RDMC; the send is scheduled to happen
+     * some time in the future. If sending through SST, the RDMA write is
+     * issued in this call.
+     */
     void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(char* buf)>& msg_generator, bool cooked_send = false);
 
