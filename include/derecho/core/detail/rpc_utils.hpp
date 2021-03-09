@@ -377,6 +377,30 @@ public:
     void await_signature_verification() {
         signature_done.get();
     }
+
+    /**
+     * Checks if a call to await_local_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool local_persistence_is_ready() const {
+        return local_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_global_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_persistence_is_ready() const {
+        return global_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_signature_verification() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_verification_is_ready() const {
+        return signature_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
 };
 
 /**
@@ -514,6 +538,30 @@ public:
      */
     void await_signature_verification() {
         signature_done.get();
+    }
+
+    /**
+     * Checks if a call to await_local_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool local_persistence_is_ready() const {
+        return local_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_global_persistence() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_persistence_is_ready() const {
+        return global_persistence_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+    }
+
+    /**
+     * Checks if a call to await_signature_verification() would succeed without
+     * blocking; returns true if so.
+     */
+    bool global_verification_is_ready() const {
+        return signature_done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
     }
 };
 
