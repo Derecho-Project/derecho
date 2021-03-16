@@ -1023,9 +1023,7 @@ void MulticastGroup::register_predicates() {
                 update_min_verified_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
-            if(callbacks.global_verified_callback) {
-                persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
-            }
+            persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
 
             if(subgroup_settings.sender_rank >= 0) {
                 auto sender_pred = [=](const DerechoSST& sst) {
