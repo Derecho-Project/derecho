@@ -380,6 +380,16 @@ public:
             sizeof(vec_field[0][index]));
     }
 
+    /** Atomically writes only a 64bits to all remote nodes. */
+    void put_atomically(SSTFieldVector<int64_t>& write_field, SSTFieldVector<int64_t> readback_field, int64_t delta, std::size_t index) {
+        put_atomically(all_indices,
+            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(write_field[0][index])))
+                    - getBaseAddress(),
+            const_cast<char*>(reinterpret_cast<volatile char*>(std::addressof(readback_field[0][index])))
+                    - getBaseAddress(),
+            delta);
+    }
+
     void put_with_completion(size_t offset, size_t size) {
         put_with_completion(all_indices, offset, size);
     }
@@ -399,6 +409,9 @@ public:
 
     /** Writes a contiguous subset of the local row to some of the remote nodes. */
     void put(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
+
+    /** Writes a 64bit value to some of the remote nodes. */
+    void put_atomically(const std::vector<uint32_t> receiver_ranks, size_t write_offset, size_t readback_offset, size_t delta);
 
     void put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size);
 

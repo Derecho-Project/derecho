@@ -158,7 +158,8 @@ int main(int argc, char* argv[]) {
             while((buf = g.get_buffer(max_msg_size)) == NULL) {
             }
             clock_gettime(CLOCK_REALTIME, &send_times[i]);
-            g.send(g.commit_send());
+            //TODO: need to specify the number of indexes to be sent. use 1 to compile through. fix it please.
+            g.send(1,g.commit_send());
         }
     }
     while(!done) {

@@ -902,7 +902,7 @@ void MulticastGroup::sst_send_trigger(subgroup_id_t subgroup_num, const Subgroup
             h->num_nulls = current_num_nulls_queued;
         }
 
-        sst_multicast_group_ptrs[subgroup_num]->send(current_committed_index, to_be_sent, current_num_nulls_queued,
+        sst_multicast_group_ptrs[subgroup_num]->send(to_be_sent, current_committed_index, to_be_sent, current_num_nulls_queued,
                                                      current_first_null_index, sizeof(header));
     }
 }

@@ -149,6 +149,15 @@ public:
     void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int size);
     /** Post an RDMA write at an offset into remote memory. */
     void post_remote_write_with_completion(lf_sender_ctxt* ctxt, const long long int offset, const long long int size);
+    /** Post an RDMA atomic fetch and add.
+     ** @param ctxt     The context
+     ** @param offset   The offset of the 64bit in sst
+     ** @param delta    The 64bit delta value
+     **/
+    void post_atomic_fetch_and_add_64bit(lf_sender_ctxt* ctxt,
+                                         const long long int offset,
+                                         const uint64_t delta,
+                                         const long long int result_offset);
 };
 
 /**
