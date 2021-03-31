@@ -166,9 +166,8 @@ public:
     SSTFieldVector<bool> global_min_ready;
     /** for SST multicast */
     SSTFieldVector<char> slots;
-    SSTFieldVector<int64_t> num_received_sst;
-    SSTFieldVector<int64_t> index;
-    SSTFieldVector<int64_t> index_readback;
+    SSTFieldVector<int32_t> num_received_sst;
+    SSTFieldVector<int32_t> index;
 
     /** to check for failures - used by the thread running check_failures_loop in derecho_group **/
     SSTFieldVector<uint64_t> local_stability_frontier;
@@ -202,7 +201,6 @@ public:
               slots(slot_size),
               num_received_sst(num_received_size),
               index(index_field_size),
-              index_readback(index_field_size),
               local_stability_frontier(num_subgroups) {
         SSTInit(seq_num, delivered_num, signatures,
                 persisted_num, verified_num,

@@ -140,13 +140,12 @@ public:
 
     // This function invocation should be always preceded by the commit_send,
     // that returns the first parameter (committed index) to be used here.
-    void send(uint32_t to_be_sent , uint32_t committed_index, uint32_t ready_to_be_sent = 1,
+    void send(uint32_t committed_index, uint32_t ready_to_be_sent = 1,
               uint32_t num_nulls_queued = 0, int32_t first_null_index = -1,
               size_t header_size = 0) {
         if(ready_to_be_sent == 0) {
             // Push the index
-            // sst->put(sst->index, index_offset);
-            sst->put_atomically(sst->index, sst->index_readback, static_cast<int64_t>(to_be_sent), index_offset);
+            sst->put(sst->index, index_offset);
             return;
         }
 
@@ -169,7 +168,7 @@ public:
         }
         sst->put((char*)std::addressof(sst->slots[0][slots_offset + max_msg_size * first_slot]) - sst->getBaseAddress(),
                  size_to_push);
-        send(to_be_sent, committed_index, ready_to_be_sent, num_nulls_queued,
+        send(committed_index, ready_to_be_sent, num_nulls_queued,
              first_null_index, header_size);
     }
 

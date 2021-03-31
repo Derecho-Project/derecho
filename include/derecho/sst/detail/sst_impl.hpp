@@ -155,18 +155,6 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t off
 }
 
 template <typename DerivedSST>
-void SST<DerivedSST>::put_atomically(const std::vector<uint32_t> receiver_ranks, size_t write_offset, size_t readback_offset, size_t delta) {
-    assert(offset % 8 == 0);
-    for (auto index: receiver_ranks) {
-        if (index == my_index || row_is_frozen[index]) {
-            continue;
-        }
-        res_vec[index]->post_atomic_fetch_and_add_64bit(nullptr,write_offset,delta,readback_offset);
-    }
-    return;
-}
-
-template <typename DerivedSST>
 void SST<DerivedSST>::put_with_completion(const std::vector<uint32_t> receiver_ranks, size_t offset, size_t size) {
     assert(offset + size <= rowLen);
     unsigned int num_writes_posted = 0;

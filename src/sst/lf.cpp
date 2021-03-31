@@ -12,7 +12,6 @@
 #include <rdma/fi_domain.h>
 #include <rdma/fi_errno.h>
 #include <rdma/fi_rma.h>
-#include <rdma/fi_atomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -486,46 +485,6 @@ void resources::post_remote_write_with_completion(lf_sender_ctxt* ctxt, const lo
     if(return_code != 0) {
         dbg_default_error("post_remote_write(4) failed with return code {}", return_code);
         std::cerr << "post_remote_write(4) failed with return code " << return_code << std::endl;
-    }
-}
-
-void resources::post_atomic_fetch_and_add_64bit(lf_sender_ctxt* ctxt,
-                                     const long long int offset,
-                                     const uint64_t delta,
-                                     const long long int result_offset) {
-    if(remote_failed) {
-        dbg_default_warn("lf.cpp: remote has failed, post_remote_send() does nothing.");
-        return;
-    }
-    int ret = 0;
-
-    struct fi_msg_atomic msg;
-    struct fi_ioc iov;
-    struct fi_rma_ioc rma_iov;
-
-    iov.addr = read_buf + result_offset;
-    iov.count = 1;
-    rma_iov.addr = ((LF_USE_VADDR) ? remote_fi_addr : 0) + offset;
-    rma_iov.count = sizeof(uint64_t);
-    rma_iov.key = this->mr_rwkey;
-
-    msg.msg_iov = &iov;
-    msg.desc = (void**)&this->mr_lrkey;
-    msg.iov_count = 1;
-    msg.addr = delta; // YES, libfabric is very strange for this argument.
-    msg.rma_iov = &rma_iov;
-    msg.rma_iov_count = 1;
-    msg.datatype = FI_UINT64;
-    msg.op = FI_SUM;
-    msg.context = (void*)ctxt;
-    msg.data = 0l;
-
-    ret = fail_if_nonzero_retry_on_eagain("fi_fetch_atomicmsg failed.", REPORT_ON_FAILURE,
-                                          fi_fetch_atomicmsg, this->ep, &msg, &iov, 
-                                          (void**)&this->mr_lrkey, 1, 0);
-    if(ret != 0) {
-        dbg_default_error("{} failed with return code {}", __PRETTY_FUNCTION__, ret);
-        std::cerr << __PRETTY_FUNCTION__ <<" failed with return code " << ret << std::endl;
     }
 }
 
