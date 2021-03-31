@@ -179,7 +179,8 @@ int main(int argc, char* argv[]) {
             // for(uint i = 0; i < size; ++i) {
             //     buf[i] = 'a' + rand() % 26;
             // }
-            g.send(g.commit_send());
+            // TODO: fix the number of messages.
+            g.send(1,g.commit_send());
         }
     }
     // cout << "Done sending" << endl;
