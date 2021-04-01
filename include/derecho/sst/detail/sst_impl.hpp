@@ -156,7 +156,7 @@ void SST<DerivedSST>::put(const std::vector<uint32_t> receiver_ranks, size_t off
 
 template <typename DerivedSST>
 void SST<DerivedSST>::put_atomically(const std::vector<uint32_t> receiver_ranks, size_t write_offset, size_t readback_offset, size_t delta) {
-    assert(offset % 8 == 0);
+    assert(write_offset % 8 == 0);
     for (auto index: receiver_ranks) {
         if (index == my_index || row_is_frozen[index]) {
             continue;
