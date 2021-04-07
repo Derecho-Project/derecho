@@ -112,15 +112,18 @@ std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(const Blob&
 
     const node_id_t storage_node_to_contact = storage_members[0][0];
     //Submit the update to the chosen storage node
+    dbg_default_debug("Submitting an update to node {}", storage_node_to_contact);
     auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_node_to_contact, new_data);
     //Wait for the response so we learn the update's version number
     std::pair<persistent::version_t, uint64_t> version_and_timestamp = storage_query_results.get().get(storage_node_to_contact);
     //Send another message requesting a callback for this version number
     node_id_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+    dbg_default_debug("Sending a request for callback to node {}, for version {}", storage_node_to_contact, version_and_timestamp.first);
     auto callback_query_results = storage_subgroup.p2p_send<RPC_NAME(register_callback)>(
             storage_node_to_contact, my_id, ClientCallbackType::GLOBAL_PERSISTENCE, version_and_timestamp.first);
     //Wait for it to be sent before returning (the method is void)
     callback_query_results.get();
+    dbg_default_debug("Returning ({},{}) from submit_update", version_and_timestamp.first, version_and_timestamp.second);
     return version_and_timestamp;
 }
 
@@ -157,9 +160,11 @@ void ClientNode::callback_thread_function() {
                 break;
             }
             next_event = callback_event_queue.front();
+            dbg_default_debug("Callback thread got a callback event for subgroup {}, version {}", next_event.sending_subgroup, next_event.version);
             callback_event_queue.pop();
         }
         if(next_event.callback_type == ClientCallbackType::GLOBAL_PERSISTENCE && global_persistence_callback) {
+            dbg_default_debug("Callback thread invoking global_persistence_callback");
             global_persistence_callback(next_event.sending_subgroup, next_event.version);
         }
         //Other event types not implemented yet
@@ -239,6 +244,7 @@ void StorageNode::callback_thread_function() {
                     break;
                 }
                 next_request = callback_request_queue.front();
+                dbg_default_debug("Callback thread got a request from {} for version {}", next_request.client, next_request.version);
                 callback_request_queue.pop();
             }
             requests_by_version.emplace(next_request.version, next_request);
@@ -255,6 +261,7 @@ void StorageNode::callback_thread_function() {
                 //request if it has called update(), which means update_results will
                 //have an entry for that version
                 if(result_search != update_results.end()) {
+                    dbg_default_debug("Checking for stability events for version {}", requested_version);
                     //If the result has already reached the requested callback state, immediately consume it
                     if(requests_iter->second.callback_type == ClientCallbackType::LOCAL_PERSISTENCE
                        && result_search->second.local_persistence_is_ready()) {
@@ -273,6 +280,7 @@ void StorageNode::callback_thread_function() {
             }
             if(requested_event_happened) {
                 //Send a callback to the client
+                dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_iter->second.client, requested_version);
                 derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
                 client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                         requests_iter->second.client, requests_iter->second.callback_type,
@@ -294,17 +302,21 @@ void StorageNode::callback_thread_function() {
         }
         switch(requests_by_version.begin()->second.callback_type) {
             case ClientCallbackType::LOCAL_PERSISTENCE:
+                dbg_default_debug("Callback thread awaiting local persistence for version {}", requests_by_version.begin()->first);
                 queryresults_for_requests.at(requests_by_version.begin()->first).await_local_persistence();
                 break;
             case ClientCallbackType::GLOBAL_PERSISTENCE:
+                dbg_default_debug("Callback thread awaiting global persistence for version {}", requests_by_version.begin()->first);
                 queryresults_for_requests.at(requests_by_version.begin()->first).await_global_persistence();
                 break;
             case ClientCallbackType::SIGNATURE_VERIFICATION:
+                dbg_default_debug("Callback thread awaiting signature verification for version {}", requests_by_version.begin()->first);
                 queryresults_for_requests.at(requests_by_version.begin()->first).await_signature_verification();
                 break;
         }
         //Send a callback to the client
         derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
+        dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_by_version.begin()->second.client, requests_by_version.begin()->first);
         client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                 requests_by_version.begin()->second.client, requests_by_version.begin()->second.callback_type,
                 requests_by_version.begin()->first, my_subgroup_id);
