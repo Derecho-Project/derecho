@@ -1,10 +1,10 @@
 #pragma once
 
-#include <memory>
-#include <vector>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <vector>
 
 #include <derecho/core/derecho.hpp>
 
@@ -100,7 +100,9 @@ public:
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
     */
-    std::pair<persistent::version_t, uint64_t> update(const Blob& new_data) const;
+    std::pair<persistent::version_t, uint64_t> update(node_id_t sender_id,
+                                                      uint32_t update_counter,
+                                                      const Blob& new_data) const;
 
     /** Actual implementation of update, only callable from within the subgroup as an ordered send. */
     void ordered_update(const Blob& new_data);
@@ -126,7 +128,6 @@ public:
     REGISTER_RPC_FUNCTIONS(StorageNode, ORDERED_TARGETS(ordered_update),
                            P2P_TARGETS(update, get, register_callback));
 };
-
 
 struct CallbackEvent {
     ClientCallbackType callback_type;
@@ -154,16 +155,16 @@ class ClientNode : public mutils::ByteRepresentable,
     mutable std::mutex event_queue_mutex;
     mutable std::condition_variable event_queue_nonempty;
 
-
 public:
     ClientNode(const derecho::persistence_callback_t& global_persistence_callback);
     ~ClientNode();
 
-    std::pair<persistent::version_t, uint64_t> submit_update(const Blob& new_data) const;
+    std::pair<persistent::version_t, uint64_t> submit_update(uint32_t update_counter,
+                                                             const Blob& new_data) const;
 
     void receive_callback(const ClientCallbackType& callback_type,
-    persistent::version_t version,
-    derecho::subgroup_id_t sending_subgroup) const;
+                          persistent::version_t version,
+                          derecho::subgroup_id_t sending_subgroup) const;
 
     /**
      * Function that implements the callback-handling thread. This thread actually

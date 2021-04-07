@@ -106,18 +106,21 @@ ClientNode::~ClientNode() {
     event_queue_nonempty.notify_all();
 }
 
-std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(const Blob& new_data) const {
+std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(uint32_t update_counter,
+                                                                     const Blob& new_data) const {
     derecho::ExternalCaller<StorageNode>& storage_subgroup = group->template get_nonmember_subgroup<StorageNode>();
     std::vector<std::vector<node_id_t>> storage_members = group->get_subgroup_members<StorageNode>();
 
     const node_id_t storage_node_to_contact = storage_members[0][0];
+    node_id_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
+
     //Submit the update to the chosen storage node
-    dbg_default_debug("Submitting an update to node {}", storage_node_to_contact);
-    auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_node_to_contact, new_data);
+    dbg_default_debug("Submitting update number {} to node {}", update_counter, storage_node_to_contact);
+    auto storage_query_results = storage_subgroup.p2p_send<RPC_NAME(update)>(storage_node_to_contact,
+                                                                             my_id, update_counter, new_data);
     //Wait for the response so we learn the update's version number
     std::pair<persistent::version_t, uint64_t> version_and_timestamp = storage_query_results.get().get(storage_node_to_contact);
     //Send another message requesting a callback for this version number
-    node_id_t my_id = derecho::getConfUInt32(CONF_DERECHO_LOCAL_ID);
     dbg_default_debug("Sending a request for callback to node {}, for version {}", storage_node_to_contact, version_and_timestamp.first);
     auto callback_query_results = storage_subgroup.p2p_send<RPC_NAME(register_callback)>(
             storage_node_to_contact, my_id, ClientCallbackType::GLOBAL_PERSISTENCE, version_and_timestamp.first);
@@ -149,6 +152,7 @@ void ClientNode::receive_callback(const ClientCallbackType& callback_type, persi
 }
 
 void ClientNode::callback_thread_function() {
+    pthread_setname_np(pthread_self(), "client_callback");
     while(!thread_shutdown) {
         CallbackEvent next_event;
         {
@@ -192,8 +196,10 @@ StorageNode::~StorageNode() {
     request_queue_nonempty.notify_all();
 }
 
-std::pair<persistent::version_t, uint64_t> StorageNode::update(const Blob& new_data) const {
-    dbg_default_debug("Received an update call");
+std::pair<persistent::version_t, uint64_t> StorageNode::update(node_id_t sender_id,
+                                                               uint32_t update_counter,
+                                                               const Blob& new_data) const {
+    dbg_default_debug("Received an update call from node {} for update {}", sender_id, update_counter);
     derecho::Replicated<StorageNode>& this_subgroup = group->get_subgroup<StorageNode>(this->subgroup_index);
     auto query_results = this_subgroup.ordered_send<RPC_NAME(ordered_update)>(new_data);
     std::pair<persistent::version_t, uint64_t> version_and_timestamp = query_results.get_persistent_version();
@@ -224,6 +230,7 @@ void StorageNode::register_callback(node_id_t client_node_id,
 }
 
 void StorageNode::callback_thread_function() {
+    pthread_setname_np(pthread_self(), "server_callback");
     //Thread-local list of pending callback requests
     std::map<persistent::version_t, CallbackRequest> requests_by_version;
     //Thread-local list of QueryResults that are related to callback requests
@@ -385,6 +392,7 @@ bool member_of_shards(node_id_t node_id, const std::vector<std::vector<node_id_t
  *              possible size that can fit in an RPC payload (given the configured max_payload_size)
  */
 int main(int argc, char** argv) {
+    pthread_setname_np(pthread_self(), "main");
     //Parse command line arguments
     const int num_args = 3;
     const unsigned int num_client_nodes = std::stoi(argv[argc - num_args]);
@@ -393,7 +401,9 @@ int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
     const std::size_t rpc_header_size = sizeof(std::size_t) + sizeof(std::size_t)
                                         + derecho::remote_invocation_utilities::header_space();
-    const std::size_t update_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE) - rpc_header_size;
+    //An update plus the two other parameters must fit in the available payload size
+    const std::size_t update_size = derecho::getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE)
+                                    - rpc_header_size - sizeof(node_id_t) - sizeof(uint32_t);
     //For generating random updates
     const std::string characters("abcdefghijklmnopqrstuvwxyz");
     std::mt19937 random_generator(getpid());
@@ -403,7 +413,7 @@ int main(int argc, char** argv) {
         return std::make_unique<StorageNode>(registry, subgroup_id);
     };
 
-    auto client_callback_function = [](persistent::version_t version, derecho::subgroup_id_t subgroup_id) {
+    auto client_callback_function = [](derecho::subgroup_id_t subgroup_id, persistent::version_t version) {
         std::cout << "Got a client-side callback for global persistence of version "
                   << version << " from subgroup " << subgroup_id << std::endl;
     };
@@ -442,7 +452,7 @@ int main(int argc, char** argv) {
             });
             std::cout << "Submitting update " << counter << std::endl;
             //P2P send to myself
-            auto query_result = this_subgroup.p2p_send<RPC_NAME(submit_update)>(my_id, test_update);
+            auto query_result = this_subgroup.p2p_send<RPC_NAME(submit_update)>(my_id, counter, test_update);
             //Block and wait for the results
             std::pair<persistent::version_t, uint64_t> version_and_timestamp = query_result.get().get(my_id);
 
