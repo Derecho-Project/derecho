@@ -253,13 +253,26 @@ void StorageNode::callback_thread_function() {
         for(auto requests_iter = requests_by_version.begin();
             requests_iter != requests_by_version.end();) {
             persistent::version_t requested_version = requests_iter->first;
+            std::string cbtype_string;
+            switch(requests_iter->second.callback_type) {
+                case ClientCallbackType::GLOBAL_PERSISTENCE:
+                    cbtype_string = "GLOBAL_PERSISTENCE";
+                    break;
+                case ClientCallbackType::LOCAL_PERSISTENCE:
+                    cbtype_string = "LOCAL_PERSISTENCE";
+                    break;
+                case ClientCallbackType::SIGNATURE_VERIFICATION:
+                    cbtype_string = "SIGNATURE_VERIFICATION";
+                default:
+                    cbtype_string = "UNKNOWN";
+            }
+            dbg_default_debug("Callback thread checking a callback of type {} for version {}", cbtype_string, requested_version);
             bool requested_event_happened = false;
             {
                 std::unique_lock<std::mutex> query_results_lock(callback_thread_mutex);
                 auto result_search = update_results.find(requested_version);
-                //This will always be true; the client will only know the version to
-                //request if it has called update(), which means update_results will
-                //have an entry for that version
+                //The QueryResults might not be in update_results if we previously moved it
+                //to queryresults_for_requests (and now there's a second callback for the same version)
                 if(result_search != update_results.end()) {
                     dbg_default_debug("Checking for stability events for version {}", requested_version);
                     //If the result has already reached the requested callback state, immediately consume it
@@ -276,22 +289,46 @@ void StorageNode::callback_thread_function() {
                         result_search->second.await_signature_verification();
                         requested_event_happened = true;
                     }
+                } else {
+                    auto cached_result_search = queryresults_for_requests.find(requested_version);
+                    if(cached_result_search != queryresults_for_requests.end()) {
+                        dbg_default_debug("Checking for stability events in thread-local cache for version {}", requested_version);
+                        if(requests_iter->second.callback_type == ClientCallbackType::LOCAL_PERSISTENCE
+                           && cached_result_search->second.local_persistence_is_ready()) {
+                            cached_result_search->second.await_local_persistence();
+                            requested_event_happened = true;
+                        } else if(requests_iter->second.callback_type == ClientCallbackType::GLOBAL_PERSISTENCE
+                                  && cached_result_search->second.global_persistence_is_ready()) {
+                            cached_result_search->second.await_global_persistence();
+                            requested_event_happened = true;
+                        } else if(requests_iter->second.callback_type == ClientCallbackType::SIGNATURE_VERIFICATION
+                                  && cached_result_search->second.global_verification_is_ready()) {
+                            cached_result_search->second.await_signature_verification();
+                            requested_event_happened = true;
+                        }
+                    }
                 }
             }
             if(requested_event_happened) {
                 //Send a callback to the client
                 dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_iter->second.client, requested_version);
                 derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
-                client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
+                auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                         requests_iter->second.client, requests_iter->second.callback_type,
                         requested_version, my_subgroup_id);
+                dbg_default_debug("Temporary: Waiting for callback P2P message to complete");
+                p2p_send_results.get();
                 //Remove the request from the list
                 requests_iter = requests_by_version.erase(requests_iter);
             } else {
                 requests_iter++;
             }
         }
-        //Once already-completed callbacks are handled, block on the lowest-numbered one,
+        //If this cleared the requests queue, go back and wait for another one
+        if(requests_by_version.empty()) {
+            continue;
+        }
+        //If there are still requests to handle, block on the lowest-numbered one,
         //which will probably complete first. Take its corresponding QueryResults out of
         //the map that is shared with the RPC thread to avoid deadlock.
         {
@@ -317,9 +354,11 @@ void StorageNode::callback_thread_function() {
         //Send a callback to the client
         derecho::ExternalCaller<ClientNode>& client_subgroup = group->template get_nonmember_subgroup<ClientNode>();
         dbg_default_debug("Callback thread sending a callback to node {} for version {}", requests_by_version.begin()->second.client, requests_by_version.begin()->first);
-        client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
+        auto p2p_send_results = client_subgroup.p2p_send<RPC_NAME(receive_callback)>(
                 requests_by_version.begin()->second.client, requests_by_version.begin()->second.callback_type,
                 requests_by_version.begin()->first, my_subgroup_id);
+        dbg_default_debug("Temporary: Waiting for callback P2P message to complete");
+        p2p_send_results.get();
         //Remove the request from the list
         requests_by_version.erase(requests_by_version.begin());
     }
