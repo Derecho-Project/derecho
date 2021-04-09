@@ -70,6 +70,8 @@ enum class ClientCallbackType {
     SIGNATURE_VERIFICATION
 };
 
+std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type);
+
 struct CallbackRequest {
     ClientCallbackType callback_type;
     node_id_t client;

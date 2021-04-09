@@ -161,7 +161,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
             if(view_manager.subgroup_is_persistent(subgroup_id)) {
                 results_awaiting_local_persistence[subgroup_id].emplace(version,
-                                                                       std::move(pending_results_to_fulfill[subgroup_id].front()));
+                                                                        std::move(pending_results_to_fulfill[subgroup_id].front()));
             } else {
                 completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_to_fulfill[subgroup_id].front()));
             }
@@ -191,6 +191,8 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     uint32_t flags;
     retrieve_header(nullptr, msg_buf, payload_size, indx, received_from, flags);
     size_t reply_size = 0;
+    dbg_default_trace("Handling a P2P message: function_id = {}, is_reply = {}, recieved_from = {}, payload_size = {}, invocation_id = {}",
+                      indx.function_id, indx.is_reply, received_from, payload_size, ((long*)(msg_buf + header_size))[0]);
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
@@ -425,6 +427,8 @@ void RPCManager::p2p_request_worker() {
                             return nullptr;
                         });
         if(reply_size > 0) {
+            dbg_default_trace("Sending a P2P reply to node {} for invocation ID {} of function {}",
+                              request.sender_id, ((long*)(request.msg_buf + header_size))[0], indx.function_id);
             connections->send(request.sender_id);
         } else {
             // hack for now to "simulate" a reply for p2p_sends to functions that do not generate a reply
@@ -466,6 +470,7 @@ void RPCManager::p2p_receive_loop() {
                 message_received = true;
                 auto reply_pair = optional_reply_pair.value();
                 if(reply_pair.first != INVALID_NODE_ID) {
+                    dbg_default_trace("P2P thread detected a message from {}", reply_pair.first);
                     p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
                     connections->update_incoming_seq_num(reply_pair.first);
                 }
