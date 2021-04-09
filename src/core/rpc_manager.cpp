@@ -295,13 +295,13 @@ void RPCManager::new_view_callback(const View& new_view) {
 }
 
 void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_debug("RPCManager: Got a local persistence callback for version {}", version);
+    dbg_default_trace("RPCManager: Got a local persistence callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     //PendingResults in each per-subgroup map are ordered by version number, so all entries before
     //the argument version number have been persisted and need to be notified
     for(auto pending_results_iter = results_awaiting_local_persistence[subgroup_id].begin();
         pending_results_iter != results_awaiting_local_persistence[subgroup_id].upper_bound(version);) {
-        dbg_default_debug("RPCManager: Setting local persistence on version {}", pending_results_iter->first);
+        dbg_default_trace("RPCManager: Setting local persistence on version {}", pending_results_iter->first);
         pending_results_iter->second.get().set_local_persistence();
         //Move the PendingResults reference to results_awaiting_global_persistence, with the same key
         results_awaiting_global_persistence[subgroup_id].emplace(std::move(*pending_results_iter));
@@ -310,13 +310,13 @@ void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persiste
 }
 
 void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_debug("RPCManager: Got a global persistence callback for version {}", version);
+    dbg_default_trace("RPCManager: Got a global persistence callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     //PendingResults in each per-subgroup map are ordered by version number, so all entries before
     //the argument version number have been persisted and need to be notified
     for(auto pending_results_iter = results_awaiting_global_persistence[subgroup_id].begin();
         pending_results_iter != results_awaiting_global_persistence[subgroup_id].upper_bound(version);) {
-        dbg_default_debug("RPCManager: Setting global persistence on version {}", pending_results_iter->first);
+        dbg_default_trace("RPCManager: Setting global persistence on version {}", pending_results_iter->first);
         pending_results_iter->second.get().set_global_persistence();
         //Move the PendingResults reference to results_awaiting_signature if the subgroup needs signatures,
         //or completed_pending_results if it does not
@@ -330,11 +330,11 @@ void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, p
 }
 
 void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
-    dbg_default_debug("RPCManager: Got a global verification callback for version {}", version);
+    dbg_default_trace("RPCManager: Got a global verification callback for version {}", version);
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto pending_results_iter = results_awaiting_signature[subgroup_id].begin();
         pending_results_iter != results_awaiting_signature[subgroup_id].upper_bound(version);) {
-        dbg_default_debug("RPCManager: Setting signature verification on version {}", pending_results_iter->first);
+        dbg_default_trace("RPCManager: Setting signature verification on version {}", pending_results_iter->first);
         pending_results_iter->second.get().set_signature_verified();
         //Move the PendingResults reference to completed_pending_results
         completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_iter->second));
