@@ -7,20 +7,37 @@
 
 #include <derecho/conf/conf.hpp>
 #include <derecho/core/detail/p2p_connection.hpp>
+#include <derecho/core/detail/rpc_utils.hpp>
 #include <derecho/sst/detail/poll_utils.hpp>
 
 namespace sst {
-P2PConnection::P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const RequestParams& request_params) 
-    : my_node_id(my_node_id), remote_id(remote_id), request_params(request_params) {
+
+std::ostream& operator<<(std::ostream& os, REQUEST_TYPE rt) {
+    switch(rt) {
+        case REQUEST_TYPE::P2P_REPLY:
+            os << "P2P reply";
+            break;
+        case REQUEST_TYPE::P2P_REQUEST:
+            os << "P2P request";
+            break;
+        case REQUEST_TYPE::RPC_REPLY:
+            os << "RPC reply";
+            break;
+    }
+    return os;
+}
+
+P2PConnection::P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const RequestParams& request_params)
+        : my_node_id(my_node_id), remote_id(remote_id), request_params(request_params) {
     incoming_p2p_buffer = std::make_unique<volatile char[]>(p2p_buf_size);
     outgoing_p2p_buffer = std::make_unique<volatile char[]>(p2p_buf_size);
-    
+
     for(auto type : p2p_request_types) {
         incoming_seq_nums_map.try_emplace(type, 0);
         outgoing_seq_nums_map.try_emplace(type, 0);
     }
 
-    if (my_node_id != remote_id) {
+    if(my_node_id != remote_id) {
 #ifdef USE_VERBS_API
         res = std::make_unique<resources>(remote_id, const_cast<char*>(incoming_p2p_buffer.get()),
                                           const_cast<char*>(outgoing_p2p_buffer.get()),
@@ -65,6 +82,7 @@ void P2PConnection::update_incoming_seq_num() {
 
 char* P2PConnection::get_sendbuffer_ptr(REQUEST_TYPE type) {
     prev_mode = type;
+    dbg_default_trace("P2PConnection prev_mode for node {} set to {}", remote_id, type);
     if(type != REQUEST_TYPE::P2P_REQUEST
        || static_cast<int32_t>(incoming_seq_nums_map[REQUEST_TYPE::P2P_REPLY])
                   > static_cast<int32_t>(outgoing_seq_nums_map[REQUEST_TYPE::P2P_REQUEST] - request_params.window_sizes[P2P_REQUEST])) {
@@ -87,10 +105,15 @@ void P2PConnection::send() {
                     const_cast<char*>(outgoing_p2p_buffer.get()) + getOffsetSeqNum(type, outgoing_seq_nums_map[type]),
                     sizeof(uint64_t));
     } else {
+        dbg_default_trace("Sending {} to node {}, about to call post_remote_write. getOffsetBuf() is {}, getOffsetSeqNum() is {}",
+                          type, remote_id, getOffsetBuf(type, outgoing_seq_nums_map[type]), getOffsetSeqNum(type, outgoing_seq_nums_map[type]));
+        uint64_t seq_num = ((uint64_t*)(outgoing_p2p_buffer.get() + getOffsetSeqNum(type, outgoing_seq_nums_map[type])))[0];
+        long invocation_id = ((long*)(outgoing_p2p_buffer.get() + getOffsetBuf(type, outgoing_seq_nums_map[type]) + derecho::rpc::remote_invocation_utilities::header_space() + 1))[0];
+        dbg_default_trace("Sequence number in the OffsetSeqNum position is {}. Invocation ID in the payload is {}", seq_num, invocation_id);
         res->post_remote_write(getOffsetBuf(type, outgoing_seq_nums_map[type]),
                                request_params.max_msg_sizes[type] - sizeof(uint64_t));
         res->post_remote_write(getOffsetSeqNum(type, outgoing_seq_nums_map[type]),
-                                                      sizeof(uint64_t));
+                               sizeof(uint64_t));
     }
     outgoing_seq_nums_map[type]++;
 }

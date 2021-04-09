@@ -22,6 +22,9 @@ enum REQUEST_TYPE {
     P2P_REQUEST,
     RPC_REPLY
 };
+
+std::ostream& operator<<(std::ostream& os, REQUEST_TYPE rt);
+
 static const REQUEST_TYPE p2p_request_types[] = {P2P_REPLY,
                                                  P2P_REQUEST,
                                                  RPC_REPLY};
@@ -45,7 +48,7 @@ class P2PConnection {
     REQUEST_TYPE last_type;
     uint64_t getOffsetSeqNum(REQUEST_TYPE type, uint64_t seq_num);
     uint64_t getOffsetBuf(REQUEST_TYPE type, uint64_t seq_num);
-    
+
 protected:
     friend class P2PConnectionManager;
     resources* get_res();
@@ -54,11 +57,11 @@ protected:
 public:
     P2PConnection(uint32_t my_node_id, uint32_t remote_id, uint64_t p2p_buf_size, const RequestParams& request_params);
     ~P2PConnection();
-    
+
     char* probe();
     void update_incoming_seq_num();
     char* get_sendbuffer_ptr(REQUEST_TYPE type);
     void send();
-    
+
 };
 }  // namespace sst

@@ -94,6 +94,22 @@ mutils::context_ptr<const Blob> Blob::from_bytes_noalloc_const(mutils::Deseriali
     return mutils::context_ptr<const Blob>{new Blob((char*)buffer + sizeof(std::size_t), ((std::size_t*)(buffer))[0], true)};
 }
 
+std::ostream& operator<<(std::ostream& os, const ClientCallbackType& cb_type) {
+    switch(cb_type) {
+        case ClientCallbackType::GLOBAL_PERSISTENCE:
+            os << "GLOBAL_PERSISTENCE";
+            break;
+        case ClientCallbackType::LOCAL_PERSISTENCE:
+            os << "LOCAL_PERSISTENCE";
+            break;
+        case ClientCallbackType::SIGNATURE_VERIFICATION:
+            os << "SIGNATURE_VERIFICATION";
+        default:
+            os << "UNKNOWN";
+    }
+    return os;
+}
+
 /* ------------------- ClientNode implementation ------------------- */
 
 ClientNode::ClientNode(const derecho::persistence_callback_t& global_persistence_callback)
@@ -131,20 +147,7 @@ std::pair<persistent::version_t, uint64_t> ClientNode::submit_update(uint32_t up
 }
 
 void ClientNode::receive_callback(const ClientCallbackType& callback_type, persistent::version_t version, derecho::subgroup_id_t sending_subgroup) const {
-    std::string cbtype_string;
-    switch(callback_type) {
-        case ClientCallbackType::GLOBAL_PERSISTENCE:
-            cbtype_string = "GLOBAL_PERSISTENCE";
-            break;
-        case ClientCallbackType::LOCAL_PERSISTENCE:
-            cbtype_string = "LOCAL_PERSISTENCE";
-            break;
-        case ClientCallbackType::SIGNATURE_VERIFICATION:
-            cbtype_string = "SIGNATURE_VERIFICATION";
-        default:
-            cbtype_string = "UNKNOWN";
-    }
-    dbg_default_debug("Got a callback of type {} for version {}", cbtype_string, version);
+    dbg_default_debug("Got a callback of type {} for version {}", callback_type, version);
     //Send the callback event to the callback thread then return, so the P2P receive thread doesn't block for too long
     std::unique_lock<std::mutex> lock(event_queue_mutex);
     callback_event_queue.emplace(CallbackEvent{callback_type, version, sending_subgroup});
@@ -260,20 +263,7 @@ void StorageNode::callback_thread_function() {
         for(auto requests_iter = requests_by_version.begin();
             requests_iter != requests_by_version.end();) {
             persistent::version_t requested_version = requests_iter->first;
-            std::string cbtype_string;
-            switch(requests_iter->second.callback_type) {
-                case ClientCallbackType::GLOBAL_PERSISTENCE:
-                    cbtype_string = "GLOBAL_PERSISTENCE";
-                    break;
-                case ClientCallbackType::LOCAL_PERSISTENCE:
-                    cbtype_string = "LOCAL_PERSISTENCE";
-                    break;
-                case ClientCallbackType::SIGNATURE_VERIFICATION:
-                    cbtype_string = "SIGNATURE_VERIFICATION";
-                default:
-                    cbtype_string = "UNKNOWN";
-            }
-            dbg_default_debug("Callback thread checking a callback of type {} for version {}", cbtype_string, requested_version);
+            dbg_default_debug("Callback thread checking a callback of type {} for version {}", requests_iter->second.callback_type, requested_version);
             bool requested_event_happened = false;
             {
                 std::unique_lock<std::mutex> query_results_lock(callback_thread_mutex);
