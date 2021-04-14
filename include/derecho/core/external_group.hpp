@@ -43,7 +43,6 @@ private:
     std::unique_ptr<View> prev_view;
     std::unique_ptr<View> curr_view;
     std::unique_ptr<sst::P2PConnectionManager> p2p_connections;
-    std::mutex p2p_connections_mutex;
     std::unique_ptr<std::map<rpc::Opcode, rpc::receive_fun_t>> receivers;
     std::map<subgroup_id_t, std::list<rpc::PendingBase_ref>> fulfilled_pending_results;
     std::map<subgroup_id_t, uint64_t> max_payload_sizes;
@@ -55,7 +54,7 @@ private:
     /**
      * requests a new view from group member nid
      * if nid is -1, then request a view from CONF_DERECHO_LEADER_IP
-     * defined in derecho.cfg 
+     * defined in derecho.cfg
      */
     bool get_view(const node_id_t nid);
     void clean_up();

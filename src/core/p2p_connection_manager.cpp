@@ -11,8 +11,9 @@
 namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id),
+          p2p_connections(derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)),
+          active_p2p_connections(derecho::getConfInt32(CONF_DERECHO_MAX_NODE_ID), false),
           failure_upcall(params.failure_upcall) {
-    
     // HARD-CODED. Adding another request type will break this
 
     request_params.window_sizes[P2P_REPLY] = params.p2p_window_size;
@@ -29,10 +30,10 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
     }
     p2p_buf_size += sizeof(bool);
 
-    p2p_connections[my_node_id] = std::make_unique<P2PConnection>(my_node_id, my_node_id, p2p_buf_size, request_params);
+    p2p_connections[my_node_id].second = std::make_unique<P2PConnection>(my_node_id, my_node_id, p2p_buf_size, request_params);
 
     // external client doesn't need failure checking
-    if (!params.is_external) {
+    if(!params.is_external) {
         timeout_thread = std::thread(&P2PConnectionManager::check_failures_loop, this);
     }
 }
@@ -42,24 +43,26 @@ P2PConnectionManager::~P2PConnectionManager() {
 }
 
 void P2PConnectionManager::add_connections(const std::vector<node_id_t>& node_ids) {
-    std::lock_guard<std::mutex> lock(connections_mutex);
-    for (const node_id_t remote_id : node_ids) {
-	if (p2p_connections.find(remote_id) == p2p_connections.end()) {
-	    p2p_connections.emplace(remote_id, std::make_unique<P2PConnection>(my_node_id, remote_id, p2p_buf_size, request_params));
-    	}
+    for(const node_id_t remote_id : node_ids) {
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[remote_id].first);
+        if(!p2p_connections[remote_id].second) {
+            p2p_connections[remote_id].second = std::make_unique<P2PConnection>(my_node_id, remote_id, p2p_buf_size, request_params);
+            active_p2p_connections[remote_id] = true;
+        }
     }
 }
 
 void P2PConnectionManager::remove_connections(const std::vector<node_id_t>& node_ids) {
-    std::lock_guard<std::mutex> lock(connections_mutex);
     for(const node_id_t remote_id : node_ids) {
-        p2p_connections.erase(remote_id);
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[remote_id].first);
+        p2p_connections[remote_id].second = nullptr;
+        active_p2p_connections[remote_id] = false;
     }
 }
 
 bool P2PConnectionManager::contains_node(const node_id_t node_id) {
-    std::lock_guard<std::mutex> lock(connections_mutex);
-    return (p2p_connections.find(node_id) != p2p_connections.end());
+    std::lock_guard<std::mutex> lock(p2p_connections[node_id].first);
+    return p2p_connections[node_id].second != nullptr;
 }
 
 void P2PConnectionManager::shutdown_failures_thread() {
@@ -73,25 +76,36 @@ uint64_t P2PConnectionManager::get_max_p2p_reply_size() {
     return request_params.max_msg_sizes[P2P_REPLY] - sizeof(uint64_t);
 }
 
-void P2PConnectionManager::update_incoming_seq_num() {
-    p2p_connections[last_node_id]->update_incoming_seq_num();
+void P2PConnectionManager::update_incoming_seq_num(node_id_t node_id) {
+    if(node_id != INVALID_NODE_ID) {
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+        if(p2p_connections[node_id].second) {
+            p2p_connections[node_id].second->update_incoming_seq_num();
+        }
+    }
 }
 
 // check if there's a new request from any node
 std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
-    for(const auto& [node_id, p2p_conn] : p2p_connections) {
-        auto buf = p2p_conn->probe();
+    for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
+        //Check the hint before locking the mutex. If it's false, don't bother.
+        if(!active_p2p_connections[node_id]) continue;
+
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+        //In case the hint was wrong, check for an empty connection
+        if(!p2p_connections[node_id].second) continue;
+
+        auto buf = p2p_connections[node_id].second->probe();
         // In include/derecho/core/detail/rpc_utils.hpp:
         // Please note that populate_header() put payload_size(size_t) at the beginning of buffer.
         // If we only test buf[0], it will fall in the wrong path if the least significant byte of the payload size is
         // zero.
         if(buf && reinterpret_cast<size_t*>(buf)[0]) {
-            last_node_id = node_id;
             return std::pair<node_id_t, char*>(node_id, buf);
         } else if(buf) {
             // this means that we have a null reply
             // we don't need to process it, but we still want to increment the seq num
-            p2p_conn->update_incoming_seq_num();
+            p2p_connections[node_id].second->update_incoming_seq_num();
             return std::pair<node_id_t, char*>(INVALID_NODE_ID, nullptr);
         }
     }
@@ -99,13 +113,19 @@ std::optional<std::pair<node_id_t, char*>> P2PConnectionManager::probe_all() {
 }
 
 char* P2PConnectionManager::get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type) {
-    return p2p_connections.at(node_id)->get_sendbuffer_ptr(type);
+    std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+    if(p2p_connections[node_id].second) {
+        return p2p_connections[node_id].second->get_sendbuffer_ptr(type);
+    } else {
+        return nullptr;
+    }
 }
 
 void P2PConnectionManager::send(node_id_t node_id) {
-    p2p_connections.at(node_id)->send();
-    if(node_id != my_node_id) {
-        p2p_connections.at(node_id)->num_rdma_writes++;
+    std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+    p2p_connections[node_id].second->send();
+    if(node_id != my_node_id && p2p_connections[node_id].second) {
+        p2p_connections[node_id].second->num_rdma_writes++;
     }
 }
 
@@ -119,7 +139,7 @@ void P2PConnectionManager::check_failures_loop() {
     uint32_t ce_idx = util::polling_data.get_index(tid);
 
     uint16_t tick_count = 0;
-    const uint16_t one_second_count = 1000/heartbeat_ms;
+    const uint16_t one_second_count = 1000 / heartbeat_ms;
     while(!thread_shutdown) {
         std::this_thread::sleep_for(std::chrono::milliseconds(heartbeat_ms));
         tick_count++;
@@ -132,19 +152,27 @@ void P2PConnectionManager::check_failures_loop() {
         std::map<uint32_t, lf_sender_ctxt> sctxt;
 #endif
 
-        for(const auto& [node_id, p2p_conn] : p2p_connections) {
+        for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
+            if(!active_p2p_connections[node_id]) continue;
+
+            std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+
+            if(!p2p_connections[node_id].second) continue;
+
             // checks every second regardless of num_rdma_writes
-            if (node_id == my_node_id || (p2p_conn->num_rdma_writes < 1000 && tick_count < one_second_count)) {
+            if(node_id == my_node_id || (p2p_connections[node_id].second->num_rdma_writes < 1000 && tick_count < one_second_count)) {
                 continue;
             }
-            p2p_conn->num_rdma_writes = 0;
+            p2p_connections[node_id].second->num_rdma_writes = 0;
             sctxt[node_id].set_remote_id(node_id);
             sctxt[node_id].set_ce_idx(ce_idx);
 
-            p2p_conn->get_res()->post_remote_write_with_completion(&sctxt[node_id], p2p_buf_size - sizeof(bool), sizeof(bool));
+            p2p_connections[node_id].second->get_res()->post_remote_write_with_completion(&sctxt[node_id],
+                                                                                          p2p_buf_size - sizeof(bool),
+                                                                                          sizeof(bool));
             posted_write_to.insert(node_id);
-        } 
-        if (tick_count >= one_second_count) {
+        }
+        if(tick_count >= one_second_count) {
             tick_count = 0;
         }
 
@@ -180,13 +208,11 @@ void P2PConnectionManager::check_failures_loop() {
             // if waiting for a completion entry timed out
             if(!ce) {
                 // mark all nodes that have not yet responded as failed
-                for(const auto& pair : p2p_connections) {
-                    const auto& node_id = pair.first;
-                    if(posted_write_to.find(node_id) == posted_write_to.end() 
-                    || polled_successfully_from.find(node_id) != polled_successfully_from.end()) {
+                for(const node_id_t& posted_id : posted_write_to) {
+                    if(polled_successfully_from.find(posted_id) != polled_successfully_from.end()) {
                         continue;
                     }
-                    failed_node_indexes.push_back(node_id);
+                    failed_node_indexes.push_back(posted_id);
                 }
                 break;
             }
@@ -204,7 +230,12 @@ void P2PConnectionManager::check_failures_loop() {
 
         for(auto nid : failed_node_indexes) {
             dbg_default_debug("p2p_connection_manager detected failure/timeout on node {}", nid);
-            p2p_connections.at(nid)->get_res()->report_failure();
+            {
+                std::lock_guard<std::mutex> connection_lock(p2p_connections[nid].first);
+                if(p2p_connections[nid].second) {
+                    p2p_connections[nid].second->get_res()->report_failure();
+                }
+            }
             if(failure_upcall) {
                 failure_upcall(nid);
             }
@@ -212,12 +243,17 @@ void P2PConnectionManager::check_failures_loop() {
     }
 }
 
-
 void P2PConnectionManager::filter_to(const std::vector<node_id_t>& live_nodes_list) {
     std::vector<node_id_t> prev_nodes_list;
-    for (const auto& e : p2p_connections ) {
-        prev_nodes_list.push_back(e.first);
+    for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
+        if(!active_p2p_connections[node_id]) continue;
+
+        std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+        if(p2p_connections[node_id].second) {
+            prev_nodes_list.push_back(node_id);
+        }
     }
+
     std::vector<node_id_t> departed;
     std::set_difference(prev_nodes_list.begin(), prev_nodes_list.end(),
                         live_nodes_list.begin(), live_nodes_list.end(),

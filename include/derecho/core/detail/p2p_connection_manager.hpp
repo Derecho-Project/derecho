@@ -36,14 +36,25 @@ class P2PConnectionManager {
     const node_id_t my_node_id;
 
     RequestParams request_params;
-    // one element per member for P2P
-    std::map<node_id_t, std::unique_ptr<P2PConnection>> p2p_connections;
+    /**
+     * Contains one entry per possible Node ID; the vector index is the node ID.
+     * Each entry is a pair consisting of a mutex protecting that entry and a
+     * possibly-null pointer to a P2PConnection to the node ID indicated by the
+     * index. You must lock the mutex before accessing the pointer.
+     */
+    std::vector<std::pair<std::mutex, std::unique_ptr<P2PConnection>>> p2p_connections;
+    /**
+     * Contains one Boolean value for each entry in p2p_connections that serves
+     * as a hint for whether that entry is non-null. This can be used to check
+     * whether a connection exists without locking its mutex, but it can be
+     * wrong due to race conditions.
+     */
+    std::vector<bool> active_p2p_connections;
 
     uint64_t p2p_buf_size;
     std::atomic<bool> thread_shutdown{false};
     std::thread timeout_thread;
-    
-    node_id_t last_node_id;
+
     void check_failures_loop();
     failure_upcall_t failure_upcall;
     std::mutex connections_mutex;
@@ -56,7 +67,7 @@ public:
     bool contains_node(const node_id_t node_id);
     void shutdown_failures_thread();
     uint64_t get_max_p2p_reply_size();
-    void update_incoming_seq_num();
+    void update_incoming_seq_num(node_id_t node_id);
     std::optional<std::pair<node_id_t, char*>> probe_all();
     char* get_sendbuffer_ptr(node_id_t node_id, REQUEST_TYPE type);
     void send(node_id_t node_id);

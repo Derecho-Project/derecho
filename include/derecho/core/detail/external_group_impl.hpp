@@ -392,13 +392,13 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
 
     // loop event
     while(!thread_shutdown) {
-        std::unique_lock<std::mutex> connections_lock(p2p_connections_mutex);
+        //No need to get a View lock here, since ExternalGroup doesn't have a ViewManager or view-change events
         auto optional_reply_pair = p2p_connections->probe_all();
         if(optional_reply_pair) {
             auto reply_pair = optional_reply_pair.value();
             if(reply_pair.first != INVALID_NODE_ID) {
                 p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-                p2p_connections->update_incoming_seq_num();
+                p2p_connections->update_incoming_seq_num(reply_pair.first);
             }
 
             // update last time
@@ -409,10 +409,8 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > 1) {
-                connections_lock.unlock();
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
-                connections_lock.lock();
             }
         }
     }
