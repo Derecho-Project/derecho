@@ -356,6 +356,7 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
                               indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
+        reply_size = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
                         [this, &reply_size, &request](size_t _size) -> char* {
                             reply_size = _size;
