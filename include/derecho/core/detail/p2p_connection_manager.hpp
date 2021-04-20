@@ -44,12 +44,16 @@ class P2PConnectionManager {
      */
     std::vector<std::pair<std::mutex, std::unique_ptr<P2PConnection>>> p2p_connections;
     /**
-     * Contains one Boolean value for each entry in p2p_connections that serves
-     * as a hint for whether that entry is non-null. This can be used to check
-     * whether a connection exists without locking its mutex, but it can be
-     * wrong due to race conditions.
+     * An array containing one Boolean value for each entry in p2p_connections
+     * that serves as a hint for whether that entry is non-null. The values are
+     * declared as char rather than bool to ensure they are each stored in
+     * exactly one byte. This can be used to check whether a connection exists
+     * without locking its mutex, but the hint can be wrong due to race
+     * conditions. Threads that write to this array should lock the
+     * corresponding mutex in p2p_connections before updating it to avoid lost
+     * updates from write conflicts.
      */
-    std::vector<bool> active_p2p_connections;
+    char* active_p2p_connections;
 
     uint64_t p2p_buf_size;
     std::atomic<bool> thread_shutdown{false};

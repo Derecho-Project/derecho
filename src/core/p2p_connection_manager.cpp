@@ -12,7 +12,7 @@ namespace sst {
 P2PConnectionManager::P2PConnectionManager(const P2PParams params)
         : my_node_id(params.my_node_id),
           p2p_connections(derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)),
-          active_p2p_connections(derecho::getConfInt32(CONF_DERECHO_MAX_NODE_ID), false),
+          active_p2p_connections(new char[derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID)]),
           failure_upcall(params.failure_upcall) {
     // HARD-CODED. Adding another request type will break this
 
@@ -22,6 +22,10 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
     request_params.max_msg_sizes[P2P_REPLY] = params.max_p2p_reply_size;
     request_params.max_msg_sizes[P2P_REQUEST] = params.max_p2p_request_size;
     request_params.max_msg_sizes[RPC_REPLY] = params.max_rpc_reply_size;
+
+    for(uint32_t i = 0; i < derecho::getConfUInt32(CONF_DERECHO_MAX_NODE_ID); ++i) {
+        active_p2p_connections[i] = false;
+    }
 
     p2p_buf_size = 0;
     for(uint8_t i = 0; i < num_request_types; ++i) {
@@ -40,6 +44,8 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
 
 P2PConnectionManager::~P2PConnectionManager() {
     shutdown_failures_thread();
+    //plain C array must be deleted
+    delete[] active_p2p_connections;
 }
 
 void P2PConnectionManager::add_connections(const std::vector<node_id_t>& node_ids) {
@@ -246,9 +252,11 @@ void P2PConnectionManager::check_failures_loop() {
 void P2PConnectionManager::filter_to(const std::vector<node_id_t>& live_nodes_list) {
     std::vector<node_id_t> prev_nodes_list;
     for(node_id_t node_id = 0; node_id < p2p_connections.size(); ++node_id) {
+        //Check the hint before acquiring the lock
         if(!active_p2p_connections[node_id]) continue;
 
         std::lock_guard<std::mutex> connection_lock(p2p_connections[node_id].first);
+        //Check again to ensure the connection is non-null
         if(p2p_connections[node_id].second) {
             prev_nodes_list.push_back(node_id);
         }
