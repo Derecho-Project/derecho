@@ -35,6 +35,7 @@ P2PConnectionManager::P2PConnectionManager(const P2PParams params)
     p2p_buf_size += sizeof(bool);
 
     p2p_connections[my_node_id].second = std::make_unique<P2PConnection>(my_node_id, my_node_id, p2p_buf_size, request_params);
+    active_p2p_connections[my_node_id] = true;
 
     // external client doesn't need failure checking
     if(!params.is_external) {
