@@ -65,28 +65,28 @@ private:
 
     /** ======================== copy/paste from rpc_manager ======================== **/
     std::atomic<bool> thread_shutdown{false};
-    std::thread rpc_thread;
+    std::thread rpc_listener_thread;
     /** p2p send and queries are queued in fifo worker */
-    std::thread fifo_worker_thread;
-    struct fifo_req {
+    std::thread request_worker_thread;
+    struct p2p_req {
         node_id_t sender_id;
         char* msg_buf;
         uint32_t buffer_size;
-        fifo_req() : sender_id(0),
+        p2p_req() : sender_id(0),
                      msg_buf(nullptr),
                      buffer_size(0) {}
-        fifo_req(node_id_t _sender_id,
+        p2p_req(node_id_t _sender_id,
                  char* _msg_buf,
                  uint32_t _buffer_size) : sender_id(_sender_id),
                                           msg_buf(_msg_buf),
                                           buffer_size(_buffer_size) {}
     };
-    std::queue<fifo_req> fifo_queue;
-    std::mutex fifo_queue_mutex;
-    std::condition_variable fifo_queue_cv;
+    std::queue<p2p_req> p2p_request_queue;
+    std::mutex request_queue_mutex;
+    std::condition_variable request_queue_cv;
     mutils::RemoteDeserialization_v rdv;
     void p2p_receive_loop();
-    void fifo_worker();
+    void p2p_request_worker();
     void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
     std::exception_ptr receive_message(const rpc::Opcode& indx, const node_id_t& received_from,
                                        char const* const buf, std::size_t payload_size,

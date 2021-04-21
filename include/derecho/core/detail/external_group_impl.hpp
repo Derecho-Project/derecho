@@ -112,14 +112,14 @@ ExternalGroup<ReplicatedTypes...>::ExternalGroup(std::vector<DeserializationCont
             true,
             NULL});
 
-    rpc_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::p2p_receive_loop, this);
+    rpc_listener_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::p2p_receive_loop, this);
 }
 
 template <typename... ReplicatedTypes>
 ExternalGroup<ReplicatedTypes...>::~ExternalGroup() {
     thread_shutdown = true;
-    if(rpc_thread.joinable()) {
-        rpc_thread.join();
+    if(rpc_listener_thread.joinable()) {
+        rpc_listener_thread.join();
     }
 }
 
@@ -322,15 +322,15 @@ void ExternalGroup<ReplicatedTypes...>::p2p_message_handler(node_id_t sender_id,
         throw derecho::derecho_exception("Cascading P2P Send/Queries to be implemented!");
     } else {
         // send to fifo queue.
-        std::unique_lock<std::mutex> lock(fifo_queue_mutex);
-        fifo_queue.emplace(sender_id, msg_buf, buffer_size);
-        fifo_queue_cv.notify_one();
+        std::unique_lock<std::mutex> lock(request_queue_mutex);
+        p2p_request_queue.emplace(sender_id, msg_buf, buffer_size);
+        request_queue_cv.notify_one();
     }
 }
 
 template <typename... ReplicatedTypes>
-void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
-    pthread_setname_np(pthread_self(), "fifo_thread");
+void ExternalGroup<ReplicatedTypes...>::p2p_request_worker() {
+    pthread_setname_np(pthread_self(), "request_worker_thread");
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -338,17 +338,17 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
     node_id_t received_from;
     uint32_t flags;
     size_t reply_size = 0;
-    fifo_req request;
+    p2p_req request;
 
     while(!thread_shutdown) {
         {
-            std::unique_lock<std::mutex> lock(fifo_queue_mutex);
-            fifo_queue_cv.wait(lock, [&]() { return !fifo_queue.empty() || thread_shutdown; });
+            std::unique_lock<std::mutex> lock(request_queue_mutex);
+            request_queue_cv.wait(lock, [&]() { return !p2p_request_queue.empty() || thread_shutdown; });
             if(thread_shutdown) {
                 break;
             }
-            request = fifo_queue.front();
-            fifo_queue.pop();
+            request = p2p_request_queue.front();
+            p2p_request_queue.pop();
         }
         retrieve_header(nullptr, request.msg_buf, payload_size, indx, received_from, flags);
         if(indx.is_reply || RPC_HEADER_FLAG_TST(flags, CASCADE)) {
@@ -379,13 +379,11 @@ void ExternalGroup<ReplicatedTypes...>::fifo_worker() {
 
 template <typename... ReplicatedTypes>
 void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
-    pthread_setname_np(pthread_self(), "rpc_thread");
+    pthread_setname_np(pthread_self(), "rpc_listener_thread");
 
     uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
-    // set the thread local rpc_handler context
-    // _in_rpc_handler = true;
 
-    fifo_worker_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::fifo_worker, this);
+    request_worker_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::fifo_worker, this);
 
     struct timespec last_time, cur_time;
     clock_gettime(CLOCK_REALTIME, &last_time);
@@ -415,8 +413,8 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
         }
     }
     // stop fifo worker.
-    fifo_queue_cv.notify_one();
-    fifo_worker_thread.join();
+    request_queue_cv.notify_one();
+    request_worker_thread.join();
 }
 
 template <typename... ReplicatedTypes>
