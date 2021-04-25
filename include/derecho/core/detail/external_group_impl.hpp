@@ -383,7 +383,7 @@ void ExternalGroup<ReplicatedTypes...>::p2p_receive_loop() {
 
     uint64_t max_payload_size = getConfUInt64(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE);
 
-    request_worker_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::fifo_worker, this);
+    request_worker_thread = std::thread(&ExternalGroup<ReplicatedTypes...>::p2p_request_worker, this);
 
     struct timespec last_time, cur_time;
     clock_gettime(CLOCK_REALTIME, &last_time);
