@@ -220,11 +220,8 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 
 //This is always called while holding a write lock on view_manager.view_mutex
 void RPCManager::new_view_callback(const View& new_view) {
-    {
-        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-        connections->remove_connections(new_view.departed);
-        connections->add_connections(new_view.members);
-    }
+    connections->remove_connections(new_view.departed);
+    connections->add_connections(new_view.members);
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
     for(auto& fulfilled_pending_results_pair : results_awaiting_local_persistence) {
@@ -343,7 +340,6 @@ void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persist
 }
 
 void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
-    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections->add_connections(node_ids);
 }
 
@@ -358,8 +354,8 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     volatile char* buf;
     int curr_vid = -1;
     do {
-        //ViewManager's view_mutex also prevents connections from being reassigned (because
-        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        //ViewManager's view_mutex also prevents connections from being removed (because
+        //that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         //Check to see if the view changed between iterations of the loop, and re-get the rank
         if(curr_vid != view_and_lock.get().vid) {
@@ -377,8 +373,8 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
 
 void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
     try {
-        //ViewManager's view_mutex also prevents connections from being reassigned (because
-        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        //ViewManager's view_mutex also prevents connections from being removed (because
+        //that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         connections->send(dest_id);
     } catch(std::out_of_range& map_error) {
@@ -418,6 +414,7 @@ void RPCManager::p2p_request_worker() {
                               indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
+        reply_size = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
                         [this, &reply_size, &request](size_t _size) -> char* {
                             reply_size = _size;
@@ -458,26 +455,33 @@ void RPCManager::p2p_receive_loop() {
 
     // loop event
     while(!thread_shutdown) {
-        std::unique_lock<std::mutex> connections_lock(p2p_connections_mutex);
-        auto optional_reply_pair = connections->probe_all();
-        if(optional_reply_pair) {
-            auto reply_pair = optional_reply_pair.value();
-            if(reply_pair.first != INVALID_NODE_ID) {
-                p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-                connections->update_incoming_seq_num();
+        bool message_received = false;
+        // This scope contains a lock on the View, which prevents view changes during
+        // delivery of a P2P message (otherwise, a View change could occur between a
+        // successful probe_all() and the call to p2p_message_handler)
+        {
+            SharedLockedReference<View> locked_view = view_manager.get_current_view();
+            auto optional_reply_pair = connections->probe_all();
+            if(optional_reply_pair) {
+                message_received = true;
+                auto reply_pair = optional_reply_pair.value();
+                if(reply_pair.first != INVALID_NODE_ID) {
+                    p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                    connections->update_incoming_seq_num(reply_pair.first);
+                }
+                // update last time
+                clock_gettime(CLOCK_REALTIME, &last_time);
             }
-            // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
-        } else {
+        }
+        //Release the View lock before going to sleep if no messages were received
+        if(!message_received) {
             clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > 1) {
-                connections_lock.unlock();
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
-                connections_lock.lock();
             }
         }
     }
