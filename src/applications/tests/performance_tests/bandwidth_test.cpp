@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
                     "data_derecho_bw");
     }
 
-    flush_events();
+    // flush_events();
 
     group.barrier_sync();
     group.leave();

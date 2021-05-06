@@ -91,21 +91,21 @@ MulticastGroup::MulticastGroup(
     sender_thread = std::thread(&MulticastGroup::send_loop, this);
     timeout_thread = std::thread(&MulticastGroup::check_failures_loop, this);
 
-    observer_thread = std::thread([this]() {
-        const node_id_t row_index = 1;
-        if(members.size() <= row_index) {
-            std::cout << "Exiting abruptly from observer_thread" << std::endl;
-            exit(1);
-        }
-        int32_t last_index = -1;
-        while(true) {
-            const int32_t cur_index = this->sst->index[row_index][subgroup_settings_map.at(0).index_offset];
-            if(member_index == 0 && cur_index > last_index) {
-                DERECHO_LOG(cur_index, -1, "");
-    		last_index = cur_index;
-            }
-        }
-    });
+    // observer_thread = std::thread([this]() {
+    //     const node_id_t row_index = 1;
+    //     if(members.size() <= row_index) {
+    //         std::cout << "Exiting abruptly from observer_thread" << std::endl;
+    //         exit(1);
+    //     }
+    //     int32_t last_index = -1;
+    //     while(true) {
+    //         const int32_t cur_index = this->sst->index[row_index][subgroup_settings_map.at(0).index_offset];
+    //         if(member_index == 0 && cur_index > last_index) {
+    //             DERECHO_LOG(cur_index, -1, "");
+    // 		last_index = cur_index;
+    //         }
+    //     }
+    // });
 }
 
 MulticastGroup::MulticastGroup(
