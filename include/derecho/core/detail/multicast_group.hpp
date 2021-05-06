@@ -20,6 +20,7 @@
 #include "derecho_internal.hpp"
 #include "derecho_sst.hpp"
 #include "persistence_manager.hpp"
+#include "evaluation_policy.hpp"
 #include <derecho/conf/conf.hpp>
 #include <derecho/mutils-serialization/SerializationMacros.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
@@ -361,6 +362,8 @@ private:
     std::list<pred_handle> delivery_pred_handles;
     std::list<pred_handle> persistence_pred_handles;
     std::list<pred_handle> sender_pred_handles;
+
+    std::map<std::pair<subgroup_id_t, PREDICATE_TYPE>, std::function<void(DerechoSST&)>> predicates_map;
 
     std::vector<bool> last_transfer_medium;
 

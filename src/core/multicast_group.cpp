@@ -975,11 +975,6 @@ void MulticastGroup::register_predicates() {
                 l++;
             }
         }
-
-        auto receiver_pred = [=](const DerechoSST& sst) {
-            return receiver_predicate(subgroup_settings,
-                                      shard_ranks_by_sender_rank, num_shard_senders, sst);
-        };
         auto sst_receive_handler_lambda = [=](uint32_t sender_rank, volatile char* data, uint64_t size) {
             sst_receive_handler(subgroup_num, subgroup_settings,
                                 shard_ranks_by_sender_rank, num_shard_senders,
@@ -990,92 +985,70 @@ void MulticastGroup::register_predicates() {
                               shard_ranks_by_sender_rank, num_shard_senders, sst,
                               sst_receive_handler_lambda);
         };
-        receiver_pred_handles.emplace_back(sst->predicates.insert(receiver_pred, receiver_trig,
-                                                                  sst::PredicateType::RECURRENT));
 
-        auto sst_send_pred = [](const DerechoSST& sst) {
-            return true;
-        };
+	predicates_map.insert({{subgroup_num, PREDICATE_TYPE::RECEIVE}, receiver_trig});
+
         auto sst_send_trig = [this, subgroup_num, subgroup_settings, num_shard_members](DerechoSST& sst) mutable {
             sst_send_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
         };
-        receiver_pred_handles.emplace_back(sst->predicates.insert(sst_send_pred, sst_send_trig,
-                                                                  sst::PredicateType::RECURRENT));
 
+	predicates_map.insert({{subgroup_num, PREDICATE_TYPE::SEND}, sst_send_trig});
+
+	
         if(subgroup_settings.mode != Mode::UNORDERED) {
-            auto delivery_pred = [](const DerechoSST& sst) {
-                return true;
-            };
             auto delivery_trig = [=](DerechoSST& sst) mutable {
                 delivery_trigger(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
-            delivery_pred_handles.emplace_back(sst->predicates.insert(delivery_pred, delivery_trig,
-                                                                      sst::PredicateType::RECURRENT));
+	    predicates_map.insert({{subgroup_num, PREDICATE_TYPE::DELIVERY}, delivery_trig});
 
             //This predicate should be "current min over persisted_num is greater than the last
             //observed minimum persisted_num," but computing the current min in the predicate is
-            //redundant with computing it in the trigger. To save time, we just make the predicate
-            //do nothing, and make the trigger both compute and update the minimum persisted_num
-            auto persistence_pred = [](const DerechoSST& sst) {
-                return true;
-            };
+            //redundant with computing it in the trigger.
+	    // The trigger both computes and update the minimum persisted_num
             auto persistence_trig = [=](DerechoSST& sst) mutable {
                 update_min_persisted_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
-            persistence_pred_handles.emplace_back(sst->predicates.insert(persistence_pred, persistence_trig, sst::PredicateType::RECURRENT));
+	    predicates_map.insert({{subgroup_num, PREDICATE_TYPE::PERSISTENCE}, persistence_trig});
 
             //In case there are persistent objects with signatures, add a similar predicate to check/update the minimum verified_num
-            auto verified_pred = [](const DerechoSST& sst) {
-                return true;
-            };
             auto verified_trig = [=](DerechoSST& sst) {
                 update_min_verified_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
             if(callbacks.global_verified_callback) {
-                persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
+                predicates_map.insert({{subgroup_num, PREDICATE_TYPE::VERIFIED}, verified_trig});
             }
 
             if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [=](const DerechoSST& sst) {
-                    message_id_t seq_num = next_message_to_deliver[subgroup_num] * num_shard_senders + subgroup_settings.sender_rank;
-                    for(uint i = 0; i < num_shard_members; ++i) {
-                        if(sst.delivered_num[node_id_to_sst_index.at(subgroup_settings.members[i])][subgroup_num] < seq_num) {
-                            return false;
-                        }
-                    }
-                    return true;
-                };
                 auto sender_trig = [=](DerechoSST& sst) {
                     sender_cv.notify_all();
                     next_message_to_deliver[subgroup_num]++;
                 };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
+		predicates_map.insert({{subgroup_num, PREDICATE_TYPE::RDMC_SEND}, sender_trig});
             }
         } else {
             //This subgroup is in UNORDERED mode
             if(subgroup_settings.sender_rank >= 0) {
-                auto sender_pred = [=](const DerechoSST& sst) {
-                    for(uint i = 0; i < num_shard_members; ++i) {
-                        uint32_t num_received_offset = subgroup_settings.num_received_offset;
-                        if(sst.num_received[node_id_to_sst_index.at(subgroup_settings.members[i])][num_received_offset + subgroup_settings.sender_rank]
-                           < static_cast<int32_t>(future_message_indices[subgroup_num] - 1 - subgroup_settings.profile.window_size)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                };
                 auto sender_trig = [this](DerechoSST& sst) {
                     sender_cv.notify_all();
                 };
-                sender_pred_handles.emplace_back(sst->predicates.insert(sender_pred, sender_trig,
-                                                                        sst::PredicateType::RECURRENT));
+                predicates_map.insert({{subgroup_num, PREDICATE_TYPE::RDMC_SEND}, sender_trig});
             }
         }
     }
+
+    auto all_pred = [this](const DerechoSST& sst) {
+        return true;
+    };
+    auto all_trig = [this](DerechoSST& sst) {
+        while(!thread_shutdown) {
+            predicates_map.at(evaluation_policy(sst))(sst);
+        }
+    };
+
+    sst->predicates.insert(all_pred, all_trig, sst::PredicateType::RECURRENT);
 }
 
 MulticastGroup::~MulticastGroup() {
@@ -1091,23 +1064,23 @@ void MulticastGroup::wedge() {
         return;
     }
 
-    //Consume and remove all the predicate handles
-    for(auto handle_iter = sender_pred_handles.begin(); handle_iter != sender_pred_handles.end();) {
-        sst->predicates.remove(*handle_iter);
-        handle_iter = sender_pred_handles.erase(handle_iter);
-    }
-    for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end();) {
-        sst->predicates.remove(*handle_iter);
-        handle_iter = receiver_pred_handles.erase(handle_iter);
-    }
-    for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end();) {
-        sst->predicates.remove(*handle_iter);
-        handle_iter = delivery_pred_handles.erase(handle_iter);
-    }
-    for(auto handle_iter = persistence_pred_handles.begin(); handle_iter != persistence_pred_handles.end();) {
-        sst->predicates.remove(*handle_iter);
-        handle_iter = persistence_pred_handles.erase(handle_iter);
-    }
+    // //Consume and remove all the predicate handles
+    // for(auto handle_iter = sender_pred_handles.begin(); handle_iter != sender_pred_handles.end();) {
+    //     sst->predicates.remove(*handle_iter);
+    //     handle_iter = sender_pred_handles.erase(handle_iter);
+    // }
+    // for(auto handle_iter = receiver_pred_handles.begin(); handle_iter != receiver_pred_handles.end();) {
+    //     sst->predicates.remove(*handle_iter);
+    //     handle_iter = receiver_pred_handles.erase(handle_iter);
+    // }
+    // for(auto handle_iter = delivery_pred_handles.begin(); handle_iter != delivery_pred_handles.end();) {
+    //     sst->predicates.remove(*handle_iter);
+    //     handle_iter = delivery_pred_handles.erase(handle_iter);
+    // }
+    // for(auto handle_iter = persistence_pred_handles.begin(); handle_iter != persistence_pred_handles.end();) {
+    //     sst->predicates.remove(*handle_iter);
+    //     handle_iter = persistence_pred_handles.erase(handle_iter);
+    // }
 
     for(uint i = 0; i < num_members; ++i) {
         rdmc::destroy_group(i + rdmc_group_num_offset);
