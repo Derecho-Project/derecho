@@ -29,17 +29,18 @@ size_t index_of(T container, U elem) {
 MulticastGroup::MulticastGroup(
         std::vector<node_id_t> _members, node_id_t my_node_id,
         std::shared_ptr<DerechoSST> sst,
-        CallbackSet callbacks,
+        UserMessageCallbacks callbacks,
+        MulticastGroupCallbacks internal_callbacks,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
         unsigned int sender_timeout,
-        const subgroup_post_next_version_func_t& post_next_version_callback,
         PersistenceManager& persistence_manager_ref,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           callbacks(callbacks),
+          internal_callbacks(internal_callbacks),
           total_num_subgroups(total_num_subgroups),
           subgroup_settings_map(subgroup_settings_by_id),
           received_intervals(sst->num_received.size(), {-1, -1}),
@@ -58,7 +59,6 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          post_next_version_callback(post_next_version_callback),
           persistence_manager(persistence_manager_ref) {
     for(uint i = 0; i < num_members; ++i) {
         node_id_to_sst_index[members[i]] = i;
@@ -98,16 +98,15 @@ MulticastGroup::MulticastGroup(
         MulticastGroup&& old_group,
         uint32_t total_num_subgroups,
         const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings_by_id,
-        const subgroup_post_next_version_func_t& post_next_version_callback,
         std::vector<char> already_failed)
         : members(_members),
           num_members(members.size()),
           member_index(index_of(members, my_node_id)),
           callbacks(old_group.callbacks),
+          internal_callbacks(old_group.internal_callbacks),
           total_num_subgroups(total_num_subgroups),
           subgroup_settings_map(subgroup_settings_by_id),
           received_intervals(sst->num_received.size(), {-1, -1}),
-          rpc_callback(old_group.rpc_callback),
           rdmc_group_num_offset(old_group.rdmc_group_num_offset + old_group.num_members),
           future_message_indices(total_num_subgroups, 0),
           next_sends(total_num_subgroups),
@@ -123,7 +122,6 @@ MulticastGroup::MulticastGroup(
           sst(sst),
           sst_multicast_group_ptrs(total_num_subgroups),
           last_transfer_medium(total_num_subgroups),
-          post_next_version_callback(post_next_version_callback),
           persistence_manager(old_group.persistence_manager) {
     // Make sure rdmc_group_num_offset didn't overflow.
     assert(old_group.rdmc_group_num_offset <= std::numeric_limits<uint16_t>::max() - old_group.num_members - num_members);
@@ -486,8 +484,8 @@ void MulticastGroup::deliver_message(RDMCMessage& msg, const subgroup_id_t& subg
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version, msg_ts_us);
-        rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
+        internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
+        internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
@@ -512,8 +510,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
     if(h->cooked_send) {
         buf += h->header_size;
         auto payload_size = msg.size - h->header_size;
-        post_next_version_callback(subgroup_num, version, msg_ts_us);
-        rpc_callback(subgroup_num, msg.sender_id, buf, payload_size);
+        internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
+        internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
         if(callbacks.global_stability_callback) {
             callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
                                                 version);
@@ -923,6 +921,9 @@ void MulticastGroup::update_min_persisted_num(subgroup_id_t subgroup_num, const 
         if(callbacks.global_persistence_callback) {
             callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
         }
+        if(internal_callbacks.global_persistence_callback) {
+            internal_callbacks.global_persistence_callback(subgroup_num, min_persisted_num);
+        }
         persistence_manager.post_verify_request(subgroup_num, min_persisted_num);
         minimum_persisted_version[subgroup_num] = min_persisted_num;
     }
@@ -939,7 +940,12 @@ void MulticastGroup::update_min_verified_num(subgroup_id_t subgroup_num, const S
         min_verified_num = std::min(min_verified_num, member_verified_num);
     }
     if(min_verified_num > minimum_verified_version[subgroup_num]) {
-        callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        if(callbacks.global_verified_callback) {
+            callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        }
+        if(internal_callbacks.global_verified_callback) {
+            internal_callbacks.global_verified_callback(subgroup_num, min_verified_num);
+        }
         minimum_verified_version[subgroup_num] = min_verified_num;
     }
 }
@@ -1017,9 +1023,7 @@ void MulticastGroup::register_predicates() {
                 update_min_verified_num(subgroup_num, subgroup_settings, num_shard_members, sst);
             };
 
-            if(callbacks.global_verified_callback) {
-                persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
-            }
+            persistence_pred_handles.emplace_back(sst->predicates.insert(verified_pred, verified_trig, sst::PredicateType::RECURRENT));
 
             if(subgroup_settings.sender_rank >= 0) {
                 auto sender_pred = [=](const DerechoSST& sst) {

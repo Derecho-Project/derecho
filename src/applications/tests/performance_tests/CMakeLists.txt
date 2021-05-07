@@ -13,6 +13,14 @@ target_link_libraries(bandwidth_test derecho)
 add_executable(latency_test latency_test.cpp aggregate_latency.cpp)
 target_link_libraries(latency_test derecho)
 
+# p2p_latency_test
+add_executable(p2p_latency_test p2p_latency_test.cpp)
+target_link_libraries(p2p_latency_test derecho)
+
+# p2p bandwidth test
+add_executable(p2p_bw_test p2p_bw_test.cpp bytes_object.cpp)
+target_link_libraries(p2p_bw_test derecho)
+
 # single_active_subgroup_test
 add_executable(single_active_subgroup_test single_active_subgroup_test.cpp aggregate_bandwidth.cpp)
 target_link_libraries(single_active_subgroup_test derecho)

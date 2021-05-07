@@ -129,6 +129,7 @@ auto Replicated<T>::ordered_send(Args&&... args) {
 
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
                 std::forward<Args>(args)...))>::type;
+        //These pointers help "return" the PendingResults/QueryResults out of the lambda
         rpc::QueryResults<Ret>* results_ptr;
         rpc::PendingResults<Ret>* pending_ptr;
         auto serializer = [&](char* buffer) {
@@ -153,6 +154,8 @@ auto Replicated<T>::ordered_send(Args&&... args) {
                     ->multicast_group->send(subgroup_id, payload_size_for_multicast_send, serializer, true);
         });
         group_rpc_manager.finish_rpc_send(subgroup_id, *pending_ptr);
+        //Warning: Even though the move-constructor will clean up all the state in *results_ptr, this
+        //still leaks the memory allocated on the heap by new QueryResults<Ret>() in the serializer lambda
         return std::move(*results_ptr);
     } else {
         throw empty_reference_exception{"Attempted to use an empty Replicated<T>"};
@@ -262,13 +265,13 @@ persistent::version_t Replicated<T>::get_minimum_latest_persisted_version() {
 
 template <typename T>
 void Replicated<T>::post_next_version(persistent::version_t version, uint64_t ts_us) {
-    next_version = version;
-    next_timestamp_us = ts_us;
+    current_version = version;
+    current_timestamp_us = ts_us;
 }
 
 template <typename T>
-std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_next_version() {
-    return std::tie(next_version, next_timestamp_us);
+std::tuple<persistent::version_t, uint64_t> Replicated<T>::get_current_version() {
+    return std::tie(current_version, current_timestamp_us);
 }
 
 template <typename T>

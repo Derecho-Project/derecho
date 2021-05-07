@@ -19,7 +19,7 @@ using std::endl;
 int main(int argc, char** argv) {
     derecho::Conf::initialize(argc, argv);
 
-    derecho::CallbackSet callback_set{};
+    derecho::UserMessageCallbacks callback_set{};
 
     const int num_nodes_in_test = 3;
     derecho::SubgroupInfo subgroup_info{[](const std::type_index& subgroup_type,

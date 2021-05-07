@@ -30,7 +30,7 @@ int main() {
     auto persist_callback = [](uint32_t subgroup, persistent::version_t ver) {
         cout << "version " << ver << " is persisted locally." << endl;
     };
-    derecho::CallbackSet callbacks{stability_callback,
+    derecho::UserMessageCallbacks callbacks{stability_callback,
                                    persist_callback};
     derecho::DerechoParams parameters{max_msg_size, sst_max_msg_size, block_size};
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},

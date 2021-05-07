@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
     SubgroupInfo one_raw_group(membership_function);
 
     // join the group
-    Group<RawObject> group(CallbackSet{stability_callback},
+    Group<RawObject> group(UserMessageCallbacks{stability_callback},
                            one_raw_group, {}, std::vector<view_upcall_t>{},
                            &raw_object_factory);
 

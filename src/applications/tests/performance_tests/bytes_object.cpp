@@ -25,9 +25,19 @@ Bytes::Bytes()
           is_temporary(false) {
 }
 
+Bytes::Bytes(const Bytes& other)
+    : size(other.size), is_temporary(false) {
+    if(size > 0) {
+        bytes = new char[size];
+        memcpy(bytes, other.bytes, size);
+    } else {
+        bytes = nullptr;
+    }
+}
+
 Bytes::~Bytes() {
     if(bytes != nullptr && !is_temporary) {
-        delete bytes;
+        delete[] bytes;
     }
 }
 
@@ -43,7 +53,7 @@ Bytes& Bytes::operator=(Bytes&& other) {
 
 Bytes& Bytes::operator=(const Bytes& other) {
     if(bytes != nullptr && !is_temporary) {
-        delete bytes;
+        delete[] bytes;
     }
     size = other.size;
     if(size > 0) {

@@ -156,7 +156,7 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    derecho::CallbackSet callback_set{
+    derecho::UserMessageCallbacks callback_set{
             stability_callback,
             nullptr,
             global_persistence_callback};

@@ -23,13 +23,32 @@ class Bytes : public mutils::ByteRepresentable {
     Bytes(char* buffer, std::size_t size, bool is_temporary);
 
 public:
+    /**
+     * Constructs a byte array by copying the contents of a char array into the
+     * internal buffer.
+     * @param buffer A pointer to the char array
+     * @param size The size of the char array
+     */
     Bytes(const char* buffer, std::size_t size);
+    /**
+     * Constructs an empty byte array
+     */
     Bytes();
+    /**
+     * Copy constructor. Copies the other Bytes object's internal buffer to
+     * initialize this one.
+     */
+    Bytes(const Bytes& other);
+    /**
+     * Non-empty destructor: frees the internal byte buffer
+     */
     virtual ~Bytes();
 
     Bytes& operator=(Bytes&& other);
 
     Bytes& operator=(const Bytes& other);
+
+    /* ---- ByteRepresentable serialization interface ---- */
 
     std::size_t to_bytes(char* buffer) const;
 

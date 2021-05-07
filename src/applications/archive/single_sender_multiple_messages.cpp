@@ -30,8 +30,8 @@ int main() {
     long long unsigned int block_size = 10;
     const long long unsigned int sst_max_msg_size = (max_msg_size < 17000 ? max_msg_size : 0);
 
-    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index, 
-                                 std::optional<std::pair<char*, long long int>> data, 
+    auto stability_callback = [](uint32_t subgroup, int sender_id, long long int index,
+                                 std::optional<std::pair<char*, long long int>> data,
                                  persistent::version_t ver) {
         cout << "Message " << index << " by node " << sender_id << " of size "
              << msg_size << " is stable " << endl;
@@ -42,12 +42,12 @@ int main() {
     std::unique_ptr<derecho::Group<>> g;
     if(node_id == 0) {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip,
-                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               derecho::UserMessageCallbacks{stability_callback, nullptr},
                                                one_raw_group,
                                                derecho::DerechoParams{max_msg_size, sst_max_msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip,
-                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               derecho::UserMessageCallbacks{stability_callback, nullptr},
                                                one_raw_group);
     }
 

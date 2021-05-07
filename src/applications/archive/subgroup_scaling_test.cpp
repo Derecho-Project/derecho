@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
 
         SubgroupInfo raw_groups(membership_function);
 
-        Group<RawObject> managed_group(CallbackSet{stability_callback},
+        Group<RawObject> managed_group(UserMessageCallbacks{stability_callback},
                               raw_groups, {}, std::vector<view_upcall_t>{},
                               &raw_object_factory);
 
@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
         }
         auto members_order = managed_group.get_members();
         auto node_rank = managed_group.get_my_rank();
-	
+
         vector<std::reference_wrapper<Replicated<RawObject>>> subgroups;
         for(uint i = 0; i < subgroup_size; ++i) {
             subgroups.emplace_back(managed_group.get_subgroup<RawObject>((node_id - i + num_nodes) % num_nodes));

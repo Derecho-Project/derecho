@@ -115,7 +115,7 @@ void Group<ReplicatedTypes...>::set_external_caller_pointer(std::type_index type
 }
 
 template <typename... ReplicatedTypes>
-Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
+Group<ReplicatedTypes...>::Group(const UserMessageCallbacks& callbacks,
                                  const SubgroupInfo& subgroup_info,
                                  const std::vector<DeserializationContext*>& deserialization_context,
                                  std::vector<view_upcall_t> _view_upcalls,
@@ -184,8 +184,23 @@ Group<ReplicatedTypes...>::Group(const CallbackSet& callbacks,
         view_manager.leader_commit_initial_view();
     }
     //At this point the initial view is committed
-    //Set up RDMA connections between each member of the view
-    view_manager.initialize_multicast_groups(callbacks);
+    //Set up the multicast groups (including RDMA initialization) and register their callbacks
+    MulticastGroupCallbacks internal_callbacks{
+            //RPC message handler
+            [this](subgroup_id_t subgroup, node_id_t sender, persistent::version_t version, uint64_t timestamp, char* buf, uint32_t size) {
+                rpc_manager.rpc_message_handler(subgroup, sender, version, timestamp, buf, size);
+            },
+            //Post-next-version callback (set in ViewManager)
+            nullptr,
+            //Global persistence callback
+            [this](subgroup_id_t subgroup, persistent::version_t version) {
+                rpc_manager.notify_global_persistence_finished(subgroup, version);
+            },
+            //Verification callback
+            [this](subgroup_id_t subgroup, persistent::version_t version) {
+                rpc_manager.notify_verification_finished(subgroup, version);
+            }};
+    view_manager.initialize_multicast_groups(callbacks, internal_callbacks);
     rpc_manager.create_connections();
     //This function registers some new-view upcalls to view_manager, so it must come before finish_setup()
     set_up_components();
@@ -302,14 +317,13 @@ template <typename... ReplicatedTypes>
 void Group<ReplicatedTypes...>::set_up_components() {
     //Give PersistenceManager this pointer to break the circular dependency
     persistence_manager.set_view_manager(view_manager);
+    //Register RPCManager's notify_persistence_finished as a persistence callback
+    persistence_manager.add_persistence_callback([this](subgroup_id_t subgroup_id, persistent::version_t version) {
+        rpc_manager.notify_persistence_finished(subgroup_id, version);
+    });
     //Connect ViewManager's external_join_handler to RPCManager
     view_manager.register_add_external_connection_upcall([this](const std::vector<uint32_t>& node_ids) {
         rpc_manager.add_connections(node_ids);
-    });
-    //Now that MulticastGroup is constructed, tell it about RPCManager's message handler
-    SharedLockedReference<View> curr_view = view_manager.get_current_view();
-    curr_view.get().multicast_group->register_rpc_callback([this](subgroup_id_t subgroup, node_id_t sender, char* buf, uint32_t size) {
-        rpc_manager.rpc_message_handler(subgroup, sender, buf, size);
     });
     //Give RPCManager a standard "new view callback" on every View change
     view_manager.add_view_upcall([this](const View& new_view) {

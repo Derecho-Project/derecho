@@ -124,9 +124,10 @@ private:
      * never be null since Group owns and outlives Replicated.
      */
     _Group* group;
-    /** The version number being processed and corresponding timestamp */
-    persistent::version_t next_version = persistent::INVALID_VERSION;
-    uint64_t next_timestamp_us = 0;
+    /** The current version number being processed by an ordered_send */
+    persistent::version_t current_version = persistent::INVALID_VERSION;
+    /** The timestamp associated with the current version number */
+    uint64_t current_timestamp_us = 0;
 
 public:
     /**
@@ -356,14 +357,24 @@ public:
     virtual void truncate(persistent::version_t latest_version);
 
     /**
-     * Post the next version to be handled.
+     * Post the next version to be assigned to an update. Called immediately
+     * before invoking an ordered_send RPC function to update current_version.
+     * @return version The new update's persistent version number
+     * @return ts_us The new update's timestamp in microseconds
      */
     virtual void post_next_version(persistent::version_t version, uint64_t ts_us);
 
     /**
-     * Get the next version to be handled.
+     * Get the current version, set by the most recent ordered_send update.
+     * During the execution of an ordered_send RPC method, this represents the
+     * version that will be assigned to that method's update.
+     * Warning: It is NOT safe to call this function from a P2P RPC method,
+     * since P2P method calls are handled in a separate thread from ordered_send
+     * method calls, and there is no synchronization between these two threads on
+     * the value of current_version.
+     * @return an ordered pair (version number, timestamp)
      */
-    virtual std::tuple<persistent::version_t, uint64_t> get_next_version();
+    virtual std::tuple<persistent::version_t, uint64_t> get_current_version();
 
     /**
      * Register a persistent member
