@@ -92,6 +92,7 @@ std::exception_ptr RPCManager::receive_message(
         return std::exception_ptr{};
     }
     std::size_t reply_header_size = header_space();
+    //Pass through the provided out_alloc function, but add space for the reply header
     recv_ret reply_return = receiver_function_entry->second(
             &rdv, received_from, buf,
             [&out_alloc, &reply_header_size](std::size_t size) {
@@ -141,7 +142,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
                               return reply_buf;
                           } else {
                               // the reply size is too large - not part of the design to handle it
-                              return nullptr;
+                                throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
                           }
                       });
     if(sender_id == nid) {
@@ -199,8 +200,9 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
                             if(reply_size <= buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
                                         sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+                            } else {
+                                throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
                             }
-                            return nullptr;
                         });
         if(reply_size > 0) {
             connections->send(sender_id);
@@ -421,8 +423,9 @@ void RPCManager::p2p_request_worker() {
                             if(reply_size <= request.buffer_size) {
                                 return (char*)connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
+                            } else {
+                                throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply size.");
                             }
-                            return nullptr;
                         });
         if(reply_size > 0) {
             connections->send(request.sender_id);
