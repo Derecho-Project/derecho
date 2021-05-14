@@ -136,13 +136,13 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     parse_and_receive(msg_buf, buffer_size,
                       [this, &reply_buf, &reply_size, &sender_id](size_t size) -> char* {
                           reply_size = size;
-                          if(reply_size <= connections->get_max_p2p_reply_size()) {
+                          if(reply_size <= connections->get_max_rpc_reply_size()) {
                               reply_buf = (char*)connections->get_sendbuffer_ptr(
                                       sender_id, sst::REQUEST_TYPE::RPC_REPLY);
                               return reply_buf;
                           } else {
                               // the reply size is too large - not part of the design to handle it
-                                throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
+                              throw buffer_overflow_exception("Size of a P2P reply exceeds the maximum P2P reply message size");
                           }
                       });
     if(sender_id == nid) {
@@ -162,7 +162,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
             if(view_manager.subgroup_is_persistent(subgroup_id)) {
                 results_awaiting_local_persistence[subgroup_id].emplace(version,
-                                                                       std::move(pending_results_to_fulfill[subgroup_id].front()));
+                                                                        std::move(pending_results_to_fulfill[subgroup_id].front()));
             } else {
                 completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_to_fulfill[subgroup_id].front()));
             }
@@ -183,7 +183,7 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
     _in_rpc_handler = false;
 }
 
-void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size) {
+void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf) {
     using namespace remote_invocation_utilities;
     const std::size_t header_size = header_space();
     std::size_t payload_size;
@@ -195,9 +195,9 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     if(indx.is_reply) {
         // REPLYs can be handled here because they do not block.
         receive_message(indx, received_from, msg_buf + header_size, payload_size,
-                        [this, &buffer_size, &reply_size, &sender_id](size_t _size) -> char* {
+                        [this, &reply_size, &sender_id](size_t _size) -> char* {
                             reply_size = _size;
-                            if(reply_size <= buffer_size) {
+                            if(reply_size <= connections->get_max_p2p_reply_size()) {
                                 return (char*)connections->get_sendbuffer_ptr(
                                         sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
@@ -215,7 +215,7 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
     } else {
         // send to fifo queue.
         std::unique_lock<std::mutex> lock(request_queue_mutex);
-        p2p_request_queue.emplace(sender_id, msg_buf, buffer_size);
+        p2p_request_queue.emplace(sender_id, msg_buf);
         request_queue_cv.notify_one();
     }
 }
@@ -420,7 +420,7 @@ void RPCManager::p2p_request_worker() {
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
                         [this, &reply_size, &request](size_t _size) -> char* {
                             reply_size = _size;
-                            if(reply_size <= request.buffer_size) {
+                            if(reply_size <= connections->get_max_p2p_reply_size()) {
                                 return (char*)connections->get_sendbuffer_ptr(
                                         request.sender_id, sst::REQUEST_TYPE::P2P_REPLY);
                             } else {
@@ -469,7 +469,7 @@ void RPCManager::p2p_receive_loop() {
                 message_received = true;
                 auto reply_pair = optional_reply_pair.value();
                 if(reply_pair.first != INVALID_NODE_ID) {
-                    p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                    p2p_message_handler(reply_pair.first, (char*)reply_pair.second);
                     connections->update_incoming_seq_num(reply_pair.first);
                 }
                 // update last time

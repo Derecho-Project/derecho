@@ -80,6 +80,5 @@ public:
      * to get_sendbuffer_ptr.
      */
     void send();
-
 };
 }  // namespace sst

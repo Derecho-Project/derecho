@@ -178,6 +178,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         // replacement operations at all. But we still need a better garbage
         // collection mechanism.
         if(is_exception) {
+            dbg_default_trace("Received an exception in response to invocation ID {} from node {}", invocation_id, nid);
             results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
         } else {
             dbg_default_trace("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);

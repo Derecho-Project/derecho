@@ -66,12 +66,32 @@ class P2PConnectionManager {
 public:
     P2PConnectionManager(const P2PParams params);
     ~P2PConnectionManager();
+    void shutdown_failures_thread();
+
     void add_connections(const std::vector<node_id_t>& node_ids);
     void remove_connections(const std::vector<node_id_t>& node_ids);
     bool contains_node(const node_id_t node_id);
-    void shutdown_failures_thread();
-    uint64_t get_max_p2p_reply_size();
+    /**
+     * @return the size of the byte array used for sending a single P2P reply
+     * in any of the P2P connections. No messages larger than this can be sent.
+     */
+    std::size_t get_max_p2p_reply_size();
+    /**
+     * @return the size of the byte array used for sending a single RPC reply
+     * in any of the P2P connections. No messages larger than this can be sent.
+     */
+    std::size_t get_max_rpc_reply_size();
+    /**
+     * Increments the sequence number of the last-received message type for
+     * the specified node's connection.
+     */
     void update_incoming_seq_num(node_id_t node_id);
+    /**
+     * Checks all the P2P connection buffers for new messages. If any
+     * connection has a new message, this returns a pair containing the
+     * sender's ID and a pointer into the message buffer.
+     * @return (remote node ID, message byte buffer)
+     */
     std::optional<std::pair<node_id_t, char*>> probe_all();
     /**
      * Returns a pointer to the beginning of the next available message buffer

@@ -95,7 +95,6 @@ class RPCManager {
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnectionManager> connections;
 
-
     /**
      * This mutex guards all the pending_results maps.
      * Technically it's only needed between two of them at a time, so it would
@@ -165,15 +164,12 @@ class RPCManager {
     struct p2p_req {
         node_id_t sender_id;
         char* msg_buf;
-        uint32_t buffer_size;
         p2p_req() : sender_id(0),
-                    msg_buf(nullptr),
-                    buffer_size(0) {}
+                    msg_buf(nullptr) {}
         p2p_req(node_id_t _sender_id,
-                char* _msg_buf,
-                uint32_t _buffer_size) : sender_id(_sender_id),
-                                         msg_buf(_msg_buf),
-                                         buffer_size(_buffer_size) {}
+                char* _msg_buf)
+                : sender_id(_sender_id),
+                  msg_buf(_msg_buf) {}
     };
     /** P2P requests that need to be handled by the worker thread. */
     std::queue<p2p_req> p2p_request_queue;
@@ -191,10 +187,9 @@ class RPCManager {
      * Handler to be called by p2p_receive_loop each time it receives a
      * peer-to-peer message over an RDMA P2P connection.
      * @param sender_id The ID of the node that sent the message
-     * @param msg_buf A buffer containing the message
-     * @param buffer_size The size of the buffer, in bytes
+     * @param msg_buf A pointer to a buffer containing the message
      */
-    void p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_t buffer_size);
+    void p2p_message_handler(node_id_t sender_id, char* msg_buf);
 
     /** Reports to the view manager that the given node has failed if it's internal member.
      * Otherwise clean up p2p_connections and external sockets in lf.cpp
