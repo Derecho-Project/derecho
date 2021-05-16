@@ -299,7 +299,7 @@ bool lf_initialize(const std::map<uint32_t, std::pair<ip_addr_t, uint16_t>>& ip_
                    uint32_t node_rank);
 bool lf_add_connection(uint32_t new_id, const std::pair<ip_addr_t, uint16_t>& new_ip_addr_and_port);
 bool lf_remove_connection(uint32_t node_id);
-void lf_destroy();
+bool lf_destroy();
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
         const std::vector<uint32_t>& members, uint32_t node_rank,

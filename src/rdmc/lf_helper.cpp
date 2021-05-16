@@ -143,8 +143,7 @@ static void default_context() {
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
                                                        strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
-    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
-       (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
+    if(strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         /** Set the sizes of the tx and rx queues */
@@ -309,14 +308,6 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             fi_freeinfo(entry.info);
             crash_with_message("Failed to accept connection.\n");
         }
-        nRead = fi_eq_sread(this->eq.get(), &event, &entry, sizeof(entry), -1, 0);
-        if(nRead != sizeof(entry)) {
-            crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
-        }
-        if(event != FI_CONNECTED || entry.fid != &(ep->fid)) {
-            fi_freeinfo(entry.info);
-            crash_with_message("RDMC Unexpected CM event: %d.\n", event);
-        }
         fi_freeinfo(entry.info);
     } else {
         struct fi_info* client_hints = fi_dupinfo(g_ctxt.hints);
@@ -379,10 +370,7 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    // in v1.12.1, this API spec changed.
-    // msg.desc = (void**)&mr.mr->key;
-    void *desc = fi_mr_desc(mr.mr.get());
-    msg.desc = &desc;
+    msg.desc = (void**)&mr.mr->key;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT);
@@ -403,10 +391,7 @@ bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size,
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    // in v1.12.1, this API spec changed.
-    // msg.desc = (void**)&mr.mr->key;
-    void *desc = fi_mr_desc(mr.mr.get());
-    msg.desc = &desc;
+    msg.desc = (void**)&mr.mr->key;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT);
@@ -467,10 +452,7 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     rma_iov.key = remote_mr.rkey;
 
     msg.msg_iov = &msg_iov;
-    // in v1.12.1, this API spec changed.
-    // msg.desc = (void**)&mr.mr->key;
-    void *desc = fi_mr_desc(mr.mr.get());
-    msg.desc = &desc;
+    msg.desc = (void**)&mr.mr->key;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.rma_iov = &rma_iov;
@@ -558,7 +540,6 @@ bool lf_remove_connection(uint32_t node_id) {
 
 static std::atomic<bool> interrupt_mode;
 static std::atomic<bool> polling_loop_shutdown_flag;
-static std::thread polling_thread;
 static void polling_loop() {
     pthread_setname_np(pthread_self(), "rdmc_poll");
 
@@ -599,14 +580,8 @@ static void polling_loop() {
         }
 
         if(num_completions < 0) {
-            struct fi_cq_err_entry err_entry;
-            fi_cq_readerr(g_ctxt.cq,  &err_entry, 0);
-            if (err_entry.err == FI_ECANCELED) {
-                // endpoint has been destructed already.
-                continue;
-            }
             std::cout << "Failed to read from completion queue, fi_cq_read returned "
-                      << num_completions << ", err_entry.err=" << err_entry.err << std::endl;
+                      << num_completions << std::endl;
         }
 
         std::lock_guard<std::mutex> l(completion_handlers_mutex);
@@ -694,15 +669,14 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     }
 
     /** Start a polling thread and run in the background */
-    polling_thread = std::move(std::thread(polling_loop));
+    std::thread polling_thread(polling_loop);
     polling_thread.detach();
 
     return true;
 }
 
-void lf_destroy() {
-    polling_loop_shutdown_flag = true;
-    polling_thread.join();
+bool lf_destroy() {
+    return false;
 }
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(
