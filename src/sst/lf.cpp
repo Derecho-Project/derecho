@@ -144,7 +144,8 @@ static void load_configuration() {
     // domain:
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
                                                        strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
-    if(strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) {
+    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
+       (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)){
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
@@ -243,6 +244,17 @@ void _resources::connect_endpoint(bool is_lf_server) {
             fi_freeinfo(entry.info);
             crash_with_message("failed to accept connection.\n");
         }
+        nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
+        if(nRead != sizeof(entry)) {
+            dbg_default_error("server failed to connect remote.");
+            crash_with_message("server failed to connect remote. nRead=%ld.\n", nRead);
+        }
+        dbg_default_debug("{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
+        if(event != FI_CONNECTED || entry.fid != &(this->ep->fid)) {
+            fi_freeinfo(entry.info);
+            crash_with_message("SST: Unexpected CM event: %d.\n", event);
+        }
+
         fi_freeinfo(entry.info);
     } else {
         // libfabric connection client

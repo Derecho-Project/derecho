@@ -143,7 +143,8 @@ static void default_context() {
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
                                                        strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
     /** Set the memory region mode mode bits, see fi_mr(3) for details */
-    if(strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) {
+    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
+       (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)) {
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         /** Set the sizes of the tx and rx queues */
@@ -307,6 +308,14 @@ void endpoint::connect(size_t remote_index, bool is_lf_server,
             fi_reject(g_ctxt.pep, entry.info->handle, NULL, 0);
             fi_freeinfo(entry.info);
             crash_with_message("Failed to accept connection.\n");
+        }
+        nRead = fi_eq_sread(this->eq.get(), &event, &entry, sizeof(entry), -1, 0);
+        if(nRead != sizeof(entry)) {
+            crash_with_message("failed to connect remote. nRead=%ld.\n", nRead);
+        }
+        if(event != FI_CONNECTED || entry.fid != &(ep->fid)) {
+            fi_freeinfo(entry.info);
+            crash_with_message("RDMC Unexpected CM event: %d.\n", event);
         }
         fi_freeinfo(entry.info);
     } else {
@@ -540,6 +549,7 @@ bool lf_remove_connection(uint32_t node_id) {
 
 static std::atomic<bool> interrupt_mode;
 static std::atomic<bool> polling_loop_shutdown_flag;
+static std::thread polling_thread;
 static void polling_loop() {
     pthread_setname_np(pthread_self(), "rdmc_poll");
 
@@ -577,6 +587,11 @@ static void polling_loop() {
                     }
                 }
             }
+        }
+
+        if (num_completions == -FI_ECANCELED) {
+            // endpoint has been destructed already.
+            continue;
         }
 
         if(num_completions < 0) {
@@ -669,14 +684,14 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     }
 
     /** Start a polling thread and run in the background */
-    std::thread polling_thread(polling_loop);
-    polling_thread.detach();
+    polling_thread = std::move(std::thread(polling_loop));
 
     return true;
 }
 
-bool lf_destroy() {
-    return false;
+void lf_destroy() {
+    polling_loop_shutdown_flag = true;
+    polling_thread.join();
 }
 
 std::map<uint32_t, remote_memory_region> lf_exchange_memory_regions(

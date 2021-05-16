@@ -13,7 +13,8 @@ cd ${WORKPATH}
 git clone https://github.com/ofiwg/libfabric.git
 cd libfabric
 #git checkout fcf0f2ec3c7109e06e09d3650564df8d2dfa12b6
-git checkout tags/v1.7.0
+#git checkout tags/v1.7.0
+git checkout tags/v1.12.1
 libtoolize
 ./autogen.sh
 ./configure --prefix=${INSTALL_PREFIX} --disable-mlx
