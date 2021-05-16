@@ -589,14 +589,15 @@ static void polling_loop() {
             }
         }
 
-        if (num_completions == -FI_ECANCELED) {
-            // endpoint has been destructed already.
-            continue;
-        }
-
         if(num_completions < 0) {
+            struct fi_cq_err_entry err_entry;
+            fi_cq_readerr(g_ctxt.cq,  &err_entry, 0);
+            if (err_entry.err == FI_ECANCELED) {
+                // endpoint has been destructed already.
+                continue;
+            }
             std::cout << "Failed to read from completion queue, fi_cq_read returned "
-                      << num_completions << std::endl;
+                      << num_completions << ", err_entry.err=" << err_entry.err << std::endl;
         }
 
         std::lock_guard<std::mutex> l(completion_handlers_mutex);
@@ -685,6 +686,7 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
 
     /** Start a polling thread and run in the background */
     polling_thread = std::move(std::thread(polling_loop));
+    polling_thread.detach();
 
     return true;
 }
