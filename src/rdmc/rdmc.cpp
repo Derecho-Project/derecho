@@ -95,7 +95,14 @@ void destroy_group(uint16_t group_number) {
     LOG_EVENT(group_number, -1, -1, "destroy_group");
     groups.erase(group_number);
 }
-void shutdown() { shutdown_flag = true; }
+void shutdown() { 
+    shutdown_flag = true; 
+#ifdef USE_VERBS_API
+    ::rdma::impl::verbs_destroy();
+#else
+    ::rdma::impl::lf_destroy();
+#endif
+}
 bool send(uint16_t group_number, shared_ptr<memory_region> mr, size_t offset,
           size_t length) {
     if(shutdown_flag) return false;
