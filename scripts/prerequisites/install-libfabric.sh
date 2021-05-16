@@ -17,6 +17,6 @@ cd libfabric
 git checkout tags/v1.12.1
 libtoolize
 ./autogen.sh
-./configure --prefix=${INSTALL_PREFIX} --disable-mlx
+./configure --prefix=${INSTALL_PREFIX} --disable-memhooks-monitor
 make -j `lscpu | grep "^CPU(" | awk '{print $2}'`
 make install

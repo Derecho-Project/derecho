@@ -395,7 +395,10 @@ int _resources::post_remote_send(
         msg_iov.iov_len = size;
 
         msg.msg_iov = &msg_iov;
-        msg.desc = (void**)&this->mr_lrkey;
+        // in v1.12.1, the API spec changed.
+        // msg.desc = (void**)&this->mr_lrkey;
+        void *desc = fi_mr_desc(this->read_mr);
+        msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;
         msg.context = (void*)ctxt;
@@ -417,7 +420,10 @@ int _resources::post_remote_send(
         rma_iov.key = this->mr_rwkey;
 
         msg.msg_iov = &msg_iov;
-        msg.desc = (void**)&this->mr_lrkey;
+        // in v1.12.1, this API changed.
+        // msg.desc = (void**)&this->mr_lrkey;
+        void *desc = fi_mr_desc(this->read_mr);
+        msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;  // not used for a connection endpoint
         msg.rma_iov = &rma_iov;
@@ -565,7 +571,10 @@ int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int 
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&this->mr_lwkey;
+    // v1.12.1 changed API spec
+    // msg.desc = (void**)&this->mr_lwkey;
+    void *desc = fi_mr_desc(this->write_mr);
+    msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;  // not used
     msg.context = (void*)ctxt;

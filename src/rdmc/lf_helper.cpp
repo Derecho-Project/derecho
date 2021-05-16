@@ -379,7 +379,10 @@ bool endpoint::post_send(const memory_region& mr, size_t offset, size_t size,
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&mr.mr->key;
+    // in v1.12.1, this API spec changed.
+    // msg.desc = (void**)&mr.mr->key;
+    void *desc = fi_mr_desc(mr.mr.get());
+    msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_SEND) << OP_BITS_SHIFT);
@@ -400,7 +403,10 @@ bool endpoint::post_recv(const memory_region& mr, size_t offset, size_t size,
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&mr.mr->key;
+    // in v1.12.1, this API spec changed.
+    // msg.desc = (void**)&mr.mr->key;
+    void *desc = fi_mr_desc(mr.mr.get());
+    msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.context = (void*)(wr_id | ((uint64_t)*type.tag << type.shift_bits) | ((uint64_t)RDMA_OP_RECV) << OP_BITS_SHIFT);
@@ -461,7 +467,10 @@ bool endpoint::post_write(const memory_region& mr, size_t offset, size_t size,
     rma_iov.key = remote_mr.rkey;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&mr.mr->key;
+    // in v1.12.1, this API spec changed.
+    // msg.desc = (void**)&mr.mr->key;
+    void *desc = fi_mr_desc(mr.mr.get());
+    msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;
     msg.rma_iov = &rma_iov;
