@@ -6,12 +6,17 @@
 
 #pragma once
 
+#include <exception>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <variant>
 
+#include "derecho_exception.hpp"
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "subgroup_info.hpp"
+
+using json = nlohmann::json;
 
 namespace derecho {
 
@@ -352,9 +357,16 @@ public:
             : policies(to_copy.policies) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
+    template <typename... ReplicatedTypes>
+    DefaultSubgroupAllocator(const json& layout);
+    template <typename... ReplicatedTypes>
+    DefaultSubgroupAllocator(const std::string& layout_path);
+
     subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
                                          const std::unique_ptr<View>& prev_view,
                                          View& curr_view) const;
 };
 
 }  // namespace derecho
+
+#include "detail/subgroup_functions_impl.hpp"
