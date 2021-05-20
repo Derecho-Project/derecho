@@ -10,6 +10,17 @@
 namespace derecho {
 
 /**
+ * defining key strings used in the layout json file.
+ */
+#define JSON_CONF_LAYOUT        "layout"
+#define JSON_CONF_TYPE_ALIAS    "type_alias"
+#define MIN_NODES_BY_SHARD      "min_nodes_by_shard"
+#define MAX_NODES_BY_SHARD      "max_nodes_by_shard"
+#define DELIVERY_MODES_BY_SHARD "delivery_modes_by_shard"
+#define DELIVERY_MODE_ORDERED   "Ordered"
+#define DELIVERY_MODE_RAW       "Raw"
+#define PROFILES_BY_SHARD       "profiles_by_shard"
+/**
  * parse_json_subgroup_policy()
  *
  * Generate a single-type subgroup allocation policy from json string
@@ -34,16 +45,16 @@ void populate_policy_by_subgroup_type_map(
 }
 
 template <typename... ReplicatedTypes>
-DefaultSubgroupAllocator::DefaultSubgroupAllocator(const json& layout) {
+DefaultSubgroupAllocator construct_DSA_with_layout(const json& layout) {
     std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> dsa_map;
 
     populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
 
-    policies = std::move(dsa_map);
+    return DefaultSubgroupAllocator(dsa_map);
 }
 
 template <typename... ReplicatedTypes>
-DefaultSubgroupAllocator::DefaultSubgroupAllocator(const std::string& layout_path) {
+DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layout_path) {
     json layout;
 
     std::ifstream json_layout_stream(layout_path.c_str());
@@ -58,7 +69,7 @@ DefaultSubgroupAllocator::DefaultSubgroupAllocator(const std::string& layout_pat
 
     populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
 
-    policies = std::move(dsa_map);
+    return DefaultSubgroupAllocator(dsa_map);
 }
 
 } /* namespace derecho */

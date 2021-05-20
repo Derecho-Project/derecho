@@ -357,15 +357,16 @@ public:
             : policies(to_copy.policies) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
-    template <typename... ReplicatedTypes>
-    DefaultSubgroupAllocator(const json& layout);
-    template <typename... ReplicatedTypes>
-    DefaultSubgroupAllocator(const std::string& layout_path);
-
     subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
                                          const std::unique_ptr<View>& prev_view,
                                          View& curr_view) const;
 };
+
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator construct_DSA_with_layout(const json& layout);
+
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layout_path);
 
 }  // namespace derecho
 

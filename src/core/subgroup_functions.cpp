@@ -39,16 +39,16 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 
 ShardAllocationPolicy flexible_even_shards(const std::string& profile) {
     const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
-    if (!hasCustomizedConfKey(conf_profile_prefix + num_shards_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + num_shards_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + num_shards_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + num_shards_profile_field);
         return {};
     }
-    if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + min_nodes_profile_field);
         return {};
     }
-    if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + max_nodes_profile_field);
         return {};
     }
     int num_shards = getConfUInt32(conf_profile_prefix + num_shards_profile_field);
@@ -62,7 +62,6 @@ ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_sha
     return ShardAllocationPolicy{
             num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
-
 
 ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
                                         const std::string& profile) {
@@ -82,12 +81,12 @@ ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_mode
     std::vector<int> max_nodes_by_shard;
     for(const std::string& profile : profiles_by_shard) {
         const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
-        if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
-            dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+        if(!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.", conf_profile_prefix + min_nodes_profile_field);
             return {};
         }
-        if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
-            dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+        if(!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.", conf_profile_prefix + max_nodes_profile_field);
             return {};
         }
         min_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + min_nodes_profile_field));
@@ -130,8 +129,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] =
-                    allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
+            subgroup_layouts[subgroup_type] = allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
         }
     } else {
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
@@ -141,9 +139,8 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] =
-                    update_standard_subgroup_type(subgroup_type, subgroup_type_id,
-                                                  prev_view, curr_view, shard_sizes);
+            subgroup_layouts[subgroup_type] = update_standard_subgroup_type(subgroup_type, subgroup_type_id,
+                                                                            prev_view, curr_view, shard_sizes);
         }
     }
 }
@@ -271,7 +268,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
                                          ? sharding_policy.shards_mode
                                          : sharding_policy.modes_by_shard[shard_num];
             std::string profile = sharding_policy.shards_profile;
-            if (!sharding_policy.even_shards) {
+            if(!sharding_policy.even_shards) {
                 profile = sharding_policy.profiles_by_shard[shard_num];
             }
             //Put the SubView at the end of subgroup_allocation[subgroup_num]
@@ -406,6 +403,43 @@ subgroup_allocation_map_t DefaultSubgroupAllocator::operator()(
     compute_standard_memberships(subgroup_type_order, prev_view, curr_view, subgroup_allocations);
     compute_cross_product_memberships(subgroup_type_order, prev_view, curr_view, subgroup_allocations);
     return subgroup_allocations;
+}
+
+SubgroupAllocationPolicy parse_json_subgroup_policy(const json& jconf) {
+    if(!jconf.is_object() || !jconf[JSON_CONF_LAYOUT].is_array()) {
+        dbg_default_error("parse_json_subgroup_policy cannot parse {}.", jconf.get<std::string>());
+        throw derecho::derecho_exception("parse_json_subgroup_policy cannot parse" + jconf.get<std::string>());
+    }
+
+    SubgroupAllocationPolicy subgroup_allocation_policy;
+    subgroup_allocation_policy.identical_subgroups = false;
+    subgroup_allocation_policy.num_subgroups = jconf[JSON_CONF_LAYOUT].size();
+    subgroup_allocation_policy.shard_policy_by_subgroup = std::vector<ShardAllocationPolicy>();
+
+    for(auto subgroup_it : jconf[JSON_CONF_LAYOUT]) {
+        ShardAllocationPolicy shard_allocation_policy;
+        size_t num_shards = subgroup_it[MIN_NODES_BY_SHARD].size();
+        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards) {
+            dbg_default_error("parse_json_subgroup_policy: shards does not match in at least one subgroup: {}",
+                              subgroup_it.get<std::string>());
+            throw derecho::derecho_exception("parse_json_subgroup_policy: shards does not match in at least one subgroup:" + subgroup_it.get<std::string>());
+        }
+        shard_allocation_policy.even_shards = false;
+        shard_allocation_policy.num_shards = num_shards;
+        shard_allocation_policy.min_num_nodes_by_shard = subgroup_it[MIN_NODES_BY_SHARD].get<std::vector<int>>();
+        shard_allocation_policy.max_num_nodes_by_shard = subgroup_it[MAX_NODES_BY_SHARD].get<std::vector<int>>();
+        std::vector<Mode> delivery_modes_by_shard;
+        for(auto it : subgroup_it[DELIVERY_MODES_BY_SHARD]) {
+            if(it == DELIVERY_MODE_RAW) {
+                shard_allocation_policy.modes_by_shard.push_back(Mode::UNORDERED);
+            } else {
+                shard_allocation_policy.modes_by_shard.push_back(Mode::ORDERED);
+            }
+        }
+        shard_allocation_policy.profiles_by_shard = subgroup_it[PROFILES_BY_SHARD].get<std::vector<std::string>>();
+        subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
+    }
+    return subgroup_allocation_policy;
 }
 
 }  // namespace derecho

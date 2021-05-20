@@ -60,6 +60,9 @@ find_package(spdlog 1.3.1 REQUIRED)
 # find openssl
 find_package(OpenSSL 1.1.1 REQUIRED)
 
+# json
+find_package(nlohmann_json 3.2.0 REQUIRED)
+
 add_subdirectory(src/mutils-serialization)
 add_subdirectory(src/conf)
 add_subdirectory(src/utils)
