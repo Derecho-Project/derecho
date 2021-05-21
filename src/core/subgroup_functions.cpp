@@ -405,7 +405,7 @@ subgroup_allocation_map_t DefaultSubgroupAllocator::operator()(
     return subgroup_allocations;
 }
 
-SubgroupAllocationPolicy parse_json_subgroup_policy(const json& jconf) {
+SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf) {
     if(!jconf.is_object() || !jconf[JSON_CONF_LAYOUT].is_array()) {
         dbg_default_error("parse_json_subgroup_policy cannot parse {}.", jconf.get<std::string>());
         throw derecho::derecho_exception("parse_json_subgroup_policy cannot parse" + jconf.get<std::string>());

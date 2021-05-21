@@ -21,34 +21,34 @@ namespace derecho {
 #define DELIVERY_MODE_RAW       "Raw"
 #define PROFILES_BY_SHARD       "profiles_by_shard"
 /**
- * parse_json_subgroup_policy()
+ * derecho_parse_json_subgroup_policy()
  *
  * Generate a single-type subgroup allocation policy from json string
  * @param json_config subgroup configuration represented in json format.
  * @return SubgroupAllocationPolicy
  */
-SubgroupAllocationPolicy parse_json_subgroup_policy(const json&);
+SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&);
 
 template <typename ReplicatedType>
-void populate_policy_by_subgroup_type_map(
+void derecho_populate_policy_by_subgroup_type_map(
         std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map,
         const json& layout, int type_idx) {
-    dsa_map.emplace(std::type_index(typeid(ReplicatedType)), parse_json_subgroup_policy(layout[type_idx]));
+    dsa_map.emplace(std::type_index(typeid(ReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx]));
 }
 
 template <typename FirstReplicatedType, typename SecondReplicatedType, typename... RestReplicatedTypes>
-void populate_policy_by_subgroup_type_map(
+void derecho_populate_policy_by_subgroup_type_map(
         std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map,
         const json& layout, int type_idx) {
-    dsa_map.emplace(std::type_index(typeid(FirstReplicatedType)), parse_json_subgroup_policy(layout[type_idx]));
-    populate_policy_by_subgroup_type_map<SecondReplicatedType, RestReplicatedTypes...>(dsa_map, layout, type_idx + 1);
+    dsa_map.emplace(std::type_index(typeid(FirstReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx]));
+    derecho_populate_policy_by_subgroup_type_map<SecondReplicatedType, RestReplicatedTypes...>(dsa_map, layout, type_idx + 1);
 }
 
 template <typename... ReplicatedTypes>
 DefaultSubgroupAllocator construct_DSA_with_layout(const json& layout) {
     std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> dsa_map;
 
-    populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
+    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
 
     return DefaultSubgroupAllocator(dsa_map);
 }
@@ -67,7 +67,7 @@ DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layou
 
     std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> dsa_map;
 
-    populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
+    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
 
     return DefaultSubgroupAllocator(dsa_map);
 }
