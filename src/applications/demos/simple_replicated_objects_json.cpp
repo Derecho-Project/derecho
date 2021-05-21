@@ -13,6 +13,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@ using derecho::ExternalCaller;
 using derecho::Replicated;
 using std::cout;
 using std::endl;
+using json = nlohmann::json;
 
 int main(int argc, char** argv) {
     // Read configurations from the command line options as well as the default config file
@@ -31,7 +33,15 @@ int main(int argc, char** argv) {
 
     //Define subgroup membership using the default subgroup allocator function
     //Each Replicated type will have one subgroup and one shard, with three members in the shard
-    derecho::SubgroupInfo subgroup_function{derecho::construct_DSA_with_layout<Foo, Bar>(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT))};
+    
+    json json_layout = json::parse(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT));
+    cout << "json_layout parsed\n";
+    auto dsa_object = derecho::construct_DSA_with_layout<Foo, Bar>(json_layout);
+    cout << "dsa_object constructed\n";
+    derecho::SubgroupInfo subgroup_function{dsa_object};
+
+    // derecho::SubgroupInfo subgroup_function{derecho::construct_DSA_with_layout<Foo, Bar>(json::parse(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT)))};
+
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
     //in this case we ignore it because the replicated objects aren't persistent.
