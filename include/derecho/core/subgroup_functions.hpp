@@ -98,6 +98,12 @@ struct ShardAllocationPolicy {
      * indicating which profile it should use. (Ignored if even_shards is
      * true). */
     std::vector<std::string> profiles_by_shard;
+    /** Only used when even_shards is false.
+     * For each shard, this stores a list of node ids reserved for it. When a 
+     * new node comes with id inside the list, it will be added into the 
+     * dedicated shard directly. Overlapping among shards can be realized by 
+     * this mechanism. */
+    std::vector<std::vector<node_id_t>> reserved_node_id_by_shard;
 };
 
 /**

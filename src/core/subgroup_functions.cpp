@@ -419,7 +419,7 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf) {
     for(auto subgroup_it : jconf[JSON_CONF_LAYOUT]) {
         ShardAllocationPolicy shard_allocation_policy;
         size_t num_shards = subgroup_it[MIN_NODES_BY_SHARD].size();
-        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards) {
+        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards || subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != num_shards) {
             dbg_default_error("parse_json_subgroup_policy: shards does not match in at least one subgroup: {}",
                               subgroup_it.get<std::string>());
             throw derecho::derecho_exception("parse_json_subgroup_policy: shards does not match in at least one subgroup:" + subgroup_it.get<std::string>());
@@ -438,6 +438,11 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf) {
         }
         shard_allocation_policy.profiles_by_shard = subgroup_it[PROFILES_BY_SHARD].get<std::vector<std::string>>();
         subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
+
+        // "reserved_node_id_by_shard" is not a mandatory field
+        if(subgroup_it.contains(RESERVED_NODE_ID_BY_SHRAD)) {
+            shard_allocation_policy.reserved_node_id_by_shard = subgroup_it[RESERVED_NODE_ID_BY_SHRAD].get<std::vector<std::vector<node_id_t>>>();
+        }
     }
     return subgroup_allocation_policy;
 }
