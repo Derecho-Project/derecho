@@ -12,6 +12,11 @@
 
 namespace derecho {
 
+
+// This configuration option is built-in, based on code in remote_invocable.hpp, and can't be changed
+// It's declared here so that it can be compared to the supplied config options
+constexpr std::size_t DERECHO_MIN_RPC_RESPONSE_SIZE = 128;
+
 #define CONF_ENTRY_INTEGER(name, section, string)
 
 /** The single configuration file for derecho **/

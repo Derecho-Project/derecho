@@ -133,15 +133,32 @@ inline bool operator==(const Opcode& lhs, const Opcode& rhs) {
 using node_list_t = std::vector<node_id_t>;
 
 /**
+ * A simple serializable struct that contains two strings, one for the typename
+ * of an exception and one for its what() value. This is used to send exception
+ * information back to a caller if an RPC function throws an exception.
+ */
+struct remote_exception_info : public mutils::ByteRepresentable {
+    std::string exception_name;
+    std::string exception_what;
+    remote_exception_info(const std::string& exception_name, const std::string& exception_what)
+            : exception_name(exception_name), exception_what(exception_what) {}
+    DEFAULT_SERIALIZATION_SUPPORT(remote_exception_info, exception_name, exception_what);
+};
+
+/**
  * Indicates that an RPC call failed because executing the RPC function on the
  * remote node resulted in an exception.
  */
 struct remote_exception_occurred : public derecho_exception {
     node_id_t who;
-    remote_exception_occurred(node_id_t who)
-            : derecho_exception(std::string("An exception occurred at node with ID ")
-                                + std::to_string(who)),
-              who(who) {}
+    std::string exception_name;
+    std::string exception_what;
+    remote_exception_occurred(node_id_t who, const std::string& name, const std::string& what)
+            : derecho_exception(std::string("Node ID ") + std::to_string(who) + std::string(" encountered an exception of type ")
+                                + name + std::string(". what(): ") + what),
+              who(who),
+              exception_name(name),
+              exception_what(what) {}
 };
 
 /**

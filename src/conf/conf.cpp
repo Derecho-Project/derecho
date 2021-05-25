@@ -1,8 +1,8 @@
-#include <derecho/conf/conf.hpp>
 #include <cstdlib>
+#include <derecho/conf/conf.hpp>
+#include <stdexcept>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <stdexcept>
 #ifndef NDEBUG
 #include <spdlog/sinks/stdout_color_sinks.h>
 #endif  //NDEBUG
@@ -13,12 +13,11 @@ static const char* default_conf_file = "derecho.cfg";
 
 const std::vector<std::string> Conf::subgroupProfileFields = {
         "max_payload_size",
-	    "max_reply_payload_size",
+        "max_reply_payload_size",
         "max_smc_payload_size",
         "block_size",
         "window_size",
-        "rdmc_send_algorithm"
-};
+        "rdmc_send_algorithm"};
 
 std::unique_ptr<Conf> Conf::singleton = nullptr;
 
@@ -48,9 +47,9 @@ struct option Conf::long_options[] = {
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_RESTART_TIMEOUT_MS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_DISABLE_PARTITIONING_SAFETY),
-	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
-	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
-	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
         MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_NODE_ID),
         // [SUBGROUP/<subgroup name>]
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM),
@@ -104,9 +103,16 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         // 3 - set the flag to initialized
         Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
 
-
         if(getConfUInt32(CONF_DERECHO_LOCAL_ID) >= getConfUInt32(CONF_DERECHO_MAX_NODE_ID)) {
             throw std::logic_error("Configuration error: Local node ID must be less than max node ID");
+        }
+        if(getConfUInt32(CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE) <= DERECHO_MIN_RPC_RESPONSE_SIZE) {
+            throw std::logic_error(std::string("Configuration error: Default subgroup reply size must be at least ")
+                                   + std::to_string(DERECHO_MIN_RPC_RESPONSE_SIZE));
+        }
+        if(getConfUInt32(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE) <= DERECHO_MIN_RPC_RESPONSE_SIZE) {
+            throw std::logic_error(std::string("Configuration error: P2P reply payload size must be at least ")
+                                   + std::to_string(DERECHO_MIN_RPC_RESPONSE_SIZE));
         }
     }
 }
@@ -115,7 +121,7 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
 // for uninitialized configuration?
 const Conf* Conf::get() noexcept(true) {
     while(Conf::singleton_initialized_flag.load(std::memory_order_acquire) != CONF_INITIALIZED) {
-        char *empty_arg[1] = {nullptr};
+        char* empty_arg[1] = {nullptr};
         Conf::initialize(0, empty_arg, nullptr);
     }
     return Conf::singleton.get();
@@ -177,4 +183,4 @@ std::vector<std::string> split_string(const std::string& str, const std::string&
     return result;
 }
 
-}
+}  // namespace derecho
