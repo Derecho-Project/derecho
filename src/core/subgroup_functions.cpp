@@ -339,7 +339,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             desired_nodes.insert(desired_nodes.end(),
                                  &curr_members[curr_view.next_unassigned_rank],
                                  &curr_members[curr_view.next_unassigned_rank + shard_size]);
-            // NOTE: If there are unassigned reserved nodes(which should not happen in regular use), next_unassigned_rank only points to 
+            // NOTE: If there are unassigned reserved nodes(which should not happen in regular use), next_unassigned_rank only points to
             // unassigned normal nodes, which I(Lichen) think is just OK and not in conflict with its definition.
             curr_view.next_unassigned_rank += shard_size;
             //Figure out what the Mode policy for this shard is
@@ -382,17 +382,31 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
      * arranged into two parts: the first part hold survive nodes from prev_view, and the second
      * part holds newly added nodes. The next_unassigned_rank is the length of the first part.
      * If we have reserved node_ids, we need to rearrnage curr_view.members into 3 parts:
-     * the first part holds reserved node_ids, no matter it's from prev_view or newly added,
-     * the second part holds survive non-reserved node_ids,
+     * the first part holds survive non-reserved node_ids,
+     * the second part holds reserved node_ids, no matter it's from prev_view or newly added,
      * and the third part holds newly added non-reserved node_ids.
      * We then rearrange next_unassigned_rank to be the length of the first two parts, for they are assigned already.
      */
     std::vector<node_id_t> curr_members;
     std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+    std::set<node_id_t> survive_member_set(curr_view.members.begin(), curr_view.members.begin() + curr_view.next_unassigned_rank);
+    std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
     const SubgroupAllocationPolicy& subgroup_type_policy
             = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
     if(all_reserved_node_ids.size() > 0) {
-
+        std::set_difference(
+                survive_member_set.begin(), survive_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(curr_members, curr_members.end()));
+        std::set_intersection(
+                curr_member_set.begin(), curr_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(curr_members, curr_members.end()));
+        curr_view.next_unassigned_rank = curr_members.size();
+        std::set_difference(
+                added_member_set.begin(), added_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(curr_members, curr_members.end()));
     }
 
     for(uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
@@ -405,6 +419,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             std::vector<node_id_t> next_shard_members;
             std::vector<int> next_is_sender;
             uint32_t allocated_shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
+
             //Add all the non-failed nodes from the previous assignment
             for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
                 if(curr_view.rank_of(previous_shard_assignment.members[rank]) == -1) {
@@ -413,6 +428,23 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 next_shard_members.push_back(previous_shard_assignment.members[rank]);
                 next_is_sender.push_back(previous_shard_assignment.is_sender[rank]);
             }
+
+            //Add newly added reserved nodes
+            const std::set<node_id_t> reserved_node_id_set(
+                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end());
+            std::set<node_id_t> added_reserved_node_id_set;
+            std::set_intersection(
+                    added_member_set.begin(), added_member_set.end(),
+                    reserved_node_id_set.begin(), reserved_node_id_set.end(),
+                    std::inserter(added_reserved_node_id_set, added_reserved_node_id_set.end()));
+            if(added_reserved_node_id_set.size() > 0) {
+                for(auto node_id : added_reserved_node_id_set) {
+                    next_shard_members.push_back(node_id);
+                    next_is_sender.push_back(true);
+                }
+            }
+
             //Add additional members if needed
             while(next_shard_members.size() < allocated_shard_size) {
                 //This must be true if compute_standard_shard_sizes said our view was adequate
