@@ -5,7 +5,9 @@
  */
 
 #include "../subgroup_functions.hpp"
+#include <derecho/utils/logger.hpp>
 #include <fstream>
+#include <sstream>
 
 namespace derecho {
 
@@ -29,6 +31,17 @@ namespace derecho {
  * @return SubgroupAllocationPolicy
  */
 SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&, std::set<node_id_t>&);
+
+template <typename Type = node_id_t>
+void print_set(const std::set<Type> uset) {
+    std::stringstream stream;
+    for(auto thing : uset) {
+        stream << thing << ' ';
+    }
+
+    std::string out = stream.str();
+    dbg_default_info(out);
+}
 
 template <typename ReplicatedType>
 void derecho_populate_policy_by_subgroup_type_map(
@@ -77,6 +90,28 @@ DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layou
 
     derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(
             dsa_map, all_reserved_node_ids, layout, 0);
+
+    dbg_default_info("after parsing, all_reserved_node_ids is :");
+    print_set(all_reserved_node_ids);
+
+    auto map_iter = dsa_map.begin();
+    int type_ = 0;
+    while(map_iter != dsa_map.end()) {
+        dbg_default_info("for type {}", type_++);
+        SubgroupAllocationPolicy& subgroup_policy
+                = std::get<SubgroupAllocationPolicy>(map_iter->second);
+        dbg_default_info("has {} subgroups", subgroup_policy.num_subgroups);
+        for(int sg_ = 0; sg_ < subgroup_policy.num_subgroups; sg_++) {
+            dbg_default_info("for subgroup {}", sg_);
+            auto shard_policy = subgroup_policy.shard_policy_by_subgroup[sg_];
+            dbg_default_info("has {} shards", shard_policy.num_shards);
+            for(int shard_ = 0; shard_ < shard_policy.num_shards; shard_++) {
+                dbg_default_info("for shard {}, its reserved node_ids are:", shard_);
+                print_set(shard_policy.reserved_node_id_by_shard[shard_]);
+            }
+        }
+        map_iter++;
+    }
 
     return DefaultSubgroupAllocator(dsa_map, all_reserved_node_ids);
 }

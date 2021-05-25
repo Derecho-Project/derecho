@@ -119,6 +119,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
         View& curr_view,
         subgroup_allocation_map_t& subgroup_layouts) const {
     //First, determine how many nodes each shard can have based on their policies
+    dbg_default_info("ready to calculate size");
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes
             = compute_standard_shard_sizes(subgroup_type_order, prev_view, curr_view);
     //Now we can go through and actually allocate nodes to each shard,
@@ -155,13 +156,19 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
 
     // If there are reserved node_ids, and some appear in curr_view, calculate the
     // intersection and count them once, in case that we want shard overlapping.
-    std::set<int> all_active_reserved_node_id_set(curr_view.members.begin(), curr_view.members.end());
+    std::set<node_id_t> all_active_reserved_node_id_set;
+    std::set<node_id_t> temp_node_id(curr_view.members.begin(), curr_view.members.end());
     if(all_reserved_node_ids.size() > 0) {
         std::set_intersection(
-                all_active_reserved_node_id_set.begin(), all_active_reserved_node_id_set.end(),
+                temp_node_id.begin(), temp_node_id.end(),
                 all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
                 std::inserter(all_active_reserved_node_id_set, all_active_reserved_node_id_set.begin()));
+
+        dbg_default_info("all_active_reserved_node_id_set is: ");
+        print_set(all_active_reserved_node_id_set);
+
         nodes_needed = all_active_reserved_node_id_set.size();
+        dbg_default_info("after processing reserve, nodes_needed is {}", nodes_needed);
     }
 
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes;
@@ -204,20 +211,33 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 }
                 shard_sizes[subgroup_type][subgroup_num][shard_num] = min_shard_size;
                 nodes_needed += min_shard_size;
+                dbg_default_info("after defautl calc, nodes_needed is {}", nodes_needed);
 
                 // If this shard reserve existing nodes, subtract the number of these nodes from nodes_needed
-                std::set<int> active_reserved_node_id_set(
+                std::set<node_id_t> active_reserved_node_id_set;
+
+                dbg_default_info("sharding_policy.reserved_node_id_by_shard has {} sets", sharding_policy.reserved_node_id_by_shard.size());
+
+                dbg_default_info("sharding_policy.reserved_node_id_by_shard[{}] for current shard is: ", shard_num);
+                print_set(sharding_policy.reserved_node_id_by_shard[shard_num]);
+
+                std::set<node_id_t> reserved_node_id_set(
                         sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
                         sharding_policy.reserved_node_id_by_shard[shard_num].end());
-
+                dbg_default_info("reserved_node_id_set for current shard is: ");
+                print_set(reserved_node_id_set);
                 std::set_intersection(
-                        active_reserved_node_id_set.begin(),
-                        active_reserved_node_id_set.end(),
+                        reserved_node_id_set.begin(),
+                        reserved_node_id_set.end(),
                         all_active_reserved_node_id_set.begin(),
                         all_active_reserved_node_id_set.end(),
                         std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
 
+                dbg_default_info("active_reserved_node_id_set for current shard is: ");
+                print_set(active_reserved_node_id_set);
+
                 nodes_needed -= active_reserved_node_id_set.size();
+                dbg_default_info("after substract reserve, nodes_needed is {}", nodes_needed);
             }
         }
     }
@@ -309,7 +329,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             std::vector<node_id_t> desired_nodes;
 
             // Allocate active reserved nodes first.
-            const std::set<node_id_t> reserved_node_id_set = subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num];
+            const std::set<node_id_t> reserved_node_id_set(
+                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end());
             if(reserved_node_id_set.size() > 0) {
                 std::set_intersection(
                         reserved_node_id_set.begin(), reserved_node_id_set.end(),
@@ -518,7 +540,6 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
             }
         }
         shard_allocation_policy.profiles_by_shard = subgroup_it[PROFILES_BY_SHARD].get<std::vector<std::string>>();
-        subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
 
         // "reserved_node_id_by_shard" is not a mandatory field
         if(subgroup_it.contains(RESERVED_NODE_ID_BY_SHRAD)) {
@@ -528,6 +549,8 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
                 std::set_union(all_reserved_node_ids.begin(), all_reserved_node_ids.end(), reserved_id_set.begin(), reserved_id_set.end(), std::inserter(all_reserved_node_ids, all_reserved_node_ids.begin()));
             }
         }
+
+        subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
     }
     return subgroup_allocation_policy;
 }
