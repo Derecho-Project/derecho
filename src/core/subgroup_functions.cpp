@@ -152,6 +152,18 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
         const View& curr_view) const {
     //First, determine how many nodes we will need for a minimal allocation
     int nodes_needed = 0;
+
+    // If there are reserved node_ids, and some appear in curr_view, calculate the
+    // intersection and count them once, in case that we want shard overlapping.
+    std::set<int> all_active_reserved_node_id_set(curr_view.members.begin(), curr_view.members.end());
+    if(all_reserved_node_ids.size() > 0) {
+        std::set_intersection(
+                all_active_reserved_node_id_set.begin(), all_active_reserved_node_id_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(all_active_reserved_node_id_set, all_active_reserved_node_id_set.begin()));
+        nodes_needed = all_active_reserved_node_id_set.size();
+    }
+
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes;
     for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size(); ++subgroup_type_id) {
         const std::type_index& subgroup_type = subgroup_type_order[subgroup_type_id];
@@ -192,6 +204,20 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 }
                 shard_sizes[subgroup_type][subgroup_num][shard_num] = min_shard_size;
                 nodes_needed += min_shard_size;
+
+                // If this shard reserve existing nodes, subtract the number of these nodes from nodes_needed
+                std::set<int> active_reserved_node_id_set(
+                        sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                        sharding_policy.reserved_node_id_by_shard[shard_num].end());
+
+                std::set_intersection(
+                        active_reserved_node_id_set.begin(),
+                        active_reserved_node_id_set.end(),
+                        all_active_reserved_node_id_set.begin(),
+                        all_active_reserved_node_id_set.end(),
+                        std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
+
+                nodes_needed -= active_reserved_node_id_set.size();
             }
         }
     }
@@ -248,14 +274,54 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
         const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
     //The size of shard_sizes[subgroup_type] is the number of subgroups of this type
     subgroup_shard_layout_t subgroup_allocation(shard_sizes.at(subgroup_type).size());
+
+    /** This function is invoked when we have no prev_view, and thus next_unassigned_rank is 0.
+     * If we have reserved node_ids, we need to rearrange node_ids in curr_view.members into two "parts":
+     * the first part holds current active reserved node_ids,
+     * while the second part holds normal node_ids.
+     * We then rearrange next_unassigned_rank to be the length of the first part, for nodes in the first part
+     * are actually assigned, and sometimes more than once if we want to overlap shards.
+     */
+    // We cannot modify curr_view.members inplace, which will corrupt curr_view.my_rank, curr_view.node_id_to_rank, etc. Besides, View::members is const.
+    std::vector<node_id_t> curr_members;
+    std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+    const SubgroupAllocationPolicy& subgroup_type_policy
+            = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    if(all_reserved_node_ids.size() > 0) {
+        std::set_intersection(
+                curr_member_set.begin(), curr_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(curr_members, curr_members.end()));
+        curr_view.next_unassigned_rank = curr_members.size();
+        std::set_difference(
+                curr_member_set.begin(), curr_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(curr_members, curr_members.end()));
+    } else {
+        curr_members = curr_view.members;
+    }
+
     for(uint32_t subgroup_num = 0; subgroup_num < subgroup_allocation.size(); ++subgroup_num) {
         //The size of shard_sizes[subgroup_type][subgroup_num] is the number of shards
         for(uint32_t shard_num = 0; shard_num < shard_sizes.at(subgroup_type)[subgroup_num].size();
             ++shard_num) {
             uint32_t shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
+            std::vector<node_id_t> desired_nodes;
+
+            // Allocate active reserved nodes first.
+            const std::set<node_id_t> reserved_node_id_set = subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num];
+            if(reserved_node_id_set.size() > 0) {
+                std::set_intersection(
+                        reserved_node_id_set.begin(), reserved_node_id_set.end(),
+                        curr_member_set.begin(), curr_member_set.end(),
+                        std::inserter(desired_nodes, desired_nodes.end()));
+                shard_size -= desired_nodes.size();
+            }
+
             //Grab the next shard_size nodes
-            std::vector<node_id_t> desired_nodes(&curr_view.members[curr_view.next_unassigned_rank],
-                                                 &curr_view.members[curr_view.next_unassigned_rank + shard_size]);
+            desired_nodes.insert(desired_nodes.end(),
+                                 &curr_members[curr_view.next_unassigned_rank],
+                                 &curr_members[curr_view.next_unassigned_rank + shard_size]);
             curr_view.next_unassigned_rank += shard_size;
             //Figure out what the Mode policy for this shard is
             const SubgroupAllocationPolicy& subgroup_type_policy
@@ -292,6 +358,21 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
      */
     const subgroup_id_t previous_assignment_offset = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)[0];
     subgroup_shard_layout_t next_assignment(shard_sizes.at(subgroup_type).size());
+
+    /** This function is invoked if there is a prev_view, and the curr_view.members is already
+     * arranged into two parts: the first part hold survive nodes from prev_view, and the second
+     * part holds newly added nodes. The next_unassigned_rank is the length of the first part.
+     * If we have reserved node_ids, we need to rearrnage curr_view.members into 3 parts:
+     * the first part holds survive non-reserved node_ids,
+     * the second part holds reserved node_ids, no matter it's from prev_view or newly added,
+     * and the third part holds newly added non-reserved node_ids.
+     * We then rearrange next_unassigned_rank to be the length of the first two parts, for they are assigned already.
+     */
+    if(all_reserved_node_ids.size() > 0) {
+        const SubgroupAllocationPolicy& subgroup_type_policy
+                = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    }
+
     for(uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
         //The size of shard_sizes[subgroup_type][subgroup_num] is the number of shards
         for(uint32_t shard_num = 0; shard_num < shard_sizes.at(subgroup_type)[subgroup_num].size();
@@ -405,7 +486,7 @@ subgroup_allocation_map_t DefaultSubgroupAllocator::operator()(
     return subgroup_allocations;
 }
 
-SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf) {
+SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, std::set<node_id_t>& all_reserved_node_ids) {
     if(!jconf.is_object() || !jconf[JSON_CONF_LAYOUT].is_array()) {
         dbg_default_error("parse_json_subgroup_policy cannot parse {}.", jconf.get<std::string>());
         throw derecho::derecho_exception("parse_json_subgroup_policy cannot parse" + jconf.get<std::string>());
@@ -441,7 +522,11 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf) {
 
         // "reserved_node_id_by_shard" is not a mandatory field
         if(subgroup_it.contains(RESERVED_NODE_ID_BY_SHRAD)) {
-            shard_allocation_policy.reserved_node_id_by_shard = subgroup_it[RESERVED_NODE_ID_BY_SHRAD].get<std::vector<std::vector<node_id_t>>>();
+            shard_allocation_policy.reserved_node_id_by_shard = subgroup_it[RESERVED_NODE_ID_BY_SHRAD].get<std::vector<std::set<node_id_t>>>();
+
+            for(auto reserved_id_set : shard_allocation_policy.reserved_node_id_by_shard) {
+                std::set_union(all_reserved_node_ids.begin(), all_reserved_node_ids.end(), reserved_id_set.begin(), reserved_id_set.end(), std::inserter(all_reserved_node_ids, all_reserved_node_ids.begin()));
+            }
         }
     }
     return subgroup_allocation_policy;

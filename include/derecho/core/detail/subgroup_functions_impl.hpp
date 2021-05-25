@@ -28,30 +28,35 @@ namespace derecho {
  * @param json_config subgroup configuration represented in json format.
  * @return SubgroupAllocationPolicy
  */
-SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&);
+SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&, std::set<node_id_t>&);
 
 template <typename ReplicatedType>
 void derecho_populate_policy_by_subgroup_type_map(
         std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map,
+        std::set<node_id_t>& all_reserved_node_ids,
         const json& layout, int type_idx) {
-    dsa_map.emplace(std::type_index(typeid(ReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx]));
+    dsa_map.emplace(std::type_index(typeid(ReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx], all_reserved_node_ids));
 }
 
 template <typename FirstReplicatedType, typename SecondReplicatedType, typename... RestReplicatedTypes>
 void derecho_populate_policy_by_subgroup_type_map(
         std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map,
+        std::set<node_id_t>& all_reserved_node_ids,
         const json& layout, int type_idx) {
-    dsa_map.emplace(std::type_index(typeid(FirstReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx]));
-    derecho_populate_policy_by_subgroup_type_map<SecondReplicatedType, RestReplicatedTypes...>(dsa_map, layout, type_idx + 1);
+    dsa_map.emplace(std::type_index(typeid(FirstReplicatedType)), derecho_parse_json_subgroup_policy(layout[type_idx], all_reserved_node_ids));
+    derecho_populate_policy_by_subgroup_type_map<SecondReplicatedType, RestReplicatedTypes...>(dsa_map, all_reserved_node_ids, layout, type_idx + 1);
 }
 
 template <typename... ReplicatedTypes>
 DefaultSubgroupAllocator construct_DSA_with_layout(const json& layout) {
     std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> dsa_map;
 
-    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
+    std::set<node_id_t> all_reserved_node_ids;
 
-    return DefaultSubgroupAllocator(dsa_map);
+    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(
+            dsa_map, all_reserved_node_ids, layout, 0);
+
+    return DefaultSubgroupAllocator(dsa_map, all_reserved_node_ids);
 }
 
 template <typename... ReplicatedTypes>
@@ -68,9 +73,12 @@ DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layou
 
     std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> dsa_map;
 
-    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(dsa_map, layout, 0);
+    std::set<node_id_t> all_reserved_node_ids;
 
-    return DefaultSubgroupAllocator(dsa_map);
+    derecho_populate_policy_by_subgroup_type_map<ReplicatedTypes...>(
+            dsa_map, all_reserved_node_ids, layout, 0);
+
+    return DefaultSubgroupAllocator(dsa_map, all_reserved_node_ids);
 }
 
 } /* namespace derecho */

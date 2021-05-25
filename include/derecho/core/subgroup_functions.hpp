@@ -9,6 +9,7 @@
 #include <exception>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <set>
 #include <variant>
 
 #include "derecho_exception.hpp"
@@ -102,8 +103,10 @@ struct ShardAllocationPolicy {
      * For each shard, this stores a list of node ids reserved for it. When a 
      * new node comes with id inside the list, it will be added into the 
      * dedicated shard directly. Overlapping among shards can be realized by 
-     * this mechanism. */
-    std::vector<std::vector<node_id_t>> reserved_node_id_by_shard;
+     * this mechanism. 
+     * Need to use std::set instead of std::unordered_set to makesure set functions
+     * run correctly.*/
+    std::vector<std::set<node_id_t>> reserved_node_id_by_shard;
 };
 
 /**
@@ -269,6 +272,11 @@ protected:
     const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
     /**
+     * The union set of reserved_node_ids from all shards.
+     */
+    const std::set<node_id_t> all_reserved_node_ids;
+
+    /**
      * Determines how many members each shard can have in the current view, based
      * on each shard's policy (minimum and maximum number of nodes) and the size
      * of the current view. This function first assigns the minimum number of
@@ -359,8 +367,16 @@ public:
                                             std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
                                      policies_by_subgroup_type)
             : policies(policies_by_subgroup_type) {}
+
+    DefaultSubgroupAllocator(const std::map<std::type_index,
+                                            std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
+                                     policies_by_subgroup_type,
+                             const std::set<node_id_t>& all_reserved_node_ids)
+            : policies(policies_by_subgroup_type),
+              all_reserved_node_ids(all_reserved_node_ids) {}
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
-            : policies(to_copy.policies) {}
+            : policies(to_copy.policies),
+              all_reserved_node_ids(to_copy.all_reserved_node_ids) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
     subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
