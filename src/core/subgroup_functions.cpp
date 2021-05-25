@@ -119,7 +119,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
         View& curr_view,
         subgroup_allocation_map_t& subgroup_layouts) const {
     //First, determine how many nodes each shard can have based on their policies
-    dbg_default_info("ready to calculate size");
+    dbg_default_debug("ready to calculate size");
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes
             = compute_standard_shard_sizes(subgroup_type_order, prev_view, curr_view);
     //Now we can go through and actually allocate nodes to each shard,
@@ -157,6 +157,7 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
     // If there are reserved node_ids, and some appear in curr_view, calculate the
     // intersection and count them once, in case that we want shard overlapping.
     std::set<node_id_t> all_active_reserved_node_id_set;
+    // We need a temp_node_id set to hold all active node ids. set_intersection can not work inplace.
     std::set<node_id_t> temp_node_id(curr_view.members.begin(), curr_view.members.end());
     if(all_reserved_node_ids.size() > 0) {
         std::set_intersection(
@@ -164,11 +165,11 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
                 std::inserter(all_active_reserved_node_id_set, all_active_reserved_node_id_set.begin()));
 
-        dbg_default_info("all_active_reserved_node_id_set is: ");
+        dbg_default_debug("all_active_reserved_node_id_set is: ");
         print_set(all_active_reserved_node_id_set);
 
         nodes_needed = all_active_reserved_node_id_set.size();
-        dbg_default_info("after processing reserve, nodes_needed is {}", nodes_needed);
+        dbg_default_debug("after processing reserve, nodes_needed is {}", nodes_needed);
     }
 
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes;
@@ -211,33 +212,27 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 }
                 shard_sizes[subgroup_type][subgroup_num][shard_num] = min_shard_size;
                 nodes_needed += min_shard_size;
-                dbg_default_info("after defautl calc, nodes_needed is {}", nodes_needed);
+                dbg_default_debug("after defautl calc, nodes_needed is {}", nodes_needed);
 
                 // If this shard reserve existing nodes, subtract the number of these nodes from nodes_needed
                 std::set<node_id_t> active_reserved_node_id_set;
 
-                dbg_default_info("sharding_policy.reserved_node_id_by_shard has {} sets", sharding_policy.reserved_node_id_by_shard.size());
+                dbg_default_debug("sharding_policy.reserved_node_id_by_shard has {} sets", sharding_policy.reserved_node_id_by_shard.size());
 
-                dbg_default_info("sharding_policy.reserved_node_id_by_shard[{}] for current shard is: ", shard_num);
+                dbg_default_debug("reserved_node_id_set for shard {} is: ", shard_num);
                 print_set(sharding_policy.reserved_node_id_by_shard[shard_num]);
-
-                std::set<node_id_t> reserved_node_id_set(
-                        sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
-                        sharding_policy.reserved_node_id_by_shard[shard_num].end());
-                dbg_default_info("reserved_node_id_set for current shard is: ");
-                print_set(reserved_node_id_set);
                 std::set_intersection(
-                        reserved_node_id_set.begin(),
-                        reserved_node_id_set.end(),
+                        sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                        sharding_policy.reserved_node_id_by_shard[shard_num].end(),
                         all_active_reserved_node_id_set.begin(),
                         all_active_reserved_node_id_set.end(),
                         std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
 
-                dbg_default_info("active_reserved_node_id_set for current shard is: ");
+                dbg_default_debug("active_reserved_node_id_set for current shard is: ");
                 print_set(active_reserved_node_id_set);
 
                 nodes_needed -= active_reserved_node_id_set.size();
-                dbg_default_info("after substract reserve, nodes_needed is {}", nodes_needed);
+                dbg_default_debug("after substract reserve, nodes_needed is {}", nodes_needed);
             }
         }
     }
@@ -344,6 +339,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             desired_nodes.insert(desired_nodes.end(),
                                  &curr_members[curr_view.next_unassigned_rank],
                                  &curr_members[curr_view.next_unassigned_rank + shard_size]);
+            // NOTE: If there are unassigned reserved nodes(which should not happen in regular use), next_unassigned_rank only points to 
+            // unassigned normal nodes, which I(Lichen) think is just OK and not in conflict with its definition.
             curr_view.next_unassigned_rank += shard_size;
             //Figure out what the Mode policy for this shard is
             const SubgroupAllocationPolicy& subgroup_type_policy
@@ -385,14 +382,17 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
      * arranged into two parts: the first part hold survive nodes from prev_view, and the second
      * part holds newly added nodes. The next_unassigned_rank is the length of the first part.
      * If we have reserved node_ids, we need to rearrnage curr_view.members into 3 parts:
-     * the first part holds survive non-reserved node_ids,
-     * the second part holds reserved node_ids, no matter it's from prev_view or newly added,
+     * the first part holds reserved node_ids, no matter it's from prev_view or newly added,
+     * the second part holds survive non-reserved node_ids,
      * and the third part holds newly added non-reserved node_ids.
      * We then rearrange next_unassigned_rank to be the length of the first two parts, for they are assigned already.
      */
+    std::vector<node_id_t> curr_members;
+    std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+    const SubgroupAllocationPolicy& subgroup_type_policy
+            = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
     if(all_reserved_node_ids.size() > 0) {
-        const SubgroupAllocationPolicy& subgroup_type_policy
-                = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+
     }
 
     for(uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
