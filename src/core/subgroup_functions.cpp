@@ -500,11 +500,6 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
 
             //Add newly added reserved nodes
 
-            dbg_default_debug("The total added_member_set is:");
-            print_set(added_member_set);
-            dbg_default_debug("Current shard reserved node_id set is:");
-            print_set(subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num]);
-
             std::set<node_id_t> added_reserved_node_id_set;
             std::set_intersection(
                     added_member_set.begin(), added_member_set.end(),
