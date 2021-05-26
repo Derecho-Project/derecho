@@ -33,7 +33,17 @@ namespace derecho {
 SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&, std::set<node_id_t>&);
 
 template <typename Type = node_id_t>
-void print_set(const std::set<Type> uset) {
+void print_set(const std::set<Type>& uset) {
+    std::stringstream stream;
+    for(auto thing : uset) {
+        stream << thing << ' ';
+    }
+
+    std::string out = stream.str();
+    dbg_default_debug(out);
+}
+template <typename Type = node_id_t>
+void print_set(const std::vector<Type>& uset) {
     std::stringstream stream;
     for(auto thing : uset) {
         stream << thing << ' ';
