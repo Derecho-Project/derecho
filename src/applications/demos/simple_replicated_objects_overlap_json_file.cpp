@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     auto find_in_foo_results = std::find(foo_members.begin(), foo_members.end(), my_id);
     if(find_in_foo_results != foo_members.end()) {
         uint32_t rank_in_foo = std::distance(foo_members.begin(), find_in_foo_results);
-        Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
+        // Replicated<Foo>& foo_rpc_handle = group.get_subgroup<Foo>();
         if(rank_in_foo == 0) {
             dbg_default_crit("Here is FOO {}!", rank_in_foo);
         } else if(rank_in_foo == 1) {
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     auto find_in_bar_results = std::find(bar_members.begin(), bar_members.end(), my_id);
     if(find_in_bar_results != bar_members.end()) {
         uint32_t rank_in_bar = derecho::index_of(bar_members, my_id);
-        Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
+        // Replicated<Bar>& bar_rpc_handle = group.get_subgroup<Bar>();
         if(rank_in_bar == 0) {
             dbg_default_crit("Here is BAR {}!", rank_in_bar);
         } else if(rank_in_bar == 1) {

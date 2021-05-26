@@ -311,7 +311,9 @@ protected:
     subgroup_shard_layout_t allocate_standard_subgroup_type(
             const std::type_index subgroup_type,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Creates and returns a new membership allocation for a single subgroup
@@ -331,7 +333,9 @@ protected:
             View& curr_view,
             const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
             const std::set<node_id_t>& survive_member_set,
-            const std::set<node_id_t>& added_member_set) const;
+            const std::set<node_id_t>& added_member_set,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Helper function that implements the subgroup allocation algorithm for all
