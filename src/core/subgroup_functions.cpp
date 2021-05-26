@@ -130,7 +130,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            dbg_default_debug("Without prev_view, assingn node to type {}", std::string(subgroup_type.name()));
+            dbg_default_debug("Without prev_view, assign node to type {}", std::string(subgroup_type.name()));
             subgroup_layouts[subgroup_type] = allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
         }
     } else {
@@ -193,13 +193,16 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
             shard_sizes[subgroup_type][subgroup_num].resize(sharding_policy.num_shards);
             for(int shard_num = 0; shard_num < sharding_policy.num_shards; ++shard_num) {
                 size_t min_shard_size = sharding_policy.even_shards ? sharding_policy.min_nodes_per_shard
-                                                                 : sharding_policy.min_num_nodes_by_shard[shard_num];
+                                                                    : sharding_policy.min_num_nodes_by_shard[shard_num];
 
                 /** With reserved nodes, we do not assign nodes evenly across shards.
                  * All current nodes may be occupied by 1 shard because it reserved all of them. 
                  * Therefore we need to check if min_shard_size for each shard is satisfied,
                  * and thus we need to maintain nodes_needed more carefully.
                  */
+
+                dbg_default_debug("Calculate node size for type {}, subgroup_num {}, shard_num {}", std::string(subgroup_type.name()), subgroup_num, shard_num);
+
                 std::set<node_id_t> survived_node_set;
                 //If there was a previous view, we must include all non-failed nodes from that view
                 if(prev_view) {
@@ -324,13 +327,15 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
     std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
     const SubgroupAllocationPolicy& subgroup_type_policy
             = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+
+    dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
     if(all_reserved_node_ids.size() > 0) {
         std::set_intersection(
                 curr_member_set.begin(), curr_member_set.end(),
                 all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
                 std::inserter(curr_members, curr_members.end()));
         curr_view.next_unassigned_rank = curr_members.size();
-        dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+        dbg_default_debug("After rearranging inherent node_ids, curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
         std::set_difference(
                 curr_member_set.begin(), curr_member_set.end(),
                 all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
@@ -346,7 +351,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             uint32_t shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
             std::vector<node_id_t> desired_nodes;
 
-            dbg_default_debug("For subgroup {}, shard {}, it needs {} nodes", subgroup_num, shard_num, shard_size);
+            dbg_default_debug("For subgroup {}, shard {}, it is assigned {} nodes", subgroup_num, shard_num, shard_size);
 
             // Allocate active reserved nodes first.
             const std::set<node_id_t> reserved_node_id_set(
@@ -423,16 +428,22 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
     std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
     const SubgroupAllocationPolicy& subgroup_type_policy
             = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+    dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
     if(all_reserved_node_ids.size() > 0) {
+        std::set<node_id_t> active_reserved_node_id_set;
+        std::set_intersection(
+                curr_member_set.begin(), curr_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.end()));
         std::set_union(
                 survive_member_set.begin(), survive_member_set.end(),
-                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                active_reserved_node_id_set.begin(), active_reserved_node_id_set.end(),
                 std::inserter(curr_members, curr_members.end()));
         dbg_default_debug("With inherent nodes, curr_members is:");
         print_set(curr_members);
 
         curr_view.next_unassigned_rank = curr_members.size();
-        dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+        dbg_default_debug("After rearranging inherent node_ids, curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
 
         std::set_difference(
                 added_member_set.begin(), added_member_set.end(),
@@ -452,7 +463,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             std::vector<node_id_t> next_shard_members;
             std::vector<int> next_is_sender;
             uint32_t allocated_shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
-            dbg_default_debug("For subgroup {}, shard {}, it needs {} nodes", subgroup_num, shard_num, allocated_shard_size);
+            dbg_default_debug("For subgroup {}, shard {}, it is assigned {} nodes", subgroup_num, shard_num, allocated_shard_size);
 
             //Add all the non-failed nodes from the previous assignment
             for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
@@ -462,7 +473,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 next_shard_members.push_back(previous_shard_assignment.members[rank]);
                 next_is_sender.push_back(previous_shard_assignment.is_sender[rank]);
             }
-            dbg_default_debug("Assigning survive nodes, next_shard_members is:");
+            dbg_default_debug("After assigning survive nodes, next_shard_members is:");
             print_set(next_shard_members);
 
             //Add newly added reserved nodes
