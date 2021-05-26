@@ -329,7 +329,9 @@ protected:
             const subgroup_type_id_t subgroup_type_id,
             const std::unique_ptr<View>& prev_view,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::set<node_id_t>& survive_member_set,
+            const std::set<node_id_t>& added_member_set) const;
 
     /**
      * Helper function that implements the subgroup allocation algorithm for all

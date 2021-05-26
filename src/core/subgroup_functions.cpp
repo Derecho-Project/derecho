@@ -134,6 +134,11 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             subgroup_layouts[subgroup_type] = allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
         }
     } else {
+        /** survive_member_set holds non-failed node_ids from prev_view, added_member_set holds
+         * newly added node_ids in curr_view. 
+         */
+        std::set<node_id_t> survive_member_set(curr_view.members.begin(), curr_view.members.begin() + curr_view.next_unassigned_rank);
+        std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
             ++subgroup_type_id) {
             //We need to both iterate through this vector and keep the counter in order to know the type IDs
@@ -143,7 +148,9 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             }
             dbg_default_debug("With prev_view, assingn node to type {}", std::string(subgroup_type.name()));
             subgroup_layouts[subgroup_type] = update_standard_subgroup_type(subgroup_type, subgroup_type_id,
-                                                                            prev_view, curr_view, shard_sizes);
+                                                                            prev_view, curr_view, shard_sizes,
+                                                                            survive_member_set,
+                                                                            added_member_set);
         }
     }
 }
@@ -404,7 +411,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
         const subgroup_type_id_t subgroup_type_id,
         const std::unique_ptr<View>& prev_view,
         View& curr_view,
-        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+        const std::set<node_id_t>& survive_member_set,
+        const std::set<node_id_t>& added_member_set) const {
     /* Subgroups of the same type will have contiguous IDs because they were created in order.
      * So the previous assignment is the slice of the previous subgroup_shard_views vector
      * starting at the first subgroup's ID, and extending for num_subgroups entries.
@@ -422,8 +431,6 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
      */
     std::vector<node_id_t> curr_members;
     std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
-    std::set<node_id_t> survive_member_set(curr_view.members.begin(), curr_view.members.begin() + curr_view.next_unassigned_rank);
-    std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
 
     dbg_default_debug("The survive_member_set is:");
     print_set(survive_member_set);
