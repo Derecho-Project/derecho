@@ -33,7 +33,7 @@ void print_set(const std::vector<node_id_t>& uset) {
     }
 
     std::string out = stream.str();
-    dbg_default_debug(out);
+    dbg_default_crit(out);
 }
 
 int main(int argc, char** argv) {
