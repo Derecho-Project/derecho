@@ -297,12 +297,16 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                 // Check whehter this shard reserve existing nodes.
                 std::set<node_id_t> active_reserved_node_id_set;
 
-                std::set_intersection(
-                        sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
-                        sharding_policy.reserved_node_id_by_shard[shard_num].end(),
-                        curr_member_set.begin(),
-                        curr_member_set.end(),
-                        std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
+                if(sharding_policy.reserved_node_id_by_shard.size() > 0) {
+                    std::set_intersection(
+                            sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].end(),
+                            curr_member_set.begin(),
+                            curr_member_set.end(),
+                            std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
+                } else {
+                    dbg_default_debug("There is no reserved node_id configured.");
+                }
 
                 dbg_default_debug("The active_reserved_node_id_set for current shard is: ");
                 print_set(active_reserved_node_id_set);
@@ -403,17 +407,21 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
             dbg_default_debug("For subgroup {}, shard {}, it is assigned {} nodes", subgroup_num, shard_num, shard_size);
 
             // Allocate active reserved nodes first.
-            const std::set<node_id_t> reserved_node_id_set(
-                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
-                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end());
-            if(reserved_node_id_set.size() > 0) {
-                std::set_intersection(
-                        reserved_node_id_set.begin(), reserved_node_id_set.end(),
-                        curr_member_set.begin(), curr_member_set.end(),
-                        std::inserter(desired_nodes, desired_nodes.end()));
-                shard_size -= desired_nodes.size();
-                dbg_default_debug("Assign it {} active reserved nodes:", desired_nodes.size());
-                print_set(std::set<node_id_t>(desired_nodes.begin(), desired_nodes.end()));
+            if(subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard.size() > 0) {
+                const std::set<node_id_t> reserved_node_id_set(
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end());
+                if(reserved_node_id_set.size() > 0) {
+                    std::set_intersection(
+                            reserved_node_id_set.begin(), reserved_node_id_set.end(),
+                            curr_member_set.begin(), curr_member_set.end(),
+                            std::inserter(desired_nodes, desired_nodes.end()));
+                    shard_size -= desired_nodes.size();
+                    dbg_default_debug("Assign it {} active reserved nodes:", desired_nodes.size());
+                    print_set(std::set<node_id_t>(desired_nodes.begin(), desired_nodes.end()));
+                }
+            } else {
+                dbg_default_debug("There is no reserved node_id configured.");
             }
 
             //Grab the next shard_size nodes
@@ -499,24 +507,27 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             print_set(next_shard_members);
 
             //Add newly added reserved nodes
+            if(subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard.size() > 0) {
+                std::set<node_id_t> added_reserved_node_id_set;
+                std::set_intersection(
+                        added_member_set.begin(), added_member_set.end(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end(),
+                        std::inserter(added_reserved_node_id_set, added_reserved_node_id_set.end()));
+                if(added_reserved_node_id_set.size() > 0) {
+                    dbg_default_debug("The added_reserved_node_id_set is not empty:");
+                    print_set(added_reserved_node_id_set);
 
-            std::set<node_id_t> added_reserved_node_id_set;
-            std::set_intersection(
-                    added_member_set.begin(), added_member_set.end(),
-                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
-                    subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end(),
-                    std::inserter(added_reserved_node_id_set, added_reserved_node_id_set.end()));
-            if(added_reserved_node_id_set.size() > 0) {
-                dbg_default_debug("The added_reserved_node_id_set is not empty:");
-                print_set(added_reserved_node_id_set);
-
-                for(auto node_id : added_reserved_node_id_set) {
-                    next_shard_members.push_back(node_id);
-                    next_is_sender.push_back(true);
+                    for(auto node_id : added_reserved_node_id_set) {
+                        next_shard_members.push_back(node_id);
+                        next_is_sender.push_back(true);
+                    }
                 }
+                dbg_default_debug("After assigning newly added reserved nodes, we get {} inherent node_id(s) assigned, next_shard_members is:", next_shard_members.size());
+                print_set(next_shard_members);
+            } else {
+                dbg_default_debug("There is no reserved node_id configured.");
             }
-            dbg_default_debug("After assigning newly added reserved nodes, we get {} inherent node_id(s) assigned, next_shard_members is:", next_shard_members.size());
-            print_set(next_shard_members);
 
             //Add additional members if needed
             while(next_shard_members.size() < allocated_shard_size) {
@@ -630,7 +641,9 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
     for(auto subgroup_it : jconf[JSON_CONF_LAYOUT]) {
         ShardAllocationPolicy shard_allocation_policy;
         size_t num_shards = subgroup_it[MIN_NODES_BY_SHARD].size();
-        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards || subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != num_shards) {
+        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards ||
+           // "reserved_node_id_by_shard" is not a mandatory field
+           (subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != 0 && subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != num_shards)) {
             dbg_default_error("parse_json_subgroup_policy: shards does not match in at least one subgroup: {}",
                               subgroup_it.get<std::string>());
             throw derecho::derecho_exception("parse_json_subgroup_policy: shards does not match in at least one subgroup:" + subgroup_it.get<std::string>());
@@ -656,6 +669,8 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
             for(auto reserved_id_set : shard_allocation_policy.reserved_node_id_by_shard) {
                 std::set_union(all_reserved_node_ids.begin(), all_reserved_node_ids.end(), reserved_id_set.begin(), reserved_id_set.end(), std::inserter(all_reserved_node_ids, all_reserved_node_ids.begin()));
             }
+        } else {
+            dbg_default_debug("There is no reserved node_id configured.");
         }
 
         subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
