@@ -193,7 +193,7 @@ int _resources::init_endpoint(struct fi_info* fi) {
 }
 
 void _resources::connect_endpoint(bool is_lf_server) {
-    dbg_default_trace("preparing connection to remote node(id=%d)...\n", this->remote_id);
+    dbg_default_trace("preparing connection to remote node(id={})...\n", this->remote_id);
     struct cm_con_data_t local_cm_data, remote_cm_data;
 
     // STEP 1 exchange CM info
