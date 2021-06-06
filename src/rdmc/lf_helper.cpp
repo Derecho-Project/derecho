@@ -665,6 +665,11 @@ bool lf_initialize(const std::map<node_id_t, std::pair<ip_addr_t, uint16_t>>& ip
     fail_if_nonzero_retry_on_eagain(
             "fi_domain() failed", CRASH_ON_FAILURE,
             fi_domain, g_ctxt.fabric, g_ctxt.fi, &(g_ctxt.domain), nullptr);
+    /**
+     * libfabric 1.12 does not pick an adequate default value for completion queue size.
+     * We simply set it to a large enough one.
+     */
+    g_ctxt.cq_attr.size = 2097152;
     fail_if_nonzero_retry_on_eagain(
             "failed to initialize tx completion queue", CRASH_ON_FAILURE,
             fi_cq_open, g_ctxt.domain, &(g_ctxt.cq_attr), &(g_ctxt.cq), nullptr);
