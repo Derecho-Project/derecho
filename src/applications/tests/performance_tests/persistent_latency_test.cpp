@@ -164,9 +164,9 @@ int main(int argc, char* argv[]) {
         if(last_version_set && ver == last_version) {
             if(is_sending) {
                 for(uint32_t i = 0; i < num_msgs; i++) {
-                    std::cout << "[" << i << "]" << local_message_ts_us[i] << " "
-                              << message_pers_ts_us[num_sender * i + node_rank] << " "
-                              << (message_pers_ts_us[num_sender * i + node_rank] - local_message_ts_us[i]) << " us" << std::endl;
+                    // std::cout << "[" << i << "]" << local_message_ts_us[i] << " "
+                    //           << message_pers_ts_us[num_sender * i + node_rank] << " "
+                    //           << (message_pers_ts_us[num_sender * i + node_rank] - local_message_ts_us[i]) << " us" << std::endl;
                 }
             }
             double thp_mbps = (double)total_num_messages * msg_size / DELTA_T_US(t_begin, ts);
