@@ -679,7 +679,6 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
 			 * to store data and model respectively for an ML application, and actually reserve
 			 * the same node_ids for shards in this two subgroup. This way the data and the model
 			 * coexist in the same node, thus delivering performance gains.
-			 * @param dsa_map the subgroup allocation map derived from json configuration.
 			 */
             std::set<node_id_t> intersect_reserved_node_ids_in_subgroup;
             std::set<node_id_t> temp(shard_allocation_policy.reserved_node_id_by_shard[0]);
