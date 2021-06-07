@@ -4,6 +4,7 @@
  * @date Feb 28, 2017
  */
 
+#include <iterator>
 #include <vector>
 
 #include <derecho/core/derecho_modes.hpp>
@@ -132,7 +133,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
          * the first part holds current active reserved node_ids,
          * while the second part holds normal node_ids.
          * We then rearrange next_unassigned_rank to be the length of the first part, for nodes in the first part
-         * are inherent nodes for some shards, and sure will be assigned, 
+         * are inherent nodes for some shards, and sure will be assigned,
          * sometimes more than once if we want to overlap shards.
          */
         // We cannot modify curr_view.members inplace, which will corrupt curr_view.my_rank, curr_view.node_id_to_rank, etc. Besides, View::members is const.
@@ -166,7 +167,7 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
         }
     } else {
         /** survive_member_set holds non-failed node_ids from prev_view, added_member_set holds
-         * newly added node_ids in curr_view. 
+         * newly added node_ids in curr_view.
          */
         std::set<node_id_t> survive_member_set(curr_view.members.begin(), curr_view.members.begin() + curr_view.next_unassigned_rank);
         std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
@@ -272,7 +273,7 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                                                                     : sharding_policy.min_num_nodes_by_shard[shard_num];
 
                 /** With reserved nodes, we do not assign nodes evenly across shards.
-                 * All current nodes may be occupied by 1 shard because it reserved all of them. 
+                 * All current nodes may be occupied by 1 shard because it reserved all of them.
                  * Therefore we need to check if min_shard_size for each shard is satisfied,
                  * and thus we need to maintain nodes_needed more carefully.
                  */
@@ -646,6 +647,7 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
            (subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != 0 && subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != num_shards)) {
             dbg_default_error("parse_json_subgroup_policy: shards does not match in at least one subgroup: {}",
                               subgroup_it.get<std::string>());
+
             throw derecho::derecho_exception("parse_json_subgroup_policy: shards does not match in at least one subgroup:" + subgroup_it.get<std::string>());
         }
         shard_allocation_policy.even_shards = false;
@@ -669,6 +671,31 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
             for(auto reserved_id_set : shard_allocation_policy.reserved_node_id_by_shard) {
                 std::set_union(all_reserved_node_ids.begin(), all_reserved_node_ids.end(), reserved_id_set.begin(), reserved_id_set.end(), std::inserter(all_reserved_node_ids, all_reserved_node_ids.begin()));
             }
+            /**
+			 * Make sure that no shards inside a subgroup reserve same node_ids. Shards in 
+			 * different subgroups of one same type or from different types can share nodes,
+			 * and this why we use the reserved_node_id feature.
+			 * For example, we can assign 2 subgroups for type "PersistentCascadeStoreWithStringKey"
+			 * to store data and model respectively for an ML application, and actually reserve
+			 * the same node_ids for shards in this two subgroup. This way the data and the model
+			 * coexist in the same node, thus delivering performance gains.
+			 * @param dsa_map the subgroup allocation map derived from json configuration.
+			 */
+            std::set<node_id_t> intersect_reserved_node_ids_in_subgroup;
+            std::set<node_id_t> temp(shard_allocation_policy.reserved_node_id_by_shard[0]);
+            for(int shard_num = 1; shard_num < shard_allocation_policy.num_shards; ++shard_num) {
+                intersect_reserved_node_ids_in_subgroup = std::set<node_id_t>();
+                std::set_intersection(
+                        temp.begin(), temp.end(),
+                        shard_allocation_policy.reserved_node_id_by_shard[shard_num].begin(),
+                        shard_allocation_policy.reserved_node_id_by_shard[shard_num].end(),
+                        std::inserter(intersect_reserved_node_ids_in_subgroup,
+                                      intersect_reserved_node_ids_in_subgroup.begin()));
+            }
+            // Shards in this subgroup have same reserved node_ids.
+            if(intersect_reserved_node_ids_in_subgroup.size() > 0) {
+                throw derecho_exception("Shards in one subgroup have same reserved node_ids!");
+            }
         } else {
             dbg_default_debug("There is no reserved node_id configured.");
         }
@@ -676,6 +703,36 @@ SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, s
         subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
     }
     return subgroup_allocation_policy;
+}
+
+void check_reserved_node_id_pool(const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map) {
+    for(auto& item : dsa_map) {
+        if(!std::holds_alternative<SubgroupAllocationPolicy>(item.second)) {
+            continue;
+        }
+        const SubgroupAllocationPolicy& subgroup_type_policy
+                = std::get<SubgroupAllocationPolicy>(item.second);
+        for(int subgroup_num = 0; subgroup_num < subgroup_type_policy.num_subgroups; ++subgroup_num) {
+            const ShardAllocationPolicy& sharding_policy = subgroup_type_policy.shard_policy_by_subgroup[subgroup_num];
+            if(sharding_policy.reserved_node_id_by_shard.size() > 0) {
+                std::set<node_id_t> intersect_reserved_node_ids_in_subgroup;
+                std::set<node_id_t> temp(sharding_policy.reserved_node_id_by_shard[0]);
+                for(int shard_num = 1; shard_num < sharding_policy.num_shards; ++shard_num) {
+                    intersect_reserved_node_ids_in_subgroup = std::set<node_id_t>();
+                    std::set_intersection(
+                            temp.begin(), temp.end(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].end(),
+                            std::inserter(intersect_reserved_node_ids_in_subgroup,
+                                          intersect_reserved_node_ids_in_subgroup.begin()));
+                }
+                // Shards in this subgroup have same reserved node_ids.
+                if(intersect_reserved_node_ids_in_subgroup.size() > 0) {
+                    throw derecho_exception("Shards in one subgroup have same reserved node_ids!");
+                }
+            }
+        }
+    }
 }
 
 }  // namespace derecho

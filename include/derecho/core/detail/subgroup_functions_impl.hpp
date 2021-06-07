@@ -24,13 +24,25 @@ namespace derecho {
 #define DELIVERY_MODE_RAW "Raw"
 #define PROFILES_BY_SHARD "profiles_by_shard"
 /**
- * derecho_parse_json_subgroup_policy()
- *
  * Generate a single-type subgroup allocation policy from json string
- * @param json_config subgroup configuration represented in json format.
+ * @param jconf subgroup configuration represented in json format.
+ * @param all_reserved_node_ids a set that holds the union of all reserved node_ids.
  * @return SubgroupAllocationPolicy
  */
 SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json&, std::set<node_id_t>&);
+
+/**
+ * TODO: If we just need to check shards within one subgroup, this function is redundant.
+ * Make sure that no shards inside a subgroup reserve same node_ids. Shards in 
+ * different subgroups of one same type or from different types can share nodes,
+ * and this why we use the reserved_node_id feature.
+ * For example, we can assign 2 subgroups for type "PersistentCascadeStoreWithStringKey"
+ * to store data and model respectively for an ML application, and actually reserve
+ * the same node_ids for shards in this two subgroup. This way the data and the model
+ * coexist in the same node, thus delivering performance gains.
+ * @param dsa_map the subgroup allocation map derived from json configuration.
+ */
+void check_reserved_node_id_pool(const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&);
 
 template <typename Type = node_id_t>
 void print_set(const std::set<Type>& uset) {
@@ -89,7 +101,6 @@ DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layou
     std::ifstream json_layout_stream(layout_path.c_str());
     if(!json_layout_stream) {
         throw derecho_exception("The json layout file " + layout_path + " not found.");
-        // TODO: do we need further actions like return something?
     }
 
     json_layout_stream >> layout;
