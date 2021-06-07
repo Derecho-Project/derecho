@@ -262,7 +262,7 @@ public:
      * template parameter of Group, providing a way to construct instances of
      * each Replicated Object
      */
-    Group(const CallbackSet& callbacks,
+    Group(const UserMessageCallbacks& callbacks,
           const SubgroupInfo& subgroup_info,
           const std::vector<DeserializationContext*>& deserialization_context,
           std::vector<view_upcall_t> _view_upcalls = {},

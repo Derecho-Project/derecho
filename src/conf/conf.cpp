@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdexcept>
 #ifndef NDEBUG
 #include <spdlog/sinks/stdout_color_sinks.h>
 #endif  //NDEBUG
@@ -50,6 +51,7 @@ struct option Conf::long_options[] = {
 	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE),
 	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE),
 	    MAKE_LONG_OPT_ENTRY(CONF_DERECHO_P2P_WINDOW_SIZE),
+        MAKE_LONG_OPT_ENTRY(CONF_DERECHO_MAX_NODE_ID),
         // [SUBGROUP/<subgroup name>]
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_RDMC_SEND_ALGORITHM),
         MAKE_LONG_OPT_ENTRY(CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE),
@@ -101,6 +103,11 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
 
         // 3 - set the flag to initialized
         Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
+
+
+        if(getConfUInt32(CONF_DERECHO_LOCAL_ID) >= getConfUInt32(CONF_DERECHO_MAX_NODE_ID)) {
+            throw std::logic_error("Configuration error: Local node ID must be less than max node ID");
+        }
     }
 }
 

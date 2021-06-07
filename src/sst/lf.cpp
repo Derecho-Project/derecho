@@ -144,7 +144,8 @@ static void load_configuration() {
     // domain:
     g_ctxt.hints->domain_attr->name = crash_if_nullptr("strdup domain name.",
                                                        strdup, derecho::getConfString(CONF_RDMA_DOMAIN).c_str());
-    if(strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) {
+    if((strcmp(g_ctxt.hints->fabric_attr->prov_name, "sockets") == 0) ||
+       (strcmp(g_ctxt.hints->fabric_attr->prov_name, "tcp") == 0)){
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_BASIC;
     } else {  // default
         g_ctxt.hints->domain_attr->mr_mode = FI_MR_LOCAL | FI_MR_ALLOCATED | FI_MR_PROV_KEY | FI_MR_VIRT_ADDR;
@@ -192,7 +193,7 @@ int _resources::init_endpoint(struct fi_info* fi) {
 }
 
 void _resources::connect_endpoint(bool is_lf_server) {
-    dbg_default_trace("preparing connection to remote node(id=%d)...\n", this->remote_id);
+    dbg_default_trace("preparing connection to remote node(id={})...\n", this->remote_id);
     struct cm_con_data_t local_cm_data, remote_cm_data;
 
     // STEP 1 exchange CM info
@@ -243,6 +244,17 @@ void _resources::connect_endpoint(bool is_lf_server) {
             fi_freeinfo(entry.info);
             crash_with_message("failed to accept connection.\n");
         }
+        nRead = fi_eq_sread(this->eq, &event, &entry, sizeof(entry), -1, 0);
+        if(nRead != sizeof(entry)) {
+            dbg_default_error("server failed to connect remote.");
+            crash_with_message("server failed to connect remote. nRead=%ld.\n", nRead);
+        }
+        dbg_default_debug("{}:{} entry.fid={},this->ep->fid={}", __FILE__, __func__, (void*)entry.fid, (void*)&(this->ep->fid));
+        if(event != FI_CONNECTED || entry.fid != &(this->ep->fid)) {
+            fi_freeinfo(entry.info);
+            crash_with_message("SST: Unexpected CM event: %d.\n", event);
+        }
+
         fi_freeinfo(entry.info);
     } else {
         // libfabric connection client
@@ -383,7 +395,10 @@ int _resources::post_remote_send(
         msg_iov.iov_len = size;
 
         msg.msg_iov = &msg_iov;
-        msg.desc = (void**)&this->mr_lrkey;
+        // in v1.12.1, the API spec changed.
+        // msg.desc = (void**)&this->mr_lrkey;
+        void *desc = fi_mr_desc(this->read_mr);
+        msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;
         msg.context = (void*)ctxt;
@@ -405,7 +420,10 @@ int _resources::post_remote_send(
         rma_iov.key = this->mr_rwkey;
 
         msg.msg_iov = &msg_iov;
-        msg.desc = (void**)&this->mr_lrkey;
+        // in v1.12.1, this API changed.
+        // msg.desc = (void**)&this->mr_lrkey;
+        void *desc = fi_mr_desc(this->read_mr);
+        msg.desc = &desc;
         msg.iov_count = 1;
         msg.addr = 0;  // not used for a connection endpoint
         msg.rma_iov = &rma_iov;
@@ -553,7 +571,10 @@ int resources_two_sided::post_receive(lf_sender_ctxt* ctxt, const long long int 
     msg_iov.iov_len = size;
 
     msg.msg_iov = &msg_iov;
-    msg.desc = (void**)&this->mr_lwkey;
+    // v1.12.1 changed API spec
+    // msg.desc = (void**)&this->mr_lwkey;
+    void *desc = fi_mr_desc(this->write_mr);
+    msg.desc = &desc;
     msg.iov_count = 1;
     msg.addr = 0;  // not used
     msg.context = (void*)ctxt;

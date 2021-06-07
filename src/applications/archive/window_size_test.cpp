@@ -56,13 +56,13 @@ int main(int argc, char *argv[]) {
     std::unique_ptr<derecho::Group<>> g;
     if(my_ip == leader_ip) {
         g = std::make_unique<derecho::Group<>>(
-                node_id, my_ip, derecho::CallbackSet{stability_callback, nullptr},
+                node_id, my_ip, derecho::UserMessageCallbacks{stability_callback, nullptr},
                 one_raw_group,
                 derecho::DerechoParams{msg_size, sst_msg_size, block_size, window_size});
     } else {
         g = std::make_unique<derecho::Group<>>(
                 node_id, my_ip, leader_ip,
-                derecho::CallbackSet{stability_callback, nullptr},
+                derecho::UserMessageCallbacks{stability_callback, nullptr},
                 one_raw_group);
     }
 

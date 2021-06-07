@@ -12,10 +12,10 @@ namespace derecho {
 PersistenceManager::PersistenceManager(
         std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
         bool any_signed_objects,
-        const persistence_callback_t& _persistence_callback)
+        const persistence_callback_t& user_persistence_callback)
         : thread_shutdown(false),
           signature_size(0),
-          persistence_callback(_persistence_callback),
+          persistence_callbacks{user_persistence_callback},
           objects_by_subgroup_id(objects_map) {
     // initialize semaphore
     if(sem_init(&persistence_request_sem, 1, 0) != 0) {
@@ -39,6 +39,10 @@ void PersistenceManager::set_view_manager(ViewManager& view_manager) {
 
 std::size_t PersistenceManager::get_signature_size() const {
     return signature_size;
+}
+
+void PersistenceManager::add_persistence_callback(const persistence_callback_t& callback) {
+    persistence_callbacks.emplace_back(callback);
 }
 
 void PersistenceManager::start() {
@@ -103,6 +107,13 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
             //Update persisted_version to the version actually persisted, which might be greater than the requested version
             persisted_version = search->second->persist(version, signature);
         }
+        // Call the local persistence callbacks before updating the SST
+        // (as soon as the SST is updated, the global persistence callback may fire)
+        for(auto& persistence_callback : persistence_callbacks) {
+            if(persistence_callback) {
+                persistence_callback(subgroup_id, persisted_version);
+            }
+        }
         // read lock the view
         SharedLockedReference<View> view_and_lock = view_manager->get_current_view();
         // update the signature and persisted_num in SST
@@ -122,11 +133,6 @@ void PersistenceManager::handle_persist_request(subgroup_id_t subgroup_id, persi
     } catch(uint64_t exp) {
         dbg_default_debug("exception on persist():subgroup={},ver={},exp={}.", subgroup_id, version, exp);
         std::cout << "exception on persistent:subgroup=" << subgroup_id << ",ver=" << version << "exception=0x" << std::hex << exp << std::endl;
-    }
-
-    // callback
-    if(this->persistence_callback != nullptr) {
-        this->persistence_callback(subgroup_id, persisted_version);
     }
 }
 

@@ -43,12 +43,12 @@ int main() {
     std::unique_ptr<derecho::Group<>> g;
     if(node_id == 0) {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip,
-                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               derecho::UserMessageCallbacks{stability_callback, nullptr},
                                                one_raw_group,
                                                derecho::DerechoParams{max_msg_size, sst_max_msg_size, block_size});
     } else {
         g = std::make_unique<derecho::Group<>>(node_id, my_ip, leader_ip,
-                                               derecho::CallbackSet{stability_callback, nullptr},
+                                               derecho::UserMessageCallbacks{stability_callback, nullptr},
                                                one_raw_group);
     }
     for(int i = 0; i < num_messages; ++i) {

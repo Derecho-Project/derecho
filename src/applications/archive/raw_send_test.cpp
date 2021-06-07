@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         num_messages_received++;
     };
 
-    derecho::CallbackSet callbacks{stability_callback, nullptr};
+    derecho::UserMessageCallbacks callbacks{stability_callback, nullptr};
     derecho::DerechoParams parameters{max_msg_size, sst_max_msg_size, block_size};
 
     derecho::SubgroupInfo one_raw_group{&derecho::one_subgroup_entire_view};

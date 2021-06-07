@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
             break;
     }
 
-    derecho::CallbackSet callback_set{
+    derecho::UserMessageCallbacks callback_set{
             nullptr,  //we don't need the stability_callback here
             [&](derecho::subgroup_id_t subgroup, persistent::version_t ver) {
                 if(ver == (total_num_messages - 1)) {

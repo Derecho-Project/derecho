@@ -39,6 +39,18 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 
 ShardAllocationPolicy flexible_even_shards(const std::string& profile) {
     const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+    if (!hasCustomizedConfKey(conf_profile_prefix + num_shards_profile_field)) {
+        dbg_default_error("{} not found in config.",conf_profile_prefix + num_shards_profile_field);
+        return {};
+    }
+    if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+        return {};
+    }
+    if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+        return {};
+    }
     int num_shards = getConfUInt32(conf_profile_prefix + num_shards_profile_field);
     int min_nodes = getConfUInt32(conf_profile_prefix + min_nodes_profile_field);
     int max_nodes = getConfUInt32(conf_profile_prefix + max_nodes_profile_field);
@@ -70,6 +82,14 @@ ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_mode
     std::vector<int> max_nodes_by_shard;
     for(const std::string& profile : profiles_by_shard) {
         const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
+        if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+            return {};
+        }
+        if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+            return {};
+        }
         min_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + min_nodes_profile_field));
         max_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + max_nodes_profile_field));
     }

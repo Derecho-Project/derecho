@@ -287,6 +287,20 @@ std::size_t bytes_size(const std::map<K, V>& m) {
 }
 
 /**
+ * Sums the size of each key and value in the unordered_map, plus one int for the
+ * number of entries
+ */
+template <typename K, typename V>
+std::size_t bytes_size(const std::unordered_map<K, V>& m) {
+    int size = sizeof(int);
+    for(const auto& p : m) {
+        size += bytes_size(p.first);
+        size += bytes_size(p.second);
+    }
+    return size;
+}
+
+/**
  * Sums the size of each element of the tuple
  */
 template <typename... T>
@@ -489,6 +503,12 @@ template <typename K, typename V>
 struct is_map<std::map<K, V>> : std::true_type {};
 
 template <typename>
+struct is_unordered_map : std::false_type {};
+
+template <typename K, typename V>
+struct is_unordered_map<std::unordered_map<K, V>> : std::true_type {};
+
+template <typename>
 struct is_string : std::false_type {};
 
 template <>
@@ -542,6 +562,10 @@ template <typename K, typename V>
 void post_object(const std::function<void(char const* const, std::size_t)>& f,
                  const std::map<K, V>& map);
 
+template <typename K, typename V>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::unordered_map<K, V>& map);
+
 // Forward declarations of to_bytes functions for STL types
 
 template <typename T, restrict(std::is_pod<T>::value)>
@@ -566,6 +590,9 @@ std::size_t to_bytes(const std::set<T>& s, char* _v);
 
 template <typename K, typename V>
 std::size_t to_bytes(const std::map<K, V>& m, char* buffer);
+
+template <typename K, typename V>
+std::size_t to_bytes(const std::unordered_map<K, V>& m, char* buffer);
 
 // Forward declarations of from_bytes functions for STL types
 
@@ -630,11 +657,16 @@ from_bytes_noalloc(DeserializationManager* ctx, char const* v,
                    context_ptr<T> = context_ptr<T>{});
 
 template <typename T>
-std::enable_if_t<is_map<T>::value, std::unique_ptr<T>>
+std::enable_if_t<is_map<T>::value||is_unordered_map<T>::value, std::unique_ptr<T>>
 from_bytes(DeserializationManager* ctx, char const* buffer);
 
 template <typename T>
 context_ptr<type_check<is_map, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T> = context_ptr<T>{});
+
+template <typename T>
+context_ptr<type_check<is_unordered_map, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
                    context_ptr<T> = context_ptr<T>{});
 
@@ -709,6 +741,17 @@ void post_object(const std::function<void(char const* const, std::size_t)>& f,
     }
 }
 
+template <typename K, typename V>
+void post_object(const std::function<void(char const* const, std::size_t)>& f,
+                 const std::unordered_map<K, V>& map) {
+    int size = map.size();
+    f((char*)&size, sizeof(size));
+    for(const auto& pair : map) {
+        post_object(f, pair.first);
+        post_object(f, pair.second);
+    }
+}
+
 // end post_object section
 
 // Implementation of to_bytes functions for STL types
@@ -772,6 +815,15 @@ std::size_t to_bytes(const std::map<K, V>& m, char* buffer) {
     post_object(post_to_buffer(index, buffer), m);
     return size;
 }
+
+template <typename K, typename V>
+std::size_t to_bytes(const std::unordered_map<K, V>& m, char* buffer) {
+    std::size_t index = 0;
+    std::size_t size = bytes_size(m);
+    post_object(post_to_buffer(index, buffer), m);
+    return size;
+}
+
 // end to_bytes section
 
 #ifdef MUTILS_DEBUG
@@ -989,7 +1041,7 @@ from_bytes_noalloc(DeserializationManager* ctx, char const* v,
 }
 
 template <typename T>
-std::enable_if_t<is_map<T>::value, std::unique_ptr<T>>
+std::enable_if_t<is_map<T>::value||is_unordered_map<T>::value, std::unique_ptr<T>>
 from_bytes(DeserializationManager* ctx, char const* buffer) {
     using key_t = typename T::key_type;
     using value_t = typename T::mapped_type;
@@ -1013,6 +1065,13 @@ from_bytes(DeserializationManager* ctx, char const* buffer) {
 
 template <typename T>
 context_ptr<type_check<is_map, T>>
+from_bytes_noalloc(DeserializationManager* ctx, char const* v,
+                   context_ptr<T>) {
+    return context_ptr<T>{from_bytes<T>(ctx, v).release()};
+}
+
+template <typename T>
+context_ptr<type_check<is_unordered_map, T>>
 from_bytes_noalloc(DeserializationManager* ctx, char const* v,
                    context_ptr<T>) {
     return context_ptr<T>{from_bytes<T>(ctx, v).release()};

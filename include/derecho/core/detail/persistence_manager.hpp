@@ -8,6 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <errno.h>
+#include <list>
 #include <queue>
 #include <semaphore.h>
 #include <thread>
@@ -71,8 +72,11 @@ private:
     std::unique_ptr<openssl::Verifier> signature_verifier;
     /** The size of a signature (which is a constant), or 0 if signatures are disabled. */
     std::size_t signature_size;
-    /** The global persistence callback */
-    persistence_callback_t persistence_callback;
+    /**
+     * The persistence callback(s), which will be called to notify clients that
+     * a particular version has finished persisting locally (on this node).
+     */
+    std::list<persistence_callback_t> persistence_callbacks;
     /** Reference to the ReplicatedObjects map in the Group that owns this PersistenceManager. */
     std::map<subgroup_id_t, ReplicatedObject*>& objects_by_subgroup_id;
     /**
@@ -92,13 +96,13 @@ public:
      * @param objects_map A reference to the objects_by_subgroup_id from Group.
      * @param any_signed_objects True if at least one of the replicated objects
      * uses a Persistent<T> field with signatures enabled, false otherwise
-     * @param _persistence_callback The persistence callback function to call when
-     * new versions are done persisting
+     * @param user_persistence_callback The user-provided persistence callback
+     * function to call when new versions are done persisting
      */
     PersistenceManager(
             std::map<subgroup_id_t, ReplicatedObject*>& objects_map,
             bool any_signed_objects,
-            const persistence_callback_t& _persistence_callback);
+            const persistence_callback_t& user_persistence_callback);
 
     /**
      * Custom destructor needed to clean up the semaphore
@@ -107,6 +111,10 @@ public:
 
     /** Initializes the ViewManager pointer. Must be called before start(). */
     void set_view_manager(ViewManager& view_manager);
+
+    /** Adds another function to the list of persistence callbacks, which are
+     * called when a version finishes persisting locally. */
+    void add_persistence_callback(const persistence_callback_t& callback);
 
     //This method is probably unnecessary since ViewManager should have other ways of determining the signature size.
     /** @return the size of a signature on an update in this group. */

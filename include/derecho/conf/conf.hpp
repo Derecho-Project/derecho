@@ -35,6 +35,7 @@ private:
 #define CONF_DERECHO_RESTART_TIMEOUT_MS "DERECHO/restart_timeout_ms"
 #define CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS "DERECHO/enable_backup_restart_leaders"
 #define CONF_DERECHO_DISABLE_PARTITIONING_SAFETY "DERECHO/disable_partitioning_safety"
+#define CONF_DERECHO_MAX_NODE_ID "DERECHO/max_node_id"
 
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
 #define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
@@ -83,6 +84,7 @@ private:
 	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
 	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_MAX_NODE_ID, "1024"},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
             {CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE, "10240"},
