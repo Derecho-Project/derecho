@@ -67,10 +67,10 @@ void RPCManager::destroy_remote_invocable_class(uint32_t instance_id) {
         pending_results_to_fulfill[instance_id].front().get().set_exception_for_caller_removed();
         pending_results_to_fulfill[instance_id].pop();
     }
-    while(!fulfilled_pending_results[instance_id].empty()) {
-        fulfilled_pending_results[instance_id].front().get().set_exception_for_caller_removed();
-        fulfilled_pending_results[instance_id].pop_front();
+    for(auto& pending_results_pair : results_awaiting_local_persistence[instance_id]) {
+        pending_results_pair.second.get().set_exception_for_caller_removed();
     }
+    results_awaiting_local_persistence[instance_id].clear();
 }
 
 void RPCManager::start_listening() {
@@ -121,6 +121,7 @@ std::exception_ptr RPCManager::parse_and_receive(char* buf, std::size_t size,
 }
 
 void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id,
+                                     persistent::version_t version, uint64_t timestamp,
                                      char* msg_buf, uint32_t buffer_size) {
     // WARNING: This assumes the current view doesn't change during execution!
     // (It accesses curr_view without a lock).
@@ -156,8 +157,14 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //We now know the membership of "all nodes in my shard of the subgroup" in the current view
             pending_results_to_fulfill[subgroup_id].front().get().fulfill_map(
                     view_manager.unsafe_get_current_view().subgroup_shard_views.at(subgroup_id).at(my_shard).members);
-            fulfilled_pending_results[subgroup_id].push_back(
-                    std::move(pending_results_to_fulfill[subgroup_id].front()));
+            pending_results_to_fulfill[subgroup_id].front().get().set_persistent_version(version, timestamp);
+            //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
+            if(view_manager.subgroup_is_persistent(subgroup_id)) {
+                results_awaiting_local_persistence[subgroup_id].emplace(version,
+                                                                       std::move(pending_results_to_fulfill[subgroup_id].front()));
+            } else {
+                completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_to_fulfill[subgroup_id].front()));
+            }
             pending_results_to_fulfill[subgroup_id].pop();
         }  //release pending_results_mutex
         if(reply_size > 0) {
@@ -213,20 +220,58 @@ void RPCManager::p2p_message_handler(node_id_t sender_id, char* msg_buf, uint32_
 
 //This is always called while holding a write lock on view_manager.view_mutex
 void RPCManager::new_view_callback(const View& new_view) {
-    {
-        std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
-        connections->remove_connections(new_view.departed);
-        connections->add_connections(new_view.members);
-    }
+    connections->remove_connections(new_view.departed);
+    connections->add_connections(new_view.members);
     dbg_default_debug("Created new connections among the new view members");
     std::lock_guard<std::mutex> lock(pending_results_mutex);
-    for(auto& fulfilled_pending_results_pair : fulfilled_pending_results) {
+    for(auto& fulfilled_pending_results_pair : results_awaiting_local_persistence) {
         const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
         //For each PendingResults in this subgroup, check the departed list of each shard in
         //the subgroup, and call set_exception_for_removed_node for the departed nodes
         for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
             pending_results_iter != fulfilled_pending_results_pair.second.end();) {
-            //Garbage-collect PendingResults references that are obsolete
+            if(!pending_results_iter->second.get().all_responded()) {
+                for(uint32_t shard_num = 0;
+                    shard_num < new_view.subgroup_shard_views[subgroup_id].size();
+                    ++shard_num) {
+                    for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
+                        //This will do nothing if removed_id was never in the
+                        //shard this PendingResult corresponds to
+                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        pending_results_iter->second.get().set_exception_for_removed_node(removed_id);
+                    }
+                }
+                pending_results_iter++;
+            }
+        }
+    }
+    //Do the same departed-node check on PendingResults in the awaiting_global_persistence map
+    for(auto& fulfilled_pending_results_pair : results_awaiting_global_persistence) {
+        const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
+        for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
+            pending_results_iter != fulfilled_pending_results_pair.second.end();) {
+            if(!pending_results_iter->second.get().all_responded()) {
+                for(uint32_t shard_num = 0;
+                    shard_num < new_view.subgroup_shard_views[subgroup_id].size();
+                    ++shard_num) {
+                    for(auto removed_id : new_view.subgroup_shard_views[subgroup_id][shard_num].departed) {
+                        dbg_default_debug("Setting exception for removed node {} on PendingResults for subgroup {}, shard {}", removed_id, subgroup_id, shard_num);
+                        pending_results_iter->second.get().set_exception_for_removed_node(removed_id);
+                    }
+                }
+                pending_results_iter++;
+            }
+        }
+    }
+
+    //No need to check any entries in the awaiting_signature map - if an update has reached global
+    //persistence, then all of the replicas must have responded to the RPC message
+
+    //Do the same check on completed_pending_results, but remove them if they are now finished
+    for(auto& fulfilled_pending_results_pair : completed_pending_results) {
+        const subgroup_id_t subgroup_id = fulfilled_pending_results_pair.first;
+        for(auto pending_results_iter = fulfilled_pending_results_pair.second.begin();
+            pending_results_iter != fulfilled_pending_results_pair.second.end();) {
             if(pending_results_iter->get().all_responded()) {
                 pending_results_iter = fulfilled_pending_results_pair.second.erase(pending_results_iter);
             } else {
@@ -246,8 +291,55 @@ void RPCManager::new_view_callback(const View& new_view) {
     }
 }
 
+void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
+    dbg_default_trace("RPCManager: Got a local persistence callback for version {}", version);
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    //PendingResults in each per-subgroup map are ordered by version number, so all entries before
+    //the argument version number have been persisted and need to be notified
+    for(auto pending_results_iter = results_awaiting_local_persistence[subgroup_id].begin();
+        pending_results_iter != results_awaiting_local_persistence[subgroup_id].upper_bound(version);) {
+        dbg_default_trace("RPCManager: Setting local persistence on version {}", pending_results_iter->first);
+        pending_results_iter->second.get().set_local_persistence();
+        //Move the PendingResults reference to results_awaiting_global_persistence, with the same key
+        results_awaiting_global_persistence[subgroup_id].emplace(std::move(*pending_results_iter));
+        pending_results_iter = results_awaiting_local_persistence[subgroup_id].erase(pending_results_iter);
+    }
+}
+
+void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
+    dbg_default_trace("RPCManager: Got a global persistence callback for version {}", version);
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    //PendingResults in each per-subgroup map are ordered by version number, so all entries before
+    //the argument version number have been persisted and need to be notified
+    for(auto pending_results_iter = results_awaiting_global_persistence[subgroup_id].begin();
+        pending_results_iter != results_awaiting_global_persistence[subgroup_id].upper_bound(version);) {
+        dbg_default_trace("RPCManager: Setting global persistence on version {}", pending_results_iter->first);
+        pending_results_iter->second.get().set_global_persistence();
+        //Move the PendingResults reference to results_awaiting_signature if the subgroup needs signatures,
+        //or completed_pending_results if it does not
+        if(view_manager.subgroup_is_signed(subgroup_id)) {
+            results_awaiting_signature[subgroup_id].emplace(std::move(*pending_results_iter));
+        } else {
+            completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_iter->second));
+        }
+        pending_results_iter = results_awaiting_global_persistence[subgroup_id].erase(pending_results_iter);
+    }
+}
+
+void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version) {
+    dbg_default_trace("RPCManager: Got a global verification callback for version {}", version);
+    std::lock_guard<std::mutex> lock(pending_results_mutex);
+    for(auto pending_results_iter = results_awaiting_signature[subgroup_id].begin();
+        pending_results_iter != results_awaiting_signature[subgroup_id].upper_bound(version);) {
+        dbg_default_trace("RPCManager: Setting signature verification on version {}", pending_results_iter->first);
+        pending_results_iter->second.get().set_signature_verified();
+        //Move the PendingResults reference to completed_pending_results
+        completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_iter->second));
+        pending_results_iter = results_awaiting_signature[subgroup_id].erase(pending_results_iter);
+    }
+}
+
 void RPCManager::add_connections(const std::vector<uint32_t>& node_ids) {
-    std::lock_guard<std::mutex> connections_lock(p2p_connections_mutex);
     connections->add_connections(node_ids);
 }
 
@@ -262,8 +354,8 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
     volatile char* buf;
     int curr_vid = -1;
     do {
-        //ViewManager's view_mutex also prevents connections from being reassigned (because
-        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        //ViewManager's view_mutex also prevents connections from being removed (because
+        //that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         //Check to see if the view changed between iterations of the loop, and re-get the rank
         if(curr_vid != view_and_lock.get().vid) {
@@ -281,8 +373,8 @@ volatile char* RPCManager::get_sendbuffer_ptr(uint32_t dest_id, sst::REQUEST_TYP
 
 void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_id, PendingBase& pending_results_handle) {
     try {
-        //ViewManager's view_mutex also prevents connections from being reassigned (because
-        //that happens in new_view_callback), so we don't need p2p_connections_mutex
+        //ViewManager's view_mutex also prevents connections from being removed (because
+        //that happens in new_view_callback)
         SharedLockedReference<View> view_and_lock = view_manager.get_current_view();
         connections->send(dest_id);
     } catch(std::out_of_range& map_error) {
@@ -290,7 +382,9 @@ void RPCManager::finish_p2p_send(node_id_t dest_id, subgroup_id_t dest_subgroup_
     }
     pending_results_handle.fulfill_map({dest_id});
     std::lock_guard<std::mutex> lock(pending_results_mutex);
-    fulfilled_pending_results[dest_subgroup_id].push_back(pending_results_handle);
+    // These PendingResults don't need to have ReplyMaps fulfilled, and they
+    // won't ever get version numbers or persistence notifications (since P2P sends are read-only)
+    completed_pending_results[dest_subgroup_id].push_back(pending_results_handle);
 }
 
 void RPCManager::p2p_request_worker() {
@@ -320,6 +414,7 @@ void RPCManager::p2p_request_worker() {
                               indx.is_reply, RPC_HEADER_FLAG_TST(flags, CASCADE));
             throw derecho::derecho_exception("invalid rpc message in fifo queue...crash.");
         }
+        reply_size = 0;
         receive_message(indx, received_from, request.msg_buf + header_size, payload_size,
                         [this, &reply_size, &request](size_t _size) -> char* {
                             reply_size = _size;
@@ -360,26 +455,33 @@ void RPCManager::p2p_receive_loop() {
 
     // loop event
     while(!thread_shutdown) {
-        std::unique_lock<std::mutex> connections_lock(p2p_connections_mutex);
-        auto optional_reply_pair = connections->probe_all();
-        if(optional_reply_pair) {
-            auto reply_pair = optional_reply_pair.value();
-            if(reply_pair.first != INVALID_NODE_ID) {
-                p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
-                connections->update_incoming_seq_num();
+        bool message_received = false;
+        // This scope contains a lock on the View, which prevents view changes during
+        // delivery of a P2P message (otherwise, a View change could occur between a
+        // successful probe_all() and the call to p2p_message_handler)
+        {
+            SharedLockedReference<View> locked_view = view_manager.get_current_view();
+            auto optional_reply_pair = connections->probe_all();
+            if(optional_reply_pair) {
+                message_received = true;
+                auto reply_pair = optional_reply_pair.value();
+                if(reply_pair.first != INVALID_NODE_ID) {
+                    p2p_message_handler(reply_pair.first, (char*)reply_pair.second, max_payload_size);
+                    connections->update_incoming_seq_num(reply_pair.first);
+                }
+                // update last time
+                clock_gettime(CLOCK_REALTIME, &last_time);
             }
-            // update last time
-            clock_gettime(CLOCK_REALTIME, &last_time);
-        } else {
+        }
+        //Release the View lock before going to sleep if no messages were received
+        if(!message_received) {
             clock_gettime(CLOCK_REALTIME, &cur_time);
             // check if the system has been inactive for enough time to induce sleep
             double time_elapsed_in_ms = (cur_time.tv_sec - last_time.tv_sec) * 1e3
                                         + (cur_time.tv_nsec - last_time.tv_nsec) / 1e6;
             if(time_elapsed_in_ms > 1) {
-                connections_lock.unlock();
                 using namespace std::chrono_literals;
                 std::this_thread::sleep_for(1ms);
-                connections_lock.lock();
             }
         }
     }

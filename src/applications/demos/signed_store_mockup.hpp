@@ -66,65 +66,32 @@ private:
     Blob(char* buffer, std::size_t size, bool temporary);
 };
 
-/**
- * This object is a workaround for the fact that Derecho has no way for clients
- * to wait for a specific update to a subgroup to reach persistence-stability
- * (or signature-stability). It is shared between the global persistence callback,
- * which calls notify_version_finished each time an update from the desired
- * subgroup reaches persistence, and the subgroup's Replicated Object, which calls
- * start_tracking_version each time an RPC method is called.
- */
-class CompletionTracker {
-    derecho::subgroup_id_t my_subgroup_id;
-    /** Guards inserts/deletes into version_finished_promises */
-    std::mutex promise_map_mutex;
-    /** Guards inserts/deletes into version_finished_futures */
-    std::mutex future_map_mutex;
-    /** Contains the promise end of a promise-future pair for each version being tracked. */
-    std::map<persistent::version_t, std::promise<void>> version_finished_promises;
-    /**
-     * Contains the future end of a promise-future pair for each version being tracked.
-     * The future is fulfilled when the version it's matched with finishes persisting.
-     */
-    std::map<persistent::version_t, std::future<void>> version_finished_futures;
-
-public:
-    CompletionTracker() : my_subgroup_id(0){};
-    void set_subgroup_id(derecho::subgroup_id_t id);
-    derecho::subgroup_id_t get_subgroup_id() const;
-    void start_tracking_version(persistent::version_t version);
-    void notify_version_finished(persistent::version_t version);
-    void await_version_finished(persistent::version_t version);
-};
-
 class ObjectStore : public mutils::ByteRepresentable,
                     public derecho::PersistsFields,
                     public derecho::GroupReference {
     persistent::Persistent<Blob> object_log;
-    /**
-     * Shared with the global persistence callback, so await_persistence can be notified
-     * when persistence completes, assuming ordered_update has added an entry for the version.
-     * PROBLEM: What about serialization? What happens on a reconfiguration/restore from logs to
-     * re-link this with the global callback?
-     */
-    std::shared_ptr<CompletionTracker> persistence_tracker;
+    /** A local cache of QueryResults from ordered_update() calls. Not part of the replicated state. */
+    mutable std::map<persistent::version_t, derecho::rpc::QueryResults<void>> update_results;
+
     using derecho::GroupReference::group;
 
 public:
-    ObjectStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker);
+    ObjectStore(persistent::PersistentRegistry* pr);
     /** Deserialization constructor */
     ObjectStore(persistent::Persistent<Blob>& other_log) : object_log(std::move(other_log)) {}
     /**
      * P2P-callable function that creates a new log entry with the provided data.
      * @return The version assigned to the new log entry, and the timestamp assigned to the new log entry
     */
-    std::tuple<persistent::version_t, uint64_t> update(const Blob& new_data) const;
+    std::pair<persistent::version_t, uint64_t> update(const Blob& new_data) const;
 
     /** Actual implementation of update, only callable from within the subgroup as an ordered send. */
-    std::tuple<persistent::version_t, uint64_t> ordered_update(const Blob& new_data);
+    void ordered_update(const Blob& new_data);
 
     /**
      * P2P-callable function that blocks until the specified version has finished persisting.
+     * This only works if it is called on the same replica that was originally contacted to
+     * submit the update via update(), since other replicas won't have a QueryResults for it.
      * Returns "true" so that the RPC function sends a reply message, since there is currently
      * no way to determine when a void RPC function actually finishes executing on the callee.
      */
@@ -152,16 +119,9 @@ class SignatureStore : public mutils::ByteRepresentable,
     using derecho::GroupReference::group;
 
     persistent::Persistent<SHA256Hash> hashes;
-    /**
-     * Shared with the global verification callback, so add_hash can be notified when
-     * verification completes, assuming ordered_add_hash has added an entry for that version.
-     * PROBLEM: What about serialization? What happens on a reconfiguration/restore from logs to
-     * re-link this with the global callback?
-     */
-    std::shared_ptr<CompletionTracker> verified_tracker;
 
 public:
-    SignatureStore(persistent::PersistentRegistry* pr, std::shared_ptr<CompletionTracker> tracker);
+    SignatureStore(persistent::PersistentRegistry* pr);
     /** Deserialization constructor */
     SignatureStore(persistent::Persistent<SHA256Hash>& other_hashes) : hashes(std::move(other_hashes)) {}
 
@@ -172,10 +132,12 @@ public:
     std::vector<unsigned char> add_hash(const SHA256Hash& hash) const;
 
     /**
-     * Ordered-send component of add_hash: appends to the log and returns the new version,
-     * which can then be used to retrieve the signature from the log
+     * Ordered-send component of add_hash: actually appends to the log and
+     * generates a new version, which will be signed.
+     * @param hash The object hash to append and sign.
      */
-    persistent::version_t ordered_add_hash(const SHA256Hash& hash);
+    void ordered_add_hash(const SHA256Hash& hash);
+
 
     DEFAULT_SERIALIZATION_SUPPORT(SignatureStore, hashes);
     REGISTER_RPC_FUNCTIONS(SignatureStore, P2P_TARGETS(add_hash), ORDERED_TARGETS(ordered_add_hash));
@@ -184,7 +146,8 @@ public:
 class ClientTier : public mutils::ByteRepresentable,
                    public derecho::GroupReference {
     using derecho::GroupReference::group;
-
+    //Used to pick random members of the storage and signature subgroups to contact; not replicated
+    mutable std::mt19937 random_engine;
 public:
     ClientTier();
 

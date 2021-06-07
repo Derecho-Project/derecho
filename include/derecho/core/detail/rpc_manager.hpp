@@ -65,9 +65,9 @@ auto make_remote_invoker(const node_id_t nid, uint32_t type_id, uint32_t instanc
         //Supply the template parameters for build_remote_invoker_for_class by
         //asking bind_to_instance for the type of the wrapped<> that corresponds to each partial_wrapped<>
         return build_remote_invoker_for_class<UserProvidedClass,
-                                                decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
+                                              decltype(bind_to_instance(std::declval<std::unique_ptr<UserProvidedClass>*>(),
                                                                         unpacked_functions))...>(nid, type_id,
-                                                                                                    instance_id, receivers);
+                                                                                                 instance_id, receivers);
     },
                             funs);
 }
@@ -95,18 +95,60 @@ class RPCManager {
     /** Contains an RDMA connection to each member of the group. */
     std::unique_ptr<sst::P2PConnectionManager> connections;
 
+
     /**
-     * This provides mutual exclusion between the P2P listening thread
-     * and the view-change thread, guarding the P2P connections pointer.
+     * This mutex guards all the pending_results maps.
+     * Technically it's only needed between two of them at a time, so it would
+     * be possible to achieve more concurrency with more fine-grained locks.
      */
-    std::mutex p2p_connections_mutex;
-    /** This mutex guards both toFulfillQueue and fulfilledList. */
     std::mutex pending_results_mutex;
-    /** This condition variable is to resolve a race condition in using ToFulfillQueue and fulfilledList */
+    /**
+     * This condition variable is to resolve a race condition in using
+     * pending_results_to_fulfill and results_pending_local_persistence
+     */
     std::condition_variable pending_results_cv;
-    //Both maps contain one list of PendingResults references per subgroup
+    /**
+     * For each subgroup, contains a queue of PendingResults references that still
+     * need to have their ReplyMaps fulfilled. The queue is in the same order as
+     * the PendingResults' corresponding RPC messages were sent, so the front of
+     * the queue corresponds to the oldest in-flight RPC message (i.e. the next
+     * one to be received in rpc_message_handler()). Note that the PendingResults
+     * objects themselves live in the RemoteInvocableClass that sent the message.
+     */
     std::map<subgroup_id_t, std::queue<PendingBase_ref>> pending_results_to_fulfill;
-    std::map<subgroup_id_t, std::list<PendingBase_ref>> fulfilled_pending_results;
+    /**
+     * For each subgroup, contains a map from version number to the PendingResults
+     * for that version's RPC call (i.e., a set of PendingResults indexed by
+     * version number). These RPC messages have been delivered locally but RPCManager
+     * still needs to use the PendingResults to report that persistence has finished.
+     */
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_local_persistence;
+    /**
+     * For each subgroup, contains a map from version number to the PendingResults
+     * for that version's RPC call (i.e., a set of PendingResults indexed by
+     * version number). These RPC messages have been persisted locally but RPCManager
+     * still needs to use the PendingResults to report that global persistence has finished.
+     */
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_global_persistence;
+    /**
+     * For each subgroup, contains a map from version number to the PendingResults
+     * for that version's RPC call (i.e., a set of PendingResults indexed by
+     * version number). These RPC messages have finished global persistence but
+     * were sent to subgroups with signatures enabled, so RPCManager still
+     * needs to use the PendingResults to report that the signature
+     * verification has finished.
+     */
+    std::map<subgroup_id_t, std::map<persistent::version_t, PendingBase_ref>> results_awaiting_signature;
+    /**
+     * For each subgroup, contains a list of PendingResults references for RPC
+     * messages that have completed all of their promise events (fulfilling
+     * ReplyMaps, persistence, etc.) and are only being kept around in case
+     * RPCManager needs to notify them of a removed node on a View change. (I
+     * think the only useful members of this list are the P2P-message-related
+     * PendingResults, since an ordered message that reaches global persistence
+     * can't possibly get a removed_node_exception)
+     */
+    std::map<subgroup_id_t, std::list<PendingBase_ref>> completed_pending_results;
 
     bool thread_start = false;
     /** Mutex for thread_start_cv. */
@@ -125,13 +167,13 @@ class RPCManager {
         char* msg_buf;
         uint32_t buffer_size;
         p2p_req() : sender_id(0),
-                     msg_buf(nullptr),
-                     buffer_size(0) {}
+                    msg_buf(nullptr),
+                    buffer_size(0) {}
         p2p_req(node_id_t _sender_id,
-                 char* _msg_buf,
-                 uint32_t _buffer_size) : sender_id(_sender_id),
-                                          msg_buf(_msg_buf),
-                                          buffer_size(_buffer_size) {}
+                char* _msg_buf,
+                uint32_t _buffer_size) : sender_id(_sender_id),
+                                         msg_buf(_msg_buf),
+                                         buffer_size(_buffer_size) {}
     };
     /** P2P requests that need to be handled by the worker thread. */
     std::queue<p2p_req> p2p_request_queue;
@@ -196,7 +238,7 @@ public:
             : nid(getConfUInt32(CONF_DERECHO_LOCAL_ID)),
               receivers(new std::decay_t<decltype(*receivers)>()),
               view_manager(group_view_manager) {
-        for (const auto& deserialization_context_ptr:deserialization_context) {
+        for(const auto& deserialization_context_ptr : deserialization_context) {
             rdv.push_back(deserialization_context_ptr);
         }
         rpc_listener_thread = std::thread(&RPCManager::p2p_receive_loop, this);
@@ -264,11 +306,41 @@ public:
      * @param subgroup_id The internal subgroup number of the subgroup this
      * message was received in
      * @param sender_id The ID of the node that sent the message
+     * @param version The persistent version number assigned to the message
+     * @param timestamp The timestamp (in microseconds) assigned to the message
      * @param msg_buf A buffer containing the message
      * @param buffer_size The size of the message in the buffer, in bytes
      */
     void rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender_id,
+                             persistent::version_t version,
+                             uint64_t timestamp,
                              char* msg_buf, uint32_t buffer_size);
+
+    /**
+     * Callback to be called by PersistenceManager when it has finished
+     * persisting a version. This will deliver "local persistence done" events
+     * to the PendingResults objects of all RPC messages with version numbers
+     * lower than the provided version.
+     * @param subgroup_id The subgroup in which persistence has finished for a
+     * version
+     * @param version The latest version number that PersistenceManager has
+     * finished persisting in that subgroup
+     */
+    void notify_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version);
+
+    /**
+     * Callback to be called by MulticastGroup when it detects that a version
+     * has reached global persistence. This will deliver "global persistence
+     * done" events to the PendingResults objects of all RPC messages with
+     * version numbers lower than the provided version.
+     * @param subgroup_id The subgroup in which persistence has finished for a
+     * version
+     * @param version The latest version number that PersistenceManager has
+     * finished persisting in that subgroup
+     */
+    void notify_global_persistence_finished(subgroup_id_t subgroup_id, persistent::version_t version);
+
+    void notify_verification_finished(subgroup_id_t subgroup_id, persistent::version_t version);
 
     /**
      * Sends the next message in the MulticastGroup's send buffer (which is
@@ -312,10 +384,10 @@ using RemoteInvocableOf = std::decay_t<decltype(*std::declval<RPCManager>()
 
 template <typename T>
 using RemoteInvokerFor = std::decay_t<decltype(*make_remote_invoker<T>(std::declval<node_id_t>(),
-                                                                      std::declval<uint32_t>(),
-                                                                      std::declval<uint32_t>(),
-                                                                      T::register_functions(),
-                                                                      std::declval<std::map<Opcode, receive_fun_t>&>()))>;
+                                                                       std::declval<uint32_t>(),
+                                                                       std::declval<uint32_t>(),
+                                                                       T::register_functions(),
+                                                                       std::declval<std::map<Opcode, receive_fun_t>&>()))>;
 
 // test if the current thread is in an RPC handler to tell if we are sending a cascading RPC message.
 bool in_rpc_handler();

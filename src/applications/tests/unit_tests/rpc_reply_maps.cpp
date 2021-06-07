@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
 
     auto string_object_factory = [](persistent::PersistentRegistry*,derecho::subgroup_id_t) { return std::make_unique<StringObject>(); };
 
-    derecho::Group<StringObject> group(derecho::CallbackSet{},
+    derecho::Group<StringObject> group(derecho::UserMessageCallbacks{},
                                        subgroup_function, {},
                                        std::vector<derecho::view_upcall_t>{},
                                        string_object_factory);

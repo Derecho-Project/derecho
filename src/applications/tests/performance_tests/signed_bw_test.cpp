@@ -71,7 +71,6 @@ int main(int argc, char* argv[]) {
         std::cout << "Note: proc_name sets the process's name as displayed in ps and pkill commands, default is " DEFAULT_PROC_NAME << std::endl;
         return -1;
     }
-    pthread_setname_np(pthread_self(), "signed_bw_test");
 
     derecho::Conf::initialize(argc, argv);
 
@@ -148,7 +147,7 @@ int main(int argc, char* argv[]) {
             done = true;
         }
     };
-    derecho::CallbackSet callback_set{
+    derecho::UserMessageCallbacks callback_set{
             stability_callback,
             persistence_callback,
             nullptr,

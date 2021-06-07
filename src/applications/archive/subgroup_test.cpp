@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
              << ", index = " << index << ", version = " << ver << endl;
     };
 
-    derecho::CallbackSet callbacks{stability_callback};
+    derecho::UserMessageCallbacks callbacks{stability_callback};
 
     //Assuming there will be a total of up to 9 nodes, define 3 subgroups with 3 nodes each
     //Also assumes that the node IDs will be 0-8 (which they always are in our experiments)

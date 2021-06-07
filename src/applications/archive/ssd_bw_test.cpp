@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    derecho::CallbackSet callbacks{stability_callback, nullptr};
+    derecho::UserMessageCallbacks callbacks{stability_callback, nullptr};
     derecho::DerechoParams param_object{buffer_size, sst_buffer_size, block_size};
 
     derecho::SubgroupInfo one_raw_group{{{std::type_index(typeid(RawObject)), &derecho::one_subgroup_entire_view}},

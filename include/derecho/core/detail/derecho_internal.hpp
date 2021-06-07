@@ -57,8 +57,11 @@ using persistence_callback_t = std::function<void(subgroup_id_t, persistent::ver
  * Parameter 2: The version number up to which the log has been verified
  */
 using verified_callback_t = std::function<void(subgroup_id_t, persistent::version_t)>;
-/** A callback function used by MulticastGroup to notify RPCManager of a new message */
-using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32_t)>;
+/**
+ * The type of the function used by MulticastGroup to notify RPCManager of a new message.
+ * Matches the type signature of RPCManager::rpc_message_handler (but as a free function).
+ */
+using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, persistent::version_t, uint64_t, char*, uint32_t)>;
 
 /**
  * Bundles together a set of callback functions for message delivery events.
@@ -67,7 +70,7 @@ using rpc_handler_t = std::function<void(subgroup_id_t, node_id_t, char*, uint32
  * message's arrival. (Note, this is a client-facing constructor argument,
  * not an internal data structure).
  */
-struct CallbackSet {
+struct UserMessageCallbacks {
     /** A function to be called each time a message reaches global stability in the group. */
     message_callback_t global_stability_callback;
     /** A function to be called when a new version of a subgroup's state finishes persisting locally */

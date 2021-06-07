@@ -542,7 +542,8 @@ private:
      * @param num_received_size The size of the num_received field in the SST (derived from subgroup_settings)
      * @param index_field_size The number of fields "index" in the SST (to send in different groups)
      */
-    void construct_multicast_group(const CallbackSet& callbacks,
+    void construct_multicast_group(const UserMessageCallbacks& callbacks,
+                                   const MulticastGroupCallbacks& internal_callbacks,
                                    const std::map<subgroup_id_t, SubgroupSettings>& subgroup_settings,
                                    const uint32_t num_received_size,
                                    const uint32_t slot_size,
@@ -570,7 +571,7 @@ private:
      * my_subgroups corrected
      * @param subgroup_settings A mutable reference to the subgroup settings map,
      * which will be filled in by this function
-     * @return num_received_size, slot_size, index_field_size for the SST based on 
+     * @return num_received_size, slot_size, index_field_size for the SST based on
      * the current View's subgroup membership
      */
     std::tuple<uint32_t, uint32_t, uint32_t> derive_subgroup_settings(View& curr_view,
@@ -743,10 +744,14 @@ public:
     /**
      * Sets up RDMA sessions for the multicast groups within this group. This
      * should only be called once the initial view is committed by the leader.
-     * @param callbacks The set of callback functions for message delivery
-     * events in this group.
+     * @param callbacks The set of user-defined callback functions for message
+     * delivery events in this group.
+     * @param internal_callbacks The set of additional callbacks for MulticastGroup
+     * needed by internal components. Copied in so that ViewManager can add its own
+     * callback to the struct.
      */
-    void initialize_multicast_groups(const CallbackSet& callbacks);
+    void initialize_multicast_groups(const UserMessageCallbacks& callbacks,
+                                     MulticastGroupCallbacks internal_callbacks);
 
     /**
      * Completes first-time setup of the ViewManager, including synchronizing
@@ -797,6 +802,7 @@ public:
     /** Returns a vector of vectors listing the members of a single subgroup
      * (identified by type and index), organized by shard number. */
     std::vector<std::vector<node_id_t>> get_subgroup_members(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
+    /** Returns the number of shards in a subgroup, identified by its type and index. */
     std::size_t get_number_of_shards_in_subgroup(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
     /**
      * If this node is a member of the given subgroup (identified by its type
@@ -804,9 +810,31 @@ public:
      * Otherwise, returns -1.
      */
     int32_t get_my_shard(subgroup_type_id_t subgroup_type, uint32_t subgroup_index);
-    /** Instructs the managed DerechoGroup's to send the next message. This
-     * returns immediately in sending through RDMC; the send is scheduled to happen some time in the future.
-     * if sending through SST, the RDMA write is issued in this call*/
+
+    /**
+     * Determines whether a subgroup (identified by its ID) uses persistence.
+     * Used by RPCManager, which doesn't have direct access to the Replicated
+     * Objects represented by subgroups.
+     * @return true if the subgroup represents a Replicated Object with
+     * Persistent<T> fields, false otherwise
+     */
+    bool subgroup_is_persistent(subgroup_id_t subgroup_num) const;
+
+    /**
+     * Determines whether a subgroup (identified by its ID) has signatures
+     * enabled. Used by RPCManager, which doesn't have direct access to the
+     * Replicated Objects.
+     * @return true if the subgroup represents a Replicated Object with a
+     * signatures enabled, false otherwise
+     */
+    bool subgroup_is_signed(subgroup_id_t subgroup_num) const;
+
+    /**
+     * Instructs the managed MulticastGroup to send a message. This returns
+     * immediately if sending through RDMC; the send is scheduled to happen
+     * some time in the future. If sending through SST, the RDMA write is
+     * issued in this call.
+     */
     void send(subgroup_id_t subgroup_num, long long unsigned int payload_size,
               const std::function<void(char* buf)>& msg_generator, bool cooked_send = false);
 

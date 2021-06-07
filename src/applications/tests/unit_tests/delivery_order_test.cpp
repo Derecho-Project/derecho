@@ -128,7 +128,7 @@ int main(int argc, char* argv[]) {
         num_received_msgs_map[sender_id] = num_received_msgs_map[sender_id] + 1;
     };
 
-    group = std::make_unique<Group<RawObject>>(CallbackSet{delivery_callback}, subgroup_info,
+    group = std::make_unique<Group<RawObject>>(UserMessageCallbacks{delivery_callback}, subgroup_info,
                 std::vector<DeserializationContext*>{}, std::vector<view_upcall_t>{}, &raw_object_factory);
     cout << "Finished constructing/joining Group" << endl;
     Replicated<RawObject>& group_as_subgroup = group->get_subgroup<RawObject>();
