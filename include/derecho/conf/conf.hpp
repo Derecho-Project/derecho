@@ -1,8 +1,8 @@
 #ifndef CONF_HPP
 #define CONF_HPP
 
-#include <atomic>
 #include "getpot/GetPot"
+#include <atomic>
 #include <getopt.h>
 #include <inttypes.h>
 #include <map>
@@ -40,6 +40,8 @@ private:
 #define CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE "DERECHO/max_p2p_request_payload_size"
 #define CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE "DERECHO/max_p2p_reply_payload_size"
 #define CONF_DERECHO_P2P_WINDOW_SIZE "DERECHO/p2p_window_size"
+#define CONF_DERECHO_JSON_LAYOUT "DERECHO/json_layout"
+#define CONF_DERECHO_JSON_LAYOUT_PATH "DERECHO/json_layout_path"
 
 #define CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_payload_size"
 #define CONF_SUBGROUP_DEFAULT_MAX_REPLY_PAYLOAD_SIZE "SUBGROUP/DEFAULT/max_reply_payload_size"
@@ -81,9 +83,9 @@ private:
             {CONF_DERECHO_RESTART_TIMEOUT_MS, "2000"},
             {CONF_DERECHO_DISABLE_PARTITIONING_SAFETY, "true"},
             {CONF_DERECHO_ENABLE_BACKUP_RESTART_LEADERS, "false"},
-	        {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
-	        {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
-	        {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
+            {CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_MAX_P2P_REPLY_PAYLOAD_SIZE, "10240"},
+            {CONF_DERECHO_P2P_WINDOW_SIZE, "16"},
             {CONF_DERECHO_MAX_NODE_ID, "1024"},
             // [SUBGROUP/<subgroupname>]
             {CONF_SUBGROUP_DEFAULT_MAX_PAYLOAD_SIZE, "10240"},
@@ -101,8 +103,8 @@ private:
             {CONF_PERS_FILE_PATH, ".plog"},
             {CONF_PERS_RAMDISK_PATH, "/dev/shm/volatile_t"},
             {CONF_PERS_RESET, "false"},
-            {CONF_PERS_MAX_LOG_ENTRY, "1048576"}, // 1M log entries.
-            {CONF_PERS_MAX_DATA_SIZE, "549755813888"}, // 512G total data size.
+            {CONF_PERS_MAX_LOG_ENTRY, "1048576"},       // 1M log entries.
+            {CONF_PERS_MAX_DATA_SIZE, "549755813888"},  // 512G total data size.
             {CONF_PERS_PRIVATE_KEY_FILE, "private_key.pem"},
             // [LOGGER]
             {CONF_LOGGER_DEFAULT_LOG_NAME, "derecho_debug"},

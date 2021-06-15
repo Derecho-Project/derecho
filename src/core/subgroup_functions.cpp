@@ -4,6 +4,7 @@
  * @date Feb 28, 2017
  */
 
+#include <iterator>
 #include <vector>
 
 #include <derecho/core/derecho_modes.hpp>
@@ -39,16 +40,16 @@ subgroup_allocation_map_t one_subgroup_entire_view_raw(const std::vector<std::ty
 
 ShardAllocationPolicy flexible_even_shards(const std::string& profile) {
     const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
-    if (!hasCustomizedConfKey(conf_profile_prefix + num_shards_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + num_shards_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + num_shards_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + num_shards_profile_field);
         return {};
     }
-    if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + min_nodes_profile_field);
         return {};
     }
-    if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
-        dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+    if(!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+        dbg_default_error("{} not found in config.", conf_profile_prefix + max_nodes_profile_field);
         return {};
     }
     int num_shards = getConfUInt32(conf_profile_prefix + num_shards_profile_field);
@@ -62,7 +63,6 @@ ShardAllocationPolicy flexible_even_shards(int num_shards, int min_nodes_per_sha
     return ShardAllocationPolicy{
             num_shards, true, min_nodes_per_shard, max_nodes_per_shard, Mode::ORDERED, profile, {}, {}, {}, {}};
 }
-
 
 ShardAllocationPolicy fixed_even_shards(int num_shards, int nodes_per_shard,
                                         const std::string& profile) {
@@ -82,12 +82,12 @@ ShardAllocationPolicy custom_shard_policy(const std::vector<Mode>& delivery_mode
     std::vector<int> max_nodes_by_shard;
     for(const std::string& profile : profiles_by_shard) {
         const std::string conf_profile_prefix = "SUBGROUP/" + profile + "/";
-        if (!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
-            dbg_default_error("{} not found in config.",conf_profile_prefix + min_nodes_profile_field);
+        if(!hasCustomizedConfKey(conf_profile_prefix + min_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.", conf_profile_prefix + min_nodes_profile_field);
             return {};
         }
-        if (!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
-            dbg_default_error("{} not found in config.",conf_profile_prefix + max_nodes_profile_field);
+        if(!hasCustomizedConfKey(conf_profile_prefix + max_nodes_profile_field)) {
+            dbg_default_error("{} not found in config.", conf_profile_prefix + max_nodes_profile_field);
             return {};
         }
         min_nodes_by_shard.emplace_back(getConfUInt32(conf_profile_prefix + min_nodes_profile_field));
@@ -120,20 +120,93 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
         View& curr_view,
         subgroup_allocation_map_t& subgroup_layouts) const {
     //First, determine how many nodes each shard can have based on their policies
+    dbg_default_debug("Ready to calculate size");
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes
             = compute_standard_shard_sizes(subgroup_type_order, prev_view, curr_view);
     //Now we can go through and actually allocate nodes to each shard,
     //knowing exactly how many nodes they will get
+
+    dbg_default_debug("Ready to really assign nodes");
     if(!prev_view) {
+        /** allocate_standard_subgroup_type is invoked when we have no prev_view, and thus next_unassigned_rank is 0.
+         * If we have reserved node_ids, we need to rearrange node_ids in curr_view.members into two "parts":
+         * the first part holds current active reserved node_ids,
+         * while the second part holds normal node_ids.
+         * We then rearrange next_unassigned_rank to be the length of the first part, for nodes in the first part
+         * are inherent nodes for some shards, and sure will be assigned,
+         * sometimes more than once if we want to overlap shards.
+         */
+        // We cannot modify curr_view.members inplace, which will corrupt curr_view.my_rank, curr_view.node_id_to_rank, etc. Besides, View::members is const.
+        std::vector<node_id_t> curr_members;
+        std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+        dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+        if(all_reserved_node_ids.size() > 0) {
+            std::set_intersection(
+                    curr_member_set.begin(), curr_member_set.end(),
+                    all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                    std::inserter(curr_members, curr_members.end()));
+            curr_view.next_unassigned_rank = curr_members.size();
+            dbg_default_debug("After rearranging inherent node_ids, curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+            std::set_difference(
+                    curr_member_set.begin(), curr_member_set.end(),
+                    all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                    std::inserter(curr_members, curr_members.end()));
+        } else {
+            curr_members = curr_view.members;
+        }
+
         for(const auto& subgroup_type : subgroup_type_order) {
             //Ignore cross-product-allocated types
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] =
-                    allocate_standard_subgroup_type(subgroup_type, curr_view, shard_sizes);
+            dbg_default_debug("Without prev_view, assign node to type {}", std::string(subgroup_type.name()));
+
+            subgroup_layouts[subgroup_type] = allocate_standard_subgroup_type(
+                    subgroup_type, curr_view, shard_sizes, curr_members, curr_member_set);
         }
     } else {
+        /** survive_member_set holds non-failed node_ids from prev_view, added_member_set holds
+         * newly added node_ids in curr_view.
+         */
+        std::set<node_id_t> survive_member_set(curr_view.members.begin(), curr_view.members.begin() + curr_view.next_unassigned_rank);
+        std::set<node_id_t> added_member_set(curr_view.members.begin() + curr_view.next_unassigned_rank, curr_view.members.end());
+
+        /** update_standard_subgroup_type is invoked if there is a prev_view, and the curr_view.members is already
+         * arranged into two parts: the first part hold survive nodes from prev_view, and the second
+         * part holds newly added nodes. The next_unassigned_rank is the length of the first part.
+         * If we have reserved node_ids, we need to rearrnage curr_view.members into 2 parts:
+         * the first part holds inherent node_ids for shards, which is composed with survive node_ids and reserved node_ids
+         * the second part holds newly added non-reserved node_ids.
+         * We then rearrange next_unassigned_rank to be the length of the first part, for they will sure be assigned.
+         */
+        std::vector<node_id_t> curr_members;
+        std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+        dbg_default_debug("Initial curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+        if(all_reserved_node_ids.size() > 0) {
+            std::set<node_id_t> active_reserved_node_id_set;
+            std::set_intersection(
+                    curr_member_set.begin(), curr_member_set.end(),
+                    all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                    std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.end()));
+            std::set_union(
+                    survive_member_set.begin(), survive_member_set.end(),
+                    active_reserved_node_id_set.begin(), active_reserved_node_id_set.end(),
+                    std::inserter(curr_members, curr_members.end()));
+            dbg_default_debug("With inherent nodes, curr_members is:");
+            print_set(curr_members);
+
+            curr_view.next_unassigned_rank = curr_members.size();
+            dbg_default_debug("After rearranging inherent node_ids, curr_view.next_unassigned_rank is {}", curr_view.next_unassigned_rank);
+
+            std::set_difference(
+                    added_member_set.begin(), added_member_set.end(),
+                    all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                    std::inserter(curr_members, curr_members.end()));
+            dbg_default_debug("Adding newly added non-reserved nodes, curr_members is:");
+            print_set(curr_members);
+        }
+
         for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size();
             ++subgroup_type_id) {
             //We need to both iterate through this vector and keep the counter in order to know the type IDs
@@ -141,9 +214,13 @@ void DefaultSubgroupAllocator::compute_standard_memberships(
             if(!std::holds_alternative<SubgroupAllocationPolicy>(policies.at(subgroup_type))) {
                 continue;
             }
-            subgroup_layouts[subgroup_type] =
-                    update_standard_subgroup_type(subgroup_type, subgroup_type_id,
-                                                  prev_view, curr_view, shard_sizes);
+            dbg_default_debug("With prev_view, assingn node to type {}", std::string(subgroup_type.name()));
+            subgroup_layouts[subgroup_type] = update_standard_subgroup_type(
+                    subgroup_type, subgroup_type_id,
+                    prev_view, curr_view, shard_sizes,
+                    survive_member_set,
+                    added_member_set,
+                    curr_members, curr_member_set);
         }
     }
 }
@@ -155,6 +232,24 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
         const View& curr_view) const {
     //First, determine how many nodes we will need for a minimal allocation
     int nodes_needed = 0;
+
+    // If there are reserved node_ids, and some appear in curr_view, calculate the
+    // intersection and count them once, in case that we want shard overlapping.
+    std::set<node_id_t> all_active_reserved_node_id_set;
+    std::set<node_id_t> curr_member_set(curr_view.members.begin(), curr_view.members.end());
+    if(all_reserved_node_ids.size() > 0) {
+        std::set_intersection(
+                curr_member_set.begin(), curr_member_set.end(),
+                all_reserved_node_ids.begin(), all_reserved_node_ids.end(),
+                std::inserter(all_active_reserved_node_id_set, all_active_reserved_node_id_set.begin()));
+
+        dbg_default_debug("Parsing all_active_reserved_node_id_set: ");
+        print_set(all_active_reserved_node_id_set);
+
+        nodes_needed = all_active_reserved_node_id_set.size();
+        dbg_default_debug("After counting all_active_reserved_node_id_set, nodes_needed is {}", nodes_needed);
+    }
+
     std::map<std::type_index, std::vector<std::vector<uint32_t>>> shard_sizes;
     for(uint32_t subgroup_type_id = 0; subgroup_type_id < subgroup_type_order.size(); ++subgroup_type_id) {
         const std::type_index& subgroup_type = subgroup_type_order[subgroup_type_id];
@@ -174,8 +269,18 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                               : subgroup_type_policy.shard_policy_by_subgroup[subgroup_num];
             shard_sizes[subgroup_type][subgroup_num].resize(sharding_policy.num_shards);
             for(int shard_num = 0; shard_num < sharding_policy.num_shards; ++shard_num) {
-                int min_shard_size = sharding_policy.even_shards ? sharding_policy.min_nodes_per_shard
-                                                                 : sharding_policy.min_num_nodes_by_shard[shard_num];
+                size_t min_shard_size = sharding_policy.even_shards ? sharding_policy.min_nodes_per_shard
+                                                                    : sharding_policy.min_num_nodes_by_shard[shard_num];
+
+                /** With reserved nodes, we do not assign nodes evenly across shards.
+                 * All current nodes may be occupied by 1 shard because it reserved all of them.
+                 * Therefore we need to check if min_shard_size for each shard is satisfied,
+                 * and thus we need to maintain nodes_needed more carefully.
+                 */
+
+                dbg_default_debug("Calculate node size for type {}, subgroup_num {}, shard_num {}", std::string(subgroup_type.name()), subgroup_num, shard_num);
+
+                std::set<node_id_t> survived_node_set;
                 //If there was a previous view, we must include all non-failed nodes from that view
                 if(prev_view) {
                     const subgroup_id_t previous_assignment_offset
@@ -183,18 +288,53 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
                     const SubView& previous_shard_assignment
                             = prev_view->subgroup_shard_views[previous_assignment_offset + subgroup_num]
                                                              [shard_num];
-                    int num_nonfailed_nodes = 0;
                     for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
                         if(curr_view.rank_of(previous_shard_assignment.members[rank]) != -1) {
-                            num_nonfailed_nodes++;
+                            survived_node_set.insert(previous_shard_assignment.members[rank]);
                         }
                     }
-                    if(num_nonfailed_nodes > min_shard_size) {
-                        min_shard_size = num_nonfailed_nodes;
-                    }
                 }
+
+                // Check whehter this shard reserve existing nodes.
+                std::set<node_id_t> active_reserved_node_id_set;
+
+                if(sharding_policy.reserved_node_id_by_shard.size() > 0) {
+                    std::set_intersection(
+                            sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].end(),
+                            curr_member_set.begin(),
+                            curr_member_set.end(),
+                            std::inserter(active_reserved_node_id_set, active_reserved_node_id_set.begin()));
+                } else {
+                    dbg_default_debug("There is no reserved node_id configured.");
+                }
+
+                dbg_default_debug("The active_reserved_node_id_set for current shard is: ");
+                print_set(active_reserved_node_id_set);
+
+                /** The inherent_node_id_set holds node_ids that are "inherent" or "intrinsic"
+                 * to the this shard, for the node_ids are either surviving nodes from "the same shard"
+                 * in the prev_view or reserved for this shard, or both.
+                 */
+                std::set<node_id_t> inherent_node_id_set;
+                std::set_union(
+                        survived_node_set.begin(), survived_node_set.end(),
+                        active_reserved_node_id_set.begin(), active_reserved_node_id_set.end(),
+                        std::inserter(inherent_node_id_set, inherent_node_id_set.end()));
+                dbg_default_debug("The inherent_node_id_set for current shard is: ");
+                print_set(inherent_node_id_set);
+                // All active reserved nodes just count once.
+                nodes_needed += inherent_node_id_set.size() - active_reserved_node_id_set.size();
+
+                if(inherent_node_id_set.size() >= min_shard_size) {
+                    min_shard_size = inherent_node_id_set.size();
+                } else {
+                    nodes_needed += min_shard_size - inherent_node_id_set.size();
+                }
+
+                // TODO: If we add a lot of nodes reserved for a shard, the number of which is larger than this shard's max_num_nodes, we will still add those nodes to it.
+                // Seems OK?
                 shard_sizes[subgroup_type][subgroup_num][shard_num] = min_shard_size;
-                nodes_needed += min_shard_size;
             }
         }
     }
@@ -203,6 +343,7 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
     if(nodes_needed > curr_view.num_members) {
         throw subgroup_provisioning_exception();
     }
+
     //Now go back and add one node to each shard evenly, until either they reach max size
     //or we run out of members in curr_view
     bool done_adding = false;
@@ -248,18 +389,53 @@ DefaultSubgroupAllocator::compute_standard_shard_sizes(
 subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_type(
         const std::type_index subgroup_type,
         View& curr_view,
-        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+        const std::vector<node_id_t>& curr_members,
+        const std::set<node_id_t>& curr_member_set) const {
     //The size of shard_sizes[subgroup_type] is the number of subgroups of this type
     subgroup_shard_layout_t subgroup_allocation(shard_sizes.at(subgroup_type).size());
+
+    const SubgroupAllocationPolicy& subgroup_type_policy
+            = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+
     for(uint32_t subgroup_num = 0; subgroup_num < subgroup_allocation.size(); ++subgroup_num) {
         //The size of shard_sizes[subgroup_type][subgroup_num] is the number of shards
         for(uint32_t shard_num = 0; shard_num < shard_sizes.at(subgroup_type)[subgroup_num].size();
             ++shard_num) {
             uint32_t shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
+            std::vector<node_id_t> desired_nodes;
+
+            dbg_default_debug("For subgroup {}, shard {}, it is assigned {} nodes", subgroup_num, shard_num, shard_size);
+
+            // Allocate active reserved nodes first.
+            if(subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard.size() > 0) {
+                const std::set<node_id_t> reserved_node_id_set(
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end());
+                if(reserved_node_id_set.size() > 0) {
+                    std::set_intersection(
+                            reserved_node_id_set.begin(), reserved_node_id_set.end(),
+                            curr_member_set.begin(), curr_member_set.end(),
+                            std::inserter(desired_nodes, desired_nodes.end()));
+                    shard_size -= desired_nodes.size();
+                    dbg_default_debug("Assign it {} active reserved nodes:", desired_nodes.size());
+                    print_set(std::set<node_id_t>(desired_nodes.begin(), desired_nodes.end()));
+                }
+            } else {
+                dbg_default_debug("There is no reserved node_id configured.");
+            }
+
             //Grab the next shard_size nodes
-            std::vector<node_id_t> desired_nodes(&curr_view.members[curr_view.next_unassigned_rank],
-                                                 &curr_view.members[curr_view.next_unassigned_rank + shard_size]);
+            desired_nodes.insert(desired_nodes.end(),
+                                 &curr_members[curr_view.next_unassigned_rank],
+                                 &curr_members[curr_view.next_unassigned_rank + shard_size]);
+            // NOTE: If there are unassigned reserved nodes(which should not happen in regular use), next_unassigned_rank only points to
+            // unassigned normal nodes, which I(Lichen) think is just OK and not in conflict with its definition.
             curr_view.next_unassigned_rank += shard_size;
+
+            dbg_default_debug("Assign it {} nodes in total, with curr_view.next_unassigned_rank {}:", desired_nodes.size(), curr_view.next_unassigned_rank);
+            print_set(desired_nodes);
+
             //Figure out what the Mode policy for this shard is
             const SubgroupAllocationPolicy& subgroup_type_policy
                     = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
@@ -271,7 +447,7 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::allocate_standard_subgroup_typ
                                          ? sharding_policy.shards_mode
                                          : sharding_policy.modes_by_shard[shard_num];
             std::string profile = sharding_policy.shards_profile;
-            if (!sharding_policy.even_shards) {
+            if(!sharding_policy.even_shards) {
                 profile = sharding_policy.profiles_by_shard[shard_num];
             }
             //Put the SubView at the end of subgroup_allocation[subgroup_num]
@@ -288,13 +464,26 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
         const subgroup_type_id_t subgroup_type_id,
         const std::unique_ptr<View>& prev_view,
         View& curr_view,
-        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const {
+        const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+        const std::set<node_id_t>& survive_member_set,
+        const std::set<node_id_t>& added_member_set,
+        const std::vector<node_id_t>& curr_members,
+        const std::set<node_id_t>& curr_member_set) const {
     /* Subgroups of the same type will have contiguous IDs because they were created in order.
      * So the previous assignment is the slice of the previous subgroup_shard_views vector
      * starting at the first subgroup's ID, and extending for num_subgroups entries.
      */
     const subgroup_id_t previous_assignment_offset = prev_view->subgroup_ids_by_type_id.at(subgroup_type_id)[0];
     subgroup_shard_layout_t next_assignment(shard_sizes.at(subgroup_type).size());
+
+    dbg_default_debug("The survive_member_set is:");
+    print_set(survive_member_set);
+    dbg_default_debug("The added_member_set is:");
+    print_set(added_member_set);
+
+    const SubgroupAllocationPolicy& subgroup_type_policy
+            = std::get<SubgroupAllocationPolicy>(policies.at(subgroup_type));
+
     for(uint32_t subgroup_num = 0; subgroup_num < next_assignment.size(); ++subgroup_num) {
         //The size of shard_sizes[subgroup_type][subgroup_num] is the number of shards
         for(uint32_t shard_num = 0; shard_num < shard_sizes.at(subgroup_type)[subgroup_num].size();
@@ -305,6 +494,8 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
             std::vector<node_id_t> next_shard_members;
             std::vector<int> next_is_sender;
             uint32_t allocated_shard_size = shard_sizes.at(subgroup_type)[subgroup_num][shard_num];
+            dbg_default_debug("For subgroup {}, shard {}, it is assigned {} nodes", subgroup_num, shard_num, allocated_shard_size);
+
             //Add all the non-failed nodes from the previous assignment
             for(std::size_t rank = 0; rank < previous_shard_assignment.members.size(); ++rank) {
                 if(curr_view.rank_of(previous_shard_assignment.members[rank]) == -1) {
@@ -313,6 +504,32 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 next_shard_members.push_back(previous_shard_assignment.members[rank]);
                 next_is_sender.push_back(previous_shard_assignment.is_sender[rank]);
             }
+            dbg_default_debug("After assigning survive nodes, next_shard_members is:");
+            print_set(next_shard_members);
+
+            //Add newly added reserved nodes
+            if(subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard.size() > 0) {
+                std::set<node_id_t> added_reserved_node_id_set;
+                std::set_intersection(
+                        added_member_set.begin(), added_member_set.end(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].begin(),
+                        subgroup_type_policy.shard_policy_by_subgroup[subgroup_num].reserved_node_id_by_shard[shard_num].end(),
+                        std::inserter(added_reserved_node_id_set, added_reserved_node_id_set.end()));
+                if(added_reserved_node_id_set.size() > 0) {
+                    dbg_default_debug("The added_reserved_node_id_set is not empty:");
+                    print_set(added_reserved_node_id_set);
+
+                    for(auto node_id : added_reserved_node_id_set) {
+                        next_shard_members.push_back(node_id);
+                        next_is_sender.push_back(true);
+                    }
+                }
+                dbg_default_debug("After assigning newly added reserved nodes, we get {} inherent node_id(s) assigned, next_shard_members is:", next_shard_members.size());
+                print_set(next_shard_members);
+            } else {
+                dbg_default_debug("There is no reserved node_id configured.");
+            }
+
             //Add additional members if needed
             while(next_shard_members.size() < allocated_shard_size) {
                 //This must be true if compute_standard_shard_sizes said our view was adequate
@@ -322,6 +539,9 @@ subgroup_shard_layout_t DefaultSubgroupAllocator::update_standard_subgroup_type(
                 //All members start out as senders with the default allocator
                 next_is_sender.push_back(true);
             }
+            dbg_default_debug("Assign it {} nodes in total, with curr_view.next_unassigned_rank {}:", next_shard_members.size(), curr_view.next_unassigned_rank);
+            print_set(next_shard_members);
+
             next_assignment[subgroup_num].emplace_back(curr_view.make_subview(next_shard_members,
                                                                               previous_shard_assignment.mode,
                                                                               next_is_sender,
@@ -406,6 +626,112 @@ subgroup_allocation_map_t DefaultSubgroupAllocator::operator()(
     compute_standard_memberships(subgroup_type_order, prev_view, curr_view, subgroup_allocations);
     compute_cross_product_memberships(subgroup_type_order, prev_view, curr_view, subgroup_allocations);
     return subgroup_allocations;
+}
+
+SubgroupAllocationPolicy derecho_parse_json_subgroup_policy(const json& jconf, std::set<node_id_t>& all_reserved_node_ids) {
+    if(!jconf.is_object() || !jconf[JSON_CONF_LAYOUT].is_array()) {
+        dbg_default_error("parse_json_subgroup_policy cannot parse {}.", jconf.get<std::string>());
+        throw derecho::derecho_exception("parse_json_subgroup_policy cannot parse" + jconf.get<std::string>());
+    }
+
+    SubgroupAllocationPolicy subgroup_allocation_policy;
+    subgroup_allocation_policy.identical_subgroups = false;
+    subgroup_allocation_policy.num_subgroups = jconf[JSON_CONF_LAYOUT].size();
+    subgroup_allocation_policy.shard_policy_by_subgroup = std::vector<ShardAllocationPolicy>();
+
+    for(auto subgroup_it : jconf[JSON_CONF_LAYOUT]) {
+        ShardAllocationPolicy shard_allocation_policy;
+        size_t num_shards = subgroup_it[MIN_NODES_BY_SHARD].size();
+        if(subgroup_it[MAX_NODES_BY_SHARD].size() != num_shards || subgroup_it[DELIVERY_MODES_BY_SHARD].size() != num_shards || subgroup_it[PROFILES_BY_SHARD].size() != num_shards ||
+           // "reserved_node_id_by_shard" is not a mandatory field
+           (subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != 0 && subgroup_it[RESERVED_NODE_ID_BY_SHRAD].size() != num_shards)) {
+            dbg_default_error("parse_json_subgroup_policy: shards does not match in at least one subgroup: {}",
+                              subgroup_it.get<std::string>());
+
+            throw derecho::derecho_exception("parse_json_subgroup_policy: shards does not match in at least one subgroup:" + subgroup_it.get<std::string>());
+        }
+        shard_allocation_policy.even_shards = false;
+        shard_allocation_policy.num_shards = num_shards;
+        shard_allocation_policy.min_num_nodes_by_shard = subgroup_it[MIN_NODES_BY_SHARD].get<std::vector<int>>();
+        shard_allocation_policy.max_num_nodes_by_shard = subgroup_it[MAX_NODES_BY_SHARD].get<std::vector<int>>();
+        std::vector<Mode> delivery_modes_by_shard;
+        for(auto it : subgroup_it[DELIVERY_MODES_BY_SHARD]) {
+            if(it == DELIVERY_MODE_RAW) {
+                shard_allocation_policy.modes_by_shard.push_back(Mode::UNORDERED);
+            } else {
+                shard_allocation_policy.modes_by_shard.push_back(Mode::ORDERED);
+            }
+        }
+        shard_allocation_policy.profiles_by_shard = subgroup_it[PROFILES_BY_SHARD].get<std::vector<std::string>>();
+
+        // "reserved_node_id_by_shard" is not a mandatory field
+        if(subgroup_it.contains(RESERVED_NODE_ID_BY_SHRAD)) {
+            shard_allocation_policy.reserved_node_id_by_shard = subgroup_it[RESERVED_NODE_ID_BY_SHRAD].get<std::vector<std::set<node_id_t>>>();
+
+            for(auto reserved_id_set : shard_allocation_policy.reserved_node_id_by_shard) {
+                std::set_union(all_reserved_node_ids.begin(), all_reserved_node_ids.end(), reserved_id_set.begin(), reserved_id_set.end(), std::inserter(all_reserved_node_ids, all_reserved_node_ids.begin()));
+            }
+            /**
+			 * Make sure that no shards inside a subgroup reserve same node_ids. Shards in 
+			 * different subgroups of one same type or from different types can share nodes,
+			 * and this why we use the reserved_node_id feature.
+			 * For example, we can assign 2 subgroups for type "PersistentCascadeStoreWithStringKey"
+			 * to store data and model respectively for an ML application, and actually reserve
+			 * the same node_ids for shards in this two subgroup. This way the data and the model
+			 * coexist in the same node, thus delivering performance gains.
+			 */
+            std::set<node_id_t> intersect_reserved_node_ids_in_subgroup;
+            std::set<node_id_t> temp(shard_allocation_policy.reserved_node_id_by_shard[0]);
+            for(int shard_num = 1; shard_num < shard_allocation_policy.num_shards; ++shard_num) {
+                intersect_reserved_node_ids_in_subgroup = std::set<node_id_t>();
+                std::set_intersection(
+                        temp.begin(), temp.end(),
+                        shard_allocation_policy.reserved_node_id_by_shard[shard_num].begin(),
+                        shard_allocation_policy.reserved_node_id_by_shard[shard_num].end(),
+                        std::inserter(intersect_reserved_node_ids_in_subgroup,
+                                      intersect_reserved_node_ids_in_subgroup.begin()));
+            }
+            // Shards in this subgroup have same reserved node_ids.
+            if(intersect_reserved_node_ids_in_subgroup.size() > 0) {
+                throw derecho_exception("Shards in one subgroup have same reserved node_ids!");
+            }
+        } else {
+            dbg_default_debug("There is no reserved node_id configured.");
+        }
+
+        subgroup_allocation_policy.shard_policy_by_subgroup.emplace_back(std::move(shard_allocation_policy));
+    }
+    return subgroup_allocation_policy;
+}
+
+void check_reserved_node_id_pool(const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>& dsa_map) {
+    for(auto& item : dsa_map) {
+        if(!std::holds_alternative<SubgroupAllocationPolicy>(item.second)) {
+            continue;
+        }
+        const SubgroupAllocationPolicy& subgroup_type_policy
+                = std::get<SubgroupAllocationPolicy>(item.second);
+        for(int subgroup_num = 0; subgroup_num < subgroup_type_policy.num_subgroups; ++subgroup_num) {
+            const ShardAllocationPolicy& sharding_policy = subgroup_type_policy.shard_policy_by_subgroup[subgroup_num];
+            if(sharding_policy.reserved_node_id_by_shard.size() > 0) {
+                std::set<node_id_t> intersect_reserved_node_ids_in_subgroup;
+                std::set<node_id_t> temp(sharding_policy.reserved_node_id_by_shard[0]);
+                for(int shard_num = 1; shard_num < sharding_policy.num_shards; ++shard_num) {
+                    intersect_reserved_node_ids_in_subgroup = std::set<node_id_t>();
+                    std::set_intersection(
+                            temp.begin(), temp.end(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].begin(),
+                            sharding_policy.reserved_node_id_by_shard[shard_num].end(),
+                            std::inserter(intersect_reserved_node_ids_in_subgroup,
+                                          intersect_reserved_node_ids_in_subgroup.begin()));
+                }
+                // Shards in this subgroup have same reserved node_ids.
+                if(intersect_reserved_node_ids_in_subgroup.size() > 0) {
+                    throw derecho_exception("Shards in one subgroup have same reserved node_ids!");
+                }
+            }
+        }
+    }
 }
 
 }  // namespace derecho

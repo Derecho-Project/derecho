@@ -6,12 +6,18 @@
 
 #pragma once
 
+#include <exception>
 #include <memory>
+#include <nlohmann/json.hpp>
+#include <set>
 #include <variant>
 
+#include "derecho_exception.hpp"
 #include "derecho_modes.hpp"
 #include "detail/derecho_internal.hpp"
 #include "subgroup_info.hpp"
+
+using json = nlohmann::json;
 
 namespace derecho {
 
@@ -93,6 +99,14 @@ struct ShardAllocationPolicy {
      * indicating which profile it should use. (Ignored if even_shards is
      * true). */
     std::vector<std::string> profiles_by_shard;
+    /** Only used when even_shards is false.
+     * For each shard, this stores a list of node ids reserved for it. When a 
+     * new node comes with id inside the list, it will be added into the 
+     * dedicated shard directly. Overlapping among shards can be realized by 
+     * this mechanism. 
+     * Need to use std::set instead of std::unordered_set to makesure set functions
+     * run correctly.*/
+    std::vector<std::set<node_id_t>> reserved_node_id_by_shard;
 };
 
 /**
@@ -258,6 +272,11 @@ protected:
     const std::map<std::type_index, std::variant<SubgroupAllocationPolicy, CrossProductPolicy>> policies;
 
     /**
+     * The union set of reserved_node_ids from all shards.
+     */
+    const std::set<node_id_t> all_reserved_node_ids;
+
+    /**
      * Determines how many members each shard can have in the current view, based
      * on each shard's policy (minimum and maximum number of nodes) and the size
      * of the current view. This function first assigns the minimum number of
@@ -292,7 +311,9 @@ protected:
     subgroup_shard_layout_t allocate_standard_subgroup_type(
             const std::type_index subgroup_type,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Creates and returns a new membership allocation for a single subgroup
@@ -310,7 +331,11 @@ protected:
             const subgroup_type_id_t subgroup_type_id,
             const std::unique_ptr<View>& prev_view,
             View& curr_view,
-            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes) const;
+            const std::map<std::type_index, std::vector<std::vector<uint32_t>>>& shard_sizes,
+            const std::set<node_id_t>& survive_member_set,
+            const std::set<node_id_t>& added_member_set,
+            const std::vector<node_id_t>& curr_members,
+            const std::set<node_id_t>& curr_member_set) const;
 
     /**
      * Helper function that implements the subgroup allocation algorithm for all
@@ -348,8 +373,16 @@ public:
                                             std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
                                      policies_by_subgroup_type)
             : policies(policies_by_subgroup_type) {}
+
+    DefaultSubgroupAllocator(const std::map<std::type_index,
+                                            std::variant<SubgroupAllocationPolicy, CrossProductPolicy>>&
+                                     policies_by_subgroup_type,
+                             const std::set<node_id_t>& all_reserved_node_ids)
+            : policies(policies_by_subgroup_type),
+              all_reserved_node_ids(all_reserved_node_ids) {}
     DefaultSubgroupAllocator(const DefaultSubgroupAllocator& to_copy)
-            : policies(to_copy.policies) {}
+            : policies(to_copy.policies),
+              all_reserved_node_ids(to_copy.all_reserved_node_ids) {}
     DefaultSubgroupAllocator(DefaultSubgroupAllocator&&) = default;
 
     subgroup_allocation_map_t operator()(const std::vector<std::type_index>& subgroup_type_order,
@@ -357,4 +390,12 @@ public:
                                          View& curr_view) const;
 };
 
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator construct_DSA_with_layout(const json& layout);
+
+template <typename... ReplicatedTypes>
+DefaultSubgroupAllocator construct_DSA_with_layout_path(const std::string& layout_path);
+
 }  // namespace derecho
+
+#include "detail/subgroup_functions_impl.hpp"
