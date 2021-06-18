@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
 
     double avg_latency, avg_std_dev;
     // the if loop selects the senders
-    if(sender_selector == PartialSendMode::ALL_SENDERS|| (sender_selector == PartialSendMode::HALF_SENDERS && node_rank > (num_of_nodes - 1) / 2) || (sender_selector == PartialSendMode::ONE_SENDER && node_rank == num_of_nodes - 1)) {
+    if(sender_selector == PartialSendMode::ALL_SENDERS|| (sender_selector == PartialSendMode::HALF_SENDERS && (int)(node_rank) > (num_of_nodes - 1) / 2) || (sender_selector == PartialSendMode::ONE_SENDER && (int)(node_rank) == num_of_nodes - 1)) {
         double total_time = 0;
         double sum_of_square = 0.0;
         double average_time = 0.0;
