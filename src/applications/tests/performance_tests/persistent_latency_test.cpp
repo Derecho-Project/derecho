@@ -243,13 +243,14 @@ int main(int argc, char* argv[]) {
         double sum_of_square = 0.0;
         double average_time = 0.0;
         for(uint i = 0; i < num_msgs; ++i) {
-            total_time += message_pers_ts_us[i] - local_message_ts_us[i];
+            total_time += (int64_t)(message_pers_ts_us[num_sender * i + node_rank]) - (int64_t)(local_message_ts_us[i]);
         }
         // average latency in nano seconds
         average_time = (total_time / num_msgs);
+        std::cout << "average time: " << average_time << std::endl;
         // calculate the standard deviation
         for(uint i = 0; i < num_msgs; ++i) {
-            sum_of_square += (double)(message_pers_ts_us[i] - local_message_ts_us[i] - average_time) * (message_pers_ts_us[i] - local_message_ts_us[i] - average_time);
+            sum_of_square += (double)((double)message_pers_ts_us[num_sender * i + node_rank] - (double)local_message_ts_us[i] - average_time) * ((double)message_pers_ts_us[num_sender * i + node_rank] - (double)local_message_ts_us[i] - average_time);
         }
         double std_dev = sqrt(sum_of_square / (num_msgs - 1));
         // aggregate latency values from all senders
