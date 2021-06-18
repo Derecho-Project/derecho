@@ -236,6 +236,8 @@ int main(int argc, char* argv[]) {
     while(!done) {
     }
 
+    std::cout << "Done!" << std::endl;
+
     double avg_latency, avg_std_dev;
     // the if loop selects the senders
     if(sender_selector == PartialSendMode::ALL_SENDERS|| (sender_selector == PartialSendMode::HALF_SENDERS && node_rank > (num_of_nodes - 1) / 2) || (sender_selector == PartialSendMode::ONE_SENDER && node_rank == num_of_nodes - 1)) {
