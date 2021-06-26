@@ -45,6 +45,34 @@ This project is organized as a standard CMake-built C++ library: all headers are
 ## Installation
 Derecho is a library that helps you build replicated, fault-tolerant services in a datacenter with RDMA networking. Here's how to start using it in your projects.
 
+### Network requirements (important!)
+Derecho was designed to run correctly on:
+* RDMA, which can be deployed on Infiniband or Ethernet (RoCE).
+* TCP (but not UDP).
+
+Under the surface, the specific requirements are these.  First, Derecho needs the network to be reliable, ordered, to deliver data exactly once in the order sent, to have its own built-in flow control, and to automatically detect failures.  TCP works this way, and is widely available.  RDMA mimics TCP and adds some features of its own, and we leverage those when we have access to them.  For example, RDMA allows us to directly write into the memory of a remote machine, with permissions.  This is very useful and is a core technology that Derecho was designed around.
+
+Derecho accesses the network via a configurable layer that currently offers:
+* Direct use of RDMA verbs.
+* Indirect networking, via a wrapper called "LibFabric" that offers efficient mappings to TCP or RDMA verbs. 
+* Eventually (Derecho V2.3 or beyond): the DataPlane Developers Kit, DPDK.  Again, our DPDK support will focus on mappings to TCP or RDMA.
+
+Your job when configuring Derecho is to build with one of these choices (by default we use LibFabric), then tell us in the Derecho config file which "sub-choice" to make, if any.  So, for LibFabric, you must tell us "tcp" or "verbs".   Do not use the LibFabrics "socket" provider -- this is deprecated and can cause Derecho to malfunction.
+
+It is quite easy to misconfigure Derecho.  You can simply tell us to map to a protocol like UDP, or some other option that lacks the semantics shared by TCP and RDMA.  If you do that, our system will break -- it may start up, but then it will crash.  
+
+How would you decide whether the LibFabrics or DPDK mapping to some other technology is safe for Derecho?  Your task centers on understanding what we require, then verifying that your favorite technology matches our needs.  Specifically, Derecho requires:  
+* A way to send data as a stream of blocks (one-sided RDMA remote writes), each operation telling the transport system where to put some block of data on the remote node.  This is how RDMA works "out of the box."  When we run on TCP, we depend on LibFabric to implement this abstraction.  
+* With each block of bytes, we expect our writes to be applied in the order we sent them, and we require "cache line atomicity" from the memory subsystem on the target machine.  This just means that if we write 1234 into X, and then write 4567 into X (X denotes a variable inside one 64-byte cache line), a reader might see 1234 for a while, but then eventually would see 4567.  The update order doesn't change, and the bytes don't somehow become mashed together.  
+* Memory fencing on an operation-by-operation basis.  This means that if we do two writes, block A and then block B, and a remote process can see the data from B, it will also see the data from A.  Memory fencing implies cache-coherency: no remote process that sees data from B would run into stale cached data from before A or B occurred.  
+* Sequential consistency for non-fenced updates from a single source.  Derecho uses memory fencing -- not locking.  Memory fencing is weaker than "atomics", which is a property needed if a system has multiple writers contending to update the same location.  We don't need atomics: in Derecho, any given memory location has just a single writer.
+
+You may be surprised to learn that TCP has these guarantees.  In fact, TCP "on its own" only has some of them.  The fencing property is really a side-effect of using LibFabric, which emulates RDMA on TCP in its tcp transport protocol for one-sided writes.  In RDMA, the properties we described are standard.
+
+Equally, it may be surprising that LibFabric on other transports, such as UDP, lacks this guarantee.  In fact this puzzles us too: LibFabrics was originally proposed as a way to emulate RDMA on TCP and other transports, and you would expect that its one-sided RDMA write implementation really should be faithful to RDMA semantics.  However, when LibFabric was extended to support UDP, the solution was designed to emulate RDMA to the extent possible, but without ever retransmitting bytes.  Thus with UDP, LibFabric will not be reliable, although it will be sequentially consistent and separate verbs will be memory-fenced.  This is not strong enough for Derecho.
+
+Above, we noted that we hope to support Derecho on DPDK.  DPDK, like LibFabrics, is a very thin standard wrapper over various user-space networking and remote memory options (including RDMA).  DPDK passes the properties of the underlying transport through.  DPDK does support a third-party layer, urdma, that translates RDMA verbs into DPDK operations, and we believe that this mix should work over TCP (so: urdma on DPDK on TCP looks plausible to us).  URDMA on DPDK on RDMA looks fine too.  But urdma on DPDK on UDP would not work because UDP is unreliable.
+
 ### Prerequisites
 * Linux (other operating systems don't currently support the RDMA features we use)
 * A C++ compiler supporting C++17: GCC 7.3+ or Clang 7+
