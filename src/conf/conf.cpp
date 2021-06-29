@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdexcept>
+#include <nlohmann/json.hpp>
 #ifndef NDEBUG
 #include <spdlog/sinks/stdout_color_sinks.h>
 #endif  //NDEBUG
@@ -106,6 +107,31 @@ void Conf::initialize(int argc, char* argv[], const char* conf_file) {
         // 3 - set the flag to initialized
         Conf::singleton_initialized_flag.store(CONF_INITIALIZED, std::memory_order_acq_rel);
 
+        // 4 - check the configuration for sanity
+        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT) && hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT_PATH)) {
+            throw std::logic_error("Configuration error: Both " CONF_DERECHO_JSON_LAYOUT " and " CONF_DERECHO_JSON_LAYOUT_PATH " were specified. These options are mutually exclusive");
+        }
+        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT_PATH)) {
+            std::ifstream json_file_stream(getConfString(CONF_DERECHO_JSON_LAYOUT_PATH));
+            if(!json_file_stream) {
+                throw std::logic_error("Configuration error: The JSON layout file could not be opened for reading");
+            }
+            nlohmann::json json_obj;
+            try {
+                json_file_stream >> json_obj;
+            } catch(nlohmann::json::exception& ex) {
+                //Wrap the JSON-specific exception in a logic_error to add a message
+                std::throw_with_nested(std::logic_error("Configuration error: The JSON layout file does not contain valid JSON"));
+            }
+        }
+        if(hasCustomizedConfKey(CONF_DERECHO_JSON_LAYOUT)) {
+            nlohmann::json json_obj;
+            try {
+                json_obj = nlohmann::json::parse(getConfString(CONF_DERECHO_JSON_LAYOUT));
+            } catch(nlohmann::json::exception& ex) {
+                std::throw_with_nested(std::logic_error("Configuration error: The JSON layout string is not valid JSON"));
+            }
+        }
 
         if(getConfUInt32(CONF_DERECHO_LOCAL_ID) >= getConfUInt32(CONF_DERECHO_MAX_NODE_ID)) {
             throw std::logic_error("Configuration error: Local node ID must be less than max node ID");

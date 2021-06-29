@@ -33,10 +33,10 @@ int main(int argc, char** argv) {
 
     //Define subgroup membership using the default subgroup allocator function
     //Each Replicated type will have one subgroup and one shard, with three members in the shard
-    
+
     json json_layout = json::parse(derecho::getConfString(CONF_DERECHO_JSON_LAYOUT));
     cout << "json_layout parsed\n";
-    auto dsa_object = derecho::construct_DSA_with_layout<Foo, Bar>(json_layout);
+    auto dsa_object = derecho::make_subgroup_allocator<Foo, Bar>(json_layout);
     cout << "dsa_object constructed\n";
     derecho::SubgroupInfo subgroup_function{dsa_object};
 

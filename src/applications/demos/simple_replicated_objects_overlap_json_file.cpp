@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 
     //Define subgroup membership using the default subgroup allocator function
     //Each Replicated type will have one subgroup and one shard, with three members in the shard
-    derecho::SubgroupInfo subgroup_function{derecho::construct_DSA_with_layout_path<Foo, Bar>(
+    derecho::SubgroupInfo subgroup_function{derecho::make_subgroup_allocator<Foo, Bar>(
             derecho::getConfString(CONF_DERECHO_JSON_LAYOUT_PATH))};
     //Each replicated type needs a factory; this can be used to supply constructor arguments
     //for the subgroup's initial state. These must take a PersistentRegistry* argument, but
