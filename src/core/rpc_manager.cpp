@@ -162,9 +162,9 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
             if(view_manager.subgroup_is_persistent(subgroup_id)) {
                 results_awaiting_local_persistence[subgroup_id].emplace(version,
-                                                                        std::move(pending_results_to_fulfill[subgroup_id].front()));
+                                                                        pending_results_to_fulfill[subgroup_id].front());
             } else {
-                completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_to_fulfill[subgroup_id].front()));
+                completed_pending_results[subgroup_id].emplace_back(pending_results_to_fulfill[subgroup_id].front());
             }
             pending_results_to_fulfill[subgroup_id].pop();
         }  //release pending_results_mutex
@@ -303,7 +303,7 @@ void RPCManager::notify_persistence_finished(subgroup_id_t subgroup_id, persiste
         dbg_default_trace("RPCManager: Setting local persistence on version {}", pending_results_iter->first);
         pending_results_iter->second.get().set_local_persistence();
         //Move the PendingResults reference to results_awaiting_global_persistence, with the same key
-        results_awaiting_global_persistence[subgroup_id].emplace(std::move(*pending_results_iter));
+        results_awaiting_global_persistence[subgroup_id].emplace(*pending_results_iter);
         pending_results_iter = results_awaiting_local_persistence[subgroup_id].erase(pending_results_iter);
     }
 }
@@ -320,9 +320,9 @@ void RPCManager::notify_global_persistence_finished(subgroup_id_t subgroup_id, p
         //Move the PendingResults reference to results_awaiting_signature if the subgroup needs signatures,
         //or completed_pending_results if it does not
         if(view_manager.subgroup_is_signed(subgroup_id)) {
-            results_awaiting_signature[subgroup_id].emplace(std::move(*pending_results_iter));
+            results_awaiting_signature[subgroup_id].emplace(*pending_results_iter);
         } else {
-            completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_iter->second));
+            completed_pending_results[subgroup_id].emplace_back(pending_results_iter->second);
         }
         pending_results_iter = results_awaiting_global_persistence[subgroup_id].erase(pending_results_iter);
     }
@@ -336,7 +336,7 @@ void RPCManager::notify_verification_finished(subgroup_id_t subgroup_id, persist
         dbg_default_trace("RPCManager: Setting signature verification on version {}", pending_results_iter->first);
         pending_results_iter->second.get().set_signature_verified();
         //Move the PendingResults reference to completed_pending_results
-        completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_iter->second));
+        completed_pending_results[subgroup_id].emplace_back(pending_results_iter->second);
         pending_results_iter = results_awaiting_signature[subgroup_id].erase(pending_results_iter);
     }
 }
