@@ -11,9 +11,9 @@
 #include <type_traits>
 
 #include "rpc_utils.hpp"
+#include <derecho/conf/conf.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
-#include <derecho/conf/conf.hpp>
 #include <mutils/FunctionalMap.hpp>
 #include <mutils/tuple_extras.hpp>
 #include <spdlog/spdlog.h>
@@ -179,8 +179,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         // collection mechanism.
         if(is_exception) {
             //If the exception bit is set, the response contains a serialized remote_exception_info
-            //This should use from_bytes_noalloc, but attempting to use it results in a baffling "overloaded call is ambiguous" error
-            auto exception_info = mutils::from_bytes<remote_exception_info>(nullptr, response + 1 + sizeof(invocation_id));
+            auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(invocation_id));
             dbg_default_trace("Received an exception in response to invocation ID {} from node {}. Exception info contained: ({}, {})", invocation_id, nid, exception_info->exception_name, exception_info->exception_what);
             results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(
                                                                      remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
