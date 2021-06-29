@@ -180,7 +180,8 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         if(is_exception) {
             //If the exception bit is set, the response contains a serialized remote_exception_info
             auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(invocation_id));
-            dbg_default_trace("Received an exception in response to invocation ID {} from node {}. Exception info contained: ({}, {})", invocation_id, nid, exception_info->exception_name, exception_info->exception_what);
+            dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, invocation_id);
+            rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
             results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(
                                                                      remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
         } else {
@@ -304,6 +305,7 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
             dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
         } catch(std::exception& ex) {
+            rls_default_error("An exception occurred while attempting to execute an RPC function. Exception message: {}", ex.what());
             //This *should* catch any exceptions that occur, unless a function does something silly like throwing an int
             remote_exception_info exception_info(typeid(ex).name(), ex.what());
             std::size_t result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
