@@ -103,13 +103,14 @@ auto Replicated<T>::p2p_send(node_id_t dest_node, Args&&... args) const {
         }
         //Convert the user's desired tag into an "internal" function tag for a P2P function
         auto return_pair = wrapped_this->template send<rpc::to_internal_tag<true>(tag)>(
+                //Invoke the sending function with a buffer-allocator that uses the P2P request buffers
                 [this, &dest_node](size_t size) -> char* {
                     const std::size_t max_p2p_request_payload_size = getConfUInt64(CONF_DERECHO_MAX_P2P_REQUEST_PAYLOAD_SIZE);
                     if(size <= max_p2p_request_payload_size) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                        throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);
@@ -124,8 +125,7 @@ template <typename T>
 template <rpc::FunctionTag tag, typename... Args>
 auto Replicated<T>::ordered_send(Args&&... args) {
     if(is_valid()) {
-        size_t payload_size_for_multicast_send = wrapped_this->
-        template get_size_for_ordered_send<rpc::to_internal_tag<false>(tag)>(std::forward<Args>(args)...);
+        size_t payload_size_for_multicast_send = wrapped_this->template get_size_for_ordered_send<rpc::to_internal_tag<false>(tag)>(std::forward<Args>(args)...);
 
         using Ret = typename std::remove_pointer<decltype(wrapped_this->template getReturnType<rpc::to_internal_tag<false>(tag)>(
                 std::forward<Args>(args)...))>::type;
@@ -136,11 +136,12 @@ auto Replicated<T>::ordered_send(Args&&... args) {
             //By the time this lambda runs, the current thread will be holding a read lock on view_mutex
             const std::size_t max_payload_size = group_rpc_manager.view_manager.get_max_payload_sizes().at(subgroup_id);
             auto send_return_struct = wrapped_this->template send<rpc::to_internal_tag<false>(tag)>(
+                    //Invoke the sending function with a buffer-allocator that uses the buffer supplied as an argument to the serializer
                     [&buffer, &max_payload_size](size_t size) -> char* {
                         if(size <= max_payload_size) {
                             return buffer;
                         } else {
-                            throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                            throw buffer_overflow_exception("The size of an ordered_send message exceeds the maximum message size.");
                         }
                     },
                     std::forward<Args>(args)...);
@@ -306,7 +307,7 @@ auto ExternalCaller<T>::p2p_send(node_id_t dest_node, Args&&... args) {
                         return (char*)group_rpc_manager.get_sendbuffer_ptr(dest_node,
                                                                            sst::REQUEST_TYPE::P2P_REQUEST);
                     } else {
-                        throw derecho_exception("The size of serialized args exceeds the maximum message size.");
+                        throw buffer_overflow_exception("The size of a P2P message exceeds the maximum P2P message size.");
                     }
                 },
                 std::forward<Args>(args)...);

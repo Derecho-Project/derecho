@@ -11,6 +11,7 @@
 #include <type_traits>
 
 #include "rpc_utils.hpp"
+#include <derecho/conf/conf.hpp>
 #include <derecho/mutils-serialization/SerializationSupport.hpp>
 #include <derecho/utils/logger.hpp>
 #include <mutils/FunctionalMap.hpp>
@@ -147,7 +148,6 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
             mutils::DeserializationManager* dsm,
             const node_id_t& nid, const char* response,
             const std::function<definitely_char*(int)>&) {
-        //note: find where this exception is set on the sending side!
         bool is_exception = response[0];
         long int invocation_id = ((long int*)(response + 1))[0];
         // lock_t l{map_lock};
@@ -178,7 +178,12 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
         // replacement operations at all. But we still need a better garbage
         // collection mechanism.
         if(is_exception) {
-            results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(remote_exception_occurred{nid}));
+            //If the exception bit is set, the response contains a serialized remote_exception_info
+            auto exception_info = mutils::from_bytes_noalloc<remote_exception_info>(nullptr, response + 1 + sizeof(invocation_id));
+            dbg_default_trace("Received an exception from node {} in response to invocation ID {}", nid, invocation_id);
+            rls_default_error("Received an exception from node {}. Exception message: {}", nid, exception_info->exception_what);
+            results_vector[invocation_id].set_exception(nid, std::make_exception_ptr(
+                                                                     remote_exception_occurred{nid, exception_info->exception_name, exception_info->exception_what}));
         } else {
             dbg_default_trace("Received an RPC response for invocation ID {} from node {}", invocation_id, nid);
             results_vector[invocation_id].set_value(nid, *mutils::from_bytes<Ret>(dsm, response + 1 + sizeof(invocation_id)));
@@ -194,7 +199,7 @@ struct RemoteInvoker<Tag, std::function<Ret(Args...)>> {
                                      mutils::DeserializationManager*,
                                      const node_id_t& nid, const char* response,
                                      const std::function<char*(int)>&) {
-        if(response[0]) throw remote_exception_occurred{nid};
+        // if(response[0]) throw remote_exception_occurred{nid};
         assert_always(false && "was not expecting a response!");
     }
 
@@ -292,18 +297,41 @@ struct RemoteInvocable<Tag, std::function<Ret(Args...)>> {
         auto recv_buf = _recv_buf + sizeof(long int);
         try {
             const auto result = mutils::deserialize_and_run(dsm, recv_buf, remote_invocable_function);
-            const auto result_size = mutils::bytes_size(result) + sizeof(long int) + 1;
+            const auto result_size = mutils::bytes_size(result) + sizeof(invocation_id) + 1;
             auto out = out_alloc(result_size);
             out[0] = false;
             ((long int*)(out + 1))[0] = invocation_id;
             mutils::to_bytes(result, out + sizeof(invocation_id) + 1);
             dbg_default_trace("Ready to send an RPC reply for invocation ID {} to node {}", invocation_id, caller);
             return recv_ret{reply_opcode, result_size, out, nullptr};
-        } catch(...) {
-            char* out = out_alloc(sizeof(long int) + 1);
+        } catch(std::exception& ex) {
+            rls_default_error("An exception occurred while attempting to execute an RPC function. Exception message: {}", ex.what());
+            //This *should* catch any exceptions that occur, unless a function does something silly like throwing an int
+            remote_exception_info exception_info(typeid(ex).name(), ex.what());
+            std::size_t result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
+            //Ensure the response will fit in a reply buffer, even if it's the minimum allowed size
+            if(result_size > DERECHO_MIN_RPC_RESPONSE_SIZE) {
+                //bytes_size(exception_info) is just name.size() + what.size(), so truncate the what string
+                exception_info.exception_what.resize(DERECHO_MIN_RPC_RESPONSE_SIZE
+                                                     - exception_info.exception_name.size() - sizeof(invocation_id) - 1);
+                result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
+            }
+            char* out = out_alloc(result_size);
             out[0] = true;
             ((long int*)(out + 1))[0] = invocation_id;
-            return recv_ret{reply_opcode, sizeof(long int) + 1, out,
+            mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
+            dbg_default_trace("Ready to send remote exception info for invocation ID {} to node {}. Exception info is: ({}, {}), with size ", invocation_id, caller, exception_info.exception_name, exception_info.exception_what, result_size);
+            return recv_ret{reply_opcode, result_size, out,
+                            std::make_exception_ptr(ex)};
+        } catch(...) {
+            //If a function throws an exception that doesn't derive from std::exception, there's nothing we can do
+            const remote_exception_info exception_info("Unknown type", "");
+            const std::size_t result_size = mutils::bytes_size(exception_info) + sizeof(invocation_id) + 1;
+            char* out = out_alloc(result_size);
+            out[0] = true;
+            ((long int*)(out + 1))[0] = invocation_id;
+            mutils::to_bytes(exception_info, out + sizeof(invocation_id) + 1);
+            return recv_ret{reply_opcode, result_size, out,
                             std::current_exception()};
         }
     }

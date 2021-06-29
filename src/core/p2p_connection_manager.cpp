@@ -79,8 +79,12 @@ void P2PConnectionManager::shutdown_failures_thread() {
     }
 }
 
-uint64_t P2PConnectionManager::get_max_p2p_reply_size() {
+std::size_t P2PConnectionManager::get_max_p2p_reply_size() {
     return request_params.max_msg_sizes[P2P_REPLY] - sizeof(uint64_t);
+}
+
+std::size_t P2PConnectionManager::get_max_rpc_reply_size() {
+    return request_params.max_msg_sizes[RPC_REPLY] - sizeof(uint64_t);
 }
 
 void P2PConnectionManager::update_incoming_seq_num(node_id_t node_id) {
