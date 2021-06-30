@@ -513,7 +513,8 @@ void MulticastGroup::deliver_message(SSTMessage& msg, const subgroup_id_t& subgr
         internal_callbacks.post_next_version_callback(subgroup_num, version, msg_ts_us);
         internal_callbacks.rpc_callback(subgroup_num, msg.sender_id, version, msg_ts_us, buf, payload_size);
         if(callbacks.global_stability_callback) {
-            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, {},
+            callbacks.global_stability_callback(subgroup_num, msg.sender_id, msg.index, 
+                                                {{buf + h->header_size, msg.size - h->header_size}},
                                                 version);
         }
     } else if(callbacks.global_stability_callback) {

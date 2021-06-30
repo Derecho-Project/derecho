@@ -161,9 +161,9 @@ void RPCManager::rpc_message_handler(subgroup_id_t subgroup_id, node_id_t sender
             //Move the fulfilled PendingResults to either the "completed" list or the "awaiting persistence" list
             if(view_manager.subgroup_is_persistent(subgroup_id)) {
                 results_awaiting_local_persistence[subgroup_id].emplace(version,
-                                                                       std::move(pending_results_to_fulfill[subgroup_id].front()));
+                                                                       pending_results_to_fulfill[subgroup_id].front());
             } else {
-                completed_pending_results[subgroup_id].emplace_back(std::move(pending_results_to_fulfill[subgroup_id].front()));
+                completed_pending_results[subgroup_id].emplace_back(pending_results_to_fulfill[subgroup_id].front());
             }
             pending_results_to_fulfill[subgroup_id].pop();
         }  //release pending_results_mutex
