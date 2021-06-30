@@ -387,7 +387,7 @@ template <typename T>
 std::enable_if_t<std::is_base_of<ByteRepresentable CMA std::decay_t<T>>::value,
                  context_ptr<T>>
 from_bytes_noalloc(
-        DeserializationManager* ctx, const char* v,
+        DeserializationManager* ctx, char* v,
         context_ptr<std::decay_t<T>> = context_ptr<std::decay_t<T>>{}) {
     return std::decay_t<T>::from_bytes_noalloc(ctx, v);
 }
@@ -886,7 +886,7 @@ from_bytes(DeserializationManager*, char const* v) {
         auto t = std::make_unique<T2>(*(T2*)v);
         // std::memcpy(t.get(),v,sizeof(T));
 #if __GNUC_PREREQ(9,0)
-        return t; // RVO optimization is default for 
+        return t; // RVO optimization is default for
 #else
         return std::move(t);
 #endif
