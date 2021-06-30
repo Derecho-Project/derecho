@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <derecho/core/derecho.hpp>
+#include <derecho/utils/time.h>
 
 #include "bytes_object.hpp"
 #include "partial_senders_allocator.hpp"
