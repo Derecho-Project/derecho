@@ -1050,9 +1050,9 @@ from_bytes(DeserializationManager* ctx, char const* buffer) {
 
     auto new_map = std::make_unique<T>();
     for(int i = 0; i < size; ++i) {
-        auto key = from_bytes_noalloc<key_t>(ctx, buf_ptr, context_ptr<key_t>{});
+        auto key = from_bytes_noalloc<key_t>(ctx, buf_ptr);
         buf_ptr += bytes_size(*key);
-        auto value = from_bytes_noalloc<value_t>(ctx, buf_ptr, context_ptr<value_t>{});
+        auto value = from_bytes_noalloc<value_t>(ctx, buf_ptr);
         buf_ptr += bytes_size(*value);
         new_map->emplace(*key, *value);
     }
