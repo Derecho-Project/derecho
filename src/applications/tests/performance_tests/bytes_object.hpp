@@ -23,6 +23,7 @@ class Bytes : public mutils::ByteRepresentable {
     Bytes(char* buffer, std::size_t size, bool is_temporary);
 
 public:
+    char* get() const;
     /**
      * Constructs a byte array by copying the contents of a char array into the
      * internal buffer.
